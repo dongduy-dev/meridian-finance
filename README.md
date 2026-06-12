@@ -2,13 +2,11 @@
 
 ## Meridian Lending Platform
 
-A digital salary advance lending platform engineered for loan origination, multi-level approval workflows, and OCR-assisted document processing. Built as a **Modular Monolith** with **Hexagonal Architecture**, designed to evolve without rewrites.
+Meridian is a digital lending platform focused on salary advance and short-term credit products, designed to simplify access to financing while improving operational efficiency for lending teams. The platform manages the complete lending lifecycle, from application submission and document verification to approval workflows, disbursement, and audit tracking.
 
----
+To reduce operational overhead and improve processing speed, Meridian incorporates OCR-assisted document processing alongside configurable multi-level approval workflows. The platform is built around core financial software concerns including auditability, security, data integrity, and regulatory compliance.
 
-## Mission
-
-To simplify access to short-term financing while improving operational efficiency through automation, transparency, and intelligent document processing.
+Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driven Design and a Modular Monolith architecture with clearly defined bounded contexts. This approach enables rapid delivery today while preserving a clear evolutionary path toward distributed services as business requirements grow.
 
 ---
 
@@ -19,35 +17,90 @@ To simplify access to short-term financing while improving operational efficienc
 | **Architecture Style** | Modular Monolith (Spring Modulith) |
 | **Internal Design** | Hexagonal Architecture (Ports & Adapters) |
 | **Domain Modeling** | Domain-Driven Design (Bounded Contexts) |
-| **Dependency Direction** | Inward-only — Domain → Application → Infrastructure |
+| **Dependency Direction** | Inward-only — Infrastructure → Application → Domain |
 | **Boundary Enforcement** | Spring Modulith + ArchUnit fitness functions |
-| **Module Communication** | Sync via port interfaces, async via Spring ApplicationEvents |
-| **Migration Path** | Each module is a future microservice candidate — zero-rewrite extraction via adapter swap |
+| **Module Communication** | Sync via port interfaces, async via Spring Modulith `ApplicationEvents` + Transactional Outbox |
+| **Migration Path** | Each module is designed to be independently extractable into a microservice with minimal impact on core business logic |
+
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                             CLIENTS                                  │
+│              React SPA (Vite)  ·  Admin Panel  ·  Mobile (Future)   │
+└───────────────────────────────┬─────────────────────────────────────┘
+                                │ HTTPS + JWT (RS256)
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      API GATEWAY LAYER                               │
+│            (Spring Security Filter Chain — embedded)                 │
+│                                                                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────┐  │
+│  │  JWT Auth    │  │  Caffeine    │  │ Idempotency  │  │  CORS  │  │
+│  │  Filter      │  │  Rate Limiter│  │  Filter      │  │ Filter │  │
+│  │  (RS256)     │  │  (in-memory) │  │  (DB-backed) │  │        │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └────────┘  │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  Springdoc OpenAPI (auto-generated, /swagger-ui)             │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└───────────────────────────────┬─────────────────────────────────────┘
+                                │
+┌───────────────────────────────▼─────────────────────────────────────┐
+│               MODULAR MONOLITH  (Spring Boot 4 + Spring Modulith)    │
+│                                                                      │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────────┐ │
+│  │  Identity &     │  │   Customer       │  │   Loan Origination   │ │
+│  │  Access (IAM)   │  │   Management     │  │   (Core Domain)      │ │
+│  │                 │  │                  │  │                      │ │
+│  │ • User/Role     │  │ • Profiles       │  │ • Applications       │ │
+│  │ • JWT issuance  │  │ • KYC status     │  │ • Products           │ │
+│  │ • RBAC (4 roles)│  │ • Employers      │  │ • State machine      │ │
+│  │ • Refresh token │  │ • AES-256-GCM    │  │ • Disbursement       │ │
+│  │   rotation      │  │   PII encryption │  │ • Repayment schedule │ │
+│  └─────────────────┘  └─────────────────┘  └──────────────────────┘ │
+│                                                                      │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────────┐ │
+│  │  Approval        │  │   Document       │  │  Audit & Compliance  │ │
+│  │  Workflow        │  │   Management     │  │                      │ │
+│  │                 │  │                  │  │ • Immutable event log │ │
+│  │ • Configurable  │  │ • Upload         │  │ • JSONB snapshots    │ │
+│  │   approval chain│  │ • Type classify  │  │ • SBV audit reports  │ │
+│  │ • Delegation    │  │ • OCR job trigger│  │ • PDPA erasure log   │ │
+│  │   limits & SLA  │  │ • Verification   │  │                      │ │
+│  └─────────────────┘  └─────────────────┘  └──────────────────────┘ │
+│                                                                      │
+│  ══════════════ Spring Modulith ApplicationEvents ═════════════════  │
+│  ══════════════ Transactional Outbox (spring-modulith-events-jdbc) ══│
+│  ══════════════ Cross-cutting: MDC Logging · Metrics · ArchUnit ════ │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+              ┌────────────────┼──────────────────┐
+              ▼                ▼                  ▼
+   ┌────────────────┐  ┌────────────┐  ┌──────────────────────┐
+   │  PostgreSQL    │  │   File     │  │  Python OCR Service  │
+   │                │  │  Storage   │  │  (Phase 2)           │
+   │ • All module   │  │            │  │                      │
+   │   schemas      │  │ • Document │  │ • FastAPI            │
+   │ • event_publi- │  │   uploads  │  │ • Vietnamese TrOCR   │
+   │   cation table │  │ • OCR input│  │ • Async job workers  │
+   │   (outbox)     │  │   artifacts│  │ • Stale lease sweep  │
+   │ • Audit log    │  │            │  │ • Shared secret auth │
+   │ • Idempotency  │  │            │  │                      │
+   │ • Job queue    │  │            │  │                      │
+   └────────────────┘  └────────────┘  └──────────────────────┘
+```
 
 ### Bounded Contexts
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    MERIDIAN LENDING PLATFORM                  │
-│                                                              │
-│  ┌────────────┐  ┌──────────────┐  ┌──────────────────────┐ │
-│  │ Identity & │  │   Customer   │  │   Loan Origination   │ │
-│  │   Access   │  │  Management  │  │    (Core Domain)     │ │
-│  └────────────┘  └──────────────┘  └──────────────────────┘ │
-│  ┌────────────┐  ┌──────────────┐  ┌──────────────────────┐ │
-│  │  Approval  │  │   Document   │  │  Audit & Compliance  │ │
-│  │  Workflow  │  │  Management  │  │                      │ │
-│  └────────────┘  └──────────────┘  └──────────────────────┘ │
-│                                                              │
-│  ═══════════ Spring ApplicationEventPublisher ════════════   │
-└──────────────────────────────────────────────────────────────┘
-         │                                    │
-         ▼                                    ▼
-   ┌───────────┐                    ┌──────────────────┐
-   │ PostgreSQL│                    │ Python OCR Service│
-   └───────────┘                    │ (Phase 2)        │
-                                    └──────────────────┘
-```
+| Context | Role | Key Entities |
+|---|---|---|
+| **Identity & Access** | Authentication, authorization, RBAC | `User`, `Role`, `RefreshToken` |
+| **Customer Management** | KYC, customer profile, employer linkage | `Customer`, `Employer`, `KycStatus` |
+| **Loan Origination** | Core domain — state machine, products, disbursement | `LoanApplication`, `LoanProduct`, `RepaymentSchedule` |
+| **Approval Workflow** | Multi-level approval chain, delegation, SLA | `ApprovalRequest`, `DelegationRule` |
+| **Document Management** | Upload, classification, OCR job dispatch | `Document`, `OcrJob` |
+| **Audit & Compliance** | Immutable event log, regulatory reporting, PDPA erasure | `AuditEvent` |
 
 ---
 
@@ -66,12 +119,12 @@ To simplify access to short-term financing while improving operational efficienc
 
 ### User Roles
 
-| Role | Capabilities |
-|---|---|
-| **Customer** | Apply for loans, upload documents, track application status |
-| **Loan Officer** | Review applications, request documents, submit approval decisions |
-| **Manager** | Approve/reject loans, override decisions, access reports |
-| **Administrator** | User management, system configuration, full audit access |
+| Role | Key Permissions | Notes |
+|---|---|---|
+| **Customer** | `loan:submit`, `loan:read` (own), `loan:cancel` (own), `document:upload`, `document:read` (own) | Self-service only; service layer enforces ownership |
+| **Loan Officer** | `loan:read`, `loan:review`, `loan:disburse`, `approval:submit`, `document:verify`, `customer:read` | Can act on any customer's application |
+| **Manager** | All Loan Officer permissions + `loan:product:manage`, `approval:override`, `customer:update`, `audit:read` | Can override decisions and manage products |
+| **Administrator** | All permissions + `admin:user:manage`, `admin:config`, `admin:data:read-all` | Full platform access including break-glass data read |
 
 ---
 
@@ -83,12 +136,13 @@ To simplify access to short-term financing while improving operational efficienc
 |---|---|
 | **Java 25** | LTS runtime with virtual threads and pattern matching |
 | **Spring Boot 4.0.x** | Application framework |
-| **Spring Modulith** | Module boundary enforcement and event publication |
+| **Spring Modulith** | Module boundary enforcement, event publication, transactional outbox (`spring-modulith-events-jdbc`) |
 | **Spring Security** | Authentication & authorization |
 | **Spring Data JPA / Hibernate** | Data persistence |
 | **Flyway** | Versioned database migrations |
 | **ArchUnit** | Architectural fitness function testing |
 | **JWT (RS256)** | Stateless authentication with asymmetric signing |
+| **Springdoc OpenAPI** | Auto-generated API documentation from annotations |
 
 ### Frontend
 
@@ -123,16 +177,17 @@ To simplify access to short-term financing while improving operational efficienc
 ## Roadmap
 
 ### Phase 1 — Core MVP *(Weeks 1–6)*
-- [x] Loan origination with state machine
-- [x] Multi-level approval workflow
-- [x] Document upload & metadata management
-- [x] JWT authentication + RBAC (4 roles)
-- [x] Idempotency framework
-- [x] Flyway database migrations
-- [x] Spring Modulith structure + verification tests
-- [x] Docker Compose (PostgreSQL + application)
-- [x] Structured JSON logging
-- [x] GitHub Actions CI pipeline
+- [ ] Loan origination with state machine
+- [ ] Multi-level approval workflow
+- [ ] Document upload & metadata management
+- [ ] JWT authentication + RBAC (4 roles)
+- [ ] Idempotency framework
+- [ ] Flyway database migrations
+- [ ] Spring Modulith structure + verification tests
+- [ ] Event Publication Registry (`event_publication` Flyway migration + startup replay scheduler)
+- [ ] Docker Compose (PostgreSQL + application)
+- [ ] Structured JSON logging
+- [ ] GitHub Actions CI pipeline
 
 ### Phase 2 — Document Intelligence *(Weeks 7–10)*
 - [ ] Python FastAPI OCR service (containerized)
@@ -157,7 +212,16 @@ To simplify access to short-term financing while improving operational efficienc
 - Notification service (email, SMS, in-app)
 - Mobile application support
 - Partner company / payroll provider integration
-- Microservice extraction (documented path, deferred execution)
+- Microservice extraction (documented path, deferred execution) + Kafka
+
+#### Financial Ledger & Accounting
+
+- Double-Entry Accounting Ledger
+- Journal Entry Engine (Debit/Credit)
+- Chart of Accounts Management
+- Automated Repayment Posting
+- Financial Reconciliation & Balance Validation
+- Accounting Audit Reports
 
 ---
 
@@ -203,6 +267,28 @@ module/
     │   └── out/persistence/  # JPA repositories & entities
     └── config/               # Module-specific configuration
 ```
+
+---
+
+## Architectural Document Index
+
+| Document | Purpose |
+|---|---|
+| [bounded_contexts.md](bounded_contexts.md) | DDD bounded context map — responsibilities, entities, domain events, and module interfaces |
+| [project_structure.md](project_structure.md) | Exact Java package structure, Hexagonal layout, and annotated code examples |
+| [dependency_rules.md](dependency_rules.md) | Layer rules, module boundary rules, anti-patterns, and ArchUnit enforcement |
+| [dependency_audit.md](dependency_audit.md) | Full dependency matrix with versions, justifications, and risk flags |
+| [infrastructure_security_observability.md](infrastructure_security_observability.md) | JWT/RBAC, AES-256-GCM PII encryption, rate limiting, observability stack |
+| [ocr_architecture.md](ocr_architecture.md) | OCR service design, async job queue, retry logic, stale lease sweep, failure handling |
+| [api_error_catalog.md](api_error_catalog.md) | Machine-readable error codes, HTTP statuses, and resolution steps for all domains |
+| [loan_interest_calculation.md](loan_interest_calculation.md) | SBV-compliant interest formula (ACT/365), rounding mode, and worked example |
+| [data_retention_policy.md](data_retention_policy.md) | PDPA/Decree 13 data retention schedule, soft-delete policy, and erasure request flow |
+| [environment_variable_reference.md](environment_variable_reference.md) | All required environment variables, formats, and defaults |
+| [database_index_inventory.md](database_index_inventory.md) | Indexing rules, index template, and partial index strategy |
+| [frontend_architecture.md](frontend_architecture.md) | State management, token storage strategy, API error handling, and loading patterns |
+| [runbook.md](runbook.md) | Start, migrate, restore, handle OCR backlog, rotate JWT keys |
+| [microservice_migration.md](microservice_migration.md) | Step-by-step extraction path (documented but deferred — not for immediate execution) |
+| [commit_convention.md](commit_convention.md) | Git commit message format, branching strategy, and PR guidelines |
 
 ---
 
