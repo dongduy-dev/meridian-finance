@@ -270,28 +270,6 @@ module/
 
 ---
 
-## Architectural Document Index
-
-| Document | Purpose |
-|---|---|
-| [bounded_contexts.md](bounded_contexts.md) | DDD bounded context map — responsibilities, entities, domain events, and module interfaces |
-| [project_structure.md](project_structure.md) | Exact Java package structure, Hexagonal layout, and annotated code examples |
-| [dependency_rules.md](dependency_rules.md) | Layer rules, module boundary rules, anti-patterns, and ArchUnit enforcement |
-| [dependency_audit.md](dependency_audit.md) | Full dependency matrix with versions, justifications, and risk flags |
-| [infrastructure_security_observability.md](infrastructure_security_observability.md) | JWT/RBAC, AES-256-GCM PII encryption, rate limiting, observability stack |
-| [ocr_architecture.md](ocr_architecture.md) | OCR service design, async job queue, retry logic, stale lease sweep, failure handling |
-| [api_error_catalog.md](api_error_catalog.md) | Machine-readable error codes, HTTP statuses, and resolution steps for all domains |
-| [loan_interest_calculation.md](loan_interest_calculation.md) | SBV-compliant interest formula (ACT/365), rounding mode, and worked example |
-| [data_retention_policy.md](data_retention_policy.md) | PDPA/Decree 13 data retention schedule, soft-delete policy, and erasure request flow |
-| [environment_variable_reference.md](environment_variable_reference.md) | All required environment variables, formats, and defaults |
-| [database_index_inventory.md](database_index_inventory.md) | Indexing rules, index template, and partial index strategy |
-| [frontend_architecture.md](frontend_architecture.md) | State management, token storage strategy, API error handling, and loading patterns |
-| [runbook.md](runbook.md) | Start, migrate, restore, handle OCR backlog, rotate JWT keys |
-| [microservice_migration.md](microservice_migration.md) | Step-by-step extraction path (documented but deferred — not for immediate execution) |
-| [commit_convention.md](commit_convention.md) | Git commit message format, branching strategy, and PR guidelines |
-
----
-
 ## License
 
 *TBD*
