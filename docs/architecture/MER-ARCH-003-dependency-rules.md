@@ -1,5 +1,7 @@
 # Dependency Rules & Architecture Enforcement
 
+> The MVP remains one backend and one database. Modules are bounded contexts inside the modular monolith, not separate services by default.
+
 ## Layer Dependency Rules (Within Each Module)
 
 ```mermaid
@@ -29,19 +31,33 @@ graph TB
 | 5 | Infrastructure (adapters) | Domain | YES - (reads domain models for mapping) |
 | 6 | Controller → Use Case | Via Port interface | YES |
 | 7 | Controller → Entity directly | — | NO - Controllers use DTOs only |
+| 8 | Application services → `CurrentUserProvider` | Shared application abstraction | YES |
+| 9 | Domain/Application → Spring Security or JWT classes | — | NO - use shared abstractions instead |
 
 ### The Rule
 > **Dependencies point inward.** Domain knows nothing about the outside world. Application knows Domain. Infrastructure knows both but implements contracts defined by inner layers.
+
+`AuthenticatedUser` is a shared representation of the current actor. `CurrentUserProvider` is a shared application-level abstraction used by modules that need the current user.
 
 ---
 
 ## Module Communication Rules
 
+- Modules should not directly access each other's internals.
+- Cross-module interaction should happen through application services, ports, published interfaces, or Spring Modulith events where appropriate.
+- Shared concepts should live in `shared`; product-specific policies must not leak into the top-level package structure.
+- `shared` must not depend on any feature module.
+- `identity` may depend on `shared`; customer, partner, loan, approval, document, audit, and notification may depend on `shared`.
+- `shared/application/security` contains abstractions only. `identity/infrastructure/security` contains concrete Spring Security/JWT implementation.
+- `JwtAuthFilter`, `JwtTokenProvider`, and Spring Security adapters belong to identity infrastructure.
+- OCR integration should be treated as an external or infrastructure-facing capability behind a document/OCR port.
+- Audit should record events without controlling the core workflow.
+
 ### Allowed Patterns
 
 ```java
 // PATTERN 1: Sync — Call public port interface
-// Loan module calling Customer module
+// Loan module calling Customer module through a port
 // loan/domain/port/out/CustomerQueryPort.java
 public interface CustomerQueryPort {
     Optional<CustomerSummaryDto> findById(CustomerId id);
@@ -57,8 +73,8 @@ public class CustomerModuleAdapter implements CustomerQueryPort {
 
 ```java
 // PATTERN 2: Async — Spring ApplicationEvents
-// loan/application/service/SubmitLoanService.java
-eventPublisher.publishEvent(new LoanSubmittedEvent(loanId, customerId));
+// loan/application/service/ReviewLoanService.java
+eventPublisher.publishEvent(new LoanSentForApprovalEvent(loanId, customerId, productCode, recommendation));
 
 // approval/infrastructure/listener/LoanEventListener.java
 @Component
@@ -66,18 +82,48 @@ public class LoanEventListener {
     // @ApplicationModuleListener ensures the listener runs after the publishing transaction commits,
     // preventing listeners from seeing uncommitted data.
     @ApplicationModuleListener
-    public void onLoanSubmitted(LoanSubmittedEvent event) {
-        approvalService.createApprovalRequest(event.loanId());
+    public void onLoanSentForApproval(LoanSentForApprovalEvent event) {
+        approvalService.createApprovalDecisionWorkItem(event.loanId(), event.recommendation());
     }
 }
 ```
+
+```java
+// PATTERN 3: Sync — Product-supporting data through clear ports
+// loan/domain/port/out/PartnerEligibilityPort.java
+public interface PartnerEligibilityPort {
+    SalaryAdvanceEligibilityData verifyEmployee(PartnerEmployeeVerificationQuery query);
+}
+
+// loan/domain/port/out/DocumentReadinessPort.java
+public interface DocumentReadinessPort {
+    DocumentReadinessResult checkReadiness(LoanApplicationId loanApplicationId);
+}
+```
+
+> Product-specific behavior belongs under the `loan` module through product policies and strategies. Partner data remains in `partner`; document and OCR behavior remains in `document` or behind document/OCR ports.
+
+```java
+// PATTERN 4: Current actor access through shared abstraction
+// loan/application/service/SubmitLoanService.java
+public class SubmitLoanService {
+    private final CurrentUserProvider currentUserProvider;
+
+    public void submit(...) {
+        AuthenticatedUser actor = currentUserProvider.currentUser();
+        // use actor.id() and role/permission data without depending on Spring Security
+    }
+}
+```
+
+> `SpringSecurityCurrentUserProvider` is an identity infrastructure adapter that implements `CurrentUserProvider` using Spring Security. `JwtAuthFilter` and `JwtTokenProvider` belong to identity because identity owns authentication, JWT, users, roles, refresh tokens, and RBAC.
 
 ### Forbidden Anti-Patterns
 
 ```java
 // ANTI-PATTERN 1: Direct entity import across modules
 // loan/application/service/LoanService.java
-import com.lending.platform.customer.domain.model.Customer; // FORBIDDEN!
+import com.meridian.platform.customer.domain.model.Customer; // FORBIDDEN!
 
 // ANTI-PATTERN 2: Direct JPA repo access across modules
 // loan/application/service/LoanService.java
@@ -103,6 +149,36 @@ public void crossModuleOperation() {
     loanService.approve(...);
     customerService.updateStatus(...); // FORBIDDEN! Different bounded context
 }
+
+// ANTI-PATTERN 8: Top-level modules for individual loan products
+// com.meridian.platform.salaryadvance        // FORBIDDEN!
+// com.meridian.platform.unsecuredloan        // FORBIDDEN!
+// com.meridian.platform.collateralloan       // FORBIDDEN!
+
+// ANTI-PATTERN 9: Product-specific behavior leaking outside Loan Core
+// partner/application/service/SalaryAdvanceApprovalService.java // FORBIDDEN!
+// Product policies and strategies belong under loan/domain/product or loan/application policy orchestration.
+
+// ANTI-PATTERN 10: OCR integration called directly from Loan
+// loan/infrastructure/client/OcrRestClientAdapter.java // FORBIDDEN!
+// OCR integration is an external/infrastructure-facing capability behind a document/OCR port.
+
+// ANTI-PATTERN 11: Audit controlling business workflow
+// audit/application/service/AuditEventService.java calls loan.approve(...) // FORBIDDEN!
+// Audit records events and history; it does not own business decision logic.
+
+// ANTI-PATTERN 12: Shared importing feature module classes
+// shared/infrastructure/config/SecurityConfig.java imports com.meridian.platform.identity.infrastructure.security.JwtAuthFilter // FORBIDDEN!
+// shared must not depend on identity or any other feature module.
+
+// ANTI-PATTERN 13: Spring Security/JWT classes in domain or application services
+// loan/application/service/SubmitLoanService.java imports org.springframework.security.core.Authentication // FORBIDDEN!
+// loan/domain/service/LoanEligibilityService.java imports io.jsonwebtoken.Claims // FORBIDDEN!
+// Application code should use CurrentUserProvider; domain code should stay pure.
+
+// ANTI-PATTERN 14: JWT implementation in shared
+// shared/infrastructure/security/JwtTokenProvider.java // FORBIDDEN!
+// shared/application/security contains abstractions only.
 ```
 
 ---
@@ -114,7 +190,7 @@ public void crossModuleOperation() {
 ```java
 @Test
 void verifiesModularStructure() {
-    ApplicationModules.of(LendingPlatformApplication.class).verify();
+    ApplicationModules.of(MeridianPlatformApplication.class).verify();
     // Automatically detects: cycle dependencies, illegal cross-module access
 }
 ```
@@ -122,7 +198,7 @@ void verifiesModularStructure() {
 ### 2. ArchUnit Rules (Supplementary)
 
 ```java
-@AnalyzeClasses(packages = "com.lending.platform")
+@AnalyzeClasses(packages = "com.meridian.platform")
 class ArchitectureRulesTest {
 
     // Rule: Domain layer must not depend on Spring
@@ -131,6 +207,18 @@ class ArchitectureRulesTest {
         noClasses().that().resideInAPackage("..domain..")
             .should().dependOnClassesThat()
             .resideInAnyPackage("org.springframework..");
+
+    // Rule: Domain and application code must not depend on Spring Security or JWT implementation classes
+    @ArchTest
+    static final ArchRule domainAndApplicationMustNotDependOnSecurityImplementations =
+        noClasses().that().resideInAnyPackage("..domain..", "..application..")
+            .should().dependOnClassesThat()
+            .resideInAnyPackage(
+                "org.springframework.security..",
+                "io.jsonwebtoken..",
+                "com.auth0.jwt.."
+            )
+            .because("Use shared CurrentUserProvider/AuthenticatedUser abstractions outside identity infrastructure");
 
     // Rule: Domain models must not depend on JPA
     @ArchTest
@@ -162,6 +250,22 @@ class ArchitectureRulesTest {
             .should().dependOnClassesThat()
             .resideInAPackage("..infrastructure..");
 
+    // Rule: Shared module must not depend on feature modules
+    @ArchTest
+    static final ArchRule sharedMustNotDependOnFeatureModules =
+        noClasses().that().resideInAPackage("com.meridian.platform.shared..")
+            .should().dependOnClassesThat()
+            .resideInAnyPackage(
+                "com.meridian.platform.identity..",
+                "com.meridian.platform.customer..",
+                "com.meridian.platform.partner..",
+                "com.meridian.platform.loan..",
+                "com.meridian.platform.approval..",
+                "com.meridian.platform.document..",
+                "com.meridian.platform.audit..",
+                "com.meridian.platform.notification.."
+            );
+
     // Rule: Controllers must only access use case ports (+ security + OpenAPI annotations)
     @ArchTest
     static final ArchRule controllersMustUsePortsOnly =
@@ -180,8 +284,17 @@ class ArchitectureRulesTest {
     // Rule: No circular dependencies between modules
     @ArchTest
     static final ArchRule noCyclicDependencies =
-        slices().matching("com.lending.platform.(*)..")
+        slices().matching("com.meridian.platform.(*)..")
             .should().beFreeOfCycles();
+
+    // Rule: Product-specific policies must stay inside the Loan module
+    @ArchTest
+    static final ArchRule noTopLevelProductModules =
+        noClasses().should().resideInAnyPackage(
+            "com.meridian.platform.salaryadvance..",
+            "com.meridian.platform.unsecuredloan..",
+            "com.meridian.platform.collateralloan.."
+        );
 
     // Rule: Prevent SQL injection via string concatenation in persistence layer
     @ArchTest
@@ -219,41 +332,59 @@ class ArchitectureRulesTest {
 Use `package-info.java` with Spring Modulith `@ApplicationModule` to control what each module exposes:
 
 ```java
+// shared/package-info.java — shared kernel and application abstractions only
+@org.springframework.modulith.ApplicationModule(
+    allowedDependencies = {}
+)
+package com.meridian.platform.shared;
+
 // loan/package-info.java
 @org.springframework.modulith.ApplicationModule(
-    allowedDependencies = {"customer", "shared"}
+    allowedDependencies = {"customer::public", "partner::public", "document::public", "shared"}
 )
-package com.lending.platform.loan;
+package com.meridian.platform.loan;
 
-// approval/package-info.java — NO sync dependency on Loan; receives events only
+// approval/package-info.java — receives Loan workflow events and publishes decisions
 @org.springframework.modulith.ApplicationModule(
-    allowedDependencies = {"shared"}
+    allowedDependencies = {"loan::events", "shared"}
 )
-package com.lending.platform.approval;
+package com.meridian.platform.approval;
 
 // identity/package-info.java
 @org.springframework.modulith.ApplicationModule(
     allowedDependencies = {"shared"}
 )
-package com.lending.platform.identity;
+package com.meridian.platform.identity;
 
 // customer/package-info.java
 @org.springframework.modulith.ApplicationModule(
     allowedDependencies = {"shared"}
 )
-package com.lending.platform.customer;
+package com.meridian.platform.customer;
+
+// partner/package-info.java
+@org.springframework.modulith.ApplicationModule(
+    allowedDependencies = {"shared"}
+)
+package com.meridian.platform.partner;
 
 // document/package-info.java
 @org.springframework.modulith.ApplicationModule(
     allowedDependencies = {"shared"}
 )
-package com.lending.platform.document;
+package com.meridian.platform.document;
 
 // audit/package-info.java — receives events via @ApplicationModuleListener (no explicit dependency)
 @org.springframework.modulith.ApplicationModule(
     allowedDependencies = {"shared"}
 )
-package com.lending.platform.audit;
+package com.meridian.platform.audit;
+
+// notification/package-info.java — optional later
+@org.springframework.modulith.ApplicationModule(
+    allowedDependencies = {"shared"}
+)
+package com.meridian.platform.notification;
 ```
 
 > The `audit` module consumes events from ALL modules via `@ApplicationModuleListener`. Spring Modulith routes events without requiring explicit `allowedDependencies` declarations for event sources.
@@ -278,12 +409,19 @@ log.info("Processing loan", kv("loanId", loanId), kv("customerId", customerId));
 
 | Source Module | Can Call (Sync) | Can Listen (Async) | Cannot Access |
 |---|---|---|---|
-| **Loan** | Customer, Document | — | Approval internals, IAM internals |
-| **Approval** | — (no sync calls) | LoanSubmittedEvent | Customer, Document, Loan internals |
-| **Document** | — | — | Loan internals, Customer |
-| **Audit** | — | ALL domain events | All module internals |
-| **Notification** | — | ALL domain events | All module internals |
-| **IAM** | — | — | All business modules |
+| **Shared** | — | — | All feature modules, including Identity |
+| **Loan** | Customer, Partner, Document | — | Approval internals, IAM internals, top-level product modules |
+| **Approval** | — (no sync calls) | LoanSentForApprovalEvent | Customer, Partner, Document, Loan internals |
+| **Customer** | — | — | Loan internals, Partner internals |
+| **Partner** | — | — | Loan internals, Customer internals |
+| **Document** | — | — | Loan internals, Customer, Partner |
+| **Audit** | — | Business/domain events | All module internals, business decision logic |
+| **Notification** | — | Future notification events | All module internals; optional later |
+| **IAM** | Shared | — | All business modules |
 
 
-> **Approval receives all needed data from `LoanSubmittedEvent`** (loan amount, product, customer). It never calls Loan synchronously, eliminating bidirectional coupling.
+> **Approval receives all needed data from Loan workflow events** (loan amount, product, customer, Loan Officer recommendation). It never calls Loan synchronously, eliminating bidirectional coupling.
+
+> **Audit receives business events and records immutable history.** It does not approve, reject, disburse, calculate eligibility, or otherwise control the core workflow.
+
+> **Current user access flows through shared abstractions.** Application services may depend on `CurrentUserProvider`; concrete Spring Security and JWT implementation stays in `identity/infrastructure/security`.

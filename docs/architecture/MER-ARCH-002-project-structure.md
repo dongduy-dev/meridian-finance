@@ -3,10 +3,10 @@
 ## Root Package Structure
 
 ```
-com.lending.platform/
-├── LendingPlatformApplication.java
+com.meridian.platform/
+├── MeridianPlatformApplication.java
 │
-├── shared/                          # Shared kernel — minimal, guarded
+├── shared/                          # Shared kernel — common abstractions, base types, cross-cutting support
 │   ├── domain/
 │   │   ├── model/
 │   │   │   ├── DomainModel.java          # Pure Java: UUID id, timestamps (optional base)
@@ -20,16 +20,14 @@ com.lending.platform/
 │   │       ├── DomainException.java
 │   │       └── EntityNotFoundException.java
 │   ├── application/
-│   │   └── IdempotencyService.java      # Cross-cutting idempotency
+│   │   ├── IdempotencyService.java      # Cross-cutting idempotency
+│   │   └── security/
+│   │       ├── AuthenticatedUser.java    # Shared current actor representation
+│   │       └── CurrentUserProvider.java  # Application-level abstraction
 │   └── infrastructure/
 │       ├── config/
-│       │   ├── SecurityConfig.java      # Auth + public/private split ONLY (no role checks)
 │       │   ├── JacksonConfig.java
 │       │   └── FlywayConfig.java
-│       ├── security/
-│       │   ├── JwtAuthFilter.java
-│       │   ├── JwtTokenProvider.java
-│       │   └── AuthenticatedUser.java
 │       ├── persistence/
 │       │   ├── BaseJpaEntity.java        # @MappedSuperclass: id, createdAt, updatedAt
 │       │   └── IdempotencyRepository.java
@@ -42,6 +40,8 @@ com.lending.platform/
 │   │   ├── model/
 │   │   │   ├── User.java
 │   │   │   ├── Role.java
+│   │   │   ├── Permission.java
+│   │   │   ├── RefreshToken.java
 │   │   │   └── UserStatus.java
 │   │   └── port/
 │   │       ├── in/
@@ -71,26 +71,72 @@ com.lending.platform/
 │       │           ├── UserJpaEntity.java    # JPA entity (infra concern)
 │       │           ├── JpaRefreshTokenRepository.java
 │       │           └── RefreshTokenJpaEntity.java
+│       ├── security/
+│       │   ├── JwtAuthFilter.java
+│       │   ├── JwtTokenProvider.java
+│       │   ├── SpringSecurityCurrentUserProvider.java  # Implements shared CurrentUserProvider
+│       │   ├── RolePermissionRegistry.java
+│       │   └── SecurityConfig.java       # Wires Spring Security, JWT, and identity auth
 │       └── config/
 │           └── IdentityModuleConfig.java
 │
 ├── customer/                        # ── Customer Module ──
-│   ├── domain/ ...                  # (same hexagonal structure)
-│   ├── application/ ...
+│   ├── domain/
+│   │   ├── model/
+│   │   │   ├── Customer.java
+│   │   │   ├── CustomerProfile.java
+│   │   │   ├── BankAccountInfo.java
+│   │   │   └── VerificationStatus.java
+│   │   └── port/
+│   │       ├── in/
+│   │       │   ├── ManageCustomerProfileUseCase.java
+│   │       │   └── QueryCustomerUseCase.java
+│   │       └── out/
+│   │           └── CustomerRepository.java
+│   ├── application/ ...             # Profile, verification status, bank info, sensitive data handling
+│   └── infrastructure/ ...
+│
+├── partner/                         # ── Partner Module ──
+│   ├── domain/
+│   │   ├── model/
+│   │   │   ├── PartnerCompany.java
+│   │   │   ├── PartnerEmployee.java
+│   │   │   ├── PartnerEmployeeImportBatch.java
+│   │   │   └── EmployeeEligibilityData.java
+│   │   └── port/
+│   │       ├── in/
+│   │       │   ├── ManagePartnerCompanyUseCase.java
+│   │       │   ├── ImportPartnerEmployeesUseCase.java
+│   │       │   └── VerifyPartnerEmployeeUseCase.java
+│   │       └── out/
+│   │           ├── PartnerCompanyRepository.java
+│   │           └── PartnerEmployeeRepository.java
+│   ├── application/ ...             # Partner Companies, Partner Employees, import batches, Salary Advance eligibility data
 │   └── infrastructure/ ...
 │
 ├── loan/                            # ── Loan Module (FULL HEXAGONAL) ──
 │   ├── domain/
 │   │   ├── model/
-│   │   │   ├── LoanApplication.java     # Aggregate root (rich model)
+│   │   │   ├── LoanApplication.java     # Aggregate root (common workflow)
 │   │   │   ├── LoanProduct.java
+│   │   │   ├── LoanProductPolicy.java
+│   │   │   ├── LoanAccount.java
 │   │   │   ├── LoanStatus.java
+│   │   │   ├── OfferTerms.java
+│   │   │   ├── DisbursementRecord.java
 │   │   │   ├── RepaymentSchedule.java
 │   │   │   └── StatusTransition.java
+│   │   ├── product/                    # Product policies/strategies; no top-level product modules
+│   │   │   ├── LoanProductStrategy.java
+│   │   │   ├── SalaryAdvancePolicy.java
+│   │   │   ├── UnsecuredConsumerLoanPolicy.java
+│   │   │   └── CollateralLoanPolicy.java
 │   │   ├── port/
 │   │   │   ├── in/
 │   │   │   │   ├── SubmitLoanUseCase.java
 │   │   │   │   ├── ReviewLoanUseCase.java
+│   │   │   │   ├── AcceptOfferUseCase.java
+│   │   │   │   ├── ConfirmDisbursementUseCase.java
 │   │   │   │   ├── QueryLoanUseCase.java
 │   │   │   │   ├── ManageLoanProductUseCase.java  # CRUD for loan products
 │   │   │   │   ├── QueryLoanProductUseCase.java   # Read-only loan product queries
@@ -103,10 +149,13 @@ com.lending.platform/
 │   │   │       ├── LoanRepository.java
 │   │   │       ├── LoanProductRepository.java     # CRUD for loan products
 │   │   │       ├── CustomerQueryPort.java         # To call Customer module
+│   │   │       ├── PartnerEligibilityPort.java    # To call Partner module for Salary Advance checks
+│   │   │       ├── DocumentReadinessPort.java     # To call Document module for checklist/readiness
 │   │   │       └── LoanEventPublisher.java
 │   │   ├── service/
-│   │   │   ├── LoanEligibilityService.java  # Domain service (PURE JAVA — no @Service)
-│   │   │   └── EirCalculationService.java   # Domain service for SBV math (PURE JAVA — no @Service)
+│   │   │   ├── LoanEligibilityService.java       # Domain service (PURE JAVA — no @Service)
+│   │   │   ├── LoanProductPolicyService.java     # Selects product policy/strategy
+│   │   │   └── RepaymentScheduleService.java     # Domain service (PURE JAVA — no @Service)
 │   │   └── event/
 │   │       ├── LoanSubmittedEvent.java       # Carries: loanId, customerId, productId, amount
 │   │       ├── LoanReviewStartedEvent.java
@@ -120,6 +169,8 @@ com.lending.platform/
 │   │   ├── service/
 │   │   │   ├── SubmitLoanService.java       # Implements SubmitLoanUseCase
 │   │   │   ├── ReviewLoanService.java
+│   │   │   ├── AcceptOfferService.java
+│   │   │   ├── ConfirmDisbursementService.java
 │   │   │   └── QueryLoanService.java
 │   │   ├── dto/
 │   │   │   ├── CreateLoanRequest.java        # Inbound REST request (raw primitives)
@@ -140,7 +191,9 @@ com.lending.platform/
 │       │       │   ├── LoanJpaEntity.java
 │       │       │   └── LoanProductJpaEntity.java
 │       │       ├── client/
-│       │       │   └── CustomerModuleAdapter.java
+│       │       │   ├── CustomerModuleAdapter.java
+│       │       │   ├── PartnerModuleAdapter.java
+│       │       │   └── DocumentModuleAdapter.java
 │       │       └── event/
 │       │           └── SpringLoanEventPublisher.java
 │       └── config/
@@ -149,28 +202,32 @@ com.lending.platform/
 ├── approval/                        # ── Approval Module (FULL HEXAGONAL) ──
 │   ├── domain/
 │   │   ├── model/
-│   │   │   ├── ApprovalRequest.java      # Aggregate root
-│   │   │   ├── ApprovalStep.java
-│   │   │   ├── ApprovalRule.java
+│   │   │   ├── ReviewRecommendation.java
+│   │   │   ├── ApprovalDecision.java
+│   │   │   ├── MakerCheckerControl.java
+│   │   │   ├── ApprovalHistory.java
 │   │   │   └── ApprovalStatus.java
 │   │   ├── port/
 │   │   │   ├── in/
 │   │   │   │   ├── CreateApprovalUseCase.java
+│   │   │   │   ├── SubmitReviewRecommendationUseCase.java
 │   │   │   │   ├── SubmitDecisionUseCase.java
 │   │   │   │   └── QueryApprovalUseCase.java
 │   │   │   └── out/
 │   │   │       ├── ApprovalRepository.java
 │   │   │       └── ApprovalEventPublisher.java
 │   │   └── event/
-│   │       ├── ApprovalCompletedEvent.java
-│   │       └── ApprovalPendingEvent.java
+│   │       ├── LoanReviewRecommendedEvent.java
+│   │       └── ApprovalDecisionRecordedEvent.java
 │   ├── application/
 │   │   ├── service/
 │   │   │   ├── CreateApprovalService.java
+│   │   │   ├── SubmitReviewRecommendationService.java
 │   │   │   ├── SubmitDecisionService.java
 │   │   │   └── QueryApprovalService.java
 │   │   ├── dto/
-│   │   │   ├── ApprovalRequestDto.java
+│   │   │   ├── ReviewRecommendationDto.java
+│   │   │   ├── ApprovalDecisionDto.java
 │   │   │   └── SubmitDecisionRequest.java
 │   │   └── mapper/
 │   │       └── ApprovalMapper.java
@@ -186,7 +243,7 @@ com.lending.platform/
 │       │       └── event/
 │       │           └── SpringApprovalEventPublisher.java
 │       ├── listener/
-│       │   └── LoanEventListener.java    # @ApplicationModuleListener for LoanSubmittedEvent
+│       │   └── LoanEventListener.java    # @ApplicationModuleListener for LoanSentForApprovalEvent
 │       └── config/
 │           └── ApprovalModuleConfig.java
 │
@@ -194,11 +251,21 @@ com.lending.platform/
 │   ├── domain/
 │   │   ├── model/
 │   │   │   ├── Document.java             # Aggregate root
+│   │   │   ├── DocumentChecklist.java
+│   │   │   ├── DocumentChecklistItem.java
+│   │   │   ├── DocumentReview.java
+│   │   │   ├── DocumentReplacementRequest.java
+│   │   │   ├── DocumentWaiver.java
+│   │   │   ├── DocumentReadiness.java
+│   │   │   ├── OcrJob.java
+│   │   │   ├── OcrResult.java
 │   │   │   ├── StorageReference.java     # Value object
 │   │   │   └── DocumentType.java         # Enum
 │   │   └── port/
 │   │       ├── in/
 │   │       │   ├── UploadDocumentUseCase.java
+│   │       │   ├── ReviewDocumentUseCase.java
+│   │       │   ├── ManageDocumentChecklistUseCase.java
 │   │       │   ├── QueryDocumentUseCase.java
 │   │       │   └── DownloadDocumentUseCase.java
 │   │       └── out/
@@ -208,6 +275,8 @@ com.lending.platform/
 │   ├── application/
 │   │   ├── service/
 │   │   │   ├── UploadDocumentService.java
+│   │   │   ├── ReviewDocumentService.java
+│   │   │   ├── ManageDocumentChecklistService.java
 │   │   │   ├── QueryDocumentService.java
 │   │   │   └── DownloadDocumentService.java
 │   │   ├── dto/
@@ -231,23 +300,30 @@ com.lending.platform/
 │       └── config/
 │           └── DocumentModuleConfig.java
 │
-└── audit/                           # ── Audit Module (SIMPLIFIED) ──
-    ├── domain/
-    │   ├── model/
-    │   │   └── AuditEvent.java
-    │   └── port/
-    │       └── in/
-    │           └── QueryAuditUseCase.java   # Read-only audit log queries
-    ├── application/
-    │   └── service/
-    │       └── AuditEventService.java
-    └── infrastructure/
-        ├── listener/
-        │   └── DomainEventAuditListener.java  # Uses @ApplicationModuleListener (not @EventListener)
-        ├── persistence/
-        │   └── JpaAuditEventRepository.java
-        └── web/
-            └── AuditController.java          # Calls QueryAuditUseCase
+├── audit/                           # ── Audit Module (SIMPLIFIED) ──
+│   ├── domain/
+│   │   ├── model/
+│   │   │   ├── AuditEvent.java
+│   │   │   ├── BusinessActionHistory.java
+│   │   │   └── StatusTransitionHistory.java
+│   │   └── port/
+│   │       └── in/
+│   │           └── QueryAuditUseCase.java   # Read-only audit log queries
+│   ├── application/
+│   │   └── service/
+│   │       └── AuditEventService.java       # Records events; does not control workflow decisions
+│   └── infrastructure/
+│       ├── listener/
+│       │   └── DomainEventAuditListener.java  # Uses @ApplicationModuleListener (not @EventListener)
+│       ├── persistence/
+│       │   └── JpaAuditEventRepository.java
+│       └── web/
+│           └── AuditController.java          # Calls QueryAuditUseCase
+│
+└── notification/                    # ── Notification Module (OPTIONAL LATER) ──
+    ├── domain/ ...
+    ├── application/ ...
+    └── infrastructure/ ...
 ```
 
 ---
@@ -256,13 +332,14 @@ com.lending.platform/
 
 | Module | Pattern | Why |
 |---|---|---|
-| **Loan Origination** | Full Hexagonal | Core domain. Complex state machine. Must be framework-independent and testable. |
-| **Approval Workflow** | Full Hexagonal | Core domain. Independent state machine. Complex rules. |
-| **Identity & Access** | Full Hexagonal | Security-critical. Will be first microservice extraction candidate. |
-| **Customer** | Moderate | Supporting domain. Use ports for external-facing interfaces only. |
-| **Document** | Moderate | Storage abstraction justifies ports (local → S3 migration). |
+| **Loan Core / Origination** | Full Hexagonal | Core domain. Generic lending core, product policies/strategies, and complex state machine. |
+| **Approval Workflow** | Full Hexagonal | Core domain. Loan Officer review, Approver decision, maker-checker controls. |
+| **Identity & Access** | Full Hexagonal | Security-critical. Owns users, roles, JWT, refresh tokens, and RBAC. |
+| **Customer** | Moderate | Supporting domain. Owns profile, verification status, bank account information, and sensitive data handling. |
+| **Partner** | Moderate | Supporting domain. Owns Partner Companies, Partner Employees, import batches, and Salary Advance eligibility data. |
+| **Document** | Moderate | Checklist, manual review, replacement, waiver, readiness, storage, and OCR-assisted processing justify ports. |
 | **Audit** | Simplified | Cross-cutting concern. Simple append-only writes. No complex domain logic. |
-| **Notification** | Simplified | Generic subdomain. Template-based, minimal logic. |
+| **Notification** | Simplified | Optional later. Template-based, minimal logic. |
 
 ---
 
