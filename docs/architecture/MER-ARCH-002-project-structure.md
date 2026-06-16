@@ -1,4 +1,4 @@
-# Phase 1 — Java Package Structure
+# Java Package Structure
 
 ## Root Package Structure
 

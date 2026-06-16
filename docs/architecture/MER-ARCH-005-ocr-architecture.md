@@ -4,15 +4,9 @@
 
 This document defines the planned OCR-assisted document processing architecture for Meridian.
 
-OCR is planned as a Phase 2 capability after the core lending MVP is stable. The core MVP remains manual-review based: customers upload documents, the system manages document checklists, and authorized back-office users review, accept, reject, waive, or request replacements.
-
-OCR improves document processing efficiency, but it does not replace manual review or business workflow decisions.
-
----
-
 ## 2. Scope
 
-### In Scope for Phase 2
+### In Scope
 
 - OCR job creation for uploaded documents
 - Asynchronous OCR processing
@@ -22,7 +16,7 @@ OCR improves document processing efficiency, but it does not replace manual revi
 - Manual review of OCR-assisted results
 - Trace correlation between Spring Boot and OCR workers
 
-### Out of Scope for Phase 2
+### Out of Scope
 
 - Fully automated document approval
 - Fully automated loan approval
@@ -72,8 +66,6 @@ Manual document review remains authoritative for checklist readiness, replacemen
 | Low-confidence handling | Manual review | OCR assists reviewers but does not make final readiness decisions. |
 | Observability | Shared trace ID | Spring Boot and OCR worker logs should be correlated. |
 
-Kafka, RabbitMQ, and gRPC are deferred until there is a real throughput or integration need.
-
 ---
 
 ## 5. Service Topology
@@ -97,8 +89,6 @@ flowchart LR
     OCR -->|Write OCR result| DB
     Document -->|Show result for review| Review
 ```
-
-The Python service may expose lightweight health and operational endpoints, but normal processing is driven by OCR jobs persisted by the Spring Boot backend.
 
 ---
 
@@ -172,8 +162,6 @@ OCR failure should not block the entire loan workflow if manual document review 
 
 ## 9. Data Model Direction
 
-The exact database migrations should be written during Phase 2 implementation.
-
 At a conceptual level, OCR needs records for:
 
 - OCR job
@@ -184,8 +172,6 @@ At a conceptual level, OCR needs records for:
 - model/version metadata
 - trace ID
 - retry metadata
-
-Detailed SQL DDL and index design should live with database migration or database design documents when implementation starts.
 
 ---
 
@@ -211,15 +197,3 @@ Useful operational signals include:
 - low-confidence result count
 - worker health
 - retry count
-
----
-
-## 12. Design Principles
-
-1. Keep OCR under Document Management.
-2. Keep OCR assistive, not authoritative.
-3. Keep manual document review as the final readiness control.
-4. Prefer PostgreSQL-backed jobs before adding message brokers.
-5. Keep the Python service focused on model execution and extraction.
-6. Avoid complex MLOps until real project needs justify it.
-7. Keep Phase 2 useful, but not overengineered.
