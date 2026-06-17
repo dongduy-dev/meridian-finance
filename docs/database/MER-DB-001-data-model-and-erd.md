@@ -10,9 +10,9 @@ The model supports the MVP lending workflow for:
 
 - Customer and back-office identity, authentication, and role-based access.
 - Customer profile, employment, bank account, and verification data.
-- Partner Company and Partner Employee data for Salary Advance eligibility.
+- Partner Company and Partner Employee data for Salary Advance eligibility, including reusable customer employee links.
 - One generic lending core for `SALARY_ADVANCE`, `UNSECURED_CONSUMER_LOAN`, and `COLLATERAL_LOAN`.
-- Loan application submission, product verification, offers, disbursement confirmation, loan account activation, and repayment tracking.
+- Salary Advance limit tracking, loan application submission, product verification, offers, disbursement confirmation, loan account activation, and repayment tracking.
 - Loan Officer review, Approver decision, and maker-checker controls.
 - Document upload, checklist completeness, manual review, waiver, replacement, and readiness checks.
 - Audit events and status transition history.
@@ -22,7 +22,7 @@ The MVP uses one PostgreSQL database. Tables are logically owned by modules, but
 
 ## 3. Database Design Principles
 
-1. Use one generic lending model. Product-specific behavior belongs in product policies, product type/code fields, and targeted detail tables such as `collaterals` and `employee_verifications`.
+1. Use one generic lending model. Product-specific behavior belongs in product policies, product type/code fields, and targeted detail tables such as `collaterals`, `customer_partner_employee_links`, `salary_advance_limits`, and `salary_advance_verifications`.
 2. Keep bounded-context ownership visible. Each module owns its tables logically, even though all tables live in the same PostgreSQL database.
 3. Use UUID-style primary keys conceptually for business entities.
 4. Use `snake_case` table and column names in database examples.
@@ -134,14 +134,53 @@ erDiagram
         boolean active
     }
 
-    employee_verifications {
+    customer_partner_employee_links {
+        uuid id PK
+        uuid customer_id FK
+        uuid partner_company_id FK
+        uuid partner_employee_id FK
+        string verification_status
+        string link_status
+        string verified_identity_ref
+        datetime last_verified_at
+        datetime last_refreshed_at
+    }
+
+    salary_advance_limits {
+        uuid id PK
+        uuid customer_id FK
+        uuid customer_partner_employee_link_id FK
+        decimal total_limit
+        decimal used_amount
+        decimal reserved_amount
+        decimal available_amount
+        string status
+        datetime last_refreshed_at
+    }
+
+    salary_advance_limit_movements {
+        uuid id PK
+        uuid salary_advance_limit_id FK
+        uuid loan_application_id FK "optional by movement type"
+        uuid loan_account_id FK "optional by movement type"
+        string movement_type
+        decimal amount
+        datetime occurred_at
+    }
+
+    salary_advance_verifications {
         uuid id PK
         uuid loan_application_id FK
+        uuid customer_partner_employee_link_id FK
+        uuid salary_advance_limit_id FK
         uuid partner_company_id FK
         uuid partner_employee_id FK
         string outcome
         string product_verification_result
-        decimal available_limit
+        decimal total_limit_snapshot
+        decimal used_amount_snapshot
+        decimal reserved_amount_snapshot
+        decimal available_limit_snapshot
         datetime verified_at
     }
 
@@ -369,19 +408,30 @@ erDiagram
     customers ||--|| customer_profiles : has
     customers ||--o{ bank_account_infos : owns
     customers ||--o{ loan_applications : submits
+    customers ||--o{ customer_partner_employee_links : verifies_as
+    customers ||--o{ salary_advance_limits : has
 
     partner_companies ||--o{ partner_employee_import_batches : imports
     partner_companies ||--o{ partner_employees : employs
+    partner_companies ||--o{ customer_partner_employee_links : links
     partner_employee_import_batches ||--o{ partner_employees : loads
-    partner_employees ||--o{ employee_verifications : used_by
+    partner_employees ||--o{ customer_partner_employee_links : verifies
+    partner_employees ||--o{ salary_advance_verifications : snapshotted_by
+
+    customer_partner_employee_links ||--o{ salary_advance_limits : supports
+    customer_partner_employee_links ||--o{ salary_advance_verifications : snapshotted_by
+    salary_advance_limits ||--o{ salary_advance_limit_movements : records
+    salary_advance_limits ||--o{ salary_advance_verifications : snapshotted_by
 
     loan_products ||--o{ loan_product_policies : configured_by
     loan_products ||--o{ loan_applications : selected_for
-    loan_applications ||--o{ employee_verifications : records
+    loan_applications ||--o{ salary_advance_verifications : records
+    loan_applications ||--o{ salary_advance_limit_movements : may_reserve_or_release
     loan_applications ||--o| offer_terms : produces
     loan_applications ||--o| loan_accounts : activates
     loan_applications ||--o| disbursement_records : confirms
     loan_accounts ||--o| disbursement_records : created_from
+    loan_accounts ||--o{ salary_advance_limit_movements : may_use_or_release
     loan_applications ||--o{ repayment_schedules : plans
     loan_accounts ||--o{ repayment_schedules : finalizes
     repayment_schedules ||--o{ repayment_records : contains
@@ -437,10 +487,10 @@ Logical tables:
 
 - `partner_companies` - employer records configured for Salary Advance.
 - `partner_employee_import_batches` - monthly import batch metadata, row counts, validation status, and effective month.
-- `partner_employees` - imported employee records used for Salary Advance verification and available-limit calculation.
-- `employee_verifications` - verification result and available-limit snapshot associated with a submitted or in-progress `loan_application`.
+- `partner_employees` - imported employee source records used for Salary Advance eligibility checks and limit recalculation inputs.
+- `customer_partner_employee_links` - reusable relationship between a customer and a verified Partner Employee record.
 
-`employee_verifications` bridges Partner Management and Loan Core by storing the outcome used by a specific loan application. It should snapshot enough evidence to preserve the decision even if later partner employee imports change.
+`customer_partner_employee_links` answers: "Is this customer verified as an employee of this partner company?" It is not a loan application and does not represent current lending exposure. It stores the customer ID, partner company ID, partner employee ID, verification/link status, and enough evidence to reuse the verified relationship for future Salary Advance applications. Partner employee source data remains owned by Partner Management; customer identity/profile data remains owned by Customer Management.
 
 ### 5.4 Loan Core / Origination
 
@@ -449,12 +499,21 @@ Logical tables:
 - `loan_products` - product catalog for `SALARY_ADVANCE`, `UNSECURED_CONSUMER_LOAN`, and `COLLATERAL_LOAN`.
 - `loan_product_policies` - configurable product policy values such as amount ranges, allowed terms, required document rules, offer validity, and product-specific validation settings.
 - `loan_applications` - common workflow aggregate for all supported lending products.
+- `salary_advance_limits` - current Salary Advance limit state for a customer with a verified customer-partner employee link.
+- `salary_advance_limit_movements` - lightweight history explaining limit changes such as refresh, reservation, release, disbursement usage, repayment release, suspension, and disablement. It is not a double-entry accounting ledger.
+- `salary_advance_verifications` - application-specific Salary Advance employee and limit snapshot associated with a submitted or in-progress `loan_application`. This is the clearer name for the previous `employee_verifications` concept.
 - `offer_terms` - approved terms generated after approval and before customer acceptance.
 - `loan_accounts` - active loan record created only after manual disbursement confirmation.
 - `disbursement_records` - manual disbursement confirmation details.
 - `repayment_schedules` - provisional or final repayment schedule headers.
 - `repayment_records` - installment-level repayment tracking.
 - `collaterals` - collateral detail records for `COLLATERAL_LOAN`.
+
+`salary_advance_limits` answers: "How much Salary Advance limit does this customer currently have available?" It tracks total, used, reserved, and available amounts as ongoing lending state. It is recalculated when partner employee data changes and adjusted when applications reserve/release limit, disbursements convert reserved amount to used amount, and repayments release used amount.
+
+`salary_advance_limit_movements` may reference a loan application, a loan account, both, or neither depending on movement type. Limit initialization and partner-data refresh normally do not need a loan reference. Reservation and reservation release normally reference a loan application. Disbursement usage and repayment release normally reference a loan account. Manual adjustments may reference neither or may reference a related business entity through the audit payload.
+
+`salary_advance_verifications` answers: "What employee verification and limit snapshot was used for this specific loan application?" It should preserve the employee status and limit values used at application time even if the reusable customer employee link or current limit later changes.
 
 `loan_applications` keeps `product_code` and `product_type` snapshots for reporting and historical stability. Product-specific request details can start in `product_details` JSONB when they are simple; data with lifecycle rules, review notes, or reporting needs should graduate into dedicated tables.
 
@@ -505,9 +564,12 @@ OCR belongs under Document Management. It is planned for Phase 2 and remains ass
 - One `users` record may have many `role_assignments`; roles grant permissions through `role_permissions`.
 - One `customers` record owns one profile and may own multiple bank account records over time, with one active account selected for disbursement.
 - One `customers` record may submit many `loan_applications`.
+- One `customers` record may have many `customer_partner_employee_links` over time, but normal Salary Advance eligibility should use only an active verified link for a partner.
+- One active verified `customer_partner_employee_links` record may support one current `salary_advance_limits` record for Salary Advance.
 - One `loan_products` record may have multiple active/inactive `loan_product_policies` over time.
 - One `loan_applications` record selects one product and uses one common lifecycle across all products.
-- One `loan_applications` record may have one Salary Advance `employee_verifications` snapshot when product type is salary-based.
+- One Salary Advance `loan_applications` record may have one `salary_advance_verifications` snapshot that records the employee link, employee source reference, and limit values used for that application.
+- One `salary_advance_limits` record may have many `salary_advance_limit_movements` explaining reservation, release, disbursement, repayment, refresh, suspension, or disablement changes. Movement references to `loan_applications` and `loan_accounts` are optional logical references based on movement type.
 - One `loan_applications` record may have one or more `collaterals` when product code is `COLLATERAL_LOAN`.
 - One approved and accepted `loan_applications` record may produce one `offer_terms` record.
 - One manually disbursed `loan_applications` record creates one `loan_accounts` record.
@@ -530,8 +592,10 @@ Status names are namespace-scoped. For example, `LoanApplicationStatus.UNDER_REV
 | `DocumentReviewStatus` | `NOT_REQUIRED`, `PENDING_UPLOAD`, `UPLOADED`, `UNDER_REVIEW`, `ACCEPTED`, `REJECTED`, `EXPIRED`, `WAIVED` |
 | Manual document review actions | `ACCEPT_DOCUMENT`, `REJECT_DOCUMENT`, `WAIVE_DOCUMENT`, `REQUEST_REPLACEMENT` |
 | `RepaymentStatus` | `NOT_DUE`, `DUE`, `PARTIALLY_PAID`, `PAID`, `OVERDUE`, `SETTLED` |
-| `MockVerificationStatus` | `NOT_CHECKED`, `MOCK_VERIFIED`, `MOCK_FAILED`, `MANUAL_REVIEW_REQUIRED` |
 | `EmployeeVerificationOutcome` | `MATCHED_ACTIVE`, `MATCHED_INACTIVE`, `NOT_FOUND`, `MULTIPLE_MATCHES`, `PENDING_MANUAL_REVIEW`, `MANUAL_REVIEW_APPROVED`, `MANUAL_REVIEW_REJECTED` |
+| `CustomerPartnerEmployeeLinkStatus` | `PENDING_VERIFICATION`, `VERIFIED`, `PENDING_MANUAL_REVIEW`, `SUSPENDED`, `DISABLED` |
+| `SalaryAdvanceLimitStatus` | `ACTIVE`, `SUSPENDED`, `DISABLED`, `STALE` |
+| `SalaryAdvanceLimitMovementType` | `INITIALIZED`, `REFRESHED`, `RESERVED`, `RESERVATION_RELEASED`, `DISBURSED_TO_USED`, `REPAID_RELEASED`, `SUSPENDED`, `DISABLED`, `MANUAL_ADJUSTMENT` |
 | `ProductCode` | `SALARY_ADVANCE`, `UNSECURED_CONSUMER_LOAN`, `COLLATERAL_LOAN` |
 | `ProductType` | `SALARY_BASED`, `UNSECURED`, `SECURED` |
 | `CollateralType` | `MOTORBIKE`, `CAR`, `ELECTRONICS`, `PROPERTY_DOCUMENT`, `OTHER` |
@@ -563,7 +627,15 @@ Salary Advance employee verification maps to `ProductVerificationResult` as foll
 - Manual review records must preserve reviewer, outcome, reason where required, and timestamp.
 - Loan Officer recommendation and Approver decision must be recorded by different users for the same application.
 - Inactive Partner Companies and inactive Partner Employee records cannot be used for normal Salary Advance eligibility.
-- Salary Advance verification records must snapshot outcome, available limit, and evidence needed to explain the eligibility decision.
+- A reusable `customer_partner_employee_links` record must not be created as a side effect of a loan application unless the customer has completed the employee verification step or an authorized manual review has approved it.
+- Normal Salary Advance application creation requires a verified active customer employee link and an active `salary_advance_limits` record with positive available limit.
+- `salary_advance_limits.available_amount` should equal `total_limit - used_amount - reserved_amount`; implementations may store it for query speed but must keep it consistent in controlled transactions.
+- Draft Salary Advance application creation does not reserve limit.
+- Submitted or approved Salary Advance applications reserve limit until they are rejected, cancelled, declined, expired, disbursed, or otherwise released by workflow rules.
+- Manual disbursement converts the reserved amount into used amount as part of the same controlled transaction that creates the `loan_accounts` record.
+- Repayment, settlement, or administrative correction releases used limit according to the configured Salary Advance policy.
+- `salary_advance_limit_movements.loan_application_id` and `loan_account_id` are nullable logical references. A movement should include the relevant reference when it is caused by an application or account event, but initialization, refresh, suspension, disablement, and some manual adjustments may not have either reference.
+- Salary Advance verification snapshot records must preserve employee outcome, product verification result, employee/link references, and total/used/reserved/available limit values needed to explain the application decision.
 - Repayment roll-up must move a loan account to `OVERDUE` when any unpaid repayment is past due, to `SETTLED` when fully paid or settled, and to `CLOSED` only after administrative closure.
 
 ## 9. Audit and Traceability Rules
@@ -572,6 +644,8 @@ Salary Advance employee verification maps to `ProductVerificationResult` as foll
 - Important business actions must record actor, action, affected entity, timestamp, and contextual payload.
 - Status changes must create `status_transition_history` entries with previous status, new status, actor, timestamp, and reason when required.
 - Rejection, return, staff cancellation, request-more-information, staff correction, waiver, manual override, and replacement-request actions must include a reason.
+- Customer employee link verification, link suspension/disablement, Salary Advance limit refresh, reservation, release, disbursement usage, repayment release, suspension, and disablement must be auditable.
+- `salary_advance_limit_movements` explain limit changes for operations and customer support; they do not replace `audit_events` for actor, reason, related business entity, and workflow traceability.
 - Audit records should reference entity IDs and avoid storing unnecessary sensitive payloads.
 - Audit event consumers must be idempotent because Spring Modulith event replay can deliver the same event more than once under failure recovery.
 - Trace IDs should be stored where useful for request, document upload, and planned OCR processing correlation.
@@ -594,7 +668,10 @@ Detailed index definitions are out of scope for this document. At implementation
 - Customer lookup by user ID and customer number.
 - Loan application queues by status, product code, customer ID, and submitted timestamp.
 - Product lookup by product code and active status.
-- Partner employee verification by partner company, identity reference, employee code, effective month, and active status.
+- Partner employee lookup by partner company, identity reference, employee code, effective month, and active status.
+- Customer partner employee link lookup by customer ID, partner company ID, partner employee ID, link status, and last refreshed timestamp.
+- Salary Advance limit lookup by customer ID, customer employee link ID, status, and last refreshed timestamp.
+- Salary Advance limit movement lookup by limit ID, movement type, occurred timestamp, and optional loan application or loan account references where present.
 - Document checklist and review queues by loan application ID, review status, and document type.
 - Approval work queues by application ID, approver/reviewer ID, status, and created timestamp.
 - Repayment operations by loan account ID, due date, and repayment status.
@@ -621,4 +698,6 @@ Detailed index definitions are out of scope for this document. At implementation
 - Should `approval_history` remain a workflow-local trail, or should it be replaced by read models derived from `review_recommendations`, `approval_decisions`, and `status_transition_history`?
 - What retention, archival, and deletion policy should apply to uploaded documents, OCR results, refresh tokens, and audit events?
 - Should document versioning be expanded beyond `documents.version` if replacement workflows become more complex?
+- Should an implementation physically rename the previous `employee_verifications` table to `salary_advance_verifications`, or keep the old name while exposing the clearer domain language in code and documentation?
+- What exact retention policy should apply to inactive customer employee links and lightweight Salary Advance limit movements?
 - What is the final Phase 2 OCR retry lease, worker ownership, and job locking strategy?

@@ -40,13 +40,18 @@ This document standardizes the API error codes across all bounded contexts in th
 | 422 | `PARTNER_COMPANY_INACTIVE` | Partner company inactive | Use an active Partner Company for Salary Advance eligibility |
 | 404 | `EMPLOYEE_NOT_FOUND` | Partner employee not found | Verify employee information or route to manual review if allowed |
 | 422 | `EMPLOYEE_INACTIVE` | Partner employee inactive | Inactive Partner Employee records cannot be used for normal eligibility |
-| 422 | `EMPLOYEE_DATA_STALE` | Partner employee data stale | Import current monthly Partner Employee data before eligibility verification |
+| 422 | `EMPLOYEE_NOT_VERIFIED` | Customer employee status not verified | Complete Salary Advance employee verification before creating an application |
+| 422 | `SALARY_ADVANCE_ELIGIBILITY_DATA_STALE` | Salary Advance eligibility data stale | Refresh current Partner Employee data before eligibility or limit use |
 | 409 | `EMPLOYEE_DUPLICATE_UNRESOLVED` | Duplicate partner employee unresolved | Resolve duplicate employee records before eligibility verification |
 | 422 | `EMPLOYEE_VERIFICATION_REQUIRES_REVIEW` | Employee verification requires review | Route the case for authorized manual review with supporting evidence |
-| 422 | `SALARY_ADVANCE_LIMIT_EXCEEDED` | Salary Advance limit exceeded | Reduce requested amount to the available Salary Advance limit |
-| 409 | `BLOCKING_OVERDUE_EXPOSURE_EXISTS` | Blocking overdue exposure exists | Resolve overdue Salary Advance exposure before submitting a new request |
 | 404 | `PARTNER_EMPLOYEE_IMPORT_BATCH_NOT_FOUND` | Partner employee import batch not found | Verify the requested import batch ID |
 | 422 | `PARTNER_EMPLOYEE_IMPORT_INVALID` | Partner employee import invalid | Fix invalid rows and re-import before using the batch for eligibility |
+| **LOAN CORE — Salary Advance Limit** | | | |
+| 422 | `SALARY_ADVANCE_LIMIT_UNAVAILABLE` | Salary Advance limit unavailable | Verify employee status and refresh limit before starting an application |
+| 422 | `INSUFFICIENT_AVAILABLE_LIMIT` | Insufficient available Salary Advance limit | Reduce requested amount to the available Salary Advance limit |
+| 409 | `SALARY_ADVANCE_LIMIT_SUSPENDED` | Salary Advance limit suspended | Resolve stale data, manual review, or operational hold before applying |
+| 409 | `SALARY_ADVANCE_LIMIT_DISABLED` | Salary Advance limit disabled | Customer is not currently eligible for normal Salary Advance applications |
+| 409 | `BLOCKING_OVERDUE_EXPOSURE_EXISTS` | Blocking overdue exposure exists | Resolve overdue Salary Advance exposure before submitting a new request |
 | **APPROVAL Domain** | | | |
 | 404 | `APPROVAL_REQUEST_NOT_FOUND` | Approval request not found | Verify the requested approval ID |
 | 422 | `APPROVAL_REQUIRED` | Approval required | Complete Approver decision before moving to the next workflow step |

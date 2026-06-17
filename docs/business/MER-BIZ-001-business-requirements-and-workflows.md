@@ -30,7 +30,7 @@ Meridian uses one generic lending core with product-specific policy behavior.
 
 | Product Code | Product Name | Product Type | MVP Depth | Verification Model |
 | ------------ | ------------ | ------------ | --------- | ------------------ |
-| `SALARY_ADVANCE` | Salary Advance | `SALARY_BASED` | Primary | Partner company and employee verification model |
+| `SALARY_ADVANCE` | Salary Advance | `SALARY_BASED` | Primary | Reusable employee verification and limit-based model |
 | `UNSECURED_CONSUMER_LOAN` | Unsecured Consumer Loan | `UNSECURED` | Streamlined | Document-based income and employment review model |
 | `COLLATERAL_LOAN` | Collateral Loan | `SECURED` | Streamlined | Collateral information and document review model |
 
@@ -82,7 +82,7 @@ com.meridian.platform/
 * Back-office authentication, role-based access control, and internal user administration.
 * Loan product catalog, product activation/deactivation, and product-specific policy configuration.
 * Common loan application lifecycle, submission validation, and transition control.
-* Salary Advance partner company management, monthly Partner Employee import, employee verification, import freshness handling, and available limit calculation.
+* Salary Advance partner company management, monthly Partner Employee import, reusable customer employee verification, import freshness handling, limit tracking, and available limit calculation.
 * Streamlined Unsecured Consumer Loan and Collateral Loan application workflows.
 * Document checklist completeness validation, document upload, manual review, rejection, replacement, waiver, and readiness checks.
 * Loan Officer review, Approver decision, maker-checker controls, customer acceptance, offer expiry, contract/document readiness, manual disbursement confirmation, LoanAccount activation, repayment tracking, settlement, closure, and audit trail.
@@ -171,11 +171,23 @@ If account creation or schedule generation fails, the system must not leave the 
 
 A Partner Company is an employer configured by Back-Office Admins for Salary Advance eligibility.
 
-A Partner Employee record represents monthly employee information imported for a partner company. It is used for employee verification and Salary Advance limit calculation.
+A Partner Employee record represents monthly employee information imported for a partner company. It is source data for reusable customer employee verification and Salary Advance limit refresh.
 
 Partner Employee data includes partner company reference, employee code, employee full name, identity reference, salary amount, employment status, salary advance limit, effective month, import batch reference, and active/inactive status.
 
-### 5.5 Collateral
+### 5.5 Customer Employee Link and Salary Advance Limit
+
+A Customer Partner Employee Link represents the reusable relationship between a customer and a verified Partner Employee record. It is created after successful employee verification or authorized manual review and can be reused for future Salary Advance applications.
+
+The customer employee link answers: "Is this customer verified as an employee of this partner company?" It is not a loan application and it is not the current limit account.
+
+A Salary Advance Limit represents the customer's current limit state for Salary Advance. It tracks total limit, used amount, reserved amount, available amount, status, and last refresh information. It is recalculated when Partner Employee data changes and updated when applications reserve or release amount, disbursements convert reserved amount to used amount, and repayments release used amount.
+
+The Salary Advance limit answers: "How much Salary Advance limit does this customer currently have available?"
+
+Each Salary Advance application still records a Salary Advance verification snapshot. The snapshot answers: "What employee verification and limit values were used for this specific application?" It preserves the employee status and limit values used at application time even if the customer's reusable employee link or current limit changes later.
+
+### 5.6 Collateral
 
 Collateral represents asset information submitted by a customer for a Collateral Loan. MVP collateral information includes collateral type, description, estimated value, ownership status, ownership document reference, collateral condition note, and manual review note.
 
@@ -191,7 +203,7 @@ OTHER
 
 Estimated value is informational for manual review in the MVP. The MVP does not enforce an automated loan-to-value rule.
 
-### 5.6 Verification, Checklist, and Review Boundaries
+### 5.7 Verification, Checklist, and Review Boundaries
 
 Meridian separates three concepts that must not be collapsed into one status:
 
@@ -246,7 +258,7 @@ Concurrency rule for MVP:
 
 * A customer may keep multiple drafts.
 * A customer may not submit a new application for the same product while another application for that product is in `SUBMITTED`, `VERIFICATION_PENDING`, `DOCUMENTS_PENDING`, `UNDER_REVIEW`, `RETURNED_TO_REVIEW`, `APPROVAL_PENDING`, `APPROVED`, `CUSTOMER_ACCEPTANCE_PENDING`, `CONTRACT_PENDING`, or `DISBURSEMENT_PENDING`.
-* Salary Advance also applies overdue and outstanding exposure rules.
+* Salary Advance also requires a verified active customer employee link, an active available limit, and overdue/used/reserved exposure checks.
 
 ### 6.2 Draft and Submission
 
@@ -260,7 +272,7 @@ After submission, Meridian records the formal product verification result for th
 
 | Product | Verification / Review Behavior |
 | ------- | ------------------------------ |
-| `SALARY_ADVANCE` | Formalizes the pre-submission employee verification result and limit result on the submitted application. |
+| `SALARY_ADVANCE` | Records the application-level snapshot of the verified employee link and current limit values used for the submitted application. |
 | `UNSECURED_CONSUMER_LOAN` | Reviews income/employment documents for consistency and basic repayment capacity. |
 | `COLLATERAL_LOAN` | Reviews collateral information, ownership/supporting documents, and manual collateral assessment notes. |
 
@@ -351,20 +363,21 @@ LoanAccount roll-up rules:
 
 ### 7.1 Salary Advance
 
-Salary Advance is the flagship MVP product. It uses Partner Company and Partner Employee data for pre-submission employee verification and Available Salary Advance limit calculation.
+Salary Advance is the flagship MVP product and should be treated as a limit-based lending product. Customers verify employee status before creating a loan application, see their current Salary Advance limit, and create applications using available limit.
 
 Product model:
 
 ```text
 Partner Company + Partner Employee data
--> pre-submission employee verification
--> Available Salary Advance limit calculation
--> loan request submission
--> formal verification result recorded on application
+-> reusable customer employee link
+-> current Salary Advance limit
+-> customer Salary Advance dashboard
+-> draft application created without limit reservation
+-> application submission reserves limit and records verification snapshot
 -> review and approval
 -> manual disbursement confirmation
 -> LoanAccount activation
--> repayment tracking
+-> repayment tracking and limit release
 ```
 
 Back-office setup and import rules:
@@ -375,6 +388,15 @@ Back-office setup and import rules:
 * The latest active record for the effective month is used for normal eligibility.
 * Stale employee data cannot be used if it falls outside the configured freshness window.
 * Duplicate employee records in the same partner/effective month require correction before use.
+
+Customer product page and dashboard behavior:
+
+* The Salary Advance product page shows the customer's employee verification status before application creation.
+* If the customer has no verified employee link, the page prompts the customer to verify employee status before starting a Salary Advance application.
+* If the customer has a verified active employee link, the page shows Salary Advance limit status, total limit, used amount, reserved amount, available amount, and last refresh time.
+* If the limit is active and available amount is positive, the customer can start a new draft Salary Advance application for an amount up to available limit.
+* If the limit is suspended, disabled, stale, or unavailable, the page shows the status and blocks normal application creation until the issue is resolved.
+* Customers should not need to manually verify employee status for every future application while the reusable employee link remains verified and active.
 
 Employee verification outcomes:
 
@@ -402,20 +424,43 @@ Mapping to generic product verification:
 
 Manual review must include a reason and identify supporting evidence. Inactive Partner Companies and inactive Partner Employee records are hard stops for normal eligibility. Manual approval cannot override an inactive Partner Company.
 
-Available limit calculation must consider product maximum amount, Partner Company policy limit, employee-level salary advance limit, salary-based percentage cap, existing active Salary Advance loans, pending Salary Advance applications, employee status, and freshness of the latest employee import.
+Salary Advance limit calculation must consider product maximum amount, Partner Company policy limit, employee-level salary advance limit, salary-based percentage cap, employee status, freshness of the latest employee import, existing used exposure, and reserved exposure from submitted non-terminal applications.
 
 Example logic:
 
 ```text
-availableSalaryAdvanceLimit = min(
+totalSalaryAdvanceLimit = min(
   productMaximumAmount,
   partnerCompanyLimit,
   employeeConfiguredLimit,
   salaryBasedLimit
-) - outstandingSalaryAdvanceExposure
+)
+
+availableSalaryAdvanceLimit = totalSalaryAdvanceLimit
+  - usedSalaryAdvanceAmount
+  - reservedSalaryAdvanceAmount
 ```
 
-Blocking overdue Salary Advance exposure prevents new Salary Advance submission. Non-overdue active exposure reduces the available limit but does not automatically block submission if the final available limit remains positive.
+Limit state behavior:
+
+* `totalLimit` is the customer's current maximum Salary Advance limit after product, partner, employee, and salary cap rules.
+* `usedAmount` reflects active disbursed Salary Advance exposure that has not been repaid or released.
+* `reservedAmount` reflects submitted, approved, or accepted Salary Advance applications that are not yet disbursed or terminal.
+* `availableAmount` is `totalLimit - usedAmount - reservedAmount`.
+* Draft Salary Advance application creation does not reserve limit.
+* A submitted Salary Advance application reserves the requested amount only if submission validation passes.
+* Rejected, cancelled, declined, expired, or otherwise released applications free the reserved amount.
+* Manual disbursement converts the reserved amount into used amount when the LoanAccount is created.
+* Repayment, settlement, or approved correction releases used amount according to the configured Salary Advance policy.
+* Blocking overdue Salary Advance exposure prevents new Salary Advance submission even when a calculated available amount remains.
+
+Limit refresh, suspension, and disablement:
+
+* When a new valid Partner Employee import changes salary, employee-level limit, active status, or effective-month data, the system refreshes the reusable employee link and recalculates the Salary Advance limit.
+* If employee data is temporarily stale, unresolved, or requires manual review, the limit may be marked `SUSPENDED` or `STALE` and normal application creation is blocked.
+* If the Partner Company or Partner Employee becomes inactive, or the relationship is no longer eligible, the limit is marked `DISABLED` for normal application creation.
+* Suspension and disablement must not erase existing application or loan history. Existing active loans continue through repayment tracking.
+* Every Salary Advance application records its own verification snapshot with employee status, employee/link references, total limit, used amount, reserved amount, available amount, and verification result used at submission time.
 
 End-to-end workflow:
 
@@ -423,24 +468,28 @@ End-to-end workflow:
 2. Back-Office Admin imports monthly Partner Employee data.
 3. System records, validates, and stores Partner Employee import data.
 4. Customer completes profile information.
-5. Customer selects Salary Advance and Partner Company.
-6. Customer submits employee verification information.
-7. System matches the customer against Partner Employee records.
-8. System calculates Available Salary Advance limit after successful verification or approved manual review.
-9. Customer enters requested amount and term.
-10. System validates product rules, requested amount, term, and available limit.
-11. Customer uploads required Salary Advance documents, or the system marks non-required checklist items `NOT_REQUIRED`.
-12. Customer submits the Salary Advance request.
-13. System records formal product verification and validates document checklist completeness.
-14. Loan Officer reviews verification, available limit, documents, requested amount, requested term, and application details.
-15. Loan Officer recommends approval, recommends rejection, or returns for revision.
-16. Approver approves, rejects, returns to Loan Officer review, or requests customer/staff correction.
-17. System generates approved terms and provisional repayment schedule.
-18. Customer accepts approved terms.
-19. Contract and disbursement documents are prepared or uploaded.
-20. Accounting Officer marks disbursement as completed.
-21. System marks the application `DISBURSED`, creates the LoanAccount, generates the final repayment schedule, and activates the LoanAccount.
-22. Repayment, settlement, and closure status are tracked.
+5. Customer opens the Salary Advance product page.
+6. System checks whether the customer already has a verified active customer employee link.
+7. If no verified link exists, customer submits employee verification information before creating a loan application.
+8. System matches the customer against Partner Employee records or routes unresolved cases to authorized manual review.
+9. System creates or refreshes the reusable customer employee link after successful verification or approved manual review.
+10. System calculates or refreshes the customer's Salary Advance limit.
+11. Customer views employee verification status plus total, used, reserved, and available Salary Advance limit.
+12. Customer starts a draft Salary Advance application. Draft creation does not reserve limit.
+13. Customer enters requested amount, term, and required application information.
+14. Customer uploads required Salary Advance documents, or the system marks non-required checklist items `NOT_REQUIRED`.
+15. Customer submits the Salary Advance request.
+16. System validates the active employee link, active limit, product rules, requested amount, term, stale data, overdue exposure, blocking application rules, available amount, and document checklist completeness.
+17. If validation passes, the system reserves the requested amount and records the application-level Salary Advance verification snapshot.
+18. Loan Officer reviews verification snapshot, current warnings if any, documents, requested amount, requested term, and application details.
+19. Loan Officer recommends approval, recommends rejection, or returns for revision.
+20. Approver approves, rejects, returns to Loan Officer review, or requests customer/staff correction.
+21. System generates approved terms and provisional repayment schedule.
+22. Customer accepts approved terms.
+23. Contract and disbursement documents are prepared or uploaded.
+24. Accounting Officer marks disbursement as completed.
+25. System marks the application `DISBURSED`, creates the LoanAccount, generates the final repayment schedule, activates the LoanAccount, and converts reserved limit to used limit.
+26. Repayment, settlement, and closure status are tracked; repayment releases used limit according to policy.
 
 Salary Advance MVP does not include real payroll integration, real employer API integration, automatic payroll deduction, real bank transfer, employer-facing production portal, or real-time HR system sync.
 
@@ -577,14 +626,13 @@ EXPIRED
 | `ProductVerificationResult` | `VERIFIED`, `FAILED`, `PENDING_MANUAL_REVIEW`, `REQUIRES_MORE_INFORMATION` |
 | `DocumentReviewStatus` | `NOT_REQUIRED`, `PENDING_UPLOAD`, `UPLOADED`, `UNDER_REVIEW`, `ACCEPTED`, `REJECTED`, `EXPIRED`, `WAIVED` |
 | `RepaymentStatus` | `NOT_DUE`, `DUE`, `PARTIALLY_PAID`, `PAID`, `OVERDUE`, `SETTLED` |
-| `MockVerificationStatus` | `NOT_CHECKED`, `MOCK_VERIFIED`, `MOCK_FAILED`, `MANUAL_REVIEW_REQUIRED` |
 
 ### 8.3 Core LoanApplication Transition Matrix
 
 | Current Status | Trigger / Action | Actor | Guard Condition | Next Status | Reason Required |
 | -------------- | ---------------- | ----- | --------------- | ----------- | --------------- |
 | `DRAFT` | Submit application | Customer | Profile complete, product active, pre-checks pass | `SUBMITTED` | No |
-| `SUBMITTED` | Start formal verification | System | Application submitted | `VERIFICATION_PENDING` | No |
+| `SUBMITTED` | Record product verification or application snapshot | System | Application submitted | `VERIFICATION_PENDING` | No |
 | `VERIFICATION_PENDING` | Verification passed | System or Loan Officer | Product verification result is `VERIFIED` | `DOCUMENTS_PENDING` or `UNDER_REVIEW` | No |
 | `VERIFICATION_PENDING` | Verification failed | System or Loan Officer | Product verification result is `FAILED` | `VERIFICATION_FAILED` | Yes |
 | `VERIFICATION_PENDING` | More information needed | System or Loan Officer | Correctable issue exists | `RETURNED_FOR_REVISION` | Yes |
@@ -623,9 +671,13 @@ EXPIRED
 | FR-APP-003 | The system shall prevent new submitted applications for the same product while another application for that product is active and non-terminal. |
 | FR-SA-001 | The system shall allow Back-Office Admins to manage Partner Companies and monthly Partner Employee imports for Salary Advance eligibility. |
 | FR-SA-002 | The system shall validate Partner Employee import rows, track import batches, enforce freshness rules, and prevent invalid, stale, inactive, or duplicate unresolved employee data from normal eligibility use. |
-| FR-SA-003 | The system shall perform Salary Advance employee verification, map employee verification outcomes to `ProductVerificationResult`, and audit manual review decisions. |
-| FR-SA-004 | The system shall calculate Available Salary Advance limit using product, partner, employee, salary cap, active exposure, pending exposure, overdue exposure, employee status, and import freshness rules. |
-| FR-SA-005 | The system shall block Salary Advance submission when blocking overdue Salary Advance exposure exists or the final available limit is not positive. |
+| FR-SA-003 | The system shall allow customers to verify Salary Advance employee status before creating a loan application and shall maintain a reusable customer employee link after successful verification or approved manual review. |
+| FR-SA-004 | The system shall show Salary Advance employee verification status and current total, used, reserved, and available limit on the customer Salary Advance product page or dashboard. |
+| FR-SA-005 | The system shall calculate and maintain Salary Advance limit state using product, partner, employee, salary cap, used exposure, reserved exposure, overdue exposure, employee status, and import freshness rules. |
+| FR-SA-006 | The system shall block Salary Advance application creation or submission when the customer is not employee-verified, the limit is unavailable, stale, suspended, disabled, insufficient, or blocked by overdue exposure. |
+| FR-SA-007 | The system shall reserve Salary Advance limit for submitted non-terminal applications, release reserved limit when applications terminate before disbursement, convert reserved limit to used limit at disbursement, and release used limit through repayment or settlement policy. |
+| FR-SA-008 | The system shall refresh customer employee links and Salary Advance limits when valid Partner Employee data changes. |
+| FR-SA-009 | The system shall record a Salary Advance verification snapshot for each Salary Advance application, including the employee verification result and limit values used for that application. |
 | FR-UCL-001 | The system shall support Unsecured Consumer Loan submission using requested amount, requested term, income/employment documents, document review, repayment capacity review, approval, acceptance, disbursement, activation, and repayment tracking. |
 | FR-CL-001 | The system shall support Collateral Loan submission using requested amount, requested term, collateral information, collateral documents, manual collateral assessment notes, approval, acceptance, disbursement, activation, and repayment tracking. |
 | FR-DOC-001 | The system shall allow customers and authorized back-office users to upload required documents and associate them with customer, application, collateral, contract, or disbursement records. |
@@ -657,35 +709,40 @@ EXPIRED
 | BR-005 | Customers may cancel their own applications before approval. |
 | BR-006 | Authorized back-office users may cancel applications before disbursement with a reason. |
 | BR-007 | Disbursed applications cannot be cancelled. |
-| BR-008 | Salary Advance requires successful employee verification or approved manual review before amount entry and submission. |
-| BR-009 | Salary Advance requested amount must be less than or equal to the Available Salary Advance limit. |
+| BR-008 | Salary Advance requires a verified active customer employee link before normal application creation. |
+| BR-009 | Salary Advance requested amount must be less than or equal to the active available Salary Advance limit. |
 | BR-010 | Inactive Partner Companies cannot be manually overridden for normal Salary Advance eligibility. |
 | BR-011 | Inactive Partner Employee records cannot be used for normal Salary Advance eligibility. |
 | BR-012 | Blocking overdue Salary Advance exposure prevents new Salary Advance submission. |
-| BR-013 | Existing active Salary Advance loans and pending Salary Advance applications reduce Available Salary Advance limit. |
-| BR-014 | Salary Advance limit calculation must use the latest valid Partner Employee record within the configured freshness window. |
-| BR-015 | Unsecured Consumer Loan requires income and employment document review but does not require collateral information. |
-| BR-016 | Collateral Loan requires collateral information and collateral ownership or supporting documents. |
-| BR-017 | Collateral estimated value is informational in MVP and does not trigger automated loan-to-value blocking. |
-| BR-018 | Document checklist completeness and manual document review are separate controls. |
-| BR-019 | Application submission may require uploaded or not-required checklist items depending on product policy. |
-| BR-020 | Disbursement readiness requires required documents to be `ACCEPTED`, `NOT_REQUIRED`, or `WAIVED`. |
-| BR-021 | Missing, rejected, expired, or replacement-required documents must route to the correct owner queue. |
-| BR-022 | Loan Officer review and Approver decision must be separate responsibilities. |
-| BR-023 | The same back-office user cannot record both the Loan Officer recommendation and final Approver decision for the same application. |
-| BR-024 | Rejection, return, staff cancellation, request-more-information, staff correction, and manual override actions must include a reason. |
-| BR-025 | Approved terms require customer acceptance before contract preparation and disbursement. |
-| BR-026 | Approved offers expire after the configured validity period, defaulting to 7 calendar days. |
-| BR-027 | Approval and disbursement must be separate responsibilities. |
-| BR-028 | Disbursement can be marked completed only after approval, customer acceptance, document readiness, and bank account confirmation. |
-| BR-029 | A LoanAccount is created only after manual disbursement confirmation. |
-| BR-030 | LoanApplication `DISBURSED`, LoanAccount creation, final repayment schedule generation, and LoanAccount `ACTIVE` status are completed as one controlled post-disbursement transaction. |
-| BR-031 | Post-submission customer bank account changes are restricted by application status and must be audited. |
-| BR-032 | Repayment updates are manually entered or confirmed in the MVP. |
-| BR-033 | Any unpaid repayment past due sets the LoanAccount to `OVERDUE`. |
-| BR-034 | Full repayment or approved settlement sets the LoanAccount to `SETTLED`. |
-| BR-035 | Administrative closure may move a settled LoanAccount to `CLOSED`. |
-| BR-036 | Every important status transition must create an audit trail record. |
+| BR-013 | Existing active Salary Advance loans reduce used limit, and submitted non-terminal Salary Advance applications reduce reserved limit. |
+| BR-014 | Salary Advance limit calculation and refresh must use the latest valid Partner Employee record within the configured freshness window. |
+| BR-015 | Suspended, disabled, stale, unavailable, or insufficient Salary Advance limits block normal application creation and submission. |
+| BR-016 | Each Salary Advance application must record a verification snapshot even when the customer's reusable employee link was verified earlier. |
+| BR-017 | Salary Advance reserved limit must be released when an application is rejected, cancelled, declined, expired, or otherwise released before disbursement. |
+| BR-018 | Salary Advance reserved limit must become used limit when manual disbursement creates the LoanAccount. |
+| BR-019 | Salary Advance used limit must be released through repayment, settlement, or approved correction according to product policy. |
+| BR-020 | Unsecured Consumer Loan requires income and employment document review but does not require collateral information. |
+| BR-021 | Collateral Loan requires collateral information and collateral ownership or supporting documents. |
+| BR-022 | Collateral estimated value is informational in MVP and does not trigger automated loan-to-value blocking. |
+| BR-023 | Document checklist completeness and manual document review are separate controls. |
+| BR-024 | Application submission may require uploaded or not-required checklist items depending on product policy. |
+| BR-025 | Disbursement readiness requires required documents to be `ACCEPTED`, `NOT_REQUIRED`, or `WAIVED`. |
+| BR-026 | Missing, rejected, expired, or replacement-required documents must route to the correct owner queue. |
+| BR-027 | Loan Officer review and Approver decision must be separate responsibilities. |
+| BR-028 | The same back-office user cannot record both the Loan Officer recommendation and final Approver decision for the same application. |
+| BR-029 | Rejection, return, staff cancellation, request-more-information, staff correction, and manual override actions must include a reason. |
+| BR-030 | Approved terms require customer acceptance before contract preparation and disbursement. |
+| BR-031 | Approved offers expire after the configured validity period, defaulting to 7 calendar days. |
+| BR-032 | Approval and disbursement must be separate responsibilities. |
+| BR-033 | Disbursement can be marked completed only after approval, customer acceptance, document readiness, and bank account confirmation. |
+| BR-034 | A LoanAccount is created only after manual disbursement confirmation. |
+| BR-035 | LoanApplication `DISBURSED`, LoanAccount creation, final repayment schedule generation, and LoanAccount `ACTIVE` status are completed as one controlled post-disbursement transaction. |
+| BR-036 | Post-submission customer bank account changes are restricted by application status and must be audited. |
+| BR-037 | Repayment updates are manually entered or confirmed in the MVP. |
+| BR-038 | Any unpaid repayment past due sets the LoanAccount to `OVERDUE`. |
+| BR-039 | Full repayment or approved settlement sets the LoanAccount to `SETTLED`. |
+| BR-040 | Administrative closure may move a settled LoanAccount to `CLOSED`. |
+| BR-041 | Every important status transition must create an audit trail record. |
 
 ---
 
@@ -710,20 +767,26 @@ These values are used for portfolio demonstration, validation, UI display, workf
 | Partner Company policy limit   | 20,000,000 VND                                                                                                        |
 | Salary-based percentage cap    | 40% of monthly salary                                                                                                 |
 | Employee configured limit      | Imported from monthly Partner Employee data                                                                           |
-| Outstanding exposure deduction | Active Salary Advance loans and pending Salary Advance applications reduce Available Salary Advance limit             |
-| Blocking exposure rule         | Blocking overdue Salary Advance exposure prevents new Salary Advance submission                                       |
+| Used limit rule                | Active disbursed Salary Advance exposure reduces used limit until repayment, settlement, or approved release          |
+| Reserved limit rule            | Submitted non-terminal Salary Advance applications reserve limit until disbursement or release; drafts do not reserve limit |
+| Blocking exposure rule         | Blocking overdue Salary Advance exposure prevents new Salary Advance application creation or submission               |
 | Import freshness rule          | Latest valid active Partner Employee record for the configured effective month must be used                           |
+| Limit status rule              | Suspended, disabled, stale, unavailable, or insufficient limit blocks normal application creation                     |
 | Manual override rule           | `NOT_FOUND` and `MULTIPLE_MATCHES` may be reviewed manually; inactive Partner Companies cannot be manually overridden |
 
 Example calculation:
 
 ```text
-availableSalaryAdvanceLimit = min(
+totalSalaryAdvanceLimit = min(
   productMaximumAmount,
   partnerCompanyLimit,
   employeeConfiguredLimit,
   salaryBasedLimit
-) - outstandingSalaryAdvanceExposure
+)
+
+availableSalaryAdvanceLimit = totalSalaryAdvanceLimit
+  - usedSalaryAdvanceAmount
+  - reservedSalaryAdvanceAmount
 ```
 
 ### 11.3 Required Documents by Product
@@ -772,10 +835,11 @@ Initial conceptual entities identified from the functional requirements:
 * PartnerCompany;
 * PartnerEmployee;
 * PartnerEmployeeImportBatch;
-* EmployeeVerification;
+* CustomerPartnerEmployeeLink;
 * SalaryAdvanceLimit;
+* SalaryAdvanceLimitMovement;
+* SalaryAdvanceVerification;
 * ProductVerificationResult;
-* MockVerificationStatus;
 * Document;
 * DocumentChecklist;
 * DocumentChecklistItem;
@@ -808,7 +872,7 @@ Initial conceptual entities identified from the functional requirements:
 
 ### 13.1 Must Have
 
-One backend and one database; Customer Web Portal; Back-Office Web Portal; customer and back-office authentication; role-based access control; customer profile completion; loan product catalog; product activation/deactivation; common loan application workflow; transition matrix enforcement; Salary Advance workflow; Partner Company management; monthly Partner Employee import; import validation and freshness handling; employee verification; Salary Advance limit calculation; Unsecured Consumer Loan workflow; Collateral Loan workflow; document checklist configuration; checklist completeness validation; manual document review; Loan Officer review; Approver decision; maker-checker same-user prevention; customer acceptance; provisional repayment schedule; offer expiry; manual disbursement confirmation; LoanAccount creation and activation; final repayment schedule; repayment tracking; settlement and closure tracking; audit trail.
+One backend and one database; Customer Web Portal; Back-Office Web Portal; customer and back-office authentication; role-based access control; customer profile completion; loan product catalog; product activation/deactivation; common loan application workflow; transition matrix enforcement; Salary Advance workflow; Partner Company management; monthly Partner Employee import; import validation and freshness handling; reusable employee verification; Salary Advance limit dashboard, calculation, reservation, refresh, suspension, disablement, and release; Unsecured Consumer Loan workflow; Collateral Loan workflow; document checklist configuration; checklist completeness validation; manual document review; Loan Officer review; Approver decision; maker-checker same-user prevention; customer acceptance; provisional repayment schedule; offer expiry; manual disbursement confirmation; LoanAccount creation and activation; final repayment schedule; repayment tracking; settlement and closure tracking; audit trail.
 
 ### 13.2 Should Have
 

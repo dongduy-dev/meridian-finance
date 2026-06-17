@@ -102,16 +102,20 @@ com.meridian.platform/
 │   │   │   ├── PartnerCompany.java
 │   │   │   ├── PartnerEmployee.java
 │   │   │   ├── PartnerEmployeeImportBatch.java
+│   │   │   ├── CustomerPartnerEmployeeLink.java
+│   │   │   ├── CustomerPartnerEmployeeLinkStatus.java
 │   │   │   └── EmployeeEligibilityData.java
 │   │   └── port/
 │   │       ├── in/
 │   │       │   ├── ManagePartnerCompanyUseCase.java
 │   │       │   ├── ImportPartnerEmployeesUseCase.java
+│   │       │   ├── ManageCustomerEmployeeLinkUseCase.java
 │   │       │   └── VerifyPartnerEmployeeUseCase.java
 │   │       └── out/
 │   │           ├── PartnerCompanyRepository.java
-│   │           └── PartnerEmployeeRepository.java
-│   ├── application/ ...             # Partner Companies, Partner Employees, import batches, Salary Advance eligibility data
+│   │           ├── PartnerEmployeeRepository.java
+│   │           └── CustomerPartnerEmployeeLinkRepository.java
+│   ├── application/ ...             # Partner Companies, Partner Employees, import batches, reusable Salary Advance employee links
 │   └── infrastructure/ ...
 │
 ├── loan/                            # ── Loan Module (FULL HEXAGONAL) ──
@@ -120,6 +124,9 @@ com.meridian.platform/
 │   │   │   ├── LoanApplication.java     # Aggregate root (common workflow)
 │   │   │   ├── LoanProduct.java
 │   │   │   ├── LoanProductPolicy.java
+│   │   │   ├── SalaryAdvanceLimit.java
+│   │   │   ├── SalaryAdvanceLimitMovement.java
+│   │   │   ├── SalaryAdvanceVerification.java
 │   │   │   ├── LoanAccount.java
 │   │   │   ├── LoanStatus.java
 │   │   │   ├── OfferTerms.java
@@ -129,6 +136,7 @@ com.meridian.platform/
 │   │   ├── product/                    # Product policies/strategies; no top-level product modules
 │   │   │   ├── LoanProductStrategy.java
 │   │   │   ├── SalaryAdvancePolicy.java
+│   │   │   ├── SalaryAdvanceLimitPolicy.java
 │   │   │   ├── UnsecuredConsumerLoanPolicy.java
 │   │   │   └── CollateralLoanPolicy.java
 │   │   ├── port/
@@ -138,6 +146,8 @@ com.meridian.platform/
 │   │   │   │   ├── AcceptOfferUseCase.java
 │   │   │   │   ├── ConfirmDisbursementUseCase.java
 │   │   │   │   ├── QueryLoanUseCase.java
+│   │   │   │   ├── QuerySalaryAdvanceLimitUseCase.java
+│   │   │   │   ├── StartSalaryAdvanceApplicationUseCase.java
 │   │   │   │   ├── ManageLoanProductUseCase.java  # CRUD for loan products
 │   │   │   │   ├── QueryLoanProductUseCase.java   # Read-only loan product queries
 │   │   │   │   └── command/
@@ -147,14 +157,16 @@ com.meridian.platform/
 │   │   │   │       └── UpdateLoanProductCommand.java
 │   │   │   └── out/
 │   │   │       ├── LoanRepository.java
+│   │   │       ├── SalaryAdvanceLimitRepository.java
 │   │   │       ├── LoanProductRepository.java     # CRUD for loan products
 │   │   │       ├── CustomerQueryPort.java         # To call Customer module
-│   │   │       ├── PartnerEligibilityPort.java    # To call Partner module for Salary Advance checks
+│   │   │       ├── PartnerEligibilityPort.java    # To call Partner module for employee links and eligibility checks
 │   │   │       ├── DocumentReadinessPort.java     # To call Document module for checklist/readiness
 │   │   │       └── LoanEventPublisher.java
 │   │   ├── service/
 │   │   │   ├── LoanEligibilityService.java       # Domain service (PURE JAVA — no @Service)
 │   │   │   ├── LoanProductPolicyService.java     # Selects product policy/strategy
+│   │   │   ├── SalaryAdvanceLimitService.java    # Reserves, releases, refreshes, suspends, disables limits
 │   │   │   └── RepaymentScheduleService.java     # Domain service (PURE JAVA — no @Service)
 │   │   └── event/
 │   │       ├── LoanSubmittedEvent.java       # Carries: loanId, customerId, productId, amount
@@ -171,10 +183,13 @@ com.meridian.platform/
 │   │   │   ├── ReviewLoanService.java
 │   │   │   ├── AcceptOfferService.java
 │   │   │   ├── ConfirmDisbursementService.java
+│   │   │   ├── QuerySalaryAdvanceLimitService.java
+│   │   │   ├── StartSalaryAdvanceApplicationService.java
 │   │   │   └── QueryLoanService.java
 │   │   ├── dto/
 │   │   │   ├── CreateLoanRequest.java        # Inbound REST request (raw primitives)
 │   │   │   ├── LoanApplicationDto.java       # Outbound response DTO
+│   │   │   ├── SalaryAdvanceDashboardDto.java
 │   │   │   └── LoanSummaryDto.java
 │   │   └── mapper/
 │   │       └── LoanMapper.java               # Domain ↔ DTO mapping (lives here, NOT in domain)
@@ -183,13 +198,18 @@ com.meridian.platform/
 │       │   ├── in/
 │       │   │   └── web/
 │       │   │       ├── LoanController.java
+│       │   │       ├── SalaryAdvanceLimitController.java
 │       │   │       └── LoanProductController.java
 │       │   └── out/
 │       │       ├── persistence/
 │       │       │   ├── JpaLoanRepository.java
 │       │       │   ├── JpaLoanProductRepository.java
+│       │       │   ├── JpaSalaryAdvanceLimitRepository.java
 │       │       │   ├── LoanJpaEntity.java
-│       │       │   └── LoanProductJpaEntity.java
+│       │       │   ├── LoanProductJpaEntity.java
+│       │       │   ├── SalaryAdvanceLimitJpaEntity.java
+│       │       │   ├── SalaryAdvanceLimitMovementJpaEntity.java
+│       │       │   └── SalaryAdvanceVerificationJpaEntity.java
 │       │       ├── client/
 │       │       │   ├── CustomerModuleAdapter.java
 │       │       │   ├── PartnerModuleAdapter.java
@@ -326,6 +346,8 @@ com.meridian.platform/
     └── infrastructure/ ...
 ```
 
+Salary Advance remains inside the generic lending architecture. `partner/` owns Partner Companies, Partner Employees, import batches, and reusable customer employee links. `loan/` owns Salary Advance limit state, limit movements, application reservation/release behavior, and application-level Salary Advance verification snapshots. Do not create top-level modules named `salaryadvance`, `unsecuredloan`, or `collateralloan`.
+
 ---
 
 ## When to Apply Full vs. Simplified Hexagonal
@@ -336,7 +358,7 @@ com.meridian.platform/
 | **Approval Workflow** | Full Hexagonal | Core domain. Loan Officer review, Approver decision, maker-checker controls. |
 | **Identity & Access** | Full Hexagonal | Security-critical. Owns users, roles, JWT, refresh tokens, and RBAC. |
 | **Customer** | Moderate | Supporting domain. Owns profile, verification status, bank account information, and sensitive data handling. |
-| **Partner** | Moderate | Supporting domain. Owns Partner Companies, Partner Employees, import batches, and Salary Advance eligibility data. |
+| **Partner** | Moderate | Supporting domain. Owns Partner Companies, Partner Employees, import batches, and reusable Salary Advance employee links. |
 | **Document** | Moderate | Checklist, manual review, replacement, waiver, readiness, storage, and OCR-assisted processing justify ports. |
 | **Audit** | Simplified | Cross-cutting concern. Simple append-only writes. No complex domain logic. |
 | **Notification** | Simplified | Optional later. Template-based, minimal logic. |

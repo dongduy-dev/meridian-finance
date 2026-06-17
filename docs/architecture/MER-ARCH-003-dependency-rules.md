@@ -45,6 +45,8 @@ graph TB
 
 - Modules should not directly access each other's internals.
 - Cross-module interaction should happen through application services, ports, published interfaces, or Spring Modulith events where appropriate.
+- Loan workflows should not directly own Partner Company or Partner Employee data. Salary Advance loan workflows may reference partner/customer employee link IDs and eligibility result DTOs only.
+- Salary Advance limit state belongs to Loan; Partner employee source data and reusable customer employee links belong to Partner/Customer eligibility boundaries.
 - Shared concepts should live in `shared`; product-specific policies must not leak into the top-level package structure.
 - `shared` must not depend on any feature module.
 - `identity` may depend on `shared`; customer, partner, loan, approval, document, audit, and notification may depend on `shared`.
@@ -52,6 +54,7 @@ graph TB
 - `JwtAuthFilter`, `JwtTokenProvider`, and Spring Security adapters belong to identity infrastructure.
 - OCR integration should be treated as an external or infrastructure-facing capability behind a document/OCR port.
 - Audit should record events without controlling the core workflow.
+- Modules must not share JPA entity ownership across bounded contexts. Cross-context relationships are stored as IDs and resolved through ports, application services, or events.
 
 ### Allowed Patterns
 
@@ -92,7 +95,8 @@ public class LoanEventListener {
 // PATTERN 3: Sync — Product-supporting data through clear ports
 // loan/domain/port/out/PartnerEligibilityPort.java
 public interface PartnerEligibilityPort {
-    SalaryAdvanceEligibilityData verifyEmployee(PartnerEmployeeVerificationQuery query);
+    CustomerEmployeeLinkData verifyOrGetEmployeeLink(EmployeeLinkQuery query);
+    SalaryAdvanceEligibilityData getEligibilityData(CustomerEmployeeLinkId linkId);
 }
 
 // loan/domain/port/out/DocumentReadinessPort.java
@@ -101,7 +105,7 @@ public interface DocumentReadinessPort {
 }
 ```
 
-> Product-specific behavior belongs under the `loan` module through product policies and strategies. Partner data remains in `partner`; document and OCR behavior remains in `document` or behind document/OCR ports.
+> Product-specific behavior belongs under the `loan` module through product policies and strategies. Partner data remains in `partner`; reusable customer employee links are exposed to Loan through IDs and eligibility DTOs; document and OCR behavior remains in `document` or behind document/OCR ports.
 
 ```java
 // PATTERN 4: Current actor access through shared abstraction
@@ -158,6 +162,11 @@ public void crossModuleOperation() {
 // ANTI-PATTERN 9: Product-specific behavior leaking outside Loan Core
 // partner/application/service/SalaryAdvanceApprovalService.java // FORBIDDEN!
 // Product policies and strategies belong under loan/domain/product or loan/application policy orchestration.
+
+// ANTI-PATTERN 9B: Loan owning partner employee source data
+// loan/domain/model/PartnerEmployee.java // FORBIDDEN!
+// loan/application/service/SalaryAdvanceService.java imports PartnerEmployeeJpaEntity // FORBIDDEN!
+// Loan stores customerEmployeeLinkId/partnerEmployeeId snapshots and calls Partner ports for eligibility data.
 
 // ANTI-PATTERN 10: OCR integration called directly from Loan
 // loan/infrastructure/client/OcrRestClientAdapter.java // FORBIDDEN!
@@ -421,6 +430,8 @@ log.info("Processing loan", kv("loanId", loanId), kv("customerId", customerId));
 
 
 > **Approval receives all needed data from Loan workflow events** (loan amount, product, customer, Loan Officer recommendation). It never calls Loan synchronously, eliminating bidirectional coupling.
+
+> **Salary Advance uses Partner through public eligibility ports only.** Loan may store customer employee link IDs, partner employee IDs, and application snapshots, but Partner remains the owner of Partner Employee source rows and reusable customer employee links.
 
 > **Audit receives business events and records immutable history.** It does not approve, reject, disburse, calculate eligibility, or otherwise control the core workflow.
 
