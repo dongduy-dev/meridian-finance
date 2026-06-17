@@ -2,11 +2,9 @@
 
 ## Meridian Lending Platform
 
-Meridian is a multi-product digital lending platform centered on Salary Advance, with streamlined workflows for Unsecured Consumer Loan and Collateral Loan. It supports the full core lending lifecycle — application submission, document upload, checklist handling, manual document review, controlled review and approval, customer acceptance, manual disbursement confirmation, repayment tracking, and audit tracking — while helping lending teams operate with clearer and more consistent processes.
+Meridian is a multi-product digital lending platform centered on Salary Advance, with streamlined workflows for Unsecured Consumer Loan and Collateral Loan. It supports the lending lifecycle — application submission, document upload, OCR-assisted document processing, checklist handling, manual document review, controlled review and approval, customer acceptance, manual disbursement confirmation, repayment tracking, and audit tracking — while helping lending teams operate with clearer and more consistent processes.
 
-The platform is designed to support OCR-assisted document processing as a planned Phase 2 capability, while the core MVP remains based on document upload, checklist handling, manual review, waiver, replacement, and readiness checks.
-
-At its core, Meridian uses one generic lending core shared across all loan products, with product-specific behavior handled through loan product policies and strategies. The platform is built around financial software concerns such as auditability, security, data integrity, controlled status transitions, configurable approval workflows, and compliance-oriented traceability.
+At its core, Meridian uses one generic lending core shared across all loan products, with product-specific behavior handled through loan product policies and strategies. The platform is built around practical financial software concerns such as auditability, security, data integrity, controlled status transitions, approval controls, document traceability, and clear operational workflows.
 
 Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driven Design and a Modular Monolith architecture with clearly defined bounded contexts. This approach enables rapid delivery today while preserving a clear evolutionary path toward distributed services as business requirements grow.
 
@@ -29,7 +27,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                                   CLIENTS                                    │
-│                 React SPA (Vite)  ·  Admin Panel  ·  Mobile (Future)        │
+│                 React SPA (Vite)  ·  Admin Panel  ·  Mobile (Future)         │
 └──────────────────────────────────────┬───────────────────────────────────────┘
                                        │ HTTPS + JWT (RS256)
                                        ▼
@@ -37,20 +35,20 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 │                         API EDGE / SECURITY LAYER                            │
 │                    (Spring Security Filter Chain — embedded)                 │
 │                                                                              │
-│   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌────────────┐   │
-│   │  JWT Auth    │   │  Caffeine    │   │ Idempotency  │   │    CORS    │   │
-│   │  Filter      │   │ Rate Limiter │   │   Filter     │   │   Filter   │   │
-│   │  (RS256)     │   │ (in-memory)  │   │ (DB-backed)  │   │            │   │
-│   └──────────────┘   └──────────────┘   └──────────────┘   └────────────┘   │
+│   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌────────────┐    │
+│   │  JWT Auth    │   │  Caffeine    │   │ Idempotency  │   │    CORS    │    │
+│   │  Filter      │   │ Rate Limiter │   │   Filter     │   │   Filter   │    │
+│   │  (RS256)     │   │ (in-memory)  │   │ (DB-backed)  │   │            │    │
+│   └──────────────┘   └──────────────┘   └──────────────┘   └────────────┘    │
 │                                                                              │
 │   ┌──────────────────────────────────────────────────────────────────────┐   │
-│   │ Springdoc OpenAPI (auto-generated, /swagger-ui)                       │   │
+│   │ Springdoc OpenAPI (auto-generated, /swagger-ui)                      │   │
 │   └──────────────────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────┬───────────────────────────────────────┘
                                        │
-┌──────────────────────────────────────▼───────────────────────────────────────┐
-│                    MODULAR MONOLITH (Spring Boot + Spring Modulith)          │
-│                                                                              │
+┌──────────────────────────────────────▼──────────────────────────────────────┐
+│                    MODULAR MONOLITH (Spring Boot + Spring Modulith)         │
+│                                                                             │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌───────────────────────────┐  │
 │  │ Identity & Access│  │ Customer         │  │ Partner Management        │  │
 │  │                  │  │ Management       │  │                           │  │
@@ -61,33 +59,33 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 │  │                  │  │ • AES-256-GCM    │  │                           │  │
 │  │                  │  │   PII encryption │  │                           │  │
 │  └──────────────────┘  └──────────────────┘  └───────────────────────────┘  │
-│                                                                              │
+│                                                                             │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌───────────────────────────┐  │
 │  │ Loan Core /      │  │ Approval         │  │ Document Management       │  │
 │  │ Origination      │  │ Workflow         │  │                           │  │
 │  │ • Applications   │  │ • Review         │  │ • Upload                  │  │
 │  │ • Products       │  │ • Approval       │  │ • Checklist               │  │
-│  │ • Product policy │  │ • Maker-checker  │  │ • OCR trigger (Phase 2)  │  │
+│  │ • Product policy │  │ • Maker-checker  │  │ • OCR trigger             │  │
 │  │ • State machine  │  │ • Decision trail │  │ • Review/readiness        │  │
 │  │ • Loan accounts  │  │                  │  │                           │  │
 │  │ • Repayments     │  │                  │  │                           │  │
 │  └──────────────────┘  └──────────────────┘  └───────────────────────────┘  │
-│                                                                              │
+│                                                                             │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │ Audit & Compliance Controls                                           │   │
-│  │ • Immutable event log  • JSONB snapshots  • Compliance audit trail    │   │
+│  │ Audit & Compliance Controls                                          │   │
+│  │ • Immutable event log  • JSONB snapshots  • Compliance audit trail   │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-│  ══════════════ Spring Modulith ApplicationEvents ════════════════════════   │
-│  ══════════════ Transactional Outbox (spring-modulith-events-jdbc) ═══════   │
-│  ══════════════ Cross-cutting: MDC Logging · Metrics · ArchUnit ══════════   │
-└──────────────────────────────────────┬───────────────────────────────────────┘
+│                                                                             │
+│  ══════════════ Spring Modulith ApplicationEvents ════════════════════════  │
+│  ══════════════ Transactional Outbox (spring-modulith-events-jdbc) ═══════  │
+│  ══════════════ Cross-cutting: MDC Logging · Metrics · ArchUnit ══════════  │
+└──────────────────────────────────────┬──────────────────────────────────────┘
                                        │
                   ┌────────────────────┼────────────────────┐
                   ▼                    ▼                    ▼
       ┌──────────────────┐   ┌────────────────┐   ┌──────────────────────┐
       │ PostgreSQL       │   │ File Storage   │   │ OCR Service          │
-      │                  │   │                │   │ (Planned Phase 2)    │
+      │                  │   │                │   │                      │
       │ • Module schemas │   │ • Document     │   │ • Python + FastAPI   │
       │ • Outbox table   │   │   uploads      │   │ • Vietnamese TrOCR   │
       │ • Audit log      │   │ • OCR input    │   │ • Async job workers  │
@@ -117,7 +115,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - **Salary Advance Workflow** — Employer-linked salary advance with Partner Company, Partner Employee, and eligibility verification support
 - **Streamlined Product Workflows** — Unsecured Consumer Loan and Collateral Loan support through shared lifecycle capabilities
 - **Controlled Review & Approval Workflow** — Loan Officer review, Approver decision, customer acceptance, and maker-checker controls
-- **Document Upload & Management** — Checklist handling, metadata, storage abstraction, manual review, waiver, replacement, readiness checks, and planned Phase 2 OCR-assisted processing
+- **Document Upload & Management** — Checklist handling, metadata, storage abstraction, manual review, waiver, replacement, readiness checks, and OCR-assisted processing
 - **JWT Authentication & RBAC** — RS256 tokens, refresh rotation, role/action permission model
 - **Idempotent Financial Operations** — `Idempotency-Key` header processing for critical mutation endpoints
 - **Immutable Audit Trail** — Append-only event logging with JSONB state snapshots
@@ -159,7 +157,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 | **React** | UI framework |
 | **Vite** | Build tooling |
 
-### OCR / Document Intelligence (Planned Phase 2)
+### OCR / Document Intelligence
 
 | Technology | Purpose |
 |---|---|
@@ -191,9 +189,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 
 ## Roadmap
 
-Phase 1 represents the core MVP baseline. Phase 2 is a planned near-term enhancement focused on OCR-assisted document processing.
-
-### Phase 1 — Core Lending MVP *(Weeks 1–6)*
+### Phase 1 — Core Lending MVP
 - [ ] Common loan application lifecycle with state machine
 - [ ] Loan product catalog and product policy framework
 - [ ] Salary Advance workflow with Partner Company and Partner Employee eligibility support
@@ -210,26 +206,26 @@ Phase 1 represents the core MVP baseline. Phase 2 is a planned near-term enhance
 - [ ] Structured JSON logging
 - [ ] GitHub Actions CI pipeline
 
-### Phase 2 — OCR-Assisted Document Processing (Planned Near-Term Enhancement) *(Weeks 7–10)*
+### Phase 2 — OCR-Assisted Document Processing
 - [ ] Python FastAPI OCR service (containerized)
 - [ ] Vietnamese TrOCR model integration
 - [ ] Async job queue (PostgreSQL-backed)
 - [ ] OCR result persistence
 - [ ] Manual review UI for OCR-assisted document results
 
-### Phase 3 — Operational Maturity *(Weeks 11–14)*
+### Phase 3 — Operational Maturity
 - [ ] Redis (JWT blacklist, rate limiting, idempotency cache)
 - [ ] Prometheus metrics + Grafana dashboards
 - [ ] OpenTelemetry distributed tracing
 - [ ] Performance profiling and optimization
 
-### Phase 4 — Analytics & Risk *(Weeks 15–18, if needed)*
+### Phase 4 — Analytics & Risk
 - [ ] Elasticsearch (loan search, audit log analytics)
 - [ ] Reporting dashboards
 - [ ] Rule-based risk assessment engine
 - [ ] Loan eligibility scoring
 
-### Future Considerations *(Not Scheduled)*
+### Future Considerations
 - Notification service (email, SMS, in-app)
 - Mobile application support
 - Payroll provider, employer API, payment gateway, bank transfer, and credit bureau integrations
@@ -265,7 +261,7 @@ com.meridian.platform/
 ├── partner/                 # Partner company and employee import bounded context
 ├── loan/                    # Generic lending core (product policies + full hexagonal)
 ├── approval/                # Approval workflow
-├── document/                # Document management + planned Phase 2 OCR-assisted processing
+├── document/                # Document management + OCR-assisted processing
 ├── audit/                   # Audit & compliance controls
 └── notification/            # Optional later
 ```
