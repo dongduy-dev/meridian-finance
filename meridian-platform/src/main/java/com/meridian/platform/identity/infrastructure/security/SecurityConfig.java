@@ -15,8 +15,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/health",
-                                "/api/loan-products",
-                                "/api/loan-products/**"
+                                "/api/v1/loan-products",
+                                "/api/v1/loan-products/**",
+                                "/api/v1/partner-companies",
+                                "/api/v1/partner-companies/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

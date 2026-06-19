@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/loan-products")
+@RequestMapping("/api/v1/loan-products")
 public class LoanProductController {
 
     private final QueryLoanProductUseCase queryLoanProductUseCase;
