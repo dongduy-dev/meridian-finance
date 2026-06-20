@@ -7,5 +7,5 @@ import java.util.UUID;
 
 public interface QueryPartnerEmployeeUseCase {
 
-    List<PartnerEmployee> getPartnerEmployeesByCompanyId(UUID partnerCompanyId);
+    List<PartnerEmployee> getPartnerEmployeesByCompanyId(UUID partnerCompanyId, boolean activeOnly);
 }

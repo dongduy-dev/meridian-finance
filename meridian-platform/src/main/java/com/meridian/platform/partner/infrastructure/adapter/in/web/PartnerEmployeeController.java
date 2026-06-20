@@ -3,10 +3,7 @@ package com.meridian.platform.partner.infrastructure.adapter.in.web;
 import com.meridian.platform.partner.application.dto.PartnerEmployeeDto;
 import com.meridian.platform.partner.application.mapper.PartnerEmployeeMapper;
 import com.meridian.platform.partner.domain.port.in.QueryPartnerEmployeeUseCase;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
@@ -23,9 +20,10 @@ public class PartnerEmployeeController {
 
     @GetMapping
     public List<PartnerEmployeeDto> getPartnerEmployeesByCompanyId(
-            @PathVariable UUID partnerCompanyId
+            @PathVariable UUID partnerCompanyId,
+            @RequestParam(defaultValue = "false") boolean activeOnly
     ) {
-        return queryPartnerEmployeeUseCase.getPartnerEmployeesByCompanyId(partnerCompanyId)
+        return queryPartnerEmployeeUseCase.getPartnerEmployeesByCompanyId(partnerCompanyId, activeOnly)
                 .stream()
                 .map(PartnerEmployeeMapper::toDto)
                 .toList();
