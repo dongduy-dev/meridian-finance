@@ -7,4 +7,5 @@ import java.util.UUID;
 
 public interface PartnerEmployeeRepository {
     List<PartnerEmployee> findByPartnerCompanyId(UUID partnerCompanyId);
+    List<PartnerEmployee> findActiveByPartnerCompanyId(UUID companyId);
 }

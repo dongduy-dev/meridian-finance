@@ -24,6 +24,14 @@ public class PartnerEmployeeRepositoryAdapter implements PartnerEmployeeReposito
                 .toList();
     }
 
+    @Override
+    public List<PartnerEmployee> findActiveByPartnerCompanyId(UUID partnerCompanyId) {
+        return jpaPartnerEmployeeRepository.findByPartnerCompanyIdAndActiveTrueOrderByEmployeeCodeAsc(partnerCompanyId)
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
     private PartnerEmployee toDomain(PartnerEmployeeJpaEntity entity) {
         return new PartnerEmployee(
                 entity.getId(),

@@ -24,14 +24,11 @@ public class QueryPartnerEmployeeService implements QueryPartnerEmployeeUseCase 
     public List<PartnerEmployee> getPartnerEmployeesByCompanyId(UUID partnerCompanyId, boolean activeOnly) {
         Objects.requireNonNull(partnerCompanyId, "partnerCompanyId must not be null");
 
-        List<PartnerEmployee> employee = partnerEmployeeRepository.findByPartnerCompanyId(partnerCompanyId);
-
-        if (!activeOnly) {
-            return employee;
+        if (activeOnly) {
+            return partnerEmployeeRepository.findActiveByPartnerCompanyId(partnerCompanyId);
         }
-
-        return employee.stream()
-                .filter(PartnerEmployee::active)
-                .toList();
+        else {
+            return partnerEmployeeRepository.findByPartnerCompanyId(partnerCompanyId);
+        }
     }
 }

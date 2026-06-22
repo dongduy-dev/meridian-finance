@@ -8,4 +8,5 @@ import java.util.UUID;
 public interface JpaPartnerEmployeeRepository extends JpaRepository<PartnerEmployeeJpaEntity, UUID> {
 
     List<PartnerEmployeeJpaEntity> findByPartnerCompanyIdOrderByEmployeeCodeAsc(UUID partnerCompanyId);
+    List<PartnerEmployeeJpaEntity> findByPartnerCompanyIdAndActiveTrueOrderByEmployeeCodeAsc(UUID partnerCompanyId);
 }
