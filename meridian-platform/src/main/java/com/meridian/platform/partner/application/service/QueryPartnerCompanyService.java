@@ -4,10 +4,13 @@ import com.meridian.platform.partner.application.dto.PartnerCompanyDto;
 import com.meridian.platform.partner.application.mapper.PartnerCompanyMapper;
 import com.meridian.platform.partner.domain.port.in.QueryPartnerCompanyUseCase;
 import com.meridian.platform.partner.domain.port.out.PartnerCompanyRepository;
+import com.meridian.platform.shared.domain.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 
 @Service
 public class QueryPartnerCompanyService implements QueryPartnerCompanyUseCase {
@@ -30,5 +33,18 @@ public class QueryPartnerCompanyService implements QueryPartnerCompanyUseCase {
                 .stream()
                 .map(partnerCompanyMapper::toDto)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PartnerCompanyDto getPartnerCompanyById(UUID partnerCompanyId) {
+        Objects.requireNonNull(partnerCompanyId, "partnerCompanyId must not be null");
+
+        return partnerCompanyRepository.findById(partnerCompanyId)
+                .map(partnerCompanyMapper::toDto)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "PARTNER_COMPANY_NOT_FOUND",
+                        "Partner company was not found."
+                ));
     }
 }

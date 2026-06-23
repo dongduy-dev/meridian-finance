@@ -2,11 +2,10 @@ package com.meridian.platform.partner.infrastructure.adapter.in.web;
 
 import com.meridian.platform.partner.application.dto.PartnerCompanyDto;
 import com.meridian.platform.partner.domain.port.in.QueryPartnerCompanyUseCase;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/partner-companies")
@@ -21,5 +20,12 @@ public class PartnerCompanyController {
     @GetMapping
     public List<PartnerCompanyDto> getPartnerCompanies() {
         return queryPartnerCompanyUseCase.getPartnerCompanies();
+    }
+
+    @GetMapping("/{partnerCompanyId}")
+    public PartnerCompanyDto getPartnerCompanyById(
+            @PathVariable UUID partnerCompanyId
+    ) {
+        return queryPartnerCompanyUseCase.getPartnerCompanyById(partnerCompanyId);
     }
 }

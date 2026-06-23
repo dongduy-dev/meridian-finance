@@ -1,4 +1,4 @@
-package com.meridian.platform.shared.infrastructure.web;
+package com.meridian.platform.shared.infrastructure.adapter.in.web;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

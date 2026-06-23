@@ -5,6 +5,8 @@ import com.meridian.platform.partner.domain.port.out.PartnerCompanyRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 public class PartnerCompanyRepositoryAdapter implements PartnerCompanyRepository {
@@ -21,6 +23,12 @@ public class PartnerCompanyRepositoryAdapter implements PartnerCompanyRepository
                 .stream()
                 .map(this::toDomain)
                 .toList();
+    }
+
+    @Override
+    public Optional<PartnerCompany> findById(UUID partnerCompanyId){
+        return jpaPartnerCompanyRepository.findById(partnerCompanyId)
+                .map(this::toDomain);
     }
 
     private PartnerCompany toDomain(PartnerCompanyJpaEntity entity) {
