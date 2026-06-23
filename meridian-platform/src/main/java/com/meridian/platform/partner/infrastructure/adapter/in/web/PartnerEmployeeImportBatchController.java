@@ -1,0 +1,26 @@
+package com.meridian.platform.partner.infrastructure.adapter.in.web;
+
+import com.meridian.platform.partner.application.dto.PartnerEmployeeImportBatchDto;
+import com.meridian.platform.partner.domain.port.in.QueryPartnerEmployeeImportBatchUseCase;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches")
+public class PartnerEmployeeImportBatchController {
+
+    private final QueryPartnerEmployeeImportBatchUseCase queryImportBatchUseCase;
+
+    public PartnerEmployeeImportBatchController(QueryPartnerEmployeeImportBatchUseCase queryImportBatchUseCase) {
+        this.queryImportBatchUseCase = queryImportBatchUseCase;
+    }
+
+    @GetMapping
+    public List<PartnerEmployeeImportBatchDto> getImportBatchesByPartnerCompanyId(
+            @PathVariable UUID partnerCompanyId
+    ) {
+        return queryImportBatchUseCase.getImportBatchesByPartnerCompanyId(partnerCompanyId);
+    }
+}
