@@ -1,41 +1,50 @@
 # Dependency Rules & Architecture Enforcement
 
 > The MVP remains one backend and one database. Modules are bounded contexts inside the modular monolith, not separate services by default.
+> Architecture Standard v2 follows the Practical Meridian Architecture Standard: MVP limits feature scope, not architecture consistency.
 
 ## Layer Dependency Rules (Within Each Module)
 
 ```mermaid
 graph TB
-    WEB["Adapter: Web (Controllers)"] --> APP["Application (Use Cases)"]
-    PERSIST["Adapter: Persistence (JPA)"] --> APP
-    CLIENT["Adapter: Client (REST/gRPC)"] --> APP
-    APP --> DOMAIN["Domain (Entities, Ports, Services)"]
+    WEB["Adapter: Web (Controllers)"] --> IN["application/port/in"]
+    WEB --> DTO["application/dto"]
+    APP["Application Services"] -.->|"implements"| IN
+    APP --> OUT["application/port/out"]
+    APP --> DOMAIN["Domain (Models, Services, Events, Exceptions)"]
+    PERSIST["Adapter: Persistence (JPA)"] -.->|"implements"| OUT
+    PERSIST --> DOMAIN
+    CLIENT["Adapter: Client (REST/gRPC)"] -.->|"implements"| OUT
+    EVENT["Adapter: Event Publisher"] -.->|"implements"| OUT
     
-    WEB -.->|"Allowed: domain/port/in/ only"| DOMAIN
-    PERSIST -.->|FORBIDDEN| WEB
+    WEB -.->|FORBIDDEN| PERSIST
     
     style DOMAIN fill:#e74c3c,color:#fff
     style APP fill:#f39c12,color:#fff
+    style IN fill:#f39c12,color:#fff
+    style OUT fill:#f39c12,color:#fff
     style WEB fill:#3498db,color:#fff
     style PERSIST fill:#2ecc71,color:#fff
 ```
 
-> Controllers MAY depend on `domain/port/in/` interfaces (use case ports). Controllers MUST NOT depend on `domain/model/`, `domain/service/`, or `domain/port/out/`.
+> Controllers MAY depend on `application/port/in/` interfaces and `application/dto/` types. Controllers MUST NOT depend on `domain/model/`, `domain/service/`, `application/port/out/`, JPA repositories, or JPA entities.
 
 | Rule | From | To | Allowed? |
 |---|---|---|---|
-| 1 | Domain | Anything | NO - Domain has ZERO outward dependencies |
-| 2 | Application | Domain | YES |
-| 3 | Application | Infrastructure | NO |
-| 4 | Infrastructure (adapters) | Application | YES - (implements ports) |
-| 5 | Infrastructure (adapters) | Domain | YES - (reads domain models for mapping) |
-| 6 | Controller → Use Case | Via Port interface | YES |
-| 7 | Controller → Entity directly | — | NO - Controllers use DTOs only |
-| 8 | Application services → `CurrentUserProvider` | Shared application abstraction | YES |
-| 9 | Domain/Application → Spring Security or JWT classes | — | NO - use shared abstractions instead |
+| 1 | Feature domain | Shared domain model/exception types | YES |
+| 2 | Domain | Application, infrastructure, DTOs, Spring, JPA, web | NO |
+| 3 | Application services | Domain models, domain services, domain exceptions, domain events | YES |
+| 4 | Application services | `application/port/in` and `application/port/out` | YES - implement input ports and call output ports |
+| 5 | Application | Infrastructure | NO |
+| 6 | Infrastructure adapters | `application/port/out` | YES - implements output ports |
+| 7 | Infrastructure persistence adapters | Domain | YES - maps JPA entities to domain objects |
+| 8 | Controllers | `application/port/in` and `application/dto` | YES |
+| 9 | Controllers | JPA repositories, JPA entities, domain services, output ports | NO |
+| 10 | Application services | `CurrentUserProvider` | YES - shared application abstraction |
+| 11 | Domain/Application | Spring Security or JWT classes | NO - use shared abstractions instead |
 
 ### The Rule
-> **Dependencies point inward.** Domain knows nothing about the outside world. Application knows Domain. Infrastructure knows both but implements contracts defined by inner layers.
+> **Dependencies point inward.** Domain knows nothing about the outside world. Application owns use-case orchestration and its input/output ports. Infrastructure knows application ports and domain models only to implement adapters and perform mapping.
 
 `AuthenticatedUser` is a shared representation of the current actor. `CurrentUserProvider` is a shared application-level abstraction used by modules that need the current user.
 
@@ -44,8 +53,8 @@ graph TB
 ## Module Communication Rules
 
 - Modules should not directly access each other's internals.
-- Cross-module interaction should happen through application services, ports, published interfaces, or Spring Modulith events where appropriate.
-- Loan workflows should not directly own Partner Company or Partner Employee data. Salary Advance loan workflows may reference partner/customer employee link IDs and eligibility result DTOs only.
+- Cross-module interaction should happen through application/public ports, published interfaces, or Spring Modulith events where appropriate.
+- Loan workflows should not directly own Partner Company or Partner Employee data. Salary Advance loan workflows may reference partner/customer employee link IDs and eligibility result records only.
 - Salary Advance limit state belongs to Loan; Partner employee source data and reusable customer employee links belong to Partner/Customer eligibility boundaries.
 - Shared concepts should live in `shared`; product-specific policies must not leak into the top-level package structure.
 - `shared` must not depend on any feature module.
@@ -54,16 +63,17 @@ graph TB
 - `JwtAuthFilter`, `JwtTokenProvider`, and Spring Security adapters belong to identity infrastructure.
 - OCR integration should be treated as an external or infrastructure-facing capability behind a document/OCR port.
 - Audit should record events without controlling the core workflow.
-- Modules must not share JPA entity ownership across bounded contexts. Cross-context relationships are stored as IDs and resolved through ports, application services, or events.
+- Modules must not share JPA entity ownership across bounded contexts. Cross-context relationships are stored as IDs and resolved through application/public ports or events.
+- Repository ports return domain objects, not DTOs. Other output ports return domain objects or application contract records, not REST DTOs.
 
 ### Allowed Patterns
 
 ```java
 // PATTERN 1: Sync — Call public port interface
 // Loan module calling Customer module through a port
-// loan/domain/port/out/CustomerQueryPort.java
+// loan/application/port/out/CustomerQueryPort.java
 public interface CustomerQueryPort {
-    Optional<CustomerSummaryDto> findById(CustomerId id);
+    Optional<CustomerProfileSnapshot> findById(CustomerId id);
 }
 
 // customer/infrastructure/.../CustomerModuleAdapter.java
@@ -93,19 +103,19 @@ public class LoanEventListener {
 
 ```java
 // PATTERN 3: Sync — Product-supporting data through clear ports
-// loan/domain/port/out/PartnerEligibilityPort.java
+// loan/application/port/out/PartnerEligibilityPort.java
 public interface PartnerEligibilityPort {
     CustomerEmployeeLinkData verifyOrGetEmployeeLink(EmployeeLinkQuery query);
     SalaryAdvanceEligibilityData getEligibilityData(CustomerEmployeeLinkId linkId);
 }
 
-// loan/domain/port/out/DocumentReadinessPort.java
+// loan/application/port/out/DocumentReadinessPort.java
 public interface DocumentReadinessPort {
     DocumentReadinessResult checkReadiness(LoanApplicationId loanApplicationId);
 }
 ```
 
-> Product-specific behavior belongs under the `loan` module through product policies and strategies. Partner data remains in `partner`; reusable customer employee links are exposed to Loan through IDs and eligibility DTOs; document and OCR behavior remains in `document` or behind document/OCR ports.
+> Product-specific behavior belongs under the `loan` module through product policies and strategies. Partner data remains in `partner`; reusable customer employee links are exposed to Loan through IDs and eligibility records; document and OCR behavior remains in `document` or behind document/OCR ports.
 
 ```java
 // PATTERN 4: Current actor access through shared abstraction
@@ -137,8 +147,8 @@ import com.meridian.platform.customer.domain.model.Customer; // FORBIDDEN!
 // Loan entity with @ManyToOne to Customer entity // FORBIDDEN!
 
 // ANTI-PATTERN 4: Controller calling repository directly
-// loan/infrastructure/web/LoanController.java
-@Autowired LoanRepository loanRepo; // FORBIDDEN! Must go through use case port
+// loan/infrastructure/adapter/in/web/LoanController.java
+@Autowired JpaLoanRepository loanRepo; // FORBIDDEN! Must go through application input port
 
 // ANTI-PATTERN 5: Domain depending on Spring
 // loan/domain/model/LoanApplication.java
@@ -229,13 +239,13 @@ class ArchitectureRulesTest {
             )
             .because("Use shared CurrentUserProvider/AuthenticatedUser abstractions outside identity infrastructure");
 
-    // Rule: Domain models must not depend on JPA
+    // Rule: Domain must not depend on JPA
     @ArchTest
-    static final ArchRule domainModelMustNotUseJpa =
-        noClasses().that().resideInAPackage("..domain.model..")
+    static final ArchRule domainMustNotUseJpa =
+        noClasses().that().resideInAPackage("..domain..")
             .should().dependOnClassesThat()
             .resideInAnyPackage("jakarta.persistence..")
-            .because("Domain models must not depend on JPA — use JPA entities in infrastructure");
+            .because("Domain must not depend on JPA — use JPA entities in infrastructure persistence");
 
     // Rule: Domain services must not use Spring annotations
     @ArchTest
@@ -245,12 +255,20 @@ class ArchitectureRulesTest {
             .orShould().beAnnotatedWith("org.springframework.transaction.annotation.Transactional")
             .because("Domain services must be pure Java — Spring annotations belong in application layer");
 
-    // Rule: Domain must not depend on infrastructure
+    // Rule: Domain must not depend on application or infrastructure
     @ArchTest
-    static final ArchRule domainMustNotDependOnInfra =
+    static final ArchRule domainMustNotDependOnApplicationOrInfra =
         noClasses().that().resideInAPackage("..domain..")
             .should().dependOnClassesThat()
-            .resideInAPackage("..infrastructure..");
+            .resideInAnyPackage("..application..", "..infrastructure..");
+
+    // Rule: Domain must not depend on DTO packages
+    @ArchTest
+    static final ArchRule domainMustNotDependOnDtos =
+        noClasses().that().resideInAPackage("..domain..")
+            .should().dependOnClassesThat()
+            .resideInAnyPackage("..dto..", "..application.dto..")
+            .because("DTOs belong to application/API boundaries, not domain logic");
 
     // Rule: Application must not depend on infrastructure
     @ArchTest
@@ -275,19 +293,31 @@ class ArchitectureRulesTest {
                 "com.meridian.platform.notification.."
             );
 
-    // Rule: Controllers must only access use case ports (+ security + OpenAPI annotations)
+    // Rule: Controllers must only access application input ports and DTO-facing concerns
     @ArchTest
     static final ArchRule controllersMustUsePortsOnly =
         classes().that().resideInAPackage("..adapter.in.web..")
             .should().onlyDependOnClassesThat()
             .resideInAnyPackage(
-                "..application.dto..", "..domain.port.in..",
-                "..application.mapper..",
+                "..application.dto..", "..application.port.in..",
                 "..shared..", "java..", "jakarta..",
                 "org.springframework.web..", "org.springframework.http..",
                 "org.springframework.security.access.prepost..",  // @PreAuthorize
                 "org.springframework.security.core..",             // Authentication
                 "io.swagger.v3.oas.annotations.."                  // OpenAPI docs
+            );
+
+    // Rule: Controllers must not call repositories or use JPA entities directly
+    @ArchTest
+    static final ArchRule controllersMustNotUseRepositoriesOrJpaEntities =
+        noClasses().that().resideInAPackage("..adapter.in.web..")
+            .should().dependOnClassesThat()
+            .resideInAnyPackage(
+                "..infrastructure.adapter.out.persistence..",
+                "..infrastructure.persistence..",
+                "org.springframework.data.repository..",
+                "org.springframework.data.jpa.repository..",
+                "jakarta.persistence.."
             );
 
     // Rule: No circular dependencies between modules
@@ -340,8 +370,10 @@ class ArchitectureRulesTest {
 
 Use `package-info.java` with Spring Modulith `@ApplicationModule` to control what each module exposes:
 
+Named public interfaces should expose application/public ports or event packages, not `domain/port` packages.
+
 ```java
-// shared/package-info.java — shared kernel and application abstractions only
+// shared/package-info.java — shared kernel and cross-cutting abstractions only
 @org.springframework.modulith.ApplicationModule(
     allowedDependencies = {}
 )
@@ -431,7 +463,7 @@ log.info("Processing loan", kv("loanId", loanId), kv("customerId", customerId));
 
 > **Approval receives all needed data from Loan workflow events** (loan amount, product, customer, Loan Officer recommendation). It never calls Loan synchronously, eliminating bidirectional coupling.
 
-> **Salary Advance uses Partner through public eligibility ports only.** Loan may store customer employee link IDs, partner employee IDs, and application snapshots, but Partner remains the owner of Partner Employee source rows and reusable customer employee links.
+> **Salary Advance uses Partner through application/public eligibility ports only.** Loan may store customer employee link IDs, partner employee IDs, and application snapshots, but Partner remains the owner of Partner Employee source rows and reusable customer employee links.
 
 > **Audit receives business events and records immutable history.** It does not approve, reject, disburse, calculate eligibility, or otherwise control the core workflow.
 

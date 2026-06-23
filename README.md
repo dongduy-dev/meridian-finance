@@ -17,9 +17,9 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 | **Architecture Style** | Modular Monolith (Spring Modulith) |
 | **Internal Design** | Hexagonal Architecture (Ports & Adapters) |
 | **Domain Modeling** | Domain-Driven Design (Bounded Contexts) |
-| **Dependency Direction** | Inward-only — Infrastructure → Application → Domain |
+| **Dependency Direction** | Inward-only — Infrastructure adapters → Application ports/services → Domain |
 | **Boundary Enforcement** | Spring Modulith + ArchUnit fitness functions |
-| **Module Communication** | Sync via port interfaces, async via Spring Modulith `ApplicationEvents` + Transactional Outbox |
+| **Module Communication** | Sync via application/public ports, async via Spring Modulith `ApplicationEvents` + Transactional Outbox |
 | **Future Evolution** | Each module is designed to be independently extractable into a microservice with minimal impact on core business logic |
 
 ### Architecture Diagram
@@ -248,14 +248,14 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 ```text
 com.meridian.platform/
 ├── shared/                  # Shared kernel (minimal)
-│   ├── domain/              # Base entities, Money VO, domain events
-│   ├── application/         # Cross-cutting (idempotency)
-│   └── infrastructure/      # Security config, JWT, exception handling
+│   ├── domain/              # Shared value objects and common domain exceptions
+│   ├── application/         # Cross-cutting application abstractions
+│   └── infrastructure/      # Config, persistence helpers, and web infrastructure
 │
 ├── identity/                # IAM bounded context
-│   ├── domain/              # User, Role, ports
-│   ├── application/         # Auth & user management use cases
-│   └── infrastructure/      # Controllers, JPA adapters
+│   ├── domain/              # User, Role, permissions, and domain events
+│   ├── application/         # Application ports plus auth & user management use cases
+│   └── infrastructure/      # Controllers, Spring Security/JWT, and JPA adapters
 │
 ├── customer/                # Customer bounded context
 ├── partner/                 # Partner company and employee import bounded context
@@ -266,27 +266,32 @@ com.meridian.platform/
 └── notification/            # Optional later
 ```
 
-Each module follows the Hexagonal Architecture internally:
+Each module follows Practical Hexagonal Architecture internally:
 
 ```text
 module/
 ├── domain/
 │   ├── model/               # Entities, value objects, enums
+│   ├── service/             # Domain services
+│   ├── event/               # Domain events
+│   └── exception/           # Business/domain exceptions
+├── application/
 │   ├── port/
 │   │   ├── in/              # Use case interfaces (driving ports)
 │   │   └── out/             # Repository & external service ports (driven ports)
-│   ├── service/             # Domain services
-│   └── event/               # Domain events
-├── application/
 │   ├── service/             # Use case implementations
 │   ├── dto/                 # Request/response DTOs
 │   └── mapper/              # Domain ↔ DTO mapping
 └── infrastructure/
     ├── adapter/
     │   ├── in/web/           # REST controllers
-    │   └── out/persistence/  # JPA repositories & entities
+    │   └── out/              # Persistence, client, event, and storage adapters
     └── config/               # Module-specific configuration
 ```
+
+Controllers call application input ports and return DTOs. Application services implement input ports, call output ports, and map domain objects to DTOs. JPA entities stay inside infrastructure persistence adapters.
+
+`shared/` keeps a simpler shape: `shared/domain/model`, `shared/domain/exception`, `shared/application`, and `shared/infrastructure/{config,persistence,web}`. Cross-cutting web infrastructure such as health checks, global exception handling, and API error responses belongs in `shared/infrastructure/web`.
 
 ---
 

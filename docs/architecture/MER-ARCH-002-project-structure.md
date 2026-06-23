@@ -32,8 +32,9 @@ com.meridian.platform/
 │       │   ├── BaseJpaEntity.java        # @MappedSuperclass: id, createdAt, updatedAt
 │       │   └── IdempotencyRepository.java
 │       └── web/
+│           ├── HealthController.java
 │           ├── GlobalExceptionHandler.java
-│           └── ApiResponse.java
+│           └── ApiErrorResponse.java
 │
 ├── identity/                        # ── IAM Module ──
 │   ├── domain/
@@ -43,14 +44,22 @@ com.meridian.platform/
 │   │   │   ├── Permission.java
 │   │   │   ├── RefreshToken.java
 │   │   │   └── UserStatus.java
-│   │   └── port/
-│   │       ├── in/
-│   │       │   ├── AuthenticationUseCase.java
-│   │       │   └── UserManagementUseCase.java
-│   │       └── out/
-│   │           ├── UserRepository.java
-│   │           └── RefreshTokenRepository.java
+│   │   ├── service/
+│   │   │   └── RolePermissionPolicy.java
+│   │   ├── event/
+│   │   │   ├── UserRegisteredEvent.java
+│   │   │   └── UserSuspendedEvent.java
+│   │   └── exception/
+│   │       └── AuthenticationException.java
 │   ├── application/
+│   │   ├── port/
+│   │   │   ├── in/
+│   │   │   │   ├── AuthenticationUseCase.java
+│   │   │   │   └── UserManagementUseCase.java
+│   │   │   └── out/
+│   │   │       ├── UserRepository.java
+│   │   │       ├── RefreshTokenRepository.java
+│   │   │       └── TokenIssuerPort.java
 │   │   ├── service/
 │   │   │   ├── AuthenticationService.java
 │   │   │   └── UserManagementService.java
@@ -87,13 +96,23 @@ com.meridian.platform/
 │   │   │   ├── CustomerProfile.java
 │   │   │   ├── BankAccountInfo.java
 │   │   │   └── VerificationStatus.java
-│   │   └── port/
-│   │       ├── in/
-│   │       │   ├── ManageCustomerProfileUseCase.java
-│   │       │   └── QueryCustomerUseCase.java
-│   │       └── out/
-│   │           └── CustomerRepository.java
-│   ├── application/ ...             # Profile, verification status, bank info, sensitive data handling
+│   │   ├── service/
+│   │   │   └── CustomerVerificationPolicy.java
+│   │   ├── event/
+│   │   │   ├── CustomerVerifiedEvent.java
+│   │   │   └── CustomerProfileUpdatedEvent.java
+│   │   └── exception/
+│   │       └── CustomerDomainException.java
+│   ├── application/
+│   │   ├── port/
+│   │   │   ├── in/
+│   │   │   │   ├── ManageCustomerProfileUseCase.java
+│   │   │   │   └── QueryCustomerUseCase.java
+│   │   │   └── out/
+│   │   │       └── CustomerRepository.java
+│   │   ├── service/ ...             # Profile, verification status, bank info, sensitive data handling
+│   │   ├── dto/
+│   │   └── mapper/
 │   └── infrastructure/ ...
 │
 ├── partner/                         # ── Partner Module ──
@@ -105,17 +124,28 @@ com.meridian.platform/
 │   │   │   ├── CustomerPartnerEmployeeLink.java
 │   │   │   ├── CustomerPartnerEmployeeLinkStatus.java
 │   │   │   └── EmployeeEligibilityData.java
-│   │   └── port/
-│   │       ├── in/
-│   │       │   ├── ManagePartnerCompanyUseCase.java
-│   │       │   ├── ImportPartnerEmployeesUseCase.java
-│   │       │   ├── ManageCustomerEmployeeLinkUseCase.java
-│   │       │   └── VerifyPartnerEmployeeUseCase.java
-│   │       └── out/
-│   │           ├── PartnerCompanyRepository.java
-│   │           ├── PartnerEmployeeRepository.java
-│   │           └── CustomerPartnerEmployeeLinkRepository.java
-│   ├── application/ ...             # Partner Companies, Partner Employees, import batches, reusable Salary Advance employee links
+│   │   ├── service/
+│   │   │   └── EmployeeEligibilityPolicy.java
+│   │   ├── event/
+│   │   │   ├── PartnerCompanyActivatedEvent.java
+│   │   │   ├── PartnerEmployeeImportCompletedEvent.java
+│   │   │   └── CustomerPartnerEmployeeLinkedEvent.java
+│   │   └── exception/
+│   │       └── PartnerDomainException.java
+│   ├── application/
+│   │   ├── port/
+│   │   │   ├── in/
+│   │   │   │   ├── ManagePartnerCompanyUseCase.java
+│   │   │   │   ├── ImportPartnerEmployeesUseCase.java
+│   │   │   │   ├── ManageCustomerEmployeeLinkUseCase.java
+│   │   │   │   └── VerifyPartnerEmployeeUseCase.java
+│   │   │   └── out/
+│   │   │       ├── PartnerCompanyRepository.java
+│   │   │       ├── PartnerEmployeeRepository.java
+│   │   │       └── CustomerPartnerEmployeeLinkRepository.java
+│   │   ├── service/ ...             # Partner Companies, Partner Employees, import batches, reusable Salary Advance employee links
+│   │   ├── dto/
+│   │   └── mapper/
 │   └── infrastructure/ ...
 │
 ├── loan/                            # ── Loan Module (FULL HEXAGONAL) ──
@@ -139,6 +169,23 @@ com.meridian.platform/
 │   │   │   ├── SalaryAdvanceLimitPolicy.java
 │   │   │   ├── UnsecuredConsumerLoanPolicy.java
 │   │   │   └── CollateralLoanPolicy.java
+│   │   ├── service/
+│   │   │   ├── LoanEligibilityService.java       # Domain service (PURE JAVA — no @Service)
+│   │   │   ├── LoanProductPolicyService.java     # Selects product policy/strategy
+│   │   │   ├── SalaryAdvanceLimitService.java    # Reserves, releases, refreshes, suspends, disables limits
+│   │   │   └── RepaymentScheduleService.java     # Domain service (PURE JAVA — no @Service)
+│   │   ├── event/
+│   │   │   ├── LoanSubmittedEvent.java       # Carries: loanId, customerId, productId, amount
+│   │   │   ├── LoanReviewStartedEvent.java
+│   │   │   ├── LoanSentForApprovalEvent.java
+│   │   │   ├── LoanApprovedEvent.java
+│   │   │   ├── LoanRejectedEvent.java
+│   │   │   ├── LoanCancelledEvent.java
+│   │   │   ├── LoanDisbursedEvent.java
+│   │   │   └── LoanCompletedEvent.java
+│   │   └── exception/
+│   │       └── LoanDomainException.java
+│   ├── application/
 │   │   ├── port/
 │   │   │   ├── in/
 │   │   │   │   ├── SubmitLoanUseCase.java
@@ -151,33 +198,18 @@ com.meridian.platform/
 │   │   │   │   ├── ManageLoanProductUseCase.java  # CRUD for loan products
 │   │   │   │   ├── QueryLoanProductUseCase.java   # Read-only loan product queries
 │   │   │   │   └── command/
-│   │   │   │       ├── SubmitLoanCommand.java      # Pure Java record (domain layer)
+│   │   │   │       ├── SubmitLoanCommand.java      # Use-case command record
 │   │   │   │       ├── ReviewLoanCommand.java
 │   │   │   │       ├── CreateLoanProductCommand.java
 │   │   │   │       └── UpdateLoanProductCommand.java
 │   │   │   └── out/
-│   │   │       ├── LoanRepository.java
+│   │   │       ├── LoanRepository.java             # Returns domain objects, not DTOs
 │   │   │       ├── SalaryAdvanceLimitRepository.java
-│   │   │       ├── LoanProductRepository.java     # CRUD for loan products
-│   │   │       ├── CustomerQueryPort.java         # To call Customer module
-│   │   │       ├── PartnerEligibilityPort.java    # To call Partner module for employee links and eligibility checks
-│   │   │       ├── DocumentReadinessPort.java     # To call Document module for checklist/readiness
+│   │   │       ├── LoanProductRepository.java      # CRUD for loan products
+│   │   │       ├── CustomerQueryPort.java          # To call Customer module
+│   │   │       ├── PartnerEligibilityPort.java     # To call Partner module for employee links and eligibility checks
+│   │   │       ├── DocumentReadinessPort.java      # To call Document module for checklist/readiness
 │   │   │       └── LoanEventPublisher.java
-│   │   ├── service/
-│   │   │   ├── LoanEligibilityService.java       # Domain service (PURE JAVA — no @Service)
-│   │   │   ├── LoanProductPolicyService.java     # Selects product policy/strategy
-│   │   │   ├── SalaryAdvanceLimitService.java    # Reserves, releases, refreshes, suspends, disables limits
-│   │   │   └── RepaymentScheduleService.java     # Domain service (PURE JAVA — no @Service)
-│   │   └── event/
-│   │       ├── LoanSubmittedEvent.java       # Carries: loanId, customerId, productId, amount
-│   │       ├── LoanReviewStartedEvent.java
-│   │       ├── LoanSentForApprovalEvent.java
-│   │       ├── LoanApprovedEvent.java
-│   │       ├── LoanRejectedEvent.java
-│   │       ├── LoanCancelledEvent.java
-│   │       ├── LoanDisbursedEvent.java
-│   │       └── LoanCompletedEvent.java
-│   ├── application/
 │   │   ├── service/
 │   │   │   ├── SubmitLoanService.java       # Implements SubmitLoanUseCase
 │   │   │   ├── ReviewLoanService.java
@@ -227,6 +259,14 @@ com.meridian.platform/
 │   │   │   ├── MakerCheckerControl.java
 │   │   │   ├── ApprovalHistory.java
 │   │   │   └── ApprovalStatus.java
+│   │   ├── service/
+│   │   │   └── MakerCheckerPolicyService.java
+│   │   ├── event/
+│   │   │   ├── LoanReviewRecommendedEvent.java
+│   │   │   └── ApprovalDecisionRecordedEvent.java
+│   │   └── exception/
+│   │       └── ApprovalDomainException.java
+│   ├── application/
 │   │   ├── port/
 │   │   │   ├── in/
 │   │   │   │   ├── CreateApprovalUseCase.java
@@ -236,10 +276,6 @@ com.meridian.platform/
 │   │   │   └── out/
 │   │   │       ├── ApprovalRepository.java
 │   │   │       └── ApprovalEventPublisher.java
-│   │   └── event/
-│   │       ├── LoanReviewRecommendedEvent.java
-│   │       └── ApprovalDecisionRecordedEvent.java
-│   ├── application/
 │   │   ├── service/
 │   │   │   ├── CreateApprovalService.java
 │   │   │   ├── SubmitReviewRecommendationService.java
@@ -263,7 +299,7 @@ com.meridian.platform/
 │       │       └── event/
 │       │           └── SpringApprovalEventPublisher.java
 │       ├── listener/
-│       │   └── LoanEventListener.java    # @ApplicationModuleListener for LoanSentForApprovalEvent
+│       │   └── LoanEventListener.java    # Inbound event adapter; @ApplicationModuleListener for LoanSentForApprovalEvent
 │       └── config/
 │           └── ApprovalModuleConfig.java
 │
@@ -281,18 +317,26 @@ com.meridian.platform/
 │   │   │   ├── OcrResult.java
 │   │   │   ├── StorageReference.java     # Value object
 │   │   │   └── DocumentType.java         # Enum
-│   │   └── port/
-│   │       ├── in/
-│   │       │   ├── UploadDocumentUseCase.java
-│   │       │   ├── ReviewDocumentUseCase.java
-│   │       │   ├── ManageDocumentChecklistUseCase.java
-│   │       │   ├── QueryDocumentUseCase.java
-│   │       │   └── DownloadDocumentUseCase.java
-│   │       └── out/
-│   │           ├── DocumentRepository.java
-│   │           ├── FileStoragePort.java   # Abstraction for local/S3
-│   │           └── OcrProcessingPort.java # Thin REST client to Python service
+│   │   ├── service/
+│   │   │   └── DocumentReadinessPolicy.java
+│   │   ├── event/
+│   │   │   ├── DocumentUploadedEvent.java
+│   │   │   ├── DocumentReviewedEvent.java
+│   │   │   └── DocumentChecklistReadyEvent.java
+│   │   └── exception/
+│   │       └── DocumentDomainException.java
 │   ├── application/
+│   │   ├── port/
+│   │   │   ├── in/
+│   │   │   │   ├── UploadDocumentUseCase.java
+│   │   │   │   ├── ReviewDocumentUseCase.java
+│   │   │   │   ├── ManageDocumentChecklistUseCase.java
+│   │   │   │   ├── QueryDocumentUseCase.java
+│   │   │   │   └── DownloadDocumentUseCase.java
+│   │   │   └── out/
+│   │   │       ├── DocumentRepository.java
+│   │   │       ├── FileStoragePort.java   # Abstraction for local/S3
+│   │   │       └── OcrProcessingPort.java # Thin REST client to Python service
 │   │   ├── service/
 │   │   │   ├── UploadDocumentService.java
 │   │   │   ├── ReviewDocumentService.java
@@ -326,24 +370,51 @@ com.meridian.platform/
 │   │   │   ├── AuditEvent.java
 │   │   │   ├── BusinessActionHistory.java
 │   │   │   └── StatusTransitionHistory.java
-│   │   └── port/
-│   │       └── in/
-│   │           └── QueryAuditUseCase.java   # Read-only audit log queries
+│   │   └── exception/
+│   │       └── AuditDomainException.java
 │   ├── application/
-│   │   └── service/
-│   │       └── AuditEventService.java       # Records events; does not control workflow decisions
+│   │   ├── port/
+│   │   │   ├── in/
+│   │   │   │   └── QueryAuditUseCase.java   # Read-only audit log queries
+│   │   │   └── out/
+│   │   │       └── AuditEventRepository.java
+│   │   ├── service/
+│   │   │   └── AuditEventService.java       # Records events; does not control workflow decisions
+│   │   ├── dto/
+│   │   └── mapper/
 │   └── infrastructure/
-│       ├── listener/
-│       │   └── DomainEventAuditListener.java  # Uses @ApplicationModuleListener (not @EventListener)
-│       ├── persistence/
-│       │   └── JpaAuditEventRepository.java
-│       └── web/
-│           └── AuditController.java          # Calls QueryAuditUseCase
+│       └── adapter/
+│           ├── in/
+│           │   ├── event/
+│           │   │   └── DomainEventAuditListener.java  # Terminal @ApplicationModuleListener consumer
+│           │   └── web/
+│           │       └── AuditController.java           # Calls QueryAuditUseCase
+│           └── out/
+│               └── persistence/
+│                   └── JpaAuditEventRepository.java
 │
 └── notification/                    # ── Notification Module (OPTIONAL LATER) ──
-    ├── domain/ ...
-    ├── application/ ...
-    └── infrastructure/ ...
+    ├── domain/
+    │   ├── model/
+    │   │   ├── Notification.java
+    │   │   └── NotificationTemplate.java
+    │   ├── event/
+    │   └── exception/
+    ├── application/
+    │   ├── port/
+    │   │   ├── in/
+    │   │   │   └── QueryNotificationUseCase.java
+    │   │   └── out/
+    │   │       └── NotificationSenderPort.java
+    │   ├── service/
+    │   ├── dto/
+    │   └── mapper/
+    └── infrastructure/
+        └── adapter/
+            ├── in/
+            │   └── event/
+            └── out/
+                └── client/
 ```
 
 Salary Advance remains inside the generic lending architecture. `partner/` owns Partner Companies, Partner Employees, import batches, and reusable customer employee links. `loan/` owns Salary Advance limit state, limit movements, application reservation/release behavior, and application-level Salary Advance verification snapshots. Do not create top-level modules named `salaryadvance`, `unsecuredloan`, or `collateralloan`.
@@ -368,6 +439,6 @@ Salary Advance remains inside the generic lending architecture. `partner/` owns 
 ## Testing Pyramid Strategy
 
 1. **Domain Unit Tests (70%)**: Pure Java, zero Spring dependencies. Fast. Tests core state machines, value objects, and domain services.
-2. **Application Layer Tests (15%)**: Tests use cases and transaction boundaries using `@ExtendWith(SpringExtension.class)` and `@MockitoBean` to mock out ports.
+2. **Application Layer Tests (15%)**: Tests use cases and transaction boundaries using `@ExtendWith(SpringExtension.class)` and `@MockitoBean` to mock application output ports.
 3. **Data/Adapter Integration Tests (10%)**: Tests `JpaRepository` implementations and Flyway migrations against a real PostgreSQL instance using Testcontainers (`@DataJpaTest` + `@AutoConfigureTestDatabase(replace = Replace.NONE)`).
 4. **Module & E2E Tests (5%)**: Tests cross-module interactions using Spring Modulith's `@ApplicationModuleTest` and full REST API testing using `MockMvc` or `TestRestTemplate`.

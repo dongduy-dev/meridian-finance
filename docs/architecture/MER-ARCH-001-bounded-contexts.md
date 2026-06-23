@@ -2,6 +2,8 @@
 
 ## Context Map Overview
 
+> Public Interface entries refer to application/public ports exposed by a module. They are not domain-owned ports.
+
 ```mermaid
 graph TB
     subgraph Core["Core Domain"]
@@ -64,7 +66,7 @@ graph TB
 | **Events Published** | `PartnerCompanyActivatedEvent`, `PartnerEmployeeImportCompletedEvent`, `CustomerPartnerEmployeeLinkedEvent`, `CustomerPartnerEmployeeLinkSuspendedEvent` |
 | **Microservice Candidacy** | Future extraction candidate. In MVP it supports the Loan Core for Salary Advance policy checks. |
 
-Partner Management owns Partner Company and Partner Employee source data. It also owns the reusable customer-to-partner-employee eligibility link because that link answers whether a customer is verified as an employee of a partner company. Loan Core may reference the link by ID and consume eligibility data through ports, but it must not own Partner Employee records.
+Partner Management owns Partner Company and Partner Employee source data. It also owns the reusable customer-to-partner-employee eligibility link because that link answers whether a customer is verified as an employee of a partner company. Loan Core may reference the link by ID and consume eligibility data through application/public ports, but it must not own Partner Employee records.
 
 ---
 
@@ -119,7 +121,7 @@ Loan Core owns the current Salary Advance limit because it is lending state: tot
 | Aspect | Detail |
 |---|---|
 | **Responsibilities** | OCR-assisted document processing, Vietnamese TrOCR inference, document text extraction, field parsing |
-| **Java Adapter** | `OcrProcessingPort.submitForProcessing(docId)`, `.getResult(jobId)` |
+| **Application/Output Port** | `OcrProcessingPort.submitForProcessing(docId)`, `.getResult(jobId)` |
 | **Python Service** | FastAPI + TrOCR model and async workers when the OCR service is enabled |
 | **Core MVP Boundary** | Manual upload, checklist handling, manual review, replacement, waiver, and readiness checks work without OCR. |
 | **Phase 2 Boundary** | OCR is assistive only; checklist readiness, replacement, waiver, and acceptance remain controlled by Document Management and manual review. |
@@ -160,7 +162,7 @@ Loan Core owns the current Salary Advance limit because it is lending state: tot
 
 > **Approval ↔ Loan coordination is event-driven for state changes.** Loan sends sufficient application context and Loan Officer recommendation when an approval decision is needed. Approval publishes the recorded decision so Loan can update the application lifecycle. No direct entity imports are allowed between these modules.
 
-> **Salary Advance eligibility and limit coordination uses clear ownership.** Partner owns Partner Company, Partner Employee, and the reusable customer employee link. Loan owns Salary Advance limit state, limit movements, and application verification snapshots. Cross-context references use IDs and public ports, not shared JPA entity ownership.
+> **Salary Advance eligibility and limit coordination uses clear ownership.** Partner owns Partner Company, Partner Employee, and the reusable customer employee link. Loan owns Salary Advance limit state, limit movements, and application verification snapshots. Cross-context references use IDs and application/public ports, not shared JPA entity ownership.
 
 > **Event delivery is transactional, not fire-and-forget.**
 > `spring-modulith-events-jdbc` writes every published event to the `event_publication`

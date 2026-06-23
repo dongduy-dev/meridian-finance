@@ -36,3 +36,6 @@ build/
 *.zip
 *.rar
 *.7z
+
+### ai-assisted ###
+.agents
