@@ -2,10 +2,10 @@ package com.meridian.platform.partner.application.service;
 
 import com.meridian.platform.partner.application.dto.PartnerEmployeeImportBatchDto;
 import com.meridian.platform.partner.application.mapper.PartnerEmployeeImportBatchMapper;
-import com.meridian.platform.partner.domain.port.in.QueryPartnerEmployeeImportBatchUseCase;
-import com.meridian.platform.partner.domain.port.out.PartnerCompanyRepository;
-import com.meridian.platform.partner.domain.port.out.PartnerEmployeeImportBatchRepository;
-import com.meridian.platform.shared.domain.exception.ResourceNotFoundException;
+import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeImportBatchUseCase;
+import com.meridian.platform.partner.application.port.out.PartnerCompanyRepository;
+import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportBatchRepository;
+import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +36,7 @@ public class QueryPartnerEmployeeImportBatchService implements QueryPartnerEmplo
         Objects.requireNonNull(partnerCompanyId, "partnerCompanyId must not be null");
 
         partnerCompanyRepository.findById(partnerCompanyId)
-                .orElseThrow(() -> new ResourceNotFoundException(
+                .orElseThrow(() -> new EntityNotFoundException(
                         "PARTNER_COMPANY_NOT_FOUND",
                         "Partner company was not found."
                 ));

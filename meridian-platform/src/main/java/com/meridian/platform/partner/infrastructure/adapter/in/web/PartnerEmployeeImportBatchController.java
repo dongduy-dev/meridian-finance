@@ -1,7 +1,7 @@
 package com.meridian.platform.partner.infrastructure.adapter.in.web;
 
 import com.meridian.platform.partner.application.dto.PartnerEmployeeImportBatchDto;
-import com.meridian.platform.partner.domain.port.in.QueryPartnerEmployeeImportBatchUseCase;
+import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeImportBatchUseCase;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;

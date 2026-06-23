@@ -2,13 +2,12 @@ package com.meridian.platform.partner.application.mapper;
 
 import com.meridian.platform.partner.application.dto.PartnerEmployeeDto;
 import com.meridian.platform.partner.domain.model.PartnerEmployee;
+import org.springframework.stereotype.Component;
 
-public final class PartnerEmployeeMapper {
+@Component
+public class PartnerEmployeeMapper {
 
-    private PartnerEmployeeMapper() {
-    }
-
-    public static PartnerEmployeeDto toDto(PartnerEmployee partnerEmployee) {
+    public PartnerEmployeeDto toDto(PartnerEmployee partnerEmployee) {
         return new PartnerEmployeeDto(
                 partnerEmployee.id(),
                 partnerEmployee.partnerCompanyId(),

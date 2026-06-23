@@ -1,4 +1,4 @@
-package com.meridian.platform.partner.domain.port.in;
+package com.meridian.platform.partner.application.port.in;
 
 import com.meridian.platform.partner.application.dto.PartnerEmployeeImportBatchDto;
 

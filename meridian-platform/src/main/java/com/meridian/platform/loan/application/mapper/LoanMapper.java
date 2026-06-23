@@ -2,13 +2,12 @@ package com.meridian.platform.loan.application.mapper;
 
 import com.meridian.platform.loan.application.dto.LoanProductDto;
 import com.meridian.platform.loan.domain.model.LoanProduct;
+import org.springframework.stereotype.Component;
 
-public final class LoanMapper {
+@Component
+public class LoanMapper {
 
-    private LoanMapper() {
-    }
-
-    public static LoanProductDto toLoanProductDto(LoanProduct loanProduct) {
+    public LoanProductDto toLoanProductDto(LoanProduct loanProduct) {
         return new LoanProductDto(
                 loanProduct.productCode().name(),
                 loanProduct.productType().name(),

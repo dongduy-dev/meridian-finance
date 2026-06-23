@@ -1,4 +1,4 @@
-package com.meridian.platform.partner.domain.port.out;
+package com.meridian.platform.partner.application.port.out;
 
 import com.meridian.platform.partner.domain.model.PartnerCompany;
 

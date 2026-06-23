@@ -3,7 +3,7 @@ package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 import com.meridian.platform.loan.domain.model.LoanProduct;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
-import com.meridian.platform.loan.domain.port.out.LoanProductRepository;
+import com.meridian.platform.loan.application.port.out.LoanProductRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;

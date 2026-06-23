@@ -2,9 +2,9 @@ package com.meridian.platform.partner.application.service;
 
 import com.meridian.platform.partner.application.dto.PartnerCompanyDto;
 import com.meridian.platform.partner.application.mapper.PartnerCompanyMapper;
-import com.meridian.platform.partner.domain.port.in.QueryPartnerCompanyUseCase;
-import com.meridian.platform.partner.domain.port.out.PartnerCompanyRepository;
-import com.meridian.platform.shared.domain.exception.ResourceNotFoundException;
+import com.meridian.platform.partner.application.port.in.QueryPartnerCompanyUseCase;
+import com.meridian.platform.partner.application.port.out.PartnerCompanyRepository;
+import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,7 +42,7 @@ public class QueryPartnerCompanyService implements QueryPartnerCompanyUseCase {
 
         return partnerCompanyRepository.findById(partnerCompanyId)
                 .map(partnerCompanyMapper::toDto)
-                .orElseThrow(() -> new ResourceNotFoundException(
+                .orElseThrow(() -> new EntityNotFoundException(
                         "PARTNER_COMPANY_NOT_FOUND",
                         "Partner company was not found."
                 ));

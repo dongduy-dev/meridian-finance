@@ -1,7 +1,7 @@
 package com.meridian.platform.partner.infrastructure.adapter.out.persistence;
 
+import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportBatchRepository;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatch;
-import com.meridian.platform.partner.domain.port.out.PartnerEmployeeImportBatchRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
