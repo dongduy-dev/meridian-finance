@@ -1,6 +1,6 @@
-package com.meridian.platform.shared.infrastructure.adapter.in.web;
+package com.meridian.platform.shared.infrastructure.web;
 
-import com.meridian.platform.shared.domain.exception.ResourceNotFoundException;
+import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,9 +12,9 @@ import java.time.Instant;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ApiErrorResponse> handleResourceNotFoundException(
-            ResourceNotFoundException exception,
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleEntityNotFoundException(
+            EntityNotFoundException exception,
             HttpServletRequest request
     ) {
         ApiErrorResponse response = new ApiErrorResponse(

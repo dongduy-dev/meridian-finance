@@ -1,4 +1,4 @@
-package com.meridian.platform.shared.infrastructure.adapter.in.web;
+package com.meridian.platform.shared.infrastructure.web;
 
 import java.time.Instant;
 

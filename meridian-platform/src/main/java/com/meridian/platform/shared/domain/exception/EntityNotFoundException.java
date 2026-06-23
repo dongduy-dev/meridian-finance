@@ -1,15 +1,15 @@
 package com.meridian.platform.shared.domain.exception;
 
-public class ResourceNotFoundException extends RuntimeException {
+public class EntityNotFoundException extends RuntimeException {
 
     private final String errorCode;
 
-    public ResourceNotFoundException(String message) {
+    public EntityNotFoundException(String message) {
         super(message);
         this.errorCode = "RESOURCE_NOT_FOUND";
     }
 
-    public ResourceNotFoundException(String errorCode, String message) {
+    public EntityNotFoundException(String errorCode, String message) {
         super(message);
         this.errorCode = errorCode;
     }

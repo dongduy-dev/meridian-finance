@@ -1,4 +1,4 @@
-package com.meridian.platform.loan.domain.port.out;
+package com.meridian.platform.loan.application.port.out;
 
 import com.meridian.platform.loan.domain.model.LoanProduct;
 

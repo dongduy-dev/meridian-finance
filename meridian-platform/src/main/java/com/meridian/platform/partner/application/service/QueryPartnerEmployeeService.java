@@ -1,8 +1,9 @@
 package com.meridian.platform.partner.application.service;
 
-import com.meridian.platform.partner.domain.model.PartnerEmployee;
-import com.meridian.platform.partner.domain.port.in.QueryPartnerEmployeeUseCase;
-import com.meridian.platform.partner.domain.port.out.PartnerEmployeeRepository;
+import com.meridian.platform.partner.application.dto.PartnerEmployeeDto;
+import com.meridian.platform.partner.application.mapper.PartnerEmployeeMapper;
+import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeUseCase;
+import com.meridian.platform.partner.application.port.out.PartnerEmployeeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,20 +16,30 @@ import java.util.UUID;
 public class QueryPartnerEmployeeService implements QueryPartnerEmployeeUseCase {
 
     private final PartnerEmployeeRepository partnerEmployeeRepository;
+    private final PartnerEmployeeMapper partnerEmployeeMapper;
 
-    public QueryPartnerEmployeeService(PartnerEmployeeRepository partnerEmployeeRepository) {
+    public QueryPartnerEmployeeService(
+            PartnerEmployeeRepository partnerEmployeeRepository,
+            PartnerEmployeeMapper partnerEmployeeMapper
+    ) {
         this.partnerEmployeeRepository = partnerEmployeeRepository;
+        this.partnerEmployeeMapper = partnerEmployeeMapper;
     }
 
     @Override
-    public List<PartnerEmployee> getPartnerEmployeesByCompanyId(UUID partnerCompanyId, boolean activeOnly) {
+    public List<PartnerEmployeeDto> getPartnerEmployeesByCompanyId(UUID partnerCompanyId, boolean activeOnly) {
         Objects.requireNonNull(partnerCompanyId, "partnerCompanyId must not be null");
 
         if (activeOnly) {
-            return partnerEmployeeRepository.findActiveByPartnerCompanyId(partnerCompanyId);
+            return partnerEmployeeRepository.findActiveByPartnerCompanyId(partnerCompanyId)
+                    .stream()
+                    .map(partnerEmployeeMapper::toDto)
+                    .toList();
         }
-        else {
-            return partnerEmployeeRepository.findByPartnerCompanyId(partnerCompanyId);
-        }
+
+        return partnerEmployeeRepository.findByPartnerCompanyId(partnerCompanyId)
+                .stream()
+                .map(partnerEmployeeMapper::toDto)
+                .toList();
     }
 }

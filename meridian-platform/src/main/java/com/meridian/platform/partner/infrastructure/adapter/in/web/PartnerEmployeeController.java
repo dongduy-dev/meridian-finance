@@ -1,8 +1,7 @@
 package com.meridian.platform.partner.infrastructure.adapter.in.web;
 
 import com.meridian.platform.partner.application.dto.PartnerEmployeeDto;
-import com.meridian.platform.partner.application.mapper.PartnerEmployeeMapper;
-import com.meridian.platform.partner.domain.port.in.QueryPartnerEmployeeUseCase;
+import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeUseCase;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,9 +22,6 @@ public class PartnerEmployeeController {
             @PathVariable UUID partnerCompanyId,
             @RequestParam(defaultValue = "false") boolean activeOnly
     ) {
-        return queryPartnerEmployeeUseCase.getPartnerEmployeesByCompanyId(partnerCompanyId, activeOnly)
-                .stream()
-                .map(PartnerEmployeeMapper::toDto)
-                .toList();
+        return queryPartnerEmployeeUseCase.getPartnerEmployeesByCompanyId(partnerCompanyId, activeOnly);
     }
 }
