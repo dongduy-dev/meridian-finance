@@ -2,9 +2,11 @@ package com.meridian.platform.partner.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportBatchRepository;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatch;
+import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatchStatus;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -22,6 +24,15 @@ public class PartnerEmployeeImportBatchRepositoryAdapter implements PartnerEmplo
                 .stream()
                 .map(this::toDomain)
                 .toList();
+    }
+
+    @Override
+    public Optional<PartnerEmployeeImportBatch> findLatestCompletedByPartnerCompanyId(UUID partnerCompanyId) {
+        return jpaRepository.findFirstByPartnerCompanyIdAndStatusOrderByEffectiveMonthDescIdDesc(
+                        partnerCompanyId,
+                        PartnerEmployeeImportBatchStatus.COMPLETED
+                )
+                .map(this::toDomain);
     }
 
     private PartnerEmployeeImportBatch toDomain(PartnerEmployeeImportBatchJpaEntity entity) {

@@ -9,4 +9,10 @@ public interface JpaPartnerEmployeeRepository extends JpaRepository<PartnerEmplo
 
     List<PartnerEmployeeJpaEntity> findByPartnerCompanyIdOrderByEmployeeCodeAsc(UUID partnerCompanyId);
     List<PartnerEmployeeJpaEntity> findByPartnerCompanyIdAndActiveTrueOrderByEmployeeCodeAsc(UUID partnerCompanyId);
+    List<PartnerEmployeeJpaEntity> findByPartnerCompanyIdAndImportBatchIdAndIdentityReferenceAndEmployeeCode(
+            UUID partnerCompanyId,
+            UUID importBatchId,
+            String identityReference,
+            String employeeCode
+    );
 }
