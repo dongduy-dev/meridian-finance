@@ -8,4 +8,10 @@ import java.util.UUID;
 public interface PartnerEmployeeRepository {
     List<PartnerEmployee> findByPartnerCompanyId(UUID partnerCompanyId);
     List<PartnerEmployee> findActiveByPartnerCompanyId(UUID companyId);
+    List<PartnerEmployee> findByVerificationEvidence(
+            UUID partnerCompanyId,
+            UUID importBatchId,
+            String identityReference,
+            String employeeCode
+    );
 }

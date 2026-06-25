@@ -32,6 +32,25 @@ public class PartnerEmployeeRepositoryAdapter implements PartnerEmployeeReposito
                 .toList();
     }
 
+    @Override
+    public List<PartnerEmployee> findByVerificationEvidence(
+            UUID partnerCompanyId,
+            UUID importBatchId,
+            String identityReference,
+            String employeeCode
+    ) {
+        return jpaPartnerEmployeeRepository
+                .findByPartnerCompanyIdAndImportBatchIdAndIdentityReferenceAndEmployeeCode(
+                        partnerCompanyId,
+                        importBatchId,
+                        identityReference,
+                        employeeCode
+                )
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
     private PartnerEmployee toDomain(PartnerEmployeeJpaEntity entity) {
         return new PartnerEmployee(
                 entity.getId(),
