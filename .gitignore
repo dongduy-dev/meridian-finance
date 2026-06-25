@@ -39,3 +39,4 @@ build/
 
 ### ai-assisted ###
 .agents
+AGENTS.md
