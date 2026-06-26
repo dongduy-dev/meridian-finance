@@ -230,6 +230,13 @@ class VerifyPartnerEmployeeServiceTest {
         private final List<PartnerEmployee> employees = new ArrayList<>();
 
         @Override
+        public Optional<PartnerEmployee> findById(UUID partnerEmployeeId) {
+            return employees.stream()
+                    .filter(employee -> employee.id().equals(partnerEmployeeId))
+                    .findFirst();
+        }
+
+        @Override
         public List<PartnerEmployee> findByPartnerCompanyId(UUID partnerCompanyId) {
             return List.of();
         }
@@ -259,6 +266,11 @@ class VerifyPartnerEmployeeServiceTest {
 
         private Optional<CustomerPartnerEmployeeLink> currentLink = Optional.empty();
         private CustomerPartnerEmployeeLink savedLink;
+
+        @Override
+        public Optional<CustomerPartnerEmployeeLink> findById(UUID customerPartnerEmployeeLinkId) {
+            return currentLink.filter(link -> link.id().equals(customerPartnerEmployeeLinkId));
+        }
 
         @Override
         public Optional<CustomerPartnerEmployeeLink> findCurrentByCustomerIdAndPartnerCompanyId(

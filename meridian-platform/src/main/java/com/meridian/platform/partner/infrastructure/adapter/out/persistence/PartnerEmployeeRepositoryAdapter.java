@@ -5,6 +5,7 @@ import com.meridian.platform.partner.domain.model.PartnerEmployee;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -14,6 +15,12 @@ public class PartnerEmployeeRepositoryAdapter implements PartnerEmployeeReposito
 
     public PartnerEmployeeRepositoryAdapter(JpaPartnerEmployeeRepository jpaPartnerEmployeeRepository) {
         this.jpaPartnerEmployeeRepository = jpaPartnerEmployeeRepository;
+    }
+
+    @Override
+    public Optional<PartnerEmployee> findById(UUID partnerEmployeeId) {
+        return jpaPartnerEmployeeRepository.findById(partnerEmployeeId)
+                .map(this::toDomain);
     }
 
     @Override

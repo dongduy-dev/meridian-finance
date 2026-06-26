@@ -7,6 +7,8 @@ import java.util.UUID;
 
 public interface CustomerPartnerEmployeeLinkRepository {
 
+    Optional<CustomerPartnerEmployeeLink> findById(UUID customerPartnerEmployeeLinkId);
+
     Optional<CustomerPartnerEmployeeLink> findCurrentByCustomerIdAndPartnerCompanyId(
             UUID customerId,
             UUID partnerCompanyId

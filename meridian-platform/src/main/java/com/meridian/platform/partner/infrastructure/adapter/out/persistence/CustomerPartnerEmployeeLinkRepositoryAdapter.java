@@ -17,6 +17,12 @@ public class CustomerPartnerEmployeeLinkRepositoryAdapter implements CustomerPar
     }
 
     @Override
+    public Optional<CustomerPartnerEmployeeLink> findById(UUID customerPartnerEmployeeLinkId) {
+        return jpaRepository.findById(customerPartnerEmployeeLinkId)
+                .map(this::toDomain);
+    }
+
+    @Override
     public Optional<CustomerPartnerEmployeeLink> findCurrentByCustomerIdAndPartnerCompanyId(
             UUID customerId,
             UUID partnerCompanyId
