@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.partner;
 
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityPort;
+import com.meridian.platform.loan.domain.model.SalaryAdvanceEmployeeVerificationOutcome;
 import com.meridian.platform.loan.domain.model.VerifiedPartnerEmployeeLinkSnapshot;
 import com.meridian.platform.partner.application.port.in.QueryCustomerPartnerEmployeeLinkUseCase;
 import org.springframework.stereotype.Component;
@@ -29,6 +30,9 @@ public class PartnerEligibilityAdapter implements PartnerEligibilityPort {
                         snapshot.partnerCompanyId(),
                         snapshot.partnerEmployeeId(),
                         snapshot.sourceImportBatchId(),
+                        SalaryAdvanceEmployeeVerificationOutcome.valueOf(snapshot.employeeVerificationOutcome()),
+                        snapshot.partnerCompanySalaryAdvanceLimit(),
+                        snapshot.employeeSalaryAmount(),
                         snapshot.employeeSalaryAdvanceLimit(),
                         snapshot.lastVerifiedAt(),
                         snapshot.lastRefreshedAt()

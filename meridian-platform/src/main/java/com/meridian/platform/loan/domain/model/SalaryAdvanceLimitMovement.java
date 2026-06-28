@@ -31,6 +31,22 @@ public record SalaryAdvanceLimitMovement(
         );
     }
 
+    public static SalaryAdvanceLimitMovement refreshed(
+            UUID id,
+            SalaryAdvanceLimit limit,
+            LocalDateTime occurredAt
+    ) {
+        return new SalaryAdvanceLimitMovement(
+                Objects.requireNonNull(id, "id must not be null"),
+                Objects.requireNonNull(limit, "limit must not be null").id(),
+                null,
+                null,
+                SalaryAdvanceLimitMovementType.REFRESHED,
+                limit.totalLimit(),
+                Objects.requireNonNull(occurredAt, "occurredAt must not be null")
+        );
+    }
+
     public static SalaryAdvanceLimitMovement reserved(
             UUID id,
             UUID salaryAdvanceLimitId,

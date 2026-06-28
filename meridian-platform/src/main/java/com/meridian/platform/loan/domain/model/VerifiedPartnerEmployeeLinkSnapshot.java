@@ -10,6 +10,9 @@ public record VerifiedPartnerEmployeeLinkSnapshot(
         UUID partnerCompanyId,
         UUID partnerEmployeeId,
         UUID sourceImportBatchId,
+        SalaryAdvanceEmployeeVerificationOutcome employeeVerificationOutcome,
+        BigDecimal partnerCompanySalaryAdvanceLimit,
+        BigDecimal employeeSalaryAmount,
         BigDecimal employeeSalaryAdvanceLimit,
         LocalDateTime lastVerifiedAt,
         LocalDateTime lastRefreshedAt

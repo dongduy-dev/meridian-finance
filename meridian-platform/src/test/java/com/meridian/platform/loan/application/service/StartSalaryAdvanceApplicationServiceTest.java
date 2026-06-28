@@ -14,9 +14,11 @@ import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanProduct;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
+import com.meridian.platform.loan.domain.model.SalaryAdvanceEmployeeVerificationOutcome;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimit;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovement;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
+import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import com.meridian.platform.loan.domain.model.VerifiedPartnerEmployeeLinkSnapshot;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
@@ -26,14 +28,15 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -101,6 +104,25 @@ class StartSalaryAdvanceApplicationServiceTest {
         assertEquals(SalaryAdvanceLimitMovementType.RESERVED,
                 salaryAdvanceLimitMovementRepository.savedMovements.get(1).movementType());
         assertNotNull(salaryAdvanceVerificationRepository.savedVerification);
+        assertEquals(SalaryAdvanceEmployeeVerificationOutcome.MATCHED_ACTIVE,
+                salaryAdvanceVerificationRepository.savedVerification.employeeVerificationOutcome());
+    }
+
+    @Test
+    void createsLimitUsingFullCapFormula() {
+        partnerEligibilityPort.snapshot = Optional.of(verifiedPartnerSnapshot(
+                limit(12_000_000),
+                limit(20_000_000),
+                limit(10_000_000)
+        ));
+
+        SalaryAdvanceApplicationDto result = service.startSalaryAdvanceApplication(request(limit(3_000_000), 1));
+
+        assertEquals(limit(4_000_000), result.totalLimitSnapshot());
+        assertEquals(limit(3_000_000), result.reservedAmountSnapshot());
+        assertEquals(limit(1_000_000), result.availableLimitSnapshot());
+        assertEquals(limit(4_000_000), salaryAdvanceLimitRepository.currentLimit.orElseThrow().totalLimit());
+        assertEquals(limit(4_000_000), salaryAdvanceLimitMovementRepository.savedMovements.get(0).amount());
     }
 
     @Test
@@ -170,7 +192,7 @@ class StartSalaryAdvanceApplicationServiceTest {
                 limit(0),
                 limit(5_000_000),
                 limit(1_000_000),
-                com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus.ACTIVE,
+                SalaryAdvanceLimitStatus.ACTIVE,
                 LocalDateTime.now()
         ));
 
@@ -183,6 +205,34 @@ class StartSalaryAdvanceApplicationServiceTest {
     }
 
     @Test
+    void failsWhenRequestedAmountExceedsEffectiveCapEvenIfStoredLimitIsHigher() {
+        partnerEligibilityPort.snapshot = Optional.of(verifiedPartnerSnapshot(
+                limit(12_000_000),
+                limit(20_000_000),
+                limit(10_000_000)
+        ));
+        salaryAdvanceLimitRepository.currentLimit = Optional.of(new SalaryAdvanceLimit(
+                UUID.randomUUID(),
+                customerId,
+                linkId,
+                limit(8_000_000),
+                limit(0),
+                limit(0),
+                limit(8_000_000),
+                SalaryAdvanceLimitStatus.ACTIVE,
+                LocalDateTime.now()
+        ));
+
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.startSalaryAdvanceApplication(request(limit(5_000_000), 1))
+        );
+
+        assertEquals("INSUFFICIENT_AVAILABLE_LIMIT", exception.getErrorCode());
+        assertTrue(loanApplicationRepository.savedApplications.isEmpty());
+    }
+
+    @Test
     void failsWhenBlockingApplicationExists() {
         loanApplicationRepository.blockingApplicationExists = true;
 
@@ -192,6 +242,27 @@ class StartSalaryAdvanceApplicationServiceTest {
         );
 
         assertEquals("BLOCKING_APPLICATION_EXISTS", exception.getErrorCode());
+    }
+
+    @Test
+    void failsWhenBlockingApplicationAppearsAfterLimitLock() {
+        loanApplicationRepository.blockingApplicationResults.add(false);
+        loanApplicationRepository.blockingApplicationResults.add(true);
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.startSalaryAdvanceApplication(request(limit(3_000_000), 1))
+        );
+
+        assertEquals("BLOCKING_APPLICATION_EXISTS", exception.getErrorCode());
+        assertTrue(salaryAdvanceLimitRepository.lockAcquired);
+        assertTrue(loanApplicationRepository.savedApplications.isEmpty());
+        assertEquals(2, loanApplicationRepository.existsChecks);
+    }
+
+    @Test
+    void returnedForRevisionBlocksDuplicates() {
+        assertTrue(LoanApplicationStatus.blockingStatuses().contains(LoanApplicationStatus.RETURNED_FOR_REVISION));
     }
 
     @Test
@@ -209,12 +280,23 @@ class StartSalaryAdvanceApplicationServiceTest {
     }
 
     private VerifiedPartnerEmployeeLinkSnapshot verifiedPartnerSnapshot(BigDecimal employeeSalaryAdvanceLimit) {
+        return verifiedPartnerSnapshot(employeeSalaryAdvanceLimit, limit(10_000_000), limit(18_000_000));
+    }
+
+    private VerifiedPartnerEmployeeLinkSnapshot verifiedPartnerSnapshot(
+            BigDecimal employeeSalaryAdvanceLimit,
+            BigDecimal partnerCompanySalaryAdvanceLimit,
+            BigDecimal employeeSalaryAmount
+    ) {
         return new VerifiedPartnerEmployeeLinkSnapshot(
                 customerId,
                 linkId,
                 partnerCompanyId,
                 partnerEmployeeId,
                 importBatchId,
+                SalaryAdvanceEmployeeVerificationOutcome.MATCHED_ACTIVE,
+                partnerCompanySalaryAdvanceLimit,
+                employeeSalaryAmount,
                 employeeSalaryAdvanceLimit,
                 LocalDateTime.now(),
                 LocalDateTime.now()
@@ -259,7 +341,9 @@ class StartSalaryAdvanceApplicationServiceTest {
     private static class FakeLoanApplicationRepository implements LoanApplicationRepository {
 
         private final List<LoanApplication> savedApplications = new ArrayList<>();
+        private final Deque<Boolean> blockingApplicationResults = new ArrayDeque<>();
         private boolean blockingApplicationExists;
+        private int existsChecks;
 
         @Override
         public LoanApplication save(LoanApplication loanApplication) {
@@ -273,6 +357,10 @@ class StartSalaryAdvanceApplicationServiceTest {
                 ProductCode productCode,
                 Set<LoanApplicationStatus> statuses
         ) {
+            existsChecks++;
+            if (!blockingApplicationResults.isEmpty()) {
+                return blockingApplicationResults.removeFirst();
+            }
             return blockingApplicationExists;
         }
 

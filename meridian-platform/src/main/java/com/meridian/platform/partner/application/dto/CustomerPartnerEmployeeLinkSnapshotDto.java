@@ -10,6 +10,9 @@ public record CustomerPartnerEmployeeLinkSnapshotDto(
         UUID partnerCompanyId,
         UUID partnerEmployeeId,
         UUID sourceImportBatchId,
+        String employeeVerificationOutcome,
+        BigDecimal partnerCompanySalaryAdvanceLimit,
+        BigDecimal employeeSalaryAmount,
         BigDecimal employeeSalaryAdvanceLimit,
         LocalDateTime lastVerifiedAt,
         LocalDateTime lastRefreshedAt

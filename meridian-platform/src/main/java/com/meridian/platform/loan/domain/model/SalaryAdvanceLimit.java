@@ -76,6 +76,31 @@ public record SalaryAdvanceLimit(
         );
     }
 
+    public SalaryAdvanceLimit refreshTotalLimit(BigDecimal effectiveTotalLimit, LocalDateTime lastRefreshedAt) {
+        requireNonNegative(effectiveTotalLimit, "effectiveTotalLimit");
+        Objects.requireNonNull(lastRefreshedAt, "lastRefreshedAt must not be null");
+
+        BigDecimal currentExposure = usedAmount.add(reservedAmount);
+        if (currentExposure.compareTo(effectiveTotalLimit) > 0) {
+            throw new BusinessRuleViolationException(
+                    "INSUFFICIENT_AVAILABLE_LIMIT",
+                    "Current Salary Advance exposure exceeds effective limit."
+            );
+        }
+
+        return new SalaryAdvanceLimit(
+                id,
+                customerId,
+                customerPartnerEmployeeLinkId,
+                effectiveTotalLimit,
+                usedAmount,
+                reservedAmount,
+                effectiveTotalLimit.subtract(currentExposure),
+                status,
+                lastRefreshedAt
+        );
+    }
+
     private static void requirePositive(BigDecimal value, String fieldName) {
         Objects.requireNonNull(value, fieldName + " must not be null");
         if (value.compareTo(ZERO) <= 0) {

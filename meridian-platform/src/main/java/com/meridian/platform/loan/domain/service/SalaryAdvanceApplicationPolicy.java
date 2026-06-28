@@ -7,12 +7,16 @@ import com.meridian.platform.loan.domain.model.VerifiedPartnerEmployeeLinkSnapsh
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Objects;
 import java.util.Set;
 
 public class SalaryAdvanceApplicationPolicy {
 
     private static final BigDecimal ZERO = BigDecimal.ZERO;
+    // Documented Salary Advance seed policy: 40% of monthly salary.
+    private static final BigDecimal SALARY_BASED_PERCENTAGE_CAP_RATE = new BigDecimal("0.40");
+    private static final int MONEY_SCALE = 2;
     private static final Set<Integer> ALLOWED_TERMS_MONTHS = Set.of(1, 2, 3);
 
     public void validateProduct(LoanProduct loanProduct) {
@@ -63,17 +67,48 @@ public class SalaryAdvanceApplicationPolicy {
         }
     }
 
-    public void validateEmployeeConfiguredLimit(
-            VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot,
-            BigDecimal requestedAmount
+    public BigDecimal calculateEffectiveTotalLimit(
+            LoanProduct loanProduct,
+            VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot
     ) {
+        Objects.requireNonNull(loanProduct, "loanProduct must not be null");
         Objects.requireNonNull(partnerSnapshot, "partnerSnapshot must not be null");
-        Objects.requireNonNull(requestedAmount, "requestedAmount must not be null");
 
-        if (partnerSnapshot.employeeSalaryAdvanceLimit().compareTo(requestedAmount) < 0) {
+        requireNonNegative(loanProduct.maxAmount(), "productMaximumAmount");
+        requireNonNegative(partnerSnapshot.partnerCompanySalaryAdvanceLimit(), "partnerCompanySalaryAdvanceLimit");
+        requireNonNegative(partnerSnapshot.employeeSalaryAdvanceLimit(), "employeeSalaryAdvanceLimit");
+        requireNonNegative(partnerSnapshot.employeeSalaryAmount(), "employeeSalaryAmount");
+
+        return min(
+                loanProduct.maxAmount(),
+                partnerSnapshot.partnerCompanySalaryAdvanceLimit(),
+                partnerSnapshot.employeeSalaryAdvanceLimit(),
+                calculateSalaryBasedLimit(partnerSnapshot.employeeSalaryAmount())
+        );
+    }
+
+    private BigDecimal calculateSalaryBasedLimit(BigDecimal employeeSalaryAmount) {
+        return employeeSalaryAmount
+                .multiply(SALARY_BASED_PERCENTAGE_CAP_RATE)
+                .setScale(MONEY_SCALE, RoundingMode.DOWN);
+    }
+
+    private BigDecimal min(BigDecimal first, BigDecimal... others) {
+        BigDecimal minimum = first;
+        for (BigDecimal value : others) {
+            if (value.compareTo(minimum) < 0) {
+                minimum = value;
+            }
+        }
+        return minimum;
+    }
+
+    private void requireNonNegative(BigDecimal value, String fieldName) {
+        Objects.requireNonNull(value, fieldName + " must not be null");
+        if (value.compareTo(ZERO) < 0) {
             throw new BusinessRuleViolationException(
-                    "INSUFFICIENT_AVAILABLE_LIMIT",
-                    "Requested amount exceeds employee configured Salary Advance limit."
+                    "PRODUCT_POLICY_INVALID",
+                    fieldName + " must not be negative."
             );
         }
     }

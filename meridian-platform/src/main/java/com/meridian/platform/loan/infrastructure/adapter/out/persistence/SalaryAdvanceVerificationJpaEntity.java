@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
+import com.meridian.platform.loan.domain.model.SalaryAdvanceEmployeeVerificationOutcome;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -43,6 +44,10 @@ public class SalaryAdvanceVerificationJpaEntity {
     private UUID sourceImportBatchId;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "employee_verification_outcome", nullable = false)
+    private SalaryAdvanceEmployeeVerificationOutcome employeeVerificationOutcome;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "product_verification_result", nullable = false)
     private ProductVerificationResult productVerificationResult;
 
@@ -76,6 +81,7 @@ public class SalaryAdvanceVerificationJpaEntity {
         this.partnerCompanyId = verification.partnerCompanyId();
         this.partnerEmployeeId = verification.partnerEmployeeId();
         this.sourceImportBatchId = verification.sourceImportBatchId();
+        this.employeeVerificationOutcome = verification.employeeVerificationOutcome();
         this.productVerificationResult = verification.productVerificationResult();
         this.totalLimitSnapshot = verification.totalLimitSnapshot();
         this.usedAmountSnapshot = verification.usedAmountSnapshot();
@@ -115,6 +121,10 @@ public class SalaryAdvanceVerificationJpaEntity {
 
     public UUID getSourceImportBatchId() {
         return sourceImportBatchId;
+    }
+
+    public SalaryAdvanceEmployeeVerificationOutcome getEmployeeVerificationOutcome() {
+        return employeeVerificationOutcome;
     }
 
     public ProductVerificationResult getProductVerificationResult() {

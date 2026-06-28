@@ -26,6 +26,7 @@ import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
@@ -81,17 +82,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         applicationPolicy.validateProduct(salaryAdvanceProduct);
         applicationPolicy.validateRequestedTerm(request.requestedTermMonths());
         applicationPolicy.validateRequestedAmount(salaryAdvanceProduct, request.requestedAmount());
-
-        if (loanApplicationRepository.existsByCustomerIdAndProductCodeAndStatusIn(
-                request.customerId(),
-                ProductCode.SALARY_ADVANCE,
-                LoanApplicationStatus.blockingStatuses()
-        )) {
-            throw new BusinessStateConflictException(
-                    "BLOCKING_APPLICATION_EXISTS",
-                    "A blocking Salary Advance application already exists for this customer."
-            );
-        }
+        assertNoBlockingApplicationExists(request.customerId());
 
         VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot = partnerEligibilityPort.findVerifiedEmployeeLink(
                         request.customerId(),
@@ -102,15 +93,20 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
                         "Customer must have a verified active employee link before creating a Salary Advance application."
                 ));
 
-        applicationPolicy.validateEmployeeConfiguredLimit(partnerSnapshot, request.requestedAmount());
+        BigDecimal effectiveTotalLimit = applicationPolicy.calculateEffectiveTotalLimit(
+                salaryAdvanceProduct,
+                partnerSnapshot
+        );
 
         salaryAdvanceLimitRepository.acquireCustomerLinkLock(
                 request.customerId(),
                 request.customerPartnerEmployeeLinkId()
         );
+        assertNoBlockingApplicationExists(request.customerId());
 
         LocalDateTime now = LocalDateTime.now();
-        SalaryAdvanceLimit limit = findOrCreateLimit(request, partnerSnapshot, now);
+        SalaryAdvanceLimit limit = findOrCreateLimit(request, partnerSnapshot, effectiveTotalLimit, now);
+        assertNoBlockingApplicationExists(request.customerId());
         SalaryAdvanceLimit reservedLimit = limit.reserve(request.requestedAmount());
 
         long applicationSequence = loanApplicationRepository.nextApplicationNumberSequence();
@@ -150,32 +146,91 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         ));
     }
 
+    private void assertNoBlockingApplicationExists(UUID customerId) {
+        if (loanApplicationRepository.existsByCustomerIdAndProductCodeAndStatusIn(
+                customerId,
+                ProductCode.SALARY_ADVANCE,
+                LoanApplicationStatus.blockingStatuses()
+        )) {
+            throw new BusinessStateConflictException(
+                    "BLOCKING_APPLICATION_EXISTS",
+                    "A blocking Salary Advance application already exists for this customer."
+            );
+        }
+    }
+
     private SalaryAdvanceLimit findOrCreateLimit(
             SalaryAdvanceApplicationRequest request,
             VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot,
+            BigDecimal effectiveTotalLimit,
             LocalDateTime occurredAt
     ) {
         return salaryAdvanceLimitRepository.findByCustomerIdAndCustomerPartnerEmployeeLinkIdForUpdate(
                         request.customerId(),
                         request.customerPartnerEmployeeLinkId()
                 )
-                .orElseGet(() -> {
-                    SalaryAdvanceLimit initializedLimit = SalaryAdvanceLimit.initialized(
-                            UUID.randomUUID(),
-                            request.customerId(),
-                            request.customerPartnerEmployeeLinkId(),
-                            partnerSnapshot.employeeSalaryAdvanceLimit(),
-                            partnerSnapshot.lastRefreshedAt()
-                    );
+                .map(currentLimit -> refreshLimitIfNeeded(
+                        currentLimit,
+                        effectiveTotalLimit,
+                        partnerSnapshot.lastRefreshedAt(),
+                        occurredAt
+                ))
+                .orElseGet(() -> initializeLimit(request, partnerSnapshot, effectiveTotalLimit, occurredAt));
+    }
 
-                    SalaryAdvanceLimit savedLimit = salaryAdvanceLimitRepository.save(initializedLimit);
-                    salaryAdvanceLimitMovementRepository.save(SalaryAdvanceLimitMovement.initialized(
-                            UUID.randomUUID(),
-                            savedLimit,
-                            occurredAt
-                    ));
-                    return savedLimit;
-                });
+    private SalaryAdvanceLimit initializeLimit(
+            SalaryAdvanceApplicationRequest request,
+            VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot,
+            BigDecimal effectiveTotalLimit,
+            LocalDateTime occurredAt
+    ) {
+        SalaryAdvanceLimit initializedLimit = SalaryAdvanceLimit.initialized(
+                UUID.randomUUID(),
+                request.customerId(),
+                request.customerPartnerEmployeeLinkId(),
+                effectiveTotalLimit,
+                partnerSnapshot.lastRefreshedAt()
+        );
+
+        SalaryAdvanceLimit savedLimit = salaryAdvanceLimitRepository.save(initializedLimit);
+        salaryAdvanceLimitMovementRepository.save(SalaryAdvanceLimitMovement.initialized(
+                UUID.randomUUID(),
+                savedLimit,
+                occurredAt
+        ));
+        return savedLimit;
+    }
+
+    private SalaryAdvanceLimit refreshLimitIfNeeded(
+            SalaryAdvanceLimit currentLimit,
+            BigDecimal effectiveTotalLimit,
+            LocalDateTime lastRefreshedAt,
+            LocalDateTime occurredAt
+    ) {
+        SalaryAdvanceLimit refreshedLimit = currentLimit.refreshTotalLimit(effectiveTotalLimit, lastRefreshedAt);
+        if (!hasLimitRefreshChange(currentLimit, refreshedLimit)) {
+            return currentLimit;
+        }
+
+        SalaryAdvanceLimit savedLimit = salaryAdvanceLimitRepository.save(refreshedLimit);
+        if (amountChanged(currentLimit.totalLimit(), savedLimit.totalLimit())) {
+            salaryAdvanceLimitMovementRepository.save(SalaryAdvanceLimitMovement.refreshed(
+                    UUID.randomUUID(),
+                    savedLimit,
+                    occurredAt
+            ));
+        }
+        return savedLimit;
+    }
+
+    private boolean hasLimitRefreshChange(SalaryAdvanceLimit currentLimit, SalaryAdvanceLimit refreshedLimit) {
+        return amountChanged(currentLimit.totalLimit(), refreshedLimit.totalLimit())
+                || amountChanged(currentLimit.availableAmount(), refreshedLimit.availableAmount())
+                || !Objects.equals(currentLimit.lastRefreshedAt(), refreshedLimit.lastRefreshedAt());
+    }
+
+    private boolean amountChanged(BigDecimal first, BigDecimal second) {
+        return first.compareTo(second) != 0;
     }
 
     private String formatApplicationNumber(long sequence, LocalDateTime submittedAt) {

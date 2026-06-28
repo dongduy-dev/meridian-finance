@@ -32,6 +32,7 @@ public class SalaryAdvanceVerificationRepositoryAdapter implements SalaryAdvance
                 entity.getPartnerCompanyId(),
                 entity.getPartnerEmployeeId(),
                 entity.getSourceImportBatchId(),
+                entity.getEmployeeVerificationOutcome(),
                 entity.getProductVerificationResult(),
                 entity.getTotalLimitSnapshot(),
                 entity.getUsedAmountSnapshot(),

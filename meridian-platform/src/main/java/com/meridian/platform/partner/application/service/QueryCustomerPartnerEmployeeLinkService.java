@@ -58,6 +58,8 @@ public class QueryCustomerPartnerEmployeeLinkService implements QueryCustomerPar
             return Optional.empty();
         }
 
+        PartnerEmployee employee = activeEmployee.get();
+
         return partnerCompanyRepository.findById(link.partnerCompanyId())
                 .filter(company -> company.status() == PartnerCompanyStatus.ACTIVE)
                 .map(company -> new CustomerPartnerEmployeeLinkSnapshotDto(
@@ -66,7 +68,10 @@ public class QueryCustomerPartnerEmployeeLinkService implements QueryCustomerPar
                         link.partnerCompanyId(),
                         link.partnerEmployeeId(),
                         link.sourceImportBatchId(),
-                        activeEmployee.get().salaryAdvanceLimit(),
+                        link.verificationOutcome().name(),
+                        company.salaryAdvancePolicyLimit(),
+                        employee.salaryAmount(),
+                        employee.salaryAdvanceLimit(),
                         link.lastVerifiedAt(),
                         link.lastRefreshedAt()
                 ));

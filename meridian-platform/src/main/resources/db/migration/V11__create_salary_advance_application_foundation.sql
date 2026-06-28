@@ -77,6 +77,7 @@ CREATE UNIQUE INDEX uq_loan_applications_customer_product_active
         'VERIFICATION_PENDING',
         'DOCUMENTS_PENDING',
         'UNDER_REVIEW',
+        'RETURNED_FOR_REVISION',
         'RETURNED_TO_REVIEW',
         'APPROVAL_PENDING',
         'APPROVED',
@@ -205,6 +206,7 @@ CREATE TABLE salary_advance_verifications (
     partner_employee_id UUID NOT NULL,
     source_import_batch_id UUID NOT NULL,
 
+    employee_verification_outcome VARCHAR(50) NOT NULL,
     product_verification_result VARCHAR(50) NOT NULL,
 
     total_limit_snapshot NUMERIC(19,2) NOT NULL,
@@ -225,6 +227,17 @@ CREATE TABLE salary_advance_verifications (
 
     CONSTRAINT uq_salary_advance_verifications_application
         UNIQUE (loan_application_id),
+
+    CONSTRAINT chk_salary_advance_verifications_employee_outcome
+        CHECK (employee_verification_outcome IN (
+            'MATCHED_ACTIVE',
+            'MATCHED_INACTIVE',
+            'NOT_FOUND',
+            'MULTIPLE_MATCHES',
+            'PENDING_MANUAL_REVIEW',
+            'MANUAL_REVIEW_APPROVED',
+            'MANUAL_REVIEW_REJECTED'
+        )),
 
     CONSTRAINT chk_salary_advance_verifications_result
         CHECK (product_verification_result IN (

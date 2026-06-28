@@ -28,6 +28,7 @@ public enum LoanApplicationStatus {
                 VERIFICATION_PENDING,
                 DOCUMENTS_PENDING,
                 UNDER_REVIEW,
+                RETURNED_FOR_REVISION,
                 RETURNED_TO_REVIEW,
                 APPROVAL_PENDING,
                 APPROVED,
