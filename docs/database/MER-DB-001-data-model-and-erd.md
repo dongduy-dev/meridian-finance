@@ -175,7 +175,7 @@ erDiagram
         uuid salary_advance_limit_id FK
         uuid partner_company_id FK
         uuid partner_employee_id FK
-        string outcome
+        string employee_verification_outcome
         string product_verification_result
         decimal total_limit_snapshot
         decimal used_amount_snapshot

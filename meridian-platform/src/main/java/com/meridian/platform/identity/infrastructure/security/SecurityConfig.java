@@ -20,7 +20,8 @@ public class SecurityConfig {
                                 "/api/v1/loan-products",
                                 "/api/v1/loan-products/**",
                                 "/api/v1/partner-companies",
-                                "/api/v1/partner-companies/**"
+                                "/api/v1/partner-companies/**",
+                                "/api/v1/loan-applications/salary-advance"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
