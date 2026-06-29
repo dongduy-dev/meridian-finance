@@ -19,6 +19,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class PartnerEmployeeVerificationControllerTest {
 
+    private static final UUID CUSTOMER_ID = UUID.fromString("99999999-9999-9999-9999-999999999999");
+
     private final UUID partnerCompanyId = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private MockMvc mockMvc;
 
@@ -40,13 +42,12 @@ class PartnerEmployeeVerificationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "customerId": "99999999-9999-9999-9999-999999999999",
                                   "identityReference": "IDREF-MER-001",
                                   "employeeCode": "MER-EMP-001"
                                 }
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.customerId").value("99999999-9999-9999-9999-999999999999"))
+                .andExpect(jsonPath("$.customerId").value(CUSTOMER_ID.toString()))
                 .andExpect(jsonPath("$.partnerCompanyId").value(partnerCompanyId.toString()))
                 .andExpect(jsonPath("$.outcome").value("MATCHED_ACTIVE"))
                 .andExpect(jsonPath("$.linkStatus").value("VERIFIED"))
@@ -64,7 +65,7 @@ class PartnerEmployeeVerificationControllerTest {
                 PartnerEmployeeVerificationRequest request
         ) {
             return new PartnerEmployeeVerificationDto(
-                    request.customerId(),
+                    CUSTOMER_ID,
                     partnerCompanyId,
                     UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb01"),
                     UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc"),

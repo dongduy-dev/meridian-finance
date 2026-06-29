@@ -5,6 +5,7 @@ import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationReques
 import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicationUseCase;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,6 +26,7 @@ public class SalaryAdvanceLoanApplicationController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('loan:submit')")
     public SalaryAdvanceApplicationDto startSalaryAdvanceApplication(
             @Valid @RequestBody SalaryAdvanceApplicationRequest request
     ) {

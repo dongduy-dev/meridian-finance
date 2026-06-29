@@ -21,6 +21,8 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import com.meridian.platform.loan.domain.model.VerifiedPartnerEmployeeLinkSnapshot;
+import com.meridian.platform.shared.application.security.AuthenticatedUser;
+import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,7 +74,8 @@ class StartSalaryAdvanceApplicationServiceTest {
                 salaryAdvanceLimitMovementRepository,
                 salaryAdvanceVerificationRepository,
                 partnerEligibilityPort,
-                new LoanMapper()
+                new LoanMapper(),
+                new FixedCurrentUserProvider(customerId)
         );
     }
 
@@ -276,7 +279,7 @@ class StartSalaryAdvanceApplicationServiceTest {
     }
 
     private SalaryAdvanceApplicationRequest request(BigDecimal requestedAmount, int requestedTermMonths) {
-        return new SalaryAdvanceApplicationRequest(customerId, linkId, requestedAmount, requestedTermMonths);
+        return new SalaryAdvanceApplicationRequest(linkId, requestedAmount, requestedTermMonths);
     }
 
     private VerifiedPartnerEmployeeLinkSnapshot verifiedPartnerSnapshot(BigDecimal employeeSalaryAdvanceLimit) {
@@ -318,6 +321,27 @@ class StartSalaryAdvanceApplicationServiceTest {
 
     private BigDecimal limit(long value) {
         return BigDecimal.valueOf(value).setScale(2);
+    }
+
+    private static class FixedCurrentUserProvider implements CurrentUserProvider {
+
+        private final UUID customerId;
+
+        private FixedCurrentUserProvider(UUID customerId) {
+            this.customerId = customerId;
+        }
+
+        @Override
+        public AuthenticatedUser currentUser() {
+            return new AuthenticatedUser(
+                    UUID.fromString("00000000-0000-0000-0000-000000000301"),
+                    "customer.demo@meridian.local",
+                    "CUSTOMER",
+                    customerId,
+                    Set.of("CUSTOMER"),
+                    Set.of("loan:submit")
+            );
+        }
     }
 
     private class FakeLoanProductRepository implements LoanProductRepository {

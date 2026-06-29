@@ -101,19 +101,18 @@ Type: Security/ownership risk
 
 Priority: P1
 
-Status: Open
+Status: Done
 
-Blocks next major feature: No, but must be resolved before real demo/auth milestone
+Blocks next major feature: No
 
 Problem:
-Salary Advance application request accepts customerId from the caller.
+Salary Advance application and employee verification requests accepted customerId from the caller.
 
 Risk:
-Without authentication and customer ownership enforcement, callers can submit applications for arbitrary customers.
+Without authentication and customer ownership enforcement, callers could submit applications or verify employee evidence for arbitrary customers.
 
-Recommendation:
-Document as temporary MVP/local testing shortcut. Later derive customerId from authenticated principal or enforce back-office/admin permission.
-
+Resolution:
+IAM/RBAC foundation now derives customerId from the authenticated customer token through `CurrentUserProvider`. `PartnerEmployeeVerificationRequest` and `SalaryAdvanceApplicationRequest` no longer accept request-provided customerId.
 ### MER-FU-005 - Add security/controller tests for sensitive endpoints
 
 Area: Testing / Security
@@ -122,16 +121,18 @@ Type: Test gap
 
 Priority: P1
 
-Status: Open
+Status: Done
 
 Blocks next major feature: No
 
 Problem:
-Security and controller coverage was thin. This patch adds focused coverage for anonymous access denial, authenticated access to a protected Partner Employee endpoint, inactive Partner Company rejection, and the safe employee verification response shape. Broader role/action authorization and full controller matrix coverage are still missing.
+Security and controller coverage was thin.
 
-Recommendation:
-Keep expanding controller/security tests as IAM/RBAC matures, especially role-specific access, customer ownership, clean auth error responses, and full Partner/Loan endpoint matrices.
+Resolution:
+IAM/RBAC foundation adds focused coverage for public login/catalog access, anonymous access denial, authenticated-but-unauthorized 403 responses, permission-specific Partner access, customer Salary Advance access, safe employee verification response shape, token issue/parse/expiry behavior, login failure behavior, and security architecture boundaries.
 
+Notes:
+Continue expanding controller matrices as new workflow endpoints are implemented.
 ### MER-FU-006 - Align API docs with implemented endpoints
 
 Area: Documentation / API
@@ -311,28 +312,221 @@ Type: Deferred feature / security hardening
 
 Priority: P1
 
-Status: Open
+Status: Done
 
-Blocks next major feature: No, but should be planned with the IAM/auth milestone before a real demo
+Blocks next major feature: No
 
 Problem:
-The P0 security patch protects sensitive endpoints with the current Spring Security authenticated gate and HTTP Basic development authentication. It does not yet enforce production JWT authentication, role/action permissions, or customer ownership.
+The P0 security patch protected sensitive endpoints with the current Spring Security authenticated gate and HTTP Basic development authentication. It did not enforce JWT authentication, role/action permissions, or customer ownership.
 
-Risk:
-Any authenticated local user can reach protected Partner and Salary Advance endpoints until role/action checks are implemented. Customer-facing operations still depend on request-provided customer IDs until ownership enforcement exists.
+Resolution:
+IAM/RBAC foundation replaces the Basic gate with JWT Bearer authentication, database-backed demo users, role-permission seed data, method-level permission checks, token-derived customer identity for customer-owned flows, and focused security tests.
+
+Notes:
+Refresh tokens, logout invalidation, account hardening, auth event auditing, and broader ownership hardening remain tracked as separate follow-ups.
+### MER-FU-016 - Refresh token rotation
+
+Area: Identity / Security
+
+Type: Deferred feature
+
+Priority: P2
+
+Status: Open
+
+Blocks next major feature: No
 
 Recommendation:
-Implement JWT-backed authentication, endpoint-level role/action authorization, and ownership checks. Replace the temporary HTTP Basic posture and add role-specific controller/security tests.
+Implement refresh token rotation after access-token-only JWT foundation is stable.
 
 Suggested future branch name:
-`fix/identity-rbac-endpoint-permissions`
+`feature/iam-refresh-token-rotation`
 
+### MER-FU-017 - Password reset
+
+Area: Identity / Security
+
+Type: Deferred feature
+
+Priority: P2
+
+Status: Open
+
+Blocks next major feature: No
+
+Recommendation:
+Implement password reset when real user lifecycle management starts.
+
+Suggested future branch name:
+`feature/iam-password-reset`
+
+### MER-FU-018 - Email verification
+
+Area: Identity / Customer
+
+Type: Deferred feature
+
+Priority: P2
+
+Status: Open
+
+Blocks next major feature: No
+
+Recommendation:
+Implement email verification with customer registration/profile flows.
+
+Suggested future branch name:
+`feature/iam-email-verification`
+
+### MER-FU-019 - Admin user management UI
+
+Area: Identity / Back Office
+
+Type: Deferred feature
+
+Priority: P2
+
+Status: Open
+
+Blocks next major feature: No
+
+Recommendation:
+Implement admin user management UI after backend user-management use cases exist.
+
+Suggested future branch name:
+`feature/admin-user-management-ui`
+
+### MER-FU-020 - Account lockout policy
+
+Area: Identity / Security
+
+Type: Risk
+
+Priority: P1
+
+Status: Open
+
+Blocks next major feature: No
+
+Recommendation:
+Add lockout policy before exposing login beyond local/demo use.
+
+Suggested future branch name:
+`feature/iam-account-lockout`
+
+### MER-FU-021 - MFA
+
+Area: Identity / Security
+
+Type: Deferred feature
+
+Priority: P3
+
+Status: Open
+
+Blocks next major feature: No
+
+Recommendation:
+Defer MFA until production-grade authentication hardening.
+
+Suggested future branch name:
+`feature/iam-mfa`
+
+### MER-FU-022 - Full permission management UI
+
+Area: Identity / Back Office
+
+Type: Deferred feature
+
+Priority: P3
+
+Status: Open
+
+Blocks next major feature: No
+
+Recommendation:
+Defer full permission management UI until role management needs exceed seeded MVP roles.
+
+Suggested future branch name:
+`feature/iam-permission-management-ui`
+
+### MER-FU-023 - Customer ownership enforcement hardening
+
+Area: Identity / Customer / Loan / Document
+
+Type: Security hardening
+
+Priority: P1
+
+Status: Open
+
+Blocks next major feature: No
+
+Recommendation:
+Broaden ownership enforcement as additional customer-facing profile, document, offer, and repayment endpoints are implemented.
+
+Suggested future branch name:
+`feature/customer-ownership-hardening`
+
+### MER-FU-024 - Token blacklist / logout invalidation
+
+Area: Identity / Security
+
+Type: Deferred feature
+
+Priority: P2
+
+Status: Open
+
+Blocks next major feature: No
+
+Recommendation:
+Implement token invalidation when logout/session management becomes in scope.
+
+Suggested future branch name:
+`feature/iam-token-invalidation`
+
+### MER-FU-025 - Audit trail for authentication events
+
+Area: Identity / Audit
+
+Type: Deferred feature
+
+Priority: P1
+
+Status: Open
+
+Blocks next major feature: No
+
+Recommendation:
+Record important authentication events when Audit foundation is implemented.
+
+Suggested future branch name:
+`feature/iam-auth-audit-events`
+
+### MER-FU-026 - Refresh Postman collection for JWT/Bearer flow
+
+Area: Documentation / API
+
+Type: Documentation gap
+
+Priority: P2
+
+Status: Open
+
+Blocks next major feature: No
+
+Recommendation:
+Update `docs/api/Meridian-Platform.postman_collection.json` to call login, store `accessToken`, use Bearer auth, and remove request-provided customerId payload fields.
+
+Suggested future branch name:
+`docs/update-postman-jwt-flow`
 ## Recommended Next Roadmap
 
 1. Review/merge the completed P0 security/PII/inactive Partner Company patch.
 2. Create current physical schema snapshot.
 3. Continue with Loan review/approval workflow.
-4. Plan JWT/RBAC and customer ownership enforcement before the real auth/demo milestone.
+4. Continue with Approval Review Recommendation on top of IAM/RBAC foundation.
 5. Continue with customer acceptance/disbursement/loan account activation.
 6. Add repayment tracking.
 7. Add audit trail.

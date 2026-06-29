@@ -15,6 +15,7 @@ import com.meridian.platform.partner.domain.model.PartnerEmployee;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatch;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeVerificationResult;
 import com.meridian.platform.partner.domain.service.PartnerEmployeeVerificationPolicy;
+import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,7 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
     private final PartnerEmployeeRepository partnerEmployeeRepository;
     private final CustomerPartnerEmployeeLinkRepository linkRepository;
     private final PartnerEmployeeVerificationMapper verificationMapper;
+    private final CurrentUserProvider currentUserProvider;
     private final PartnerEmployeeVerificationPolicy verificationPolicy = new PartnerEmployeeVerificationPolicy();
 
     public VerifyPartnerEmployeeService(
@@ -39,13 +41,15 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
             PartnerEmployeeImportBatchRepository importBatchRepository,
             PartnerEmployeeRepository partnerEmployeeRepository,
             CustomerPartnerEmployeeLinkRepository linkRepository,
-            PartnerEmployeeVerificationMapper verificationMapper
+            PartnerEmployeeVerificationMapper verificationMapper,
+            CurrentUserProvider currentUserProvider
     ) {
         this.partnerCompanyRepository = partnerCompanyRepository;
         this.importBatchRepository = importBatchRepository;
         this.partnerEmployeeRepository = partnerEmployeeRepository;
         this.linkRepository = linkRepository;
         this.verificationMapper = verificationMapper;
+        this.currentUserProvider = currentUserProvider;
     }
 
     @Override
@@ -56,8 +60,8 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
     ) {
         Objects.requireNonNull(partnerCompanyId, "partnerCompanyId must not be null");
         Objects.requireNonNull(request, "request must not be null");
-        Objects.requireNonNull(request.customerId(), "customerId must not be null");
 
+        UUID customerId = currentUserProvider.currentUser().requireCustomerId();
         String identityReference = normalizeRequired(request.identityReference(), "identityReference");
         String employeeCode = normalizeRequired(request.employeeCode(), "employeeCode");
 
@@ -70,14 +74,14 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
 
         return importBatchRepository.findLatestCompletedByPartnerCompanyId(partnerCompanyId)
                 .map(importBatch -> verifyAgainstBatch(
-                        request.customerId(),
+                        customerId,
                         partnerCompanyId,
                         importBatch,
                         identityReference,
                         employeeCode
                 ))
                 .orElseGet(() -> verificationMapper.toDto(new PartnerEmployeeVerificationResult(
-                        request.customerId(),
+                        customerId,
                         partnerCompanyId,
                         null,
                         null,

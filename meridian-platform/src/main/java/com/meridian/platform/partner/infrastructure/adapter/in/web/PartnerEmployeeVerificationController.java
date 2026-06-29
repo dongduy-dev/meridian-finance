@@ -4,6 +4,7 @@ import com.meridian.platform.partner.application.dto.PartnerEmployeeVerification
 import com.meridian.platform.partner.application.dto.PartnerEmployeeVerificationRequest;
 import com.meridian.platform.partner.application.port.in.VerifyPartnerEmployeeUseCase;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,6 +24,7 @@ public class PartnerEmployeeVerificationController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('partner:employee:verify:own')")
     public PartnerEmployeeVerificationDto verifyPartnerEmployee(
             @PathVariable UUID partnerCompanyId,
             @Valid @RequestBody PartnerEmployeeVerificationRequest request

@@ -20,6 +20,7 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovement;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import com.meridian.platform.loan.domain.model.VerifiedPartnerEmployeeLinkSnapshot;
 import com.meridian.platform.loan.domain.service.SalaryAdvanceApplicationPolicy;
+import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
@@ -44,6 +45,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
     private final SalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository;
     private final PartnerEligibilityPort partnerEligibilityPort;
     private final LoanMapper loanMapper;
+    private final CurrentUserProvider currentUserProvider;
     private final SalaryAdvanceApplicationPolicy applicationPolicy = new SalaryAdvanceApplicationPolicy();
 
     public StartSalaryAdvanceApplicationService(
@@ -53,7 +55,8 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
             SalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository,
             SalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository,
             PartnerEligibilityPort partnerEligibilityPort,
-            LoanMapper loanMapper
+            LoanMapper loanMapper,
+            CurrentUserProvider currentUserProvider
     ) {
         this.loanProductRepository = loanProductRepository;
         this.loanApplicationRepository = loanApplicationRepository;
@@ -62,16 +65,18 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         this.salaryAdvanceVerificationRepository = salaryAdvanceVerificationRepository;
         this.partnerEligibilityPort = partnerEligibilityPort;
         this.loanMapper = loanMapper;
+        this.currentUserProvider = currentUserProvider;
     }
 
     @Override
     @Transactional
     public SalaryAdvanceApplicationDto startSalaryAdvanceApplication(SalaryAdvanceApplicationRequest request) {
         Objects.requireNonNull(request, "request must not be null");
-        Objects.requireNonNull(request.customerId(), "customerId must not be null");
         Objects.requireNonNull(request.customerPartnerEmployeeLinkId(), "customerPartnerEmployeeLinkId must not be null");
         Objects.requireNonNull(request.requestedAmount(), "requestedAmount must not be null");
         Objects.requireNonNull(request.requestedTermMonths(), "requestedTermMonths must not be null");
+
+        UUID customerId = currentUserProvider.currentUser().requireCustomerId();
 
         LoanProduct salaryAdvanceProduct = loanProductRepository.findByProductCode(ProductCode.SALARY_ADVANCE)
                 .orElseThrow(() -> new EntityNotFoundException(
@@ -82,10 +87,10 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         applicationPolicy.validateProduct(salaryAdvanceProduct);
         applicationPolicy.validateRequestedTerm(request.requestedTermMonths());
         applicationPolicy.validateRequestedAmount(salaryAdvanceProduct, request.requestedAmount());
-        assertNoBlockingApplicationExists(request.customerId());
+        assertNoBlockingApplicationExists(customerId);
 
         VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot = partnerEligibilityPort.findVerifiedEmployeeLink(
-                        request.customerId(),
+                        customerId,
                         request.customerPartnerEmployeeLinkId()
                 )
                 .orElseThrow(() -> new BusinessRuleViolationException(
@@ -99,20 +104,20 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         );
 
         salaryAdvanceLimitRepository.acquireCustomerLinkLock(
-                request.customerId(),
+                customerId,
                 request.customerPartnerEmployeeLinkId()
         );
-        assertNoBlockingApplicationExists(request.customerId());
+        assertNoBlockingApplicationExists(customerId);
 
         LocalDateTime now = LocalDateTime.now();
-        SalaryAdvanceLimit limit = findOrCreateLimit(request, partnerSnapshot, effectiveTotalLimit, now);
-        assertNoBlockingApplicationExists(request.customerId());
+        SalaryAdvanceLimit limit = findOrCreateLimit(customerId, request, partnerSnapshot, effectiveTotalLimit, now);
+        assertNoBlockingApplicationExists(customerId);
         SalaryAdvanceLimit reservedLimit = limit.reserve(request.requestedAmount());
 
         long applicationSequence = loanApplicationRepository.nextApplicationNumberSequence();
         LoanApplication loanApplication = LoanApplication.submitted(
                 UUID.randomUUID(),
-                request.customerId(),
+                customerId,
                 salaryAdvanceProduct,
                 formatApplicationNumber(applicationSequence, now),
                 request.requestedAmount(),
@@ -160,13 +165,14 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
     }
 
     private SalaryAdvanceLimit findOrCreateLimit(
+            UUID customerId,
             SalaryAdvanceApplicationRequest request,
             VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot,
             BigDecimal effectiveTotalLimit,
             LocalDateTime occurredAt
     ) {
         return salaryAdvanceLimitRepository.findByCustomerIdAndCustomerPartnerEmployeeLinkIdForUpdate(
-                        request.customerId(),
+                        customerId,
                         request.customerPartnerEmployeeLinkId()
                 )
                 .map(currentLimit -> refreshLimitIfNeeded(
@@ -175,10 +181,11 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
                         partnerSnapshot.lastRefreshedAt(),
                         occurredAt
                 ))
-                .orElseGet(() -> initializeLimit(request, partnerSnapshot, effectiveTotalLimit, occurredAt));
+                .orElseGet(() -> initializeLimit(customerId, request, partnerSnapshot, effectiveTotalLimit, occurredAt));
     }
 
     private SalaryAdvanceLimit initializeLimit(
+            UUID customerId,
             SalaryAdvanceApplicationRequest request,
             VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot,
             BigDecimal effectiveTotalLimit,
@@ -186,7 +193,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
     ) {
         SalaryAdvanceLimit initializedLimit = SalaryAdvanceLimit.initialized(
                 UUID.randomUUID(),
-                request.customerId(),
+                customerId,
                 request.customerPartnerEmployeeLinkId(),
                 effectiveTotalLimit,
                 partnerSnapshot.lastRefreshedAt()

@@ -21,6 +21,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class SalaryAdvanceLoanApplicationControllerTest {
 
+    private static final UUID CUSTOMER_ID = UUID.fromString("99999999-9999-9999-9999-999999999999");
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -51,7 +53,7 @@ class SalaryAdvanceLoanApplicationControllerTest {
             return new SalaryAdvanceApplicationDto(
                     UUID.randomUUID(),
                     "SA-20260626-000001",
-                    request.customerId(),
+                    CUSTOMER_ID,
                     "SALARY_ADVANCE",
                     "SALARY_BASED",
                     "SUBMITTED",
