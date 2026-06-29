@@ -1,21 +1,43 @@
 package com.meridian.platform.partner.domain.service;
 
 import com.meridian.platform.partner.domain.model.EmployeeVerificationOutcome;
+import com.meridian.platform.partner.domain.model.PartnerCompany;
+import com.meridian.platform.partner.domain.model.PartnerCompanyStatus;
 import com.meridian.platform.partner.domain.model.PartnerEmployee;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeStatus;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PartnerEmployeeVerificationPolicyTest {
 
     private final PartnerEmployeeVerificationPolicy policy = new PartnerEmployeeVerificationPolicy();
+
+    @Test
+    void allowsActivePartnerCompanyForEligibility() {
+        assertDoesNotThrow(() -> policy.validatePartnerCompanyCanBeUsedForEligibility(
+                partnerCompany(PartnerCompanyStatus.ACTIVE)
+        ));
+    }
+
+    @Test
+    void rejectsInactivePartnerCompanyForEligibility() {
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> policy.validatePartnerCompanyCanBeUsedForEligibility(partnerCompany(PartnerCompanyStatus.INACTIVE))
+        );
+
+        assertEquals("PARTNER_COMPANY_INACTIVE", exception.getErrorCode());
+    }
 
     @Test
     void returnsMatchedActiveForSingleActiveEmployee() {
@@ -50,6 +72,16 @@ class PartnerEmployeeVerificationPolicyTest {
 
         assertEquals(EmployeeVerificationOutcome.MULTIPLE_MATCHES, outcome);
         assertTrue(policy.requiresManualReview(outcome));
+    }
+
+    private PartnerCompany partnerCompany(PartnerCompanyStatus status) {
+        return new PartnerCompany(
+                UUID.randomUUID(),
+                "MERIDIAN_PARTNER",
+                "Meridian Partner Co.",
+                status,
+                BigDecimal.valueOf(20_000_000)
+        );
     }
 
     private PartnerEmployee employee(boolean active, PartnerEmployeeStatus status) {

@@ -29,18 +29,24 @@ Type: Security risk
 
 Priority: P0
 
-Status: Open
+Status: Done
 
-Blocks next major feature: Yes
+Blocks next major feature: No
 
 Problem:
-Sensitive Partner employee and Salary Advance application endpoints are currently public through SecurityConfig permitAll rules.
+Sensitive Partner employee and Salary Advance application endpoints were public through SecurityConfig permitAll rules.
 
 Risk:
-Unauthenticated callers can perform employee verification and submit Salary Advance applications.
+Unauthenticated callers could perform employee verification and submit Salary Advance applications.
 
-Recommendation:
-Restrict sensitive endpoints behind authentication/RBAC or introduce a clearly documented local-only development security profile. Do not silently expand permitAll.
+Resolution:
+`SecurityConfig` now keeps only health and loan product catalog endpoints public. Partner Company, Partner Employee, employee verification, import batch, and Salary Advance application endpoints require authentication through the current Spring Security gate. The patch does not expand `permitAll`.
+
+Notes:
+This is a minimal authenticated gate using Spring Security HTTP Basic for local/development until full JWT/RBAC is implemented. Role/action permissions and customer ownership enforcement remain tracked separately.
+
+Suggested future branch name:
+`fix/identity-rbac-endpoint-permissions`
 
 ### MER-FU-002 - Remove or split PII-heavy Partner employee DTOs from public responses
 
@@ -50,18 +56,21 @@ Type: Security risk
 
 Priority: P0
 
-Status: Open
+Status: Done
 
-Blocks next major feature: Yes
+Blocks next major feature: No
 
 Problem:
-Partner employee API responses expose employee code, identity reference, salary, and limit data.
+Partner employee API responses exposed employee code, identity reference, salary, and limit data while the endpoint was public.
 
 Risk:
-Sensitive employment and salary data can leak through public/customer-facing endpoints.
+Sensitive employment and salary data could leak through public/customer-facing endpoints.
 
-Recommendation:
-Create safe public DTOs for customer-facing use. Keep detailed internal/admin DTOs only behind protected back-office/admin endpoints.
+Resolution:
+Detailed `PartnerEmployeeDto` remains only on the protected Partner Employee query endpoint, which is treated as an internal/admin surface. The customer-facing employee verification response now returns only IDs, outcome, link status, and manual-review flag; it no longer returns salary amount, salary advance limit, identity reference, employee code, or raw matching evidence.
+
+Notes:
+Internal Partner-to-Loan eligibility snapshots still carry salary and limit values where needed for Salary Advance limit calculation. Those snapshots are not REST customer response DTOs.
 
 ### MER-FU-003 - Reject inactive Partner Companies during employee verification
 
@@ -71,18 +80,18 @@ Type: Business-rule mismatch
 
 Priority: P0
 
-Status: Open
+Status: Done
 
-Blocks next major feature: Yes
+Blocks next major feature: No
 
 Problem:
-Employee verification checks partner company existence but not active status.
+Employee verification checked partner company existence but not active status.
 
 Risk:
-Inactive Partner Companies may still be used for normal Salary Advance eligibility.
+Inactive Partner Companies could still be used for normal Salary Advance eligibility.
 
-Recommendation:
-Update verification service/policy to reject inactive Partner Companies with a clean business error or appropriate verification outcome. Add tests.
+Resolution:
+`PartnerEmployeeVerificationPolicy` now rejects non-active Partner Companies with `PARTNER_COMPANY_INACTIVE` before import-batch lookup, employee matching, link creation, or manual-review routing. This keeps inactive Partner Companies as a hard stop for normal Salary Advance eligibility.
 
 ### MER-FU-004 - Request-provided customerId is temporary until auth ownership exists
 
@@ -118,10 +127,10 @@ Status: Open
 Blocks next major feature: No
 
 Problem:
-Current tests focus on domain/application behavior, but controller/security behavior is not covered enough.
+Security and controller coverage was thin. This patch adds focused coverage for anonymous access denial, authenticated access to a protected Partner Employee endpoint, inactive Partner Company rejection, and the safe employee verification response shape. Broader role/action authorization and full controller matrix coverage are still missing.
 
 Recommendation:
-Add tests for protected endpoint access, PII-safe DTOs, inactive Partner Company rejection, and important error responses.
+Keep expanding controller/security tests as IAM/RBAC matures, especially role-specific access, customer ownership, clean auth error responses, and full Partner/Loan endpoint matrices.
 
 ### MER-FU-006 - Align API docs with implemented endpoints
 
@@ -131,15 +140,15 @@ Type: Documentation gap
 
 Priority: P1
 
-Status: Open
+Status: Done
 
 Blocks next major feature: No
 
 Problem:
-API docs do not list implemented employee verification and Salary Advance application endpoints.
+API docs did not list implemented employee verification and Salary Advance application endpoints.
 
-Recommendation:
-Document method, path, request, response, security posture, and safe PII behavior for:
+Resolution:
+`docs/architecture/MER-ARCH-006-api-request-flow-and-dependencies.md` now documents method, path, current security posture, request/response shape, and safe PII behavior for:
 
 * `POST /api/v1/partner-companies/{partnerCompanyId}/employee-verifications`
 * `POST /api/v1/loan-applications/salary-advance`
@@ -294,14 +303,37 @@ Flyway migrations are growing and current schema is harder to inspect from migra
 Recommendation:
 Create `docs/database/MER-DB-CURRENT-SCHEMA.sql` after the security/PII patch or after the next stable milestone. This file is documentation only and must not be placed in the Flyway migration folder.
 
+### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
+
+Area: Identity / Security / API
+
+Type: Deferred feature / security hardening
+
+Priority: P1
+
+Status: Open
+
+Blocks next major feature: No, but should be planned with the IAM/auth milestone before a real demo
+
+Problem:
+The P0 security patch protects sensitive endpoints with the current Spring Security authenticated gate and HTTP Basic development authentication. It does not yet enforce production JWT authentication, role/action permissions, or customer ownership.
+
+Risk:
+Any authenticated local user can reach protected Partner and Salary Advance endpoints until role/action checks are implemented. Customer-facing operations still depend on request-provided customer IDs until ownership enforcement exists.
+
+Recommendation:
+Implement JWT-backed authentication, endpoint-level role/action authorization, and ownership checks. Replace the temporary HTTP Basic posture and add role-specific controller/security tests.
+
+Suggested future branch name:
+`fix/identity-rbac-endpoint-permissions`
+
 ## Recommended Next Roadmap
 
-1. Patch P0 security/PII/inactive Partner Company issues.
-2. Add/adjust tests for those P0 fixes.
-3. Update API docs for implemented endpoints.
-4. Create current physical schema snapshot.
-5. Continue with Loan review/approval workflow.
-6. Continue with customer acceptance/disbursement/loan account activation.
-7. Add repayment tracking.
-8. Add audit trail.
-9. Add document checklist/manual review/OCR.
+1. Review/merge the completed P0 security/PII/inactive Partner Company patch.
+2. Create current physical schema snapshot.
+3. Continue with Loan review/approval workflow.
+4. Plan JWT/RBAC and customer ownership enforcement before the real auth/demo milestone.
+5. Continue with customer acceptance/disbursement/loan account activation.
+6. Add repayment tracking.
+7. Add audit trail.
+8. Add document checklist/manual review/OCR.

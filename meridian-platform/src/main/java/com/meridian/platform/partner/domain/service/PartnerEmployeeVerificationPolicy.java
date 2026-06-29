@@ -1,13 +1,27 @@
 package com.meridian.platform.partner.domain.service;
 
 import com.meridian.platform.partner.domain.model.EmployeeVerificationOutcome;
+import com.meridian.platform.partner.domain.model.PartnerCompany;
+import com.meridian.platform.partner.domain.model.PartnerCompanyStatus;
 import com.meridian.platform.partner.domain.model.PartnerEmployee;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeStatus;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 
 import java.util.List;
 import java.util.Objects;
 
 public class PartnerEmployeeVerificationPolicy {
+
+    public void validatePartnerCompanyCanBeUsedForEligibility(PartnerCompany partnerCompany) {
+        Objects.requireNonNull(partnerCompany, "partnerCompany must not be null");
+
+        if (partnerCompany.status() != PartnerCompanyStatus.ACTIVE) {
+            throw new BusinessRuleViolationException(
+                    "PARTNER_COMPANY_INACTIVE",
+                    "Partner company is inactive for Salary Advance eligibility."
+            );
+        }
+    }
 
     public EmployeeVerificationOutcome determineOutcome(List<PartnerEmployee> matchingEmployees) {
         Objects.requireNonNull(matchingEmployees, "matchingEmployees must not be null");
