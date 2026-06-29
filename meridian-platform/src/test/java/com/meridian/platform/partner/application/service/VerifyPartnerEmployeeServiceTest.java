@@ -16,6 +16,7 @@ import com.meridian.platform.partner.domain.model.PartnerEmployee;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatch;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatchStatus;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeStatus;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VerifyPartnerEmployeeServiceTest {
@@ -74,8 +76,6 @@ class VerifyPartnerEmployeeServiceTest {
         assertFalse(result.manualReviewRequired());
         assertEquals(partnerEmployeeId, result.partnerEmployeeId());
         assertNotNull(result.customerPartnerEmployeeLinkId());
-        assertEquals(BigDecimal.valueOf(18_000_000).setScale(2), result.salaryAmount());
-        assertEquals(BigDecimal.valueOf(6_000_000).setScale(2), result.salaryAdvanceLimit());
         assertEquals("IDREF-MER-001", linkRepository.savedLink.verifiedIdentityRef());
         assertEquals("MER-EMP-001", linkRepository.savedLink.verifiedEmployeeCode());
     }
@@ -109,7 +109,22 @@ class VerifyPartnerEmployeeServiceTest {
         assertFalse(result.manualReviewRequired());
         assertEquals(partnerEmployeeId, result.partnerEmployeeId());
         assertNull(result.customerPartnerEmployeeLinkId());
-        assertNull(result.salaryAmount());
+        assertNull(linkRepository.savedLink);
+    }
+
+    @Test
+    void rejectsInactivePartnerCompanyBeforeManualReviewOrLinkCreation() {
+        partnerCompanyRepository.status = PartnerCompanyStatus.INACTIVE;
+
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.verifyPartnerEmployee(
+                        partnerCompanyId,
+                        new PartnerEmployeeVerificationRequest(customerId, "IDREF-MER-001", "MER-EMP-001")
+                )
+        );
+
+        assertEquals("PARTNER_COMPANY_INACTIVE", exception.getErrorCode());
         assertNull(linkRepository.savedLink);
     }
 
@@ -128,7 +143,6 @@ class VerifyPartnerEmployeeServiceTest {
         assertEquals("SUSPENDED", result.linkStatus());
         assertTrue(result.manualReviewRequired());
         assertEquals(existingLink.id(), result.customerPartnerEmployeeLinkId());
-        assertNull(result.salaryAmount());
         assertNull(linkRepository.savedLink);
     }
 
@@ -173,6 +187,7 @@ class VerifyPartnerEmployeeServiceTest {
     private static class FakePartnerCompanyRepository implements PartnerCompanyRepository {
 
         private final UUID partnerCompanyId;
+        private PartnerCompanyStatus status = PartnerCompanyStatus.ACTIVE;
 
         private FakePartnerCompanyRepository(UUID partnerCompanyId) {
             this.partnerCompanyId = partnerCompanyId;
@@ -193,7 +208,7 @@ class VerifyPartnerEmployeeServiceTest {
                     partnerCompanyId,
                     "MERIDIAN_PARTNER",
                     "Meridian Partner Co.",
-                    PartnerCompanyStatus.ACTIVE,
+                    status,
                     BigDecimal.valueOf(20_000_000).setScale(2)
             ));
         }

@@ -10,6 +10,7 @@ import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportB
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeRepository;
 import com.meridian.platform.partner.domain.model.CustomerPartnerEmployeeLink;
 import com.meridian.platform.partner.domain.model.EmployeeVerificationOutcome;
+import com.meridian.platform.partner.domain.model.PartnerCompany;
 import com.meridian.platform.partner.domain.model.PartnerEmployee;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatch;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeVerificationResult;
@@ -60,11 +61,12 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
         String identityReference = normalizeRequired(request.identityReference(), "identityReference");
         String employeeCode = normalizeRequired(request.employeeCode(), "employeeCode");
 
-        partnerCompanyRepository.findById(partnerCompanyId)
+        PartnerCompany partnerCompany = partnerCompanyRepository.findById(partnerCompanyId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "PARTNER_COMPANY_NOT_FOUND",
                         "Partner company was not found."
                 ));
+        verificationPolicy.validatePartnerCompanyCanBeUsedForEligibility(partnerCompany);
 
         return importBatchRepository.findLatestCompletedByPartnerCompanyId(partnerCompanyId)
                 .map(importBatch -> verifyAgainstBatch(

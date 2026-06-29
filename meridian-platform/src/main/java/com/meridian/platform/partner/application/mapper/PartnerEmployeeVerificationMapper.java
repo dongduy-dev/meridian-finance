@@ -15,9 +15,7 @@ public class PartnerEmployeeVerificationMapper {
                 result.customerPartnerEmployeeLinkId(),
                 result.outcome().name(),
                 result.linkStatus() == null ? null : result.linkStatus().name(),
-                result.manualReviewRequired(),
-                result.salaryAmount(),
-                result.salaryAdvanceLimit()
+                result.manualReviewRequired()
         );
     }
 }

@@ -1,0 +1,938 @@
+﻿{
+    "info":  {
+                 "name":  "Meridian Platform API Smoke and Salary Advance Scenario",
+                 "description":  "Generated from current Spring controllers. Run the first request first; it creates a fresh scenarioCustomerId for duplicate-safe Salary Advance testing. Protected endpoints use collection-level Basic Auth variables.",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+             },
+    "auth":  {
+                 "type":  "basic",
+                 "basic":  [
+                               {
+                                   "key":  "username",
+                                   "value":  "{{basicUsername}}",
+                                   "type":  "string"
+                               },
+                               {
+                                   "key":  "password",
+                                   "value":  "{{basicPassword}}",
+                                   "type":  "string"
+                               }
+                           ]
+             },
+    "variable":  [
+                     {
+                         "key":  "baseUrl",
+                         "value":  "http://localhost:8080",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "basicUsername",
+                         "value":  "user",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "basicPassword",
+                         "value":  "replace-with-generated-or-configured-password",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "partnerCompanyId",
+                         "value":  "11111111-1111-1111-1111-111111111111",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "activeIdentityReference",
+                         "value":  "IDREF-MER-001",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "activeEmployeeCode",
+                         "value":  "MER-EMP-001",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "inactiveIdentityReference",
+                         "value":  "IDREF-MER-003",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "inactiveEmployeeCode",
+                         "value":  "MER-EMP-003",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "requestedAmount",
+                         "value":  "3000000.00",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "requestedTermMonths",
+                         "value":  "1",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "scenarioCustomerId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "customerPartnerEmployeeLinkId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "loanApplicationId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "applicationNumber",
+                         "value":  "",
+                         "type":  "string"
+                     }
+                 ],
+    "item":  [
+                 {
+                     "name":  "00 Public and Scenario Setup",
+                     "item":  [
+                                  {
+                                      "name":  "GET /api/v1/health - public + reset scenario customer",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/health",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "health"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const freshCustomerId = pm.variables.replaceIn(\u0027{{$guid}}\u0027);",
+                                                                                    "pm.collectionVariables.set(\u0027scenarioCustomerId\u0027, freshCustomerId);",
+                                                                                    "pm.collectionVariables.unset(\u0027customerPartnerEmployeeLinkId\u0027);",
+                                                                                    "pm.collectionVariables.unset(\u0027loanApplicationId\u0027);",
+                                                                                    "pm.collectionVariables.unset(\u0027applicationNumber\u0027);",
+                                                                                    "console.log(\u0027Meridian scenario customerId:\u0027, freshCustomerId);"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027health is UP\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(200);",
+                                                                                    "  const json = pm.response.json();",
+                                                                                    "  pm.expect(json.status).to.eql(\u0027UP\u0027);",
+                                                                                    "  pm.expect(json.app).to.eql(\u0027Meridian Platform\u0027);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET /api/health - public legacy alias",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/health",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "health"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027health is UP\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(200);",
+                                                                                    "  const json = pm.response.json();",
+                                                                                    "  pm.expect(json.status).to.eql(\u0027UP\u0027);",
+                                                                                    "  pm.expect(json.app).to.eql(\u0027Meridian Platform\u0027);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET /api/v1/loan-products - public catalog",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-products",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-products"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027loan products are public and include Salary Advance\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(200);",
+                                                                                    "  const products = pm.response.json();",
+                                                                                    "  pm.expect(products).to.be.an(\u0027array\u0027);",
+                                                                                    "  pm.expect(products.map(p =\u003e p.productCode)).to.include(\u0027SALARY_ADVANCE\u0027);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "01 Security Gates",
+                     "item":  [
+                                  {
+                                      "name":  "GET /api/v1/partner-companies without auth -\u003e 401",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "partner-companies"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027anonymous caller is rejected\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(401);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET /api/v1/partner-companies/{id}/employees without auth -\u003e 401",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies/{{partnerCompanyId}}/employees?activeOnly=true",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "partner-companies",
+                                                                               "{{partnerCompanyId}}",
+                                                                               "employees?activeOnly=true"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027anonymous caller is rejected\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(401);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST /api/v1/loan-applications/salary-advance without auth -\u003e 401",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/salary-advance",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "salary-advance"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": {{requestedAmount}},\n  \"requestedTermMonths\": {{requestedTermMonths}}\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027anonymous caller is rejected\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(401);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "02 Protected Partner Reads",
+                     "item":  [
+                                  {
+                                      "name":  "GET /api/v1/partner-companies",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "partner-companies"
+                                                                           ]
+                                                              }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027request succeeds with an array response\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(200);",
+                                                                                    "  pm.expect(pm.response.json()).to.be.an(\u0027array\u0027);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET /api/v1/partner-companies/{partnerCompanyId}",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies/{{partnerCompanyId}}",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "partner-companies",
+                                                                               "{{partnerCompanyId}}"
+                                                                           ]
+                                                              }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027partner company is returned\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(200);",
+                                                                                    "  const company = pm.response.json();",
+                                                                                    "  pm.expect(company.id).to.eql(pm.collectionVariables.get(\u0027partnerCompanyId\u0027));",
+                                                                                    "  pm.expect(company.status).to.eql(\u0027ACTIVE\u0027);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET /api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=true",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies/{{partnerCompanyId}}/employees?activeOnly=true",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "partner-companies",
+                                                                               "{{partnerCompanyId}}",
+                                                                               "employees?activeOnly=true"
+                                                                           ]
+                                                              }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027protected employee list returns detailed internal DTO\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(200);",
+                                                                                    "  const employees = pm.response.json();",
+                                                                                    "  pm.expect(employees).to.be.an(\u0027array\u0027).that.is.not.empty;",
+                                                                                    "  pm.expect(employees[0]).to.have.property(\u0027employeeCode\u0027);",
+                                                                                    "  pm.expect(employees[0]).to.have.property(\u0027identityReference\u0027);",
+                                                                                    "  pm.expect(employees[0]).to.have.property(\u0027salaryAmount\u0027);",
+                                                                                    "  pm.expect(employees[0]).to.have.property(\u0027salaryAdvanceLimit\u0027);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET /api/v1/partner-companies/{partnerCompanyId}/employee-import-batches",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies/{{partnerCompanyId}}/employee-import-batches",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "partner-companies",
+                                                                               "{{partnerCompanyId}}",
+                                                                               "employee-import-batches"
+                                                                           ]
+                                                              }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027request succeeds with an array response\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(200);",
+                                                                                    "  pm.expect(pm.response.json()).to.be.an(\u0027array\u0027);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "03 Employee Verification",
+                     "item":  [
+                                  {
+                                      "name":  "POST verify active employee -\u003e MATCHED_ACTIVE",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies/{{partnerCompanyId}}/employee-verifications",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "partner-companies",
+                                                                               "{{partnerCompanyId}}",
+                                                                               "employee-verifications"
+                                                                           ]
+                                                              },
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"identityReference\": \"{{activeIdentityReference}}\",\n  \"employeeCode\": \"{{activeEmployeeCode}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027active employee verification succeeds with safe response\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(200);",
+                                                                                    "  const json = pm.response.json();",
+                                                                                    "  pm.expect(json.outcome).to.eql(\u0027MATCHED_ACTIVE\u0027);",
+                                                                                    "  pm.expect(json.linkStatus).to.eql(\u0027VERIFIED\u0027);",
+                                                                                    "  pm.expect(json.manualReviewRequired).to.eql(false);",
+                                                                                    "  pm.expect(json).to.not.have.property(\u0027salaryAmount\u0027);",
+                                                                                    "  pm.expect(json).to.not.have.property(\u0027salaryAdvanceLimit\u0027);",
+                                                                                    "  pm.expect(json).to.not.have.property(\u0027identityReference\u0027);",
+                                                                                    "  pm.expect(json).to.not.have.property(\u0027employeeCode\u0027);",
+                                                                                    "  pm.expect(json.customerPartnerEmployeeLinkId).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                                    "  pm.collectionVariables.set(\u0027customerPartnerEmployeeLinkId\u0027, json.customerPartnerEmployeeLinkId);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST verify inactive employee -\u003e MATCHED_INACTIVE",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies/{{partnerCompanyId}}/employee-verifications",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "partner-companies",
+                                                                               "{{partnerCompanyId}}",
+                                                                               "employee-verifications"
+                                                                           ]
+                                                              },
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"identityReference\": \"{{inactiveIdentityReference}}\",\n  \"employeeCode\": \"{{inactiveEmployeeCode}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027inactive employee is not linked\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(200);",
+                                                                                    "  const json = pm.response.json();",
+                                                                                    "  pm.expect(json.outcome).to.eql(\u0027MATCHED_INACTIVE\u0027);",
+                                                                                    "  pm.expect(json.manualReviewRequired).to.eql(false);",
+                                                                                    "  pm.expect(json.customerPartnerEmployeeLinkId).to.be.oneOf([null, undefined]);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST verify missing employee -\u003e PENDING_MANUAL_REVIEW",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies/{{partnerCompanyId}}/employee-verifications",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "partner-companies",
+                                                                               "{{partnerCompanyId}}",
+                                                                               "employee-verifications"
+                                                                           ]
+                                                              },
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"identityReference\": \"IDREF-NOT-FOUND\",\n  \"employeeCode\": \"MER-EMP-NOT-FOUND\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027missing employee evidence routes to manual review\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(200);",
+                                                                                    "  const json = pm.response.json();",
+                                                                                    "  pm.expect(json.outcome).to.eql(\u0027PENDING_MANUAL_REVIEW\u0027);",
+                                                                                    "  pm.expect(json.manualReviewRequired).to.eql(true);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "04 Salary Advance Application",
+                     "item":  [
+                                  {
+                                      "name":  "POST Salary Advance with missing link -\u003e 422 EMPLOYEE_NOT_VERIFIED",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/salary-advance",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "salary-advance"
+                                                                           ]
+                                                              },
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"customerPartnerEmployeeLinkId\": \"00000000-0000-0000-0000-000000000000\",\n  \"requestedAmount\": 3000000.00,\n  \"requestedTermMonths\": 1\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027missing verified employee link is rejected cleanly\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(422);",
+                                                                                    "  const json = pm.response.json();",
+                                                                                    "  pm.expect(json.errorCode).to.eql(\u0027EMPLOYEE_NOT_VERIFIED\u0027);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST Salary Advance below min amount -\u003e 422 INVALID_PRODUCT_AMOUNT",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/salary-advance",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "salary-advance"
+                                                                           ]
+                                                              },
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": 100000.00,\n  \"requestedTermMonths\": 1\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027amount below product minimum is rejected cleanly\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(422);",
+                                                                                    "  const json = pm.response.json();",
+                                                                                    "  pm.expect(json.errorCode).to.eql(\u0027INVALID_PRODUCT_AMOUNT\u0027);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST Salary Advance happy path -\u003e 201 SUBMITTED",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/salary-advance",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "salary-advance"
+                                                                           ]
+                                                              },
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": {{requestedAmount}},\n  \"requestedTermMonths\": {{requestedTermMonths}}\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027salary advance application is created and reserves limit\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(201);",
+                                                                                    "  const json = pm.response.json();",
+                                                                                    "  pm.expect(json.status).to.eql(\u0027SUBMITTED\u0027);",
+                                                                                    "  pm.expect(json.productCode).to.eql(\u0027SALARY_ADVANCE\u0027);",
+                                                                                    "  pm.expect(json.productVerificationResult).to.eql(\u0027VERIFIED\u0027);",
+                                                                                    "  pm.expect(json.customerPartnerEmployeeLinkId).to.eql(pm.collectionVariables.get(\u0027customerPartnerEmployeeLinkId\u0027));",
+                                                                                    "  pm.expect(Number(json.requestedAmount)).to.eql(Number(pm.collectionVariables.get(\u0027requestedAmount\u0027)));",
+                                                                                    "  pm.expect(Number(json.availableLimitSnapshot)).to.be.at.least(0);",
+                                                                                    "  pm.collectionVariables.set(\u0027loanApplicationId\u0027, json.loanApplicationId);",
+                                                                                    "  pm.collectionVariables.set(\u0027applicationNumber\u0027, json.applicationNumber);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST Salary Advance duplicate active application -\u003e 409",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/salary-advance",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "salary-advance"
+                                                                           ]
+                                                              },
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": {{requestedAmount}},\n  \"requestedTermMonths\": {{requestedTermMonths}}\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027duplicate active Salary Advance application is blocked\u0027, function () {",
+                                                                                    "  pm.response.to.have.status(409);",
+                                                                                    "  const json = pm.response.json();",
+                                                                                    "  pm.expect(json.errorCode).to.eql(\u0027BLOCKING_APPLICATION_EXISTS\u0027);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 }
+             ]
+}
