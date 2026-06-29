@@ -2,27 +2,56 @@
 
 ## Current Endpoint Inventory
 
-Current security posture comes from `SecurityConfig`: health and loan product catalog endpoints are public; all other endpoints require the current Spring Security HTTP Basic authenticated gate. This is a development/MVP gate, not final JWT/RBAC.
+Current security posture comes from `SecurityConfig`: health, login, and loan product catalog endpoints are public; all other implemented business endpoints require JWT Bearer authentication plus role/permission checks. HTTP Basic is no longer the intended development gate.
 
 | Method | Path | Auth | Controller | Purpose |
 | --- | --- | --- | --- | --- |
 | GET | `/api/health` | Public | `HealthController` | Legacy health alias. |
 | GET | `/api/v1/health` | Public | `HealthController` | Versioned health check. |
+| POST | `/api/v1/auth/login` | Public | `AuthController` | Authenticate a seeded demo user and return a Bearer access token. |
 | GET | `/api/v1/loan-products` | Public | `LoanProductController` | List active loan products. |
-| GET | `/api/v1/partner-companies` | Basic auth | `PartnerCompanyController` | List Partner Companies. |
-| GET | `/api/v1/partner-companies/{partnerCompanyId}` | Basic auth | `PartnerCompanyController` | Get one Partner Company. |
-| GET | `/api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=false` | Basic auth | `PartnerEmployeeController` | List Partner Employees for a company. `activeOnly` is optional and defaults to `false`. |
-| GET | `/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | Basic auth | `PartnerEmployeeImportBatchController` | List Partner Employee import batches. |
-| POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-verifications` | Basic auth | `PartnerEmployeeVerificationController` | Verify customer Partner Employee evidence and create/reuse a verified link. |
-| POST | `/api/v1/loan-applications/salary-advance` | Basic auth | `SalaryAdvanceLoanApplicationController` | Create a submitted Salary Advance application and reserve limit. |
+| GET | `/api/v1/partner-companies` | Bearer + `partner:read` | `PartnerCompanyController` | List Partner Companies. |
+| GET | `/api/v1/partner-companies/{partnerCompanyId}` | Bearer + `partner:read` | `PartnerCompanyController` | Get one Partner Company. |
+| GET | `/api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=false` | Bearer + `partner:read` | `PartnerEmployeeController` | List Partner Employees for a company. `activeOnly` is optional and defaults to `false`. |
+| GET | `/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | Bearer + `partner:read` | `PartnerEmployeeImportBatchController` | List Partner Employee import batches. |
+| POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-verifications` | Bearer + `partner:employee:verify:own` | `PartnerEmployeeVerificationController` | Verify the authenticated customer's Partner Employee evidence and create/reuse a verified link. |
+| POST | `/api/v1/loan-applications/salary-advance` | Bearer + `loan:submit` | `SalaryAdvanceLoanApplicationController` | Create a submitted Salary Advance application for the authenticated customer and reserve limit. |
+
+## Authentication
+
+### Login
+
+```json
+{
+  "email": "customer.demo@meridian.local",
+  "password": "<local-demo-password>"
+}
+```
+
+Use the returned `accessToken` as:
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+Seeded demo user emails:
+
+| Role | Email |
+| --- | --- |
+| Customer | `customer.demo@meridian.local` |
+| Loan Officer | `loan.officer@meridian.local` |
+| Approver | `approver@meridian.local` |
+| Accounting Officer | `accounting.officer@meridian.local` |
+| Back-Office Admin | `backoffice.admin@meridian.local` |
 
 ## Request Payloads
 
 ### Employee Verification
 
+`customerId` is derived from the authenticated customer token and is no longer accepted in the request body.
+
 ```json
 {
-  "customerId": "99999999-9999-9999-9999-999999999999",
   "identityReference": "IDREF-MER-001",
   "employeeCode": "MER-EMP-001"
 }
@@ -34,16 +63,17 @@ The response intentionally does not expose salary, salary advance limit, identit
 
 ### Salary Advance Application
 
+`customerId` is derived from the authenticated customer token and is no longer accepted in the request body.
+
 ```json
 {
-  "customerId": "99999999-9999-9999-9999-999999999999",
   "customerPartnerEmployeeLinkId": "<capture from employee verification response>",
   "requestedAmount": 3000000.00,
   "requestedTermMonths": 1
 }
 ```
 
-## Seed Data Useful For Postman
+## Seed Data Useful For API Verification
 
 | Purpose | Value |
 | --- | --- |
@@ -61,25 +91,7 @@ Import this file into Postman:
 
 `docs/api/Meridian-Platform.postman_collection.json`
 
-Collection variables:
-
-| Variable | Meaning |
-| --- | --- |
-| `baseUrl` | Default `http://localhost:8080`. |
-| `basicUsername` | Default `user`, unless overridden by Spring Security config. |
-| `basicPassword` | Set this from the app startup generated password or from your configured `spring.security.user.password`. |
-| `partnerCompanyId` | Defaults to seeded Meridian Partner Company. |
-| `scenarioCustomerId` | Generated by the first collection request for repeatable test runs. |
-| `customerPartnerEmployeeLinkId` | Captured from active employee verification. |
-| `loanApplicationId` | Captured from Salary Advance creation. |
-
-Run order:
-
-1. `00 Public and Scenario Setup`
-2. `01 Security Gates`
-3. `02 Protected Partner Reads`
-4. `03 Employee Verification`
-5. `04 Salary Advance Application`
+Collection update note: the Markdown inventory above is authoritative for the IAM/RBAC checkpoint. The Postman collection should be refreshed to use `POST /api/v1/auth/login`, the `accessToken` collection variable, and Bearer auth instead of collection-level Basic auth.
 
 Expected high-value checks:
 
@@ -87,18 +99,19 @@ Expected high-value checks:
 | --- | --- |
 | Public health | `200`, `status = UP`. |
 | Public loan products | `200`, includes `SALARY_ADVANCE`. |
-| Protected endpoint without auth | `401`. |
-| Protected Partner Employee list with auth | `200`, detailed internal DTO visible only behind auth. |
-| Active employee verification | `200`, `MATCHED_ACTIVE`, captures `customerPartnerEmployeeLinkId`, no PII fields in response. |
-| Inactive employee verification | `200`, `MATCHED_INACTIVE`, no link created. |
-| Missing employee evidence | `200`, `PENDING_MANUAL_REVIEW`. |
+| Login with seeded demo user | `200`, `tokenType = Bearer`, returns `accessToken`. |
+| Protected endpoint without token | `401`, `AUTHENTICATION_REQUIRED`. |
+| Authenticated user without permission | `403`, `ACCESS_DENIED`. |
+| Back-Office Admin reads Partner Employee list | `200`, detailed internal DTO visible only behind `partner:read`. |
+| Customer active employee verification | `200`, `MATCHED_ACTIVE`, captures `customerPartnerEmployeeLinkId`, no PII fields in response. |
+| Customer inactive employee verification | `200`, `MATCHED_INACTIVE`, no link created. |
+| Customer missing employee evidence | `200`, `PENDING_MANUAL_REVIEW`. |
 | Salary Advance with missing link | `422`, `EMPLOYEE_NOT_VERIFIED`. |
 | Salary Advance below minimum amount | `422`, `INVALID_PRODUCT_AMOUNT`. |
 | Salary Advance happy path | `201`, `SUBMITTED`, limit reserved. |
-| Duplicate Salary Advance for same generated customer | `409`, `BLOCKING_APPLICATION_EXISTS`. |
+| Duplicate Salary Advance for same authenticated customer | `409`, `BLOCKING_APPLICATION_EXISTS`. |
 
 Notes:
 
-- The first request generates a fresh `scenarioCustomerId`; run it before the scenario to avoid duplicate active-application conflicts from previous runs.
-- Request-provided `customerId` is still the current MVP/local testing shortcut until authenticated ownership is implemented.
-- Full role/action authorization is not implemented yet; Basic auth only confirms the endpoint is not anonymous.
+- Customer-owned endpoints now derive customer identity from the authenticated token.
+- Refresh tokens, logout invalidation, and broader customer ownership hardening remain deferred IAM follow-ups.

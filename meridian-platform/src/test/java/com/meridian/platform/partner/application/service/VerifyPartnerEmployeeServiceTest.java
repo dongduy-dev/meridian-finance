@@ -16,6 +16,8 @@ import com.meridian.platform.partner.domain.model.PartnerEmployee;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatch;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatchStatus;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeStatus;
+import com.meridian.platform.shared.application.security.AuthenticatedUser;
+import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -58,7 +61,8 @@ class VerifyPartnerEmployeeServiceTest {
                 importBatchRepository,
                 partnerEmployeeRepository,
                 linkRepository,
-                new PartnerEmployeeVerificationMapper()
+                new PartnerEmployeeVerificationMapper(),
+                new FixedCurrentUserProvider(customerId)
         );
     }
 
@@ -68,7 +72,7 @@ class VerifyPartnerEmployeeServiceTest {
 
         PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
                 partnerCompanyId,
-                new PartnerEmployeeVerificationRequest(customerId, " IDREF-MER-001 ", " MER-EMP-001 ")
+                new PartnerEmployeeVerificationRequest(" IDREF-MER-001 ", " MER-EMP-001 ")
         );
 
         assertEquals("MATCHED_ACTIVE", result.outcome());
@@ -86,7 +90,7 @@ class VerifyPartnerEmployeeServiceTest {
 
         PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
                 partnerCompanyId,
-                new PartnerEmployeeVerificationRequest(customerId, "IDREF-MER-001", "MER-EMP-001")
+                new PartnerEmployeeVerificationRequest("IDREF-MER-001", "MER-EMP-001")
         );
 
         assertEquals("PENDING_MANUAL_REVIEW", result.outcome());
@@ -102,7 +106,7 @@ class VerifyPartnerEmployeeServiceTest {
 
         PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
                 partnerCompanyId,
-                new PartnerEmployeeVerificationRequest(customerId, "IDREF-MER-001", "MER-EMP-001")
+                new PartnerEmployeeVerificationRequest("IDREF-MER-001", "MER-EMP-001")
         );
 
         assertEquals("MATCHED_INACTIVE", result.outcome());
@@ -120,7 +124,7 @@ class VerifyPartnerEmployeeServiceTest {
                 BusinessRuleViolationException.class,
                 () -> service.verifyPartnerEmployee(
                         partnerCompanyId,
-                        new PartnerEmployeeVerificationRequest(customerId, "IDREF-MER-001", "MER-EMP-001")
+                        new PartnerEmployeeVerificationRequest("IDREF-MER-001", "MER-EMP-001")
                 )
         );
 
@@ -136,7 +140,7 @@ class VerifyPartnerEmployeeServiceTest {
 
         PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
                 partnerCompanyId,
-                new PartnerEmployeeVerificationRequest(customerId, "IDREF-MER-001", "MER-EMP-001")
+                new PartnerEmployeeVerificationRequest("IDREF-MER-001", "MER-EMP-001")
         );
 
         assertEquals("PENDING_MANUAL_REVIEW", result.outcome());
@@ -182,6 +186,27 @@ class VerifyPartnerEmployeeServiceTest {
                 LocalDateTime.now(),
                 LocalDateTime.now()
         );
+    }
+
+    private static class FixedCurrentUserProvider implements CurrentUserProvider {
+
+        private final UUID customerId;
+
+        private FixedCurrentUserProvider(UUID customerId) {
+            this.customerId = customerId;
+        }
+
+        @Override
+        public AuthenticatedUser currentUser() {
+            return new AuthenticatedUser(
+                    UUID.fromString("00000000-0000-0000-0000-000000000301"),
+                    "customer.demo@meridian.local",
+                    "CUSTOMER",
+                    customerId,
+                    Set.of("CUSTOMER"),
+                    Set.of("partner:employee:verify:own")
+            );
+        }
     }
 
     private static class FakePartnerCompanyRepository implements PartnerCompanyRepository {
