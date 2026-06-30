@@ -21,6 +21,7 @@ import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerCompan
 import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerEmployeeController;
 import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerEmployeeImportBatchController;
 import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerEmployeeVerificationController;
+import com.meridian.platform.shared.infrastructure.web.HealthController;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -46,6 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = {
+        HealthController.class,
         AuthController.class,
         LoanProductController.class,
         SalaryAdvanceLoanApplicationController.class,
@@ -101,6 +103,21 @@ class SecurityConfigTest {
 
     @MockitoBean
     private VerifyPartnerEmployeeUseCase verifyPartnerEmployeeUseCase;
+
+    @Test
+    void keepsVersionedHealthEndpointPublic() throws Exception {
+        mockMvc.perform(get("/api/v1/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.app").value("Meridian Platform"));
+    }
+
+    @Test
+    void doesNotExposeLegacyHealthAlias() throws Exception {
+        mockMvc.perform(get("/api/health")
+                        .with(user("authenticated-user")))
+                .andExpect(status().isNotFound());
+    }
 
     @Test
     void keepsLoginAndLoanProductCatalogPublic() throws Exception {
