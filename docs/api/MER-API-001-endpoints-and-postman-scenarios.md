@@ -6,7 +6,6 @@ Current security posture comes from `SecurityConfig`: health, login, and loan pr
 
 | Method | Path | Auth | Controller | Purpose |
 | --- | --- | --- | --- | --- |
-| GET | `/api/health` | Public | `HealthController` | Legacy health alias. |
 | GET | `/api/v1/health` | Public | `HealthController` | Versioned health check. |
 | POST | `/api/v1/auth/login` | Public | `AuthController` | Authenticate a seeded demo user and return a Bearer access token. |
 | GET | `/api/v1/loan-products` | Public | `LoanProductController` | List active loan products. |
