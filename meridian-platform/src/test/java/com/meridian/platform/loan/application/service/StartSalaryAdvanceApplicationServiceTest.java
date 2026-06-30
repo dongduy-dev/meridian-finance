@@ -376,6 +376,11 @@ class StartSalaryAdvanceApplicationServiceTest {
         }
 
         @Override
+        public Optional<LoanApplication> findByIdForUpdate(UUID loanApplicationId) {
+            return Optional.empty();
+        }
+
+        @Override
         public boolean existsByCustomerIdAndProductCodeAndStatusIn(
                 UUID customerId,
                 ProductCode productCode,

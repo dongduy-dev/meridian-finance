@@ -6,6 +6,7 @@ import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -20,7 +21,20 @@ public class LoanApplicationRepositoryAdapter implements LoanApplicationReposito
 
     @Override
     public LoanApplication save(LoanApplication loanApplication) {
-        return toDomain(jpaLoanApplicationRepository.save(new LoanApplicationJpaEntity(loanApplication)));
+        LoanApplicationJpaEntity entity = jpaLoanApplicationRepository.findById(loanApplication.id())
+                .map(existingEntity -> {
+                    existingEntity.updateFrom(loanApplication);
+                    return existingEntity;
+                })
+                .orElseGet(() -> new LoanApplicationJpaEntity(loanApplication));
+
+        return toDomain(jpaLoanApplicationRepository.save(entity));
+    }
+
+    @Override
+    public Optional<LoanApplication> findByIdForUpdate(UUID loanApplicationId) {
+        return jpaLoanApplicationRepository.findByIdForUpdate(loanApplicationId)
+                .map(this::toDomain);
     }
 
     @Override

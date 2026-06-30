@@ -16,6 +16,8 @@ Current security posture comes from `SecurityConfig`: health, login, and loan pr
 | GET | `/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | Bearer + `partner:read` | `PartnerEmployeeImportBatchController` | List Partner Employee import batches. |
 | POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-verifications` | Bearer + `partner:employee:verify:own` | `PartnerEmployeeVerificationController` | Verify the authenticated customer's Partner Employee evidence and create/reuse a verified link. |
 | POST | `/api/v1/loan-applications/salary-advance` | Bearer + `loan:submit` | `SalaryAdvanceLoanApplicationController` | Create a submitted Salary Advance application for the authenticated customer and reserve limit. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/review/start` | Bearer + `loan:review` | `LoanApplicationReviewController` | Start Loan Officer review and transition a submitted application to `UNDER_REVIEW`. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/review-recommendations` | Bearer + `approval:recommend` | `ReviewRecommendationController` | Record the authenticated Loan Officer recommendation and trigger Loan-owned status transition. |
 
 ## Authentication
 
@@ -72,6 +74,27 @@ The response intentionally does not expose salary, salary advance limit, identit
   "requestedTermMonths": 1
 }
 ```
+### Start Loan Officer Review
+
+The reviewer actor is derived from the Bearer token. No request body is required.
+
+```text
+POST /api/v1/loan-applications/{loanApplicationId}/review/start
+```
+
+### Review Recommendation
+
+`loanOfficerUserId` is derived from the authenticated Loan Officer token and is not accepted in the request body.
+
+```json
+{
+  "action": "RECOMMEND_APPROVAL",
+  "reason": "Application and verification snapshot reviewed.",
+  "internalNotes": "Optional staff-only note."
+}
+```
+
+Valid actions are `RECOMMEND_APPROVAL`, `RECOMMEND_REJECTION`, `RETURN_TO_CUSTOMER_REVISION`, and `REQUEST_STAFF_CORRECTION`. A nonblank `reason` is required for all actions except `RECOMMEND_APPROVAL`.
 
 ## Seed Data Useful For API Verification
 
@@ -109,6 +132,10 @@ Expected high-value checks:
 | Salary Advance with missing link | `422`, `EMPLOYEE_NOT_VERIFIED`. |
 | Salary Advance below minimum amount | `422`, `INVALID_PRODUCT_AMOUNT`. |
 | Salary Advance happy path | `201`, `SUBMITTED`, limit reserved. |
+| Start Loan Officer review | `200`, `UNDER_REVIEW`. |
+| Recommendation without `approval:recommend` | `403`, `ACCESS_DENIED`. |
+| Recommendation missing required reason | `422`, `RECOMMENDATION_REASON_REQUIRED`. |
+| Recommendation happy path | `201`, recommendation recorded, Loan status moves to `APPROVAL_PENDING` or `RETURNED_FOR_REVISION`. |
 | Duplicate Salary Advance for same authenticated customer | `409`, `BLOCKING_APPLICATION_EXISTS`. |
 
 Notes:

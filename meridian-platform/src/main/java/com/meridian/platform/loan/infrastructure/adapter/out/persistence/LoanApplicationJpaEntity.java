@@ -13,6 +13,7 @@ import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 @Entity
@@ -65,6 +66,18 @@ public class LoanApplicationJpaEntity {
     public LoanApplicationJpaEntity(LoanApplication loanApplication) {
         LocalDateTime now = LocalDateTime.now();
         this.id = loanApplication.id();
+        this.createdAt = now;
+        this.updatedAt = now;
+        apply(loanApplication);
+    }
+
+    public void updateFrom(LoanApplication loanApplication) {
+        this.updatedAt = LocalDateTime.now();
+        apply(loanApplication);
+    }
+
+    private void apply(LoanApplication loanApplication) {
+        Objects.requireNonNull(loanApplication, "loanApplication must not be null");
         this.customerId = loanApplication.customerId();
         this.loanProductId = loanApplication.loanProductId();
         this.applicationNumber = loanApplication.applicationNumber();
@@ -74,8 +87,6 @@ public class LoanApplicationJpaEntity {
         this.requestedAmount = loanApplication.requestedAmount();
         this.requestedTermMonths = loanApplication.requestedTermMonths();
         this.submittedAt = loanApplication.submittedAt();
-        this.createdAt = now;
-        this.updatedAt = now;
     }
 
     public UUID getId() {
