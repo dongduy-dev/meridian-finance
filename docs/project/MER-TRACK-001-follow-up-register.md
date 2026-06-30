@@ -512,12 +512,12 @@ Type: Documentation gap
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocks next major feature: No
 
-Recommendation:
-Update `docs/api/Meridian-Platform.postman_collection.json` to call login, store `accessToken`, use Bearer auth, and remove request-provided customerId payload fields.
+Resolution:
+`docs/api/Meridian-Platform.postman_collection.json` now calls login, stores role-specific Bearer token variables, uses JWT auth for protected endpoints, removes request-provided customerId payload fields, and covers the current endpoint inventory including Loan Officer review/recommendation.
 
 Suggested future branch name:
 `docs/update-postman-jwt-flow`

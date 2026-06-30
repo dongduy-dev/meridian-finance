@@ -1,38 +1,96 @@
-﻿{
+{
     "info":  {
-                 "name":  "Meridian Platform API Smoke and Salary Advance Scenario",
-                 "description":  "Generated from current Spring controllers. Run the first request first; it creates a fresh scenarioCustomerId for duplicate-safe Salary Advance testing. Protected endpoints use collection-level Basic Auth variables.",
+                 "name":  "Meridian Platform API - Full Current Endpoint Test Collection",
+                 "description":  "JWT/RBAC Postman collection for all currently implemented Meridian backend endpoints.\n\nRecommended run order:\n1. Run the Auth folder to capture role-specific Bearer tokens.\n2. Run Public and Partner Admin requests.\n3. Run Customer Employee Verification, then Salary Advance Application.\n4. Run Loan Officer Review and Recommendation.\n\nThe Salary Advance happy path is duplicate-sensitive because the authenticated demo customer can have only one active Salary Advance application. Run it on a fresh local database, or reset test data before repeating the full happy-path flow.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "auth":  {
-                 "type":  "basic",
-                 "basic":  [
-                               {
-                                   "key":  "username",
-                                   "value":  "{{basicUsername}}",
-                                   "type":  "string"
-                               },
-                               {
-                                   "key":  "password",
-                                   "value":  "{{basicPassword}}",
-                                   "type":  "string"
-                               }
-                           ]
+                 "type":  "bearer",
+                 "bearer":  [
+                                {
+                                    "key":  "token",
+                                    "value":  "{{accessToken}}",
+                                    "type":  "string"
+                                }
+                            ]
              },
     "variable":  [
                      {
                          "key":  "baseUrl",
                          "value":  "http://localhost:8080",
+                         "type":  "string",
+                         "description":  "Local Meridian backend base URL."
+                     },
+                     {
+                         "key":  "demoPassword",
+                         "value":  "Meridian@123",
+                         "type":  "string",
+                         "description":  "Fictional local demo password for seeded Meridian users only."
+                     },
+                     {
+                         "key":  "customerEmail",
+                         "value":  "customer.demo@meridian.local",
                          "type":  "string"
                      },
                      {
-                         "key":  "basicUsername",
-                         "value":  "user",
+                         "key":  "loanOfficerEmail",
+                         "value":  "loan.officer@meridian.local",
                          "type":  "string"
                      },
                      {
-                         "key":  "basicPassword",
-                         "value":  "replace-with-generated-or-configured-password",
+                         "key":  "approverEmail",
+                         "value":  "approver@meridian.local",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "accountingOfficerEmail",
+                         "value":  "accounting.officer@meridian.local",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "backOfficeAdminEmail",
+                         "value":  "backoffice.admin@meridian.local",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "customerAccessToken",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "loanOfficerAccessToken",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "approverAccessToken",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "accountingAccessToken",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "backOfficeAccessToken",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "accessToken",
+                         "value":  "",
+                         "type":  "string",
+                         "description":  "Default Bearer token used by collection-level auth."
+                     },
+                     {
+                         "key":  "currentUserId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "currentCustomerId",
+                         "value":  "",
                          "type":  "string"
                      },
                      {
@@ -61,6 +119,21 @@
                          "type":  "string"
                      },
                      {
+                         "key":  "missingIdentityReference",
+                         "value":  "IDREF-MER-MISSING",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "missingEmployeeCode",
+                         "value":  "MER-EMP-MISSING",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "customerPartnerEmployeeLinkId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
                          "key":  "requestedAmount",
                          "value":  "3000000.00",
                          "type":  "string"
@@ -68,16 +141,6 @@
                      {
                          "key":  "requestedTermMonths",
                          "value":  "1",
-                         "type":  "string"
-                     },
-                     {
-                         "key":  "scenarioCustomerId",
-                         "value":  "",
-                         "type":  "string"
-                     },
-                     {
-                         "key":  "customerPartnerEmployeeLinkId",
-                         "value":  "",
                          "type":  "string"
                      },
                      {
@@ -89,18 +152,423 @@
                          "key":  "applicationNumber",
                          "value":  "",
                          "type":  "string"
+                     },
+                     {
+                         "key":  "loanApplicationStatus",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "reviewRecommendationId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "recommendationAction",
+                         "value":  "RECOMMEND_APPROVAL",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "recommendationReason",
+                         "value":  "Application and verification snapshot reviewed.",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "internalNotes",
+                         "value":  "Postman local API test.",
+                         "type":  "string"
                      }
                  ],
     "item":  [
                  {
-                     "name":  "00 Public and Scenario Setup",
+                     "name":  "00 Auth - Capture Bearer Tokens",
                      "item":  [
                                   {
-                                      "name":  "GET /api/v1/health - public + reset scenario customer",
+                                      "name":  "Login as Customer",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/auth/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "auth",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "description":  "Captures customerAccessToken and sets accessToken by default.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Customer token is returned\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.tokenType).to.eql(\"Bearer\");",
+                                                                                    "    pm.expect(json.accessToken).to.be.a(\"string\").and.not.empty;",
+                                                                                    "    pm.collectionVariables.set(\"customerAccessToken\", json.accessToken);",
+                                                                                    "    pm.collectionVariables.set(\"currentUserId\", json.userId || \"\");",
+                                                                                    "    pm.collectionVariables.set(\"currentCustomerId\", json.customerId || \"\");",
+                                                                                    "    pm.collectionVariables.set(\"accessToken\", json.accessToken);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Login as Back-Office Admin",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/auth/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "auth",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "description":  "Captures backOfficeAccessToken for partner read endpoints.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"{{backOfficeAdminEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Back-office admin token is returned\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.tokenType).to.eql(\"Bearer\");",
+                                                                                    "    pm.expect(json.accessToken).to.be.a(\"string\").and.not.empty;",
+                                                                                    "    pm.collectionVariables.set(\"backOfficeAccessToken\", json.accessToken);",
+                                                                                    "    pm.collectionVariables.set(\"currentUserId\", json.userId || \"\");",
+                                                                                    "    pm.collectionVariables.set(\"currentCustomerId\", json.customerId || \"\");",
+                                                                                    "    ",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Login as Loan Officer",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/auth/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "auth",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "description":  "Captures loanOfficerAccessToken for review and recommendation endpoints.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"{{loanOfficerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Loan Officer token is returned\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.tokenType).to.eql(\"Bearer\");",
+                                                                                    "    pm.expect(json.accessToken).to.be.a(\"string\").and.not.empty;",
+                                                                                    "    pm.collectionVariables.set(\"loanOfficerAccessToken\", json.accessToken);",
+                                                                                    "    pm.collectionVariables.set(\"currentUserId\", json.userId || \"\");",
+                                                                                    "    pm.collectionVariables.set(\"currentCustomerId\", json.customerId || \"\");",
+                                                                                    "    ",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Login as Approver",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/auth/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "auth",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "description":  "Captures approverAccessToken for future approval-decision endpoints.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"{{approverEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Approver token is returned\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.tokenType).to.eql(\"Bearer\");",
+                                                                                    "    pm.expect(json.accessToken).to.be.a(\"string\").and.not.empty;",
+                                                                                    "    pm.collectionVariables.set(\"approverAccessToken\", json.accessToken);",
+                                                                                    "    pm.collectionVariables.set(\"currentUserId\", json.userId || \"\");",
+                                                                                    "    pm.collectionVariables.set(\"currentCustomerId\", json.customerId || \"\");",
+                                                                                    "    ",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Login as Accounting Officer",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/auth/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "auth",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "description":  "Captures accountingAccessToken for future disbursement endpoints.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"{{accountingOfficerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Accounting Officer token is returned\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.tokenType).to.eql(\"Bearer\");",
+                                                                                    "    pm.expect(json.accessToken).to.be.a(\"string\").and.not.empty;",
+                                                                                    "    pm.collectionVariables.set(\"accountingAccessToken\", json.accessToken);",
+                                                                                    "    pm.collectionVariables.set(\"currentUserId\", json.userId || \"\");",
+                                                                                    "    pm.collectionVariables.set(\"currentCustomerId\", json.customerId || \"\");",
+                                                                                    "    ",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "01 Public Endpoints",
+                     "item":  [
+                                  {
+                                      "name":  "GET /api/health",
                                       "request":  {
                                                       "method":  "GET",
                                                       "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/health",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "health"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "description":  "Legacy public health endpoint.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
 
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Health is UP\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.status).to.eql(\"UP\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET /api/v1/health",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
                                                                  ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/health",
@@ -115,61 +583,16 @@
                                                               },
                                                       "auth":  {
                                                                    "type":  "noauth"
-                                                               }
-                                                  },
-                                      "response":  [
-
-                                                   ],
-                                      "event":  [
-                                                    {
-                                                        "listen":  "prerequest",
-                                                        "script":  {
-                                                                       "type":  "text/javascript",
-                                                                       "exec":  [
-                                                                                    "const freshCustomerId = pm.variables.replaceIn(\u0027{{$guid}}\u0027);",
-                                                                                    "pm.collectionVariables.set(\u0027scenarioCustomerId\u0027, freshCustomerId);",
-                                                                                    "pm.collectionVariables.unset(\u0027customerPartnerEmployeeLinkId\u0027);",
-                                                                                    "pm.collectionVariables.unset(\u0027loanApplicationId\u0027);",
-                                                                                    "pm.collectionVariables.unset(\u0027applicationNumber\u0027);",
-                                                                                    "console.log(\u0027Meridian scenario customerId:\u0027, freshCustomerId);"
-                                                                                ]
-                                                                   }
-                                                    },
-                                                    {
-                                                        "listen":  "test",
-                                                        "script":  {
-                                                                       "type":  "text/javascript",
-                                                                       "exec":  [
-                                                                                    "pm.test(\u0027health is UP\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(200);",
-                                                                                    "  const json = pm.response.json();",
-                                                                                    "  pm.expect(json.status).to.eql(\u0027UP\u0027);",
-                                                                                    "  pm.expect(json.app).to.eql(\u0027Meridian Platform\u0027);",
-                                                                                    "});"
-                                                                                ]
-                                                                   }
-                                                    }
-                                                ]
-                                  },
-                                  {
-                                      "name":  "GET /api/health - public legacy alias",
-                                      "request":  {
-                                                      "method":  "GET",
-                                                      "header":  [
-
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "{{baseUrl}}/api/health",
-                                                                  "host":  [
-                                                                               "{{baseUrl}}"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "api",
-                                                                               "health"
-                                                                           ]
-                                                              },
-                                                      "auth":  {
-                                                                   "type":  "noauth"
+                                                               },
+                                                      "description":  "Versioned public health endpoint.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
                                                                }
                                                   },
                                       "response":  [
@@ -181,11 +604,12 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027health is UP\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(200);",
-                                                                                    "  const json = pm.response.json();",
-                                                                                    "  pm.expect(json.status).to.eql(\u0027UP\u0027);",
-                                                                                    "  pm.expect(json.app).to.eql(\u0027Meridian Platform\u0027);",
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Health is UP\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.status).to.eql(\"UP\");",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -193,11 +617,15 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "GET /api/v1/loan-products - public catalog",
+                                      "name":  "GET /api/v1/loan-products",
                                       "request":  {
                                                       "method":  "GET",
                                                       "header":  [
-
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
                                                                  ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/loan-products",
@@ -212,142 +640,11 @@
                                                               },
                                                       "auth":  {
                                                                    "type":  "noauth"
-                                                               }
-                                                  },
-                                      "response":  [
-
-                                                   ],
-                                      "event":  [
-                                                    {
-                                                        "listen":  "test",
-                                                        "script":  {
-                                                                       "type":  "text/javascript",
-                                                                       "exec":  [
-                                                                                    "pm.test(\u0027loan products are public and include Salary Advance\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(200);",
-                                                                                    "  const products = pm.response.json();",
-                                                                                    "  pm.expect(products).to.be.an(\u0027array\u0027);",
-                                                                                    "  pm.expect(products.map(p =\u003e p.productCode)).to.include(\u0027SALARY_ADVANCE\u0027);",
-                                                                                    "});"
-                                                                                ]
-                                                                   }
-                                                    }
-                                                ]
-                                  }
-                              ]
-                 },
-                 {
-                     "name":  "01 Security Gates",
-                     "item":  [
-                                  {
-                                      "name":  "GET /api/v1/partner-companies without auth -\u003e 401",
-                                      "request":  {
-                                                      "method":  "GET",
-                                                      "header":  [
-
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies",
-                                                                  "host":  [
-                                                                               "{{baseUrl}}"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "api",
-                                                                               "v1",
-                                                                               "partner-companies"
-                                                                           ]
-                                                              },
-                                                      "auth":  {
-                                                                   "type":  "noauth"
-                                                               }
-                                                  },
-                                      "response":  [
-
-                                                   ],
-                                      "event":  [
-                                                    {
-                                                        "listen":  "test",
-                                                        "script":  {
-                                                                       "type":  "text/javascript",
-                                                                       "exec":  [
-                                                                                    "pm.test(\u0027anonymous caller is rejected\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(401);",
-                                                                                    "});"
-                                                                                ]
-                                                                   }
-                                                    }
-                                                ]
-                                  },
-                                  {
-                                      "name":  "GET /api/v1/partner-companies/{id}/employees without auth -\u003e 401",
-                                      "request":  {
-                                                      "method":  "GET",
-                                                      "header":  [
-
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies/{{partnerCompanyId}}/employees?activeOnly=true",
-                                                                  "host":  [
-                                                                               "{{baseUrl}}"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "api",
-                                                                               "v1",
-                                                                               "partner-companies",
-                                                                               "{{partnerCompanyId}}",
-                                                                               "employees?activeOnly=true"
-                                                                           ]
-                                                              },
-                                                      "auth":  {
-                                                                   "type":  "noauth"
-                                                               }
-                                                  },
-                                      "response":  [
-
-                                                   ],
-                                      "event":  [
-                                                    {
-                                                        "listen":  "test",
-                                                        "script":  {
-                                                                       "type":  "text/javascript",
-                                                                       "exec":  [
-                                                                                    "pm.test(\u0027anonymous caller is rejected\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(401);",
-                                                                                    "});"
-                                                                                ]
-                                                                   }
-                                                    }
-                                                ]
-                                  },
-                                  {
-                                      "name":  "POST /api/v1/loan-applications/salary-advance without auth -\u003e 401",
-                                      "request":  {
-                                                      "method":  "POST",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Content-Type",
-                                                                         "value":  "application/json",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/salary-advance",
-                                                                  "host":  [
-                                                                               "{{baseUrl}}"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "api",
-                                                                               "v1",
-                                                                               "loan-applications",
-                                                                               "salary-advance"
-                                                                           ]
-                                                              },
-                                                      "auth":  {
-                                                                   "type":  "noauth"
                                                                },
+                                                      "description":  "Public active loan product catalog.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": {{requestedAmount}},\n  \"requestedTermMonths\": {{requestedTermMonths}}\n}",
+                                                                   "raw":  "",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -364,8 +661,11 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027anonymous caller is rejected\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(401);",
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Response is an array\", function () {",
+                                                                                    "    pm.expect(pm.response.json()).to.be.an(\"array\");",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -375,14 +675,18 @@
                               ]
                  },
                  {
-                     "name":  "02 Protected Partner Reads",
+                     "name":  "02 Partner Admin Endpoints - partner:read",
                      "item":  [
                                   {
                                       "name":  "GET /api/v1/partner-companies",
                                       "request":  {
                                                       "method":  "GET",
                                                       "header":  [
-
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
                                                                  ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/partner-companies",
@@ -394,7 +698,27 @@
                                                                                "v1",
                                                                                "partner-companies"
                                                                            ]
-                                                              }
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{backOfficeAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Lists partner companies using back-office token.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
                                                   },
                                       "response":  [
 
@@ -405,9 +729,8 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027request succeeds with an array response\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(200);",
-                                                                                    "  pm.expect(pm.response.json()).to.be.an(\u0027array\u0027);",
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -419,7 +742,11 @@
                                       "request":  {
                                                       "method":  "GET",
                                                       "header":  [
-
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
                                                                  ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/partner-companies/{{partnerCompanyId}}",
@@ -432,7 +759,27 @@
                                                                                "partner-companies",
                                                                                "{{partnerCompanyId}}"
                                                                            ]
-                                                              }
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{backOfficeAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Gets one partner company.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
                                                   },
                                       "response":  [
 
@@ -443,11 +790,8 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027partner company is returned\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(200);",
-                                                                                    "  const company = pm.response.json();",
-                                                                                    "  pm.expect(company.id).to.eql(pm.collectionVariables.get(\u0027partnerCompanyId\u0027));",
-                                                                                    "  pm.expect(company.status).to.eql(\u0027ACTIVE\u0027);",
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -455,11 +799,83 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "GET /api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=true",
+                                      "name":  "GET /api/v1/partner-companies/{partnerCompanyId}/employees - all",
                                       "request":  {
                                                       "method":  "GET",
                                                       "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies/{{partnerCompanyId}}/employees?activeOnly=false",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "partner-companies",
+                                                                               "{{partnerCompanyId}}",
+                                                                               "employees"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "activeOnly",
+                                                                                    "value":  "false"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{backOfficeAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Lists partner employees including inactive rows.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
 
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET /api/v1/partner-companies/{partnerCompanyId}/employees - active only",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
                                                                  ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/partner-companies/{{partnerCompanyId}}/employees?activeOnly=true",
@@ -471,9 +887,35 @@
                                                                                "v1",
                                                                                "partner-companies",
                                                                                "{{partnerCompanyId}}",
-                                                                               "employees?activeOnly=true"
-                                                                           ]
-                                                              }
+                                                                               "employees"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "activeOnly",
+                                                                                    "value":  "true"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{backOfficeAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Lists active partner employees only.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
                                                   },
                                       "response":  [
 
@@ -484,14 +926,8 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027protected employee list returns detailed internal DTO\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(200);",
-                                                                                    "  const employees = pm.response.json();",
-                                                                                    "  pm.expect(employees).to.be.an(\u0027array\u0027).that.is.not.empty;",
-                                                                                    "  pm.expect(employees[0]).to.have.property(\u0027employeeCode\u0027);",
-                                                                                    "  pm.expect(employees[0]).to.have.property(\u0027identityReference\u0027);",
-                                                                                    "  pm.expect(employees[0]).to.have.property(\u0027salaryAmount\u0027);",
-                                                                                    "  pm.expect(employees[0]).to.have.property(\u0027salaryAdvanceLimit\u0027);",
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -503,7 +939,11 @@
                                       "request":  {
                                                       "method":  "GET",
                                                       "header":  [
-
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
                                                                  ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/partner-companies/{{partnerCompanyId}}/employee-import-batches",
@@ -517,7 +957,27 @@
                                                                                "{{partnerCompanyId}}",
                                                                                "employee-import-batches"
                                                                            ]
-                                                              }
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{backOfficeAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Lists partner employee import batches.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
                                                   },
                                       "response":  [
 
@@ -528,9 +988,8 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027request succeeds with an array response\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(200);",
-                                                                                    "  pm.expect(pm.response.json()).to.be.an(\u0027array\u0027);",
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -540,10 +999,10 @@
                               ]
                  },
                  {
-                     "name":  "03 Employee Verification",
+                     "name":  "03 Customer Employee Verification - partner:employee:verify:own",
                      "item":  [
                                   {
-                                      "name":  "POST verify active employee -\u003e MATCHED_ACTIVE",
+                                      "name":  "POST active employee verification - captures link id",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -566,9 +1025,20 @@
                                                                                "employee-verifications"
                                                                            ]
                                                               },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Verifies active employee evidence and captures customerPartnerEmployeeLinkId.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"identityReference\": \"{{activeIdentityReference}}\",\n  \"employeeCode\": \"{{activeEmployeeCode}}\"\n}",
+                                                                   "raw":  "{\n  \"identityReference\": \"{{activeIdentityReference}}\",\n  \"employeeCode\": \"{{activeEmployeeCode}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -585,18 +1055,14 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027active employee verification succeeds with safe response\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(200);",
-                                                                                    "  const json = pm.response.json();",
-                                                                                    "  pm.expect(json.outcome).to.eql(\u0027MATCHED_ACTIVE\u0027);",
-                                                                                    "  pm.expect(json.linkStatus).to.eql(\u0027VERIFIED\u0027);",
-                                                                                    "  pm.expect(json.manualReviewRequired).to.eql(false);",
-                                                                                    "  pm.expect(json).to.not.have.property(\u0027salaryAmount\u0027);",
-                                                                                    "  pm.expect(json).to.not.have.property(\u0027salaryAdvanceLimit\u0027);",
-                                                                                    "  pm.expect(json).to.not.have.property(\u0027identityReference\u0027);",
-                                                                                    "  pm.expect(json).to.not.have.property(\u0027employeeCode\u0027);",
-                                                                                    "  pm.expect(json.customerPartnerEmployeeLinkId).to.be.a(\u0027string\u0027).and.not.empty;",
-                                                                                    "  pm.collectionVariables.set(\u0027customerPartnerEmployeeLinkId\u0027, json.customerPartnerEmployeeLinkId);",
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Active employee verification creates/reuses link\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.outcome).to.eql(\"MATCHED_ACTIVE\");",
+                                                                                    "    pm.expect(json.customerPartnerEmployeeLinkId).to.be.a(\"string\").and.not.empty;",
+                                                                                    "    pm.collectionVariables.set(\"customerPartnerEmployeeLinkId\", json.customerPartnerEmployeeLinkId);",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -604,7 +1070,7 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST verify inactive employee -\u003e MATCHED_INACTIVE",
+                                      "name":  "POST inactive employee verification",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -627,9 +1093,20 @@
                                                                                "employee-verifications"
                                                                            ]
                                                               },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Expected MATCHED_INACTIVE with no active link creation.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"identityReference\": \"{{inactiveIdentityReference}}\",\n  \"employeeCode\": \"{{inactiveEmployeeCode}}\"\n}",
+                                                                   "raw":  "{\n  \"identityReference\": \"{{inactiveIdentityReference}}\",\n  \"employeeCode\": \"{{inactiveEmployeeCode}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -646,12 +1123,8 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027inactive employee is not linked\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(200);",
-                                                                                    "  const json = pm.response.json();",
-                                                                                    "  pm.expect(json.outcome).to.eql(\u0027MATCHED_INACTIVE\u0027);",
-                                                                                    "  pm.expect(json.manualReviewRequired).to.eql(false);",
-                                                                                    "  pm.expect(json.customerPartnerEmployeeLinkId).to.be.oneOf([null, undefined]);",
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -659,7 +1132,7 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST verify missing employee -\u003e PENDING_MANUAL_REVIEW",
+                                      "name":  "POST missing employee verification",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -682,9 +1155,20 @@
                                                                                "employee-verifications"
                                                                            ]
                                                               },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Expected PENDING_MANUAL_REVIEW for missing evidence.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"identityReference\": \"IDREF-NOT-FOUND\",\n  \"employeeCode\": \"MER-EMP-NOT-FOUND\"\n}",
+                                                                   "raw":  "{\n  \"identityReference\": \"{{missingIdentityReference}}\",\n  \"employeeCode\": \"{{missingEmployeeCode}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -701,11 +1185,8 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027missing employee evidence routes to manual review\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(200);",
-                                                                                    "  const json = pm.response.json();",
-                                                                                    "  pm.expect(json.outcome).to.eql(\u0027PENDING_MANUAL_REVIEW\u0027);",
-                                                                                    "  pm.expect(json.manualReviewRequired).to.eql(true);",
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -715,10 +1196,10 @@
                               ]
                  },
                  {
-                     "name":  "04 Salary Advance Application",
+                     "name":  "04 Loan Application - Salary Advance",
                      "item":  [
                                   {
-                                      "name":  "POST Salary Advance with missing link -\u003e 422 EMPLOYEE_NOT_VERIFIED",
+                                      "name":  "POST /api/v1/loan-applications/salary-advance - happy path",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -740,9 +1221,20 @@
                                                                                "salary-advance"
                                                                            ]
                                                               },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Creates a submitted Salary Advance application for authenticated customer. Requires customerPartnerEmployeeLinkId from active verification.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"customerPartnerEmployeeLinkId\": \"00000000-0000-0000-0000-000000000000\",\n  \"requestedAmount\": 3000000.00,\n  \"requestedTermMonths\": 1\n}",
+                                                                   "raw":  "{\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": {{requestedAmount}},\n  \"requestedTermMonths\": {{requestedTermMonths}}\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -759,10 +1251,15 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027missing verified employee link is rejected cleanly\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(422);",
-                                                                                    "  const json = pm.response.json();",
-                                                                                    "  pm.expect(json.errorCode).to.eql(\u0027EMPLOYEE_NOT_VERIFIED\u0027);",
+                                                                                    "pm.test(\"Status is 201\", function () {",
+                                                                                    "    pm.response.to.have.status(201);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Salary Advance application id is captured\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.status).to.eql(\"SUBMITTED\");",
+                                                                                    "    pm.expect(json.loanApplicationId).to.be.a(\"string\").and.not.empty;",
+                                                                                    "    pm.collectionVariables.set(\"loanApplicationId\", json.loanApplicationId);",
+                                                                                    "    pm.collectionVariables.set(\"applicationNumber\", json.applicationNumber || \"\");",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -770,7 +1267,7 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST Salary Advance below min amount -\u003e 422 INVALID_PRODUCT_AMOUNT",
+                                      "name":  "POST /api/v1/loan-applications/salary-advance - duplicate check",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -792,9 +1289,20 @@
                                                                                "salary-advance"
                                                                            ]
                                                               },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Run after happy path to verify duplicate active Salary Advance blocking.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": 100000.00,\n  \"requestedTermMonths\": 1\n}",
+                                                                   "raw":  "{\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": {{requestedAmount}},\n  \"requestedTermMonths\": {{requestedTermMonths}}\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -811,10 +1319,85 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027amount below product minimum is rejected cleanly\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(422);",
-                                                                                    "  const json = pm.response.json();",
-                                                                                    "  pm.expect(json.errorCode).to.eql(\u0027INVALID_PRODUCT_AMOUNT\u0027);",
+                                                                                    "pm.test(\"Status is 409\", function () {",
+                                                                                    "    pm.response.to.have.status(409);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Duplicate application is blocked\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"BLOCKING_APPLICATION_EXISTS\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "05 Loan Officer Review and Recommendation",
+                     "item":  [
+                                  {
+                                      "name":  "POST start Loan Officer review",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/review/start",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "review",
+                                                                               "start"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{loanOfficerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Moves a submitted application to UNDER_REVIEW. Requires loanApplicationId from Salary Advance happy path.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Application moved under review\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.status).to.eql(\"UNDER_REVIEW\");",
+                                                                                    "    pm.collectionVariables.set(\"loanApplicationStatus\", json.status);",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -822,7 +1405,7 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST Salary Advance happy path -\u003e 201 SUBMITTED",
+                                      "name":  "POST recommend approval",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -833,7 +1416,7 @@
                                                                      }
                                                                  ],
                                                       "url":  {
-                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/salary-advance",
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/review-recommendations",
                                                                   "host":  [
                                                                                "{{baseUrl}}"
                                                                            ],
@@ -841,12 +1424,24 @@
                                                                                "api",
                                                                                "v1",
                                                                                "loan-applications",
-                                                                               "salary-advance"
+                                                                               "{{loanApplicationId}}",
+                                                                               "review-recommendations"
                                                                            ]
                                                               },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{loanOfficerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Records recommendation and triggers Loan-owned status transition in the same transaction.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": {{requestedAmount}},\n  \"requestedTermMonths\": {{requestedTermMonths}}\n}",
+                                                                   "raw":  "{\n  \"action\": \"{{recommendationAction}}\",\n  \"reason\": \"{{recommendationReason}}\",\n  \"internalNotes\": \"{{internalNotes}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -863,17 +1458,14 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027salary advance application is created and reserves limit\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(201);",
-                                                                                    "  const json = pm.response.json();",
-                                                                                    "  pm.expect(json.status).to.eql(\u0027SUBMITTED\u0027);",
-                                                                                    "  pm.expect(json.productCode).to.eql(\u0027SALARY_ADVANCE\u0027);",
-                                                                                    "  pm.expect(json.productVerificationResult).to.eql(\u0027VERIFIED\u0027);",
-                                                                                    "  pm.expect(json.customerPartnerEmployeeLinkId).to.eql(pm.collectionVariables.get(\u0027customerPartnerEmployeeLinkId\u0027));",
-                                                                                    "  pm.expect(Number(json.requestedAmount)).to.eql(Number(pm.collectionVariables.get(\u0027requestedAmount\u0027)));",
-                                                                                    "  pm.expect(Number(json.availableLimitSnapshot)).to.be.at.least(0);",
-                                                                                    "  pm.collectionVariables.set(\u0027loanApplicationId\u0027, json.loanApplicationId);",
-                                                                                    "  pm.collectionVariables.set(\u0027applicationNumber\u0027, json.applicationNumber);",
+                                                                                    "pm.test(\"Status is 201\", function () {",
+                                                                                    "    pm.response.to.have.status(201);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Recommendation id is captured\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.recommendationId).to.be.a(\"string\").and.not.empty;",
+                                                                                    "    pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"loanApplicationId\"));",
+                                                                                    "    pm.collectionVariables.set(\"reviewRecommendationId\", json.recommendationId);",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -881,7 +1473,7 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST Salary Advance duplicate active application -\u003e 409",
+                                      "name":  "POST recommend rejection example",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -892,7 +1484,7 @@
                                                                      }
                                                                  ],
                                                       "url":  {
-                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/salary-advance",
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/review-recommendations",
                                                                   "host":  [
                                                                                "{{baseUrl}}"
                                                                            ],
@@ -900,12 +1492,24 @@
                                                                                "api",
                                                                                "v1",
                                                                                "loan-applications",
-                                                                               "salary-advance"
+                                                                               "{{loanApplicationId}}",
+                                                                               "review-recommendations"
                                                                            ]
                                                               },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{loanOfficerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Example payload for a separate application still in UNDER_REVIEW or RETURNED_TO_REVIEW.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"customerId\": \"{{scenarioCustomerId}}\",\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": {{requestedAmount}},\n  \"requestedTermMonths\": {{requestedTermMonths}}\n}",
+                                                                   "raw":  "{\n  \"action\": \"RECOMMEND_REJECTION\",\n  \"reason\": \"Repayment capacity is not acceptable for this request.\",\n  \"internalNotes\": \"Postman rejection example.\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -922,10 +1526,465 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027duplicate active Salary Advance application is blocked\u0027, function () {",
-                                                                                    "  pm.response.to.have.status(409);",
-                                                                                    "  const json = pm.response.json();",
-                                                                                    "  pm.expect(json.errorCode).to.eql(\u0027BLOCKING_APPLICATION_EXISTS\u0027);",
+                                                                                    "pm.test(\"Status is 201\", function () {",
+                                                                                    "    pm.response.to.have.status(201);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST return to customer revision example",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/review-recommendations",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "review-recommendations"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{loanOfficerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Example payload for a separate application still in UNDER_REVIEW or RETURNED_TO_REVIEW.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"action\": \"RETURN_TO_CUSTOMER_REVISION\",\n  \"reason\": \"Customer must correct submitted information.\",\n  \"internalNotes\": \"Postman return example.\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 201\", function () {",
+                                                                                    "    pm.response.to.have.status(201);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST request staff correction example",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/review-recommendations",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "review-recommendations"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{loanOfficerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Example payload for a separate application still in UNDER_REVIEW or RETURNED_TO_REVIEW.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"action\": \"REQUEST_STAFF_CORRECTION\",\n  \"reason\": \"Back-office data correction is required before approval.\",\n  \"internalNotes\": \"Postman staff correction example.\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 201\", function () {",
+                                                                                    "    pm.response.to.have.status(201);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "90 Negative Auth and Validation Checks",
+                     "item":  [
+                                  {
+                                      "name":  "GET partner companies without token - 401",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "partner-companies"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "description":  "Protected endpoint without Bearer token.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 401\", function () {",
+                                                                                    "    pm.response.to.have.status(401);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Authentication is required\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"AUTHENTICATION_REQUIRED\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET partner employees with customer token - 403",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/partner-companies/{{partnerCompanyId}}/employees?activeOnly=true",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "partner-companies",
+                                                                               "{{partnerCompanyId}}",
+                                                                               "employees"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "activeOnly",
+                                                                                    "value":  "true"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Customer token lacks partner:read.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 403\", function () {",
+                                                                                    "    pm.response.to.have.status(403);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Access is denied\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"ACCESS_DENIED\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST start review with customer token - 403",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/review/start",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "review",
+                                                                               "start"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Customer token lacks loan:review.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 403\", function () {",
+                                                                                    "    pm.response.to.have.status(403);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Access is denied\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"ACCESS_DENIED\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST recommendation with customer token - 403",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/review-recommendations",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "review-recommendations"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Customer token lacks approval:recommend.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"action\": \"RECOMMEND_APPROVAL\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 403\", function () {",
+                                                                                    "    pm.response.to.have.status(403);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Access is denied\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"ACCESS_DENIED\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST recommendation missing required reason - 422",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/review-recommendations",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "review-recommendations"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{loanOfficerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Requires an application still in UNDER_REVIEW or RETURNED_TO_REVIEW to reach domain reason validation before status validation.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"action\": \"REQUEST_STAFF_CORRECTION\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 422\", function () {",
+                                                                                    "    pm.response.to.have.status(422);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Reason is required\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"RECOMMENDATION_REASON_REQUIRED\");",
                                                                                     "});"
                                                                                 ]
                                                                    }

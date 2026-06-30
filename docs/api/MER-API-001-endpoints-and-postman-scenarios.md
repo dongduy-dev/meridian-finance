@@ -114,7 +114,7 @@ Import this file into Postman:
 
 `docs/api/Meridian-Platform.postman_collection.json`
 
-Collection update note: the Markdown inventory above is authoritative for the IAM/RBAC checkpoint. The Postman collection should be refreshed to use `POST /api/v1/auth/login`, the `accessToken` collection variable, and Bearer auth instead of collection-level Basic auth.
+Collection note: the Postman collection now uses `POST /api/v1/auth/login`, role-specific Bearer token variables, and the full current endpoint inventory including Loan Officer review and recommendation endpoints.
 
 Expected high-value checks:
 
