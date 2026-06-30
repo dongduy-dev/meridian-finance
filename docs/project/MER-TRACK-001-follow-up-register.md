@@ -521,6 +521,27 @@ Update `docs/api/Meridian-Platform.postman_collection.json` to call login, store
 
 Suggested future branch name:
 `docs/update-postman-jwt-flow`
+
+### MER-FU-027 - Harden Approval-to-Loan async event processing before using after-commit listeners
+
+Area: Approval / Loan / Architecture
+
+Type: Deferred architecture hardening
+
+Priority: P2
+
+Status: Open
+
+Blocks current PR: No
+
+Problem:
+The Approval Review Recommendation slice intentionally uses same-transaction event handling so Loan status transition failures roll back the saved recommendation. Moving this coordination to after-commit or asynchronous event handling without extra state would risk persisted recommendations whose Loan status transition failed later.
+
+Recommendation:
+Before switching Approval-to-Loan review/approval coordination to after-commit or asynchronous processing, add recommendation/decision processing status, failure tracking, idempotent Loan event handling, and retry behavior.
+
+Suggested future branch name:
+`feature/approval-event-processing-hardening`
 ## Recommended Next Roadmap
 
 1. Review/merge the completed P0 security/PII/inactive Partner Company patch.

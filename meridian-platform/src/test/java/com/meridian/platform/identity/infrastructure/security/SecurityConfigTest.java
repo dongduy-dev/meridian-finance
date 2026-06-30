@@ -1,10 +1,16 @@
 package com.meridian.platform.identity.infrastructure.security;
 
+import com.meridian.platform.approval.application.dto.ReviewRecommendationDto;
+import com.meridian.platform.approval.application.port.in.SubmitReviewRecommendationUseCase;
+import com.meridian.platform.approval.infrastructure.adapter.in.web.ReviewRecommendationController;
 import com.meridian.platform.identity.application.dto.AuthResponse;
 import com.meridian.platform.identity.application.port.in.AuthenticationUseCase;
 import com.meridian.platform.identity.infrastructure.adapter.in.web.AuthController;
+import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.in.QueryLoanProductUseCase;
+import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicationUseCase;
+import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanApplicationReviewController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanProductController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.SalaryAdvanceLoanApplicationController;
 import com.meridian.platform.partner.application.port.in.QueryPartnerCompanyUseCase;
@@ -25,6 +31,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -42,6 +49,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         AuthController.class,
         LoanProductController.class,
         SalaryAdvanceLoanApplicationController.class,
+        LoanApplicationReviewController.class,
+        ReviewRecommendationController.class,
         PartnerCompanyController.class,
         PartnerEmployeeController.class,
         PartnerEmployeeImportBatchController.class,
@@ -58,6 +67,7 @@ class SecurityConfigTest {
 
     private static final UUID PARTNER_COMPANY_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID LINK_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
+    private static final UUID LOAN_APPLICATION_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
     @Autowired
     private MockMvc mockMvc;
@@ -73,6 +83,12 @@ class SecurityConfigTest {
 
     @MockitoBean
     private StartSalaryAdvanceApplicationUseCase startSalaryAdvanceApplicationUseCase;
+
+    @MockitoBean
+    private StartLoanApplicationReviewUseCase startLoanApplicationReviewUseCase;
+
+    @MockitoBean
+    private SubmitReviewRecommendationUseCase submitReviewRecommendationUseCase;
 
     @MockitoBean
     private QueryPartnerCompanyUseCase queryPartnerCompanyUseCase;
@@ -119,7 +135,7 @@ class SecurityConfigTest {
     }
 
     @Test
-    void rejectsAnonymousAccessToSensitivePartnerAndSalaryAdvanceEndpoints() throws Exception {
+    void rejectsAnonymousAccessToSensitivePartnerSalaryAdvanceAndReviewEndpoints() throws Exception {
         mockMvc.perform(get("/api/v1/partner-companies"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
@@ -139,12 +155,36 @@ class SecurityConfigTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/review/start", LOAN_APPLICATION_ID))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/review-recommendations", LOAN_APPLICATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
     void rejectsAuthenticatedUsersWithoutRequiredPermission() throws Exception {
         mockMvc.perform(get("/api/v1/partner-companies/{partnerCompanyId}/employees", PARTNER_COMPANY_ID)
                         .with(user("customer").authorities(new SimpleGrantedAuthority("loan:submit"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/review/start", LOAN_APPLICATION_ID)
+                        .with(user("customer").authorities(new SimpleGrantedAuthority("loan:submit"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/review-recommendations", LOAN_APPLICATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "action": "RECOMMEND_APPROVAL"
+                                }
+                                """)
+                        .with(user("reviewer").authorities(new SimpleGrantedAuthority("loan:review"))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
     }
@@ -176,5 +216,46 @@ class SecurityConfigTest {
                         .with(user("customer")
                                 .authorities(new SimpleGrantedAuthority("loan:submit"))))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void allowsLoanOfficerWithLoanReviewPermissionToStartReview() throws Exception {
+        when(startLoanApplicationReviewUseCase.startReview(LOAN_APPLICATION_ID))
+                .thenReturn(new LoanApplicationReviewDto(LOAN_APPLICATION_ID, "UNDER_REVIEW"));
+
+        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/review/start", LOAN_APPLICATION_ID)
+                        .with(user("loan-officer")
+                                .authorities(new SimpleGrantedAuthority("loan:review"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UNDER_REVIEW"));
+    }
+
+    @Test
+    void allowsLoanOfficerWithApprovalRecommendPermissionToRecommend() throws Exception {
+        UUID recommendationId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        UUID loanOfficerUserId = UUID.fromString("00000000-0000-0000-0000-000000000302");
+        when(submitReviewRecommendationUseCase.submitReviewRecommendation(any(), any()))
+                .thenReturn(new ReviewRecommendationDto(
+                        recommendationId,
+                        LOAN_APPLICATION_ID,
+                        loanOfficerUserId,
+                        "RECOMMEND_APPROVAL",
+                        null,
+                        null,
+                        LocalDateTime.now()
+                ));
+
+        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/review-recommendations", LOAN_APPLICATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "action": "RECOMMEND_APPROVAL"
+                                }
+                                """)
+                        .with(user("loan-officer")
+                                .authorities(new SimpleGrantedAuthority("approval:recommend"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.recommendationId").value(recommendationId.toString()))
+                .andExpect(jsonPath("$.action").value("RECOMMEND_APPROVAL"));
     }
 }
