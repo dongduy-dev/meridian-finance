@@ -504,62 +504,6 @@
                      "name":  "01 Public Endpoints",
                      "item":  [
                                   {
-                                      "name":  "GET /api/health",
-                                      "request":  {
-                                                      "method":  "GET",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Content-Type",
-                                                                         "value":  "application/json",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
-                                                      "url":  {
-                                                                  "raw":  "{{baseUrl}}/api/health",
-                                                                  "host":  [
-                                                                               "{{baseUrl}}"
-                                                                           ],
-                                                                  "path":  [
-                                                                               "api",
-                                                                               "health"
-                                                                           ]
-                                                              },
-                                                      "auth":  {
-                                                                   "type":  "noauth"
-                                                               },
-                                                      "description":  "Legacy public health endpoint.",
-                                                      "body":  {
-                                                                   "mode":  "raw",
-                                                                   "raw":  "",
-                                                                   "options":  {
-                                                                                   "raw":  {
-                                                                                               "language":  "json"
-                                                                                           }
-                                                                               }
-                                                               }
-                                                  },
-                                      "response":  [
-
-                                                   ],
-                                      "event":  [
-                                                    {
-                                                        "listen":  "test",
-                                                        "script":  {
-                                                                       "type":  "text/javascript",
-                                                                       "exec":  [
-                                                                                    "pm.test(\"Status is 200\", function () {",
-                                                                                    "    pm.response.to.have.status(200);",
-                                                                                    "});",
-                                                                                    "pm.test(\"Health is UP\", function () {",
-                                                                                    "    const json = pm.response.json();",
-                                                                                    "    pm.expect(json.status).to.eql(\"UP\");",
-                                                                                    "});"
-                                                                                ]
-                                                                   }
-                                                    }
-                                                ]
-                                  },
-                                  {
                                       "name":  "GET /api/v1/health",
                                       "request":  {
                                                       "method":  "GET",
