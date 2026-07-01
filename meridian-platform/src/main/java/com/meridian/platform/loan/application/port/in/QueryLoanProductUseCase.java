@@ -7,4 +7,6 @@ import java.util.List;
 public interface QueryLoanProductUseCase {
 
     List<LoanProductDto> findActiveLoanProducts();
+
+    LoanProductDto findByProductCode(String productCode);
 }
