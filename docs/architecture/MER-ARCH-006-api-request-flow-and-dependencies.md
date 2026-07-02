@@ -131,7 +131,7 @@ flowchart LR
 
 Security posture:
 
-- Requires authentication through the current Spring Security gate.
+- Requires JWT Bearer authentication plus `partner:read`.
 - Intended as an internal/back-office endpoint.
 - Returns detailed `PartnerEmployeeDto`, including employee evidence and salary/limit fields, only behind this protected endpoint.
 - Do not reuse this DTO for public/customer-facing responses.
@@ -213,16 +213,15 @@ The service checks the partner company first, then loads import batches.
 
 Security posture:
 
-- Requires authentication through the current Spring Security gate.
+- Requires JWT Bearer authentication plus `partner:employee:verify:own`.
 - This endpoint can support the customer employee-verification journey, but it is not public/anonymous.
-- Current MVP request still includes `customerId`; ownership enforcement remains tracked in MER-FU-004.
+- `customerId` is derived from the authenticated customer token through `CurrentUserProvider`; it is not accepted in the request body.
 - The response is PII-safe and does not echo raw `identityReference`, `employeeCode`, salary, salary advance limit, or raw matching evidence.
 
 Request fields:
 
 | Field | Notes |
 | --- | --- |
-| `customerId` | Temporary MVP shortcut until derived from authenticated principal or admin permission. |
 | `identityReference` | Used for matching only; not returned in the response. |
 | `employeeCode` | Used for matching only; not returned in the response. |
 
@@ -230,7 +229,7 @@ Response fields:
 
 | Field | Notes |
 | --- | --- |
-| `customerId` | Customer reference. |
+| `customerId` | Authenticated customer reference derived from the Bearer token. |
 | `partnerCompanyId` | Partner Company reference. |
 | `partnerEmployeeId` | Present only when a single employee record was matched. |
 | `customerPartnerEmployeeLinkId` | Present when a reusable verified link exists or is created. |
@@ -251,6 +250,7 @@ flowchart LR
     Controller["PartnerEmployeeVerificationController"]
     InPort["VerifyPartnerEmployeeUseCase"]
     Service["VerifyPartnerEmployeeService"]
+    UserProvider["CurrentUserProvider<br/>authenticated customerId"]
     CompanyPort["PartnerCompanyRepository"]
     Policy["PartnerEmployeeVerificationPolicy"]
     BatchPort["PartnerEmployeeImportBatchRepository"]
@@ -260,7 +260,7 @@ flowchart LR
     Dto["Safe PartnerEmployeeVerificationDto"]
     Json["JSON"]
 
-    Client --> Controller --> InPort --> Service --> CompanyPort --> Policy
+    Client --> Controller --> InPort --> Service --> UserProvider --> CompanyPort --> Policy
     Policy --> BatchPort --> EmployeePort --> LinkPort --> Mapper --> Dto --> Json
 ```
 
@@ -270,15 +270,13 @@ flowchart LR
 
 Security posture:
 
-- Requires authentication through the current Spring Security gate.
-- Current MVP request still includes `customerId`; ownership enforcement remains tracked in MER-FU-004.
-- This endpoint is protected but not yet role/action-authorized because full JWT/RBAC remains a future IAM milestone.
+- Requires JWT Bearer authentication plus `loan:submit`.
+- `customerId` is derived from the authenticated customer token through `CurrentUserProvider`; it is not accepted in the request body.
 
 Request fields:
 
 | Field | Notes |
 | --- | --- |
-| `customerId` | Temporary MVP shortcut until ownership is derived from authentication. |
 | `customerPartnerEmployeeLinkId` | Reusable verified employee-link reference. |
 | `requestedAmount` | Requested Salary Advance amount. |
 | `requestedTermMonths` | Requested term, currently validated by Salary Advance policy. |

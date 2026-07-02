@@ -81,8 +81,8 @@ com.meridian.platform/
 │       │           ├── JpaRefreshTokenRepository.java
 │       │           └── RefreshTokenJpaEntity.java
 │       ├── security/
-│       │   ├── JwtAuthFilter.java
-│       │   ├── JwtTokenProvider.java
+│       │   ├── JwtAuthenticationFilter.java
+│       │   ├── JwtTokenService.java
 │       │   ├── SpringSecurityCurrentUserProvider.java  # Implements shared CurrentUserProvider
 │       │   ├── RolePermissionRegistry.java
 │       │   └── SecurityConfig.java       # Wires Spring Security, JWT, and identity auth
