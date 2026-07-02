@@ -164,6 +164,21 @@
                          "type":  "string"
                      },
                      {
+                         "key":  "approvalDecisionId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "approvalDecisionAction",
+                         "value":  "APPROVE",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "approvalDecisionReason",
+                         "value":  "Approver decision from Postman local API test.",
+                         "type":  "string"
+                     },
+                     {
                          "key":  "recommendationAction",
                          "value":  "RECOMMEND_APPROVAL",
                          "type":  "string"
@@ -1417,6 +1432,74 @@
                                                 ]
                                   },
                                   {
+                                      "name":  "POST approval decision approve",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/approval-decisions",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "approval-decisions"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{approverAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Records final Approver decision after Loan Officer recommendation and triggers Loan-owned status transition.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"action\": \"{{approvalDecisionAction}}\",\n  \"reason\": \"{{approvalDecisionReason}}\",\n  \"internalNotes\": \"{{internalNotes}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 201\", function () {",
+                                                                                    "    pm.response.to.have.status(201);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Approval decision id is captured\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.decisionId).to.be.a(\"string\").and.not.empty;",
+                                                                                    "    pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"loanApplicationId\"));",
+                                                                                    "    pm.collectionVariables.set(\"approvalDecisionId\", json.decisionId);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
                                       "name":  "POST recommend rejection example",
                                       "request":  {
                                                       "method":  "POST",
@@ -1929,6 +2012,72 @@
                                                                                     "pm.test(\"Reason is required\", function () {",
                                                                                     "    const json = pm.response.json();",
                                                                                     "    pm.expect(json.errorCode).to.eql(\"RECOMMENDATION_REASON_REQUIRED\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST approval decision with customer token - 403",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/approval-decisions",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "approval-decisions"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Customer token lacks approval:decide.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"action\": \"APPROVE\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 403\", function () {",
+                                                                                    "    pm.response.to.have.status(403);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Access is denied\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"ACCESS_DENIED\");",
                                                                                     "});"
                                                                                 ]
                                                                    }

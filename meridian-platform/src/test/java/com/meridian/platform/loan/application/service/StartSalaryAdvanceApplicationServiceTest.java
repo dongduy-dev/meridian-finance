@@ -444,6 +444,12 @@ class StartSalaryAdvanceApplicationServiceTest {
             savedVerification = salaryAdvanceVerification;
             return salaryAdvanceVerification;
         }
+
+        @Override
+        public Optional<SalaryAdvanceVerification> findByLoanApplicationId(UUID loanApplicationId) {
+            return Optional.ofNullable(savedVerification)
+                    .filter(value -> value.loanApplicationId().equals(loanApplicationId));
+        }
     }
 
     private static class FakePartnerEligibilityPort implements PartnerEligibilityPort {
