@@ -4,6 +4,9 @@ import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerification
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+import java.util.UUID;
+
 @Repository
 public class SalaryAdvanceVerificationRepositoryAdapter implements SalaryAdvanceVerificationRepository {
 
@@ -20,6 +23,12 @@ public class SalaryAdvanceVerificationRepositoryAdapter implements SalaryAdvance
         return toDomain(jpaSalaryAdvanceVerificationRepository.save(
                 new SalaryAdvanceVerificationJpaEntity(salaryAdvanceVerification)
         ));
+    }
+
+    @Override
+    public Optional<SalaryAdvanceVerification> findByLoanApplicationId(UUID loanApplicationId) {
+        return jpaSalaryAdvanceVerificationRepository.findByLoanApplicationId(loanApplicationId)
+                .map(this::toDomain);
     }
 
     private SalaryAdvanceVerification toDomain(SalaryAdvanceVerificationJpaEntity entity) {

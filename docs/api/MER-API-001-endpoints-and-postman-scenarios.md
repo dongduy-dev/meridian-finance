@@ -17,6 +17,7 @@ Current security posture comes from `SecurityConfig`: health, login, and loan pr
 | POST | `/api/v1/loan-applications/salary-advance` | Bearer + `loan:submit` | `SalaryAdvanceLoanApplicationController` | Create a submitted Salary Advance application for the authenticated customer and reserve limit. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review/start` | Bearer + `loan:review` | `LoanApplicationReviewController` | Start Loan Officer review and transition a submitted application to `UNDER_REVIEW`. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review-recommendations` | Bearer + `approval:recommend` | `ReviewRecommendationController` | Record the authenticated Loan Officer recommendation and trigger Loan-owned status transition. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/approval-decisions` | Bearer + `approval:decide` | `ApprovalDecisionController` | Record the authenticated Approver decision and trigger Loan-owned final/return status transition. |
 
 ## Authentication
 
@@ -95,6 +96,20 @@ POST /api/v1/loan-applications/{loanApplicationId}/review/start
 
 Valid actions are `RECOMMEND_APPROVAL`, `RECOMMEND_REJECTION`, `RETURN_TO_CUSTOMER_REVISION`, and `REQUEST_STAFF_CORRECTION`. A nonblank `reason` is required for all actions except `RECOMMEND_APPROVAL`.
 
+### Approval Decision
+
+`approverUserId` is derived from the authenticated Approver token and is not accepted in the request body. The Approver must be different from the Loan Officer who submitted the latest recommendation.
+
+```json
+{
+  "action": "APPROVE",
+  "reason": "Optional for approval; required for reject/return/correction decisions.",
+  "internalNotes": "Optional staff-only note."
+}
+```
+
+Valid actions are `APPROVE`, `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`. A nonblank `reason` is required for all actions except `APPROVE`. `REJECT` transitions the Loan Application to `REJECTED` and releases the reserved Salary Advance limit.
+
 ## Seed Data Useful For API Verification
 
 | Purpose | Value |
@@ -113,7 +128,7 @@ Import this file into Postman:
 
 `docs/api/Meridian-Platform.postman_collection.json`
 
-Collection note: the Postman collection now uses `POST /api/v1/auth/login`, role-specific Bearer token variables, and the full current endpoint inventory including Loan Officer review and recommendation endpoints.
+Collection note: the Postman collection now uses `POST /api/v1/auth/login`, role-specific Bearer token variables, and the full current endpoint inventory including Loan Officer review, recommendation, and approval decision endpoints.
 
 Expected high-value checks:
 
@@ -135,6 +150,9 @@ Expected high-value checks:
 | Recommendation without `approval:recommend` | `403`, `ACCESS_DENIED`. |
 | Recommendation missing required reason | `422`, `RECOMMENDATION_REASON_REQUIRED`. |
 | Recommendation happy path | `201`, recommendation recorded, Loan status moves to `APPROVAL_PENDING` or `RETURNED_FOR_REVISION`. |
+| Approval decision without `approval:decide` | `403`, `ACCESS_DENIED`. |
+| Approval decision maker-checker violation | `422`, `MAKER_CHECKER_VIOLATION`. |
+| Approval decision reject path | `201`, decision recorded, Loan status moves to `REJECTED`, Salary Advance reservation is released. |
 | Duplicate Salary Advance for same authenticated customer | `409`, `BLOCKING_APPLICATION_EXISTS`. |
 
 Notes:

@@ -4,6 +4,9 @@ import com.meridian.platform.approval.application.port.out.ReviewRecommendationR
 import com.meridian.platform.approval.domain.model.ReviewRecommendation;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+import java.util.UUID;
+
 @Repository
 public class ReviewRecommendationRepositoryAdapter implements ReviewRecommendationRepository {
 
@@ -17,5 +20,11 @@ public class ReviewRecommendationRepositoryAdapter implements ReviewRecommendati
     public ReviewRecommendation save(ReviewRecommendation recommendation) {
         return jpaReviewRecommendationRepository.save(new ReviewRecommendationJpaEntity(recommendation))
                 .toDomain();
+    }
+
+    @Override
+    public Optional<ReviewRecommendation> findLatestByLoanApplicationId(UUID loanApplicationId) {
+        return jpaReviewRecommendationRepository.findFirstByLoanApplicationIdOrderBySubmittedAtDesc(loanApplicationId)
+                .map(ReviewRecommendationJpaEntity::toDomain);
     }
 }

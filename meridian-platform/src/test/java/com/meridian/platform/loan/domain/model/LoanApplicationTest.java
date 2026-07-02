@@ -83,6 +83,49 @@ class LoanApplicationTest {
         assertEquals("LOAN_RECOMMENDATION_NOT_ALLOWED", exception.getErrorCode());
     }
 
+    @Test
+    void approvalDecisionMovesApprovalPendingApplicationApproved() {
+        LoanApplication result = loanApplication(LoanApplicationStatus.APPROVAL_PENDING)
+                .applyApprovalDecision(LoanApprovalDecisionAction.APPROVE);
+
+        assertEquals(LoanApplicationStatus.APPROVED, result.status());
+    }
+
+    @Test
+    void rejectionDecisionMovesApprovalPendingApplicationRejected() {
+        LoanApplication result = loanApplication(LoanApplicationStatus.APPROVAL_PENDING)
+                .applyApprovalDecision(LoanApprovalDecisionAction.REJECT);
+
+        assertEquals(LoanApplicationStatus.REJECTED, result.status());
+    }
+
+    @Test
+    void returnDecisionMovesApprovalPendingApplicationReturnedToReview() {
+        LoanApplication result = loanApplication(LoanApplicationStatus.APPROVAL_PENDING)
+                .applyApprovalDecision(LoanApprovalDecisionAction.RETURN_TO_LOAN_OFFICER_REVIEW);
+
+        assertEquals(LoanApplicationStatus.RETURNED_TO_REVIEW, result.status());
+    }
+
+    @Test
+    void correctionDecisionMovesApprovalPendingApplicationReturnedForRevision() {
+        LoanApplication result = loanApplication(LoanApplicationStatus.APPROVAL_PENDING)
+                .applyApprovalDecision(LoanApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION);
+
+        assertEquals(LoanApplicationStatus.RETURNED_FOR_REVISION, result.status());
+    }
+
+    @Test
+    void approvalDecisionRejectsNonApprovalPendingApplication() {
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> loanApplication(LoanApplicationStatus.UNDER_REVIEW)
+                        .applyApprovalDecision(LoanApprovalDecisionAction.APPROVE)
+        );
+
+        assertEquals("APPROVAL_DECISION_NOT_ALLOWED", exception.getErrorCode());
+    }
+
     private LoanApplication loanApplication(LoanApplicationStatus status) {
         return new LoanApplication(
                 UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),

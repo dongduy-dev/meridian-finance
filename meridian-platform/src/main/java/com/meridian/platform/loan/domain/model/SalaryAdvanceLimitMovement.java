@@ -64,4 +64,22 @@ public record SalaryAdvanceLimitMovement(
                 Objects.requireNonNull(occurredAt, "occurredAt must not be null")
         );
     }
+
+    public static SalaryAdvanceLimitMovement reservationReleased(
+            UUID id,
+            UUID salaryAdvanceLimitId,
+            UUID loanApplicationId,
+            BigDecimal amount,
+            LocalDateTime occurredAt
+    ) {
+        return new SalaryAdvanceLimitMovement(
+                Objects.requireNonNull(id, "id must not be null"),
+                Objects.requireNonNull(salaryAdvanceLimitId, "salaryAdvanceLimitId must not be null"),
+                Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null"),
+                null,
+                SalaryAdvanceLimitMovementType.RESERVATION_RELEASED,
+                Objects.requireNonNull(amount, "amount must not be null"),
+                Objects.requireNonNull(occurredAt, "occurredAt must not be null")
+        );
+    }
 }

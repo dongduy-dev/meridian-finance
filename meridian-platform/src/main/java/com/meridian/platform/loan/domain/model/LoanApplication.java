@@ -79,6 +79,24 @@ public record LoanApplication(
         };
     }
 
+    public LoanApplication applyApprovalDecision(LoanApprovalDecisionAction action) {
+        Objects.requireNonNull(action, "action must not be null");
+
+        if (status != LoanApplicationStatus.APPROVAL_PENDING) {
+            throw new BusinessStateConflictException(
+                    "APPROVAL_DECISION_NOT_ALLOWED",
+                    "Approval decision can only be recorded while the application is pending approval."
+            );
+        }
+
+        return switch (action) {
+            case APPROVE -> withStatus(LoanApplicationStatus.APPROVED);
+            case REJECT -> withStatus(LoanApplicationStatus.REJECTED);
+            case RETURN_TO_LOAN_OFFICER_REVIEW -> withStatus(LoanApplicationStatus.RETURNED_TO_REVIEW);
+            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION -> withStatus(LoanApplicationStatus.RETURNED_FOR_REVISION);
+        };
+    }
+
     private LoanApplication withStatus(LoanApplicationStatus nextStatus) {
         return new LoanApplication(
                 id,

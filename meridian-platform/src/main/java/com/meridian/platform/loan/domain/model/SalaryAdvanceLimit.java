@@ -76,6 +76,29 @@ public record SalaryAdvanceLimit(
         );
     }
 
+    public SalaryAdvanceLimit releaseReservation(BigDecimal amount) {
+        requirePositive(amount, "amount");
+
+        if (reservedAmount.compareTo(amount) < 0) {
+            throw new BusinessRuleViolationException(
+                    "SALARY_ADVANCE_RESERVATION_RELEASE_NOT_ALLOWED",
+                    "Cannot release more Salary Advance reservation than currently reserved."
+            );
+        }
+
+        return new SalaryAdvanceLimit(
+                id,
+                customerId,
+                customerPartnerEmployeeLinkId,
+                totalLimit,
+                usedAmount,
+                reservedAmount.subtract(amount),
+                availableAmount.add(amount),
+                status,
+                lastRefreshedAt
+        );
+    }
+
     public SalaryAdvanceLimit refreshTotalLimit(BigDecimal effectiveTotalLimit, LocalDateTime lastRefreshedAt) {
         requireNonNegative(effectiveTotalLimit, "effectiveTotalLimit");
         Objects.requireNonNull(lastRefreshedAt, "lastRefreshedAt must not be null");

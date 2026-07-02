@@ -203,10 +203,10 @@ Status: Open
 Blocks next major feature: No
 
 Problem:
-Manual review outcomes exist conceptually, but approval/rejection workflow is not implemented.
+Manual review outcomes exist conceptually, but a dedicated manual review queue/outcome workflow is not implemented. Approval decision now exists for applications that have completed Loan Officer recommendation.
 
 Recommendation:
-Implement after security/PII patch and before complex document flows.
+Implement after the common approval lifecycle is stable and before complex document flows.
 
 ### MER-FU-010 - Implement review/approval/customer acceptance/disbursement lifecycle
 
@@ -226,11 +226,11 @@ Application creation exists, but the remaining lifecycle is deferred.
 Recommendation:
 Implement in vertical slices:
 
-1. Loan officer review/recommendation.
-2. Approval decision.
-3. Customer acceptance.
-4. Manual disbursement confirmation.
-5. Loan account activation.
+1. Loan officer review/recommendation. Done.
+2. Approval decision. Done.
+3. Customer acceptance. Deferred.
+4. Manual disbursement confirmation. Deferred.
+5. Loan account activation. Deferred.
 
 ### MER-FU-011 - Implement repayment tracking
 

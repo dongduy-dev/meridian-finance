@@ -1,7 +1,10 @@
 package com.meridian.platform.identity.infrastructure.security;
 
+import com.meridian.platform.approval.application.dto.ApprovalDecisionDto;
 import com.meridian.platform.approval.application.dto.ReviewRecommendationDto;
+import com.meridian.platform.approval.application.port.in.SubmitApprovalDecisionUseCase;
 import com.meridian.platform.approval.application.port.in.SubmitReviewRecommendationUseCase;
+import com.meridian.platform.approval.infrastructure.adapter.in.web.ApprovalDecisionController;
 import com.meridian.platform.approval.infrastructure.adapter.in.web.ReviewRecommendationController;
 import com.meridian.platform.identity.application.dto.AuthResponse;
 import com.meridian.platform.identity.application.port.in.AuthenticationUseCase;
@@ -53,6 +56,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         SalaryAdvanceLoanApplicationController.class,
         LoanApplicationReviewController.class,
         ReviewRecommendationController.class,
+        ApprovalDecisionController.class,
         PartnerCompanyController.class,
         PartnerEmployeeController.class,
         PartnerEmployeeImportBatchController.class,
@@ -91,6 +95,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private SubmitReviewRecommendationUseCase submitReviewRecommendationUseCase;
+
+    @MockitoBean
+    private SubmitApprovalDecisionUseCase submitApprovalDecisionUseCase;
 
     @MockitoBean
     private QueryPartnerCompanyUseCase queryPartnerCompanyUseCase;
@@ -152,7 +159,7 @@ class SecurityConfigTest {
     }
 
     @Test
-    void rejectsAnonymousAccessToSensitivePartnerSalaryAdvanceAndReviewEndpoints() throws Exception {
+    void rejectsAnonymousAccessToSensitivePartnerSalaryAdvanceReviewAndDecisionEndpoints() throws Exception {
         mockMvc.perform(get("/api/v1/partner-companies"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
@@ -180,6 +187,11 @@ class SecurityConfigTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/approval-decisions", LOAN_APPLICATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -202,6 +214,17 @@ class SecurityConfigTest {
                                 }
                                 """)
                         .with(user("reviewer").authorities(new SimpleGrantedAuthority("loan:review"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/approval-decisions", LOAN_APPLICATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "action": "APPROVE"
+                                }
+                                """)
+                        .with(user("loan-officer").authorities(new SimpleGrantedAuthority("approval:recommend"))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
     }
@@ -274,5 +297,36 @@ class SecurityConfigTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.recommendationId").value(recommendationId.toString()))
                 .andExpect(jsonPath("$.action").value("RECOMMEND_APPROVAL"));
+    }
+
+    @Test
+    void allowsApproverWithApprovalDecidePermissionToDecide() throws Exception {
+        UUID decisionId = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
+        UUID recommendationId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        UUID approverUserId = UUID.fromString("00000000-0000-0000-0000-000000000303");
+        when(submitApprovalDecisionUseCase.submitApprovalDecision(any(), any()))
+                .thenReturn(new ApprovalDecisionDto(
+                        decisionId,
+                        LOAN_APPLICATION_ID,
+                        recommendationId,
+                        approverUserId,
+                        "APPROVE",
+                        null,
+                        null,
+                        LocalDateTime.now()
+                ));
+
+        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/approval-decisions", LOAN_APPLICATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "action": "APPROVE"
+                                }
+                                """)
+                        .with(user("approver")
+                                .authorities(new SimpleGrantedAuthority("approval:decide"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.decisionId").value(decisionId.toString()))
+                .andExpect(jsonPath("$.action").value("APPROVE"));
     }
 }
