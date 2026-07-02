@@ -38,37 +38,24 @@ com.meridian.platform/
 │
 ├── identity/                        # ── IAM Module ──
 │   ├── domain/
-│   │   ├── model/
-│   │   │   ├── User.java
-│   │   │   ├── Role.java
-│   │   │   ├── Permission.java
-│   │   │   ├── RefreshToken.java
-│   │   │   └── UserStatus.java
-│   │   ├── service/
-│   │   │   └── RolePermissionPolicy.java
-│   │   ├── event/
-│   │   │   ├── UserRegisteredEvent.java
-│   │   │   └── UserSuspendedEvent.java
-│   │   └── exception/
-│   │       └── AuthenticationException.java
+│   │   └── model/
+│   │       ├── User.java
+│   │       ├── UserStatus.java
+│   │       └── UserType.java
 │   ├── application/
 │   │   ├── port/
 │   │   │   ├── in/
-│   │   │   │   ├── AuthenticationUseCase.java
-│   │   │   │   └── UserManagementUseCase.java
+│   │   │   │   └── AuthenticationUseCase.java
 │   │   │   └── out/
-│   │   │       ├── UserRepository.java
-│   │   │       ├── RefreshTokenRepository.java
-│   │   │       └── TokenIssuerPort.java
+│   │   │       ├── IssuedAccessToken.java
+│   │   │       ├── PasswordVerifierPort.java
+│   │   │       ├── TokenIssuerPort.java
+│   │   │       └── UserRepository.java
 │   │   ├── service/
-│   │   │   ├── AuthenticationService.java
-│   │   │   └── UserManagementService.java
-│   │   ├── dto/
-│   │   │   ├── LoginRequest.java
-│   │   │   ├── RegisterRequest.java
-│   │   │   └── AuthResponse.java
-│   │   └── mapper/
-│   │       └── UserMapper.java
+│   │   │   └── AuthenticationService.java
+│   │   └── dto/
+│   │       ├── AuthResponse.java
+│   │       └── LoginRequest.java
 │   └── infrastructure/
 │       ├── adapter/
 │       │   ├── in/
@@ -77,17 +64,20 @@ com.meridian.platform/
 │       │   └── out/
 │       │       └── persistence/
 │       │           ├── JpaUserRepository.java
-│       │           ├── UserJpaEntity.java    # JPA entity (infra concern)
-│       │           ├── JpaRefreshTokenRepository.java
-│       │           └── RefreshTokenJpaEntity.java
-│       ├── security/
-│       │   ├── JwtAuthFilter.java
-│       │   ├── JwtTokenProvider.java
-│       │   ├── SpringSecurityCurrentUserProvider.java  # Implements shared CurrentUserProvider
-│       │   ├── RolePermissionRegistry.java
-│       │   └── SecurityConfig.java       # Wires Spring Security, JWT, and identity auth
-│       └── config/
-│           └── IdentityModuleConfig.java
+│       │           ├── UserJpaEntity.java
+│       │           └── UserRepositoryAdapter.java
+│       └── security/
+│           ├── BCryptPasswordVerifierAdapter.java
+│           ├── JwtAuthenticationException.java
+│           ├── JwtAuthenticationFilter.java
+│           ├── JwtKeyProvider.java
+│           ├── JwtTokenService.java
+│           ├── MeridianAccessDeniedHandler.java
+│           ├── MeridianAuthenticationEntryPoint.java
+│           ├── MeridianPrincipal.java
+│           ├── SecurityConfig.java
+│           ├── SecurityErrorResponseWriter.java
+│           └── SpringSecurityCurrentUserProvider.java
 │
 ├── customer/                        # ── Customer Module ──
 │   ├── domain/
@@ -427,7 +417,7 @@ Salary Advance remains inside the generic lending architecture. `partner/` owns 
 |---|---|---|
 | **Loan Core / Origination** | Full Hexagonal | Core domain. Generic lending core, product policies/strategies, and complex state machine. |
 | **Approval Workflow** | Full Hexagonal | Core domain. Loan Officer review, Approver decision, maker-checker controls. |
-| **Identity & Access** | Full Hexagonal | Security-critical. Owns users, roles, JWT, refresh tokens, and RBAC. |
+| **Identity & Access** | Full Hexagonal | Security-critical. Owns users, JWT access tokens, role/permission claims, RBAC, and current-user context. Refresh token rotation remains future work. |
 | **Customer** | Moderate | Supporting domain. Owns profile, verification status, bank account information, and sensitive data handling. |
 | **Partner** | Moderate | Supporting domain. Owns Partner Companies, Partner Employees, import batches, and reusable Salary Advance employee links. |
 | **Document** | Moderate | Checklist, manual review, replacement, waiver, readiness, storage, and OCR-assisted processing justify ports. |

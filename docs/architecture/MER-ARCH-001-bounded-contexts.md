@@ -36,10 +36,10 @@ graph TB
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | User registration, authentication (JWT), authorization (RBAC), users, roles, refresh token/session management |
-| **Entities** | `User`, `Role` (enum: `CUSTOMER`, `LOAN_OFFICER`, `APPROVER`, `ACCOUNTING_OFFICER`, `BACK_OFFICE_ADMIN`), `Permission` (constants class), `RolePermissionRegistry` (role→permission mapping), `RefreshToken`, `UserId` (VO), `EmailAddress` (VO) |
-| **Public Interface** | `AuthenticationPort.authenticate(token)`, `UserQueryPort.findById(id)` |
-| **Events Published** | `UserRegisteredEvent`, `UserSuspendedEvent` |
+| **Responsibilities** | Login/authentication, JWT access-token issuance and parsing, role/permission claims, authenticated current-user context. Refresh token/session management remains future work. |
+| **Entities** | `User`, `UserType`, `UserStatus`; roles and permissions are currently stored as user claim sets, not separate domain entities. |
+| **Public Interface** | `AuthenticationUseCase.login(request)`, `CurrentUserProvider.currentUser()` for application services that need the authenticated actor. |
+| **Events Published** | None implemented yet. |
 | **Microservice Candidacy** | First to extract. Minimal domain coupling, well-defined API. |
 
 ---

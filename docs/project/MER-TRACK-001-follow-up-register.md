@@ -40,13 +40,12 @@ Risk:
 Unauthenticated callers could perform employee verification and submit Salary Advance applications.
 
 Resolution:
-`SecurityConfig` now keeps only health and loan product catalog endpoints public. Partner Company, Partner Employee, employee verification, import batch, and Salary Advance application endpoints require authentication through the current Spring Security gate. The patch does not expand `permitAll`.
+`SecurityConfig` now keeps only health, login, and loan product catalog endpoints public. Partner Company, Partner Employee, employee verification, import batch, and Salary Advance application endpoints require JWT Bearer authentication. Endpoint-specific role/permission checks are enforced through method security where implemented.
 
 Notes:
-This is a minimal authenticated gate using Spring Security HTTP Basic for local/development until full JWT/RBAC is implemented. Role/action permissions and customer ownership enforcement remain tracked separately.
+This item records the original endpoint lockdown. The temporary HTTP Basic gate has since been replaced by JWT/RBAC, including token-derived customer identity for customer-owned flows; see MER-FU-015.
 
-Suggested future branch name:
-`fix/identity-rbac-endpoint-permissions`
+Superseded by MER-FU-015.
 
 ### MER-FU-002 - Remove or split PII-heavy Partner employee DTOs from public responses
 

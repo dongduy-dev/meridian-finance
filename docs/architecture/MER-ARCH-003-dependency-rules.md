@@ -60,7 +60,7 @@ graph TB
 - `shared` must not depend on any feature module.
 - `identity` may depend on `shared`; customer, partner, loan, approval, document, audit, and notification may depend on `shared`.
 - `shared/application/security` contains abstractions only. `identity/infrastructure/security` contains concrete Spring Security/JWT implementation.
-- `JwtAuthFilter`, `JwtTokenProvider`, and Spring Security adapters belong to identity infrastructure.
+- `JwtAuthenticationFilter`, `JwtTokenService`, and Spring Security adapters belong to identity infrastructure.
 - OCR integration should be treated as an external or infrastructure-facing capability behind a document/OCR port.
 - Audit should record events without controlling the core workflow.
 - Modules must not share JPA entity ownership across bounded contexts. Cross-context relationships are stored as IDs and resolved through application/public ports or events.
@@ -130,7 +130,7 @@ public class SubmitLoanService {
 }
 ```
 
-> `SpringSecurityCurrentUserProvider` is an identity infrastructure adapter that implements `CurrentUserProvider` using Spring Security. `JwtAuthFilter` and `JwtTokenProvider` belong to identity because identity owns authentication, JWT, users, roles, refresh tokens, and RBAC.
+> `SpringSecurityCurrentUserProvider` is an identity infrastructure adapter that implements `CurrentUserProvider` using Spring Security. `JwtAuthenticationFilter` and `JwtTokenService` belong to identity because identity owns authentication, JWT access tokens, users, role/permission claims, and RBAC.
 
 ### Forbidden Anti-Patterns
 
@@ -187,7 +187,7 @@ public void crossModuleOperation() {
 // Audit records events and history; it does not own business decision logic.
 
 // ANTI-PATTERN 12: Shared importing feature module classes
-// shared/infrastructure/config/SecurityConfig.java imports com.meridian.platform.identity.infrastructure.security.JwtAuthFilter // FORBIDDEN!
+// shared/infrastructure/config/SecurityConfig.java imports com.meridian.platform.identity.infrastructure.security.JwtAuthenticationFilter // FORBIDDEN!
 // shared must not depend on identity or any other feature module.
 
 // ANTI-PATTERN 13: Spring Security/JWT classes in domain or application services
@@ -196,7 +196,7 @@ public void crossModuleOperation() {
 // Application code should use CurrentUserProvider; domain code should stay pure.
 
 // ANTI-PATTERN 14: JWT implementation in shared
-// shared/infrastructure/security/JwtTokenProvider.java // FORBIDDEN!
+// shared/infrastructure/security/JwtTokenService.java // FORBIDDEN!
 // shared/application/security contains abstractions only.
 ```
 
