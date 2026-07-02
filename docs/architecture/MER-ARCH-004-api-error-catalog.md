@@ -7,11 +7,12 @@ This document standardizes the API error codes across all bounded contexts in th
 | **AUTH Domain** | | | |
 | 401 | `AUTHENTICATION_REQUIRED` | Authentication required | Provide a valid Bearer token in the Authorization header |
 | 401 | `INVALID_CREDENTIALS` | Invalid credentials | Check username and password |
-| 401 | `TOKEN_EXPIRED` | Token expired | Refresh the access token using the refresh token flow |
+| 401 | `TOKEN_EXPIRED` | Token expired | Log in again for now; use refresh token flow once implemented |
 | 401 | `INVALID_TOKEN` | Invalid token | Re-authenticate to obtain a valid token |
 | 401 | `REFRESH_TOKEN_INVALID` | Refresh token invalid | Re-authenticate to obtain a new token pair |
 | 403 | `ACCOUNT_SUSPENDED` | Account suspended | Contact support to review account status |
 | 403 | `ACCESS_DENIED` | Access denied | The user's role does not include the required permission for this action |
+| 403 | `CUSTOMER_CONTEXT_REQUIRED` | Customer context required | Use an authenticated customer-linked token for customer-owned flows |
 | 409 | `CONCURRENT_SESSION_LIMIT_EXCEEDED` | Concurrent session limit exceeded | Log out of other devices before logging in |
 | **CUSTOMER Domain** | | | |
 | 404 | `CUSTOMER_NOT_FOUND` | Customer not found | Verify the requested customer ID |
