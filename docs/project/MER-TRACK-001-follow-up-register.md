@@ -542,6 +542,31 @@ Before switching Approval-to-Loan review/approval coordination to after-commit o
 
 Suggested future branch name:
 `feature/approval-event-processing-hardening`
+
+### MER-FU-028 - Automatically refresh customer employee links after completed Partner Employee imports
+
+Area: Partner / Salary Advance Limit Refresh
+
+Type: Deferred feature
+
+Priority: P1
+
+Status: Open
+
+Blocks current PR: No
+
+Problem:
+Customer Partner Employee links are currently refreshed when the customer verifies again. They are not automatically refreshed when new Partner Employee imports are completed.
+
+Risk:
+Reusable employee links and Salary Advance limits may continue to reference older imported employee rows until the customer re-verifies, even when fresher active employee data is available.
+
+Recommendation:
+Automatically refresh verified customer employee links when new valid Partner Employee imports are completed. The refresh should preserve inactive Partner Company and inactive Partner Employee hard stops, update the linked Partner Employee/source batch when the verified evidence still matches, and trigger Salary Advance limit recalculation where applicable.
+
+Suggested future branch name:
+`feature/partner-employee-import-link-refresh`
+
 ## Recommended Next Roadmap
 
 1. Review/merge the completed P0 security/PII/inactive Partner Company patch.
