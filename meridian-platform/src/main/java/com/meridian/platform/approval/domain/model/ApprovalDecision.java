@@ -1,6 +1,7 @@
 package com.meridian.platform.approval.domain.model;
 
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -55,5 +56,10 @@ public record ApprovalDecision(
 
         String trimmedValue = value.trim();
         return trimmedValue.isEmpty() ? null : trimmedValue;
+    }
+
+    @Transactional
+    public String toString(){
+        return "";
     }
 }
