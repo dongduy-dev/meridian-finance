@@ -97,6 +97,58 @@ public record LoanApplication(
         };
     }
 
+    public LoanApplication markCustomerAcceptancePending() {
+        if (status != LoanApplicationStatus.APPROVED) {
+            throw new BusinessStateConflictException(
+                    "INVALID_APPLICATION_STATUS",
+                    "Only approved loan applications can move to customer acceptance."
+            );
+        }
+
+        return withStatus(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING);
+    }
+
+    public LoanApplication acceptApprovedOffer() {
+        if (status == LoanApplicationStatus.CONTRACT_PENDING) {
+            return this;
+        }
+        if (status != LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING) {
+            throw new BusinessStateConflictException(
+                    "OFFER_ACTION_CONFLICT",
+                    "Approved offer cannot be accepted in the current application status."
+            );
+        }
+
+        return withStatus(LoanApplicationStatus.CONTRACT_PENDING);
+    }
+
+    public LoanApplication declineApprovedOffer() {
+        if (status == LoanApplicationStatus.CUSTOMER_DECLINED) {
+            return this;
+        }
+        if (status != LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING) {
+            throw new BusinessStateConflictException(
+                    "OFFER_ACTION_CONFLICT",
+                    "Approved offer cannot be declined in the current application status."
+            );
+        }
+
+        return withStatus(LoanApplicationStatus.CUSTOMER_DECLINED);
+    }
+
+    public LoanApplication expireApprovedOffer() {
+        if (status == LoanApplicationStatus.EXPIRED) {
+            return this;
+        }
+        if (status != LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING) {
+            throw new BusinessStateConflictException(
+                    "OFFER_ACTION_CONFLICT",
+                    "Approved offer cannot be expired in the current application status."
+            );
+        }
+
+        return withStatus(LoanApplicationStatus.EXPIRED);
+    }
     private LoanApplication withStatus(LoanApplicationStatus nextStatus) {
         return new LoanApplication(
                 id,

@@ -221,17 +221,16 @@ Status: Open
 Blocks next major feature: No
 
 Problem:
-Application creation exists, but the remaining lifecycle is deferred.
+Application creation, Loan Officer review/recommendation, Approver decision, and Salary Advance approved-offer customer acceptance now exist. Manual disbursement confirmation and LoanAccount activation remain deferred.
 
 Recommendation:
-Implement in vertical slices:
+Continue implementation in vertical slices:
 
 1. Loan officer review/recommendation. Done.
 2. Approval decision. Done.
-3. Customer acceptance. Deferred.
+3. Salary Advance approved offer and customer acceptance. Done.
 4. Manual disbursement confirmation. Deferred.
 5. Loan account activation. Deferred.
-
 ### MER-FU-011 - Implement repayment tracking
 
 Area: Loan / Repayment
@@ -294,7 +293,7 @@ Type: Documentation improvement
 
 Priority: P1
 
-Status: Open
+Status: Done
 
 Blocks next major feature: No
 
@@ -302,7 +301,7 @@ Problem:
 Flyway migrations are growing and current schema is harder to inspect from migrations alone.
 
 Recommendation:
-Create `docs/database/MER-DB-CURRENT-SCHEMA.sql` after the security/PII patch or after the next stable milestone. This file is documentation only and must not be placed in the Flyway migration folder.
+`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V16. This file is documentation only and must not be placed in the Flyway migration folder.
 
 ### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
 
@@ -569,11 +568,8 @@ Suggested future branch name:
 
 ## Recommended Next Roadmap
 
-1. Review/merge the completed P0 security/PII/inactive Partner Company patch.
-2. Create current physical schema snapshot.
-3. Continue with Loan review/approval workflow.
-4. Continue with Approval Review Recommendation on top of IAM/RBAC foundation.
-5. Continue with customer acceptance/disbursement/loan account activation.
-6. Add repayment tracking.
-7. Add audit trail.
-8. Add document checklist/manual review/OCR.
+1. Review/merge the completed Salary Advance approved-offer and customer-acceptance slice.
+2. Continue with manual disbursement and loan account activation.
+3. Add repayment tracking.
+4. Add audit trail.
+5. Add document checklist/manual review/OCR.

@@ -32,6 +32,11 @@ public class LoanApplicationRepositoryAdapter implements LoanApplicationReposito
     }
 
     @Override
+    public Optional<LoanApplication> findById(UUID loanApplicationId) {
+        return jpaLoanApplicationRepository.findById(loanApplicationId)
+                .map(this::toDomain);
+    }
+    @Override
     public Optional<LoanApplication> findByIdForUpdate(UUID loanApplicationId) {
         return jpaLoanApplicationRepository.findByIdForUpdate(loanApplicationId)
                 .map(this::toDomain);

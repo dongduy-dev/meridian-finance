@@ -376,6 +376,10 @@ class StartSalaryAdvanceApplicationServiceTest {
         }
 
         @Override
+        public Optional<LoanApplication> findById(UUID loanApplicationId) {
+            return Optional.empty();
+        }
+        @Override
         public Optional<LoanApplication> findByIdForUpdate(UUID loanApplicationId) {
             return Optional.empty();
         }
@@ -433,7 +437,14 @@ class StartSalaryAdvanceApplicationServiceTest {
             savedMovements.add(salaryAdvanceLimitMovement);
             return salaryAdvanceLimitMovement;
         }
-    }
+
+        @Override
+        public boolean existsByLoanApplicationIdAndMovementType(
+                UUID loanApplicationId,
+                SalaryAdvanceLimitMovementType movementType
+        ) {
+            return false;
+        }    }
 
     private static class FakeSalaryAdvanceVerificationRepository implements SalaryAdvanceVerificationRepository {
 

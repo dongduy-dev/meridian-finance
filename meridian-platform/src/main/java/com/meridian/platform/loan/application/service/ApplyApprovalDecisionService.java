@@ -3,16 +3,16 @@ package com.meridian.platform.loan.application.service;
 import com.meridian.platform.loan.application.dto.ApplyApprovalDecisionCommand;
 import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.in.ApplyApprovalDecisionUseCase;
+import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
-import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
-import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
-import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
+import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyRepository;
+import com.meridian.platform.loan.domain.model.ApprovedOffer;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApprovalDecisionAction;
 import com.meridian.platform.loan.domain.model.ProductCode;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimit;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovement;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
+import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
+import com.meridian.platform.loan.domain.service.SalaryAdvanceOfferCalculator;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,20 +24,21 @@ import java.util.UUID;
 public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCase {
 
     private final LoanApplicationRepository loanApplicationRepository;
-    private final SalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository;
-    private final SalaryAdvanceLimitRepository salaryAdvanceLimitRepository;
-    private final SalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository;
+    private final ApprovedOfferRepository approvedOfferRepository;
+    private final SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository;
+    private final SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService;
+    private final SalaryAdvanceOfferCalculator salaryAdvanceOfferCalculator = new SalaryAdvanceOfferCalculator();
 
     public ApplyApprovalDecisionService(
             LoanApplicationRepository loanApplicationRepository,
-            SalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository,
-            SalaryAdvanceLimitRepository salaryAdvanceLimitRepository,
-            SalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository
+            ApprovedOfferRepository approvedOfferRepository,
+            SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository,
+            SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService
     ) {
         this.loanApplicationRepository = loanApplicationRepository;
-        this.salaryAdvanceVerificationRepository = salaryAdvanceVerificationRepository;
-        this.salaryAdvanceLimitRepository = salaryAdvanceLimitRepository;
-        this.salaryAdvanceLimitMovementRepository = salaryAdvanceLimitMovementRepository;
+        this.approvedOfferRepository = approvedOfferRepository;
+        this.salaryAdvanceOfferPolicyRepository = salaryAdvanceOfferPolicyRepository;
+        this.salaryAdvanceReservationReleaseService = salaryAdvanceReservationReleaseService;
     }
 
     @Override
@@ -58,8 +59,13 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
                 ));
 
         LoanApplication transitionedApplication = loanApplication.applyApprovalDecision(command.action());
+        if (shouldGenerateSalaryAdvanceOffer(loanApplication, command.action())) {
+            ApprovedOffer approvedOffer = generateSalaryAdvanceOffer(loanApplication, command);
+            approvedOfferRepository.save(approvedOffer);
+            transitionedApplication = transitionedApplication.markCustomerAcceptancePending();
+        }
         if (shouldReleaseSalaryAdvanceReservation(loanApplication, command.action())) {
-            releaseSalaryAdvanceReservation(loanApplication, command);
+            salaryAdvanceReservationReleaseService.releaseReservationOnce(loanApplication, command.decidedAt());
         }
 
         LoanApplication savedApplication = loanApplicationRepository.save(transitionedApplication);
@@ -70,43 +76,39 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         );
     }
 
+    private boolean shouldGenerateSalaryAdvanceOffer(
+            LoanApplication loanApplication,
+            LoanApprovalDecisionAction action
+    ) {
+        return loanApplication.productCode() == ProductCode.SALARY_ADVANCE
+                && action == LoanApprovalDecisionAction.APPROVE;
+    }
+
+    private ApprovedOffer generateSalaryAdvanceOffer(
+            LoanApplication loanApplication,
+            ApplyApprovalDecisionCommand command
+    ) {
+        SalaryAdvanceOfferPolicy policy = salaryAdvanceOfferPolicyRepository.findActiveDefaultPolicy()
+                .orElseThrow(() -> new BusinessRuleViolationException(
+                        "PRODUCT_POLICY_INVALID",
+                        "Salary Advance active default offer policy was not found."
+                ));
+
+        return salaryAdvanceOfferCalculator.generate(
+                UUID.randomUUID(),
+                loanApplication.id(),
+                policy,
+                loanApplication.requestedAmount(),
+                loanApplication.requestedTermMonths(),
+                command.decidedAt()
+        );
+    }
+
     private boolean shouldReleaseSalaryAdvanceReservation(
             LoanApplication loanApplication,
             LoanApprovalDecisionAction action
     ) {
         return loanApplication.productCode() == ProductCode.SALARY_ADVANCE
                 && action == LoanApprovalDecisionAction.REJECT;
-    }
-
-    private void releaseSalaryAdvanceReservation(
-            LoanApplication loanApplication,
-            ApplyApprovalDecisionCommand command
-    ) {
-        SalaryAdvanceVerification verification = salaryAdvanceVerificationRepository
-                .findByLoanApplicationId(loanApplication.id())
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "SALARY_ADVANCE_VERIFICATION_NOT_FOUND",
-                        "Salary Advance verification was not found for the loan application."
-                ));
-
-        SalaryAdvanceLimit currentLimit = salaryAdvanceLimitRepository
-                .findByCustomerIdAndCustomerPartnerEmployeeLinkIdForUpdate(
-                        verification.customerId(),
-                        verification.customerPartnerEmployeeLinkId()
-                )
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "SALARY_ADVANCE_LIMIT_NOT_FOUND",
-                        "Salary Advance limit was not found for the loan application."
-                ));
-
-        SalaryAdvanceLimit releasedLimit = currentLimit.releaseReservation(loanApplication.requestedAmount());
-        SalaryAdvanceLimit savedLimit = salaryAdvanceLimitRepository.save(releasedLimit);
-        salaryAdvanceLimitMovementRepository.save(SalaryAdvanceLimitMovement.reservationReleased(
-                UUID.randomUUID(),
-                savedLimit.id(),
-                loanApplication.id(),
-                loanApplication.requestedAmount(),
-                command.decidedAt()
-        ));
     }
 }

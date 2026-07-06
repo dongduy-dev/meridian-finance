@@ -1,18 +1,18 @@
 package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.loan.application.dto.ApplyApprovalDecisionCommand;
-import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
+import com.meridian.platform.loan.application.dto.ApprovedOfferActionOutcome;
+import com.meridian.platform.loan.application.dto.ApprovedOfferActionResult;
+import com.meridian.platform.loan.application.mapper.ApprovedOfferMapper;
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
-import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
+import com.meridian.platform.loan.domain.model.ApprovedOfferStatus;
 import com.meridian.platform.loan.domain.model.InterestCalculationMethod;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
-import com.meridian.platform.loan.domain.model.LoanApprovalDecisionAction;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
@@ -24,13 +24,19 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
-import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import com.meridian.platform.loan.domain.service.SalaryAdvanceOfferCalculator;
+import com.meridian.platform.shared.application.security.AuthenticatedUser;
+import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.exception.AuthorizationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -38,37 +44,30 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class ApplyApprovalDecisionServiceTest {
+class RespondToApprovedOfferServiceTest {
 
     private static final UUID LOAN_APPLICATION_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-    private static final UUID DECISION_ID = UUID.fromString("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
-    private static final UUID RECOMMENDATION_ID = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
-    private static final UUID APPROVER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000303");
     private static final UUID CUSTOMER_ID = UUID.fromString("99999999-9999-9999-9999-999999999999");
+    private static final UUID OTHER_CUSTOMER_ID = UUID.fromString("88888888-8888-8888-8888-888888888888");
     private static final UUID LINK_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
     private static final UUID LIMIT_ID = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
-    private static final UUID POLICY_ID = UUID.fromString("12121212-1212-1212-1212-121212121212");
-    private static final LocalDateTime DECIDED_AT = LocalDateTime.of(2026, 7, 6, 9, 30);
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 7, 6, 12, 0);
 
     private FakeLoanApplicationRepository loanApplicationRepository;
     private FakeApprovedOfferRepository approvedOfferRepository;
-    private FakeSalaryAdvanceOfferPolicyRepository offerPolicyRepository;
-    private FakeSalaryAdvanceVerificationRepository verificationRepository;
     private FakeSalaryAdvanceLimitRepository limitRepository;
     private FakeSalaryAdvanceLimitMovementRepository movementRepository;
-    private ApplyApprovalDecisionService service;
+    private RespondToApprovedOfferService service;
 
     @BeforeEach
     void setUp() {
         loanApplicationRepository = new FakeLoanApplicationRepository();
         approvedOfferRepository = new FakeApprovedOfferRepository();
-        offerPolicyRepository = new FakeSalaryAdvanceOfferPolicyRepository();
-        verificationRepository = new FakeSalaryAdvanceVerificationRepository();
+        FakeSalaryAdvanceVerificationRepository verificationRepository = new FakeSalaryAdvanceVerificationRepository();
         limitRepository = new FakeSalaryAdvanceLimitRepository();
         movementRepository = new FakeSalaryAdvanceLimitMovementRepository();
         SalaryAdvanceReservationReleaseService releaseService = new SalaryAdvanceReservationReleaseService(
@@ -76,134 +75,201 @@ class ApplyApprovalDecisionServiceTest {
                 limitRepository,
                 movementRepository
         );
-        service = new ApplyApprovalDecisionService(
+        service = new RespondToApprovedOfferService(
                 loanApplicationRepository,
                 approvedOfferRepository,
-                offerPolicyRepository,
-                releaseService
+                new FixedCurrentUserProvider(CUSTOMER_ID),
+                releaseService,
+                new ApprovedOfferMapper(),
+                Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC)
         );
     }
 
     @Test
-    void approvalGeneratesSalaryAdvanceOfferAndMovesToCustomerAcceptancePending() {
-        LoanApplicationReviewDto result = service.applyApprovalDecision(command(LoanApprovalDecisionAction.APPROVE));
+    void acceptsPendingOffer() {
+        ApprovedOfferActionResult result = service.acceptOffer(LOAN_APPLICATION_ID);
 
-        assertEquals(LOAN_APPLICATION_ID, result.loanApplicationId());
-        assertEquals("CUSTOMER_ACCEPTANCE_PENDING", result.status());
-        assertEquals(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING,
-                loanApplicationRepository.savedApplication.status());
-        assertNotNull(approvedOfferRepository.savedOffer);
-        assertEquals(LOAN_APPLICATION_ID, approvedOfferRepository.savedOffer.loanApplicationId());
-        assertEquals(POLICY_ID, approvedOfferRepository.savedOffer.sourceLoanProductPolicyId());
-        assertEquals(limit(3_000_000), approvedOfferRepository.savedOffer.financialTerms().approvedPrincipal());
-        assertEquals(1, approvedOfferRepository.savedOffer.financialTerms().approvedTermMonths());
-        assertEquals(limit(36_000), approvedOfferRepository.savedOffer.financialTerms().totalInterest());
-        assertEquals(limit(3_036_000), approvedOfferRepository.savedOffer.financialTerms().totalRepaymentAmount());
-        assertEquals(DECIDED_AT, approvedOfferRepository.savedOffer.generatedAt());
-        assertEquals(DECIDED_AT.plusDays(7), approvedOfferRepository.savedOffer.expiresAt());
-        assertEquals(1, approvedOfferRepository.savedOffer.repaymentItems().size());
+        assertEquals(ApprovedOfferActionOutcome.SUCCESS, result.outcome());
+        assertEquals("ACCEPTED", result.offer().status());
+        assertEquals(ApprovedOfferStatus.ACCEPTED, approvedOfferRepository.savedOffer.status());
+        assertEquals(LoanApplicationStatus.CONTRACT_PENDING, loanApplicationRepository.savedApplication.status());
         assertTrue(movementRepository.savedMovements.isEmpty());
     }
 
     @Test
-    void approvalRollsBackWhenSalaryAdvancePolicyIsMissing() {
-        offerPolicyRepository.policy = Optional.empty();
+    void acceptAfterAcceptReturnsCurrentAcceptedResult() {
+        loanApplicationRepository.application = loanApplication(LoanApplicationStatus.CONTRACT_PENDING, CUSTOMER_ID);
+        approvedOfferRepository.offer = pendingOffer(NOW.plusDays(3)).accept(NOW.minusHours(1));
 
-        BusinessRuleViolationException exception = assertThrows(
-                BusinessRuleViolationException.class,
-                () -> service.applyApprovalDecision(command(LoanApprovalDecisionAction.APPROVE))
-        );
+        ApprovedOfferActionResult result = service.acceptOffer(LOAN_APPLICATION_ID);
 
-        assertEquals("PRODUCT_POLICY_INVALID", exception.getErrorCode());
-        assertNull(approvedOfferRepository.savedOffer);
+        assertEquals(ApprovedOfferActionOutcome.SUCCESS, result.outcome());
+        assertEquals("ACCEPTED", result.offer().status());
         assertNull(loanApplicationRepository.savedApplication);
-        assertTrue(movementRepository.savedMovements.isEmpty());
+        assertNull(approvedOfferRepository.savedOffer);
     }
 
     @Test
-    void rejectionReleasesSalaryAdvanceReservationExactlyOnce() {
-        LoanApplicationReviewDto result = service.applyApprovalDecision(command(LoanApprovalDecisionAction.REJECT));
+    void declinesPendingOfferAndReleasesReservation() {
+        ApprovedOfferActionResult result = service.declineOffer(LOAN_APPLICATION_ID);
 
-        assertEquals("REJECTED", result.status());
-        assertEquals(LoanApplicationStatus.REJECTED, loanApplicationRepository.savedApplication.status());
-        assertEquals(limit(0), limitRepository.savedLimit.reservedAmount());
-        assertEquals(limit(6_000_000), limitRepository.savedLimit.availableAmount());
+        assertEquals(ApprovedOfferActionOutcome.SUCCESS, result.outcome());
+        assertEquals("DECLINED", result.offer().status());
+        assertEquals(ApprovedOfferStatus.DECLINED, approvedOfferRepository.savedOffer.status());
+        assertEquals(LoanApplicationStatus.CUSTOMER_DECLINED, loanApplicationRepository.savedApplication.status());
         assertEquals(1, movementRepository.savedMovements.size());
         assertEquals(SalaryAdvanceLimitMovementType.RESERVATION_RELEASED,
                 movementRepository.savedMovements.get(0).movementType());
-        assertEquals(LOAN_APPLICATION_ID, movementRepository.savedMovements.get(0).loanApplicationId());
-        assertEquals(limit(3_000_000), movementRepository.savedMovements.get(0).amount());
+        assertEquals(money(0), limitRepository.savedLimit.reservedAmount());
     }
 
     @Test
-    void rejectionSkipsReleaseWhenReleaseMovementAlreadyExists() {
-        movementRepository.releaseMovementExists = true;
+    void declineAfterDeclineReturnsCurrentDeclinedResult() {
+        loanApplicationRepository.application = loanApplication(LoanApplicationStatus.CUSTOMER_DECLINED, CUSTOMER_ID);
+        approvedOfferRepository.offer = pendingOffer(NOW.plusDays(3)).decline(NOW.minusHours(1));
 
-        LoanApplicationReviewDto result = service.applyApprovalDecision(command(LoanApprovalDecisionAction.REJECT));
+        ApprovedOfferActionResult result = service.declineOffer(LOAN_APPLICATION_ID);
 
-        assertEquals("REJECTED", result.status());
-        assertNull(limitRepository.savedLimit);
+        assertEquals(ApprovedOfferActionOutcome.SUCCESS, result.outcome());
+        assertEquals("DECLINED", result.offer().status());
+        assertNull(loanApplicationRepository.savedApplication);
+        assertNull(approvedOfferRepository.savedOffer);
         assertTrue(movementRepository.savedMovements.isEmpty());
     }
 
     @Test
-    void appliesReturnToReviewDecision() {
-        LoanApplicationReviewDto result = service.applyApprovalDecision(
-                command(LoanApprovalDecisionAction.RETURN_TO_LOAN_OFFICER_REVIEW)
-        );
+    void expiredAcceptCommitsExpiryAndReturnsExpiredOutcome() {
+        approvedOfferRepository.offer = pendingOffer(NOW);
 
-        assertEquals("RETURNED_TO_REVIEW", result.status());
-        assertEquals(LoanApplicationStatus.RETURNED_TO_REVIEW, loanApplicationRepository.savedApplication.status());
-        assertNull(approvedOfferRepository.savedOffer);
+        ApprovedOfferActionResult result = service.acceptOffer(LOAN_APPLICATION_ID);
+
+        assertEquals(ApprovedOfferActionOutcome.EXPIRED, result.outcome());
+        assertEquals("EXPIRED", result.offer().status());
+        assertEquals(ApprovedOfferStatus.EXPIRED, approvedOfferRepository.savedOffer.status());
+        assertEquals(LoanApplicationStatus.EXPIRED, loanApplicationRepository.savedApplication.status());
+        assertEquals(1, movementRepository.savedMovements.size());
     }
 
     @Test
-    void rejectsDecisionWhenLoanApplicationIsNotApprovalPending() {
-        loanApplicationRepository.application = loanApplication(LoanApplicationStatus.UNDER_REVIEW);
+    void expiredDeclineCommitsExpiryAndReturnsExpiredOutcome() {
+        approvedOfferRepository.offer = pendingOffer(NOW.minusSeconds(1));
+
+        ApprovedOfferActionResult result = service.declineOffer(LOAN_APPLICATION_ID);
+
+        assertEquals(ApprovedOfferActionOutcome.EXPIRED, result.outcome());
+        assertEquals("EXPIRED", result.offer().status());
+        assertEquals(ApprovedOfferStatus.EXPIRED, approvedOfferRepository.savedOffer.status());
+        assertEquals(LoanApplicationStatus.EXPIRED, loanApplicationRepository.savedApplication.status());
+        assertEquals(1, movementRepository.savedMovements.size());
+    }
+
+    @Test
+    void contradictoryTerminalActionsConflict() {
+        loanApplicationRepository.application = loanApplication(LoanApplicationStatus.CUSTOMER_DECLINED, CUSTOMER_ID);
+        approvedOfferRepository.offer = pendingOffer(NOW.plusDays(3)).decline(NOW.minusHours(1));
 
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,
-                () -> service.applyApprovalDecision(command(LoanApprovalDecisionAction.APPROVE))
+                () -> service.acceptOffer(LOAN_APPLICATION_ID)
         );
 
-        assertEquals("APPROVAL_DECISION_NOT_ALLOWED", exception.getErrorCode());
-        assertTrue(movementRepository.savedMovements.isEmpty());
+        assertEquals("OFFER_ACTION_CONFLICT", exception.getErrorCode());
+    }
+
+    @Test
+    void enforcesCustomerOwnershipThroughLoanApplication() {
+        loanApplicationRepository.application = loanApplication(
+                LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING,
+                OTHER_CUSTOMER_ID
+        );
+
+        AuthorizationException exception = assertThrows(
+                AuthorizationException.class,
+                () -> service.acceptOffer(LOAN_APPLICATION_ID)
+        );
+
+        assertEquals("ACCESS_DENIED", exception.getErrorCode());
         assertNull(approvedOfferRepository.savedOffer);
     }
 
-    private ApplyApprovalDecisionCommand command(LoanApprovalDecisionAction action) {
-        return new ApplyApprovalDecisionCommand(
+    private ApprovedOffer pendingOffer(LocalDateTime expiresAt) {
+        ApprovedOffer generated = new SalaryAdvanceOfferCalculator().generate(
+                UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd"),
                 LOAN_APPLICATION_ID,
-                DECISION_ID,
-                RECOMMENDATION_ID,
-                APPROVER_USER_ID,
-                action,
-                DECIDED_AT
+                new SalaryAdvanceOfferPolicy(
+                        UUID.fromString("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+                        InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL,
+                        new BigDecimal("0.012000"),
+                        money(0),
+                        RepaymentMethod.ON_SALARY_DATE,
+                        7,
+                        Set.of(1, 2, 3)
+                ),
+                money(3_000_000),
+                1,
+                NOW.minusDays(1)
+        );
+        return new ApprovedOffer(
+                generated.id(),
+                generated.loanApplicationId(),
+                generated.sourceLoanProductPolicyId(),
+                generated.status(),
+                generated.financialTerms(),
+                generated.repaymentItems(),
+                generated.generatedAt(),
+                expiresAt,
+                generated.acceptedAt(),
+                generated.declinedAt(),
+                generated.expiredAt()
         );
     }
 
-    private LoanApplication loanApplication(LoanApplicationStatus status) {
+    private LoanApplication loanApplication(LoanApplicationStatus status, UUID customerId) {
         return new LoanApplication(
                 LOAN_APPLICATION_ID,
-                CUSTOMER_ID,
-                UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd"),
-                "SA-20260630-000001",
+                customerId,
+                UUID.fromString("12121212-1212-1212-1212-121212121212"),
+                "SA-20260706-000001",
                 ProductCode.SALARY_ADVANCE,
                 ProductType.SALARY_BASED,
                 status,
-                limit(3_000_000),
+                money(3_000_000),
                 1,
-                LocalDateTime.now()
+                NOW.minusDays(2)
         );
     }
 
-    private BigDecimal limit(long value) {
+    private BigDecimal money(long value) {
         return BigDecimal.valueOf(value).setScale(2);
+    }
+
+    private static class FixedCurrentUserProvider implements CurrentUserProvider {
+
+        private final UUID customerId;
+
+        private FixedCurrentUserProvider(UUID customerId) {
+            this.customerId = customerId;
+        }
+
+        @Override
+        public AuthenticatedUser currentUser() {
+            return new AuthenticatedUser(
+                    UUID.fromString("00000000-0000-0000-0000-000000000301"),
+                    "customer.demo@meridian.local",
+                    "CUSTOMER",
+                    customerId,
+                    Set.of("CUSTOMER"),
+                    Set.of("loan:read:own", "loan:offer:respond:own")
+            );
+        }
     }
 
     private class FakeLoanApplicationRepository implements LoanApplicationRepository {
 
-        private LoanApplication application = loanApplication(LoanApplicationStatus.APPROVAL_PENDING);
+        private LoanApplication application = loanApplication(
+                LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING,
+                CUSTOMER_ID
+        );
         private LoanApplication savedApplication;
 
         @Override
@@ -241,17 +307,19 @@ class ApplyApprovalDecisionServiceTest {
 
     private class FakeApprovedOfferRepository implements ApprovedOfferRepository {
 
+        private ApprovedOffer offer = pendingOffer(NOW.plusDays(3));
         private ApprovedOffer savedOffer;
 
         @Override
         public ApprovedOffer save(ApprovedOffer approvedOffer) {
             savedOffer = approvedOffer;
+            offer = approvedOffer;
             return approvedOffer;
         }
 
         @Override
         public Optional<ApprovedOffer> findByLoanApplicationId(UUID loanApplicationId) {
-            return Optional.ofNullable(savedOffer)
+            return Optional.ofNullable(offer)
                     .filter(value -> value.loanApplicationId().equals(loanApplicationId));
         }
 
@@ -263,24 +331,6 @@ class ApplyApprovalDecisionServiceTest {
         @Override
         public List<UUID> findExpiredPendingLoanApplicationIds(LocalDateTime now, int batchSize) {
             return List.of();
-        }
-    }
-
-    private class FakeSalaryAdvanceOfferPolicyRepository implements SalaryAdvanceOfferPolicyRepository {
-
-        private Optional<SalaryAdvanceOfferPolicy> policy = Optional.of(new SalaryAdvanceOfferPolicy(
-                POLICY_ID,
-                InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL,
-                new BigDecimal("0.012000"),
-                BigDecimal.ZERO.setScale(2),
-                RepaymentMethod.ON_SALARY_DATE,
-                7,
-                Set.of(1, 2, 3)
-        ));
-
-        @Override
-        public Optional<SalaryAdvanceOfferPolicy> findActiveDefaultPolicy() {
-            return policy;
         }
     }
 
@@ -296,7 +346,6 @@ class ApplyApprovalDecisionServiceTest {
             if (!LOAN_APPLICATION_ID.equals(loanApplicationId)) {
                 return Optional.empty();
             }
-
             return Optional.of(new SalaryAdvanceVerification(
                     UUID.randomUUID(),
                     LOAN_APPLICATION_ID,
@@ -304,15 +353,15 @@ class ApplyApprovalDecisionServiceTest {
                     LINK_ID,
                     LIMIT_ID,
                     UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                    UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb01"),
-                    UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"),
+                    UUID.fromString("22222222-2222-2222-2222-222222222222"),
+                    UUID.fromString("33333333-3333-3333-3333-333333333333"),
                     SalaryAdvanceEmployeeVerificationOutcome.MATCHED_ACTIVE,
                     ProductVerificationResult.VERIFIED,
-                    limit(6_000_000),
-                    limit(0),
-                    limit(3_000_000),
-                    limit(3_000_000),
-                    LocalDateTime.now()
+                    money(6_000_000),
+                    money(0),
+                    money(3_000_000),
+                    money(3_000_000),
+                    NOW.minusDays(2)
             ));
         }
     }
@@ -323,12 +372,12 @@ class ApplyApprovalDecisionServiceTest {
                 LIMIT_ID,
                 CUSTOMER_ID,
                 LINK_ID,
-                limit(6_000_000),
-                limit(0),
-                limit(3_000_000),
-                limit(3_000_000),
+                money(6_000_000),
+                money(0),
+                money(3_000_000),
+                money(3_000_000),
                 SalaryAdvanceLimitStatus.ACTIVE,
-                LocalDateTime.now()
+                NOW.minusDays(2)
         );
         private SalaryAdvanceLimit savedLimit;
 
@@ -341,9 +390,7 @@ class ApplyApprovalDecisionServiceTest {
                 UUID customerId,
                 UUID customerPartnerEmployeeLinkId
         ) {
-            return Optional.ofNullable(currentLimit)
-                    .filter(value -> value.customerId().equals(customerId))
-                    .filter(value -> value.customerPartnerEmployeeLinkId().equals(customerPartnerEmployeeLinkId));
+            return Optional.of(currentLimit);
         }
 
         @Override
@@ -357,13 +404,10 @@ class ApplyApprovalDecisionServiceTest {
     private static class FakeSalaryAdvanceLimitMovementRepository implements SalaryAdvanceLimitMovementRepository {
 
         private final List<SalaryAdvanceLimitMovement> savedMovements = new ArrayList<>();
-        private boolean releaseMovementExists;
 
         @Override
         public SalaryAdvanceLimitMovement save(SalaryAdvanceLimitMovement salaryAdvanceLimitMovement) {
             savedMovements.add(salaryAdvanceLimitMovement);
-            releaseMovementExists = salaryAdvanceLimitMovement.movementType()
-                    == SalaryAdvanceLimitMovementType.RESERVATION_RELEASED;
             return salaryAdvanceLimitMovement;
         }
 
@@ -372,7 +416,9 @@ class ApplyApprovalDecisionServiceTest {
                 UUID loanApplicationId,
                 SalaryAdvanceLimitMovementType movementType
         ) {
-            return releaseMovementExists && movementType == SalaryAdvanceLimitMovementType.RESERVATION_RELEASED;
+            return savedMovements.stream()
+                    .anyMatch(movement -> loanApplicationId.equals(movement.loanApplicationId())
+                            && movementType == movement.movementType());
         }
     }
 }

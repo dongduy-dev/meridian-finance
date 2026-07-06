@@ -200,6 +200,10 @@ erDiagram
         string policy_code
         jsonb policy_config
         integer offer_validity_days
+        string interest_calculation_method
+        decimal flat_monthly_interest_rate
+        decimal fee_amount
+        string repayment_method
         boolean active
     }
 
@@ -217,14 +221,34 @@ erDiagram
         datetime submitted_at
     }
 
-    offer_terms {
+    approved_offers {
         uuid id PK
         uuid loan_application_id FK
-        decimal approved_amount
+        uuid source_loan_product_policy_id FK
+        string status
+        decimal approved_principal
         integer approved_term_months
-        decimal interest_rate
+        string interest_calculation_method
+        decimal flat_monthly_interest_rate
+        decimal total_interest
+        decimal fee_amount
+        decimal total_repayment_amount
+        string repayment_method
+        datetime generated_at
         datetime expires_at
-        string acceptance_status
+        datetime accepted_at
+        datetime declined_at
+        datetime expired_at
+    }
+
+    approved_offer_repayment_items {
+        uuid id PK
+        uuid approved_offer_id FK
+        integer installment_number
+        decimal principal_due
+        decimal interest_due
+        decimal fee_due
+        decimal total_due
     }
 
     loan_accounts {
@@ -427,7 +451,8 @@ erDiagram
     loan_products ||--o{ loan_applications : selected_for
     loan_applications ||--o{ salary_advance_verifications : records
     loan_applications ||--o{ salary_advance_limit_movements : may_reserve_or_release
-    loan_applications ||--o| offer_terms : produces
+    loan_applications ||--o| approved_offers : produces
+    approved_offers ||--o{ approved_offer_repayment_items : contains
     loan_applications ||--o| loan_accounts : activates
     loan_applications ||--o| disbursement_records : confirms
     loan_accounts ||--o| disbursement_records : created_from
@@ -502,7 +527,8 @@ Logical tables:
 - `salary_advance_limits` - current Salary Advance limit state for a customer with a verified customer-partner employee link.
 - `salary_advance_limit_movements` - lightweight history explaining limit changes such as refresh, reservation, release, disbursement usage, repayment release, suspension, and disablement. It is not a double-entry accounting ledger.
 - `salary_advance_verifications` - application-specific Salary Advance employee and limit snapshot associated with a submitted or in-progress `loan_application`. This is the clearer name for the previous `employee_verifications` concept.
-- `offer_terms` - approved terms generated after approval and before customer acceptance.
+- `approved_offers` - immutable customer-facing approved-offer snapshots generated after approval and before customer acceptance.
+- `approved_offer_repayment_items` - provisional installment-level principal, interest, fee, and total-due items owned by an approved offer.
 - `loan_accounts` - active loan record created only after manual disbursement confirmation.
 - `disbursement_records` - manual disbursement confirmation details.
 - `repayment_schedules` - provisional or final repayment schedule headers.
@@ -571,7 +597,7 @@ OCR belongs under Document Management. It is planned for Phase 2 and remains ass
 - One Salary Advance `loan_applications` record may have one `salary_advance_verifications` snapshot that records the employee link, employee source reference, and limit values used for that application.
 - One `salary_advance_limits` record may have many `salary_advance_limit_movements` explaining reservation, release, disbursement, repayment, refresh, suspension, or disablement changes. Movement references to `loan_applications` and `loan_accounts` are optional logical references based on movement type.
 - One `loan_applications` record may have one or more `collaterals` when product code is `COLLATERAL_LOAN`.
-- One approved and accepted `loan_applications` record may produce one `offer_terms` record.
+- One approved `loan_applications` record may produce one `approved_offers` record, and each approved offer contains one `approved_offer_repayment_items` row per approved term month.
 - One manually disbursed `loan_applications` record creates one `loan_accounts` record.
 - One `loan_accounts` record has a final `repayment_schedules` record and many `repayment_records`.
 - One `loan_applications` record has one `document_checklists` header and many checklist items.
