@@ -324,6 +324,14 @@ Loan Officer actions:
 
 The Approver reviews the application and Loan Officer recommendation. Approval must be separate from Loan Officer review, and the same back-office user cannot record both the Loan Officer recommendation and final Approver decision for the same application.
 
+For the current MVP, approval is exact-request approval:
+
+* approved amount equals the submitted requested amount;
+* approved term equals the submitted requested term;
+* the Approver does not create a counteroffer and does not modify amount or term during approval.
+
+If the requested amount or term must change, the application must be returned through an existing review or correction path. Counteroffers and approver-adjusted financial terms are outside the current MVP.
+
 Approver actions:
 
 | Action | Next Status |
@@ -336,11 +344,33 @@ Approver actions:
 
 `APPROVED` is a decision status. It should not remain the customer-facing waiting status once approved terms are generated; the customer-facing status becomes `CUSTOMER_ACCEPTANCE_PENDING`.
 
+When approved-offer generation is part of the workflow, approval and offer generation must complete as one controlled business operation. If the approved offer cannot be generated, the approval must not leave the application permanently in `APPROVED` without customer-facing approved terms.
+
 ### 6.7 Offer, Contract, Disbursement, and Activation
 
-After approval, the system generates approved terms and a provisional repayment schedule. Approved terms include approved amount, approved term, interest rate, repayment method, estimated installment amount, provisional repayment schedule, fees, conditions, and offer expiry date.
+An approved offer is the customer-facing historical snapshot of the terms presented after approval and before contract preparation.
 
-The customer must accept approved terms before contract preparation and disbursement. MVP default offer validity is 7 calendar days from approved terms generation and should be configurable by product. If the offer expires before acceptance, the system moves the application to `EXPIRED` and records an audit event.
+For the current MVP, each Loan Application may have one approved offer. Once the offer is presented, the approved financial terms snapshot is immutable: approved principal, approved term, interest and pricing terms, total interest, fees, total repayment amount, repayment method, provisional repayment items, generated time, and expiry time must not change. Later product or policy changes must not silently change terms already presented. Offer lifecycle state and response metadata may change only through defined transitions, including offer status, accepted time, declined time, and expired time.
+
+For Salary Advance, the approved offer uses exact-request terms and approved product pricing:
+
+* approved principal amount is the submitted requested amount;
+* approved term is the submitted requested term, limited to 1, 2, or 3 months;
+* interest is 1.2% flat interest per month, applied to the original approved principal for each approved term month;
+* fee amount is 0 VND;
+* total repayment amount is approved principal plus total interest;
+* repayment method is `ON_SALARY_DATE`, used as a repayment timing category only;
+* provisional repayment items are generated using the Salary Advance rules in Section 11.2;
+* generated time and expiry time are captured when the offer is generated;
+* offer status tracks whether the offer is pending, accepted, declined, or expired.
+
+The customer-visible Salary Advance offer shows product, approved principal amount, approved term, flat monthly interest rate, total interest amount, fee amount, total repayment amount, repayment method, provisional repayment items, generated time, expiry time, and offer lifecycle state. Provisional repayment items show item number, principal due, interest due, fee due, total due, and salary-cycle timing. Exact calendar due dates are not shown in the approved offer and are determined later by the final repayment schedule process.
+
+The customer must accept approved terms before contract preparation and disbursement. Viewing an offer is read-only and must not change application status, expire the offer, or release a Salary Advance reservation. Responding to an offer requires authenticated customer ownership of the Loan Application. Viewing the customer's own offer may use `loan:read:own`; accepting or declining the offer requires `loan:offer:respond:own`.
+
+If the customer accepts a valid unexpired offer, the application moves from `CUSTOMER_ACCEPTANCE_PENDING` to `CONTRACT_PENDING`. If the customer declines a pending Salary Advance offer, the application moves to `CUSTOMER_DECLINED` and the reserved Salary Advance amount is released exactly once in the same controlled business operation. If the offer expires before acceptance, the application moves to `EXPIRED` and the reserved Salary Advance amount is released exactly once in the same controlled business operation.
+
+Same-action retries are idempotent for customer offer responses: accepting an already accepted offer returns the current accepted result, and declining an already declined offer returns the current declined result without releasing reservation again. Contradictory terminal actions are conflicts: accept after decline or expiry is not allowed, and decline after accept or expiry is not allowed.
 
 After customer acceptance, the system prepares or records required contract and disbursement documents. MVP document handling may include generated loan agreement record, uploaded signed agreement, uploaded supporting documents, internal approval memo, disbursement instruction record, or manual staff confirmation.
 
@@ -449,7 +479,8 @@ Limit state behavior:
 * `availableAmount` is `totalLimit - usedAmount - reservedAmount`.
 * Draft Salary Advance application creation does not reserve limit.
 * A submitted Salary Advance application reserves the requested amount only if submission validation passes.
-* Rejected, cancelled, declined, expired, or otherwise released applications free the reserved amount.
+* Rejected, cancelled, customer-declined, expired, or otherwise released applications free the reserved amount.
+* Customer decline and offer expiry release the reserved amount exactly once, in the same controlled business operation as the terminal application transition.
 * Manual disbursement converts the reserved amount into used amount when the LoanAccount is created.
 * Repayment, settlement, or approved correction releases used amount according to the configured Salary Advance policy.
 * Blocking overdue Salary Advance exposure prevents new Salary Advance submission even when a calculated available amount remains.
@@ -484,14 +515,17 @@ End-to-end workflow:
 18. Loan Officer reviews verification snapshot, current warnings if any, documents, requested amount, requested term, and application details.
 19. Loan Officer recommends approval, recommends rejection, or returns for revision.
 20. Approver approves, rejects, returns to Loan Officer review, or requests customer/staff correction.
-21. System generates approved terms and provisional repayment schedule.
-22. Customer accepts approved terms.
-23. Contract and disbursement documents are prepared or uploaded.
-24. Accounting Officer marks disbursement as completed.
-25. System marks the application `DISBURSED`, creates the LoanAccount, generates the final repayment schedule, activates the LoanAccount, and converts reserved limit to used limit.
-26. Repayment, settlement, and closure status are tracked; repayment releases used limit according to policy.
+21. If the Approver approves, the system applies exact-request approval, generates one immutable approved financial-terms snapshot, and moves the application to `CUSTOMER_ACCEPTANCE_PENDING` only if offer generation succeeds.
+22. Customer views the approved offer without causing financial state changes.
+23. Customer accepts a valid unexpired offer, declines the offer, or the system expires the offer after its validity period.
+24. Accepted offers move to `CONTRACT_PENDING`; declined or expired offers are terminal pre-disbursement outcomes and release the reserved Salary Advance amount exactly once.
+25. Contract and disbursement documents are prepared or uploaded after customer acceptance.
+26. Accounting Officer marks disbursement as completed.
+27. System marks the application `DISBURSED`, creates the LoanAccount, generates the final repayment schedule, activates the LoanAccount, and converts reserved limit to used limit.
+28. Repayment, settlement, and closure status are tracked; repayment releases used limit according to policy.
 
-Salary Advance MVP does not include real payroll integration, real employer API integration, automatic payroll deduction, real bank transfer, employer-facing production portal, or real-time HR system sync.
+
+Salary Advance MVP does not include real payroll integration, real employer API integration, automatic payroll deduction, real bank transfer, employer-facing production portal, counteroffers, approver-modified amount or term, or real-time HR system sync.
 
 ### 7.2 Unsecured Consumer Loan
 
@@ -512,6 +546,8 @@ Customer profile + income and employment documents
 ```
 
 Required MVP documents are defined in Section 11.1. A loan purpose declaration may be added as an optional policy-configured document.
+
+This workflow describes intended Unsecured Consumer Loan product behavior. Product-specific pricing and approved-offer details require Unsecured Consumer Loan rules.
 
 End-to-end workflow:
 
@@ -555,6 +591,8 @@ Customer profile + collateral information + collateral documents
 Collateral information includes collateral type, collateral description, estimated value, ownership status, ownership document reference, collateral condition note, and manual review note.
 
 Required MVP documents are defined in Section 11.1.
+
+This workflow describes intended Collateral Loan product behavior. Product-specific pricing and approved-offer details require Collateral Loan rules.
 
 End-to-end workflow:
 
@@ -646,10 +684,10 @@ EXPIRED
 | `APPROVAL_PENDING` | Return to Loan Officer review | Approver | Further review needed | `RETURNED_TO_REVIEW` | Yes |
 | `APPROVAL_PENDING` | Request customer/staff correction | Approver | Correctable issue exists | `RETURNED_FOR_REVISION` | Yes |
 | `RETURNED_TO_REVIEW` | Review resumed | Loan Officer | Application returned by Approver | `UNDER_REVIEW` | No |
-| `APPROVED` | Generate approved terms | System | Approval is valid | `CUSTOMER_ACCEPTANCE_PENDING` | No |
-| `CUSTOMER_ACCEPTANCE_PENDING` | Accept offer | Customer | Offer not expired | `CONTRACT_PENDING` | No |
-| `CUSTOMER_ACCEPTANCE_PENDING` | Decline offer | Customer | Offer pending | `CUSTOMER_DECLINED` | No |
-| `CUSTOMER_ACCEPTANCE_PENDING` | Offer expires | System | Offer validity period elapsed | `EXPIRED` | No |
+| `APPROVED` | Generate approved offer | System | Approved offer generation succeeds | `CUSTOMER_ACCEPTANCE_PENDING` | No |
+| `CUSTOMER_ACCEPTANCE_PENDING` | Accept offer | Customer | Authenticated owner; offer pending; current time is before expiry | `CONTRACT_PENDING` | No |
+| `CUSTOMER_ACCEPTANCE_PENDING` | Decline offer | Customer | Authenticated owner; offer pending | `CUSTOMER_DECLINED` | No |
+| `CUSTOMER_ACCEPTANCE_PENDING` | Offer expires | System | Offer pending; current time is at or after expiry | `EXPIRED` | No |
 | `CONTRACT_PENDING` | Required contract/disbursement documents ready | Staff or system | Documents accepted/not required/waived | `DISBURSEMENT_PENDING` | No |
 | `DISBURSEMENT_PENDING` | Confirm manual disbursement | Accounting Officer | Approved, accepted, document-ready, bank account confirmed | `DISBURSED` | No |
 | Any pre-`DISBURSED` non-terminal status | Cancel application | Customer or authorized back-office user | Cancellation allowed by actor/status rule | `CANCELLED` | Yes for staff cancellation |
@@ -675,7 +713,7 @@ EXPIRED
 | FR-SA-004 | The system shall show Salary Advance employee verification status and current total, used, reserved, and available limit on the customer Salary Advance product page or dashboard. |
 | FR-SA-005 | The system shall calculate and maintain Salary Advance limit state using product, partner, employee, salary cap, used exposure, reserved exposure, overdue exposure, employee status, and import freshness rules. |
 | FR-SA-006 | The system shall block Salary Advance application creation or submission when the customer is not employee-verified, the limit is unavailable, stale, suspended, disabled, insufficient, or blocked by overdue exposure. |
-| FR-SA-007 | The system shall reserve Salary Advance limit for submitted non-terminal applications, release reserved limit when applications terminate before disbursement, convert reserved limit to used limit at disbursement, and release used limit through repayment or settlement policy. |
+| FR-SA-007 | The system shall reserve Salary Advance limit for submitted non-terminal applications, release reserved limit exactly once when applications terminate before disbursement including rejection, cancellation, customer decline, and offer expiry, convert reserved limit to used limit at disbursement, and release used limit through repayment or settlement policy. |
 | FR-SA-008 | The system shall refresh customer employee links and Salary Advance limits when valid Partner Employee data changes. |
 | FR-SA-009 | The system shall record a Salary Advance verification snapshot for each Salary Advance application, including the employee verification result and limit values used for that application. |
 | FR-UCL-001 | The system shall support Unsecured Consumer Loan submission using requested amount, requested term, income/employment documents, document review, repayment capacity review, approval, acceptance, disbursement, activation, and repayment tracking. |
@@ -686,12 +724,12 @@ EXPIRED
 | FR-REV-001 | The system shall allow Loan Officers to review applications and recommend approval, recommend rejection, return to customer revision, or request staff correction. |
 | FR-APR-001 | The system shall allow Approvers to approve, reject, return to Loan Officer review, request customer information, or request staff correction. |
 | FR-APR-002 | The system shall enforce maker-checker separation between Loan Officer recommendation and Approver decision. |
-| FR-OFFER-001 | The system shall generate approved terms and a provisional repayment schedule after approval, present them to the customer, support customer acceptance/decline, and expire offers after the configured validity period. |
+| FR-OFFER-001 | The system shall generate one immutable approved financial-terms snapshot after approval, present confirmed customer-visible terms to the authenticated customer owner, support customer acceptance/decline, and expire pending offers after the configured validity period. Salary Advance approved offers include approved principal, approved term, flat monthly interest rate, total interest, 0 VND fees, total repayment amount, `ON_SALARY_DATE` repayment timing category, and provisional repayment items defined by Salary Advance rules, without exact calendar due dates or the final repayment schedule at offer time. |
 | FR-CON-001 | The system shall support contract and disbursement document preparation after customer acceptance, including uploaded signed documents or manual confirmation for MVP handling. |
 | FR-DIS-001 | The system shall allow only Accounting Officers to confirm manual disbursement after approval, customer acceptance, document readiness, and bank account confirmation. |
 | FR-DIS-002 | The system shall move the application to `DISBURSED`, create the LoanAccount, generate the final repayment schedule, activate the LoanAccount, and audit all actions in one controlled post-disbursement transaction. |
 | FR-REP-001 | The system shall generate and track repayment schedules, due amounts, paid amounts, outstanding balance, repayment status, overdue status, settlement, and administrative closure. |
-| FR-PORTAL-001 | The Customer Web Portal shall support registration, login, profile completion, active product browsing, application submission, document upload, offer acceptance/decline, and status tracking. |
+| FR-PORTAL-001 | The Customer Web Portal shall support registration, login, profile completion, active product browsing, application submission, document upload, viewing the customer's own approved offer, customer-owned offer acceptance/decline, and status tracking. |
 | FR-PORTAL-002 | The Back-Office Web Portal shall support product, partner, import, user, queue, review, approval, disbursement, repayment, and audit operations according to role permissions. |
 | FR-AUD-001 | The system shall record audit trail entries for important business actions and status transitions, including actor, action, timestamp, affected entity, previous status, new status, and reason where applicable. |
 | FR-AUD-002 | Audit records shall not be modified by normal users and must support maker-checker traceability. |
@@ -718,7 +756,7 @@ EXPIRED
 | BR-014 | Salary Advance limit calculation and refresh must use the latest valid Partner Employee record within the configured freshness window. |
 | BR-015 | Suspended, disabled, stale, unavailable, or insufficient Salary Advance limits block normal application creation and submission. |
 | BR-016 | Each Salary Advance application must record a verification snapshot even when the customer's reusable employee link was verified earlier. |
-| BR-017 | Salary Advance reserved limit must be released when an application is rejected, cancelled, declined, expired, or otherwise released before disbursement. |
+| BR-017 | Salary Advance reserved limit must be released exactly once when an application is rejected, cancelled, customer-declined, expired, or otherwise released before disbursement, and the release must be part of the same controlled business operation as the terminal transition. |
 | BR-018 | Salary Advance reserved limit must become used limit when manual disbursement creates the LoanAccount. |
 | BR-019 | Salary Advance used limit must be released through repayment, settlement, or approved correction according to product policy. |
 | BR-020 | Unsecured Consumer Loan requires income and employment document review but does not require collateral information. |
@@ -731,8 +769,8 @@ EXPIRED
 | BR-027 | Loan Officer review and Approver decision must be separate responsibilities. |
 | BR-028 | The same back-office user cannot record both the Loan Officer recommendation and final Approver decision for the same application. |
 | BR-029 | Rejection, return, staff cancellation, request-more-information, staff correction, and manual override actions must include a reason. |
-| BR-030 | Approved terms require customer acceptance before contract preparation and disbursement. |
-| BR-031 | Approved offers expire after the configured validity period, defaulting to 7 calendar days. |
+| BR-030 | Approved offer terms require authenticated customer acceptance before contract preparation and disbursement. |
+| BR-031 | Approved offers expire when the current time is at or after `generatedAt + offerValidityDays` calendar days, defaulting to 7 calendar days. |
 | BR-032 | Approval and disbursement must be separate responsibilities. |
 | BR-033 | Disbursement can be marked completed only after approval, customer acceptance, document readiness, and bank account confirmation. |
 | BR-034 | A LoanAccount is created only after manual disbursement confirmation. |
@@ -743,6 +781,16 @@ EXPIRED
 | BR-039 | Full repayment or approved settlement sets the LoanAccount to `SETTLED`. |
 | BR-040 | Administrative closure may move a settled LoanAccount to `CLOSED`. |
 | BR-041 | Every important status transition must create an audit trail record. |
+| BR-042 | For the current MVP, Approver approval approves the exact submitted amount and exact submitted term; any change to amount or term must return through review or correction rather than becoming a counteroffer. |
+| BR-043 | Each Loan Application may have one approved offer for the current MVP; once presented, its approved financial terms snapshot is immutable, while offer lifecycle state and response metadata may change only through defined transitions. |
+| BR-044 | Customer offer viewing and response actions must derive customer identity from authentication and verify ownership through the Loan Application. |
+| BR-045 | Viewing an offer is read-only; offer expiry state changes are performed by system expiry processing or by guarded state-changing customer actions. |
+| BR-046 | Same-action offer response retries are idempotent, while contradictory terminal offer actions must be rejected as conflicts. |
+| BR-047 | Salary Advance approved principal equals the submitted requested amount, and approved term equals the submitted requested term, limited to 1, 2, or 3 months. |
+| BR-048 | Salary Advance total interest is 1.2% flat interest per approved term month applied to the original approved principal: `unroundedTotalInterest = approvedPrincipal x 0.012 x approvedTermMonths`; `totalInterest` is rounded to whole VND using `HALF_UP`. |
+| BR-049 | Salary Advance fees are 0 VND, and total repayment amount equals approved principal plus total interest. |
+| BR-050 | Salary Advance provisional repayment items include one item per approved term month, use `ON_SALARY_DATE` as a timing category, and describe first, second, and third salary cycle after disbursement timing as applicable without exact calendar due dates. |
+| BR-051 | Salary Advance provisional item principal and interest are allocated in whole VND, remainders are assigned to the final item, fee due is 0 VND for every item, each item total equals principal plus interest plus fee, and item sums must reconcile to approved principal, total interest, 0 VND fees, and total repayment amount with no unreconciled 1-VND difference. |
 
 ---
 
@@ -760,6 +808,10 @@ These values are used for portfolio demonstration, validation, UI display, workf
 | `UNSECURED_CONSUMER_LOAN` | Unsecured Consumer Loan | `UNSECURED`    | Yes    | 2,000,000 VND  | 50,000,000 VND  | 3, 6, 9, 12 months   | 1.8% per month | Equal monthly installment, manually tracked | 7 calendar days |
 | `COLLATERAL_LOAN`         | Collateral Loan         | `SECURED`      | Yes    | 5,000,000 VND  | 100,000,000 VND | 6, 12, 18, 24 months | 1.5% per month | Equal monthly installment, manually tracked | 7 calendar days |
 
+For Salary Advance, allowed terms of 1, 2, and 3 months mean the requested and approved term length in months and the number of provisional repayment items generated for the approved offer.
+
+The Salary Advance interest-rate column is the approved flat monthly interest rate for approved-offer calculation. It is applied to the original approved principal for each approved term month and rounded according to the Salary Advance policy rules below.
+
 ### 11.2 Salary Advance Policy Seed Values
 
 | Policy Item                    | Seed Value                                                                                                            |
@@ -773,6 +825,42 @@ These values are used for portfolio demonstration, validation, UI display, workf
 | Import freshness rule          | Latest valid active Partner Employee record for the configured effective month must be used                           |
 | Limit status rule              | Suspended, disabled, stale, unavailable, or insufficient limit blocks normal application creation                     |
 | Manual override rule           | `NOT_FOUND` and `MULTIPLE_MATCHES` may be reviewed manually; inactive Partner Companies cannot be manually overridden |
+
+The Salary Advance policy seed uses the repayment method value `ON_SALARY_DATE`. This identifies the repayment timing category only. Approved-offer provisional repayment items describe the first, second, and third salary cycle after disbursement as applicable. Exact calendar due dates are not part of the approved offer and belong to the later final repayment schedule process.
+
+Salary Advance approved-offer pricing:
+
+```text
+approvedPrincipal = submitted requested amount
+approvedTermMonths = submitted requested term
+unroundedTotalInterest = approvedPrincipal x 0.012 x approvedTermMonths
+totalInterest = round unroundedTotalInterest to whole VND using HALF_UP
+feeAmount = 0 VND
+totalRepaymentAmount = approvedPrincipal + totalInterest
+```
+
+Salary Advance uses flat interest, not declining-balance interest. No fee is deducted from disbursement, added separately, charged as a percentage, or charged as a fixed processing fee.
+
+Salary Advance provisional repayment items:
+
+* one item is generated for each approved term month: 1 month creates 1 item, 2 months creates 2 items, and 3 months creates 3 items;
+* each item includes installment number, principal due, interest due, fee due, total due, and repayment timing;
+* repayment timing is expressed as first salary cycle after disbursement, second salary cycle after disbursement, and third salary cycle after disbursement as applicable;
+* principal due is split evenly across items using whole VND, with any remainder assigned to the final item;
+* interest due is allocated from total interest, split evenly across items using whole VND, with any remainder assigned to the final item;
+* fee due is 0 VND for every item;
+* item total due equals principal due plus interest due plus fee due.
+
+Reconciliation invariants:
+
+```text
+sum(item.principalDue) = approvedPrincipal
+sum(item.interestDue) = totalInterest
+sum(item.feeDue) = 0 VND
+sum(item.totalDue) = totalRepaymentAmount
+```
+
+All customer-visible Salary Advance monetary values are whole VND. Percentage interest is rounded to whole VND using `HALF_UP`; provisional item allocation uses whole-VND integer amounts, assigns remainders to the final item, and must not leave an unreconciled 1-VND difference.
 
 Example calculation:
 
@@ -809,11 +897,23 @@ availableSalaryAdvanceLimit = totalSalaryAdvanceLimit
 
 ### 11.5 Offer Validity
 
-MVP default offer validity is 7 calendar days from approved terms generation.
+MVP default offer validity is 7 calendar days from approved-offer generation.
 
 Offer validity should be configurable by product.
 
-If the customer does not accept approved terms before the offer expires, the system moves the application to `EXPIRED` and records an audit event.
+The expiry timestamp is calculated as:
+
+```text
+expiresAt = generatedAt + offerValidityDays calendar days
+```
+
+A pending offer is expired when the current time is at or after `expiresAt`.
+
+Offer expiry must not depend only on the customer returning to the application. The system must include expiry processing that eventually finds overdue pending offers and expires them. Customer actions such as accept must also enforce expiry before completing the action, so an already-expired offer cannot be accepted between expiry processing runs.
+
+Viewing an offer is read-only. It must not change application status, mark the offer expired, release Salary Advance reservation, or create financial movements.
+
+If the customer does not accept a Salary Advance approved offer before it expires, the system moves the application to `EXPIRED`, marks the offer expired, releases the reserved Salary Advance amount exactly once, and records an audit event.
 
 
 ---
