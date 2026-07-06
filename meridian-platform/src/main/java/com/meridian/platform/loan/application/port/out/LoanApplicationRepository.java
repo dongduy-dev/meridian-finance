@@ -12,6 +12,8 @@ public interface LoanApplicationRepository {
 
     LoanApplication save(LoanApplication loanApplication);
 
+    Optional<LoanApplication> findById(UUID loanApplicationId);
+
     Optional<LoanApplication> findByIdForUpdate(UUID loanApplicationId);
 
     boolean existsByCustomerIdAndProductCodeAndStatusIn(

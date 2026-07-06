@@ -18,6 +18,9 @@ Current security posture comes from `SecurityConfig`: health, login, and loan pr
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review/start` | Bearer + `loan:review` | `LoanApplicationReviewController` | Start Loan Officer review and transition a submitted application to `UNDER_REVIEW`. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review-recommendations` | Bearer + `approval:recommend` | `ReviewRecommendationController` | Record the authenticated Loan Officer recommendation and trigger Loan-owned status transition. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approval-decisions` | Bearer + `approval:decide` | `ApprovalDecisionController` | Record the authenticated Approver decision and trigger Loan-owned final/return status transition. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/approved-offer` | Bearer + `loan:read:own` | `ApprovedOfferController` | View the authenticated customer's approved offer without mutating expiry, status, or financial movements. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept` | Bearer + `loan:offer:respond:own` | `ApprovedOfferController` | Accept the authenticated customer's pending approved offer and move the application to `CONTRACT_PENDING`; expired offers commit expiry and return `409 OFFER_EXPIRED`. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/decline` | Bearer + `loan:offer:respond:own` | `ApprovedOfferController` | Decline the authenticated customer's pending approved offer, move the application to `CUSTOMER_DECLINED`, and release Salary Advance reservation exactly once. |
 
 ## Authentication
 
@@ -108,7 +111,20 @@ Valid actions are `RECOMMEND_APPROVAL`, `RECOMMEND_REJECTION`, `RETURN_TO_CUSTOM
 }
 ```
 
-Valid actions are `APPROVE`, `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`. A nonblank `reason` is required for all actions except `APPROVE`. `REJECT` transitions the Loan Application to `REJECTED` and releases the reserved Salary Advance limit.
+Valid actions are `APPROVE`, `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`. A nonblank `reason` is required for all actions except `APPROVE`. For Salary Advance, `APPROVE` atomically generates the customer approved offer and moves the Loan Application to `CUSTOMER_ACCEPTANCE_PENDING`; `REJECT` transitions the Loan Application to `REJECTED` and releases the reserved Salary Advance limit.
+### Approved Offer
+
+`customerId` is derived from the authenticated customer token and is not accepted in the path or request body. Offer response actions do not require a request body.
+
+```text
+GET /api/v1/loan-applications/{loanApplicationId}/approved-offer
+POST /api/v1/loan-applications/{loanApplicationId}/approved-offer/accept
+POST /api/v1/loan-applications/{loanApplicationId}/approved-offer/decline
+```
+
+Safe response fields include approved principal, approved term, interest calculation method, flat monthly interest rate, total interest, fee amount, total repayment amount, repayment method, generated and expiry timestamps, effective customer-facing status, available actions, and provisional repayment items. Provisional items expose installment number, principal due, interest due, fee due, total due, and the controlled `ON_SALARY_DATE` repayment timing code. Exact calendar due dates are not part of the approved offer.
+
+GET is read-only. If a persisted pending offer is already expired, GET returns `status = EXPIRED` and `availableActions = []` without changing the application, offer, reservation, or financial movements.
 
 ## Seed Data Useful For API Verification
 
@@ -128,7 +144,7 @@ Import this file into Postman:
 
 `docs/api/Meridian-Platform.postman_collection.json`
 
-Collection note: the Postman collection now uses `POST /api/v1/auth/login`, role-specific Bearer token variables, and the full current endpoint inventory including Loan Officer review, recommendation, and approval decision endpoints.
+Collection note: the Postman collection now uses `POST /api/v1/auth/login`, role-specific Bearer token variables, and the full current endpoint inventory including Loan Officer review, recommendation, approval decision, and customer approved-offer endpoints.
 
 Expected high-value checks:
 
@@ -153,6 +169,11 @@ Expected high-value checks:
 | Approval decision without `approval:decide` | `403`, `ACCESS_DENIED`. |
 | Approval decision maker-checker violation | `422`, `MAKER_CHECKER_VIOLATION`. |
 | Approval decision reject path | `201`, decision recorded, Loan status moves to `REJECTED`, Salary Advance reservation is released. |
+| Approval decision approve path | `201`, Salary Advance decision recorded, approved offer generated, Loan status moves to `CUSTOMER_ACCEPTANCE_PENDING`. |
+| Customer approved-offer view | `200`, customer-facing offer includes immutable terms, provisional repayment items, and available actions while pending. |
+| Customer approved-offer accept | `200`, offer status `ACCEPTED`, application moves to `CONTRACT_PENDING`. |
+| Customer approved-offer decline | `200`, offer status `DECLINED`, application moves to `CUSTOMER_DECLINED`, reservation released exactly once. |
+| Expired offer accept/decline | `409`, `OFFER_EXPIRED`, expiry state and release are committed before the response. |
 | Duplicate Salary Advance for same authenticated customer | `409`, `BLOCKING_APPLICATION_EXISTS`. |
 
 Notes:

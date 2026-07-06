@@ -79,6 +79,8 @@ This document standardizes the API error codes across all bounded contexts in th
 | 503 | `OCR_SERVICE_UNAVAILABLE` | OCR service unavailable | Retry later or continue through manual document review where allowed |
 | **LOAN CORE — Offer / Disbursement / Repayment** | | | |
 | 409 | `OFFER_EXPIRED` | Offer expired | Generate or request a new approved offer according to product rules |
+| 409 | `OFFER_ACTION_CONFLICT` | Offer action conflict | Refresh the approved offer state and do not submit contradictory terminal actions |
+| 404 | `APPROVED_OFFER_NOT_FOUND` | Approved offer not found | Verify the loan application has an approved offer generated for the authenticated customer |
 | 422 | `OFFER_NOT_ACCEPTED` | Offer not accepted | Customer must accept approved terms before contract preparation and disbursement |
 | 422 | `CONTRACT_DOCUMENTS_NOT_READY` | Contract documents not ready | Complete required contract or disbursement documents before manual disbursement |
 | 422 | `DISBURSEMENT_NOT_READY` | Disbursement not ready | Confirm approval, customer acceptance, document readiness, and bank account information |

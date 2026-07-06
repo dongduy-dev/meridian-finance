@@ -126,6 +126,47 @@ class LoanApplicationTest {
         assertEquals("APPROVAL_DECISION_NOT_ALLOWED", exception.getErrorCode());
     }
 
+    @Test
+    void approvedApplicationMovesToCustomerAcceptancePending() {
+        LoanApplication result = loanApplication(LoanApplicationStatus.APPROVED)
+                .markCustomerAcceptancePending();
+
+        assertEquals(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING, result.status());
+    }
+
+    @Test
+    void customerAcceptsPendingOfferAndMovesToContractPending() {
+        LoanApplication result = loanApplication(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING)
+                .acceptApprovedOffer();
+
+        assertEquals(LoanApplicationStatus.CONTRACT_PENDING, result.status());
+    }
+
+    @Test
+    void customerDeclinesPendingOfferAndMovesToCustomerDeclined() {
+        LoanApplication result = loanApplication(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING)
+                .declineApprovedOffer();
+
+        assertEquals(LoanApplicationStatus.CUSTOMER_DECLINED, result.status());
+    }
+
+    @Test
+    void pendingOfferExpiresAndMovesApplicationExpired() {
+        LoanApplication result = loanApplication(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING)
+                .expireApprovedOffer();
+
+        assertEquals(LoanApplicationStatus.EXPIRED, result.status());
+    }
+
+    @Test
+    void offerActionRejectsContradictoryTerminalApplicationStatus() {
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> loanApplication(LoanApplicationStatus.CUSTOMER_DECLINED).acceptApprovedOffer()
+        );
+
+        assertEquals("OFFER_ACTION_CONFLICT", exception.getErrorCode());
+    }
     private LoanApplication loanApplication(LoanApplicationStatus status) {
         return new LoanApplication(
                 UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),

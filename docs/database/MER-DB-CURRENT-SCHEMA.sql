@@ -1,7 +1,7 @@
 -- Meridian current physical schema snapshot.
 -- Documentation only. Flyway migrations under meridian-platform/src/main/resources/db/migration
 -- remain the executable database history.
--- Snapshot source: migrations V1 through V15.
+-- Snapshot source: migrations V1 through V16.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -48,6 +48,10 @@ CREATE TABLE loan_product_policies (
     policy_code VARCHAR(100) NOT NULL,
     policy_config JSONB NOT NULL DEFAULT '{}'::jsonb,
     offer_validity_days INTEGER NOT NULL DEFAULT 7,
+    interest_calculation_method VARCHAR(50),
+    flat_monthly_interest_rate NUMERIC(9, 6),
+    fee_amount NUMERIC(19, 2),
+    repayment_method VARCHAR(50),
     active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -57,11 +61,34 @@ CREATE TABLE loan_product_policies (
         FOREIGN KEY (loan_product_id)
         REFERENCES loan_products (id),
     CONSTRAINT uq_loan_product_policies_product_policy
-        UNIQUE (loan_product_id, policy_code)
+        UNIQUE (loan_product_id, policy_code),
+    CONSTRAINT chk_loan_product_policies_interest_calculation_method
+        CHECK (interest_calculation_method IS NULL OR interest_calculation_method IN ('FLAT_ORIGINAL_PRINCIPAL')),
+    CONSTRAINT chk_loan_product_policies_flat_monthly_interest_rate_non_negative
+        CHECK (flat_monthly_interest_rate IS NULL OR flat_monthly_interest_rate >= 0),
+    CONSTRAINT chk_loan_product_policies_fee_amount_non_negative
+        CHECK (fee_amount IS NULL OR fee_amount >= 0),
+    CONSTRAINT chk_loan_product_policies_fee_amount_whole_vnd
+        CHECK (fee_amount IS NULL OR fee_amount = trunc(fee_amount)),
+    CONSTRAINT chk_loan_product_policies_repayment_method
+        CHECK (repayment_method IS NULL OR repayment_method IN ('ON_SALARY_DATE', 'MONTHLY_INSTALLMENT')),
+    CONSTRAINT chk_loan_product_policies_offer_validity_days_positive
+        CHECK (offer_validity_days > 0)
 );
 
 CREATE INDEX idx_loan_product_policies_loan_product_id
     ON loan_product_policies (loan_product_id);
+CREATE TABLE loan_product_policy_terms (
+    loan_product_policy_id UUID NOT NULL,
+    term_months INTEGER NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT pk_loan_product_policy_terms PRIMARY KEY (loan_product_policy_id, term_months),
+    CONSTRAINT fk_loan_product_policy_terms_policy
+        FOREIGN KEY (loan_product_policy_id)
+        REFERENCES loan_product_policies (id),
+    CONSTRAINT chk_loan_product_policy_terms_positive CHECK (term_months > 0)
+);
 
 CREATE TABLE partner_companies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -382,6 +409,10 @@ CREATE INDEX idx_salary_advance_limit_movements_application_id
 
 CREATE INDEX idx_salary_advance_limit_movements_type_occurred_at
     ON salary_advance_limit_movements (movement_type, occurred_at);
+CREATE UNIQUE INDEX uq_salary_advance_limit_movements_application_release
+    ON salary_advance_limit_movements (loan_application_id)
+    WHERE movement_type = 'RESERVATION_RELEASED'
+      AND loan_application_id IS NOT NULL;
 
 CREATE TABLE salary_advance_verifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -439,6 +470,98 @@ CREATE INDEX idx_salary_advance_verifications_link_id
 
 CREATE INDEX idx_salary_advance_verifications_partner_company_id
     ON salary_advance_verifications (partner_company_id);
+CREATE TABLE approved_offers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    loan_application_id UUID NOT NULL,
+    source_loan_product_policy_id UUID NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    approved_principal NUMERIC(19, 2) NOT NULL,
+    approved_term_months INTEGER NOT NULL,
+    interest_calculation_method VARCHAR(50) NOT NULL,
+    flat_monthly_interest_rate NUMERIC(9, 6) NOT NULL,
+    total_interest NUMERIC(19, 2) NOT NULL,
+    fee_amount NUMERIC(19, 2) NOT NULL,
+    total_repayment_amount NUMERIC(19, 2) NOT NULL,
+    repayment_method VARCHAR(50) NOT NULL,
+    generated_at TIMESTAMP NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    accepted_at TIMESTAMP,
+    declined_at TIMESTAMP,
+    expired_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_approved_offers_application
+        FOREIGN KEY (loan_application_id)
+        REFERENCES loan_applications (id),
+    CONSTRAINT fk_approved_offers_source_policy
+        FOREIGN KEY (source_loan_product_policy_id)
+        REFERENCES loan_product_policies (id),
+    CONSTRAINT uq_approved_offers_application UNIQUE (loan_application_id),
+    CONSTRAINT chk_approved_offers_status CHECK (status IN ('PENDING', 'ACCEPTED', 'DECLINED', 'EXPIRED')),
+    CONSTRAINT chk_approved_offers_principal_positive CHECK (approved_principal > 0),
+    CONSTRAINT chk_approved_offers_term_positive CHECK (approved_term_months > 0),
+    CONSTRAINT chk_approved_offers_interest_method CHECK (interest_calculation_method IN ('FLAT_ORIGINAL_PRINCIPAL')),
+    CONSTRAINT chk_approved_offers_interest_rate_non_negative CHECK (flat_monthly_interest_rate >= 0),
+    CONSTRAINT chk_approved_offers_money_non_negative
+        CHECK (total_interest >= 0 AND fee_amount >= 0 AND total_repayment_amount >= 0),
+    CONSTRAINT chk_approved_offers_whole_vnd
+        CHECK (
+            approved_principal = trunc(approved_principal)
+            AND total_interest = trunc(total_interest)
+            AND fee_amount = trunc(fee_amount)
+            AND total_repayment_amount = trunc(total_repayment_amount)
+        ),
+    CONSTRAINT chk_approved_offers_repayment_method CHECK (repayment_method IN ('ON_SALARY_DATE')),
+    CONSTRAINT chk_approved_offers_total_repayment
+        CHECK (total_repayment_amount = approved_principal + total_interest + fee_amount),
+    CONSTRAINT chk_approved_offers_expiry_after_generation CHECK (expires_at > generated_at),
+    CONSTRAINT chk_approved_offers_status_timestamps
+        CHECK (
+            (status = 'PENDING' AND accepted_at IS NULL AND declined_at IS NULL AND expired_at IS NULL)
+            OR (status = 'ACCEPTED' AND accepted_at IS NOT NULL AND declined_at IS NULL AND expired_at IS NULL)
+            OR (status = 'DECLINED' AND accepted_at IS NULL AND declined_at IS NOT NULL AND expired_at IS NULL)
+            OR (status = 'EXPIRED' AND accepted_at IS NULL AND declined_at IS NULL AND expired_at IS NOT NULL)
+        )
+);
+
+CREATE INDEX idx_approved_offers_source_policy_id
+    ON approved_offers (source_loan_product_policy_id);
+
+CREATE INDEX idx_approved_offers_status_expires_at
+    ON approved_offers (status, expires_at, id);
+
+CREATE TABLE approved_offer_repayment_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    approved_offer_id UUID NOT NULL,
+    installment_number INTEGER NOT NULL,
+    principal_due NUMERIC(19, 2) NOT NULL,
+    interest_due NUMERIC(19, 2) NOT NULL,
+    fee_due NUMERIC(19, 2) NOT NULL,
+    total_due NUMERIC(19, 2) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_approved_offer_repayment_items_offer
+        FOREIGN KEY (approved_offer_id)
+        REFERENCES approved_offers (id),
+    CONSTRAINT uq_approved_offer_repayment_items_offer_installment
+        UNIQUE (approved_offer_id, installment_number),
+    CONSTRAINT chk_approved_offer_repayment_items_installment_positive CHECK (installment_number > 0),
+    CONSTRAINT chk_approved_offer_repayment_items_money_non_negative
+        CHECK (principal_due >= 0 AND interest_due >= 0 AND fee_due >= 0 AND total_due >= 0),
+    CONSTRAINT chk_approved_offer_repayment_items_whole_vnd
+        CHECK (
+            principal_due = trunc(principal_due)
+            AND interest_due = trunc(interest_due)
+            AND fee_due = trunc(fee_due)
+            AND total_due = trunc(total_due)
+        ),
+    CONSTRAINT chk_approved_offer_repayment_items_total_due
+        CHECK (total_due = principal_due + interest_due + fee_due)
+);
+
+CREATE INDEX idx_approved_offer_repayment_items_offer_id
+    ON approved_offer_repayment_items (approved_offer_id);
 
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

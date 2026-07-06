@@ -9,10 +9,16 @@ import com.meridian.platform.approval.infrastructure.adapter.in.web.ReviewRecomm
 import com.meridian.platform.identity.application.dto.AuthResponse;
 import com.meridian.platform.identity.application.port.in.AuthenticationUseCase;
 import com.meridian.platform.identity.infrastructure.adapter.in.web.AuthController;
+import com.meridian.platform.loan.application.dto.ApprovedOfferActionOutcome;
+import com.meridian.platform.loan.application.dto.ApprovedOfferActionResult;
+import com.meridian.platform.loan.application.dto.ApprovedOfferDto;
 import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
+import com.meridian.platform.loan.application.port.in.QueryApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.QueryLoanProductUseCase;
+import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicationUseCase;
+import com.meridian.platform.loan.infrastructure.adapter.in.web.ApprovedOfferController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanApplicationReviewController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanProductController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.SalaryAdvanceLoanApplicationController;
@@ -57,6 +63,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         LoanApplicationReviewController.class,
         ReviewRecommendationController.class,
         ApprovalDecisionController.class,
+        ApprovedOfferController.class,
         PartnerCompanyController.class,
         PartnerEmployeeController.class,
         PartnerEmployeeImportBatchController.class,
@@ -86,6 +93,12 @@ class SecurityConfigTest {
 
     @MockitoBean
     private QueryLoanProductUseCase queryLoanProductUseCase;
+
+    @MockitoBean
+    private QueryApprovedOfferUseCase queryApprovedOfferUseCase;
+
+    @MockitoBean
+    private RespondToApprovedOfferUseCase respondToApprovedOfferUseCase;
 
     @MockitoBean
     private StartSalaryAdvanceApplicationUseCase startSalaryAdvanceApplicationUseCase;
@@ -192,6 +205,12 @@ class SecurityConfigTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/v1/loan-applications/{loanApplicationId}/approved-offer", LOAN_APPLICATION_ID))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept", LOAN_APPLICATION_ID))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -225,6 +244,16 @@ class SecurityConfigTest {
                                 }
                                 """)
                         .with(user("loan-officer").authorities(new SimpleGrantedAuthority("approval:recommend"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        mockMvc.perform(get("/api/v1/loan-applications/{loanApplicationId}/approved-offer", LOAN_APPLICATION_ID)
+                        .with(user("customer").authorities(new SimpleGrantedAuthority("loan:submit"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept", LOAN_APPLICATION_ID)
+                        .with(user("customer").authorities(new SimpleGrantedAuthority("loan:read:own"))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
     }
@@ -300,6 +329,28 @@ class SecurityConfigTest {
     }
 
     @Test
+    void allowsCustomerWithOfferPermissionsToViewAndAcceptApprovedOffer() throws Exception {
+        when(queryApprovedOfferUseCase.getApprovedOffer(LOAN_APPLICATION_ID))
+                .thenReturn(approvedOffer("PENDING", List.of("ACCEPT", "DECLINE")));
+        when(respondToApprovedOfferUseCase.acceptOffer(LOAN_APPLICATION_ID))
+                .thenReturn(new ApprovedOfferActionResult(
+                        ApprovedOfferActionOutcome.SUCCESS,
+                        approvedOffer("ACCEPTED", List.of())
+                ));
+
+        mockMvc.perform(get("/api/v1/loan-applications/{loanApplicationId}/approved-offer", LOAN_APPLICATION_ID)
+                        .with(user("customer")
+                                .authorities(new SimpleGrantedAuthority("loan:read:own"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"));
+
+        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept", LOAN_APPLICATION_ID)
+                        .with(user("customer")
+                                .authorities(new SimpleGrantedAuthority("loan:offer:respond:own"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACCEPTED"));
+    }
+    @Test
     void allowsApproverWithApprovalDecidePermissionToDecide() throws Exception {
         UUID decisionId = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
         UUID recommendationId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
@@ -328,5 +379,27 @@ class SecurityConfigTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.decisionId").value(decisionId.toString()))
                 .andExpect(jsonPath("$.action").value("APPROVE"));
+    }
+    private static ApprovedOfferDto approvedOffer(String status, List<String> availableActions) {
+        return new ApprovedOfferDto(
+                UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                LOAN_APPLICATION_ID,
+                status,
+                java.math.BigDecimal.valueOf(3_000_000).setScale(2),
+                1,
+                "FLAT_ORIGINAL_PRINCIPAL",
+                new java.math.BigDecimal("0.012000"),
+                java.math.BigDecimal.valueOf(36_000).setScale(2),
+                java.math.BigDecimal.ZERO.setScale(2),
+                java.math.BigDecimal.valueOf(3_036_000).setScale(2),
+                "ON_SALARY_DATE",
+                LocalDateTime.of(2026, 7, 6, 9, 0),
+                LocalDateTime.of(2026, 7, 13, 9, 0),
+                null,
+                null,
+                null,
+                availableActions,
+                List.of()
+        );
     }
 }

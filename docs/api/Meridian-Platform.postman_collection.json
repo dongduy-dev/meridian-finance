@@ -1,7 +1,7 @@
 {
     "info":  {
                  "name":  "Meridian Platform API - Full Current Endpoint Test Collection",
-                 "description":  "JWT/RBAC Postman collection for all currently implemented Meridian backend endpoints.\n\nRecommended run order:\n1. Run the Auth folder to capture role-specific Bearer tokens.\n2. Run Public and Partner Admin requests.\n3. Run Customer Employee Verification, then Salary Advance Application.\n4. Run Loan Officer Review and Recommendation.\n\nThe Salary Advance happy path is duplicate-sensitive because the authenticated demo customer can have only one active Salary Advance application. Run it on a fresh local database, or reset test data before repeating the full happy-path flow.",
+                 "description":  "JWT/RBAC Postman collection for all currently implemented Meridian backend endpoints.\n\nRecommended run order:\n1. Run the Auth folder to capture role-specific Bearer tokens.\n2. Run Public and Partner Admin requests.\n3. Run Customer Employee Verification, then Salary Advance Application.\n4. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n\nThe Salary Advance happy path is duplicate-sensitive because the authenticated demo customer can have only one active Salary Advance application. Run it on a fresh local database, or reset test data before repeating the full happy-path flow.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "auth":  {
@@ -191,6 +191,11 @@
                      {
                          "key":  "internalNotes",
                          "value":  "Postman local API test.",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "approvedOfferStatus",
+                         "value":  "",
                          "type":  "string"
                      }
                  ],
@@ -1684,6 +1689,183 @@
                                                                    }
                                                     }
                                                 ]
+                                  },
+                                  {
+                                      "name":  "GET approved offer as customer",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/approved-offer",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "approved-offer"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Read-only customer approved-offer view. Does not expire the offer or release reservation."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "pm.test(\"Approved offer is customer-facing\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"loanApplicationId\"));",
+                                                                                    "    pm.expect(json.repaymentMethod).to.eql(\"ON_SALARY_DATE\");",
+                                                                                    "    pm.collectionVariables.set(\"approvedOfferStatus\", json.status || \"\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST accept approved offer as customer",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/approved-offer/accept",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "approved-offer",
+                                                                               "accept"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Accepts pending approved offer and moves application toward contract preparation. If the offer expired at action time, API returns 409 OFFER_EXPIRED after committing expiry.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200 or expired conflict\", function () { pm.expect([200, 409]).to.include(pm.response.code); });",
+                                                                                    "if (pm.response.code === 200) {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.status).to.eql(\"ACCEPTED\");",
+                                                                                    "    pm.collectionVariables.set(\"approvedOfferStatus\", json.status);",
+                                                                                    "} else {",
+                                                                                    "    pm.expect(pm.response.json().errorCode).to.eql(\"OFFER_EXPIRED\");",
+                                                                                    "}"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST decline approved offer example",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/approved-offer/decline",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "approved-offer",
+                                                                               "decline"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Alternate customer path for a fresh pending approved offer. If accept already ran in this collection, this request should return 409 OFFER_ACTION_CONFLICT.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is accepted alternate, expired, or action conflict\", function () { pm.expect([200, 409]).to.include(pm.response.code); });",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "if (pm.response.code === 200) { pm.expect(json.status).to.eql(\"DECLINED\"); }",
+                                                                                    "if (pm.response.code === 409) { pm.expect([\"OFFER_EXPIRED\", \"OFFER_ACTION_CONFLICT\"]).to.include(json.errorCode); }"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
                                   }
                               ]
                  },
@@ -2079,6 +2261,64 @@
                                                                                     "    const json = pm.response.json();",
                                                                                     "    pm.expect(json.errorCode).to.eql(\"ACCESS_DENIED\");",
                                                                                     "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST approved offer accept with loan officer token - 403",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/approved-offer/accept",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "approved-offer",
+                                                                               "accept"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{loanOfficerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Loan Officer token lacks loan:offer:respond:own.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 403\", function () { pm.response.to.have.status(403); });",
+                                                                                    "pm.test(\"Access is denied\", function () { pm.expect(pm.response.json().errorCode).to.eql(\"ACCESS_DENIED\"); });"
                                                                                 ]
                                                                    }
                                                     }

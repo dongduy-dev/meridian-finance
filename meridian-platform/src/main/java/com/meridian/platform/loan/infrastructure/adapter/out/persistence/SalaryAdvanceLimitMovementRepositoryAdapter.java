@@ -2,6 +2,9 @@ package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovement;
+import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
+
+import java.util.UUID;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -22,6 +25,16 @@ public class SalaryAdvanceLimitMovementRepositoryAdapter implements SalaryAdvanc
         ));
     }
 
+    @Override
+    public boolean existsByLoanApplicationIdAndMovementType(
+            UUID loanApplicationId,
+            SalaryAdvanceLimitMovementType movementType
+    ) {
+        return jpaSalaryAdvanceLimitMovementRepository.existsByLoanApplicationIdAndMovementType(
+                loanApplicationId,
+                movementType
+        );
+    }
     private SalaryAdvanceLimitMovement toDomain(SalaryAdvanceLimitMovementJpaEntity entity) {
         return new SalaryAdvanceLimitMovement(
                 entity.getId(),
