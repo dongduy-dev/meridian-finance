@@ -566,6 +566,30 @@ Automatically refresh verified customer employee links when new valid Partner Em
 Suggested future branch name:
 `feature/partner-employee-import-link-refresh`
 
+### MER-FU-029 - Harden Salary Advance same-customer cross-link submission concurrency
+
+Area: Loan / Salary Advance / Concurrency
+
+Type: Deferred architecture hardening
+
+Priority: P2
+
+Status: Open
+
+Blocks current PR: No
+
+Problem:
+Salary Advance application creation currently serializes same-customer/same-employee-link submissions through the customer-link advisory lock and the `salary_advance_limits` pessimistic row lock. This protects stale limit math for the same link, but same-customer submissions using different employee links can use different advisory lock keys.
+
+Risk:
+If a customer can have multiple active employee links, concurrent submissions across different links could race the "one blocking Salary Advance application per customer" business rule before either transaction commits.
+
+Recommendation:
+Consider adding a customer-level Salary Advance application advisory lock keyed by customer and product before the blocking-application check, and evaluate a PostgreSQL partial unique index on `loan_applications(customer_id, product_code)` for blocking Salary Advance statuses as the database-level invariant.
+
+Suggested future branch name:
+`feature/salary-advance-customer-concurrency-hardening`
+
 ## Recommended Next Roadmap
 
 1. Review/merge the completed Salary Advance approved-offer and customer-acceptance slice.

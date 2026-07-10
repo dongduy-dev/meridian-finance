@@ -111,7 +111,6 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
 
         LocalDateTime now = LocalDateTime.now();
         SalaryAdvanceLimit limit = findOrCreateLimit(customerId, request, partnerSnapshot, effectiveTotalLimit, now);
-        assertNoBlockingApplicationExists(customerId);
         SalaryAdvanceLimit reservedLimit = limit.reserve(request.requestedAmount());
 
         long applicationSequence = loanApplicationRepository.nextApplicationNumberSequence();
