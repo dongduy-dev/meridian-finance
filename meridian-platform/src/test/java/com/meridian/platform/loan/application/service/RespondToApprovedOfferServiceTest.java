@@ -25,9 +25,13 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import com.meridian.platform.loan.domain.service.SalaryAdvanceOfferCalculator;
+import com.meridian.platform.shared.application.audit.AuditAction;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.AuthorizationException;
+import com.meridian.platform.shared.domain.model.ActionActorType;
+import com.meridian.platform.support.CapturingAuditEventPublisher;
+import com.meridian.platform.support.CapturingLoanApplicationStatusTransitionRepository;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +65,8 @@ class RespondToApprovedOfferServiceTest {
     private FakeApprovedOfferRepository approvedOfferRepository;
     private FakeSalaryAdvanceLimitRepository limitRepository;
     private FakeSalaryAdvanceLimitMovementRepository movementRepository;
+    private CapturingLoanApplicationStatusTransitionRepository transitionRepository;
+    private CapturingAuditEventPublisher auditEventPublisher;
     private RespondToApprovedOfferService service;
 
     @BeforeEach
@@ -70,10 +76,13 @@ class RespondToApprovedOfferServiceTest {
         FakeSalaryAdvanceVerificationRepository verificationRepository = new FakeSalaryAdvanceVerificationRepository();
         limitRepository = new FakeSalaryAdvanceLimitRepository();
         movementRepository = new FakeSalaryAdvanceLimitMovementRepository();
+        transitionRepository = new CapturingLoanApplicationStatusTransitionRepository();
+        auditEventPublisher = new CapturingAuditEventPublisher();
         SalaryAdvanceReservationReleaseService releaseService = new SalaryAdvanceReservationReleaseService(
                 verificationRepository,
                 limitRepository,
-                movementRepository
+                movementRepository,
+                auditEventPublisher
         );
         service = new RespondToApprovedOfferService(
                 loanApplicationRepository,
@@ -81,7 +90,9 @@ class RespondToApprovedOfferServiceTest {
                 new FixedCurrentUserProvider(CUSTOMER_ID),
                 releaseService,
                 new ApprovedOfferMapper(),
-                Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC)
+                Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC),
+                new LoanApplicationLifecycleHistoryRecorder(transitionRepository),
+                auditEventPublisher
         );
     }
 
@@ -94,6 +105,10 @@ class RespondToApprovedOfferServiceTest {
         assertEquals(ApprovedOfferStatus.ACCEPTED, approvedOfferRepository.savedOffer.status());
         assertEquals(LoanApplicationStatus.CONTRACT_PENDING, loanApplicationRepository.savedApplication.status());
         assertTrue(movementRepository.savedMovements.isEmpty());
+        assertEquals(1, transitionRepository.transitions().size());
+        assertEquals(LoanApplicationStatus.CONTRACT_PENDING, transitionRepository.transitions().get(0).toStatus());
+        assertEquals(1, auditEventPublisher.events().size());
+        assertEquals(AuditAction.OFFER_ACCEPTED, auditEventPublisher.events().get(0).action());
     }
 
     @Test
@@ -107,6 +122,8 @@ class RespondToApprovedOfferServiceTest {
         assertEquals("ACCEPTED", result.offer().status());
         assertNull(loanApplicationRepository.savedApplication);
         assertNull(approvedOfferRepository.savedOffer);
+        assertTrue(transitionRepository.transitions().isEmpty());
+        assertTrue(auditEventPublisher.events().isEmpty());
     }
 
     @Test
@@ -121,6 +138,12 @@ class RespondToApprovedOfferServiceTest {
         assertEquals(SalaryAdvanceLimitMovementType.RESERVATION_RELEASED,
                 movementRepository.savedMovements.get(0).movementType());
         assertEquals(money(0), limitRepository.savedLimit.reservedAmount());
+        assertEquals(1, transitionRepository.transitions().size());
+        assertEquals(LoanApplicationStatus.CUSTOMER_DECLINED, transitionRepository.transitions().get(0).toStatus());
+        assertEquals(2, auditEventPublisher.events().size());
+        assertEquals(AuditAction.OFFER_DECLINED, auditEventPublisher.events().get(0).action());
+        assertEquals(AuditAction.SALARY_ADVANCE_RESERVATION_RELEASED, auditEventPublisher.events().get(1).action());
+        assertEquals(auditEventPublisher.events().get(0).operationId(), auditEventPublisher.events().get(1).operationId());
     }
 
     @Test
@@ -135,6 +158,8 @@ class RespondToApprovedOfferServiceTest {
         assertNull(loanApplicationRepository.savedApplication);
         assertNull(approvedOfferRepository.savedOffer);
         assertTrue(movementRepository.savedMovements.isEmpty());
+        assertTrue(transitionRepository.transitions().isEmpty());
+        assertTrue(auditEventPublisher.events().isEmpty());
     }
 
     @Test
@@ -148,6 +173,10 @@ class RespondToApprovedOfferServiceTest {
         assertEquals(ApprovedOfferStatus.EXPIRED, approvedOfferRepository.savedOffer.status());
         assertEquals(LoanApplicationStatus.EXPIRED, loanApplicationRepository.savedApplication.status());
         assertEquals(1, movementRepository.savedMovements.size());
+        assertEquals(1, transitionRepository.transitions().size());
+        assertEquals(2, auditEventPublisher.events().size());
+        assertEquals(AuditAction.OFFER_EXPIRED, auditEventPublisher.events().get(0).action());
+        assertEquals(ActionActorType.SYSTEM, auditEventPublisher.events().get(0).actor().type());
     }
 
     @Test

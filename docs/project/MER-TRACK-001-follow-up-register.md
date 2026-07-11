@@ -275,15 +275,15 @@ Type: Deferred feature
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocks next major feature: No
 
 Problem:
-No full audit trail or transition history tables exist yet.
+Completed by the audit/lifecycle-history checkpoint on `feat/audit-loan-lifecycle-history`: V17 adds append-only `audit_events` and `loan_application_status_transitions`, implemented workflows record mandatory same-transaction audit/history, focused tests cover adapters and rollback behavior, and PostgreSQL-backed `verify` passed.
 
 Recommendation:
-Implement audit trail for important business actions and status transitions before final demo.
+No further work remains for the checkpoint boundary. Future retention/read API/async hardening are tracked separately as MER-FU-030, MER-FU-031, and MER-FU-032.
 
 ### MER-FU-014 - Create current physical schema snapshot
 
@@ -590,10 +590,82 @@ Consider adding a customer-level Salary Advance application advisory lock keyed 
 Suggested future branch name:
 `feature/salary-advance-customer-concurrency-hardening`
 
+
+### MER-FU-030 - Define audit retention and archive policy
+
+Area: Audit / Operations
+
+Type: Deferred feature
+
+Priority: P2
+
+Status: Open
+
+Blocks current PR: No
+
+Recommendation:
+Define retention windows, archive/export behavior, and operational storage policy for append-only audit events before production-scale data growth.
+
+Suggested future branch name:
+`feature/audit-retention-policy`
+
+### MER-FU-031 - Optional audit/history read API
+
+Area: Audit / API
+
+Type: Deferred feature
+
+Priority: P2
+
+Status: Open
+
+Blocks current PR: No
+
+Recommendation:
+Add role-protected read APIs for audit events and Loan Application lifecycle history only after access policy, filtering, pagination, and sensitive-payload redaction requirements are decided.
+
+Suggested future branch name:
+`feature/audit-history-read-api`
+
+### MER-FU-032 - Future async/replay audit hardening
+
+Area: Audit / Architecture
+
+Type: Deferred architecture hardening
+
+Priority: P2
+
+Status: Open
+
+Blocks current PR: No
+
+Recommendation:
+Before changing mandatory audit/history recording from synchronous same-transaction writes to async or replayed processing, add idempotency, processing status, retry behavior, and failure visibility.
+
+Suggested future branch name:
+`feature/audit-async-replay-hardening`
+
+### MER-FU-033 - Owned history tables for future aggregates
+
+Area: Workflow / Database
+
+Type: Deferred feature
+
+Priority: P3
+
+Status: Open
+
+Blocks current PR: No
+
+Recommendation:
+Do not add generic polymorphic status history. Add aggregate-owned history tables only when future implemented aggregates need immutable transition history.
+
+Suggested future branch name:
+`feature/aggregate-owned-history-tables`
+
 ## Recommended Next Roadmap
 
-1. Review/merge the completed Salary Advance approved-offer and customer-acceptance slice.
+1. Review/merge the completed audit/lifecycle-history checkpoint.
 2. Continue with manual disbursement and loan account activation.
 3. Add repayment tracking.
-4. Add audit trail.
-5. Add document checklist/manual review/OCR.
+4. Add document checklist/manual review/OCR.

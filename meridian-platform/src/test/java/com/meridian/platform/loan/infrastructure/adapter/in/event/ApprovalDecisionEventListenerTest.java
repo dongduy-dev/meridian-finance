@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ApprovalDecisionEventListenerTest {
 
@@ -24,6 +25,7 @@ class ApprovalDecisionEventListenerTest {
         UUID recommendationId = UUID.randomUUID();
         UUID approverUserId = UUID.randomUUID();
         LocalDateTime decidedAt = LocalDateTime.now();
+        UUID operationId = UUID.randomUUID();
 
         listener.onApprovalDecisionRecorded(new ApprovalDecisionRecordedEvent(
                 decisionId,
@@ -32,7 +34,8 @@ class ApprovalDecisionEventListenerTest {
                 approverUserId,
                 ApprovalDecisionEventAction.REJECT,
                 "not eligible",
-                decidedAt
+                decidedAt,
+                operationId
         ));
 
         assertEquals(decisionId, useCase.command.decisionId());
@@ -41,14 +44,42 @@ class ApprovalDecisionEventListenerTest {
         assertEquals(approverUserId, useCase.command.approverUserId());
         assertEquals(LoanApprovalDecisionAction.REJECT, useCase.command.action());
         assertEquals(decidedAt, useCase.command.decidedAt());
+        assertEquals(operationId, useCase.command.operationId());
     }
 
+
+    @Test
+    void propagatesDownstreamLoanFailureToPreserveSynchronousRollback() {
+        CapturingUseCase useCase = new CapturingUseCase();
+        useCase.failure = new IllegalStateException("history failed");
+        ApprovalDecisionEventListener listener = new ApprovalDecisionEventListener(useCase);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> listener.onApprovalDecisionRecorded(new ApprovalDecisionRecordedEvent(
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        ApprovalDecisionEventAction.APPROVE,
+                        null,
+                        LocalDateTime.now(),
+                        UUID.randomUUID()
+                ))
+        );
+
+        assertEquals("history failed", exception.getMessage());
+    }
     private static class CapturingUseCase implements ApplyApprovalDecisionUseCase {
 
         private ApplyApprovalDecisionCommand command;
+        private RuntimeException failure;
 
         @Override
         public LoanApplicationReviewDto applyApprovalDecision(ApplyApprovalDecisionCommand command) {
+            if (failure != null) {
+                throw failure;
+            }
             this.command = command;
             return new LoanApplicationReviewDto(command.loanApplicationId(), "REJECTED");
         }

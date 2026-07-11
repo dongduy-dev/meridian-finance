@@ -8,12 +8,17 @@ import com.meridian.platform.approval.application.port.out.ReviewRecommendationE
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.domain.model.ReviewRecommendation;
 import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
+import com.meridian.platform.shared.application.audit.AuditAction;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import com.meridian.platform.support.CapturingAuditEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -29,17 +34,21 @@ class SubmitReviewRecommendationServiceTest {
 
     private FakeReviewRecommendationRepository repository;
     private FakeReviewRecommendationEventPublisher eventPublisher;
+    private CapturingAuditEventPublisher auditEventPublisher;
     private SubmitReviewRecommendationService service;
 
     @BeforeEach
     void setUp() {
         repository = new FakeReviewRecommendationRepository();
         eventPublisher = new FakeReviewRecommendationEventPublisher();
+        auditEventPublisher = new CapturingAuditEventPublisher();
         service = new SubmitReviewRecommendationService(
                 repository,
                 eventPublisher,
                 new FixedCurrentUserProvider(),
-                new ApprovalMapper()
+                new ApprovalMapper(),
+                auditEventPublisher,
+                Clock.fixed(Instant.parse("2026-07-06T05:00:00Z"), ZoneOffset.UTC)
         );
     }
 
@@ -61,6 +70,9 @@ class SubmitReviewRecommendationServiceTest {
         assertEquals(LOAN_OFFICER_USER_ID, repository.savedRecommendation.loanOfficerUserId());
         assertEquals(result.recommendationId(), eventPublisher.publishedEvent.recommendationId());
         assertEquals(LOAN_APPLICATION_ID, eventPublisher.publishedEvent.loanApplicationId());
+        assertEquals(1, auditEventPublisher.events().size());
+        assertEquals(AuditAction.REVIEW_RECOMMENDATION_RECORDED, auditEventPublisher.events().get(0).action());
+        assertEquals(eventPublisher.publishedEvent.operationId(), auditEventPublisher.events().get(0).operationId());
     }
 
     @Test

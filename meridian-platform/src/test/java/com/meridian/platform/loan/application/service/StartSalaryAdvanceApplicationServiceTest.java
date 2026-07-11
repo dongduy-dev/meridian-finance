@@ -21,15 +21,21 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import com.meridian.platform.loan.domain.model.VerifiedPartnerEmployeeLinkSnapshot;
+import com.meridian.platform.shared.application.audit.AuditAction;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.support.CapturingAuditEventPublisher;
+import com.meridian.platform.support.CapturingLoanApplicationStatusTransitionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -57,6 +63,8 @@ class StartSalaryAdvanceApplicationServiceTest {
     private FakeSalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository;
     private FakeSalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository;
     private FakePartnerEligibilityPort partnerEligibilityPort;
+    private CapturingLoanApplicationStatusTransitionRepository transitionRepository;
+    private CapturingAuditEventPublisher auditEventPublisher;
     private StartSalaryAdvanceApplicationService service;
 
     @BeforeEach
@@ -67,6 +75,8 @@ class StartSalaryAdvanceApplicationServiceTest {
         salaryAdvanceLimitMovementRepository = new FakeSalaryAdvanceLimitMovementRepository();
         salaryAdvanceVerificationRepository = new FakeSalaryAdvanceVerificationRepository();
         partnerEligibilityPort = new FakePartnerEligibilityPort(verifiedPartnerSnapshot(limit(6_000_000)));
+        transitionRepository = new CapturingLoanApplicationStatusTransitionRepository();
+        auditEventPublisher = new CapturingAuditEventPublisher();
         service = new StartSalaryAdvanceApplicationService(
                 loanProductRepository,
                 loanApplicationRepository,
@@ -75,7 +85,10 @@ class StartSalaryAdvanceApplicationServiceTest {
                 salaryAdvanceVerificationRepository,
                 partnerEligibilityPort,
                 new LoanMapper(),
-                new FixedCurrentUserProvider(customerId)
+                new FixedCurrentUserProvider(customerId),
+                Clock.fixed(Instant.parse("2026-06-26T00:00:00Z"), ZoneOffset.UTC),
+                new LoanApplicationLifecycleHistoryRecorder(transitionRepository),
+                auditEventPublisher
         );
     }
 
@@ -109,6 +122,17 @@ class StartSalaryAdvanceApplicationServiceTest {
         assertNotNull(salaryAdvanceVerificationRepository.savedVerification);
         assertEquals(SalaryAdvanceEmployeeVerificationOutcome.MATCHED_ACTIVE,
                 salaryAdvanceVerificationRepository.savedVerification.employeeVerificationOutcome());
+        assertEquals(1, transitionRepository.transitions().size());
+        assertEquals(LoanApplicationStatus.SUBMITTED, transitionRepository.transitions().get(0).toStatus());
+        assertEquals(3, auditEventPublisher.events().size());
+        assertEquals(AuditAction.SALARY_ADVANCE_LIMIT_INITIALIZED, auditEventPublisher.events().get(0).action());
+        assertEquals(AuditAction.APPLICATION_SUBMITTED, auditEventPublisher.events().get(1).action());
+        assertEquals(AuditAction.SALARY_ADVANCE_LIMIT_RESERVED, auditEventPublisher.events().get(2).action());
+        assertEquals(1, auditEventPublisher.events().get(0).sequenceNumber());
+        assertEquals(2, auditEventPublisher.events().get(1).sequenceNumber());
+        assertEquals(3, auditEventPublisher.events().get(2).sequenceNumber());
+        assertEquals(auditEventPublisher.events().get(0).operationId(), auditEventPublisher.events().get(1).operationId());
+        assertEquals(auditEventPublisher.events().get(0).operationId(), auditEventPublisher.events().get(2).operationId());
     }
 
     @Test
@@ -127,6 +151,61 @@ class StartSalaryAdvanceApplicationServiceTest {
         assertEquals(limit(4_000_000), salaryAdvanceLimitRepository.currentLimit.orElseThrow().totalLimit());
         assertEquals(limit(4_000_000), salaryAdvanceLimitMovementRepository.savedMovements.get(0).amount());
     }
+    @Test
+    void refreshesChangedLimitAndAuditsRefreshMovement() {
+        salaryAdvanceLimitRepository.currentLimit = Optional.of(new SalaryAdvanceLimit(
+                UUID.randomUUID(),
+                customerId,
+                linkId,
+                limit(4_000_000),
+                limit(0),
+                limit(0),
+                limit(4_000_000),
+                SalaryAdvanceLimitStatus.ACTIVE,
+                LocalDateTime.of(2026, 6, 1, 0, 0)
+        ));
+        partnerEligibilityPort.snapshot = Optional.of(verifiedPartnerSnapshot(limit(6_000_000)));
+
+        service.startSalaryAdvanceApplication(request(limit(3_000_000), 1));
+
+        assertEquals(2, salaryAdvanceLimitMovementRepository.savedMovements.size());
+        assertEquals(SalaryAdvanceLimitMovementType.REFRESHED,
+                salaryAdvanceLimitMovementRepository.savedMovements.get(0).movementType());
+        assertEquals(SalaryAdvanceLimitMovementType.RESERVED,
+                salaryAdvanceLimitMovementRepository.savedMovements.get(1).movementType());
+        assertEquals(3, auditEventPublisher.events().size());
+        assertEquals(AuditAction.SALARY_ADVANCE_LIMIT_REFRESHED, auditEventPublisher.events().get(0).action());
+        assertEquals(AuditAction.APPLICATION_SUBMITTED, auditEventPublisher.events().get(1).action());
+        assertEquals(AuditAction.SALARY_ADVANCE_LIMIT_RESERVED, auditEventPublisher.events().get(2).action());
+        assertEquals(auditEventPublisher.events().get(0).operationId(), auditEventPublisher.events().get(2).operationId());
+    }
+
+    @Test
+    void propagatesHistoryPersistenceFailure() {
+        transitionRepository.failWith(new IllegalStateException("history unavailable"));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> service.startSalaryAdvanceApplication(request(limit(3_000_000), 1))
+        );
+
+        assertEquals("history unavailable", exception.getMessage());
+        assertTrue(auditEventPublisher.events().isEmpty());
+    }
+
+    @Test
+    void propagatesAuditPersistenceFailure() {
+        auditEventPublisher.failWith(new IllegalStateException("audit unavailable"));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> service.startSalaryAdvanceApplication(request(limit(3_000_000), 1))
+        );
+
+        assertEquals("audit unavailable", exception.getMessage());
+        assertEquals(1, transitionRepository.transitions().size());
+    }
+
 
     @Test
     void failsWhenVerifiedLinkIsMissing() {

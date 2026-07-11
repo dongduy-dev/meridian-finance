@@ -26,7 +26,7 @@ public record LoanApplication(
             LoanApplicationStatus.RETURNED_TO_REVIEW
     );
 
-    public static LoanApplication submitted(
+    public static LoanApplicationTransitionResult submittedWithTransition(
             UUID id,
             UUID customerId,
             LoanProduct loanProduct,
@@ -37,7 +37,7 @@ public record LoanApplication(
     ) {
         Objects.requireNonNull(loanProduct, "loanProduct must not be null");
 
-        return new LoanApplication(
+        LoanApplication application = new LoanApplication(
                 Objects.requireNonNull(id, "id must not be null"),
                 Objects.requireNonNull(customerId, "customerId must not be null"),
                 loanProduct.id(),
@@ -49,9 +49,12 @@ public record LoanApplication(
                 requestedTermMonths,
                 Objects.requireNonNull(submittedAt, "submittedAt must not be null")
         );
+        return LoanApplicationTransitionResult.changed(application, new LoanApplicationTransitionFact(
+                null, LoanApplicationStatus.SUBMITTED, LoanApplicationTransitionAction.APPLICATION_SUBMITTED
+        ));
     }
 
-    public LoanApplication startReview() {
+    public LoanApplicationTransitionResult startReviewWithTransition() {
         if (status != LoanApplicationStatus.SUBMITTED) {
             throw new BusinessStateConflictException(
                     "LOAN_REVIEW_START_NOT_ALLOWED",
@@ -59,10 +62,10 @@ public record LoanApplication(
             );
         }
 
-        return withStatus(LoanApplicationStatus.UNDER_REVIEW);
+        return withStatus(LoanApplicationStatus.UNDER_REVIEW, LoanApplicationTransitionAction.REVIEW_STARTED);
     }
 
-    public LoanApplication applyReviewRecommendation(LoanReviewRecommendationAction action) {
+    public LoanApplicationTransitionResult applyReviewRecommendationWithTransition(LoanReviewRecommendationAction action) {
         Objects.requireNonNull(action, "action must not be null");
 
         if (!REVIEW_RECOMMENDATION_SOURCE_STATUSES.contains(status)) {
@@ -73,13 +76,14 @@ public record LoanApplication(
         }
 
         return switch (action) {
-            case RECOMMEND_APPROVAL, RECOMMEND_REJECTION -> withStatus(LoanApplicationStatus.APPROVAL_PENDING);
-            case RETURN_TO_CUSTOMER_REVISION, REQUEST_STAFF_CORRECTION ->
-                    withStatus(LoanApplicationStatus.RETURNED_FOR_REVISION);
+            case RECOMMEND_APPROVAL -> withStatus(LoanApplicationStatus.APPROVAL_PENDING, LoanApplicationTransitionAction.RECOMMEND_APPROVAL);
+            case RECOMMEND_REJECTION -> withStatus(LoanApplicationStatus.APPROVAL_PENDING, LoanApplicationTransitionAction.RECOMMEND_REJECTION);
+            case RETURN_TO_CUSTOMER_REVISION -> withStatus(LoanApplicationStatus.RETURNED_FOR_REVISION, LoanApplicationTransitionAction.RETURN_TO_CUSTOMER_REVISION);
+            case REQUEST_STAFF_CORRECTION -> withStatus(LoanApplicationStatus.RETURNED_FOR_REVISION, LoanApplicationTransitionAction.REQUEST_STAFF_CORRECTION);
         };
     }
 
-    public LoanApplication applyApprovalDecision(LoanApprovalDecisionAction action) {
+    public LoanApplicationTransitionResult applyApprovalDecisionWithTransition(LoanApprovalDecisionAction action) {
         Objects.requireNonNull(action, "action must not be null");
 
         if (status != LoanApplicationStatus.APPROVAL_PENDING) {
@@ -90,14 +94,14 @@ public record LoanApplication(
         }
 
         return switch (action) {
-            case APPROVE -> withStatus(LoanApplicationStatus.APPROVED);
-            case REJECT -> withStatus(LoanApplicationStatus.REJECTED);
-            case RETURN_TO_LOAN_OFFICER_REVIEW -> withStatus(LoanApplicationStatus.RETURNED_TO_REVIEW);
-            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION -> withStatus(LoanApplicationStatus.RETURNED_FOR_REVISION);
+            case APPROVE -> withStatus(LoanApplicationStatus.APPROVED, LoanApplicationTransitionAction.APPROVE);
+            case REJECT -> withStatus(LoanApplicationStatus.REJECTED, LoanApplicationTransitionAction.REJECT);
+            case RETURN_TO_LOAN_OFFICER_REVIEW -> withStatus(LoanApplicationStatus.RETURNED_TO_REVIEW, LoanApplicationTransitionAction.RETURN_TO_LOAN_OFFICER_REVIEW);
+            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION -> withStatus(LoanApplicationStatus.RETURNED_FOR_REVISION, LoanApplicationTransitionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION);
         };
     }
 
-    public LoanApplication markCustomerAcceptancePending() {
+    public LoanApplicationTransitionResult markCustomerAcceptancePendingWithTransition() {
         if (status != LoanApplicationStatus.APPROVED) {
             throw new BusinessStateConflictException(
                     "INVALID_APPLICATION_STATUS",
@@ -105,12 +109,12 @@ public record LoanApplication(
             );
         }
 
-        return withStatus(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING);
+        return withStatus(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING, LoanApplicationTransitionAction.APPROVED_OFFER_GENERATED);
     }
 
-    public LoanApplication acceptApprovedOffer() {
+    public LoanApplicationTransitionResult acceptApprovedOfferWithTransition() {
         if (status == LoanApplicationStatus.CONTRACT_PENDING) {
-            return this;
+            return LoanApplicationTransitionResult.unchanged(this);
         }
         if (status != LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING) {
             throw new BusinessStateConflictException(
@@ -119,12 +123,12 @@ public record LoanApplication(
             );
         }
 
-        return withStatus(LoanApplicationStatus.CONTRACT_PENDING);
+        return withStatus(LoanApplicationStatus.CONTRACT_PENDING, LoanApplicationTransitionAction.OFFER_ACCEPTED);
     }
 
-    public LoanApplication declineApprovedOffer() {
+    public LoanApplicationTransitionResult declineApprovedOfferWithTransition() {
         if (status == LoanApplicationStatus.CUSTOMER_DECLINED) {
-            return this;
+            return LoanApplicationTransitionResult.unchanged(this);
         }
         if (status != LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING) {
             throw new BusinessStateConflictException(
@@ -133,12 +137,12 @@ public record LoanApplication(
             );
         }
 
-        return withStatus(LoanApplicationStatus.CUSTOMER_DECLINED);
+        return withStatus(LoanApplicationStatus.CUSTOMER_DECLINED, LoanApplicationTransitionAction.OFFER_DECLINED);
     }
 
-    public LoanApplication expireApprovedOffer() {
+    public LoanApplicationTransitionResult expireApprovedOfferWithTransition() {
         if (status == LoanApplicationStatus.EXPIRED) {
-            return this;
+            return LoanApplicationTransitionResult.unchanged(this);
         }
         if (status != LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING) {
             throw new BusinessStateConflictException(
@@ -147,10 +151,11 @@ public record LoanApplication(
             );
         }
 
-        return withStatus(LoanApplicationStatus.EXPIRED);
+        return withStatus(LoanApplicationStatus.EXPIRED, LoanApplicationTransitionAction.OFFER_EXPIRED);
     }
-    private LoanApplication withStatus(LoanApplicationStatus nextStatus) {
-        return new LoanApplication(
+
+    private LoanApplicationTransitionResult withStatus(LoanApplicationStatus nextStatus, LoanApplicationTransitionAction action) {
+        LoanApplication transitioned = new LoanApplication(
                 id,
                 customerId,
                 loanProductId,
@@ -161,6 +166,10 @@ public record LoanApplication(
                 requestedAmount,
                 requestedTermMonths,
                 submittedAt
+        );
+        return LoanApplicationTransitionResult.changed(
+                transitioned,
+                new LoanApplicationTransitionFact(status, nextStatus, action)
         );
     }
 }

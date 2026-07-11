@@ -24,8 +24,11 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
+import com.meridian.platform.shared.application.audit.AuditAction;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.support.CapturingAuditEventPublisher;
+import com.meridian.platform.support.CapturingLoanApplicationStatusTransitionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -49,6 +52,7 @@ class ApplyApprovalDecisionServiceTest {
     private static final UUID DECISION_ID = UUID.fromString("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
     private static final UUID RECOMMENDATION_ID = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
     private static final UUID APPROVER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000303");
+    private static final UUID OPERATION_ID = UUID.fromString("77777777-7777-7777-7777-777777777777");
     private static final UUID CUSTOMER_ID = UUID.fromString("99999999-9999-9999-9999-999999999999");
     private static final UUID LINK_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
     private static final UUID LIMIT_ID = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
@@ -61,6 +65,8 @@ class ApplyApprovalDecisionServiceTest {
     private FakeSalaryAdvanceVerificationRepository verificationRepository;
     private FakeSalaryAdvanceLimitRepository limitRepository;
     private FakeSalaryAdvanceLimitMovementRepository movementRepository;
+    private CapturingLoanApplicationStatusTransitionRepository transitionRepository;
+    private CapturingAuditEventPublisher auditEventPublisher;
     private ApplyApprovalDecisionService service;
 
     @BeforeEach
@@ -71,16 +77,21 @@ class ApplyApprovalDecisionServiceTest {
         verificationRepository = new FakeSalaryAdvanceVerificationRepository();
         limitRepository = new FakeSalaryAdvanceLimitRepository();
         movementRepository = new FakeSalaryAdvanceLimitMovementRepository();
+        transitionRepository = new CapturingLoanApplicationStatusTransitionRepository();
+        auditEventPublisher = new CapturingAuditEventPublisher();
         SalaryAdvanceReservationReleaseService releaseService = new SalaryAdvanceReservationReleaseService(
                 verificationRepository,
                 limitRepository,
-                movementRepository
+                movementRepository,
+                auditEventPublisher
         );
         service = new ApplyApprovalDecisionService(
                 loanApplicationRepository,
                 approvedOfferRepository,
                 offerPolicyRepository,
-                releaseService
+                releaseService,
+                new LoanApplicationLifecycleHistoryRecorder(transitionRepository),
+                auditEventPublisher
         );
     }
 
@@ -103,6 +114,13 @@ class ApplyApprovalDecisionServiceTest {
         assertEquals(DECIDED_AT.plusDays(7), approvedOfferRepository.savedOffer.expiresAt());
         assertEquals(1, approvedOfferRepository.savedOffer.repaymentItems().size());
         assertTrue(movementRepository.savedMovements.isEmpty());
+        assertEquals(2, transitionRepository.transitions().size());
+        assertEquals(LoanApplicationStatus.APPROVED, transitionRepository.transitions().get(0).toStatus());
+        assertEquals(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING, transitionRepository.transitions().get(1).toStatus());
+        assertEquals(1, auditEventPublisher.events().size());
+        assertEquals(AuditAction.APPROVED_OFFER_GENERATED, auditEventPublisher.events().get(0).action());
+        assertEquals(OPERATION_ID, auditEventPublisher.events().get(0).operationId());
+        assertEquals(2, auditEventPublisher.events().get(0).sequenceNumber());
     }
 
     @Test
@@ -133,6 +151,12 @@ class ApplyApprovalDecisionServiceTest {
                 movementRepository.savedMovements.get(0).movementType());
         assertEquals(LOAN_APPLICATION_ID, movementRepository.savedMovements.get(0).loanApplicationId());
         assertEquals(limit(3_000_000), movementRepository.savedMovements.get(0).amount());
+        assertEquals(1, transitionRepository.transitions().size());
+        assertEquals(LoanApplicationStatus.REJECTED, transitionRepository.transitions().get(0).toStatus());
+        assertEquals(1, auditEventPublisher.events().size());
+        assertEquals(AuditAction.SALARY_ADVANCE_RESERVATION_RELEASED, auditEventPublisher.events().get(0).action());
+        assertEquals(OPERATION_ID, auditEventPublisher.events().get(0).operationId());
+        assertEquals(2, auditEventPublisher.events().get(0).sequenceNumber());
     }
 
     @Test
@@ -178,7 +202,9 @@ class ApplyApprovalDecisionServiceTest {
                 RECOMMENDATION_ID,
                 APPROVER_USER_ID,
                 action,
-                DECIDED_AT
+                null,
+                DECIDED_AT,
+                OPERATION_ID
         );
     }
 

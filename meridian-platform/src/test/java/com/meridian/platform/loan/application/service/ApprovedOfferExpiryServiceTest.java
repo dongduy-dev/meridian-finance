@@ -22,6 +22,10 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import com.meridian.platform.loan.domain.service.SalaryAdvanceOfferCalculator;
+import com.meridian.platform.shared.application.audit.AuditAction;
+import com.meridian.platform.shared.domain.model.ActionActorType;
+import com.meridian.platform.support.CapturingAuditEventPublisher;
+import com.meridian.platform.support.CapturingLoanApplicationStatusTransitionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -49,6 +53,8 @@ class ApprovedOfferExpiryServiceTest {
     private FakeApprovedOfferRepository approvedOfferRepository;
     private FakeSalaryAdvanceLimitRepository limitRepository;
     private FakeSalaryAdvanceLimitMovementRepository movementRepository;
+    private CapturingLoanApplicationStatusTransitionRepository transitionRepository;
+    private CapturingAuditEventPublisher auditEventPublisher;
     private ApprovedOfferExpiryService service;
 
     @BeforeEach
@@ -58,15 +64,20 @@ class ApprovedOfferExpiryServiceTest {
         FakeSalaryAdvanceVerificationRepository verificationRepository = new FakeSalaryAdvanceVerificationRepository();
         limitRepository = new FakeSalaryAdvanceLimitRepository();
         movementRepository = new FakeSalaryAdvanceLimitMovementRepository();
+        transitionRepository = new CapturingLoanApplicationStatusTransitionRepository();
+        auditEventPublisher = new CapturingAuditEventPublisher();
         SalaryAdvanceReservationReleaseService releaseService = new SalaryAdvanceReservationReleaseService(
                 verificationRepository,
                 limitRepository,
-                movementRepository
+                movementRepository,
+                auditEventPublisher
         );
         service = new ApprovedOfferExpiryService(
                 loanApplicationRepository,
                 approvedOfferRepository,
-                releaseService
+                releaseService,
+                new LoanApplicationLifecycleHistoryRecorder(transitionRepository),
+                auditEventPublisher
         );
     }
 
@@ -78,6 +89,11 @@ class ApprovedOfferExpiryServiceTest {
         assertEquals(LoanApplicationStatus.EXPIRED, loanApplicationRepository.savedApplication.status());
         assertEquals(1, movementRepository.savedMovements.size());
         assertEquals(money(0), limitRepository.savedLimit.reservedAmount());
+        assertEquals(1, transitionRepository.transitions().size());
+        assertEquals(2, auditEventPublisher.events().size());
+        assertEquals(AuditAction.OFFER_EXPIRED, auditEventPublisher.events().get(0).action());
+        assertEquals(ActionActorType.SYSTEM, auditEventPublisher.events().get(0).actor().type());
+        assertEquals(AuditAction.SALARY_ADVANCE_RESERVATION_RELEASED, auditEventPublisher.events().get(1).action());
     }
 
     @Test
@@ -89,6 +105,8 @@ class ApprovedOfferExpiryServiceTest {
         assertNull(approvedOfferRepository.savedOffer);
         assertNull(loanApplicationRepository.savedApplication);
         assertTrue(movementRepository.savedMovements.isEmpty());
+        assertTrue(transitionRepository.transitions().isEmpty());
+        assertTrue(auditEventPublisher.events().isEmpty());
     }
 
     @Test
@@ -101,6 +119,8 @@ class ApprovedOfferExpiryServiceTest {
         assertNull(approvedOfferRepository.savedOffer);
         assertNull(loanApplicationRepository.savedApplication);
         assertTrue(movementRepository.savedMovements.isEmpty());
+        assertTrue(transitionRepository.transitions().isEmpty());
+        assertTrue(auditEventPublisher.events().isEmpty());
     }
 
     @Test
@@ -113,6 +133,8 @@ class ApprovedOfferExpiryServiceTest {
         assertEquals(LoanApplicationStatus.EXPIRED, loanApplicationRepository.savedApplication.status());
         assertNull(limitRepository.savedLimit);
         assertTrue(movementRepository.savedMovements.isEmpty());
+        assertEquals(1, auditEventPublisher.events().size());
+        assertEquals(AuditAction.OFFER_EXPIRED, auditEventPublisher.events().get(0).action());
     }
 
     private static ApprovedOffer pendingOffer(LocalDateTime expiresAt) {

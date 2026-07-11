@@ -16,9 +16,9 @@ graph TB
     PERSIST --> DOMAIN
     CLIENT["Adapter: Client (REST/gRPC)"] -.->|"implements"| OUT
     EVENT["Adapter: Event Publisher"] -.->|"implements"| OUT
-    
+
     WEB -.->|FORBIDDEN| PERSIST
-    
+
     style DOMAIN fill:#e74c3c,color:#fff
     style APP fill:#f39c12,color:#fff
     style IN fill:#f39c12,color:#fff
@@ -69,7 +69,7 @@ graph TB
 ### Allowed Patterns
 
 ```java
-// PATTERN 1: Sync — Call public port interface
+// PATTERN 1: Sync â€” Call public port interface
 // Loan module calling Customer module through a port
 // loan/application/port/out/CustomerQueryPort.java
 public interface CustomerQueryPort {
@@ -85,16 +85,16 @@ public class CustomerModuleAdapter implements CustomerQueryPort {
 ```
 
 ```java
-// PATTERN 2: Async — Spring ApplicationEvents
+// PATTERN 2: Same-transaction Spring ApplicationEvents for mandatory workflow coordination
 // loan/application/service/ReviewLoanService.java
 eventPublisher.publishEvent(new LoanSentForApprovalEvent(loanId, customerId, productCode, recommendation));
 
 // approval/infrastructure/listener/LoanEventListener.java
 @Component
 public class LoanEventListener {
-    // @ApplicationModuleListener ensures the listener runs after the publishing transaction commits,
-    // preventing listeners from seeing uncommitted data.
-    @ApplicationModuleListener
+    // Current Approval-to-Loan coordination uses ordinary @EventListener so Loan failures roll back the publishing transaction.
+    // The listener runs before the publisher transaction commits and intentionally shares that rollback boundary.
+    @EventListener
     public void onLoanSentForApproval(LoanSentForApprovalEvent event) {
         approvalService.createApprovalDecisionWorkItem(event.loanId(), event.recommendation());
     }
@@ -102,7 +102,7 @@ public class LoanEventListener {
 ```
 
 ```java
-// PATTERN 3: Sync — Product-supporting data through clear ports
+// PATTERN 3: Sync â€” Product-supporting data through clear ports
 // loan/application/port/out/PartnerEligibilityPort.java
 public interface PartnerEligibilityPort {
     CustomerEmployeeLinkData verifyOrGetEmployeeLink(EmployeeLinkQuery query);
@@ -152,10 +152,10 @@ import com.meridian.platform.customer.domain.model.Customer; // FORBIDDEN!
 
 // ANTI-PATTERN 5: Domain depending on Spring
 // loan/domain/model/LoanApplication.java
-@Entity @Table // FORBIDDEN in domain layer — JPA annotations go on infra JPA entities
+@Entity @Table // FORBIDDEN in domain layer â€” JPA annotations go on infra JPA entities
 
 // ANTI-PATTERN 6: Circular module dependency
-// Loan → Customer AND Customer → Loan // FORBIDDEN! Use events to break cycles
+// Loan â†’ Customer AND Customer â†’ Loan // FORBIDDEN! Use events to break cycles
 
 // ANTI-PATTERN 7: Transaction spanning modules
 @Transactional
@@ -245,7 +245,7 @@ class ArchitectureRulesTest {
         noClasses().that().resideInAPackage("..domain..")
             .should().dependOnClassesThat()
             .resideInAnyPackage("jakarta.persistence..")
-            .because("Domain must not depend on JPA — use JPA entities in infrastructure persistence");
+            .because("Domain must not depend on JPA â€” use JPA entities in infrastructure persistence");
 
     // Rule: Domain services must not use Spring annotations
     @ArchTest
@@ -253,7 +253,7 @@ class ArchitectureRulesTest {
         noClasses().that().resideInAPackage("..domain.service..")
             .should().beAnnotatedWith("org.springframework.stereotype.Service")
             .orShould().beAnnotatedWith("org.springframework.transaction.annotation.Transactional")
-            .because("Domain services must be pure Java — Spring annotations belong in application layer");
+            .because("Domain services must be pure Java â€” Spring annotations belong in application layer");
 
     // Rule: Domain must not depend on application or infrastructure
     @ArchTest
@@ -373,7 +373,7 @@ Use `package-info.java` with Spring Modulith `@ApplicationModule` to control wha
 Named public interfaces should expose application/public ports or event packages, not `domain/port` packages.
 
 ```java
-// shared/package-info.java — shared kernel and cross-cutting abstractions only
+// shared/package-info.java â€” shared kernel and cross-cutting abstractions only
 @org.springframework.modulith.ApplicationModule(
     allowedDependencies = {}
 )
@@ -385,7 +385,7 @@ package com.meridian.platform.shared;
 )
 package com.meridian.platform.loan;
 
-// approval/package-info.java — receives Loan workflow events and publishes decisions
+// approval/package-info.java â€” receives Loan workflow events and publishes decisions
 @org.springframework.modulith.ApplicationModule(
     allowedDependencies = {"loan::events", "shared"}
 )
@@ -415,31 +415,31 @@ package com.meridian.platform.partner;
 )
 package com.meridian.platform.document;
 
-// audit/package-info.java — receives events via @ApplicationModuleListener (no explicit dependency)
+// audit/infrastructure adapter â€” currently receives shared audit requests via synchronous @EventListener
 @org.springframework.modulith.ApplicationModule(
     allowedDependencies = {"shared"}
 )
 package com.meridian.platform.audit;
 
-// notification/package-info.java — optional later
+// notification/package-info.java â€” optional later
 @org.springframework.modulith.ApplicationModule(
     allowedDependencies = {"shared"}
 )
 package com.meridian.platform.notification;
 ```
 
-> The `audit` module consumes events from ALL modules via `@ApplicationModuleListener`. Spring Modulith routes events without requiring explicit `allowedDependencies` declarations for event sources.
+> Current Audit is a terminal same-transaction consumer of shared audit-record request events. Future async/replay consumption may use Spring Modulith after idempotency, retry, and processing-state behavior are designed.
 
 ---
 
 ### Logging Rule: No PII in Log Statements
 
 ```java
-// FORBIDDEN — PII in logs
+// FORBIDDEN â€” PII in logs
 log.info("Customer registered: {}", customer.getNationalId());
 log.info("Processing loan for {}", customer.getFullName());
 
-// CORRECT — Use IDs only, never PII
+// CORRECT â€” Use IDs only, never PII
 log.info("Customer registered", kv("customerId", customer.getId()));
 log.info("Processing loan", kv("loanId", loanId), kv("customerId", customerId));
 ```
@@ -450,15 +450,15 @@ log.info("Processing loan", kv("loanId", loanId), kv("customerId", customerId));
 
 | Source Module | Can Call (Sync) | Can Listen (Async) | Cannot Access |
 |---|---|---|---|
-| **Shared** | — | — | All feature modules, including Identity |
-| **Loan** | Customer, Partner, Document | — | Approval internals, IAM internals, top-level product modules |
-| **Approval** | — (no sync calls) | LoanSentForApprovalEvent | Customer, Partner, Document, Loan internals |
-| **Customer** | — | — | Loan internals, Partner internals |
-| **Partner** | — | — | Loan internals, Customer internals |
-| **Document** | — | — | Loan internals, Customer, Partner |
-| **Audit** | — | Business/domain events | All module internals, business decision logic |
-| **Notification** | — | Future notification events | All module internals; optional later |
-| **IAM** | Shared | — | All business modules |
+| **Shared** | â€” | â€” | All feature modules, including Identity |
+| **Loan** | Customer, Partner, Document | â€” | Approval internals, IAM internals, top-level product modules |
+| **Approval** | â€” (no sync calls) | LoanSentForApprovalEvent | Customer, Partner, Document, Loan internals |
+| **Customer** | â€” | â€” | Loan internals, Partner internals |
+| **Partner** | â€” | â€” | Loan internals, Customer internals |
+| **Document** | â€” | â€” | Loan internals, Customer, Partner |
+| **Audit** | â€” | Business/domain events | All module internals, business decision logic |
+| **Notification** | â€” | Future notification events | All module internals; optional later |
+| **IAM** | Shared | â€” | All business modules |
 
 
 > **Approval receives all needed data from Loan workflow events** (loan amount, product, customer, Loan Officer recommendation). It never calls Loan synchronously, eliminating bidirectional coupling.

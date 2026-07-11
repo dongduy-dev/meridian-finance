@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ReviewRecommendationEventListener {
-
     private final ApplyReviewRecommendationUseCase applyReviewRecommendationUseCase;
 
     public ReviewRecommendationEventListener(ApplyReviewRecommendationUseCase applyReviewRecommendationUseCase) {
@@ -19,13 +18,10 @@ public class ReviewRecommendationEventListener {
 
     @EventListener
     public void onReviewRecommendationRecorded(ReviewRecommendationRecordedEvent event) {
-        // Intentional synchronous listener: Loan status failures must roll back the recommendation transaction.
+        // Synchronous by design: Loan transition or history failures roll back the recommendation transaction.
         applyReviewRecommendationUseCase.applyReviewRecommendation(new ApplyReviewRecommendationCommand(
-                event.loanApplicationId(),
-                event.recommendationId(),
-                event.loanOfficerUserId(),
-                toLoanAction(event.action()),
-                event.recordedAt()
+                event.loanApplicationId(), event.recommendationId(), event.loanOfficerUserId(), toLoanAction(event.action()),
+                event.reason(), event.recordedAt(), event.operationId()
         ));
     }
 

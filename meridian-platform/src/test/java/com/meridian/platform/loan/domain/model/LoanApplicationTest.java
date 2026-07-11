@@ -14,7 +14,7 @@ class LoanApplicationTest {
 
     @Test
     void startReviewMovesSubmittedApplicationUnderReview() {
-        LoanApplication result = loanApplication(LoanApplicationStatus.SUBMITTED).startReview();
+        LoanApplication result = loanApplication(LoanApplicationStatus.SUBMITTED).startReviewWithTransition().loanApplication();
 
         assertEquals(LoanApplicationStatus.UNDER_REVIEW, result.status());
     }
@@ -23,7 +23,7 @@ class LoanApplicationTest {
     void startReviewRejectsNonSubmittedApplication() {
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,
-                () -> loanApplication(LoanApplicationStatus.APPROVAL_PENDING).startReview()
+                () -> loanApplication(LoanApplicationStatus.APPROVAL_PENDING).startReviewWithTransition().loanApplication()
         );
 
         assertEquals("LOAN_REVIEW_START_NOT_ALLOWED", exception.getErrorCode());
@@ -32,7 +32,7 @@ class LoanApplicationTest {
     @Test
     void recommendationForApprovalMovesUnderReviewApplicationToApprovalPending() {
         LoanApplication result = loanApplication(LoanApplicationStatus.UNDER_REVIEW)
-                .applyReviewRecommendation(LoanReviewRecommendationAction.RECOMMEND_APPROVAL);
+                .applyReviewRecommendationWithTransition(LoanReviewRecommendationAction.RECOMMEND_APPROVAL).loanApplication();
 
         assertEquals(LoanApplicationStatus.APPROVAL_PENDING, result.status());
     }
@@ -40,7 +40,7 @@ class LoanApplicationTest {
     @Test
     void recommendationForRejectionStillMovesApplicationToApprovalPending() {
         LoanApplication result = loanApplication(LoanApplicationStatus.UNDER_REVIEW)
-                .applyReviewRecommendation(LoanReviewRecommendationAction.RECOMMEND_REJECTION);
+                .applyReviewRecommendationWithTransition(LoanReviewRecommendationAction.RECOMMEND_REJECTION).loanApplication();
 
         assertEquals(LoanApplicationStatus.APPROVAL_PENDING, result.status());
     }
@@ -48,7 +48,7 @@ class LoanApplicationTest {
     @Test
     void returnRecommendationMovesReturnedToReviewApplicationToRevision() {
         LoanApplication result = loanApplication(LoanApplicationStatus.RETURNED_TO_REVIEW)
-                .applyReviewRecommendation(LoanReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION);
+                .applyReviewRecommendationWithTransition(LoanReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION).loanApplication();
 
         assertEquals(LoanApplicationStatus.RETURNED_FOR_REVISION, result.status());
     }
@@ -56,7 +56,7 @@ class LoanApplicationTest {
     @Test
     void staffCorrectionRecommendationMovesApplicationToRevision() {
         LoanApplication result = loanApplication(LoanApplicationStatus.UNDER_REVIEW)
-                .applyReviewRecommendation(LoanReviewRecommendationAction.REQUEST_STAFF_CORRECTION);
+                .applyReviewRecommendationWithTransition(LoanReviewRecommendationAction.REQUEST_STAFF_CORRECTION).loanApplication();
 
         assertEquals(LoanApplicationStatus.RETURNED_FOR_REVISION, result.status());
     }
@@ -66,7 +66,7 @@ class LoanApplicationTest {
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,
                 () -> loanApplication(LoanApplicationStatus.SUBMITTED)
-                        .applyReviewRecommendation(LoanReviewRecommendationAction.RECOMMEND_APPROVAL)
+                        .applyReviewRecommendationWithTransition(LoanReviewRecommendationAction.RECOMMEND_APPROVAL)
         );
 
         assertEquals("LOAN_RECOMMENDATION_NOT_ALLOWED", exception.getErrorCode());
@@ -77,7 +77,7 @@ class LoanApplicationTest {
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,
                 () -> loanApplication(LoanApplicationStatus.REJECTED)
-                        .applyReviewRecommendation(LoanReviewRecommendationAction.RECOMMEND_APPROVAL)
+                        .applyReviewRecommendationWithTransition(LoanReviewRecommendationAction.RECOMMEND_APPROVAL)
         );
 
         assertEquals("LOAN_RECOMMENDATION_NOT_ALLOWED", exception.getErrorCode());
@@ -86,7 +86,7 @@ class LoanApplicationTest {
     @Test
     void approvalDecisionMovesApprovalPendingApplicationApproved() {
         LoanApplication result = loanApplication(LoanApplicationStatus.APPROVAL_PENDING)
-                .applyApprovalDecision(LoanApprovalDecisionAction.APPROVE);
+                .applyApprovalDecisionWithTransition(LoanApprovalDecisionAction.APPROVE).loanApplication();
 
         assertEquals(LoanApplicationStatus.APPROVED, result.status());
     }
@@ -94,7 +94,7 @@ class LoanApplicationTest {
     @Test
     void rejectionDecisionMovesApprovalPendingApplicationRejected() {
         LoanApplication result = loanApplication(LoanApplicationStatus.APPROVAL_PENDING)
-                .applyApprovalDecision(LoanApprovalDecisionAction.REJECT);
+                .applyApprovalDecisionWithTransition(LoanApprovalDecisionAction.REJECT).loanApplication();
 
         assertEquals(LoanApplicationStatus.REJECTED, result.status());
     }
@@ -102,7 +102,7 @@ class LoanApplicationTest {
     @Test
     void returnDecisionMovesApprovalPendingApplicationReturnedToReview() {
         LoanApplication result = loanApplication(LoanApplicationStatus.APPROVAL_PENDING)
-                .applyApprovalDecision(LoanApprovalDecisionAction.RETURN_TO_LOAN_OFFICER_REVIEW);
+                .applyApprovalDecisionWithTransition(LoanApprovalDecisionAction.RETURN_TO_LOAN_OFFICER_REVIEW).loanApplication();
 
         assertEquals(LoanApplicationStatus.RETURNED_TO_REVIEW, result.status());
     }
@@ -110,7 +110,7 @@ class LoanApplicationTest {
     @Test
     void correctionDecisionMovesApprovalPendingApplicationReturnedForRevision() {
         LoanApplication result = loanApplication(LoanApplicationStatus.APPROVAL_PENDING)
-                .applyApprovalDecision(LoanApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION);
+                .applyApprovalDecisionWithTransition(LoanApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION).loanApplication();
 
         assertEquals(LoanApplicationStatus.RETURNED_FOR_REVISION, result.status());
     }
@@ -120,7 +120,7 @@ class LoanApplicationTest {
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,
                 () -> loanApplication(LoanApplicationStatus.UNDER_REVIEW)
-                        .applyApprovalDecision(LoanApprovalDecisionAction.APPROVE)
+                        .applyApprovalDecisionWithTransition(LoanApprovalDecisionAction.APPROVE)
         );
 
         assertEquals("APPROVAL_DECISION_NOT_ALLOWED", exception.getErrorCode());
@@ -129,7 +129,7 @@ class LoanApplicationTest {
     @Test
     void approvedApplicationMovesToCustomerAcceptancePending() {
         LoanApplication result = loanApplication(LoanApplicationStatus.APPROVED)
-                .markCustomerAcceptancePending();
+                .markCustomerAcceptancePendingWithTransition().loanApplication();
 
         assertEquals(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING, result.status());
     }
@@ -137,7 +137,7 @@ class LoanApplicationTest {
     @Test
     void customerAcceptsPendingOfferAndMovesToContractPending() {
         LoanApplication result = loanApplication(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING)
-                .acceptApprovedOffer();
+                .acceptApprovedOfferWithTransition().loanApplication();
 
         assertEquals(LoanApplicationStatus.CONTRACT_PENDING, result.status());
     }
@@ -145,7 +145,7 @@ class LoanApplicationTest {
     @Test
     void customerDeclinesPendingOfferAndMovesToCustomerDeclined() {
         LoanApplication result = loanApplication(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING)
-                .declineApprovedOffer();
+                .declineApprovedOfferWithTransition().loanApplication();
 
         assertEquals(LoanApplicationStatus.CUSTOMER_DECLINED, result.status());
     }
@@ -153,7 +153,7 @@ class LoanApplicationTest {
     @Test
     void pendingOfferExpiresAndMovesApplicationExpired() {
         LoanApplication result = loanApplication(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING)
-                .expireApprovedOffer();
+                .expireApprovedOfferWithTransition().loanApplication();
 
         assertEquals(LoanApplicationStatus.EXPIRED, result.status());
     }
@@ -162,7 +162,7 @@ class LoanApplicationTest {
     void offerActionRejectsContradictoryTerminalApplicationStatus() {
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,
-                () -> loanApplication(LoanApplicationStatus.CUSTOMER_DECLINED).acceptApprovedOffer()
+                () -> loanApplication(LoanApplicationStatus.CUSTOMER_DECLINED).acceptApprovedOfferWithTransition().loanApplication()
         );
 
         assertEquals("OFFER_ACTION_CONFLICT", exception.getErrorCode());

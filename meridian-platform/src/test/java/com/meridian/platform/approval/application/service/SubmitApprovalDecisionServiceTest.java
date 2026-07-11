@@ -11,14 +11,19 @@ import com.meridian.platform.approval.domain.model.ApprovalDecision;
 import com.meridian.platform.approval.domain.model.ApprovalDecisionAction;
 import com.meridian.platform.approval.domain.model.ReviewRecommendation;
 import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
+import com.meridian.platform.shared.application.audit.AuditAction;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.support.CapturingAuditEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -37,6 +42,7 @@ class SubmitApprovalDecisionServiceTest {
     private FakeReviewRecommendationRepository reviewRecommendationRepository;
     private FakeApprovalDecisionRepository approvalDecisionRepository;
     private FakeApprovalDecisionEventPublisher eventPublisher;
+    private CapturingAuditEventPublisher auditEventPublisher;
     private SubmitApprovalDecisionService service;
 
     @BeforeEach
@@ -44,12 +50,15 @@ class SubmitApprovalDecisionServiceTest {
         reviewRecommendationRepository = new FakeReviewRecommendationRepository();
         approvalDecisionRepository = new FakeApprovalDecisionRepository();
         eventPublisher = new FakeApprovalDecisionEventPublisher();
+        auditEventPublisher = new CapturingAuditEventPublisher();
         service = new SubmitApprovalDecisionService(
                 reviewRecommendationRepository,
                 approvalDecisionRepository,
                 eventPublisher,
                 new FixedCurrentUserProvider(APPROVER_USER_ID),
-                new ApprovalMapper()
+                new ApprovalMapper(),
+                auditEventPublisher,
+                Clock.fixed(Instant.parse("2026-07-06T05:00:00Z"), ZoneOffset.UTC)
         );
     }
 
@@ -72,6 +81,10 @@ class SubmitApprovalDecisionServiceTest {
         assertEquals(APPROVER_USER_ID, approvalDecisionRepository.savedDecision.approverUserId());
         assertEquals(result.decisionId(), eventPublisher.publishedEvent.decisionId());
         assertEquals(RECOMMENDATION_ID, eventPublisher.publishedEvent.reviewRecommendationId());
+        assertEquals(1, auditEventPublisher.events().size());
+        assertEquals(AuditAction.APPROVAL_DECISION_RECORDED, auditEventPublisher.events().get(0).action());
+        assertEquals(eventPublisher.publishedEvent.operationId(), auditEventPublisher.events().get(0).operationId());
+        assertEquals(1, auditEventPublisher.events().get(0).sequenceNumber());
     }
 
     @Test
@@ -81,7 +94,9 @@ class SubmitApprovalDecisionServiceTest {
                 approvalDecisionRepository,
                 eventPublisher,
                 new FixedCurrentUserProvider(LOAN_OFFICER_USER_ID),
-                new ApprovalMapper()
+                new ApprovalMapper(),
+                auditEventPublisher,
+                Clock.fixed(Instant.parse("2026-07-06T05:00:00Z"), ZoneOffset.UTC)
         );
 
         BusinessRuleViolationException exception = assertThrows(

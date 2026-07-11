@@ -299,7 +299,7 @@ com.meridian.platform/
 │       │       └── event/
 │       │           └── SpringApprovalEventPublisher.java
 │       ├── listener/
-│       │   └── LoanEventListener.java    # Inbound event adapter; @ApplicationModuleListener for LoanSentForApprovalEvent
+│       │   └── LoanEventListener.java    # Inbound event adapter; ordinary @EventListener where rollback is required
 │       └── config/
 │           └── ApprovalModuleConfig.java
 │
@@ -375,7 +375,7 @@ com.meridian.platform/
 │   ├── application/
 │   │   ├── port/
 │   │   │   ├── in/
-│   │   │   │   └── QueryAuditUseCase.java   # Read-only audit log queries
+│   │   │   │   └── QueryAuditUseCase.java   # Future optional read API; not implemented yet
 │   │   │   └── out/
 │   │   │       └── AuditEventRepository.java
 │   │   ├── service/
@@ -386,9 +386,9 @@ com.meridian.platform/
 │       └── adapter/
 │           ├── in/
 │           │   ├── event/
-│           │   │   └── DomainEventAuditListener.java  # Terminal @ApplicationModuleListener consumer
+│           │   │   └── SynchronousAuditEventListener.java # Terminal same-transaction @EventListener consumer
 │           │   └── web/
-│           │       └── AuditController.java           # Calls QueryAuditUseCase
+│           │       └── AuditController.java           # Future optional read API; not implemented yet
 │           └── out/
 │               └── persistence/
 │                   └── JpaAuditEventRepository.java

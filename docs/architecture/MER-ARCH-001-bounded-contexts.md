@@ -1,4 +1,4 @@
-# Bounded Context Design — DDD Context Map
+# Bounded Context Design â€” DDD Context Map
 
 ## Context Map Overview
 
@@ -32,19 +32,19 @@ graph TB
 
 ---
 
-## 1. Identity & Access (IAM) — Supporting Domain
+## 1. Identity & Access (IAM) â€” Supporting Domain
 
 | Aspect | Detail |
 |---|---|
 | **Responsibilities** | User registration, authentication (JWT), authorization (RBAC), users, roles, refresh token/session management |
-| **Entities** | `User`, `Role` (enum: `CUSTOMER`, `LOAN_OFFICER`, `APPROVER`, `ACCOUNTING_OFFICER`, `BACK_OFFICE_ADMIN`), `Permission` (constants class), `RolePermissionRegistry` (role→permission mapping), `RefreshToken`, `UserId` (VO), `EmailAddress` (VO) |
+| **Entities** | `User`, `Role` (enum: `CUSTOMER`, `LOAN_OFFICER`, `APPROVER`, `ACCOUNTING_OFFICER`, `BACK_OFFICE_ADMIN`), `Permission` (constants class), `RolePermissionRegistry` (roleâ†’permission mapping), `RefreshToken`, `UserId` (VO), `EmailAddress` (VO) |
 | **Public Interface** | `AuthenticationPort.authenticate(token)`, `UserQueryPort.findById(id)` |
 | **Events Published** | `UserRegisteredEvent`, `UserSuspendedEvent` |
 | **Microservice Candidacy** | First to extract. Minimal domain coupling, well-defined API. |
 
 ---
 
-## 2. Customer Management — Supporting Domain
+## 2. Customer Management â€” Supporting Domain
 
 | Aspect | Detail |
 |---|---|
@@ -56,7 +56,7 @@ graph TB
 
 ---
 
-## 3. Partner Management — Supporting Domain
+## 3. Partner Management â€” Supporting Domain
 
 | Aspect | Detail |
 |---|---|
@@ -70,7 +70,7 @@ Partner Management owns Partner Company and Partner Employee source data. It als
 
 ---
 
-## 4. Loan Core / Origination — CORE DOMAIN
+## 4. Loan Core / Origination â€” CORE DOMAIN
 
 > Loan Core / Origination is the generic lending core of the platform and is responsible for enforcing lending business rules. To maintain domain integrity, loan lifecycle transitions, eligibility policies, repayment calculations, and interest computations are owned by the Loan domain and must not be implemented in controllers, persistence adapters, or external services.
 
@@ -80,7 +80,7 @@ Partner Management owns Partner Company and Partner Employee source data. It als
 |---|---|
 | **Responsibilities** | Generic loan application lifecycle, product definition, `LoanProductPolicy` selection, product-specific policies/strategies, eligibility, Salary Advance limit state and usage, offer terms, manual disbursement confirmation state, repayment schedule, state machine |
 | **Entities** | `LoanApplication` (aggregate root), `LoanProduct`, `LoanProductPolicy`, `SalaryAdvanceLimit`, `SalaryAdvanceLimitMovement`, `SalaryAdvanceVerification`, `LoanAccount`, `OfferTerms`, `DisbursementRecord`, `RepaymentSchedule`, `ProductVerificationResult`, `Money` (VO), `LoanTerm` (VO), `InterestRate` (VO), `RejectionReason` (VO) |
-| **State Machine** | `DRAFT → SUBMITTED → VERIFICATION_PENDING/DOCUMENTS_PENDING → UNDER_REVIEW → APPROVAL_PENDING → APPROVED → CUSTOMER_ACCEPTANCE_PENDING → CONTRACT_PENDING → DISBURSEMENT_PENDING → DISBURSED → SETTLED/CLOSED` (also `→ RETURNED_FOR_REVISION`, `→ RETURNED_TO_REVIEW`, `→ REJECTED`, `→ CANCELLED`, `→ EXPIRED`) |
+| **State Machine** | `DRAFT â†’ SUBMITTED â†’ VERIFICATION_PENDING/DOCUMENTS_PENDING â†’ UNDER_REVIEW â†’ APPROVAL_PENDING â†’ APPROVED â†’ CUSTOMER_ACCEPTANCE_PENDING â†’ CONTRACT_PENDING â†’ DISBURSEMENT_PENDING â†’ DISBURSED â†’ SETTLED/CLOSED` (also `â†’ RETURNED_FOR_REVISION`, `â†’ RETURNED_TO_REVIEW`, `â†’ REJECTED`, `â†’ CANCELLED`, `â†’ EXPIRED`) |
 | **Public Interface** | `LoanApplicationPort.submit()`, `.getApplication()`, `.listApplications()`, `SalaryAdvanceLimitPort.getCurrentLimit()`, `.startApplicationUsingLimit()` |
 | **Events Published** | `LoanSubmittedEvent` (carries: loanId, customerId, productId, requestedAmount, submittedAt), `SalaryAdvanceLimitReservedEvent`, `SalaryAdvanceLimitReleasedEvent`, `LoanReviewStartedEvent`, `LoanSentForApprovalEvent`, `LoanApprovedEvent`, `LoanRejectedEvent`, `LoanCancelledEvent`, `LoanDisbursedEvent`, `LoanCompletedEvent` |
 | **Microservice Candidacy** | LAST to extract |
@@ -89,20 +89,20 @@ Loan Core owns the current Salary Advance limit because it is lending state: tot
 
 ---
 
-## 5. Approval Workflow — Core Domain
+## 5. Approval Workflow â€” Core Domain
 
 | Aspect | Detail |
 |---|---|
 | **Responsibilities** | Loan Officer review, Approver decision, controlled review and approval, maker-checker controls, approval decision trail |
 | **Entities** | `ReviewRecommendation`, `ApprovalDecision`, `ApprovalRequest` (aggregate root), `ApprovalStep`, `UserId` (VO), `RejectionReason` (VO) |
 | **Public Interface** | `ApprovalPort.createReview()`, `.submitRecommendation()`, `.submitDecision()`, `.getDecisionTrail()` |
-| **Listens To** | `LoanSentForApprovalEvent` → creates approval decision work item after Loan Officer review |
-| **Events Published** | `LoanReviewRecommendedEvent`, `ApprovalDecisionRecordedEvent` → Loan module updates status |
+| **Listens To** | `LoanSentForApprovalEvent` â†’ creates approval decision work item after Loan Officer review |
+| **Events Published** | `LoanReviewRecommendedEvent`, `ApprovalDecisionRecordedEvent` â†’ Loan module updates status |
 | **Microservice Candidacy** | Future extraction candidate. Keep with the modular monolith for MVP controlled review and approval. |
 
 ---
 
-## 6. Document Management — Supporting Domain
+## 6. Document Management â€” Supporting Domain
 
 | Aspect | Detail |
 |---|---|
@@ -128,18 +128,18 @@ Loan Core owns the current Salary Advance limit because it is lending state: tot
 
 ---
 
-## 7. Audit & Compliance Controls — Supporting (Cross-Cutting)
+## 7. Audit & Compliance Controls â€” Supporting (Cross-Cutting)
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Immutable audit events, business action history, status transition history, compliance-oriented audit trail |
-| **Entities** | `AuditEvent` (append-only, NEVER updated) with JSONB payload for state snapshots, `BusinessActionHistory`, `StatusTransitionHistory` |
-| **Integration** | Consumes important domain events via `@ApplicationModuleListener`. Never publishes. Terminal consumer. Events are guaranteed at-least-once via the Event Publication Registry — the `event_publication` table records each event atomically with the originating business transaction. If the JVM crashes before a listener completes, the event is replayed on restart. |
+| **Responsibilities** | Immutable audit events, compliance-oriented traceability, and observational audit logging. Loan owns Loan Application lifecycle history. |
+| **Entities** | Current implementation: `AuditEvent` append-only rows with safe JSONB payloads. Loan owns `LoanApplicationStatusTransition`; Approval source records remain `ReviewRecommendation` and `ApprovalDecision`. |
+| **Integration** | Current implementation consumes shared audit-record requests synchronously via ordinary Spring `@EventListener` in the same transaction. Audit is terminal and never publishes. Future async/replay delivery would need idempotency, retry, and failure tracking before replacing current same-transaction writes. |
 | **Microservice Candidacy** | Remain within the monolith by default. Extraction is possible for large-scale compliance, archival, or regulatory workloads but is not expected within the current platform scope. |
 
 ---
 
-## 8. Notification — Generic Subdomain (Optional Later)
+## 8. Notification â€” Generic Subdomain (Optional Later)
 
 | Aspect | Detail |
 |---|---|
@@ -155,19 +155,13 @@ Loan Core owns the current Salary Advance limit because it is lending state: tot
 
 | Type | Allowed | Forbidden |
 |---|---|---|
-| **Sync** | IAM→Any (auth), Loan→Customer (profile/bank account checks), Loan→Partner (Salary Advance eligibility data), Loan/Approval→Document (checklist readiness) | Direct entity imports across modules |
-| **Async** | All domain events via Spring `ApplicationEventPublisher` | Direct JPA repo access across modules |
+| **Sync** | IAMâ†’Any (auth), Loanâ†’Customer (profile/bank account checks), Loanâ†’Partner (Salary Advance eligibility data), Loan/Approvalâ†’Document (checklist readiness) | Direct entity imports across modules |
+| **Events** | Spring `ApplicationEventPublisher`; current mandatory workflows use synchronous same-transaction listeners | Direct JPA repo access across modules |
 | **Data** | Each module owns its tables exclusively | Shared tables, cross-module JOINs |
-| **Reliability** | Spring Modulith Event Publication Registry (outbox) | Rolling your own outbox table; relying on in-memory delivery alone |
+| **Reliability** | Current implemented workflows use same-transaction synchronous listeners for mandatory rollback semantics. Spring Modulith Event Publication Registry remains a future hardening option, not the current audit implementation. | Rolling your own outbox table; silently making mandatory audit/history writes async |
 
-> **Approval ↔ Loan coordination is event-driven for state changes.** Loan sends sufficient application context and Loan Officer recommendation when an approval decision is needed. Approval publishes the recorded decision so Loan can update the application lifecycle. No direct entity imports are allowed between these modules.
+> **Approval â†” Loan coordination is event-driven for state changes.** Loan sends sufficient application context and Loan Officer recommendation when an approval decision is needed. Approval publishes the recorded decision so Loan can update the application lifecycle. No direct entity imports are allowed between these modules.
 
 > **Salary Advance eligibility and limit coordination uses clear ownership.** Partner owns Partner Company, Partner Employee, and the reusable customer employee link. Loan owns Salary Advance limit state, limit movements, and application verification snapshots. Cross-context references use IDs and application/public ports, not shared JPA entity ownership.
 
-> **Event delivery is transactional, not fire-and-forget.**
-> `spring-modulith-events-jdbc` writes every published event to the `event_publication`
-> table within the same database transaction as the business operation. A listener marks
-> its row complete only after successful processing. Incomplete rows are replayed on
-> application restart. All `@ApplicationModuleListener` consumers must therefore be
-> **idempotent** — they may be called more than once for the same event under failure
-> conditions.
+> **Current implemented event delivery is synchronous for mandatory workflow writes.** Approval-to-Loan propagation and Audit recording currently use ordinary Spring `@EventListener` so failures roll back the originating transaction. Spring Modulith event-publication/replay remains a future architecture option only after idempotency, retry, and failure tracking are added.

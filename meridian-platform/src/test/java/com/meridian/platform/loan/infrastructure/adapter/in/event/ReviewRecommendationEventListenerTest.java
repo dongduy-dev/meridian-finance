@@ -23,6 +23,7 @@ class ReviewRecommendationEventListenerTest {
         UUID loanApplicationId = UUID.randomUUID();
         UUID loanOfficerUserId = UUID.randomUUID();
         LocalDateTime recordedAt = LocalDateTime.now();
+        UUID operationId = UUID.randomUUID();
 
         listener.onReviewRecommendationRecorded(new ReviewRecommendationRecordedEvent(
                 recommendationId,
@@ -30,7 +31,8 @@ class ReviewRecommendationEventListenerTest {
                 loanOfficerUserId,
                 ReviewRecommendationEventAction.RECOMMEND_REJECTION,
                 "not eligible",
-                recordedAt
+                recordedAt,
+                operationId
         ));
 
         assertEquals(recommendationId, useCase.command.recommendationId());
@@ -38,6 +40,7 @@ class ReviewRecommendationEventListenerTest {
         assertEquals(loanOfficerUserId, useCase.command.loanOfficerUserId());
         assertEquals(LoanReviewRecommendationAction.RECOMMEND_REJECTION, useCase.command.action());
         assertEquals(recordedAt, useCase.command.recommendedAt());
+        assertEquals(operationId, useCase.command.operationId());
     }
 
     private static class CapturingUseCase implements ApplyReviewRecommendationUseCase {

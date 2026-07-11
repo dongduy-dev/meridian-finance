@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ApprovalDecisionEventListener {
-
     private final ApplyApprovalDecisionUseCase applyApprovalDecisionUseCase;
 
     public ApprovalDecisionEventListener(ApplyApprovalDecisionUseCase applyApprovalDecisionUseCase) {
@@ -19,14 +18,10 @@ public class ApprovalDecisionEventListener {
 
     @EventListener
     public void onApprovalDecisionRecorded(ApprovalDecisionRecordedEvent event) {
-        // Intentional synchronous listener: Loan status failures must roll back the decision transaction.
+        // Synchronous by design: Loan transition or audit/history failures roll back the Approval decision transaction.
         applyApprovalDecisionUseCase.applyApprovalDecision(new ApplyApprovalDecisionCommand(
-                event.loanApplicationId(),
-                event.decisionId(),
-                event.reviewRecommendationId(),
-                event.approverUserId(),
-                toLoanAction(event.action()),
-                event.decidedAt()
+                event.loanApplicationId(), event.decisionId(), event.reviewRecommendationId(), event.approverUserId(),
+                toLoanAction(event.action()), event.reason(), event.decidedAt(), event.operationId()
         ));
     }
 
@@ -35,8 +30,7 @@ public class ApprovalDecisionEventListener {
             case APPROVE -> LoanApprovalDecisionAction.APPROVE;
             case REJECT -> LoanApprovalDecisionAction.REJECT;
             case RETURN_TO_LOAN_OFFICER_REVIEW -> LoanApprovalDecisionAction.RETURN_TO_LOAN_OFFICER_REVIEW;
-            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION ->
-                    LoanApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION;
+            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION -> LoanApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION;
         };
     }
 }

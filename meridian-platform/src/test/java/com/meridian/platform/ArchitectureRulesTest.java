@@ -23,6 +23,17 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    void domainMustNotDependOnApplicationLayer() {
+        noClasses()
+                .that()
+                .resideInAPackage("..domain..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("..application..")
+                .check(importedClasses);
+    }
+
+    @Test
     void domainAndApplicationMustNotDependOnSecurityImplementation() {
         noClasses()
                 .that()
@@ -46,6 +57,28 @@ class ArchitectureRulesTest {
                 .should()
                 .dependOnClassesThat()
                 .resideInAnyPackage("com.meridian.platform.identity..")
+                .check(importedClasses);
+    }
+
+    @Test
+    void loanMustNotDependOnAuditInfrastructure() {
+        noClasses()
+                .that()
+                .resideInAPackage("com.meridian.platform.loan..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("com.meridian.platform.audit.infrastructure..")
+                .check(importedClasses);
+    }
+
+    @Test
+    void controllersMustNotUseOutputPortsOrPersistenceAdapters() {
+        noClasses()
+                .that()
+                .resideInAPackage("..infrastructure.adapter.in.web..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("..application.port.out..", "..infrastructure.adapter.out.persistence..")
                 .check(importedClasses);
     }
 }
