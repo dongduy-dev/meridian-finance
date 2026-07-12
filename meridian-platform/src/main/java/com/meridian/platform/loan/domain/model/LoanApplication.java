@@ -21,12 +21,12 @@ public record LoanApplication(
         LocalDateTime submittedAt
 ) {
 
-    private static final Set<LoanApplicationStatus> REVIEW_RECOMMENDATION_SOURCE_STATUSES = Set.of(
+    private static final Set<LoanApplicationStatus> LOAN_OFFICER_RECOMMENDATION_SOURCE_STATUSES = Set.of(
             LoanApplicationStatus.UNDER_REVIEW,
             LoanApplicationStatus.RETURNED_TO_REVIEW
     );
 
-    public static LoanApplication submitted(
+    public static LoanApplicationTransitionResult submit(
             UUID id,
             UUID customerId,
             LoanProduct loanProduct,
@@ -36,8 +36,7 @@ public record LoanApplication(
             LocalDateTime submittedAt
     ) {
         Objects.requireNonNull(loanProduct, "loanProduct must not be null");
-
-        return new LoanApplication(
+        LoanApplication loanApplication = new LoanApplication(
                 Objects.requireNonNull(id, "id must not be null"),
                 Objects.requireNonNull(customerId, "customerId must not be null"),
                 loanProduct.id(),
@@ -49,23 +48,30 @@ public record LoanApplication(
                 requestedTermMonths,
                 Objects.requireNonNull(submittedAt, "submittedAt must not be null")
         );
+        return LoanApplicationTransitionResult.of(
+                loanApplication,
+                new LoanApplicationTransitionFact(
+                        loanApplication.id(),
+                        null,
+                        LoanApplicationStatus.SUBMITTED,
+                        LoanApplicationTransitionAction.SUBMIT_APPLICATION
+                )
+        );
     }
 
-    public LoanApplication startReview() {
+    public LoanApplicationTransitionResult startReview() {
         if (status != LoanApplicationStatus.SUBMITTED) {
             throw new BusinessStateConflictException(
                     "LOAN_REVIEW_START_NOT_ALLOWED",
                     "Only submitted loan applications can start Loan Officer review."
             );
         }
-
-        return withStatus(LoanApplicationStatus.UNDER_REVIEW);
+        return transitionTo(LoanApplicationStatus.UNDER_REVIEW, LoanApplicationTransitionAction.START_REVIEW);
     }
 
-    public LoanApplication applyReviewRecommendation(LoanReviewRecommendationAction action) {
+    public LoanApplicationTransitionResult applyReviewRecommendation(LoanReviewRecommendationAction action) {
         Objects.requireNonNull(action, "action must not be null");
-
-        if (!REVIEW_RECOMMENDATION_SOURCE_STATUSES.contains(status)) {
+        if (!LOAN_OFFICER_RECOMMENDATION_SOURCE_STATUSES.contains(status)) {
             throw new BusinessStateConflictException(
                     "LOAN_RECOMMENDATION_NOT_ALLOWED",
                     "Loan Officer recommendation can only be recorded while the application is under review."
@@ -73,15 +79,21 @@ public record LoanApplication(
         }
 
         return switch (action) {
-            case RECOMMEND_APPROVAL, RECOMMEND_REJECTION -> withStatus(LoanApplicationStatus.APPROVAL_PENDING);
+            case RECOMMEND_APPROVAL, RECOMMEND_REJECTION ->
+                    transitionTo(
+                            LoanApplicationStatus.APPROVAL_PENDING,
+                            LoanApplicationTransitionAction.valueOf(action.name())
+                    );
             case RETURN_TO_CUSTOMER_REVISION, REQUEST_STAFF_CORRECTION ->
-                    withStatus(LoanApplicationStatus.RETURNED_FOR_REVISION);
+                    transitionTo(
+                            LoanApplicationStatus.RETURNED_FOR_REVISION,
+                            LoanApplicationTransitionAction.valueOf(action.name())
+                    );
         };
     }
 
-    public LoanApplication applyApprovalDecision(LoanApprovalDecisionAction action) {
+    public LoanApplicationTransitionResult applyApprovalDecision(LoanApprovalDecisionAction action) {
         Objects.requireNonNull(action, "action must not be null");
-
         if (status != LoanApplicationStatus.APPROVAL_PENDING) {
             throw new BusinessStateConflictException(
                     "APPROVAL_DECISION_NOT_ALLOWED",
@@ -90,27 +102,36 @@ public record LoanApplication(
         }
 
         return switch (action) {
-            case APPROVE -> withStatus(LoanApplicationStatus.APPROVED);
-            case REJECT -> withStatus(LoanApplicationStatus.REJECTED);
-            case RETURN_TO_LOAN_OFFICER_REVIEW -> withStatus(LoanApplicationStatus.RETURNED_TO_REVIEW);
-            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION -> withStatus(LoanApplicationStatus.RETURNED_FOR_REVISION);
+            case APPROVE -> transitionTo(LoanApplicationStatus.APPROVED, LoanApplicationTransitionAction.APPROVE);
+            case REJECT -> transitionTo(LoanApplicationStatus.REJECTED, LoanApplicationTransitionAction.REJECT);
+            case RETURN_TO_LOAN_OFFICER_REVIEW -> transitionTo(
+                    LoanApplicationStatus.RETURNED_TO_REVIEW,
+                    LoanApplicationTransitionAction.RETURN_TO_LOAN_OFFICER_REVIEW
+            );
+            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION ->
+                    transitionTo(
+                            LoanApplicationStatus.RETURNED_FOR_REVISION,
+                            LoanApplicationTransitionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION
+                    );
         };
     }
 
-    public LoanApplication markCustomerAcceptancePending() {
+    public LoanApplicationTransitionResult markCustomerAcceptancePending() {
         if (status != LoanApplicationStatus.APPROVED) {
             throw new BusinessStateConflictException(
                     "INVALID_APPLICATION_STATUS",
                     "Only approved loan applications can move to customer acceptance."
             );
         }
-
-        return withStatus(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING);
+        return transitionTo(
+                LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING,
+                LoanApplicationTransitionAction.GENERATE_APPROVED_OFFER
+        );
     }
 
-    public LoanApplication acceptApprovedOffer() {
+    public LoanApplicationTransitionResult acceptApprovedOffer() {
         if (status == LoanApplicationStatus.CONTRACT_PENDING) {
-            return this;
+            return LoanApplicationTransitionResult.unchanged(this);
         }
         if (status != LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING) {
             throw new BusinessStateConflictException(
@@ -118,13 +139,15 @@ public record LoanApplication(
                     "Approved offer cannot be accepted in the current application status."
             );
         }
-
-        return withStatus(LoanApplicationStatus.CONTRACT_PENDING);
+        return transitionTo(
+                LoanApplicationStatus.CONTRACT_PENDING,
+                LoanApplicationTransitionAction.ACCEPT_APPROVED_OFFER
+        );
     }
 
-    public LoanApplication declineApprovedOffer() {
+    public LoanApplicationTransitionResult declineApprovedOffer() {
         if (status == LoanApplicationStatus.CUSTOMER_DECLINED) {
-            return this;
+            return LoanApplicationTransitionResult.unchanged(this);
         }
         if (status != LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING) {
             throw new BusinessStateConflictException(
@@ -132,13 +155,15 @@ public record LoanApplication(
                     "Approved offer cannot be declined in the current application status."
             );
         }
-
-        return withStatus(LoanApplicationStatus.CUSTOMER_DECLINED);
+        return transitionTo(
+                LoanApplicationStatus.CUSTOMER_DECLINED,
+                LoanApplicationTransitionAction.DECLINE_APPROVED_OFFER
+        );
     }
 
-    public LoanApplication expireApprovedOffer() {
+    public LoanApplicationTransitionResult expireApprovedOffer() {
         if (status == LoanApplicationStatus.EXPIRED) {
-            return this;
+            return LoanApplicationTransitionResult.unchanged(this);
         }
         if (status != LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING) {
             throw new BusinessStateConflictException(
@@ -146,9 +171,23 @@ public record LoanApplication(
                     "Approved offer cannot be expired in the current application status."
             );
         }
-
-        return withStatus(LoanApplicationStatus.EXPIRED);
+        return transitionTo(
+                LoanApplicationStatus.EXPIRED,
+                LoanApplicationTransitionAction.EXPIRE_APPROVED_OFFER
+        );
     }
+
+    private LoanApplicationTransitionResult transitionTo(
+            LoanApplicationStatus nextStatus,
+            LoanApplicationTransitionAction action
+    ) {
+        LoanApplication transitioned = withStatus(nextStatus);
+        return LoanApplicationTransitionResult.of(
+                transitioned,
+                new LoanApplicationTransitionFact(id, status, nextStatus, action)
+        );
+    }
+
     private LoanApplication withStatus(LoanApplicationStatus nextStatus) {
         return new LoanApplication(
                 id,

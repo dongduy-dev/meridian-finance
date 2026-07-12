@@ -11,14 +11,19 @@ import com.meridian.platform.approval.domain.model.ApprovalDecision;
 import com.meridian.platform.approval.domain.model.ApprovalDecisionAction;
 import com.meridian.platform.approval.domain.model.ReviewRecommendation;
 import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
+import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
+import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -33,10 +38,13 @@ class SubmitApprovalDecisionServiceTest {
     private static final UUID RECOMMENDATION_ID = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
     private static final UUID LOAN_OFFICER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000302");
     private static final UUID APPROVER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000303");
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 7, 6, 11, 0);
+    private static final Clock CLOCK = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
 
     private FakeReviewRecommendationRepository reviewRecommendationRepository;
     private FakeApprovalDecisionRepository approvalDecisionRepository;
     private FakeApprovalDecisionEventPublisher eventPublisher;
+    private FakeBusinessAuditPublisher auditPublisher;
     private SubmitApprovalDecisionService service;
 
     @BeforeEach
@@ -44,17 +52,12 @@ class SubmitApprovalDecisionServiceTest {
         reviewRecommendationRepository = new FakeReviewRecommendationRepository();
         approvalDecisionRepository = new FakeApprovalDecisionRepository();
         eventPublisher = new FakeApprovalDecisionEventPublisher();
-        service = new SubmitApprovalDecisionService(
-                reviewRecommendationRepository,
-                approvalDecisionRepository,
-                eventPublisher,
-                new FixedCurrentUserProvider(APPROVER_USER_ID),
-                new ApprovalMapper()
-        );
+        auditPublisher = new FakeBusinessAuditPublisher();
+        service = newService(APPROVER_USER_ID);
     }
 
     @Test
-    void derivesApproverActorFromCurrentUserAndPublishesEvent() {
+    void derivesApproverActorFromCurrentUserAuditsAndPublishesEvent() {
         ApprovalDecisionDto result = service.submitApprovalDecision(
                 LOAN_APPLICATION_ID,
                 new ApprovalDecisionRequest(
@@ -69,20 +72,18 @@ class SubmitApprovalDecisionServiceTest {
         assertEquals(RECOMMENDATION_ID, result.reviewRecommendationId());
         assertEquals(APPROVER_USER_ID, result.approverUserId());
         assertEquals("APPROVE", result.action());
+        assertEquals(NOW, result.decidedAt());
         assertEquals(APPROVER_USER_ID, approvalDecisionRepository.savedDecision.approverUserId());
         assertEquals(result.decisionId(), eventPublisher.publishedEvent.decisionId());
         assertEquals(RECOMMENDATION_ID, eventPublisher.publishedEvent.reviewRecommendationId());
+        assertEquals(auditPublisher.publishedEvent.operationContext(), eventPublisher.publishedEvent.operationContext());
+        assertEquals(BusinessAuditAction.APPROVAL_DECISION_RECORDED,
+                auditPublisher.publishedEvent.entries().getFirst().action());
     }
 
     @Test
     void rejectsSameUserMakerCheckerViolation() {
-        service = new SubmitApprovalDecisionService(
-                reviewRecommendationRepository,
-                approvalDecisionRepository,
-                eventPublisher,
-                new FixedCurrentUserProvider(LOAN_OFFICER_USER_ID),
-                new ApprovalMapper()
-        );
+        service = newService(LOAN_OFFICER_USER_ID);
 
         BusinessRuleViolationException exception = assertThrows(
                 BusinessRuleViolationException.class,
@@ -123,6 +124,18 @@ class SubmitApprovalDecisionServiceTest {
         );
 
         assertEquals("loan rejected transition", exception.getMessage());
+    }
+
+    private SubmitApprovalDecisionService newService(UUID userId) {
+        return new SubmitApprovalDecisionService(
+                reviewRecommendationRepository,
+                approvalDecisionRepository,
+                eventPublisher,
+                new FixedCurrentUserProvider(userId),
+                new ApprovalMapper(),
+                auditPublisher,
+                CLOCK
+        );
     }
 
     private static ReviewRecommendation recommendation() {
@@ -197,6 +210,16 @@ class SubmitApprovalDecisionServiceTest {
             if (failure != null) {
                 throw failure;
             }
+        }
+    }
+
+    private static class FakeBusinessAuditPublisher implements BusinessAuditPublisher {
+
+        private BusinessAuditEvent publishedEvent;
+
+        @Override
+        public void publish(BusinessAuditEvent event) {
+            publishedEvent = event;
         }
     }
 }

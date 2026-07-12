@@ -8,6 +8,7 @@ import com.meridian.platform.approval.application.event.ReviewRecommendationEven
 import com.meridian.platform.approval.application.event.ReviewRecommendationRecordedEvent;
 import com.meridian.platform.approval.domain.model.ApprovalDecision;
 import com.meridian.platform.approval.domain.model.ReviewRecommendation;
+import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -25,14 +26,18 @@ public class ApprovalMapper {
         );
     }
 
-    public ReviewRecommendationRecordedEvent toRecordedEvent(ReviewRecommendation recommendation) {
+    public ReviewRecommendationRecordedEvent toRecordedEvent(
+            ReviewRecommendation recommendation,
+            BusinessOperationContext operationContext
+    ) {
         return new ReviewRecommendationRecordedEvent(
                 recommendation.id(),
                 recommendation.loanApplicationId(),
                 recommendation.loanOfficerUserId(),
                 ReviewRecommendationEventAction.valueOf(recommendation.action().name()),
                 recommendation.reason(),
-                recommendation.submittedAt()
+                recommendation.submittedAt(),
+                operationContext
         );
     }
 
@@ -49,7 +54,10 @@ public class ApprovalMapper {
         );
     }
 
-    public ApprovalDecisionRecordedEvent toRecordedEvent(ApprovalDecision decision) {
+    public ApprovalDecisionRecordedEvent toRecordedEvent(
+            ApprovalDecision decision,
+            BusinessOperationContext operationContext
+    ) {
         return new ApprovalDecisionRecordedEvent(
                 decision.id(),
                 decision.loanApplicationId(),
@@ -57,7 +65,8 @@ public class ApprovalMapper {
                 decision.approverUserId(),
                 ApprovalDecisionEventAction.valueOf(decision.action().name()),
                 decision.reason(),
-                decision.decidedAt()
+                decision.decidedAt(),
+                operationContext
         );
     }
 }

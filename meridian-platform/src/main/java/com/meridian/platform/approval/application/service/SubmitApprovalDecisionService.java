@@ -9,13 +9,22 @@ import com.meridian.platform.approval.application.port.out.ApprovalDecisionRepos
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.domain.model.ApprovalDecision;
 import com.meridian.platform.approval.domain.model.ReviewRecommendation;
+import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
+import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
+import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
+import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
+import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
+import com.meridian.platform.shared.domain.audit.BusinessAuditPayload;
+import com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
@@ -28,19 +37,25 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
     private final ApprovalDecisionEventPublisher approvalDecisionEventPublisher;
     private final CurrentUserProvider currentUserProvider;
     private final ApprovalMapper approvalMapper;
+    private final BusinessAuditPublisher businessAuditPublisher;
+    private final Clock clock;
 
     public SubmitApprovalDecisionService(
             ReviewRecommendationRepository reviewRecommendationRepository,
             ApprovalDecisionRepository approvalDecisionRepository,
             ApprovalDecisionEventPublisher approvalDecisionEventPublisher,
             CurrentUserProvider currentUserProvider,
-            ApprovalMapper approvalMapper
+            ApprovalMapper approvalMapper,
+            BusinessAuditPublisher businessAuditPublisher,
+            Clock clock
     ) {
         this.reviewRecommendationRepository = reviewRecommendationRepository;
         this.approvalDecisionRepository = approvalDecisionRepository;
         this.approvalDecisionEventPublisher = approvalDecisionEventPublisher;
         this.currentUserProvider = currentUserProvider;
         this.approvalMapper = approvalMapper;
+        this.businessAuditPublisher = businessAuditPublisher;
+        this.clock = clock;
     }
 
     @Override
@@ -63,6 +78,13 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
         AuthenticatedUser currentUser = currentUserProvider.currentUser();
         validateMakerChecker(latestRecommendation, currentUser);
 
+        LocalDateTime now = LocalDateTime.now(clock);
+        BusinessOperationContext operationContext = BusinessOperationContext.user(
+                UUID.randomUUID(),
+                currentUser.userId(),
+                now
+        );
+
         ApprovalDecision decision = ApprovalDecision.recorded(
                 UUID.randomUUID(),
                 loanApplicationId,
@@ -71,11 +93,24 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
                 request.action(),
                 request.reason(),
                 request.internalNotes(),
-                LocalDateTime.now()
+                now
         );
 
         ApprovalDecision savedDecision = approvalDecisionRepository.save(decision);
-        approvalDecisionEventPublisher.publish(approvalMapper.toRecordedEvent(savedDecision));
+        businessAuditPublisher.publish(BusinessAuditEvent.single(
+                operationContext,
+                new BusinessAuditEntry(
+                        BusinessAuditAction.APPROVAL_DECISION_RECORDED,
+                        BusinessAuditEntityType.APPROVAL_DECISION,
+                        savedDecision.id(),
+                        BusinessAuditPayload.builder()
+                                .put(BusinessAuditPayloadKey.LOAN_APPLICATION_ID, savedDecision.loanApplicationId())
+                                .put(BusinessAuditPayloadKey.REVIEW_RECOMMENDATION_ID, savedDecision.reviewRecommendationId())
+                                .put(BusinessAuditPayloadKey.APPROVAL_DECISION_ACTION, savedDecision.action())
+                                .build()
+                )
+        ));
+        approvalDecisionEventPublisher.publish(approvalMapper.toRecordedEvent(savedDecision, operationContext));
 
         return approvalMapper.toDto(savedDecision);
     }

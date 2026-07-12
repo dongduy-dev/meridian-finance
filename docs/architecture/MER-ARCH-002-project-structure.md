@@ -157,12 +157,12 @@ com.meridian.platform/
 │   │   │   ├── SalaryAdvanceLimit.java
 │   │   │   ├── SalaryAdvanceLimitMovement.java
 │   │   │   ├── SalaryAdvanceVerification.java
+│   │   │   ├── LoanApplicationStatusTransition.java
 │   │   │   ├── LoanAccount.java
 │   │   │   ├── LoanStatus.java
 │   │   │   ├── OfferTerms.java
 │   │   │   ├── DisbursementRecord.java
-│   │   │   ├── RepaymentSchedule.java
-│   │   │   └── StatusTransition.java
+│   │   │   └── RepaymentSchedule.java
 │   │   ├── product/                    # Product policies/strategies; no top-level product modules
 │   │   │   ├── LoanProductStrategy.java
 │   │   │   ├── SalaryAdvancePolicy.java
@@ -257,7 +257,6 @@ com.meridian.platform/
 │   │   │   ├── ReviewRecommendation.java
 │   │   │   ├── ApprovalDecision.java
 │   │   │   ├── MakerCheckerControl.java
-│   │   │   ├── ApprovalHistory.java
 │   │   │   └── ApprovalStatus.java
 │   │   ├── service/
 │   │   │   └── MakerCheckerPolicyService.java
@@ -299,7 +298,7 @@ com.meridian.platform/
 │       │       └── event/
 │       │           └── SpringApprovalEventPublisher.java
 │       ├── listener/
-│       │   └── LoanEventListener.java    # Inbound event adapter; @ApplicationModuleListener for LoanSentForApprovalEvent
+│       │   └── LoanEventListener.java    # Inbound event adapter; synchronous @EventListener when rollback semantics are required
 │       └── config/
 │           └── ApprovalModuleConfig.java
 │
@@ -367,28 +366,25 @@ com.meridian.platform/
 ├── audit/                           # ── Audit Module (SIMPLIFIED) ──
 │   ├── domain/
 │   │   ├── model/
-│   │   │   ├── AuditEvent.java
-│   │   │   ├── BusinessActionHistory.java
-│   │   │   └── StatusTransitionHistory.java
+│   │   │   └── AuditEvent.java
 │   │   └── exception/
 │   │       └── AuditDomainException.java
 │   ├── application/
 │   │   ├── port/
 │   │   │   ├── in/
-│   │   │   │   └── QueryAuditUseCase.java   # Read-only audit log queries
+│   │   │   │   └── RecordAuditEventsUseCase.java # Synchronous append-only recording
 │   │   │   └── out/
 │   │   │       └── AuditEventRepository.java
 │   │   ├── service/
-│   │   │   └── AuditEventService.java       # Records events; does not control workflow decisions
+│   │   │   └── RecordAuditEventsService.java # Records events; does not control workflow decisions
 │   │   ├── dto/
 │   │   └── mapper/
 │   └── infrastructure/
 │       └── adapter/
 │           ├── in/
 │           │   ├── event/
-│           │   │   └── DomainEventAuditListener.java  # Terminal @ApplicationModuleListener consumer
+│           │   │   └── BusinessAuditEventListener.java # Terminal synchronous @EventListener consumer
 │           │   └── web/
-│           │       └── AuditController.java           # Calls QueryAuditUseCase
 │           └── out/
 │               └── persistence/
 │                   └── JpaAuditEventRepository.java
@@ -431,7 +427,7 @@ Salary Advance remains inside the generic lending architecture. `partner/` owns 
 | **Customer** | Moderate | Supporting domain. Owns profile, verification status, bank account information, and sensitive data handling. |
 | **Partner** | Moderate | Supporting domain. Owns Partner Companies, Partner Employees, import batches, and reusable Salary Advance employee links. |
 | **Document** | Moderate | Checklist, manual review, replacement, waiver, readiness, storage, and OCR-assisted processing justify ports. |
-| **Audit** | Simplified | Cross-cutting concern. Simple append-only writes. No complex domain logic. |
+| **Audit** | Simplified | Cross-cutting concern. Append-only writes for approved workflow actions. No read API or workflow-control logic in the current checkpoint. |
 | **Notification** | Simplified | Optional later. Template-based, minimal logic. |
 
 ---

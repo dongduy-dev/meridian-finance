@@ -2,6 +2,7 @@ package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
@@ -10,6 +11,7 @@ import com.meridian.platform.loan.domain.model.ApprovedOfferStatus;
 import com.meridian.platform.loan.domain.model.InterestCalculationMethod;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
@@ -22,6 +24,13 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import com.meridian.platform.loan.domain.service.SalaryAdvanceOfferCalculator;
+import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
+import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
+import com.meridian.platform.shared.application.operation.BusinessOperationContext;
+import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
+import com.meridian.platform.shared.domain.audit.ExpiryDiscoveryTrigger;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import com.meridian.platform.shared.domain.model.ActorType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -35,6 +44,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ApprovedOfferExpiryServiceTest {
@@ -49,6 +59,8 @@ class ApprovedOfferExpiryServiceTest {
     private FakeApprovedOfferRepository approvedOfferRepository;
     private FakeSalaryAdvanceLimitRepository limitRepository;
     private FakeSalaryAdvanceLimitMovementRepository movementRepository;
+    private FakeLoanApplicationStatusTransitionRepository transitionRepository;
+    private FakeBusinessAuditPublisher auditPublisher;
     private ApprovedOfferExpiryService service;
 
     @BeforeEach
@@ -58,33 +70,41 @@ class ApprovedOfferExpiryServiceTest {
         FakeSalaryAdvanceVerificationRepository verificationRepository = new FakeSalaryAdvanceVerificationRepository();
         limitRepository = new FakeSalaryAdvanceLimitRepository();
         movementRepository = new FakeSalaryAdvanceLimitMovementRepository();
+        transitionRepository = new FakeLoanApplicationStatusTransitionRepository();
+        auditPublisher = new FakeBusinessAuditPublisher();
         SalaryAdvanceReservationReleaseService releaseService = new SalaryAdvanceReservationReleaseService(
                 verificationRepository,
                 limitRepository,
-                movementRepository
+                movementRepository,
+                auditPublisher
         );
         service = new ApprovedOfferExpiryService(
                 loanApplicationRepository,
                 approvedOfferRepository,
-                releaseService
+                releaseService,
+                new LoanApplicationStatusTransitionRecorder(transitionRepository),
+                auditPublisher
         );
     }
 
     @Test
     void expiresDuePendingOfferAndReleasesReservation() {
-        service.expireDueOffer(LOAN_APPLICATION_ID, NOW);
+        service.expireDueOffer(LOAN_APPLICATION_ID, systemContext(), ExpiryDiscoveryTrigger.SCHEDULED_SCAN);
 
         assertEquals(ApprovedOfferStatus.EXPIRED, approvedOfferRepository.savedOffer.status());
         assertEquals(LoanApplicationStatus.EXPIRED, loanApplicationRepository.savedApplication.status());
         assertEquals(1, movementRepository.savedMovements.size());
         assertEquals(money(0), limitRepository.savedLimit.reservedAmount());
+        assertEquals(1, transitionRepository.savedTransitions.size());
+        assertEquals(ActorType.SYSTEM, transitionRepository.savedTransitions.getFirst().actorType());
+        assertEquals(BusinessAuditAction.RESERVATION_RELEASED, auditPublisher.lastEvent().entries().getFirst().action());
     }
 
     @Test
     void skipsPendingOfferBeforeExpiry() {
         approvedOfferRepository.offer = pendingOffer(NOW.plusSeconds(1));
 
-        service.expireDueOffer(LOAN_APPLICATION_ID, NOW);
+        service.expireDueOffer(LOAN_APPLICATION_ID, systemContext(), ExpiryDiscoveryTrigger.SCHEDULED_SCAN);
 
         assertNull(approvedOfferRepository.savedOffer);
         assertNull(loanApplicationRepository.savedApplication);
@@ -96,7 +116,7 @@ class ApprovedOfferExpiryServiceTest {
         approvedOfferRepository.offer = pendingOffer(NOW.minusSeconds(1)).expire(NOW.minusSeconds(1));
         loanApplicationRepository.application = loanApplication(LoanApplicationStatus.EXPIRED);
 
-        service.expireDueOffer(LOAN_APPLICATION_ID, NOW);
+        service.expireDueOffer(LOAN_APPLICATION_ID, systemContext(), ExpiryDiscoveryTrigger.SCHEDULED_SCAN);
 
         assertNull(approvedOfferRepository.savedOffer);
         assertNull(loanApplicationRepository.savedApplication);
@@ -107,7 +127,7 @@ class ApprovedOfferExpiryServiceTest {
     void existingReleaseMovementPreventsDuplicateReleaseOnExpiry() {
         movementRepository.releaseMovementExists = true;
 
-        service.expireDueOffer(LOAN_APPLICATION_ID, NOW);
+        service.expireDueOffer(LOAN_APPLICATION_ID, systemContext(), ExpiryDiscoveryTrigger.SCHEDULED_SCAN);
 
         assertEquals(ApprovedOfferStatus.EXPIRED, approvedOfferRepository.savedOffer.status());
         assertEquals(LoanApplicationStatus.EXPIRED, loanApplicationRepository.savedApplication.status());
@@ -115,6 +135,30 @@ class ApprovedOfferExpiryServiceTest {
         assertTrue(movementRepository.savedMovements.isEmpty());
     }
 
+    @Test
+    void scheduledExpiryRejectsUserOperationContext() {
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.expireDueOffer(
+                        LOAN_APPLICATION_ID,
+                        BusinessOperationContext.user(
+                                UUID.fromString("abababab-abab-abab-abab-abababababab"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000301"),
+                                NOW
+                        ),
+                        ExpiryDiscoveryTrigger.SCHEDULED_SCAN
+                )
+        );
+
+        assertEquals("INVALID_OPERATION_CONTEXT", exception.getErrorCode());
+        assertNull(approvedOfferRepository.savedOffer);
+        assertNull(loanApplicationRepository.savedApplication);
+        assertTrue(movementRepository.savedMovements.isEmpty());
+    }
+
+    private BusinessOperationContext systemContext() {
+        return BusinessOperationContext.system(UUID.fromString("abababab-abab-abab-abab-abababababab"), NOW);
+    }
     private static ApprovedOffer pendingOffer(LocalDateTime expiresAt) {
         ApprovedOffer generated = new SalaryAdvanceOfferCalculator().generate(
                 UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd"),
@@ -299,6 +343,36 @@ class ApprovedOfferExpiryServiceTest {
         }
     }
 
+
+    private static class FakeLoanApplicationStatusTransitionRepository implements LoanApplicationStatusTransitionRepository {
+
+        private final List<LoanApplicationStatusTransition> savedTransitions = new ArrayList<>();
+
+        @Override
+        public int nextSequenceNumber(UUID loanApplicationId) {
+            return savedTransitions.size() + 1;
+        }
+
+        @Override
+        public LoanApplicationStatusTransition save(LoanApplicationStatusTransition transition) {
+            savedTransitions.add(transition);
+            return transition;
+        }
+    }
+
+    private static class FakeBusinessAuditPublisher implements BusinessAuditPublisher {
+
+        private final List<BusinessAuditEvent> publishedEvents = new ArrayList<>();
+
+        @Override
+        public void publish(BusinessAuditEvent event) {
+            publishedEvents.add(event);
+        }
+
+        private BusinessAuditEvent lastEvent() {
+            return publishedEvents.getLast();
+        }
+    }
     private static class FakeSalaryAdvanceLimitMovementRepository implements SalaryAdvanceLimitMovementRepository {
 
         private final List<SalaryAdvanceLimitMovement> savedMovements = new ArrayList<>();

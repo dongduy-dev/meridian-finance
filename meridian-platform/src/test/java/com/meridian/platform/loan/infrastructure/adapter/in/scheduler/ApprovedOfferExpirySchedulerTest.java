@@ -3,6 +3,9 @@ package com.meridian.platform.loan.infrastructure.adapter.in.scheduler;
 import com.meridian.platform.loan.application.port.in.ExpireApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
+import com.meridian.platform.shared.application.operation.BusinessOperationContext;
+import com.meridian.platform.shared.domain.audit.ExpiryDiscoveryTrigger;
+import com.meridian.platform.shared.domain.model.ActorType;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -15,6 +18,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class ApprovedOfferExpirySchedulerTest {
 
@@ -36,6 +40,10 @@ class ApprovedOfferExpirySchedulerTest {
 
         assertEquals(100, repository.requestedBatchSize);
         assertEquals(List.of(FIRST_APPLICATION_ID, SECOND_APPLICATION_ID), useCase.attemptedApplicationIds);
+        assertEquals(List.of(ExpiryDiscoveryTrigger.SCHEDULED_SCAN, ExpiryDiscoveryTrigger.SCHEDULED_SCAN), useCase.triggers);
+        assertEquals(ActorType.SYSTEM, useCase.contexts.getFirst().actorType());
+        assertNull(useCase.contexts.getFirst().actorUserId());
+        assertEquals(LocalDateTime.of(2026, 7, 6, 5, 0), useCase.contexts.getFirst().occurredAt());
     }
 
     private static class FakeApprovedOfferRepository implements ApprovedOfferRepository {
@@ -67,10 +75,18 @@ class ApprovedOfferExpirySchedulerTest {
     private static class FailingFirstExpireUseCase implements ExpireApprovedOfferUseCase {
 
         private final List<UUID> attemptedApplicationIds = new ArrayList<>();
+        private final List<BusinessOperationContext> contexts = new ArrayList<>();
+        private final List<ExpiryDiscoveryTrigger> triggers = new ArrayList<>();
 
         @Override
-        public void expireDueOffer(UUID loanApplicationId, LocalDateTime now) {
+        public void expireDueOffer(
+                UUID loanApplicationId,
+                BusinessOperationContext operationContext,
+                ExpiryDiscoveryTrigger trigger
+        ) {
             attemptedApplicationIds.add(loanApplicationId);
+            contexts.add(operationContext);
+            triggers.add(trigger);
             if (loanApplicationId.equals(FIRST_APPLICATION_ID)) {
                 throw new IllegalStateException("first item failed");
             }

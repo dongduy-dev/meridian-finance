@@ -8,15 +8,28 @@ import com.meridian.platform.loan.application.port.out.LoanApplicationRepository
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyRepository;
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
 import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.domain.model.LoanApplicationTransitionFact;
+import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
 import com.meridian.platform.loan.domain.model.LoanApprovalDecisionAction;
 import com.meridian.platform.loan.domain.model.ProductCode;
+import com.meridian.platform.loan.domain.model.ReservationReleaseTrigger;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
 import com.meridian.platform.loan.domain.service.SalaryAdvanceOfferCalculator;
+import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
+import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
+import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
+import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
+import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
+import com.meridian.platform.shared.domain.audit.BusinessAuditPayload;
+import com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
+import com.meridian.platform.shared.domain.model.ActorType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -27,18 +40,24 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
     private final ApprovedOfferRepository approvedOfferRepository;
     private final SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository;
     private final SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService;
+    private final LoanApplicationStatusTransitionRecorder transitionRecorder;
+    private final BusinessAuditPublisher businessAuditPublisher;
     private final SalaryAdvanceOfferCalculator salaryAdvanceOfferCalculator = new SalaryAdvanceOfferCalculator();
 
     public ApplyApprovalDecisionService(
             LoanApplicationRepository loanApplicationRepository,
             ApprovedOfferRepository approvedOfferRepository,
             SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository,
-            SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService
+            SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService,
+            LoanApplicationStatusTransitionRecorder transitionRecorder,
+            BusinessAuditPublisher businessAuditPublisher
     ) {
         this.loanApplicationRepository = loanApplicationRepository;
         this.approvedOfferRepository = approvedOfferRepository;
         this.salaryAdvanceOfferPolicyRepository = salaryAdvanceOfferPolicyRepository;
         this.salaryAdvanceReservationReleaseService = salaryAdvanceReservationReleaseService;
+        this.transitionRecorder = transitionRecorder;
+        this.businessAuditPublisher = businessAuditPublisher;
     }
 
     @Override
@@ -51,6 +70,8 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         Objects.requireNonNull(command.approverUserId(), "approverUserId must not be null");
         Objects.requireNonNull(command.action(), "action must not be null");
         Objects.requireNonNull(command.decidedAt(), "decidedAt must not be null");
+        Objects.requireNonNull(command.operationContext(), "operationContext must not be null");
+        validateOperationContext(command);
 
         LoanApplication loanApplication = loanApplicationRepository.findByIdForUpdate(command.loanApplicationId())
                 .orElseThrow(() -> new EntityNotFoundException(
@@ -58,22 +79,59 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
                         "Loan application was not found."
                 ));
 
-        LoanApplication transitionedApplication = loanApplication.applyApprovalDecision(command.action());
+        LoanApplicationTransitionResult decisionTransition = loanApplication.applyApprovalDecision(command.action());
+        LoanApplication transitionedApplication = decisionTransition.loanApplication();
+        List<LoanApplicationTransitionFact> transitionFacts = new ArrayList<>(decisionTransition.facts());
+        ApprovedOffer savedApprovedOffer = null;
+
         if (shouldGenerateSalaryAdvanceOffer(loanApplication, command.action())) {
             ApprovedOffer approvedOffer = generateSalaryAdvanceOffer(loanApplication, command);
-            approvedOfferRepository.save(approvedOffer);
-            transitionedApplication = transitionedApplication.markCustomerAcceptancePending();
+            savedApprovedOffer = approvedOfferRepository.save(approvedOffer);
+            LoanApplicationTransitionResult acceptancePendingTransition =
+                    transitionedApplication.markCustomerAcceptancePending();
+            transitionedApplication = acceptancePendingTransition.loanApplication();
+            transitionFacts.addAll(acceptancePendingTransition.facts());
         }
         if (shouldReleaseSalaryAdvanceReservation(loanApplication, command.action())) {
-            salaryAdvanceReservationReleaseService.releaseReservationOnce(loanApplication, command.decidedAt());
+            salaryAdvanceReservationReleaseService.releaseReservationOnce(
+                    loanApplication,
+                    command.operationContext(),
+                    ReservationReleaseTrigger.APPROVAL_REJECTION
+            );
         }
 
         LoanApplication savedApplication = loanApplicationRepository.save(transitionedApplication);
+        transitionRecorder.record(command.operationContext(), transitionFacts, command.reason());
+        if (savedApprovedOffer != null) {
+            businessAuditPublisher.publish(BusinessAuditEvent.single(
+                    command.operationContext(),
+                    new BusinessAuditEntry(
+                            BusinessAuditAction.APPROVED_OFFER_GENERATED,
+                            BusinessAuditEntityType.APPROVED_OFFER,
+                            savedApprovedOffer.id(),
+                            BusinessAuditPayload.builder()
+                                    .put(BusinessAuditPayloadKey.LOAN_APPLICATION_ID, savedApplication.id())
+                                    .put(BusinessAuditPayloadKey.OFFER_STATUS, savedApprovedOffer.status())
+                                    .build()
+                    )
+            ));
+        }
 
         return new LoanApplicationReviewDto(
                 savedApplication.id(),
                 savedApplication.status().name()
         );
+    }
+
+    private void validateOperationContext(ApplyApprovalDecisionCommand command) {
+        if (command.operationContext().actorType() != ActorType.USER
+                || !command.approverUserId().equals(command.operationContext().actorUserId())
+                || !command.decidedAt().equals(command.operationContext().occurredAt())) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_OPERATION_CONTEXT",
+                    "Approval operation context must match the authoritative approval decision record."
+            );
+        }
     }
 
     private boolean shouldGenerateSalaryAdvanceOffer(
@@ -100,7 +158,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
                 policy,
                 loanApplication.requestedAmount(),
                 loanApplication.requestedTermMonths(),
-                command.decidedAt()
+                command.operationContext().occurredAt()
         );
     }
 

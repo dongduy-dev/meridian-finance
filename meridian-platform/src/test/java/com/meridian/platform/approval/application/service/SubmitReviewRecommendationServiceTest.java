@@ -8,12 +8,19 @@ import com.meridian.platform.approval.application.port.out.ReviewRecommendationE
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.domain.model.ReviewRecommendation;
 import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
+import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
+import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -26,25 +33,31 @@ class SubmitReviewRecommendationServiceTest {
 
     private static final UUID LOAN_APPLICATION_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private static final UUID LOAN_OFFICER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000302");
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 7, 6, 10, 0);
+    private static final Clock CLOCK = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
 
     private FakeReviewRecommendationRepository repository;
     private FakeReviewRecommendationEventPublisher eventPublisher;
+    private FakeBusinessAuditPublisher auditPublisher;
     private SubmitReviewRecommendationService service;
 
     @BeforeEach
     void setUp() {
         repository = new FakeReviewRecommendationRepository();
         eventPublisher = new FakeReviewRecommendationEventPublisher();
+        auditPublisher = new FakeBusinessAuditPublisher();
         service = new SubmitReviewRecommendationService(
                 repository,
                 eventPublisher,
                 new FixedCurrentUserProvider(),
-                new ApprovalMapper()
+                new ApprovalMapper(),
+                auditPublisher,
+                CLOCK
         );
     }
 
     @Test
-    void derivesLoanOfficerActorFromCurrentUserAndPublishesEvent() {
+    void derivesLoanOfficerActorFromCurrentUserAuditsAndPublishesEvent() {
         ReviewRecommendationDto result = service.submitReviewRecommendation(
                 LOAN_APPLICATION_ID,
                 new ReviewRecommendationRequest(
@@ -58,9 +71,13 @@ class SubmitReviewRecommendationServiceTest {
         assertEquals(LOAN_APPLICATION_ID, result.loanApplicationId());
         assertEquals(LOAN_OFFICER_USER_ID, result.loanOfficerUserId());
         assertEquals("RECOMMEND_APPROVAL", result.action());
+        assertEquals(NOW, result.submittedAt());
         assertEquals(LOAN_OFFICER_USER_ID, repository.savedRecommendation.loanOfficerUserId());
         assertEquals(result.recommendationId(), eventPublisher.publishedEvent.recommendationId());
         assertEquals(LOAN_APPLICATION_ID, eventPublisher.publishedEvent.loanApplicationId());
+        assertEquals(auditPublisher.publishedEvent.operationContext(), eventPublisher.publishedEvent.operationContext());
+        assertEquals(BusinessAuditAction.REVIEW_RECOMMENDATION_RECORDED,
+                auditPublisher.publishedEvent.entries().getFirst().action());
     }
 
     @Test
@@ -142,6 +159,16 @@ class SubmitReviewRecommendationServiceTest {
             if (failure != null) {
                 throw failure;
             }
+        }
+    }
+
+    private static class FakeBusinessAuditPublisher implements BusinessAuditPublisher {
+
+        private BusinessAuditEvent publishedEvent;
+
+        @Override
+        public void publish(BusinessAuditEvent event) {
+            publishedEvent = event;
         }
     }
 }

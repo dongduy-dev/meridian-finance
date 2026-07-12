@@ -4,6 +4,7 @@ import com.meridian.platform.loan.application.dto.ApplyApprovalDecisionCommand;
 import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyRepository;
@@ -12,6 +13,7 @@ import com.meridian.platform.loan.domain.model.ApprovedOffer;
 import com.meridian.platform.loan.domain.model.InterestCalculationMethod;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
 import com.meridian.platform.loan.domain.model.LoanApprovalDecisionAction;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
@@ -24,6 +26,10 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
+import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
+import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
+import com.meridian.platform.shared.application.operation.BusinessOperationContext;
+import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,6 +67,8 @@ class ApplyApprovalDecisionServiceTest {
     private FakeSalaryAdvanceVerificationRepository verificationRepository;
     private FakeSalaryAdvanceLimitRepository limitRepository;
     private FakeSalaryAdvanceLimitMovementRepository movementRepository;
+    private FakeLoanApplicationStatusTransitionRepository transitionRepository;
+    private FakeBusinessAuditPublisher auditPublisher;
     private ApplyApprovalDecisionService service;
 
     @BeforeEach
@@ -71,16 +79,21 @@ class ApplyApprovalDecisionServiceTest {
         verificationRepository = new FakeSalaryAdvanceVerificationRepository();
         limitRepository = new FakeSalaryAdvanceLimitRepository();
         movementRepository = new FakeSalaryAdvanceLimitMovementRepository();
+        transitionRepository = new FakeLoanApplicationStatusTransitionRepository();
+        auditPublisher = new FakeBusinessAuditPublisher();
         SalaryAdvanceReservationReleaseService releaseService = new SalaryAdvanceReservationReleaseService(
                 verificationRepository,
                 limitRepository,
-                movementRepository
+                movementRepository,
+                auditPublisher
         );
         service = new ApplyApprovalDecisionService(
                 loanApplicationRepository,
                 approvedOfferRepository,
                 offerPolicyRepository,
-                releaseService
+                releaseService,
+                new LoanApplicationStatusTransitionRecorder(transitionRepository),
+                auditPublisher
         );
     }
 
@@ -103,6 +116,10 @@ class ApplyApprovalDecisionServiceTest {
         assertEquals(DECIDED_AT.plusDays(7), approvedOfferRepository.savedOffer.expiresAt());
         assertEquals(1, approvedOfferRepository.savedOffer.repaymentItems().size());
         assertTrue(movementRepository.savedMovements.isEmpty());
+        assertEquals(2, transitionRepository.savedTransitions.size());
+        assertEquals(LoanApplicationStatus.APPROVED, transitionRepository.savedTransitions.get(0).toStatus());
+        assertEquals(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING, transitionRepository.savedTransitions.get(1).toStatus());
+        assertEquals(BusinessAuditAction.APPROVED_OFFER_GENERATED, auditPublisher.lastEvent().entries().getFirst().action());
     }
 
     @Test
@@ -133,6 +150,9 @@ class ApplyApprovalDecisionServiceTest {
                 movementRepository.savedMovements.get(0).movementType());
         assertEquals(LOAN_APPLICATION_ID, movementRepository.savedMovements.get(0).loanApplicationId());
         assertEquals(limit(3_000_000), movementRepository.savedMovements.get(0).amount());
+        assertEquals(1, transitionRepository.savedTransitions.size());
+        assertEquals(LoanApplicationStatus.REJECTED, transitionRepository.savedTransitions.getFirst().toStatus());
+        assertEquals(BusinessAuditAction.RESERVATION_RELEASED, auditPublisher.lastEvent().entries().getFirst().action());
     }
 
     @Test
@@ -171,14 +191,82 @@ class ApplyApprovalDecisionServiceTest {
         assertNull(approvedOfferRepository.savedOffer);
     }
 
+    @Test
+    void rejectsSystemActorApprovalOperationContext() {
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.applyApprovalDecision(command(
+                        LoanApprovalDecisionAction.APPROVE,
+                        BusinessOperationContext.system(UUID.fromString("abababab-abab-abab-abab-abababababab"), DECIDED_AT)
+                ))
+        );
+
+        assertEquals("INVALID_OPERATION_CONTEXT", exception.getErrorCode());
+        assertNull(loanApplicationRepository.savedApplication);
+        assertNull(approvedOfferRepository.savedOffer);
+    }
+
+    @Test
+    void rejectsMismatchedApproverOperationContext() {
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.applyApprovalDecision(command(
+                        LoanApprovalDecisionAction.APPROVE,
+                        BusinessOperationContext.user(
+                                UUID.fromString("abababab-abab-abab-abab-abababababab"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000302"),
+                                DECIDED_AT
+                        )
+                ))
+        );
+
+        assertEquals("INVALID_OPERATION_CONTEXT", exception.getErrorCode());
+        assertNull(loanApplicationRepository.savedApplication);
+        assertNull(approvedOfferRepository.savedOffer);
+    }
+
+    @Test
+    void rejectsMismatchedDecisionTimestampOperationContext() {
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.applyApprovalDecision(command(
+                        LoanApprovalDecisionAction.APPROVE,
+                        BusinessOperationContext.user(
+                                UUID.fromString("abababab-abab-abab-abab-abababababab"),
+                                APPROVER_USER_ID,
+                                DECIDED_AT.plusSeconds(1)
+                        )
+                ))
+        );
+
+        assertEquals("INVALID_OPERATION_CONTEXT", exception.getErrorCode());
+        assertNull(loanApplicationRepository.savedApplication);
+        assertNull(approvedOfferRepository.savedOffer);
+    }
     private ApplyApprovalDecisionCommand command(LoanApprovalDecisionAction action) {
+        return command(
+                action,
+                BusinessOperationContext.user(
+                        UUID.fromString("abababab-abab-abab-abab-abababababab"),
+                        APPROVER_USER_ID,
+                        DECIDED_AT
+                )
+        );
+    }
+
+    private ApplyApprovalDecisionCommand command(
+            LoanApprovalDecisionAction action,
+            BusinessOperationContext operationContext
+    ) {
         return new ApplyApprovalDecisionCommand(
                 LOAN_APPLICATION_ID,
                 DECISION_ID,
                 RECOMMENDATION_ID,
                 APPROVER_USER_ID,
                 action,
-                DECIDED_AT
+                action == LoanApprovalDecisionAction.REJECT ? "Business-facing reason" : null,
+                DECIDED_AT,
+                operationContext
         );
     }
 
@@ -354,6 +442,36 @@ class ApplyApprovalDecisionServiceTest {
         }
     }
 
+
+    private static class FakeLoanApplicationStatusTransitionRepository implements LoanApplicationStatusTransitionRepository {
+
+        private final List<LoanApplicationStatusTransition> savedTransitions = new ArrayList<>();
+
+        @Override
+        public int nextSequenceNumber(UUID loanApplicationId) {
+            return savedTransitions.size() + 1;
+        }
+
+        @Override
+        public LoanApplicationStatusTransition save(LoanApplicationStatusTransition transition) {
+            savedTransitions.add(transition);
+            return transition;
+        }
+    }
+
+    private static class FakeBusinessAuditPublisher implements BusinessAuditPublisher {
+
+        private final List<BusinessAuditEvent> publishedEvents = new ArrayList<>();
+
+        @Override
+        public void publish(BusinessAuditEvent event) {
+            publishedEvents.add(event);
+        }
+
+        private BusinessAuditEvent lastEvent() {
+            return publishedEvents.getLast();
+        }
+    }
     private static class FakeSalaryAdvanceLimitMovementRepository implements SalaryAdvanceLimitMovementRepository {
 
         private final List<SalaryAdvanceLimitMovement> savedMovements = new ArrayList<>();

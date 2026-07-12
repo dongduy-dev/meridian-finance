@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.application.dto;
 
 import com.meridian.platform.loan.domain.model.LoanApprovalDecisionAction;
+import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -11,6 +12,8 @@ public record ApplyApprovalDecisionCommand(
         UUID reviewRecommendationId,
         UUID approverUserId,
         LoanApprovalDecisionAction action,
-        LocalDateTime decidedAt
+        String reason,
+        LocalDateTime decidedAt,
+        BusinessOperationContext operationContext
 ) {
 }

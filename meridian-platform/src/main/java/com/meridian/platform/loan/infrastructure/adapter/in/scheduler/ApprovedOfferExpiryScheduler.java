@@ -2,6 +2,8 @@ package com.meridian.platform.loan.infrastructure.adapter.in.scheduler;
 
 import com.meridian.platform.loan.application.port.in.ExpireApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
+import com.meridian.platform.shared.application.operation.BusinessOperationContext;
+import com.meridian.platform.shared.domain.audit.ExpiryDiscoveryTrigger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,7 +48,11 @@ public class ApprovedOfferExpiryScheduler {
         LocalDateTime now = LocalDateTime.now(clock);
         for (UUID loanApplicationId : approvedOfferRepository.findExpiredPendingLoanApplicationIds(now, batchSize)) {
             try {
-                expireApprovedOfferUseCase.expireDueOffer(loanApplicationId, now);
+                expireApprovedOfferUseCase.expireDueOffer(
+                        loanApplicationId,
+                        BusinessOperationContext.system(UUID.randomUUID(), now),
+                        ExpiryDiscoveryTrigger.SCHEDULED_SCAN
+                );
             } catch (RuntimeException exception) {
                 LOGGER.warn("Failed to expire approved offer for loan application {}", loanApplicationId, exception);
             }

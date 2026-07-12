@@ -15,7 +15,7 @@ The model supports the MVP lending workflow for:
 - Salary Advance limit tracking, loan application submission, product verification, offers, disbursement confirmation, loan account activation, and repayment tracking.
 - Loan Officer review, Approver decision, and maker-checker controls.
 - Document upload, checklist completeness, manual review, waiver, replacement, and readiness checks.
-- Audit events and status transition history.
+- Audit events and Loan Application status transition history.
 - Planned Phase 2 OCR-assisted document processing under Document Management.
 
 The MVP uses one PostgreSQL database. Tables are logically owned by modules, but Meridian does not use a database-per-service design.
@@ -372,15 +372,6 @@ erDiagram
         datetime decided_at
     }
 
-    approval_history {
-        uuid id PK
-        uuid loan_application_id FK
-        uuid actor_user_id FK
-        string action
-        string from_status
-        string to_status
-        datetime occurred_at
-    }
 
     audit_events {
         uuid id PK
@@ -392,15 +383,19 @@ erDiagram
         datetime occurred_at
     }
 
-    status_transition_history {
+    loan_application_status_transitions {
         uuid id PK
-        string entity_type
-        uuid entity_id
-        string from_status
+        uuid loan_application_id FK
+        uuid operation_id
+        smallint sequence_number
+        string from_status "nullable for initial submission"
         string to_status
-        string reason
-        uuid actor_user_id FK
+        string action
+        text reason "nullable"
+        string actor_type
+        uuid actor_user_id FK "nullable for system actions"
         datetime occurred_at
+        datetime created_at
     }
 
     ocr_jobs {
@@ -473,8 +468,9 @@ erDiagram
 
     loan_applications ||--o{ review_recommendations : receives
     loan_applications ||--o{ approval_decisions : receives
-    loan_applications ||--o{ approval_history : tracks
-    loan_applications ||--o{ status_transition_history : changes
+
+    users o|--o{ loan_application_status_transitions : may_act_on
+    loan_applications ||--o{ loan_application_status_transitions : changes
     loan_applications ||--o{ audit_events : audited_by
 
     documents ||--o{ ocr_jobs : queues_phase_2
@@ -527,6 +523,7 @@ Logical tables:
 - `salary_advance_limits` - current Salary Advance limit state for a customer with a verified customer-partner employee link.
 - `salary_advance_limit_movements` - lightweight history explaining limit changes such as refresh, reservation, release, disbursement usage, repayment release, suspension, and disablement. It is not a double-entry accounting ledger.
 - `salary_advance_verifications` - application-specific Salary Advance employee and limit snapshot associated with a submitted or in-progress `loan_application`. This is the clearer name for the previous `employee_verifications` concept.
+- `loan_application_status_transitions` - ordered Loan-owned status transition history for `loan_applications`, keyed by `loan_application_id` rather than generic polymorphic entity references.
 - `approved_offers` - immutable customer-facing approved-offer snapshots generated after approval and before customer acceptance.
 - `approved_offer_repayment_items` - provisional installment-level principal, interest, fee, and total-due items owned by an approved offer.
 - `loan_accounts` - active loan record created only after manual disbursement confirmation.
@@ -547,11 +544,10 @@ Logical tables:
 
 Logical tables:
 
-- `review_recommendations` - Loan Officer recommendation records.
-- `approval_decisions` - Approver decision records.
-- `approval_history` - ordered approval workflow trail for returns, corrections, recommendations, and decisions.
+- `review_recommendations` - authoritative Loan Officer recommendation records.
+- `approval_decisions` - authoritative Approver decision records.
 
-Approval remains separate from Loan Core behavior. The data model enforces maker-checker traceability by preserving the Loan Officer actor and Approver actor on separate records.
+Approval remains separate from Loan Core behavior. The data model enforces maker-checker traceability by preserving the Loan Officer actor and Approver actor on separate records. A combined Approval timeline, if later needed, should be derived as a query/read model from `review_recommendations`, `approval_decisions`, and related Loan lifecycle records rather than persisted in a duplicated Approval history table.
 
 ### 5.6 Document Management
 
@@ -571,9 +567,8 @@ Checklist completeness and manual document review are separate. Submission may r
 Logical tables:
 
 - `audit_events` - append-only business event log with actor, action, affected entity, timestamp, and JSONB payload snapshots.
-- `status_transition_history` - explicit status transition history for loan applications, loan accounts, documents, approval work items, and OCR jobs where relevant.
 
-Audit tables are terminal consumers of business events. They record history and support compliance-oriented traceability; they do not control workflow decisions.
+`loan_application_status_transitions` records ordered Loan Application status changes and is owned by Loan Core. `audit_events` records important cross-cutting business actions. Audit events are observational and are not the authoritative source for current workflow or financial state.
 
 ### 5.8 OCR-Assisted Processing — Planned Phase 2
 
@@ -603,7 +598,7 @@ OCR belongs under Document Management. It is planned for Phase 2 and remains ass
 - One `loan_applications` record has one `document_checklists` header and many checklist items.
 - A `document_checklist_items` record may be satisfied by a current `documents` record, waived by `document_waivers`, or marked not required by policy.
 - One `documents` record may have many `document_reviews`, replacement requests, and Phase 2 OCR jobs.
-- One `loan_applications` record has many review, approval, audit, and status transition records.
+- One `loan_applications` record has many review recommendation, approval decision, audit event, and Loan-owned status transition records.
 
 ## 7. Status and Enum Reference
 
@@ -668,7 +663,10 @@ Salary Advance employee verification maps to `ProductVerificationResult` as foll
 
 - `audit_events` are append-only and must not be modified by normal application workflows.
 - Important business actions must record actor, action, affected entity, timestamp, and contextual payload.
-- Status changes must create `status_transition_history` entries with previous status, new status, actor, timestamp, and reason when required.
+- Loan Application status changes must create `loan_application_status_transitions` entries with previous status, new status, actor type, optional actor user, timestamp, action, sequence, operation ID, and reason when required.
+- `audit_events` are observational and are not the authoritative source for current workflow or financial state.
+- Generic `audit_events.entity_id` intentionally has no polymorphic foreign key.
+- System audit actors may have no `actor_user_id`.
 - Rejection, return, staff cancellation, request-more-information, staff correction, waiver, manual override, and replacement-request actions must include a reason.
 - Customer employee link verification, link suspension/disablement, Salary Advance limit refresh, reservation, release, disbursement usage, repayment release, suspension, and disablement must be auditable.
 - `salary_advance_limit_movements` explain limit changes for operations and customer support; they do not replace `audit_events` for actor, reason, related business entity, and workflow traceability.
@@ -701,7 +699,7 @@ Detailed index definitions are out of scope for this document. At implementation
 - Document checklist and review queues by loan application ID, review status, and document type.
 - Approval work queues by application ID, approver/reviewer ID, status, and created timestamp.
 - Repayment operations by loan account ID, due date, and repayment status.
-- Audit and status transition queries by entity type, entity ID, actor, action, and occurred timestamp.
+- Audit event queries by entity type, entity ID, actor, action, and occurred timestamp; Loan Application status transition queries by loan application ID, sequence number, actor, action, and occurred timestamp.
 - Phase 2 OCR job polling by job status, lease/attempt metadata, and queued timestamp.
 
 ## 12. Out of Scope
@@ -721,7 +719,6 @@ Detailed index definitions are out of scope for this document. At implementation
 
 - Which product-specific fields should remain in `loan_applications.product_details` and which should become dedicated tables after MVP usage stabilizes?
 - What exact encryption and key-management approach will be used for bank account, identity, and OCR-extracted sensitive fields?
-- Should `approval_history` remain a workflow-local trail, or should it be replaced by read models derived from `review_recommendations`, `approval_decisions`, and `status_transition_history`?
 - What retention, archival, and deletion policy should apply to uploaded documents, OCR results, refresh tokens, and audit events?
 - Should document versioning be expanded beyond `documents.version` if replacement workflows become more complex?
 - Should an implementation physically rename the previous `employee_verifications` table to `salary_advance_verifications`, or keep the old name while exposing the clearer domain language in code and documentation?

@@ -12,15 +12,26 @@ import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitReposit
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
 import com.meridian.platform.loan.domain.model.LoanProduct;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceApplicationCreationResult;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimit;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovement;
+import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import com.meridian.platform.loan.domain.model.VerifiedPartnerEmployeeLinkSnapshot;
 import com.meridian.platform.loan.domain.service.SalaryAdvanceApplicationPolicy;
+import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
+import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
+import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
+import com.meridian.platform.shared.application.operation.BusinessOperationContext;
+import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
+import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
+import com.meridian.platform.shared.domain.audit.BusinessAuditPayload;
+import com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
@@ -28,8 +39,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -46,6 +60,9 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
     private final PartnerEligibilityPort partnerEligibilityPort;
     private final LoanMapper loanMapper;
     private final CurrentUserProvider currentUserProvider;
+    private final LoanApplicationStatusTransitionRecorder transitionRecorder;
+    private final BusinessAuditPublisher businessAuditPublisher;
+    private final Clock clock;
     private final SalaryAdvanceApplicationPolicy applicationPolicy = new SalaryAdvanceApplicationPolicy();
 
     public StartSalaryAdvanceApplicationService(
@@ -56,7 +73,10 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
             SalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository,
             PartnerEligibilityPort partnerEligibilityPort,
             LoanMapper loanMapper,
-            CurrentUserProvider currentUserProvider
+            CurrentUserProvider currentUserProvider,
+            LoanApplicationStatusTransitionRecorder transitionRecorder,
+            BusinessAuditPublisher businessAuditPublisher,
+            Clock clock
     ) {
         this.loanProductRepository = loanProductRepository;
         this.loanApplicationRepository = loanApplicationRepository;
@@ -66,6 +86,9 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         this.partnerEligibilityPort = partnerEligibilityPort;
         this.loanMapper = loanMapper;
         this.currentUserProvider = currentUserProvider;
+        this.transitionRecorder = transitionRecorder;
+        this.businessAuditPublisher = businessAuditPublisher;
+        this.clock = clock;
     }
 
     @Override
@@ -76,7 +99,14 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         Objects.requireNonNull(request.requestedAmount(), "requestedAmount must not be null");
         Objects.requireNonNull(request.requestedTermMonths(), "requestedTermMonths must not be null");
 
-        UUID customerId = currentUserProvider.currentUser().requireCustomerId();
+        AuthenticatedUser currentUser = currentUserProvider.currentUser();
+        UUID customerId = currentUser.requireCustomerId();
+        LocalDateTime now = LocalDateTime.now(clock);
+        BusinessOperationContext operationContext = BusinessOperationContext.user(
+                UUID.randomUUID(),
+                currentUser.userId(),
+                now
+        );
 
         LoanProduct salaryAdvanceProduct = loanProductRepository.findByProductCode(ProductCode.SALARY_ADVANCE)
                 .orElseThrow(() -> new EntityNotFoundException(
@@ -109,12 +139,17 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         );
         assertNoBlockingApplicationExists(customerId);
 
-        LocalDateTime now = LocalDateTime.now();
-        SalaryAdvanceLimit limit = findOrCreateLimit(customerId, request, partnerSnapshot, effectiveTotalLimit, now);
-        SalaryAdvanceLimit reservedLimit = limit.reserve(request.requestedAmount());
+        LimitPreparationResult preparedLimit = findOrCreateLimit(
+                customerId,
+                request,
+                partnerSnapshot,
+                effectiveTotalLimit,
+                now
+        );
+        SalaryAdvanceLimit reservedLimit = preparedLimit.limit().reserve(request.requestedAmount());
 
         long applicationSequence = loanApplicationRepository.nextApplicationNumberSequence();
-        LoanApplication loanApplication = LoanApplication.submitted(
+        LoanApplicationTransitionResult submission = LoanApplication.submit(
                 UUID.randomUUID(),
                 customerId,
                 salaryAdvanceProduct,
@@ -124,15 +159,17 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
                 now
         );
 
-        LoanApplication savedApplication = loanApplicationRepository.save(loanApplication);
+        LoanApplication savedApplication = loanApplicationRepository.save(submission.loanApplication());
         SalaryAdvanceLimit savedReservedLimit = salaryAdvanceLimitRepository.save(reservedLimit);
-        salaryAdvanceLimitMovementRepository.save(SalaryAdvanceLimitMovement.reserved(
-                UUID.randomUUID(),
-                savedReservedLimit.id(),
-                savedApplication.id(),
-                request.requestedAmount(),
-                now
-        ));
+        SalaryAdvanceLimitMovement reservedMovement = salaryAdvanceLimitMovementRepository.save(
+                SalaryAdvanceLimitMovement.reserved(
+                        UUID.randomUUID(),
+                        savedReservedLimit.id(),
+                        savedApplication.id(),
+                        request.requestedAmount(),
+                        now
+                )
+        );
 
         SalaryAdvanceVerification verification = SalaryAdvanceVerification.verified(
                 UUID.randomUUID(),
@@ -142,6 +179,12 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
                 now
         );
         SalaryAdvanceVerification savedVerification = salaryAdvanceVerificationRepository.save(verification);
+
+        transitionRecorder.record(operationContext, submission.facts(), null);
+        businessAuditPublisher.publish(new BusinessAuditEvent(
+                operationContext,
+                submissionAuditEntries(savedApplication, preparedLimit.movement(), reservedMovement)
+        ));
 
         return loanMapper.toSalaryAdvanceApplicationDto(new SalaryAdvanceApplicationCreationResult(
                 savedApplication,
@@ -163,7 +206,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         }
     }
 
-    private SalaryAdvanceLimit findOrCreateLimit(
+    private LimitPreparationResult findOrCreateLimit(
             UUID customerId,
             SalaryAdvanceApplicationRequest request,
             VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot,
@@ -183,7 +226,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
                 .orElseGet(() -> initializeLimit(customerId, request, partnerSnapshot, effectiveTotalLimit, occurredAt));
     }
 
-    private SalaryAdvanceLimit initializeLimit(
+    private LimitPreparationResult initializeLimit(
             UUID customerId,
             SalaryAdvanceApplicationRequest request,
             VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot,
@@ -199,15 +242,17 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         );
 
         SalaryAdvanceLimit savedLimit = salaryAdvanceLimitRepository.save(initializedLimit);
-        salaryAdvanceLimitMovementRepository.save(SalaryAdvanceLimitMovement.initialized(
-                UUID.randomUUID(),
-                savedLimit,
-                occurredAt
-        ));
-        return savedLimit;
+        SalaryAdvanceLimitMovement movement = salaryAdvanceLimitMovementRepository.save(
+                SalaryAdvanceLimitMovement.initialized(
+                        UUID.randomUUID(),
+                        savedLimit,
+                        occurredAt
+                )
+        );
+        return new LimitPreparationResult(savedLimit, movement);
     }
 
-    private SalaryAdvanceLimit refreshLimitIfNeeded(
+    private LimitPreparationResult refreshLimitIfNeeded(
             SalaryAdvanceLimit currentLimit,
             BigDecimal effectiveTotalLimit,
             LocalDateTime lastRefreshedAt,
@@ -215,18 +260,66 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
     ) {
         SalaryAdvanceLimit refreshedLimit = currentLimit.refreshTotalLimit(effectiveTotalLimit, lastRefreshedAt);
         if (!hasLimitRefreshChange(currentLimit, refreshedLimit)) {
-            return currentLimit;
+            return new LimitPreparationResult(currentLimit, null);
         }
 
         SalaryAdvanceLimit savedLimit = salaryAdvanceLimitRepository.save(refreshedLimit);
         if (amountChanged(currentLimit.totalLimit(), savedLimit.totalLimit())) {
-            salaryAdvanceLimitMovementRepository.save(SalaryAdvanceLimitMovement.refreshed(
-                    UUID.randomUUID(),
-                    savedLimit,
-                    occurredAt
-            ));
+            SalaryAdvanceLimitMovement movement = salaryAdvanceLimitMovementRepository.save(
+                    SalaryAdvanceLimitMovement.refreshed(
+                            UUID.randomUUID(),
+                            savedLimit,
+                            occurredAt
+                    )
+            );
+            return new LimitPreparationResult(savedLimit, movement);
         }
-        return savedLimit;
+        return new LimitPreparationResult(savedLimit, null);
+    }
+
+    private List<BusinessAuditEntry> submissionAuditEntries(
+            LoanApplication savedApplication,
+            SalaryAdvanceLimitMovement preparedLimitMovement,
+            SalaryAdvanceLimitMovement reservedMovement
+    ) {
+        List<BusinessAuditEntry> entries = new ArrayList<>();
+        entries.add(BusinessAuditEntry.of(
+                BusinessAuditAction.SALARY_ADVANCE_APPLICATION_SUBMITTED,
+                BusinessAuditEntityType.LOAN_APPLICATION,
+                savedApplication.id()
+        ));
+        if (preparedLimitMovement != null) {
+            entries.add(limitMovementAuditEntry(preparedLimitMovement, null));
+        }
+        entries.add(limitMovementAuditEntry(reservedMovement, savedApplication.id()));
+        return entries;
+    }
+
+    private BusinessAuditEntry limitMovementAuditEntry(
+            SalaryAdvanceLimitMovement movement,
+            UUID loanApplicationId
+    ) {
+        BusinessAuditPayload.Builder payload = BusinessAuditPayload.builder()
+                .put(BusinessAuditPayloadKey.SALARY_ADVANCE_LIMIT_ID, movement.salaryAdvanceLimitId())
+                .put(BusinessAuditPayloadKey.MOVEMENT_TYPE, movement.movementType());
+        if (loanApplicationId != null) {
+            payload.put(BusinessAuditPayloadKey.LOAN_APPLICATION_ID, loanApplicationId);
+        }
+        return new BusinessAuditEntry(
+                auditActionFor(movement.movementType()),
+                BusinessAuditEntityType.SALARY_ADVANCE_LIMIT_MOVEMENT,
+                movement.id(),
+                payload.build()
+        );
+    }
+
+    private BusinessAuditAction auditActionFor(SalaryAdvanceLimitMovementType movementType) {
+        return switch (movementType) {
+            case INITIALIZED -> BusinessAuditAction.SALARY_ADVANCE_LIMIT_INITIALIZED;
+            case REFRESHED -> BusinessAuditAction.SALARY_ADVANCE_LIMIT_REFRESHED;
+            case RESERVED -> BusinessAuditAction.SALARY_ADVANCE_LIMIT_RESERVED;
+            default -> throw new IllegalArgumentException("Unsupported submission movement type: " + movementType);
+        };
     }
 
     private boolean hasLimitRefreshChange(SalaryAdvanceLimit currentLimit, SalaryAdvanceLimit refreshedLimit) {
@@ -241,5 +334,11 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
 
     private String formatApplicationNumber(long sequence, LocalDateTime submittedAt) {
         return "SA-" + submittedAt.format(APPLICATION_NUMBER_DATE_FORMAT) + "-" + String.format("%06d", sequence);
+    }
+
+    private record LimitPreparationResult(
+            SalaryAdvanceLimit limit,
+            SalaryAdvanceLimitMovement movement
+    ) {
     }
 }
