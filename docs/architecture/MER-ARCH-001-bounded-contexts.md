@@ -21,7 +21,7 @@ graph TB
         NOTIF["Notification"]
     end
     IAM -->|AuthContext| LOAN
-    CUSTOMER -->|CustomerProfile/BankAccountInfo| LOAN
+    CUSTOMER -->|Customer readiness and bank-account facts| LOAN
     PARTNER -->|Employee link and eligibility data| LOAN
     LOAN -->|LoanEvents| APPROVAL
     APPROVAL -->|Decision| LOAN
@@ -49,10 +49,14 @@ graph TB
 | Aspect | Detail |
 |---|---|
 | **Responsibilities** | Customer profile, verification status, bank account information, sensitive customer data protection |
-| **Entities** | `Customer` (aggregate root), `CustomerProfile`, `PersonalInfo` (VO), `EmploymentInfo` (VO), `BankAccountInfo` (VO), `NationalId` (VO), `PhoneNumber` (VO), `EmailAddress` (VO), `VerificationStatus` |
-| **Public Interface** | `CustomerQueryPort.findByUserId(id)`, `CustomerQueryPort.getBankAccountInfo(id)`, `CustomerProfilePort.updateVerificationStatus(id)` |
+| **Entities** | `Customer` (aggregate root), value-oriented `CustomerProfile` child, `CustomerBankAccount` child, `VerificationStatus`, `ProfileCompletionStatus`, `CustomerStatus` |
+| **Public Interface** | Customer readiness query for lending, primary bank-account readiness query, internal identity-evidence query for Partner verification, own-profile/customer APIs through application input ports |
 | **Events Published** | `CustomerVerifiedEvent`, `CustomerProfileUpdatedEvent` |
 | **Microservice Candidacy** | Future extraction candidate. Keep customer data protection and ownership boundaries explicit. |
+
+Identity owns the login-to-customer mapping through `users.customer_id`. Customer owns the Customer aggregate, profile, and bank-account data. Do not add a second `customers.user_id` ownership link.
+
+Customer identity references and bank-account numbers are encrypted at rest. Public REST responses must not expose plaintext, ciphertext, fingerprints, or unrestricted evidence. Generic Audit records may contain only closed, PII-safe IDs and status codes.
 
 ---
 

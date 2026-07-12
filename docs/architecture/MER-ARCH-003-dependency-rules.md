@@ -61,6 +61,10 @@ graph TB
 - `identity` may depend on `shared`; customer, partner, loan, approval, document, audit, and notification may depend on `shared`.
 - `shared/application/security` contains abstractions only. `identity/infrastructure/security` contains concrete Spring Security/JWT implementation.
 - `JwtAuthenticationFilter`, `JwtTokenService`, and Spring Security adapters belong to identity infrastructure.
+- Identity owns the user-to-customer login mapping through `users.customer_id`. Customer owns Customer profile and bank-account data and must not add a redundant `customers.user_id` foreign key.
+- Loan and Partner may consume Customer facts only through narrow application/public contracts. They must not import Customer domain models, JPA entities, persistence repositories, or web DTOs.
+- Partner employee verification must derive identity evidence from Customer through an internal Customer contract, not from an unrestricted customer request field.
+- Customer must not call Loan to decide profile or bank-account mutation rules. Loan-status-sensitive Customer mutation restrictions require immutable snapshots or an explicit non-circular policy design before implementation.
 - OCR integration should be treated as an external or infrastructure-facing capability behind a document/OCR port.
 - Audit should record synchronous business audit events without controlling the core workflow.
 - Modules must not share JPA entity ownership across bounded contexts. Cross-context relationships are stored as IDs and resolved through application/public ports or events.

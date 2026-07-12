@@ -80,29 +80,43 @@ erDiagram
 
     customers {
         uuid id PK
-        uuid user_id FK
         string customer_number
+        string status
         string verification_status
+        string profile_completion_status
         datetime created_at
+        datetime updated_at
     }
 
     customer_profiles {
         uuid id PK
         uuid customer_id FK
         string full_name
-        string national_id_ref
+        string identity_reference_ciphertext
+        string identity_reference_fingerprint
+        string identity_reference_last_four
         string phone_number
+        string residential_address
         string employment_status
-        boolean profile_complete
+        boolean consent_confirmed
+        datetime created_at
+        datetime updated_at
     }
 
-    bank_account_infos {
+    customer_bank_accounts {
         uuid id PK
         uuid customer_id FK
-        string bank_name
-        string account_number_encrypted
+        string bank_code
+        string bank_name_snapshot
         string account_holder_name
-        boolean active
+        string account_number_ciphertext
+        string account_number_fingerprint
+        string account_number_last_four
+        string status
+        boolean primary_account
+        datetime created_at
+        datetime updated_at
+        datetime deactivated_at
     }
 
     partner_companies {
@@ -425,7 +439,7 @@ erDiagram
 
     users ||--o| customers : maps_to
     customers ||--|| customer_profiles : has
-    customers ||--o{ bank_account_infos : owns
+    customers ||--o{ customer_bank_accounts : owns
     customers ||--o{ loan_applications : submits
     customers ||--o{ customer_partner_employee_links : verifies_as
     customers ||--o{ salary_advance_limits : has
@@ -496,11 +510,13 @@ The data model supports JWT authentication and refresh-token rotation while keep
 
 Logical tables:
 
-- `customers` - customer aggregate root linked to the owning `users` identity.
+- `customers` - customer aggregate root referenced by Identity through `users.customer_id`. The Customer table does not contain `user_id`; Identity owns the login-to-customer mapping.
 - `customer_profiles` - identity, contact, residential, employment, and consent-related profile data.
-- `bank_account_infos` - customer bank account data used for disbursement confirmation, with sensitive fields encrypted or tokenized.
+- `customer_bank_accounts` - customer-owned bank account data used for readiness and later disbursement confirmation, with account numbers encrypted and deterministic fingerprints used for duplicate detection.
 
-Customer profile completeness is a precondition for loan submission. Post-submission profile and bank-account changes are restricted by application status and must be audited.
+Customer profile completeness and bank-account readiness are separate facts. Normal Salary Advance submission requires an active Customer, complete profile, and one primary active bank account. Customer verification status remains separate and is not required until real Customer verification/KYC is implemented.
+
+Loan-status-sensitive profile and bank-account mutation restrictions are deferred until immutable application/disbursement snapshots exist. Customer does not depend on Loan to decide mutation policy.
 
 ### 5.3 Partner Management
 
@@ -581,9 +597,9 @@ OCR belongs under Document Management. It is planned for Phase 2 and remains ass
 
 ## 6. Key Relationships
 
-- One `users` record may map to one `customers` record for customer identities.
+- One Customer `users` record maps to one `customers` record through `users.customer_id`; staff users have `customer_id = NULL`.
 - One `users` record may have many `role_assignments`; roles grant permissions through `role_permissions`.
-- One `customers` record owns one profile and may own multiple bank account records over time, with one active account selected for disbursement.
+- One `customers` record owns one profile and may own multiple bank account records over time, with at most one primary active account selected for readiness/disbursement.
 - One `customers` record may submit many `loan_applications`.
 - One `customers` record may have many `customer_partner_employee_links` over time, but normal Salary Advance eligibility should use only an active verified link for a partner.
 - One active verified `customer_partner_employee_links` record may support one current `salary_advance_limits` record for Salary Advance.

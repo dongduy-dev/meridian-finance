@@ -591,6 +591,30 @@ Consider adding a customer-level Salary Advance application advisory lock keyed 
 Suggested future branch name:
 `feature/salary-advance-customer-concurrency-hardening`
 
+### MER-FU-030 - Enforce Loan-status-sensitive Customer mutation restrictions
+
+Area: Customer / Loan / Disbursement readiness
+
+Type: Deferred feature
+
+Priority: P1
+
+Status: Open
+
+Blocks current PR: No
+
+Problem:
+Customer profile and bank-account changes after loan submission need status-aware restrictions, but implementing those restrictions directly in Customer would create a Customer-to-Loan dependency cycle before immutable application and disbursement snapshots exist.
+
+Risk:
+Customers may update contact, employment, address, or bank-account data after an application is submitted. Current lending flows preserve their own application, approval, offer, and future disbursement snapshots, so the immediate MVP risk is controlled by auditability and by not using Customer as a mutable historical source of truth.
+
+Recommendation:
+When application/disbursement snapshot behavior is implemented, add a non-circular mutation policy. Prefer Loan-owned immutable snapshots and a Customer-owned neutral change policy, or a Loan-provided application port consumed by Customer only if module boundaries and tests prove there is no cycle.
+
+Suggested future branch name:
+`feature/customer-loan-status-mutation-policy`
+
 ## Recommended Next Roadmap
 
 1. Review/merge the completed Salary Advance approved-offer and customer-acceptance slice.

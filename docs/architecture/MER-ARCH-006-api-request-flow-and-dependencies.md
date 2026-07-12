@@ -216,14 +216,15 @@ Security posture:
 - Requires JWT Bearer authentication plus `partner:employee:verify:own`.
 - This endpoint can support the customer employee-verification journey, but it is not public/anonymous.
 - `customerId` is derived from the authenticated customer token through `CurrentUserProvider`; it is not accepted in the request body.
-- The response is PII-safe and does not echo raw `identityReference`, `employeeCode`, salary, salary advance limit, or raw matching evidence.
+- The response is PII-safe and does not echo raw identity evidence, `employeeCode`, salary, salary advance limit, or raw matching evidence.
 
 Request fields:
 
 | Field | Notes |
 | --- | --- |
-| `identityReference` | Used for matching only; not returned in the response. |
 | `employeeCode` | Used for matching only; not returned in the response. |
+
+The identity reference used for matching is loaded from the authenticated Customer profile through a narrow internal Customer contract. It is not accepted in the request body.
 
 Response fields:
 
@@ -272,6 +273,7 @@ Security posture:
 
 - Requires JWT Bearer authentication plus `loan:submit`.
 - `customerId` is derived from the authenticated customer token through `CurrentUserProvider`; it is not accepted in the request body.
+- Salary Advance submission requires an active Customer, complete Customer profile, and primary active bank account. Customer verification status is not required until real Customer verification/KYC is implemented.
 
 Request fields:
 

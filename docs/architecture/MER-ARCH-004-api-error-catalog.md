@@ -16,11 +16,16 @@ This document standardizes the API error codes across all bounded contexts in th
 | 409 | `CONCURRENT_SESSION_LIMIT_EXCEEDED` | Concurrent session limit exceeded | Log out of other devices before logging in |
 | **CUSTOMER Domain** | | | |
 | 404 | `CUSTOMER_NOT_FOUND` | Customer not found | Verify the requested customer ID |
+| 409 | `CUSTOMER_NOT_ACTIVE` | Customer not active | Customer must be active before using customer-owned lending flows |
 | 409 | `DUPLICATE_NATIONAL_ID` | Duplicate national ID | A customer with this National ID already exists |
 | 409 | `DUPLICATE_PHONE_NUMBER` | Duplicate phone number | A customer with this phone number already exists |
-| 422 | `PROFILE_INCOMPLETE` | Customer profile incomplete | Complete required identity, contact, employment, bank account, and consent information |
+| 409 | `IDENTITY_REFERENCE_IMMUTABLE` | Identity reference immutable | Identity reference cannot be changed after the profile first becomes complete |
+| 422 | `PROFILE_INCOMPLETE` | Customer profile incomplete | Complete required identity, contact, residential, employment, and consent information |
+| 422 | `PRIMARY_BANK_ACCOUNT_REQUIRED` | Primary bank account required | Add or select a primary active bank account before continuing |
 | 422 | `CUSTOMER_VERIFICATION_REQUIRED` | Customer verification required | Complete the configured customer verification step before continuing |
 | 409 | `BANK_ACCOUNT_UPDATE_NOT_ALLOWED` | Bank account update not allowed | Bank account information cannot be changed in the current application status |
+| 404 | `BANK_ACCOUNT_NOT_FOUND` | Bank account not found | Verify the bank account belongs to the authenticated customer |
+| 409 | `DUPLICATE_BANK_ACCOUNT` | Duplicate bank account | This active bank account already exists for the customer |
 | **LOAN CORE / PRODUCT Domain** | | | |
 | 404 | `LOAN_APPLICATION_NOT_FOUND` | Loan application not found | Verify the requested loan application ID |
 | 404 | `PRODUCT_NOT_FOUND` | Loan product not found | Verify the requested loan product ID |

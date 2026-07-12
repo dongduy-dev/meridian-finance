@@ -94,7 +94,9 @@ com.meridian.platform/
 │   │   ├── model/
 │   │   │   ├── Customer.java
 │   │   │   ├── CustomerProfile.java
-│   │   │   ├── BankAccountInfo.java
+│   │   │   ├── CustomerBankAccount.java
+│   │   │   ├── CustomerStatus.java
+│   │   │   ├── ProfileCompletionStatus.java
 │   │   │   └── VerificationStatus.java
 │   │   ├── service/
 │   │   │   └── CustomerVerificationPolicy.java
@@ -110,7 +112,7 @@ com.meridian.platform/
 │   │   │   │   └── QueryCustomerUseCase.java
 │   │   │   └── out/
 │   │   │       └── CustomerRepository.java
-│   │   ├── service/ ...             # Profile, verification status, bank info, sensitive data handling
+│   │   ├── service/ ...             # Profile completeness, bank-account lifecycle, sensitive data handling
 │   │   ├── dto/
 │   │   └── mapper/
 │   └── infrastructure/ ...
@@ -424,7 +426,7 @@ Salary Advance remains inside the generic lending architecture. `partner/` owns 
 | **Loan Core / Origination** | Full Hexagonal | Core domain. Generic lending core, product policies/strategies, and complex state machine. |
 | **Approval Workflow** | Full Hexagonal | Core domain. Loan Officer review, Approver decision, maker-checker controls. |
 | **Identity & Access** | Full Hexagonal | Security-critical. Owns users, roles, JWT, refresh tokens, and RBAC. |
-| **Customer** | Moderate | Supporting domain. Owns profile, verification status, bank account information, and sensitive data handling. |
+| **Customer** | Moderate | Supporting domain. Owns profile, verification status, bank-account information, and sensitive data handling. Identity still owns the users.customer_id login mapping. |
 | **Partner** | Moderate | Supporting domain. Owns Partner Companies, Partner Employees, import batches, and reusable Salary Advance employee links. |
 | **Document** | Moderate | Checklist, manual review, replacement, waiver, readiness, storage, and OCR-assisted processing justify ports. |
 | **Audit** | Simplified | Cross-cutting concern. Append-only writes for approved workflow actions. No read API or workflow-control logic in the current checkpoint. |

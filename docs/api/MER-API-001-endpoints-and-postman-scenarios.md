@@ -53,11 +53,10 @@ Seeded demo user emails:
 
 ### Employee Verification
 
-`customerId` is derived from the authenticated customer token and is no longer accepted in the request body.
+`customerId` is derived from the authenticated customer token and is no longer accepted in the request body. `identityReference` is also not accepted; Partner verification uses identity evidence from the authenticated Customer profile.
 
 ```json
 {
-  "identityReference": "IDREF-MER-001",
   "employeeCode": "MER-EMP-001"
 }
 ```
@@ -68,7 +67,7 @@ The response intentionally does not expose salary, salary advance limit, identit
 
 ### Salary Advance Application
 
-`customerId` is derived from the authenticated customer token and is no longer accepted in the request body.
+`customerId` is derived from the authenticated customer token and is no longer accepted in the request body. Salary Advance submission requires an active Customer, complete Customer profile, and one primary active bank account.
 
 ```json
 {

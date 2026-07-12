@@ -242,6 +242,18 @@ All loan products share the same core lifecycle, with product-specific pre-submi
 
 Before submission, the customer must complete a basic profile including identity reference, contact details, residential address, employment information, bank account information for disbursement, and consent confirmations as configured.
 
+Current Customer foundation rules:
+
+* Customer profile completeness and bank-account readiness are separate facts.
+* Normal Salary Advance submission requires an active Customer, a complete Customer profile, and one primary active bank account.
+* Customer `VerificationStatus.VERIFIED` is not required for Salary Advance submission in the current MVP because real Customer KYC/provider verification is deferred.
+* The Customer identity reference is captured in the Customer profile, encrypted at rest, and becomes immutable after the profile first becomes complete.
+* Partner employee verification derives identity evidence from the authenticated Customer profile; customer-facing requests must not provide unrestricted `identityReference`.
+* Bank-account numbers are encrypted at rest and exposed only as masked values.
+* Bank-account identity is not edited in place. Replacements are modeled by adding a new account and deactivating the old account.
+* Contact details, residential address, employment summary, and configured consent confirmations may be updated by the customer and must be audited without storing PII in generic Audit payloads.
+* Loan-status-sensitive Customer profile and bank-account mutation restrictions are deferred until immutable application/disbursement snapshot behavior exists, so Customer does not depend on Loan.
+
 The Customer Web Portal displays active products with name, description, amount range, available terms, interest rate, repayment method, required documents, eligibility notes, and product-specific pre-submission requirements.
 
 Common eligibility pre-checks:
@@ -776,6 +788,7 @@ EXPIRED
 | BR-034 | A LoanAccount is created only after manual disbursement confirmation. |
 | BR-035 | LoanApplication `DISBURSED`, LoanAccount creation, final repayment schedule generation, and LoanAccount `ACTIVE` status are completed as one controlled post-disbursement transaction. |
 | BR-036 | Post-submission customer bank account changes are restricted by application status and must be audited. |
+| BR-036A | Until immutable application/disbursement snapshots exist, Customer profile and bank-account changes remain Customer-owned, audited, and not Loan-status-aware to avoid a Customer-to-Loan dependency cycle. |
 | BR-037 | Repayment updates are manually entered or confirmed in the MVP. |
 | BR-038 | Any unpaid repayment past due sets the LoanAccount to `OVERDUE`. |
 | BR-039 | Full repayment or approved settlement sets the LoanAccount to `SETTLED`. |

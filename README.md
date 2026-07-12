@@ -99,7 +99,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 | Context | Role | Key Entities |
 |---|---|---|
 | **Identity & Access** | Authentication, authorization, RBAC | `User`, `Role`, `RefreshToken` |
-| **Customer Management** | Customer profile, verification status, bank account information | `Customer`, `CustomerProfile`, `BankAccountInfo` |
+| **Customer Management** | Customer profile, verification status, bank account information | `Customer`, `CustomerProfile`, `CustomerBankAccount` |
 | **Partner Management** | Partner company and employee data for Salary Advance eligibility | `PartnerCompany`, `PartnerEmployee`, `PartnerEmployeeImportBatch` |
 | **Loan Core / Origination** | Generic lending core — state machine, product policies, offers, disbursement, repayment | `LoanApplication`, `LoanProduct`, `LoanProductPolicy`, `LoanAccount`, `RepaymentSchedule` |
 | **Approval Workflow** | Controlled review and approval workflow, maker-checker controls | `ReviewRecommendation`, `ApprovalDecision` |
