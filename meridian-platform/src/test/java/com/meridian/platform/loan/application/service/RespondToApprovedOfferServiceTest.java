@@ -5,6 +5,7 @@ import com.meridian.platform.loan.application.dto.ApprovedOfferActionResult;
 import com.meridian.platform.loan.application.mapper.ApprovedOfferMapper;
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
@@ -13,6 +14,7 @@ import com.meridian.platform.loan.domain.model.ApprovedOfferStatus;
 import com.meridian.platform.loan.domain.model.InterestCalculationMethod;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
@@ -25,9 +27,13 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import com.meridian.platform.loan.domain.service.SalaryAdvanceOfferCalculator;
+import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
+import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.exception.AuthorizationException;
+import com.meridian.platform.shared.domain.model.ActorType;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +67,8 @@ class RespondToApprovedOfferServiceTest {
     private FakeApprovedOfferRepository approvedOfferRepository;
     private FakeSalaryAdvanceLimitRepository limitRepository;
     private FakeSalaryAdvanceLimitMovementRepository movementRepository;
+    private FakeLoanApplicationStatusTransitionRepository transitionRepository;
+    private FakeBusinessAuditPublisher auditPublisher;
     private RespondToApprovedOfferService service;
 
     @BeforeEach
@@ -70,16 +78,21 @@ class RespondToApprovedOfferServiceTest {
         FakeSalaryAdvanceVerificationRepository verificationRepository = new FakeSalaryAdvanceVerificationRepository();
         limitRepository = new FakeSalaryAdvanceLimitRepository();
         movementRepository = new FakeSalaryAdvanceLimitMovementRepository();
+        transitionRepository = new FakeLoanApplicationStatusTransitionRepository();
+        auditPublisher = new FakeBusinessAuditPublisher();
         SalaryAdvanceReservationReleaseService releaseService = new SalaryAdvanceReservationReleaseService(
                 verificationRepository,
                 limitRepository,
-                movementRepository
+                movementRepository,
+                auditPublisher
         );
         service = new RespondToApprovedOfferService(
                 loanApplicationRepository,
                 approvedOfferRepository,
                 new FixedCurrentUserProvider(CUSTOMER_ID),
                 releaseService,
+                new LoanApplicationStatusTransitionRecorder(transitionRepository),
+                auditPublisher,
                 new ApprovedOfferMapper(),
                 Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC)
         );
@@ -94,6 +107,9 @@ class RespondToApprovedOfferServiceTest {
         assertEquals(ApprovedOfferStatus.ACCEPTED, approvedOfferRepository.savedOffer.status());
         assertEquals(LoanApplicationStatus.CONTRACT_PENDING, loanApplicationRepository.savedApplication.status());
         assertTrue(movementRepository.savedMovements.isEmpty());
+        assertEquals(1, transitionRepository.savedTransitions.size());
+        assertEquals(ActorType.USER, transitionRepository.savedTransitions.getFirst().actorType());
+        assertEquals(BusinessAuditAction.APPROVED_OFFER_ACCEPTED, auditPublisher.lastEvent().entries().getFirst().action());
     }
 
     @Test
@@ -121,6 +137,9 @@ class RespondToApprovedOfferServiceTest {
         assertEquals(SalaryAdvanceLimitMovementType.RESERVATION_RELEASED,
                 movementRepository.savedMovements.get(0).movementType());
         assertEquals(money(0), limitRepository.savedLimit.reservedAmount());
+        assertEquals(1, transitionRepository.savedTransitions.size());
+        assertEquals(ActorType.USER, transitionRepository.savedTransitions.getFirst().actorType());
+        assertEquals(BusinessAuditAction.RESERVATION_RELEASED, auditPublisher.lastEvent().entries().getFirst().action());
     }
 
     @Test
@@ -401,6 +420,36 @@ class RespondToApprovedOfferServiceTest {
         }
     }
 
+
+    private static class FakeLoanApplicationStatusTransitionRepository implements LoanApplicationStatusTransitionRepository {
+
+        private final List<LoanApplicationStatusTransition> savedTransitions = new ArrayList<>();
+
+        @Override
+        public int nextSequenceNumber(UUID loanApplicationId) {
+            return savedTransitions.size() + 1;
+        }
+
+        @Override
+        public LoanApplicationStatusTransition save(LoanApplicationStatusTransition transition) {
+            savedTransitions.add(transition);
+            return transition;
+        }
+    }
+
+    private static class FakeBusinessAuditPublisher implements BusinessAuditPublisher {
+
+        private final List<BusinessAuditEvent> publishedEvents = new ArrayList<>();
+
+        @Override
+        public void publish(BusinessAuditEvent event) {
+            publishedEvents.add(event);
+        }
+
+        private BusinessAuditEvent lastEvent() {
+            return publishedEvents.getLast();
+        }
+    }
     private static class FakeSalaryAdvanceLimitMovementRepository implements SalaryAdvanceLimitMovementRepository {
 
         private final List<SalaryAdvanceLimitMovement> savedMovements = new ArrayList<>();

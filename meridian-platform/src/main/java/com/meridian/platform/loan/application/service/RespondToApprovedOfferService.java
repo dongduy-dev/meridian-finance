@@ -9,7 +9,19 @@ import com.meridian.platform.loan.application.port.out.LoanApplicationRepository
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
 import com.meridian.platform.loan.domain.model.ApprovedOfferStatus;
 import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
+import com.meridian.platform.loan.domain.model.ReservationReleaseTrigger;
+import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
+import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
+import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
+import com.meridian.platform.shared.application.operation.BusinessOperationContext;
+import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
+import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
+import com.meridian.platform.shared.domain.audit.BusinessAuditPayload;
+import com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey;
+import com.meridian.platform.shared.domain.audit.ExpiryDiscoveryTrigger;
 import com.meridian.platform.shared.domain.exception.AuthorizationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
@@ -28,6 +40,8 @@ public class RespondToApprovedOfferService implements RespondToApprovedOfferUseC
     private final ApprovedOfferRepository approvedOfferRepository;
     private final CurrentUserProvider currentUserProvider;
     private final SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService;
+    private final LoanApplicationStatusTransitionRecorder transitionRecorder;
+    private final BusinessAuditPublisher businessAuditPublisher;
     private final ApprovedOfferMapper approvedOfferMapper;
     private final Clock clock;
 
@@ -36,6 +50,8 @@ public class RespondToApprovedOfferService implements RespondToApprovedOfferUseC
             ApprovedOfferRepository approvedOfferRepository,
             CurrentUserProvider currentUserProvider,
             SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService,
+            LoanApplicationStatusTransitionRecorder transitionRecorder,
+            BusinessAuditPublisher businessAuditPublisher,
             ApprovedOfferMapper approvedOfferMapper,
             Clock clock
     ) {
@@ -43,6 +59,8 @@ public class RespondToApprovedOfferService implements RespondToApprovedOfferUseC
         this.approvedOfferRepository = approvedOfferRepository;
         this.currentUserProvider = currentUserProvider;
         this.salaryAdvanceReservationReleaseService = salaryAdvanceReservationReleaseService;
+        this.transitionRecorder = transitionRecorder;
+        this.businessAuditPublisher = businessAuditPublisher;
         this.approvedOfferMapper = approvedOfferMapper;
         this.clock = clock;
     }
@@ -63,7 +81,8 @@ public class RespondToApprovedOfferService implements RespondToApprovedOfferUseC
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
         Objects.requireNonNull(action, "action must not be null");
 
-        UUID customerId = currentUserProvider.currentUser().requireCustomerId();
+        AuthenticatedUser currentUser = currentUserProvider.currentUser();
+        UUID customerId = currentUser.requireCustomerId();
         LocalDateTime now = LocalDateTime.now(clock);
         LoanApplication loanApplication = loanApplicationRepository.findByIdForUpdate(loanApplicationId)
                 .orElseThrow(() -> new EntityNotFoundException(
@@ -85,31 +104,97 @@ public class RespondToApprovedOfferService implements RespondToApprovedOfferUseC
             throw offerActionConflict();
         }
         if (approvedOffer.isExpiredAt(now)) {
-            ApprovedOffer expiredOffer = approvedOffer.expire(now);
-            LoanApplication expiredApplication = loanApplication.expireApprovedOffer();
-            ApprovedOffer savedOffer = approvedOfferRepository.save(expiredOffer);
-            loanApplicationRepository.save(expiredApplication);
-            salaryAdvanceReservationReleaseService.releaseReservationOnce(loanApplication, now);
-            return new ApprovedOfferActionResult(
-                    ApprovedOfferActionOutcome.EXPIRED,
-                    approvedOfferMapper.toDto(savedOffer, now)
-            );
+            return expireFromCustomerAction(loanApplication, approvedOffer, now);
         }
 
+        BusinessOperationContext userOperationContext = BusinessOperationContext.user(
+                UUID.randomUUID(),
+                currentUser.userId(),
+                now
+        );
         if (action == OfferResponseAction.ACCEPT) {
             ApprovedOffer acceptedOffer = approvedOffer.accept(now);
-            LoanApplication acceptedApplication = loanApplication.acceptApprovedOffer();
+            LoanApplicationTransitionResult transition = loanApplication.acceptApprovedOffer();
             ApprovedOffer savedOffer = approvedOfferRepository.save(acceptedOffer);
-            loanApplicationRepository.save(acceptedApplication);
+            loanApplicationRepository.save(transition.loanApplication());
+            transitionRecorder.record(userOperationContext, transition.facts(), null);
+            auditOfferAction(
+                    userOperationContext,
+                    BusinessAuditAction.APPROVED_OFFER_ACCEPTED,
+                    savedOffer,
+                    null
+            );
             return success(savedOffer, now);
         }
 
         ApprovedOffer declinedOffer = approvedOffer.decline(now);
-        LoanApplication declinedApplication = loanApplication.declineApprovedOffer();
+        LoanApplicationTransitionResult transition = loanApplication.declineApprovedOffer();
         ApprovedOffer savedOffer = approvedOfferRepository.save(declinedOffer);
-        loanApplicationRepository.save(declinedApplication);
-        salaryAdvanceReservationReleaseService.releaseReservationOnce(loanApplication, now);
+        loanApplicationRepository.save(transition.loanApplication());
+        transitionRecorder.record(userOperationContext, transition.facts(), null);
+        auditOfferAction(
+                userOperationContext,
+                BusinessAuditAction.APPROVED_OFFER_DECLINED,
+                savedOffer,
+                null
+        );
+        salaryAdvanceReservationReleaseService.releaseReservationOnce(
+                loanApplication,
+                userOperationContext,
+                ReservationReleaseTrigger.CUSTOMER_DECLINE
+        );
         return success(savedOffer, now);
+    }
+
+    private ApprovedOfferActionResult expireFromCustomerAction(
+            LoanApplication loanApplication,
+            ApprovedOffer approvedOffer,
+            LocalDateTime now
+    ) {
+        BusinessOperationContext systemOperationContext = BusinessOperationContext.system(UUID.randomUUID(), now);
+        ApprovedOffer expiredOffer = approvedOffer.expire(now);
+        LoanApplicationTransitionResult transition = loanApplication.expireApprovedOffer();
+        ApprovedOffer savedOffer = approvedOfferRepository.save(expiredOffer);
+        loanApplicationRepository.save(transition.loanApplication());
+        transitionRecorder.record(systemOperationContext, transition.facts(), null);
+        auditOfferAction(
+                systemOperationContext,
+                BusinessAuditAction.OFFER_EXPIRED,
+                savedOffer,
+                ExpiryDiscoveryTrigger.CUSTOMER_ACTION
+        );
+        salaryAdvanceReservationReleaseService.releaseReservationOnce(
+                loanApplication,
+                systemOperationContext,
+                ReservationReleaseTrigger.OFFER_EXPIRY
+        );
+        return new ApprovedOfferActionResult(
+                ApprovedOfferActionOutcome.EXPIRED,
+                approvedOfferMapper.toDto(savedOffer, now)
+        );
+    }
+
+    private void auditOfferAction(
+            BusinessOperationContext operationContext,
+            BusinessAuditAction action,
+            ApprovedOffer approvedOffer,
+            ExpiryDiscoveryTrigger trigger
+    ) {
+        BusinessAuditPayload.Builder payload = BusinessAuditPayload.builder()
+                .put(BusinessAuditPayloadKey.LOAN_APPLICATION_ID, approvedOffer.loanApplicationId())
+                .put(BusinessAuditPayloadKey.OFFER_STATUS, approvedOffer.status());
+        if (trigger != null) {
+            payload.put(BusinessAuditPayloadKey.EXPIRY_DISCOVERY_TRIGGER, trigger);
+        }
+        businessAuditPublisher.publish(BusinessAuditEvent.single(
+                operationContext,
+                new BusinessAuditEntry(
+                        action,
+                        BusinessAuditEntityType.APPROVED_OFFER,
+                        approvedOffer.id(),
+                        payload.build()
+                )
+        ));
     }
 
     private boolean isIdempotentCurrentResult(ApprovedOffer approvedOffer, OfferResponseAction action) {

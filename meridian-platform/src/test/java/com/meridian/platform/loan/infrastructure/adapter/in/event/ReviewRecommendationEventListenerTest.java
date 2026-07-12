@@ -6,6 +6,7 @@ import com.meridian.platform.loan.application.dto.ApplyReviewRecommendationComma
 import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.in.ApplyReviewRecommendationUseCase;
 import com.meridian.platform.loan.domain.model.LoanReviewRecommendationAction;
+import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -23,6 +24,11 @@ class ReviewRecommendationEventListenerTest {
         UUID loanApplicationId = UUID.randomUUID();
         UUID loanOfficerUserId = UUID.randomUUID();
         LocalDateTime recordedAt = LocalDateTime.now();
+        BusinessOperationContext operationContext = BusinessOperationContext.user(
+                UUID.randomUUID(),
+                loanOfficerUserId,
+                recordedAt
+        );
 
         listener.onReviewRecommendationRecorded(new ReviewRecommendationRecordedEvent(
                 recommendationId,
@@ -30,14 +36,17 @@ class ReviewRecommendationEventListenerTest {
                 loanOfficerUserId,
                 ReviewRecommendationEventAction.RECOMMEND_REJECTION,
                 "not eligible",
-                recordedAt
+                recordedAt,
+                operationContext
         ));
 
         assertEquals(recommendationId, useCase.command.recommendationId());
         assertEquals(loanApplicationId, useCase.command.loanApplicationId());
         assertEquals(loanOfficerUserId, useCase.command.loanOfficerUserId());
         assertEquals(LoanReviewRecommendationAction.RECOMMEND_REJECTION, useCase.command.action());
+        assertEquals("not eligible", useCase.command.reason());
         assertEquals(recordedAt, useCase.command.recommendedAt());
+        assertEquals(operationContext, useCase.command.operationContext());
     }
 
     private static class CapturingUseCase implements ApplyReviewRecommendationUseCase {

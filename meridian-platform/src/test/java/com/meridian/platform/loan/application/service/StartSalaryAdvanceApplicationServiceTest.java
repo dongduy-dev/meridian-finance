@@ -4,12 +4,14 @@ import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationDto;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationRequest;
 import com.meridian.platform.loan.application.mapper.LoanMapper;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanProductRepository;
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityPort;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanProduct;
 import com.meridian.platform.loan.domain.model.ProductCode;
@@ -21,15 +23,22 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import com.meridian.platform.loan.domain.model.VerifiedPartnerEmployeeLinkSnapshot;
+import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
+import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.model.ActorType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -57,6 +66,8 @@ class StartSalaryAdvanceApplicationServiceTest {
     private FakeSalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository;
     private FakeSalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository;
     private FakePartnerEligibilityPort partnerEligibilityPort;
+    private FakeLoanApplicationStatusTransitionRepository transitionRepository;
+    private FakeBusinessAuditPublisher auditPublisher;
     private StartSalaryAdvanceApplicationService service;
 
     @BeforeEach
@@ -67,6 +78,8 @@ class StartSalaryAdvanceApplicationServiceTest {
         salaryAdvanceLimitMovementRepository = new FakeSalaryAdvanceLimitMovementRepository();
         salaryAdvanceVerificationRepository = new FakeSalaryAdvanceVerificationRepository();
         partnerEligibilityPort = new FakePartnerEligibilityPort(verifiedPartnerSnapshot(limit(6_000_000)));
+        transitionRepository = new FakeLoanApplicationStatusTransitionRepository();
+        auditPublisher = new FakeBusinessAuditPublisher();
         service = new StartSalaryAdvanceApplicationService(
                 loanProductRepository,
                 loanApplicationRepository,
@@ -75,7 +88,10 @@ class StartSalaryAdvanceApplicationServiceTest {
                 salaryAdvanceVerificationRepository,
                 partnerEligibilityPort,
                 new LoanMapper(),
-                new FixedCurrentUserProvider(customerId)
+                new FixedCurrentUserProvider(customerId),
+                new LoanApplicationStatusTransitionRecorder(transitionRepository),
+                auditPublisher,
+                Clock.fixed(Instant.parse("2026-06-26T05:00:00Z"), ZoneOffset.UTC)
         );
     }
 
@@ -109,6 +125,17 @@ class StartSalaryAdvanceApplicationServiceTest {
         assertNotNull(salaryAdvanceVerificationRepository.savedVerification);
         assertEquals(SalaryAdvanceEmployeeVerificationOutcome.MATCHED_ACTIVE,
                 salaryAdvanceVerificationRepository.savedVerification.employeeVerificationOutcome());
+        assertEquals(1, transitionRepository.savedTransitions.size());
+        LoanApplicationStatusTransition transition = transitionRepository.savedTransitions.getFirst();
+        assertEquals(LoanApplicationStatus.SUBMITTED, transition.toStatus());
+        assertEquals(ActorType.USER, transition.actorType());
+        assertEquals(3, auditPublisher.lastEvent().entries().size());
+        assertEquals(List.of(
+                        BusinessAuditAction.SALARY_ADVANCE_APPLICATION_SUBMITTED,
+                        BusinessAuditAction.SALARY_ADVANCE_LIMIT_INITIALIZED,
+                        BusinessAuditAction.SALARY_ADVANCE_LIMIT_RESERVED
+                ),
+                auditPublisher.lastEvent().entries().stream().map(entry -> entry.action()).toList());
     }
 
     @Test
@@ -425,6 +452,36 @@ class StartSalaryAdvanceApplicationServiceTest {
         public SalaryAdvanceLimit save(SalaryAdvanceLimit salaryAdvanceLimit) {
             currentLimit = Optional.of(salaryAdvanceLimit);
             return salaryAdvanceLimit;
+        }
+    }
+
+    private static class FakeLoanApplicationStatusTransitionRepository implements LoanApplicationStatusTransitionRepository {
+
+        private final List<LoanApplicationStatusTransition> savedTransitions = new ArrayList<>();
+
+        @Override
+        public int nextSequenceNumber(UUID loanApplicationId) {
+            return savedTransitions.size() + 1;
+        }
+
+        @Override
+        public LoanApplicationStatusTransition save(LoanApplicationStatusTransition transition) {
+            savedTransitions.add(transition);
+            return transition;
+        }
+    }
+
+    private static class FakeBusinessAuditPublisher implements BusinessAuditPublisher {
+
+        private final List<BusinessAuditEvent> publishedEvents = new ArrayList<>();
+
+        @Override
+        public void publish(BusinessAuditEvent event) {
+            publishedEvents.add(event);
+        }
+
+        private BusinessAuditEvent lastEvent() {
+            return publishedEvents.getLast();
         }
     }
 

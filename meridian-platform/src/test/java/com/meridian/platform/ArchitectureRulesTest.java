@@ -23,6 +23,17 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    void domainMustNotDependOnJpaApplicationOrInfrastructure() {
+        noClasses()
+                .that()
+                .resideInAPackage("..domain..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("jakarta.persistence..", "..application..", "..infrastructure..")
+                .check(importedClasses);
+    }
+
+    @Test
     void domainAndApplicationMustNotDependOnSecurityImplementation() {
         noClasses()
                 .that()
@@ -39,13 +50,33 @@ class ArchitectureRulesTest {
     }
 
     @Test
-    void sharedMustNotDependOnIdentity() {
+    void applicationMustNotDependOnInfrastructure() {
+        noClasses()
+                .that()
+                .resideInAPackage("..application..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAPackage("..infrastructure..")
+                .check(importedClasses);
+    }
+
+    @Test
+    void sharedMustNotDependOnFeatureModules() {
         noClasses()
                 .that()
                 .resideInAPackage("com.meridian.platform.shared..")
                 .should()
                 .dependOnClassesThat()
-                .resideInAnyPackage("com.meridian.platform.identity..")
+                .resideInAnyPackage(
+                        "com.meridian.platform.identity..",
+                        "com.meridian.platform.customer..",
+                        "com.meridian.platform.partner..",
+                        "com.meridian.platform.loan..",
+                        "com.meridian.platform.approval..",
+                        "com.meridian.platform.document..",
+                        "com.meridian.platform.audit..",
+                        "com.meridian.platform.notification.."
+                )
                 .check(importedClasses);
     }
 }

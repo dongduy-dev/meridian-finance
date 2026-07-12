@@ -134,7 +134,7 @@ Loan Core owns the current Salary Advance limit because it is lending state: tot
 |---|---|
 | **Responsibilities** | Immutable audit events, cross-cutting business action history, compliance-oriented audit trail; observational only and not a workflow source of truth |
 | **Entities** | `AuditEvent` (append-only, NEVER updated) with JSONB payload for state snapshots |
-| **Integration** | Consumes important domain events via `@ApplicationModuleListener`. Never publishes. Terminal consumer. Events are guaranteed at-least-once via the Event Publication Registry — the `event_publication` table records each event atomically with the originating business transaction. If the JVM crashes before a listener completes, the event is replayed on restart. |
+| **Integration** | Records explicit shared business audit events synchronously through Spring `@EventListener` for the current MVP checkpoint. Audit is a terminal consumer, never commands other modules, and audit failures propagate so the originating business transaction rolls back. The generic `event_publication` table remains a Spring Modulith infrastructure table but is not used as an async audit/outbox design in this checkpoint. |
 | **Microservice Candidacy** | Remain within the monolith by default. Extraction is possible for large-scale compliance, archival, or regulatory workloads but is not expected within the current platform scope. |
 
 ---
@@ -156,18 +156,13 @@ Loan Core owns the current Salary Advance limit because it is lending state: tot
 | Type | Allowed | Forbidden |
 |---|---|---|
 | **Sync** | IAM→Any (auth), Loan→Customer (profile/bank account checks), Loan→Partner (Salary Advance eligibility data), Loan/Approval→Document (checklist readiness) | Direct entity imports across modules |
-| **Async** | All domain events via Spring `ApplicationEventPublisher` | Direct JPA repo access across modules |
+| **Async** | Future after-commit or replayable domain events where explicitly designed | Direct JPA repo access across modules |
 | **Data** | Each module owns its tables exclusively | Shared tables, cross-module JOINs |
-| **Reliability** | Spring Modulith Event Publication Registry (outbox) | Rolling your own outbox table; relying on in-memory delivery alone |
+| **Reliability** | Current Approval-to-Loan and Audit recording are synchronous and transaction-participating; future async delivery requires explicit retry/idempotency design | Rolling your own outbox table; relying on in-memory delivery alone |
 
 > **Approval ↔ Loan coordination is event-driven for state changes.** Loan sends sufficient application context and Loan Officer recommendation when an approval decision is needed. Approval publishes the recorded decision so Loan can update the application lifecycle. No direct entity imports are allowed between these modules.
 
 > **Salary Advance eligibility and limit coordination uses clear ownership.** Partner owns Partner Company, Partner Employee, and the reusable customer employee link. Loan owns Salary Advance limit state, limit movements, and application verification snapshots. Cross-context references use IDs and application/public ports, not shared JPA entity ownership.
 
-> **Event delivery is transactional, not fire-and-forget.**
-> `spring-modulith-events-jdbc` writes every published event to the `event_publication`
-> table within the same database transaction as the business operation. A listener marks
-> its row complete only after successful processing. Incomplete rows are replayed on
-> application restart. All `@ApplicationModuleListener` consumers must therefore be
-> **idempotent** — they may be called more than once for the same event under failure
-> conditions.
+> **Current workflow coordination is synchronous for this checkpoint.**
+> Approval-to-Loan listeners and Audit recording use Spring `@EventListener` and participate in the originating transaction. The `event_publication` table remains a Spring Modulith infrastructure table, but this checkpoint does not introduce async audit, after-commit listeners, outbox processing, or retry infrastructure.

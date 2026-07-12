@@ -62,7 +62,7 @@ graph TB
 - `shared/application/security` contains abstractions only. `identity/infrastructure/security` contains concrete Spring Security/JWT implementation.
 - `JwtAuthenticationFilter`, `JwtTokenService`, and Spring Security adapters belong to identity infrastructure.
 - OCR integration should be treated as an external or infrastructure-facing capability behind a document/OCR port.
-- Audit should record events without controlling the core workflow.
+- Audit should record synchronous business audit events without controlling the core workflow.
 - Modules must not share JPA entity ownership across bounded contexts. Cross-context relationships are stored as IDs and resolved through application/public ports or events.
 - Repository ports return domain objects, not DTOs. Other output ports return domain objects or application contract records, not REST DTOs.
 
@@ -92,9 +92,8 @@ eventPublisher.publishEvent(new LoanSentForApprovalEvent(loanId, customerId, pro
 // approval/infrastructure/listener/LoanEventListener.java
 @Component
 public class LoanEventListener {
-    // @ApplicationModuleListener ensures the listener runs after the publishing transaction commits,
-    // preventing listeners from seeing uncommitted data.
-    @ApplicationModuleListener
+    // Intentional synchronous listener: downstream failures roll back the publishing transaction.
+    @EventListener
     public void onLoanSentForApproval(LoanSentForApprovalEvent event) {
         approvalService.createApprovalDecisionWorkItem(event.loanId(), event.recommendation());
     }
@@ -415,7 +414,7 @@ package com.meridian.platform.partner;
 )
 package com.meridian.platform.document;
 
-// audit/package-info.java — receives events via @ApplicationModuleListener (no explicit dependency)
+// audit/package-info.java - terminal audit module; receives shared audit events synchronously
 @org.springframework.modulith.ApplicationModule(
     allowedDependencies = {"shared"}
 )
@@ -428,7 +427,7 @@ package com.meridian.platform.audit;
 package com.meridian.platform.notification;
 ```
 
-> The `audit` module consumes events from ALL modules via `@ApplicationModuleListener`. Spring Modulith routes events without requiring explicit `allowedDependencies` declarations for event sources.
+> The current `audit` module records explicit shared business audit events through a synchronous Spring `@EventListener`. Audit depends on shared contracts only, does not command other modules, and participates in the originating transaction for the MVP checkpoint.
 
 ---
 
@@ -456,7 +455,7 @@ log.info("Processing loan", kv("loanId", loanId), kv("customerId", customerId));
 | **Customer** | — | — | Loan internals, Partner internals |
 | **Partner** | — | — | Loan internals, Customer internals |
 | **Document** | — | — | Loan internals, Customer, Partner |
-| **Audit** | — | Business/domain events | All module internals, business decision logic |
+| **Audit** | - | Shared business audit events | All module internals, business decision logic |
 | **Notification** | — | Future notification events | All module internals; optional later |
 | **IAM** | Shared | — | All business modules |
 
@@ -465,6 +464,6 @@ log.info("Processing loan", kv("loanId", loanId), kv("customerId", customerId));
 
 > **Salary Advance uses Partner through application/public eligibility ports only.** Loan may store customer employee link IDs, partner employee IDs, and application snapshots, but Partner remains the owner of Partner Employee source rows and reusable customer employee links.
 
-> **Audit receives business events and records immutable history.** It does not approve, reject, disburse, calculate eligibility, or otherwise control the core workflow.
+> **Audit receives shared business audit events and records immutable history.** It does not approve, reject, disburse, calculate eligibility, or otherwise control the core workflow.
 
 > **Current user access flows through shared abstractions.** Application services may depend on `CurrentUserProvider`; concrete Spring Security and JWT implementation stays in `identity/infrastructure/security`.

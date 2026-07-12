@@ -26,7 +26,9 @@ public class ApprovalDecisionEventListener {
                 event.reviewRecommendationId(),
                 event.approverUserId(),
                 toLoanAction(event.action()),
-                event.decidedAt()
+                event.reason(),
+                event.decidedAt(),
+                event.operationContext()
         ));
     }
 

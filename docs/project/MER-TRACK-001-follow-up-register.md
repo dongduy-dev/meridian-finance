@@ -275,15 +275,16 @@ Type: Deferred feature
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocks next major feature: No
 
 Problem:
-No full audit trail or Loan Application lifecycle history tables exist yet.
+No full audit trail or Loan Application lifecycle history tables existed for the implemented Salary Advance workflow.
 
-Recommendation:
-Implement `audit_events` for important cross-cutting business actions and Loan-owned `loan_application_status_transitions` for ordered Loan Application status changes before final demo.
+Resolution:
+
+V17 adds append-only `audit_events` for important cross-cutting business actions and Loan-owned `loan_application_status_transitions` for ordered Loan Application status changes. The current implementation records the implemented Salary Advance submission, review, recommendation, decision, approved-offer, customer response, expiry, and reservation-release actions synchronously in the originating transaction. Future modules and future workflow slices should extend this foundation rather than create duplicate approval-history or generic status-history tables.
 
 ### MER-FU-014 - Create current physical schema snapshot
 
@@ -301,7 +302,7 @@ Problem:
 Flyway migrations are growing and current schema is harder to inspect from migrations alone.
 
 Recommendation:
-`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V16. This file is documentation only and must not be placed in the Flyway migration folder.
+`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V17. This file is documentation only and must not be placed in the Flyway migration folder.
 
 ### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
 
@@ -595,5 +596,5 @@ Suggested future branch name:
 1. Review/merge the completed Salary Advance approved-offer and customer-acceptance slice.
 2. Continue with manual disbursement and loan account activation.
 3. Add repayment tracking.
-4. Add audit trail.
+4. Extend audit trail coverage to future modules and workflow slices.
 5. Add document checklist/manual review/OCR.

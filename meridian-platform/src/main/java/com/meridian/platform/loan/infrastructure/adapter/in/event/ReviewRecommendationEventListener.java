@@ -25,7 +25,9 @@ public class ReviewRecommendationEventListener {
                 event.recommendationId(),
                 event.loanOfficerUserId(),
                 toLoanAction(event.action()),
-                event.recordedAt()
+                event.reason(),
+                event.recordedAt(),
+                event.operationContext()
         ));
     }
 
