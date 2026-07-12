@@ -78,8 +78,8 @@ Partner Management owns Partner Company and Partner Employee source data. It als
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Generic loan application lifecycle, product definition, `LoanProductPolicy` selection, product-specific policies/strategies, eligibility, Salary Advance limit state and usage, offer terms, manual disbursement confirmation state, repayment schedule, state machine |
-| **Entities** | `LoanApplication` (aggregate root), `LoanProduct`, `LoanProductPolicy`, `SalaryAdvanceLimit`, `SalaryAdvanceLimitMovement`, `SalaryAdvanceVerification`, `LoanAccount`, `OfferTerms`, `DisbursementRecord`, `RepaymentSchedule`, `ProductVerificationResult`, `Money` (VO), `LoanTerm` (VO), `InterestRate` (VO), `RejectionReason` (VO) |
+| **Responsibilities** | Generic loan application lifecycle, product definition, `LoanProductPolicy` selection, product-specific policies/strategies, eligibility, Salary Advance limit state and usage, offer terms, manual disbursement confirmation state, repayment schedule, state machine, Loan Application lifecycle history |
+| **Entities** | `LoanApplication` (aggregate root), `LoanProduct`, `LoanProductPolicy`, `SalaryAdvanceLimit`, `SalaryAdvanceLimitMovement`, `SalaryAdvanceVerification`, `LoanApplicationStatusTransition`, `LoanAccount`, `OfferTerms`, `DisbursementRecord`, `RepaymentSchedule`, `ProductVerificationResult`, `Money` (VO), `LoanTerm` (VO), `InterestRate` (VO), `RejectionReason` (VO) |
 | **State Machine** | `DRAFT → SUBMITTED → VERIFICATION_PENDING/DOCUMENTS_PENDING → UNDER_REVIEW → APPROVAL_PENDING → APPROVED → CUSTOMER_ACCEPTANCE_PENDING → CONTRACT_PENDING → DISBURSEMENT_PENDING → DISBURSED → SETTLED/CLOSED` (also `→ RETURNED_FOR_REVISION`, `→ RETURNED_TO_REVIEW`, `→ REJECTED`, `→ CANCELLED`, `→ EXPIRED`) |
 | **Public Interface** | `LoanApplicationPort.submit()`, `.getApplication()`, `.listApplications()`, `SalaryAdvanceLimitPort.getCurrentLimit()`, `.startApplicationUsingLimit()` |
 | **Events Published** | `LoanSubmittedEvent` (carries: loanId, customerId, productId, requestedAmount, submittedAt), `SalaryAdvanceLimitReservedEvent`, `SalaryAdvanceLimitReleasedEvent`, `LoanReviewStartedEvent`, `LoanSentForApprovalEvent`, `LoanApprovedEvent`, `LoanRejectedEvent`, `LoanCancelledEvent`, `LoanDisbursedEvent`, `LoanCompletedEvent` |
@@ -132,8 +132,8 @@ Loan Core owns the current Salary Advance limit because it is lending state: tot
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Immutable audit events, business action history, status transition history, compliance-oriented audit trail |
-| **Entities** | `AuditEvent` (append-only, NEVER updated) with JSONB payload for state snapshots, `BusinessActionHistory`, `StatusTransitionHistory` |
+| **Responsibilities** | Immutable audit events, cross-cutting business action history, compliance-oriented audit trail; observational only and not a workflow source of truth |
+| **Entities** | `AuditEvent` (append-only, NEVER updated) with JSONB payload for state snapshots |
 | **Integration** | Consumes important domain events via `@ApplicationModuleListener`. Never publishes. Terminal consumer. Events are guaranteed at-least-once via the Event Publication Registry — the `event_publication` table records each event atomically with the originating business transaction. If the JVM crashes before a listener completes, the event is replayed on restart. |
 | **Microservice Candidacy** | Remain within the monolith by default. Extraction is possible for large-scale compliance, archival, or regulatory workloads but is not expected within the current platform scope. |
 

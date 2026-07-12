@@ -267,7 +267,7 @@ Docs describe documents/checklists/OCR, but implementation is not present.
 Recommendation:
 Implement after core Salary Advance lifecycle is stable.
 
-### MER-FU-013 - Implement audit trail/status history
+### MER-FU-013 - Implement audit trail and Loan Application lifecycle history
 
 Area: Audit / Workflow
 
@@ -280,10 +280,10 @@ Status: Open
 Blocks next major feature: No
 
 Problem:
-No full audit trail or transition history tables exist yet.
+No full audit trail or Loan Application lifecycle history tables exist yet.
 
 Recommendation:
-Implement audit trail for important business actions and status transitions before final demo.
+Implement `audit_events` for important cross-cutting business actions and Loan-owned `loan_application_status_transitions` for ordered Loan Application status changes before final demo.
 
 ### MER-FU-014 - Create current physical schema snapshot
 

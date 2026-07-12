@@ -104,7 +104,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 | **Loan Core / Origination** | Generic lending core — state machine, product policies, offers, disbursement, repayment | `LoanApplication`, `LoanProduct`, `LoanProductPolicy`, `LoanAccount`, `RepaymentSchedule` |
 | **Approval Workflow** | Controlled review and approval workflow, maker-checker controls | `ReviewRecommendation`, `ApprovalDecision` |
 | **Document Management** | Upload, checklist management, manual document review, planned OCR-assisted processing | `Document`, `DocumentChecklist`, `DocumentChecklistItem`, `OcrJob`, `OcrResult` |
-| **Audit & Compliance Controls** | Immutable event log, business action history, status transition history, compliance-oriented audit trail | `AuditEvent` |
+| **Audit & Compliance Controls** | Immutable event log, cross-cutting business action history, compliance-oriented audit trail | `AuditEvent` |
 
 ---
 

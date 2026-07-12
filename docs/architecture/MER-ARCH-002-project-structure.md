@@ -157,12 +157,12 @@ com.meridian.platform/
 │   │   │   ├── SalaryAdvanceLimit.java
 │   │   │   ├── SalaryAdvanceLimitMovement.java
 │   │   │   ├── SalaryAdvanceVerification.java
+│   │   │   ├── LoanApplicationStatusTransition.java
 │   │   │   ├── LoanAccount.java
 │   │   │   ├── LoanStatus.java
 │   │   │   ├── OfferTerms.java
 │   │   │   ├── DisbursementRecord.java
-│   │   │   ├── RepaymentSchedule.java
-│   │   │   └── StatusTransition.java
+│   │   │   └── RepaymentSchedule.java
 │   │   ├── product/                    # Product policies/strategies; no top-level product modules
 │   │   │   ├── LoanProductStrategy.java
 │   │   │   ├── SalaryAdvancePolicy.java
@@ -257,7 +257,6 @@ com.meridian.platform/
 │   │   │   ├── ReviewRecommendation.java
 │   │   │   ├── ApprovalDecision.java
 │   │   │   ├── MakerCheckerControl.java
-│   │   │   ├── ApprovalHistory.java
 │   │   │   └── ApprovalStatus.java
 │   │   ├── service/
 │   │   │   └── MakerCheckerPolicyService.java
@@ -367,9 +366,7 @@ com.meridian.platform/
 ├── audit/                           # ── Audit Module (SIMPLIFIED) ──
 │   ├── domain/
 │   │   ├── model/
-│   │   │   ├── AuditEvent.java
-│   │   │   ├── BusinessActionHistory.java
-│   │   │   └── StatusTransitionHistory.java
+│   │   │   └── AuditEvent.java
 │   │   └── exception/
 │   │       └── AuditDomainException.java
 │   ├── application/
