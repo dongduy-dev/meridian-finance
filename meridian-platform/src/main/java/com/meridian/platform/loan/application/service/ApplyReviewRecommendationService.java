@@ -6,7 +6,9 @@ import com.meridian.platform.loan.application.port.in.ApplyReviewRecommendationU
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
+import com.meridian.platform.shared.domain.model.ActorType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,7 @@ public class ApplyReviewRecommendationService implements ApplyReviewRecommendati
         Objects.requireNonNull(command.action(), "action must not be null");
         Objects.requireNonNull(command.recommendedAt(), "recommendedAt must not be null");
         Objects.requireNonNull(command.operationContext(), "operationContext must not be null");
+        validateOperationContext(command);
 
         LoanApplication loanApplication = loanApplicationRepository.findByIdForUpdate(command.loanApplicationId())
                 .orElseThrow(() -> new EntityNotFoundException(
@@ -51,5 +54,16 @@ public class ApplyReviewRecommendationService implements ApplyReviewRecommendati
                 savedApplication.id(),
                 savedApplication.status().name()
         );
+    }
+
+    private void validateOperationContext(ApplyReviewRecommendationCommand command) {
+        if (command.operationContext().actorType() != ActorType.USER
+                || !command.loanOfficerUserId().equals(command.operationContext().actorUserId())
+                || !command.recommendedAt().equals(command.operationContext().occurredAt())) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_OPERATION_CONTEXT",
+                    "Recommendation operation context must match the authoritative recommendation record."
+            );
+        }
     }
 }

@@ -56,7 +56,7 @@ public class LoanApplicationStatusTransitionJpaEntity {
     @Column(name = "occurred_at", nullable = false)
     private LocalDateTime occurredAt;
 
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
     protected LoanApplicationStatusTransitionJpaEntity() {
@@ -74,7 +74,6 @@ public class LoanApplicationStatusTransitionJpaEntity {
         this.actorType = transition.actorType();
         this.actorUserId = transition.actorUserId();
         this.occurredAt = transition.occurredAt();
-        this.createdAt = LocalDateTime.now();
     }
 
     private short toSmallInt(int value) {

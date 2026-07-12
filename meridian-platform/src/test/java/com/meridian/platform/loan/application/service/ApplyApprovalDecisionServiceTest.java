@@ -186,12 +186,78 @@ class ApplyApprovalDecisionServiceTest {
                 () -> service.applyApprovalDecision(command(LoanApprovalDecisionAction.APPROVE))
         );
 
-        assertEquals("INVALID_APPLICATION_STATUS", exception.getErrorCode());
+        assertEquals("APPROVAL_DECISION_NOT_ALLOWED", exception.getErrorCode());
         assertTrue(movementRepository.savedMovements.isEmpty());
         assertNull(approvedOfferRepository.savedOffer);
     }
 
+    @Test
+    void rejectsSystemActorApprovalOperationContext() {
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.applyApprovalDecision(command(
+                        LoanApprovalDecisionAction.APPROVE,
+                        BusinessOperationContext.system(UUID.fromString("abababab-abab-abab-abab-abababababab"), DECIDED_AT)
+                ))
+        );
+
+        assertEquals("INVALID_OPERATION_CONTEXT", exception.getErrorCode());
+        assertNull(loanApplicationRepository.savedApplication);
+        assertNull(approvedOfferRepository.savedOffer);
+    }
+
+    @Test
+    void rejectsMismatchedApproverOperationContext() {
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.applyApprovalDecision(command(
+                        LoanApprovalDecisionAction.APPROVE,
+                        BusinessOperationContext.user(
+                                UUID.fromString("abababab-abab-abab-abab-abababababab"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000302"),
+                                DECIDED_AT
+                        )
+                ))
+        );
+
+        assertEquals("INVALID_OPERATION_CONTEXT", exception.getErrorCode());
+        assertNull(loanApplicationRepository.savedApplication);
+        assertNull(approvedOfferRepository.savedOffer);
+    }
+
+    @Test
+    void rejectsMismatchedDecisionTimestampOperationContext() {
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.applyApprovalDecision(command(
+                        LoanApprovalDecisionAction.APPROVE,
+                        BusinessOperationContext.user(
+                                UUID.fromString("abababab-abab-abab-abab-abababababab"),
+                                APPROVER_USER_ID,
+                                DECIDED_AT.plusSeconds(1)
+                        )
+                ))
+        );
+
+        assertEquals("INVALID_OPERATION_CONTEXT", exception.getErrorCode());
+        assertNull(loanApplicationRepository.savedApplication);
+        assertNull(approvedOfferRepository.savedOffer);
+    }
     private ApplyApprovalDecisionCommand command(LoanApprovalDecisionAction action) {
+        return command(
+                action,
+                BusinessOperationContext.user(
+                        UUID.fromString("abababab-abab-abab-abab-abababababab"),
+                        APPROVER_USER_ID,
+                        DECIDED_AT
+                )
+        );
+    }
+
+    private ApplyApprovalDecisionCommand command(
+            LoanApprovalDecisionAction action,
+            BusinessOperationContext operationContext
+    ) {
         return new ApplyApprovalDecisionCommand(
                 LOAN_APPLICATION_ID,
                 DECISION_ID,
@@ -200,7 +266,7 @@ class ApplyApprovalDecisionServiceTest {
                 action,
                 action == LoanApprovalDecisionAction.REJECT ? "Business-facing reason" : null,
                 DECIDED_AT,
-                BusinessOperationContext.user(UUID.fromString("abababab-abab-abab-abab-abababababab"), APPROVER_USER_ID, DECIDED_AT)
+                operationContext
         );
     }
 

@@ -17,7 +17,9 @@ import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayload;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey;
 import com.meridian.platform.shared.domain.audit.ExpiryDiscoveryTrigger;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
+import com.meridian.platform.shared.domain.model.ActorType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,6 +60,7 @@ public class ApprovedOfferExpiryService implements ExpireApprovedOfferUseCase {
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
         Objects.requireNonNull(operationContext, "operationContext must not be null");
         Objects.requireNonNull(discoveryTrigger, "discoveryTrigger must not be null");
+        validateScheduledOperationContext(operationContext, discoveryTrigger);
         LocalDateTime now = operationContext.occurredAt();
 
         LoanApplication loanApplication = loanApplicationRepository.findByIdForUpdate(loanApplicationId)
@@ -99,5 +102,18 @@ public class ApprovedOfferExpiryService implements ExpireApprovedOfferUseCase {
                 operationContext,
                 ReservationReleaseTrigger.OFFER_EXPIRY
         );
+    }
+
+    private void validateScheduledOperationContext(
+            BusinessOperationContext operationContext,
+            ExpiryDiscoveryTrigger discoveryTrigger
+    ) {
+        if (discoveryTrigger == ExpiryDiscoveryTrigger.SCHEDULED_SCAN
+                && (operationContext.actorType() != ActorType.SYSTEM || operationContext.actorUserId() != null)) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_OPERATION_CONTEXT",
+                    "Scheduled expiry operation context must use a SYSTEM actor."
+            );
+        }
     }
 }

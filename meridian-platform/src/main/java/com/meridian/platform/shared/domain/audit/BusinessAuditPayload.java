@@ -7,18 +7,26 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 public record BusinessAuditPayload(Map<String, String> values) {
 
     private static final int MAX_VALUE_LENGTH = 120;
+    private static final Pattern UPPERCASE_CODE_PATTERN = Pattern.compile("[A-Z][A-Z0-9_]*");
 
     public BusinessAuditPayload {
         Objects.requireNonNull(values, "values must not be null");
         LinkedHashMap<String, String> copy = new LinkedHashMap<>();
-        values.forEach((key, value) -> {
-            validateText(key, "payload key");
-            validateText(value, "payload value");
-            copy.put(key, value);
+        values.forEach((jsonName, value) -> {
+            validateText(jsonName, "payload key");
+            BusinessAuditPayloadKey key = BusinessAuditPayloadKey.fromJsonName(jsonName);
+            validateValue(key, value);
+            if (copy.put(jsonName, value) != null) {
+                throw new BusinessRuleViolationException(
+                        "DUPLICATE_AUDIT_PAYLOAD_KEY",
+                        "Audit payload keys must be unique."
+                );
+            }
         });
         values = Collections.unmodifiableMap(copy);
     }
@@ -27,29 +35,50 @@ public record BusinessAuditPayload(Map<String, String> values) {
         return new BusinessAuditPayload(Map.of());
     }
 
+    public static BusinessAuditPayload fromStored(Map<String, String> values) {
+        return new BusinessAuditPayload(values);
+    }
+
     public static Builder builder() {
         return new Builder();
+    }
+
+    static BusinessRuleViolationException invalidPayload(String message) {
+        return new BusinessRuleViolationException("INVALID_AUDIT_PAYLOAD", message);
+    }
+
+    private static void validateValue(BusinessAuditPayloadKey key, String value) {
+        validateText(value, "payload value");
+        switch (key.valueType()) {
+            case UUID -> validateUuid(value);
+            case CODE -> validateCode(value);
+        }
+    }
+
+    private static void validateUuid(String value) {
+        try {
+            UUID.fromString(value);
+        } catch (IllegalArgumentException exception) {
+            throw invalidPayload("Audit payload UUID value is malformed.");
+        }
+    }
+
+    private static void validateCode(String value) {
+        if (!UPPERCASE_CODE_PATTERN.matcher(value).matches()) {
+            throw invalidPayload("Audit payload code value must be an uppercase code.");
+        }
     }
 
     private static void validateText(String value, String label) {
         Objects.requireNonNull(value, label + " must not be null");
         if (value.isBlank()) {
-            throw new BusinessRuleViolationException(
-                    "INVALID_AUDIT_PAYLOAD",
-                    label + " must not be blank."
-            );
+            throw invalidPayload(label + " must not be blank.");
         }
         if (value.length() > MAX_VALUE_LENGTH) {
-            throw new BusinessRuleViolationException(
-                    "INVALID_AUDIT_PAYLOAD",
-                    label + " exceeds the maximum safe length."
-            );
+            throw invalidPayload(label + " exceeds the maximum safe length.");
         }
         if (value.chars().anyMatch(Character::isISOControl)) {
-            throw new BusinessRuleViolationException(
-                    "INVALID_AUDIT_PAYLOAD",
-                    label + " must not contain control characters."
-            );
+            throw invalidPayload(label + " must not contain control characters.");
         }
     }
 

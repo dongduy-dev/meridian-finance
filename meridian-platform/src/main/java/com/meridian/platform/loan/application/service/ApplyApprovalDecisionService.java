@@ -24,6 +24,7 @@ import com.meridian.platform.shared.domain.audit.BusinessAuditPayload;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
+import com.meridian.platform.shared.domain.model.ActorType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,6 +71,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         Objects.requireNonNull(command.action(), "action must not be null");
         Objects.requireNonNull(command.decidedAt(), "decidedAt must not be null");
         Objects.requireNonNull(command.operationContext(), "operationContext must not be null");
+        validateOperationContext(command);
 
         LoanApplication loanApplication = loanApplicationRepository.findByIdForUpdate(command.loanApplicationId())
                 .orElseThrow(() -> new EntityNotFoundException(
@@ -119,6 +121,17 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
                 savedApplication.id(),
                 savedApplication.status().name()
         );
+    }
+
+    private void validateOperationContext(ApplyApprovalDecisionCommand command) {
+        if (command.operationContext().actorType() != ActorType.USER
+                || !command.approverUserId().equals(command.operationContext().actorUserId())
+                || !command.decidedAt().equals(command.operationContext().occurredAt())) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_OPERATION_CONTEXT",
+                    "Approval operation context must match the authoritative approval decision record."
+            );
+        }
     }
 
     private boolean shouldGenerateSalaryAdvanceOffer(

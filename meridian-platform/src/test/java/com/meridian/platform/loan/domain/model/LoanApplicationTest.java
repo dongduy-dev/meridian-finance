@@ -57,7 +57,7 @@ class LoanApplicationTest {
                 () -> loanApplication(LoanApplicationStatus.APPROVAL_PENDING).startReview()
         );
 
-        assertEquals("INVALID_APPLICATION_STATUS", exception.getErrorCode());
+        assertEquals("LOAN_REVIEW_START_NOT_ALLOWED", exception.getErrorCode());
     }
 
     @Test
@@ -124,7 +124,7 @@ class LoanApplicationTest {
                         .applyReviewRecommendation(LoanReviewRecommendationAction.RECOMMEND_APPROVAL)
         );
 
-        assertEquals("INVALID_APPLICATION_STATUS", exception.getErrorCode());
+        assertEquals("LOAN_RECOMMENDATION_NOT_ALLOWED", exception.getErrorCode());
     }
 
     @Test
@@ -135,7 +135,7 @@ class LoanApplicationTest {
                         .applyReviewRecommendation(LoanReviewRecommendationAction.RECOMMEND_APPROVAL)
         );
 
-        assertEquals("INVALID_APPLICATION_STATUS", exception.getErrorCode());
+        assertEquals("LOAN_RECOMMENDATION_NOT_ALLOWED", exception.getErrorCode());
     }
 
     @Test
@@ -202,7 +202,7 @@ class LoanApplicationTest {
                         .applyApprovalDecision(LoanApprovalDecisionAction.APPROVE)
         );
 
-        assertEquals("INVALID_APPLICATION_STATUS", exception.getErrorCode());
+        assertEquals("APPROVAL_DECISION_NOT_ALLOWED", exception.getErrorCode());
     }
 
     @Test
@@ -277,7 +277,7 @@ class LoanApplicationTest {
                 () -> loanApplication(LoanApplicationStatus.CUSTOMER_DECLINED).acceptApprovedOffer()
         );
 
-        assertEquals("INVALID_APPLICATION_STATUS", exception.getErrorCode());
+        assertEquals("OFFER_ACTION_CONFLICT", exception.getErrorCode());
     }
 
     private void assertTransition(

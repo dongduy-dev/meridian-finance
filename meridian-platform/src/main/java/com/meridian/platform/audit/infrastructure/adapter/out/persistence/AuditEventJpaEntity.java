@@ -58,7 +58,7 @@ public class AuditEventJpaEntity {
     @Column(name = "occurred_at", nullable = false)
     private LocalDateTime occurredAt;
 
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
     protected AuditEventJpaEntity() {
@@ -75,7 +75,6 @@ public class AuditEventJpaEntity {
         this.action = auditEvent.action();
         this.payload = new LinkedHashMap<>(auditEvent.payload().values());
         this.occurredAt = auditEvent.occurredAt();
-        this.createdAt = LocalDateTime.now();
     }
 
     private short toSmallInt(int value) {
@@ -95,7 +94,7 @@ public class AuditEventJpaEntity {
                 entityType,
                 entityId,
                 action,
-                new BusinessAuditPayload(payload),
+                BusinessAuditPayload.fromStored(payload),
                 occurredAt
         );
     }

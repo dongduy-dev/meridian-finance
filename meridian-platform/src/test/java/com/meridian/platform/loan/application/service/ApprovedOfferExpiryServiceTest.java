@@ -29,6 +29,7 @@ import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.audit.ExpiryDiscoveryTrigger;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.model.ActorType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ApprovedOfferExpiryServiceTest {
@@ -133,6 +135,26 @@ class ApprovedOfferExpiryServiceTest {
         assertTrue(movementRepository.savedMovements.isEmpty());
     }
 
+    @Test
+    void scheduledExpiryRejectsUserOperationContext() {
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.expireDueOffer(
+                        LOAN_APPLICATION_ID,
+                        BusinessOperationContext.user(
+                                UUID.fromString("abababab-abab-abab-abab-abababababab"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000301"),
+                                NOW
+                        ),
+                        ExpiryDiscoveryTrigger.SCHEDULED_SCAN
+                )
+        );
+
+        assertEquals("INVALID_OPERATION_CONTEXT", exception.getErrorCode());
+        assertNull(approvedOfferRepository.savedOffer);
+        assertNull(loanApplicationRepository.savedApplication);
+        assertTrue(movementRepository.savedMovements.isEmpty());
+    }
 
     private BusinessOperationContext systemContext() {
         return BusinessOperationContext.system(UUID.fromString("abababab-abab-abab-abab-abababababab"), NOW);

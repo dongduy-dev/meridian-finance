@@ -62,7 +62,7 @@ public record LoanApplication(
     public LoanApplicationTransitionResult startReview() {
         if (status != LoanApplicationStatus.SUBMITTED) {
             throw new BusinessStateConflictException(
-                    "INVALID_APPLICATION_STATUS",
+                    "LOAN_REVIEW_START_NOT_ALLOWED",
                     "Only submitted loan applications can start Loan Officer review."
             );
         }
@@ -73,8 +73,8 @@ public record LoanApplication(
         Objects.requireNonNull(action, "action must not be null");
         if (!LOAN_OFFICER_RECOMMENDATION_SOURCE_STATUSES.contains(status)) {
             throw new BusinessStateConflictException(
-                    "INVALID_APPLICATION_STATUS",
-                    "Only applications under Loan Officer review can receive a recommendation."
+                    "LOAN_RECOMMENDATION_NOT_ALLOWED",
+                    "Loan Officer recommendation can only be recorded while the application is under review."
             );
         }
 
@@ -96,8 +96,8 @@ public record LoanApplication(
         Objects.requireNonNull(action, "action must not be null");
         if (status != LoanApplicationStatus.APPROVAL_PENDING) {
             throw new BusinessStateConflictException(
-                    "INVALID_APPLICATION_STATUS",
-                    "Only applications pending approval can receive an approval decision."
+                    "APPROVAL_DECISION_NOT_ALLOWED",
+                    "Approval decision can only be recorded while the application is pending approval."
             );
         }
 
@@ -120,7 +120,7 @@ public record LoanApplication(
         if (status != LoanApplicationStatus.APPROVED) {
             throw new BusinessStateConflictException(
                     "INVALID_APPLICATION_STATUS",
-                    "Only approved applications can move to customer acceptance."
+                    "Only approved loan applications can move to customer acceptance."
             );
         }
         return transitionTo(
@@ -135,8 +135,8 @@ public record LoanApplication(
         }
         if (status != LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING) {
             throw new BusinessStateConflictException(
-                    "INVALID_APPLICATION_STATUS",
-                    "Only applications awaiting customer acceptance can accept an approved offer."
+                    "OFFER_ACTION_CONFLICT",
+                    "Approved offer cannot be accepted in the current application status."
             );
         }
         return transitionTo(
@@ -151,8 +151,8 @@ public record LoanApplication(
         }
         if (status != LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING) {
             throw new BusinessStateConflictException(
-                    "INVALID_APPLICATION_STATUS",
-                    "Only applications awaiting customer acceptance can decline an approved offer."
+                    "OFFER_ACTION_CONFLICT",
+                    "Approved offer cannot be declined in the current application status."
             );
         }
         return transitionTo(
@@ -167,8 +167,8 @@ public record LoanApplication(
         }
         if (status != LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING) {
             throw new BusinessStateConflictException(
-                    "INVALID_APPLICATION_STATUS",
-                    "Only applications awaiting customer acceptance can expire an approved offer."
+                    "OFFER_ACTION_CONFLICT",
+                    "Approved offer cannot be expired in the current application status."
             );
         }
         return transitionTo(
