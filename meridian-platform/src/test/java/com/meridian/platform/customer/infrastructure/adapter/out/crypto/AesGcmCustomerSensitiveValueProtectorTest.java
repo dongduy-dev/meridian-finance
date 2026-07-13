@@ -9,6 +9,7 @@ import java.security.SecureRandom;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class AesGcmCustomerSensitiveValueProtectorTest {
 
@@ -31,6 +32,24 @@ class AesGcmCustomerSensitiveValueProtectorTest {
         assertFalse(first.ciphertext().contains("IDREF-MER-001"));
     }
 
+    @Test
+    void rejectsShortBankAccountNumberAfterNormalization() {
+        assertThrows(IllegalArgumentException.class,
+                () -> protector.protectBankAccountNumber("VCB", "1234"));
+        assertThrows(IllegalArgumentException.class,
+                () -> protector.protectBankAccountNumber("VCB", "12-34"));
+        assertThrows(IllegalArgumentException.class,
+                () -> protector.protectBankAccountNumber("VCB", "1 2 3 4"));
+    }
+
+    @Test
+    void acceptsExactlySixNormalizedBankAccountNumberCharacters() {
+        ProtectedSensitiveValue value = protector.protectBankAccountNumber("VCB", "12-3456");
+
+        assertEquals("3456", value.lastFour());
+        assertEquals("123456", protector.reveal(value));
+        assertFalse(value.ciphertext().contains("123456"));
+    }
     @Test
     void bankAccountFingerprintIncludesNormalizedBankCode() {
         ProtectedSensitiveValue first = protector.protectBankAccountNumber(" vcb ", " 1234-5678 ");

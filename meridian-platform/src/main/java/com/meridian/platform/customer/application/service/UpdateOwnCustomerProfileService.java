@@ -85,7 +85,7 @@ public class UpdateOwnCustomerProfileService implements UpdateOwnCustomerProfile
                 previousProfile == null ? null : previousProfile.id(),
                 customerId,
                 request.fullName(),
-                resolveIdentityReference(previousProfile, request.identityReference()),
+                resolveIdentityReference(previousProfile, request.identityReference(), customerId),
                 request.phoneNumber(),
                 request.residentialAddress(),
                 request.employmentStatus(),
@@ -109,10 +109,19 @@ public class UpdateOwnCustomerProfileService implements UpdateOwnCustomerProfile
 
     private ProtectedSensitiveValue resolveIdentityReference(
             CustomerProfile previousProfile,
-            String requestedIdentityReference
+            String requestedIdentityReference,
+            UUID customerId
     ) {
         if (requestedIdentityReference != null && !requestedIdentityReference.isBlank()) {
-            return sensitiveValueProtector.protectIdentityReference(requestedIdentityReference);
+            ProtectedSensitiveValue protectedValue = sensitiveValueProtector.protectIdentityReference(requestedIdentityReference);
+            if (previousProfile != null
+                    && previousProfile.identityReference().fingerprint().equals(protectedValue.fingerprint())) {
+                return protectedValue;
+            }
+            if (previousProfile == null || !previousProfile.isComplete()) {
+                assertIdentityReferenceNotOwnedByAnother(protectedValue, customerId);
+            }
+            return protectedValue;
         }
         if (previousProfile != null) {
             return previousProfile.identityReference();
@@ -120,6 +129,25 @@ public class UpdateOwnCustomerProfileService implements UpdateOwnCustomerProfile
         throw new BusinessRuleViolationException(
                 "PROFILE_INCOMPLETE",
                 "Customer profile requires identity reference before it can be completed."
+        );
+    }
+
+    private void assertIdentityReferenceNotOwnedByAnother(
+            ProtectedSensitiveValue protectedValue,
+            UUID customerId
+    ) {
+        if (customerRepository.existsByIdentityReferenceFingerprintAndCustomerIdNot(
+                protectedValue.fingerprint(),
+                customerId
+        )) {
+            throw identityReferenceAlreadyInUse();
+        }
+    }
+
+    private BusinessStateConflictException identityReferenceAlreadyInUse() {
+        return new BusinessStateConflictException(
+                "IDENTITY_REFERENCE_ALREADY_IN_USE",
+                "Identity reference is already associated with another customer."
         );
     }
 

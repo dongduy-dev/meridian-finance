@@ -58,7 +58,7 @@ Seeded demo user emails:
 ## Request Payloads
 ### Customer Profile
 
-`customerId` is derived from the authenticated customer token. `identityReference` is accepted only on profile update, stored encrypted, and is not returned by Customer profile responses.
+`customerId` is derived from the authenticated customer token. `identityReference` is accepted only on profile update, stored encrypted, and is not returned by Customer profile responses. Duplicate normalized identity references owned by another Customer return `409 IDENTITY_REFERENCE_ALREADY_IN_USE` without returning the sensitive value.
 
 ```json
 {
@@ -75,7 +75,7 @@ Seeded demo user emails:
 
 ### Customer Bank Accounts
 
-Bank-account numbers are accepted only on add, encrypted at rest, and returned only as masked values plus last four digits.
+Bank-account numbers are accepted only on add, normalized by removing spaces and hyphens, must contain at least 6 normalized characters, encrypted at rest, and returned only as masked values plus last four digits.
 
 ```json
 {

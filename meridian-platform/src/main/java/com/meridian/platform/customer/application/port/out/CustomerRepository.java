@@ -12,4 +12,6 @@ public interface CustomerRepository {
     Optional<Customer> findById(UUID customerId);
 
     Optional<Customer> findByIdForUpdate(UUID customerId);
+
+    boolean existsByIdentityReferenceFingerprintAndCustomerIdNot(String fingerprint, UUID customerId);
 }

@@ -81,6 +81,41 @@ class ManageOwnCustomerBankAccountServiceTest {
     }
 
     @Test
+    void rejectsShortNormalizedAccountNumber() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.addBankAccount(request("VCB", "12-34"))
+        );
+
+        assertEquals("accountNumber must contain at least 6 characters after normalization", exception.getMessage());
+        assertTrue(customerRepository.customer.orElseThrow().bankAccounts().isEmpty());
+        assertTrue(auditPublisher.events.isEmpty());
+    }
+
+    @Test
+    void whitespaceCannotBypassAccountNumberMinimum() {
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.addBankAccount(request("VCB", "1 2 3 4"))
+        );
+
+        assertEquals("accountNumber must contain at least 6 characters after normalization", exception.getMessage());
+        assertTrue(customerRepository.customer.orElseThrow().bankAccounts().isEmpty());
+        assertTrue(auditPublisher.events.isEmpty());
+    }
+
+    @Test
+    void acceptsExactlySixNormalizedAccountNumberCharacters() {
+        CustomerBankAccountDto result = service.addBankAccount(request("VCB", "12-3456"));
+
+        assertTrue(result.primaryAccount());
+        assertEquals("****3456", result.maskedAccountNumber());
+        assertEquals("3456", result.accountNumberLastFour());
+        assertFalse(result.toString().contains("123456"));
+        assertEquals("cipher:123456",
+                customerRepository.customer.orElseThrow().bankAccounts().getFirst().accountNumber().ciphertext());
+    }
+    @Test
     void duplicateActiveAccountIsRejected() {
         service.addBankAccount(request("VCB", "1234567890"));
 
@@ -221,7 +256,10 @@ class ManageOwnCustomerBankAccountServiceTest {
         @Override
         public ProtectedSensitiveValue protectBankAccountNumber(String bankCode, String accountNumber) {
             String normalizedBankCode = bankCode.trim().toUpperCase();
-            String normalizedAccountNumber = accountNumber.replaceAll("[\\s-]+", "");
+            String normalizedAccountNumber = accountNumber.trim().replaceAll("[\\s-]+", "");
+            if (normalizedAccountNumber.length() < 6) {
+                throw new IllegalArgumentException("accountNumber must contain at least 6 characters after normalization");
+            }
             return new ProtectedSensitiveValue(
                     "cipher:" + normalizedAccountNumber,
                     "hmac:" + normalizedBankCode + ":" + normalizedAccountNumber,
@@ -257,6 +295,11 @@ class ManageOwnCustomerBankAccountServiceTest {
         @Override
         public Optional<Customer> findByIdForUpdate(UUID customerId) {
             return findById(customerId);
+        }
+
+        @Override
+        public boolean existsByIdentityReferenceFingerprintAndCustomerIdNot(String fingerprint, UUID customerId) {
+            return false;
         }
     }
 

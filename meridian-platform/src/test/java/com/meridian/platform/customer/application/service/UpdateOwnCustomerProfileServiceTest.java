@@ -27,7 +27,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -83,6 +85,50 @@ class UpdateOwnCustomerProfileServiceTest {
     }
 
     @Test
+    void rejectsDuplicateIdentityReferenceOwnedByAnotherCustomer() {
+        customerRepository.duplicateIdentityFingerprints.add("hmac:IDREF-MER-001");
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.updateOwnProfile(completeRequest("IDREF-MER-001"))
+        );
+
+        assertEquals("IDENTITY_REFERENCE_ALREADY_IN_USE", exception.getErrorCode());
+        assertEquals("Identity reference is already associated with another customer.", exception.getMessage());
+        assertFalse(exception.getMessage().contains("IDREF-MER-001"));
+        assertEquals(1, customerRepository.duplicateIdentityLookupCount);
+        assertTrue(customerRepository.savedCustomer == null);
+        assertTrue(auditPublisher.events.isEmpty());
+    }
+
+    @Test
+    void rejectsNormalizationEquivalentDuplicateIdentityReference() {
+        customerRepository.duplicateIdentityFingerprints.add("hmac:IDREF-MER-001");
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.updateOwnProfile(completeRequest(" idref-mer-001 "))
+        );
+
+        assertEquals("IDENTITY_REFERENCE_ALREADY_IN_USE", exception.getErrorCode());
+        assertEquals(1, customerRepository.duplicateIdentityLookupCount);
+        assertTrue(customerRepository.savedCustomer == null);
+        assertTrue(auditPublisher.events.isEmpty());
+    }
+
+    @Test
+    void resubmittingSameCurrentIdentityReferenceSkipsDuplicateOwnerCheck() {
+        customerRepository.customer = Optional.of(incompleteCustomer()
+                .updateProfile(completeProfile("IDREF-MER-001"), NOW));
+        customerRepository.duplicateIdentityFingerprints.add("hmac:IDREF-MER-001");
+
+        CustomerDto result = service.updateOwnProfile(completeRequest(" idref-mer-001 "));
+
+        assertEquals("COMPLETE", result.profileCompletionStatus());
+        assertEquals(0, customerRepository.duplicateIdentityLookupCount);
+        assertEquals("hmac:IDREF-MER-001", customerRepository.savedCustomer.profile().identityReference().fingerprint());
+    }
+    @Test
     void allowsContactUpdateWithoutRepeatingIdentityReference() {
         customerRepository.customer = Optional.of(incompleteCustomer()
                 .updateProfile(completeProfile("IDREF-MER-001"), NOW));
@@ -100,6 +146,7 @@ class UpdateOwnCustomerProfileServiceTest {
 
         assertEquals("0909999999", result.profile().phoneNumber());
         assertEquals("hmac:IDREF-MER-001", customerRepository.savedCustomer.profile().identityReference().fingerprint());
+        assertEquals(0, customerRepository.duplicateIdentityLookupCount);
         assertEquals(List.of(BusinessAuditAction.CUSTOMER_PROFILE_UPDATED),
                 auditPublisher.lastEvent.entries().stream().map(entry -> entry.action()).toList());
     }
@@ -115,6 +162,7 @@ class UpdateOwnCustomerProfileServiceTest {
         );
 
         assertEquals("IDENTITY_REFERENCE_IMMUTABLE", exception.getErrorCode());
+        assertEquals(0, customerRepository.duplicateIdentityLookupCount);
         assertTrue(auditPublisher.events.isEmpty());
     }
 
@@ -222,10 +270,11 @@ class UpdateOwnCustomerProfileServiceTest {
 
         @Override
         public ProtectedSensitiveValue protectIdentityReference(String identityReference) {
+            String normalized = identityReference.trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", "");
             return new ProtectedSensitiveValue(
-                    "cipher:" + identityReference,
-                    "hmac:" + identityReference,
-                    identityReference.substring(identityReference.length() - 4)
+                    "cipher:" + normalized,
+                    "hmac:" + normalized,
+                    normalized.substring(normalized.length() - 4)
             );
         }
 
@@ -244,6 +293,8 @@ class UpdateOwnCustomerProfileServiceTest {
 
         private Optional<Customer> customer;
         private Customer savedCustomer;
+        private final Set<String> duplicateIdentityFingerprints = new HashSet<>();
+        private int duplicateIdentityLookupCount;
 
         private FakeCustomerRepository(Customer customer) {
             this.customer = Optional.of(customer);
@@ -264,6 +315,12 @@ class UpdateOwnCustomerProfileServiceTest {
         @Override
         public Optional<Customer> findByIdForUpdate(UUID customerId) {
             return findById(customerId);
+        }
+
+        @Override
+        public boolean existsByIdentityReferenceFingerprintAndCustomerIdNot(String fingerprint, UUID customerId) {
+            duplicateIdentityLookupCount++;
+            return duplicateIdentityFingerprints.contains(fingerprint);
         }
     }
 

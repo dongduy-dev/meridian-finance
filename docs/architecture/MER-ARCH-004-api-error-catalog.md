@@ -20,6 +20,7 @@ This document standardizes the API error codes across all bounded contexts in th
 | 409 | `DUPLICATE_NATIONAL_ID` | Duplicate national ID | A customer with this National ID already exists |
 | 409 | `DUPLICATE_PHONE_NUMBER` | Duplicate phone number | A customer with this phone number already exists |
 | 409 | `IDENTITY_REFERENCE_IMMUTABLE` | Identity reference immutable | Identity reference cannot be changed after the profile first becomes complete |
+| 409 | `IDENTITY_REFERENCE_ALREADY_IN_USE` | Identity reference already in use | Identity reference already belongs to another Customer; no sensitive value is returned |
 | 422 | `PROFILE_INCOMPLETE` | Customer profile incomplete | Complete required identity, contact, residential, employment, and consent information |
 | 422 | `PRIMARY_BANK_ACCOUNT_REQUIRED` | Primary bank account required | Add or select a primary active bank account before continuing |
 | 422 | `CUSTOMER_VERIFICATION_REQUIRED` | Customer verification required | Complete the configured customer verification step before continuing |

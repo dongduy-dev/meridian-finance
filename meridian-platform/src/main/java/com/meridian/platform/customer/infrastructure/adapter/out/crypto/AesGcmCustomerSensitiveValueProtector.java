@@ -25,6 +25,7 @@ public class AesGcmCustomerSensitiveValueProtector implements CustomerSensitiveV
     private static final int AES_256_KEY_BYTES = 32;
     private static final int GCM_IV_BYTES = 12;
     private static final int GCM_TAG_BITS = 128;
+    private static final int MIN_NORMALIZED_ACCOUNT_NUMBER_LENGTH = 6;
 
     private final SecretKeySpec encryptionKey;
     private final SecretKeySpec fingerprintKey;
@@ -115,7 +116,11 @@ public class AesGcmCustomerSensitiveValueProtector implements CustomerSensitiveV
     }
 
     private static String normalizeAccountNumber(String value) {
-        return requireText(value, "accountNumber").replaceAll("[\\s-]+", "");
+        String normalized = requireText(value, "accountNumber").replaceAll("[\\s-]+", "");
+        if (normalized.length() < MIN_NORMALIZED_ACCOUNT_NUMBER_LENGTH) {
+            throw new IllegalArgumentException("accountNumber must contain at least 6 characters after normalization");
+        }
+        return normalized;
     }
 
     private static String requireText(String value, String fieldName) {

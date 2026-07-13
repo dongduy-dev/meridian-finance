@@ -4,8 +4,13 @@ import com.meridian.platform.customer.application.port.out.CustomerRepository;
 import com.meridian.platform.customer.domain.model.Customer;
 import com.meridian.platform.customer.domain.model.CustomerBankAccount;
 import com.meridian.platform.customer.domain.model.CustomerProfile;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import jakarta.persistence.EntityManager;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,18 +18,28 @@ import java.util.UUID;
 @Repository
 public class CustomerRepositoryAdapter implements CustomerRepository {
 
+    private static final String IDENTITY_REFERENCE_FINGERPRINT_CONSTRAINT =
+            "uq_customer_profiles_identity_reference_fingerprint";
+    private static final String UNIQUE_VIOLATION_SQL_STATE = "23505";
+
     private final JpaCustomerRepository customerRepository;
     private final JpaCustomerProfileRepository profileRepository;
     private final JpaCustomerBankAccountRepository bankAccountRepository;
+    private final JdbcTemplate jdbcTemplate;
+    private final EntityManager entityManager;
 
     public CustomerRepositoryAdapter(
             JpaCustomerRepository customerRepository,
             JpaCustomerProfileRepository profileRepository,
-            JpaCustomerBankAccountRepository bankAccountRepository
+            JpaCustomerBankAccountRepository bankAccountRepository,
+            JdbcTemplate jdbcTemplate,
+            EntityManager entityManager
     ) {
         this.customerRepository = customerRepository;
         this.profileRepository = profileRepository;
         this.bankAccountRepository = bankAccountRepository;
+        this.jdbcTemplate = jdbcTemplate;
+        this.entityManager = entityManager;
     }
 
     @Override
@@ -35,12 +50,16 @@ public class CustomerRepositoryAdapter implements CustomerRepository {
                     return existingEntity;
                 })
                 .orElseGet(() -> new CustomerJpaEntity(customer));
-        CustomerJpaEntity savedCustomer = customerRepository.save(customerEntity);
+        UUID savedCustomerId = customerRepository.saveAndFlush(customerEntity).getId();
 
-        saveProfile(customer.profile());
+        boolean profileSaved = saveProfile(customer.profile());
+        if (profileSaved) {
+            entityManager.clear();
+        }
         saveBankAccounts(customer.bankAccounts());
 
-        return toDomain(savedCustomer, false);
+        return findById(savedCustomerId)
+                .orElseThrow(() -> new IllegalStateException("Saved customer could not be reloaded."));
     }
 
     @Override
@@ -55,17 +74,110 @@ public class CustomerRepositoryAdapter implements CustomerRepository {
                 .map(customer -> toDomain(customer, true));
     }
 
-    private void saveProfile(CustomerProfile profile) {
+    @Override
+    public boolean existsByIdentityReferenceFingerprintAndCustomerIdNot(String fingerprint, UUID customerId) {
+        return profileRepository.existsByIdentityReferenceFingerprintAndCustomerIdNot(fingerprint, customerId);
+    }
+
+    private boolean saveProfile(CustomerProfile profile) {
         if (profile == null) {
-            return;
+            return false;
         }
-        CustomerProfileJpaEntity profileEntity = profileRepository.findByCustomerId(profile.customerId())
-                .map(existingEntity -> {
-                    existingEntity.updateFrom(profile);
-                    return existingEntity;
-                })
-                .orElseGet(() -> new CustomerProfileJpaEntity(profile));
-        profileRepository.save(profileEntity);
+        Optional<CustomerProfileJpaEntity> existingProfile = profileRepository.findByCustomerId(profile.customerId());
+        if (existingProfile.isPresent()) {
+            updateProfile(existingProfile.orElseThrow().getId(), profile);
+        } else {
+            insertProfile(profile);
+        }
+        return true;
+    }
+
+    private void insertProfile(CustomerProfile profile) {
+        UUID profileId = profile.id() == null ? UUID.randomUUID() : profile.id();
+        try {
+            int insertedRows = jdbcTemplate.update(
+                    """
+                            insert into customer_profiles (
+                                id,
+                                customer_id,
+                                full_name,
+                                identity_reference_ciphertext,
+                                identity_reference_fingerprint,
+                                identity_reference_last_four,
+                                phone_number,
+                                residential_address,
+                                employment_status,
+                                employer_name,
+                                terms_consent_accepted,
+                                data_processing_consent_accepted,
+                                created_at,
+                                updated_at
+                            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            on conflict on constraint uq_customer_profiles_identity_reference_fingerprint do nothing
+                            """,
+                    profileId,
+                    profile.customerId(),
+                    profile.fullName(),
+                    profile.identityReference().ciphertext(),
+                    profile.identityReference().fingerprint(),
+                    profile.identityReference().lastFour(),
+                    profile.phoneNumber(),
+                    profile.residentialAddress(),
+                    profile.employmentStatus(),
+                    profile.employerName(),
+                    profile.termsConsentAccepted(),
+                    profile.dataProcessingConsentAccepted(),
+                    profile.createdAt(),
+                    profile.updatedAt()
+            );
+            if (insertedRows == 0) {
+                throw identityReferenceAlreadyInUse();
+            }
+        } catch (DataIntegrityViolationException exception) {
+            if (isIdentityReferenceFingerprintConstraintViolation(exception)) {
+                throw identityReferenceAlreadyInUse();
+            }
+            throw exception;
+        }
+    }
+
+    private void updateProfile(UUID profileId, CustomerProfile profile) {
+        try {
+            jdbcTemplate.update(
+                    """
+                            update customer_profiles
+                            set full_name = ?,
+                                identity_reference_ciphertext = ?,
+                                identity_reference_fingerprint = ?,
+                                identity_reference_last_four = ?,
+                                phone_number = ?,
+                                residential_address = ?,
+                                employment_status = ?,
+                                employer_name = ?,
+                                terms_consent_accepted = ?,
+                                data_processing_consent_accepted = ?,
+                                updated_at = ?
+                            where id = ?
+                            """,
+                    profile.fullName(),
+                    profile.identityReference().ciphertext(),
+                    profile.identityReference().fingerprint(),
+                    profile.identityReference().lastFour(),
+                    profile.phoneNumber(),
+                    profile.residentialAddress(),
+                    profile.employmentStatus(),
+                    profile.employerName(),
+                    profile.termsConsentAccepted(),
+                    profile.dataProcessingConsentAccepted(),
+                    profile.updatedAt(),
+                    profileId
+            );
+        } catch (DataIntegrityViolationException exception) {
+            if (isIdentityReferenceFingerprintConstraintViolation(exception)) {
+                throw identityReferenceAlreadyInUse();
+            }
+            throw exception;
+        }
     }
 
     private void saveBankAccounts(List<CustomerBankAccount> bankAccounts) {
@@ -80,6 +192,31 @@ public class CustomerRepositoryAdapter implements CustomerRepository {
                             .orElseGet(() -> new CustomerBankAccountJpaEntity(bankAccount));
             bankAccountRepository.save(bankAccountEntity);
         }
+    }
+
+    private boolean isIdentityReferenceFingerprintConstraintViolation(DataIntegrityViolationException exception) {
+        Throwable current = exception;
+        while (current != null) {
+            if (current instanceof SQLException sqlException
+                    && UNIQUE_VIOLATION_SQL_STATE.equals(sqlException.getSQLState())
+                    && messageContainsIdentityReferenceConstraint(sqlException)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private boolean messageContainsIdentityReferenceConstraint(SQLException exception) {
+        return exception.getMessage() != null
+                && exception.getMessage().contains(IDENTITY_REFERENCE_FINGERPRINT_CONSTRAINT);
+    }
+
+    private BusinessStateConflictException identityReferenceAlreadyInUse() {
+        return new BusinessStateConflictException(
+                "IDENTITY_REFERENCE_ALREADY_IN_USE",
+                "Identity reference is already associated with another customer."
+        );
     }
 
     private Customer toDomain(CustomerJpaEntity customerEntity, boolean lockedChildren) {

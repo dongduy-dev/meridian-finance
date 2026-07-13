@@ -122,5 +122,10 @@ class QueryOwnCustomerServiceTest {
         public Optional<Customer> findByIdForUpdate(UUID customerId) {
             return findById(customerId);
         }
+
+        @Override
+        public boolean existsByIdentityReferenceFingerprintAndCustomerIdNot(String fingerprint, UUID customerId) {
+            return false;
+        }
     }
 }
