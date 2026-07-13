@@ -3,6 +3,8 @@ package com.meridian.platform.partner.application.service;
 import com.meridian.platform.partner.application.dto.PartnerEmployeeVerificationDto;
 import com.meridian.platform.partner.application.dto.PartnerEmployeeVerificationRequest;
 import com.meridian.platform.partner.application.mapper.PartnerEmployeeVerificationMapper;
+import com.meridian.platform.partner.application.port.out.CustomerIdentityEvidencePort;
+import com.meridian.platform.partner.application.port.out.CustomerIdentityEvidenceSnapshot;
 import com.meridian.platform.partner.application.port.out.CustomerPartnerEmployeeLinkRepository;
 import com.meridian.platform.partner.application.port.out.PartnerCompanyRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportBatchRepository;
@@ -19,6 +21,8 @@ import com.meridian.platform.partner.domain.model.PartnerEmployeeStatus;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -48,6 +52,7 @@ class VerifyPartnerEmployeeServiceTest {
     private FakePartnerEmployeeImportBatchRepository importBatchRepository;
     private FakePartnerEmployeeRepository partnerEmployeeRepository;
     private FakeCustomerPartnerEmployeeLinkRepository linkRepository;
+    private FakeCustomerIdentityEvidencePort customerIdentityEvidencePort;
     private VerifyPartnerEmployeeService service;
 
     @BeforeEach
@@ -56,11 +61,13 @@ class VerifyPartnerEmployeeServiceTest {
         importBatchRepository = new FakePartnerEmployeeImportBatchRepository(importBatchId, partnerCompanyId);
         partnerEmployeeRepository = new FakePartnerEmployeeRepository();
         linkRepository = new FakeCustomerPartnerEmployeeLinkRepository();
+        customerIdentityEvidencePort = new FakeCustomerIdentityEvidencePort(identityEvidence(true, true, "IDREF-MER-001"));
         service = new VerifyPartnerEmployeeService(
                 partnerCompanyRepository,
                 importBatchRepository,
                 partnerEmployeeRepository,
                 linkRepository,
+                customerIdentityEvidencePort,
                 new PartnerEmployeeVerificationMapper(),
                 new FixedCurrentUserProvider(customerId)
         );
@@ -72,7 +79,7 @@ class VerifyPartnerEmployeeServiceTest {
 
         PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
                 partnerCompanyId,
-                new PartnerEmployeeVerificationRequest(" IDREF-MER-001 ", " MER-EMP-001 ")
+                new PartnerEmployeeVerificationRequest(" MER-EMP-001 ")
         );
 
         assertEquals("MATCHED_ACTIVE", result.outcome());
@@ -85,12 +92,66 @@ class VerifyPartnerEmployeeServiceTest {
     }
 
     @Test
+    void usesCustomerIdentityEvidenceForEmployeeMatching() {
+        customerIdentityEvidencePort.snapshot = Optional.of(identityEvidence(true, true, "IDREF-FROM-CUSTOMER"));
+        partnerEmployeeRepository.employees.add(employee(PartnerEmployeeStatus.ACTIVE, true, "IDREF-FROM-CUSTOMER"));
+
+        PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
+                partnerCompanyId,
+                new PartnerEmployeeVerificationRequest("MER-EMP-001")
+        );
+
+        assertEquals("MATCHED_ACTIVE", result.outcome());
+        assertEquals("IDREF-FROM-CUSTOMER", partnerEmployeeRepository.lastIdentityReference);
+        assertEquals("IDREF-FROM-CUSTOMER", linkRepository.savedLink.verifiedIdentityRef());
+        assertFalse(customerIdentityEvidencePort.snapshot.orElseThrow().toString().contains("IDREF-FROM-CUSTOMER"));
+    }
+
+    @Test
+    void failsWhenCustomerIdentityEvidenceIsMissing() {
+        customerIdentityEvidencePort.snapshot = Optional.empty();
+
+        EntityNotFoundException exception = assertThrows(
+                EntityNotFoundException.class,
+                () -> service.verifyPartnerEmployee(partnerCompanyId, new PartnerEmployeeVerificationRequest("MER-EMP-001"))
+        );
+
+        assertEquals("CUSTOMER_NOT_FOUND", exception.getErrorCode());
+        assertNull(linkRepository.savedLink);
+    }
+
+    @Test
+    void failsWhenCustomerIsNotActive() {
+        customerIdentityEvidencePort.snapshot = Optional.of(identityEvidence(false, true, "IDREF-MER-001"));
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.verifyPartnerEmployee(partnerCompanyId, new PartnerEmployeeVerificationRequest("MER-EMP-001"))
+        );
+
+        assertEquals("CUSTOMER_NOT_ACTIVE", exception.getErrorCode());
+        assertNull(linkRepository.savedLink);
+    }
+
+    @Test
+    void failsWhenCustomerProfileIsIncomplete() {
+        customerIdentityEvidencePort.snapshot = Optional.of(identityEvidence(true, false, null));
+
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.verifyPartnerEmployee(partnerCompanyId, new PartnerEmployeeVerificationRequest("MER-EMP-001"))
+        );
+
+        assertEquals("PROFILE_INCOMPLETE", exception.getErrorCode());
+        assertNull(linkRepository.savedLink);
+    }
+    @Test
     void returnsPendingManualReviewWhenNoCompletedImportBatchExists() {
         importBatchRepository.latestCompletedBatch = Optional.empty();
 
         PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
                 partnerCompanyId,
-                new PartnerEmployeeVerificationRequest("IDREF-MER-001", "MER-EMP-001")
+                new PartnerEmployeeVerificationRequest("MER-EMP-001")
         );
 
         assertEquals("PENDING_MANUAL_REVIEW", result.outcome());
@@ -106,7 +167,7 @@ class VerifyPartnerEmployeeServiceTest {
 
         PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
                 partnerCompanyId,
-                new PartnerEmployeeVerificationRequest("IDREF-MER-001", "MER-EMP-001")
+                new PartnerEmployeeVerificationRequest("MER-EMP-001")
         );
 
         assertEquals("MATCHED_INACTIVE", result.outcome());
@@ -124,7 +185,7 @@ class VerifyPartnerEmployeeServiceTest {
                 BusinessRuleViolationException.class,
                 () -> service.verifyPartnerEmployee(
                         partnerCompanyId,
-                        new PartnerEmployeeVerificationRequest("IDREF-MER-001", "MER-EMP-001")
+                        new PartnerEmployeeVerificationRequest("MER-EMP-001")
                 )
         );
 
@@ -140,7 +201,7 @@ class VerifyPartnerEmployeeServiceTest {
 
         PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
                 partnerCompanyId,
-                new PartnerEmployeeVerificationRequest("IDREF-MER-001", "MER-EMP-001")
+                new PartnerEmployeeVerificationRequest("MER-EMP-001")
         );
 
         assertEquals("PENDING_MANUAL_REVIEW", result.outcome());
@@ -154,17 +215,25 @@ class VerifyPartnerEmployeeServiceTest {
         return employee(PartnerEmployeeStatus.ACTIVE, true);
     }
 
+    private CustomerIdentityEvidenceSnapshot identityEvidence(boolean active, boolean profileComplete, String identityReference) {
+        return new CustomerIdentityEvidenceSnapshot(customerId, active, profileComplete, identityReference);
+    }
+
     private PartnerEmployee inactiveEmployee() {
         return employee(PartnerEmployeeStatus.INACTIVE, false);
     }
 
     private PartnerEmployee employee(PartnerEmployeeStatus status, boolean active) {
+        return employee(status, active, "IDREF-MER-001");
+    }
+
+    private PartnerEmployee employee(PartnerEmployeeStatus status, boolean active, String identityReference) {
         return new PartnerEmployee(
                 partnerEmployeeId,
                 partnerCompanyId,
                 importBatchId,
                 "MER-EMP-001",
-                "IDREF-MER-001",
+                identityReference,
                 BigDecimal.valueOf(18_000_000).setScale(2),
                 BigDecimal.valueOf(6_000_000).setScale(2),
                 status,
@@ -188,6 +257,19 @@ class VerifyPartnerEmployeeServiceTest {
         );
     }
 
+    private static class FakeCustomerIdentityEvidencePort implements CustomerIdentityEvidencePort {
+
+        private Optional<CustomerIdentityEvidenceSnapshot> snapshot;
+
+        private FakeCustomerIdentityEvidencePort(CustomerIdentityEvidenceSnapshot snapshot) {
+            this.snapshot = Optional.of(snapshot);
+        }
+
+        @Override
+        public Optional<CustomerIdentityEvidenceSnapshot> findIdentityEvidenceByCustomerId(UUID customerId) {
+            return snapshot.filter(value -> value.customerId().equals(customerId));
+        }
+    }
     private static class FixedCurrentUserProvider implements CurrentUserProvider {
 
         private final UUID customerId;
@@ -268,6 +350,7 @@ class VerifyPartnerEmployeeServiceTest {
     private static class FakePartnerEmployeeRepository implements PartnerEmployeeRepository {
 
         private final List<PartnerEmployee> employees = new ArrayList<>();
+        private String lastIdentityReference;
 
         @Override
         public Optional<PartnerEmployee> findById(UUID partnerEmployeeId) {
@@ -293,6 +376,7 @@ class VerifyPartnerEmployeeServiceTest {
                 String identityReference,
                 String employeeCode
         ) {
+            lastIdentityReference = identityReference;
             return employees.stream()
                     .filter(employee -> employee.partnerCompanyId().equals(partnerCompanyId))
                     .filter(employee -> employee.importBatchId().equals(importBatchId))

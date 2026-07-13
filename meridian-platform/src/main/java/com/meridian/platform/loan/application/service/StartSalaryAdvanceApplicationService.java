@@ -4,6 +4,8 @@ import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationDto;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationRequest;
 import com.meridian.platform.loan.application.mapper.LoanMapper;
 import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicationUseCase;
+import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
+import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanProductRepository;
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityPort;
@@ -57,6 +59,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
     private final SalaryAdvanceLimitRepository salaryAdvanceLimitRepository;
     private final SalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository;
     private final SalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository;
+    private final CustomerReadinessPort customerReadinessPort;
     private final PartnerEligibilityPort partnerEligibilityPort;
     private final LoanMapper loanMapper;
     private final CurrentUserProvider currentUserProvider;
@@ -71,6 +74,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
             SalaryAdvanceLimitRepository salaryAdvanceLimitRepository,
             SalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository,
             SalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository,
+            CustomerReadinessPort customerReadinessPort,
             PartnerEligibilityPort partnerEligibilityPort,
             LoanMapper loanMapper,
             CurrentUserProvider currentUserProvider,
@@ -83,6 +87,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         this.salaryAdvanceLimitRepository = salaryAdvanceLimitRepository;
         this.salaryAdvanceLimitMovementRepository = salaryAdvanceLimitMovementRepository;
         this.salaryAdvanceVerificationRepository = salaryAdvanceVerificationRepository;
+        this.customerReadinessPort = customerReadinessPort;
         this.partnerEligibilityPort = partnerEligibilityPort;
         this.loanMapper = loanMapper;
         this.currentUserProvider = currentUserProvider;
@@ -107,6 +112,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
                 currentUser.userId(),
                 now
         );
+        validateCustomerReadiness(customerId);
 
         LoanProduct salaryAdvanceProduct = loanProductRepository.findByProductCode(ProductCode.SALARY_ADVANCE)
                 .orElseThrow(() -> new EntityNotFoundException(
@@ -191,6 +197,32 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
                 savedReservedLimit,
                 savedVerification
         ));
+    }
+
+    private void validateCustomerReadiness(UUID customerId) {
+        CustomerReadinessSnapshot readiness = customerReadinessPort.findReadinessByCustomerId(customerId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "CUSTOMER_NOT_FOUND",
+                        "Customer was not found."
+                ));
+        if (!readiness.active()) {
+            throw new BusinessStateConflictException(
+                    "CUSTOMER_NOT_ACTIVE",
+                    "Customer must be active before creating a Salary Advance application."
+            );
+        }
+        if (!readiness.profileComplete()) {
+            throw new BusinessRuleViolationException(
+                    "PROFILE_INCOMPLETE",
+                    "Customer profile must be complete before creating a Salary Advance application."
+            );
+        }
+        if (!readiness.hasPrimaryActiveBankAccount()) {
+            throw new BusinessRuleViolationException(
+                    "PRIMARY_BANK_ACCOUNT_REQUIRED",
+                    "Customer must have a primary active bank account before creating a Salary Advance application."
+            );
+        }
     }
 
     private void assertNoBlockingApplicationExists(UUID customerId) {

@@ -99,7 +99,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 | Context | Role | Key Entities |
 |---|---|---|
 | **Identity & Access** | Authentication, authorization, RBAC | `User`, `Role`, `RefreshToken` |
-| **Customer Management** | Customer profile, verification status, bank account information | `Customer`, `CustomerProfile`, `BankAccountInfo` |
+| **Customer Management** | Customer profile, verification status, bank account information | `Customer`, `CustomerProfile`, `CustomerBankAccount` |
 | **Partner Management** | Partner company and employee data for Salary Advance eligibility | `PartnerCompany`, `PartnerEmployee`, `PartnerEmployeeImportBatch` |
 | **Loan Core / Origination** | Generic lending core — state machine, product policies, offers, disbursement, repayment | `LoanApplication`, `LoanProduct`, `LoanProductPolicy`, `LoanAccount`, `RepaymentSchedule` |
 | **Approval Workflow** | Controlled review and approval workflow, maker-checker controls | `ReviewRecommendation`, `ApprovalDecision` |
@@ -184,6 +184,17 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 |---|---|
 | **Git / GitHub** | Version control |
 | **Postman** | API testing |
+
+---
+
+## Local Backend Configuration
+
+Customer profile and bank-account encryption requires two Base64-encoded keys at startup:
+
+- `MERIDIAN_CUSTOMER_ENCRYPTION_KEY` maps to `meridian.customer.encryption-key` and must decode to 32 bytes for AES-256-GCM.
+- `MERIDIAN_CUSTOMER_FINGERPRINT_KEY` maps to `meridian.customer.fingerprint-key` and must decode to at least 32 bytes for HMAC-SHA-256.
+
+Use non-production values for local and test runs only; do not commit real secrets.
 
 ---
 

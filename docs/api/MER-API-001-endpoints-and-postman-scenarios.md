@@ -13,6 +13,12 @@ Current security posture comes from `SecurityConfig`: health, login, and loan pr
 | GET | `/api/v1/partner-companies/{partnerCompanyId}` | Bearer + `partner:read` | `PartnerCompanyController` | Get one Partner Company. |
 | GET | `/api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=false` | Bearer + `partner:read` | `PartnerEmployeeController` | List Partner Employees for a company. `activeOnly` is optional and defaults to `false`. |
 | GET | `/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | Bearer + `partner:read` | `PartnerEmployeeImportBatchController` | List Partner Employee import batches. |
+| GET | `/api/v1/customers/me` | Bearer + `customer:profile:read:own` | `CustomerProfileController` | Read the authenticated Customer profile readiness snapshot without exposing identity evidence. |
+| PUT | `/api/v1/customers/me/profile` | Bearer + `customer:profile:write:own` | `CustomerProfileController` | Create or update the authenticated Customer profile. |
+| GET | `/api/v1/customers/me/bank-accounts` | Bearer + `customer:bank-account:read:own` | `CustomerBankAccountController` | List masked bank accounts owned by the authenticated Customer. |
+| POST | `/api/v1/customers/me/bank-accounts` | Bearer + `customer:bank-account:write:own` | `CustomerBankAccountController` | Add an encrypted bank account; the first active account becomes primary. |
+| POST | `/api/v1/customers/me/bank-accounts/{customerBankAccountId}/make-primary` | Bearer + `customer:bank-account:write:own` | `CustomerBankAccountController` | Make one active bank account primary. |
+| POST | `/api/v1/customers/me/bank-accounts/{customerBankAccountId}/deactivate` | Bearer + `customer:bank-account:write:own` | `CustomerBankAccountController` | Deactivate a bank account; a primary account cannot be deactivated while another active account exists. |
 | POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-verifications` | Bearer + `partner:employee:verify:own` | `PartnerEmployeeVerificationController` | Verify the authenticated customer's Partner Employee evidence and create/reuse a verified link. |
 | POST | `/api/v1/loan-applications/salary-advance` | Bearer + `loan:submit` | `SalaryAdvanceLoanApplicationController` | Create a submitted Salary Advance application for the authenticated customer and reserve limit. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review/start` | Bearer + `loan:review` | `LoanApplicationReviewController` | Start Loan Officer review and transition a submitted application to `UNDER_REVIEW`. |
@@ -50,14 +56,41 @@ Seeded demo user emails:
 | Back-Office Admin | `backoffice.admin@meridian.local` |
 
 ## Request Payloads
+### Customer Profile
 
-### Employee Verification
-
-`customerId` is derived from the authenticated customer token and is no longer accepted in the request body.
+`customerId` is derived from the authenticated customer token. `identityReference` is accepted only on profile update, stored encrypted, and is not returned by Customer profile responses. Duplicate normalized identity references owned by another Customer return `409 IDENTITY_REFERENCE_ALREADY_IN_USE` without returning the sensitive value.
 
 ```json
 {
+  "fullName": "Customer Demo",
   "identityReference": "IDREF-MER-001",
+  "phoneNumber": "0901234567",
+  "residentialAddress": "1 Meridian Street, District 1, Ho Chi Minh City",
+  "employmentStatus": "SALARIED",
+  "employerName": "Meridian Partner Co.",
+  "termsConsentAccepted": true,
+  "dataProcessingConsentAccepted": true
+}
+```
+
+### Customer Bank Accounts
+
+Bank-account numbers are accepted only on add, normalized by removing spaces and hyphens, must contain at least 6 normalized characters, encrypted at rest, and returned only as masked values plus last four digits.
+
+```json
+{
+  "bankCode": "VCB",
+  "bankNameSnapshot": "Vietcombank",
+  "accountHolderName": "Customer Demo",
+  "accountNumber": "1234567890"
+}
+```
+### Employee Verification
+
+`customerId` is derived from the authenticated customer token and is no longer accepted in the request body. `identityReference` is also not accepted; Partner verification uses identity evidence from the authenticated Customer profile.
+
+```json
+{
   "employeeCode": "MER-EMP-001"
 }
 ```
@@ -68,7 +101,7 @@ The response intentionally does not expose salary, salary advance limit, identit
 
 ### Salary Advance Application
 
-`customerId` is derived from the authenticated customer token and is no longer accepted in the request body.
+`customerId` is derived from the authenticated customer token and is no longer accepted in the request body. Salary Advance submission requires an active Customer, complete Customer profile, and one primary active bank account.
 
 ```json
 {

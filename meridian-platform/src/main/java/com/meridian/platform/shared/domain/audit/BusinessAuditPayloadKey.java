@@ -3,6 +3,12 @@ package com.meridian.platform.shared.domain.audit;
 import java.util.Arrays;
 
 public enum BusinessAuditPayloadKey {
+    CUSTOMER_ID("customerId", ValueType.UUID),
+    PROFILE_COMPLETION_STATUS("profileCompletionStatus", ValueType.CODE),
+    CUSTOMER_BANK_ACCOUNT_ID("customerBankAccountId", ValueType.UUID),
+    PREVIOUS_PRIMARY_BANK_ACCOUNT_ID("previousPrimaryBankAccountId", ValueType.UUID),
+    NEW_PRIMARY_BANK_ACCOUNT_ID("newPrimaryBankAccountId", ValueType.UUID),
+    BANK_ACCOUNT_STATUS("bankAccountStatus", ValueType.CODE),
     LOAN_APPLICATION_ID("loanApplicationId", ValueType.UUID),
     SALARY_ADVANCE_LIMIT_ID("salaryAdvanceLimitId", ValueType.UUID),
     MOVEMENT_TYPE("movementType", ValueType.CODE),

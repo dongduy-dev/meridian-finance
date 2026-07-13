@@ -36,11 +36,16 @@ class BusinessAuditPayloadTest {
                 .put(BusinessAuditPayloadKey.EXPIRY_DISCOVERY_TRIGGER, ExpiryDiscoveryTrigger.CUSTOMER_ACTION)
                 .put(BusinessAuditPayloadKey.RESERVATION_RELEASE_TRIGGER, TestAuditCode.OFFER_EXPIRY)
                 .build();
+        BusinessAuditPayload customer = BusinessAuditPayload.builder()
+                .put(BusinessAuditPayloadKey.CUSTOMER_ID, LOAN_APPLICATION_ID)
+                .put(BusinessAuditPayloadKey.PROFILE_COMPLETION_STATUS, TestAuditCode.COMPLETE)
+                .build();
 
         assertEquals(1, submission.values().size());
         assertEquals(3, movement.values().size());
         assertEquals(3, approval.values().size());
         assertEquals(4, offer.values().size());
+        assertEquals(2, customer.values().size());
     }
 
     @Test
@@ -144,6 +149,7 @@ class BusinessAuditPayloadTest {
 
     private enum TestAuditCode {
         APPROVE,
+        COMPLETE,
         OFFER_EXPIRY,
         PENDING,
         RESERVED

@@ -42,7 +42,6 @@ class PartnerEmployeeVerificationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "identityReference": "IDREF-MER-001",
                                   "employeeCode": "MER-EMP-001"
                                 }
                                 """))

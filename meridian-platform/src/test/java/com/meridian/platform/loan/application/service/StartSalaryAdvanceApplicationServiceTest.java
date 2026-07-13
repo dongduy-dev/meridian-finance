@@ -3,6 +3,8 @@ package com.meridian.platform.loan.application.service;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationDto;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationRequest;
 import com.meridian.platform.loan.application.mapper.LoanMapper;
+import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
+import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanProductRepository;
@@ -30,6 +32,7 @@ import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import com.meridian.platform.shared.domain.model.ActorType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +51,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -65,6 +69,7 @@ class StartSalaryAdvanceApplicationServiceTest {
     private FakeSalaryAdvanceLimitRepository salaryAdvanceLimitRepository;
     private FakeSalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository;
     private FakeSalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository;
+    private FakeCustomerReadinessPort customerReadinessPort;
     private FakePartnerEligibilityPort partnerEligibilityPort;
     private FakeLoanApplicationStatusTransitionRepository transitionRepository;
     private FakeBusinessAuditPublisher auditPublisher;
@@ -77,6 +82,7 @@ class StartSalaryAdvanceApplicationServiceTest {
         salaryAdvanceLimitRepository = new FakeSalaryAdvanceLimitRepository();
         salaryAdvanceLimitMovementRepository = new FakeSalaryAdvanceLimitMovementRepository();
         salaryAdvanceVerificationRepository = new FakeSalaryAdvanceVerificationRepository();
+        customerReadinessPort = new FakeCustomerReadinessPort(readiness(true, true, true, "UNVERIFIED"));
         partnerEligibilityPort = new FakePartnerEligibilityPort(verifiedPartnerSnapshot(limit(6_000_000)));
         transitionRepository = new FakeLoanApplicationStatusTransitionRepository();
         auditPublisher = new FakeBusinessAuditPublisher();
@@ -86,6 +92,7 @@ class StartSalaryAdvanceApplicationServiceTest {
                 salaryAdvanceLimitRepository,
                 salaryAdvanceLimitMovementRepository,
                 salaryAdvanceVerificationRepository,
+                customerReadinessPort,
                 partnerEligibilityPort,
                 new LoanMapper(),
                 new FixedCurrentUserProvider(customerId),
@@ -138,6 +145,57 @@ class StartSalaryAdvanceApplicationServiceTest {
                 auditPublisher.lastEvent().entries().stream().map(entry -> entry.action()).toList());
     }
 
+    @Test
+    void failsBeforeLoanSideEffectsWhenCustomerIsMissing() {
+        customerReadinessPort.snapshot = Optional.empty();
+
+        EntityNotFoundException exception = assertThrows(
+                EntityNotFoundException.class,
+                () -> service.startSalaryAdvanceApplication(request(limit(3_000_000), 1))
+        );
+
+        assertEquals("CUSTOMER_NOT_FOUND", exception.getErrorCode());
+        assertNoLoanSideEffectsBeforeReadinessPasses();
+    }
+
+    @Test
+    void failsBeforeLoanSideEffectsWhenCustomerIsNotActive() {
+        customerReadinessPort.snapshot = Optional.of(readiness(false, true, true, "VERIFIED"));
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.startSalaryAdvanceApplication(request(limit(3_000_000), 1))
+        );
+
+        assertEquals("CUSTOMER_NOT_ACTIVE", exception.getErrorCode());
+        assertNoLoanSideEffectsBeforeReadinessPasses();
+    }
+
+    @Test
+    void failsBeforeLoanSideEffectsWhenProfileIsIncomplete() {
+        customerReadinessPort.snapshot = Optional.of(readiness(true, false, true, "UNVERIFIED"));
+
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.startSalaryAdvanceApplication(request(limit(3_000_000), 1))
+        );
+
+        assertEquals("PROFILE_INCOMPLETE", exception.getErrorCode());
+        assertNoLoanSideEffectsBeforeReadinessPasses();
+    }
+
+    @Test
+    void failsBeforeLoanSideEffectsWhenPrimaryBankAccountIsMissing() {
+        customerReadinessPort.snapshot = Optional.of(readiness(true, true, false, "UNVERIFIED"));
+
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.startSalaryAdvanceApplication(request(limit(3_000_000), 1))
+        );
+
+        assertEquals("PRIMARY_BANK_ACCOUNT_REQUIRED", exception.getErrorCode());
+        assertNoLoanSideEffectsBeforeReadinessPasses();
+    }
     @Test
     void createsLimitUsingFullCapFormula() {
         partnerEligibilityPort.snapshot = Optional.of(verifiedPartnerSnapshot(
@@ -305,8 +363,34 @@ class StartSalaryAdvanceApplicationServiceTest {
         assertEquals("INVALID_PRODUCT_TERM", exception.getErrorCode());
     }
 
+    private void assertNoLoanSideEffectsBeforeReadinessPasses() {
+        assertEquals(0, loanProductRepository.findByProductCodeCalls);
+        assertEquals(0, partnerEligibilityPort.findCalls);
+        assertFalse(salaryAdvanceLimitRepository.lockAcquired);
+        assertTrue(loanApplicationRepository.savedApplications.isEmpty());
+        assertTrue(salaryAdvanceLimitMovementRepository.savedMovements.isEmpty());
+        assertTrue(salaryAdvanceVerificationRepository.savedVerification == null);
+        assertTrue(transitionRepository.savedTransitions.isEmpty());
+        assertTrue(auditPublisher.publishedEvents.isEmpty());
+    }
+
     private SalaryAdvanceApplicationRequest request(BigDecimal requestedAmount, int requestedTermMonths) {
         return new SalaryAdvanceApplicationRequest(linkId, requestedAmount, requestedTermMonths);
+    }
+
+    private CustomerReadinessSnapshot readiness(
+            boolean active,
+            boolean profileComplete,
+            boolean hasPrimaryActiveBankAccount,
+            String verificationStatus
+    ) {
+        return new CustomerReadinessSnapshot(
+                customerId,
+                active,
+                profileComplete,
+                hasPrimaryActiveBankAccount,
+                verificationStatus
+        );
     }
 
     private VerifiedPartnerEmployeeLinkSnapshot verifiedPartnerSnapshot(BigDecimal employeeSalaryAdvanceLimit) {
@@ -374,6 +458,7 @@ class StartSalaryAdvanceApplicationServiceTest {
     private class FakeLoanProductRepository implements LoanProductRepository {
 
         private LoanProduct product = salaryAdvanceProduct(true);
+        private int findByProductCodeCalls;
 
         @Override
         public List<LoanProduct> findAllActive() {
@@ -382,6 +467,7 @@ class StartSalaryAdvanceApplicationServiceTest {
 
         @Override
         public Optional<LoanProduct> findByProductCode(ProductCode productCode) {
+            findByProductCodeCalls++;
             if (product.productCode() != productCode) {
                 return Optional.empty();
             }
@@ -520,9 +606,23 @@ class StartSalaryAdvanceApplicationServiceTest {
         }
     }
 
+    private static class FakeCustomerReadinessPort implements CustomerReadinessPort {
+
+        private Optional<CustomerReadinessSnapshot> snapshot;
+
+        private FakeCustomerReadinessPort(CustomerReadinessSnapshot snapshot) {
+            this.snapshot = Optional.of(snapshot);
+        }
+
+        @Override
+        public Optional<CustomerReadinessSnapshot> findReadinessByCustomerId(UUID customerId) {
+            return snapshot.filter(value -> value.customerId().equals(customerId));
+        }
+    }
     private static class FakePartnerEligibilityPort implements PartnerEligibilityPort {
 
         private Optional<VerifiedPartnerEmployeeLinkSnapshot> snapshot;
+        private int findCalls;
 
         private FakePartnerEligibilityPort(VerifiedPartnerEmployeeLinkSnapshot snapshot) {
             this.snapshot = Optional.of(snapshot);
@@ -533,6 +633,7 @@ class StartSalaryAdvanceApplicationServiceTest {
                 UUID customerId,
                 UUID customerPartnerEmployeeLinkId
         ) {
+            findCalls++;
             return snapshot
                     .filter(value -> value.customerId().equals(customerId))
                     .filter(value -> value.customerPartnerEmployeeLinkId().equals(customerPartnerEmployeeLinkId));
