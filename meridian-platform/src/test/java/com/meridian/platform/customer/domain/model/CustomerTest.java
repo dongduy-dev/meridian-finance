@@ -77,6 +77,48 @@ class CustomerTest {
         assertFalse(combinedOutput.contains("account-fingerprint"));
     }
 
+
+    @Test
+    void primaryDeactivationRequiresPrimarySwitchWhenOtherActiveAccountExists() {
+        UUID primaryAccountId = UUID.randomUUID();
+        UUID replacementAccountId = UUID.randomUUID();
+        Customer customer = new Customer(
+                CUSTOMER_ID,
+                "CUS-000000001",
+                CustomerStatus.ACTIVE,
+                VerificationStatus.UNVERIFIED,
+                ProfileCompletionStatus.COMPLETE,
+                completeProfile("fingerprint-1"),
+                List.of(
+                        activeBankAccount(primaryAccountId, "account-fingerprint-1", true),
+                        activeBankAccount(replacementAccountId, "account-fingerprint-2", false)
+                ),
+                NOW,
+                NOW
+        );
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> customer.deactivateBankAccount(primaryAccountId, NOW.plusMinutes(1))
+        );
+
+        assertEquals("BANK_ACCOUNT_UPDATE_NOT_ALLOWED", exception.getErrorCode());
+
+        Customer switched = customer.makePrimaryBankAccount(replacementAccountId, NOW.plusMinutes(2));
+        Customer deactivated = switched.deactivateBankAccount(primaryAccountId, NOW.plusMinutes(3));
+        assertFalse(deactivated.bankAccounts().stream()
+                .filter(account -> primaryAccountId.equals(account.id()))
+                .findFirst()
+                .orElseThrow()
+                .isActive());
+
+        Customer repeated = deactivated.deactivateBankAccount(primaryAccountId, NOW.plusMinutes(4));
+        assertEquals(CustomerBankAccountStatus.DEACTIVATED, repeated.bankAccounts().stream()
+                .filter(account -> primaryAccountId.equals(account.id()))
+                .findFirst()
+                .orElseThrow()
+                .status());
+    }
     private static Customer incompleteCustomer() {
         return new Customer(
                 CUSTOMER_ID,

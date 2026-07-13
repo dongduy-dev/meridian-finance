@@ -6,11 +6,16 @@ import com.meridian.platform.approval.application.port.in.SubmitApprovalDecision
 import com.meridian.platform.approval.application.port.in.SubmitReviewRecommendationUseCase;
 import com.meridian.platform.approval.infrastructure.adapter.in.web.ApprovalDecisionController;
 import com.meridian.platform.approval.infrastructure.adapter.in.web.ReviewRecommendationController;
+import com.meridian.platform.customer.application.dto.AddCustomerBankAccountRequest;
+import com.meridian.platform.customer.application.dto.CustomerBankAccountDto;
 import com.meridian.platform.customer.application.dto.CustomerDto;
 import com.meridian.platform.customer.application.dto.CustomerProfileDto;
 import com.meridian.platform.customer.application.dto.UpdateCustomerProfileRequest;
+import com.meridian.platform.customer.application.port.in.ManageOwnCustomerBankAccountUseCase;
+import com.meridian.platform.customer.application.port.in.QueryOwnCustomerBankAccountsUseCase;
 import com.meridian.platform.customer.application.port.in.QueryOwnCustomerUseCase;
 import com.meridian.platform.customer.application.port.in.UpdateOwnCustomerProfileUseCase;
+import com.meridian.platform.customer.infrastructure.adapter.in.web.CustomerBankAccountController;
 import com.meridian.platform.customer.infrastructure.adapter.in.web.CustomerProfileController;
 import com.meridian.platform.identity.application.dto.AuthResponse;
 import com.meridian.platform.identity.application.port.in.AuthenticationUseCase;
@@ -63,6 +68,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = {
+        CustomerBankAccountController.class,
         CustomerProfileController.class,
         HealthController.class,
         AuthController.class,
@@ -138,6 +144,12 @@ class SecurityConfigTest {
     @MockitoBean
     private UpdateOwnCustomerProfileUseCase updateOwnCustomerProfileUseCase;
 
+    @MockitoBean
+    private QueryOwnCustomerBankAccountsUseCase queryOwnCustomerBankAccountsUseCase;
+
+    @MockitoBean
+    private ManageOwnCustomerBankAccountUseCase manageOwnCustomerBankAccountUseCase;
+
     @Test
     void keepsVersionedHealthEndpointPublic() throws Exception {
         mockMvc.perform(get("/api/v1/health"))
@@ -192,6 +204,14 @@ class SecurityConfigTest {
                 .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
 
         mockMvc.perform(put("/api/v1/customers/me/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/v1/customers/me/bank-accounts"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/customers/me/bank-accounts")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isUnauthorized());
@@ -258,6 +278,25 @@ class SecurityConfigTest {
                                 }
                                 """)
                         .with(user("customer").authorities(new SimpleGrantedAuthority("customer:profile:read:own"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        mockMvc.perform(get("/api/v1/customers/me/bank-accounts")
+                        .with(user("customer").authorities(new SimpleGrantedAuthority("customer:profile:read:own"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        mockMvc.perform(post("/api/v1/customers/me/bank-accounts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "bankCode": "VCB",
+                                  "bankNameSnapshot": "Vietcombank",
+                                  "accountHolderName": "Customer Demo",
+                                  "accountNumber": "1234567890"
+                                }
+                                """)
+                        .with(user("customer").authorities(new SimpleGrantedAuthority("customer:bank-account:read:own"))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
 
@@ -337,6 +376,38 @@ class SecurityConfigTest {
                                 .authorities(new SimpleGrantedAuthority("customer:profile:write:own"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.profile.identityReference").doesNotExist());
+    }
+
+    @Test
+    void allowsCustomerWithBankAccountPermissionsToReadAndAddMaskedAccounts() throws Exception {
+        when(queryOwnCustomerBankAccountsUseCase.getOwnBankAccounts()).thenReturn(List.of(bankAccountDto()));
+        when(manageOwnCustomerBankAccountUseCase.addBankAccount(any(AddCustomerBankAccountRequest.class)))
+                .thenReturn(bankAccountDto());
+
+        mockMvc.perform(get("/api/v1/customers/me/bank-accounts")
+                        .with(user("customer")
+                                .authorities(new SimpleGrantedAuthority("customer:bank-account:read:own"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].maskedAccountNumber").value("****7890"))
+                .andExpect(jsonPath("$[0].accountNumber").doesNotExist())
+                .andExpect(jsonPath("$[0].accountNumberCiphertext").doesNotExist())
+                .andExpect(jsonPath("$[0].accountNumberFingerprint").doesNotExist());
+
+        mockMvc.perform(post("/api/v1/customers/me/bank-accounts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "bankCode": "VCB",
+                                  "bankNameSnapshot": "Vietcombank",
+                                  "accountHolderName": "Customer Demo",
+                                  "accountNumber": "1234567890"
+                                }
+                                """)
+                        .with(user("customer")
+                                .authorities(new SimpleGrantedAuthority("customer:bank-account:write:own"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.maskedAccountNumber").value("****7890"))
+                .andExpect(jsonPath("$.accountNumber").doesNotExist());
     }
     @Test
     void allowsStaffWithPartnerReadPermissionToProtectedPartnerEmployeeEndpoint() throws Exception {
@@ -461,6 +532,22 @@ class SecurityConfigTest {
                 .andExpect(jsonPath("$.action").value("APPROVE"));
     }
 
+
+    private static CustomerBankAccountDto bankAccountDto() {
+        return new CustomerBankAccountDto(
+                UUID.fromString("abababab-abab-abab-abab-abababababab"),
+                "VCB",
+                "Vietcombank",
+                "Customer Demo",
+                "****7890",
+                "7890",
+                "ACTIVE",
+                true,
+                LocalDateTime.now(),
+                LocalDateTime.now(),
+                null
+        );
+    }
     private static CustomerDto customerDto() {
         return new CustomerDto(
                 UUID.fromString("99999999-9999-9999-9999-999999999999"),

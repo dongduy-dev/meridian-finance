@@ -1,6 +1,7 @@
 package com.meridian.platform.customer.domain.model;
 
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -106,7 +107,10 @@ public record Customer(
         for (CustomerBankAccount account : bankAccounts) {
             if (bankAccountId.equals(account.id())) {
                 if (!account.isActive()) {
-                    throw new BusinessStateConflictException("BANK_ACCOUNT_NOT_FOUND", "Bank account was not found for the customer");
+                    throw new BusinessStateConflictException(
+                            "BANK_ACCOUNT_UPDATE_NOT_ALLOWED",
+                            "Inactive bank account cannot be made primary."
+                    );
                 }
                 updatedAccounts.add(account.makePrimary(now));
                 found = true;
@@ -115,7 +119,10 @@ public record Customer(
             }
         }
         if (!found) {
-            throw new BusinessStateConflictException("BANK_ACCOUNT_NOT_FOUND", "Bank account was not found for the customer");
+            throw new EntityNotFoundException(
+                    "BANK_ACCOUNT_NOT_FOUND",
+                    "Bank account was not found for the customer."
+            );
         }
         return withBankAccounts(updatedAccounts, now);
     }
@@ -125,11 +132,15 @@ public record Customer(
             throw new IllegalArgumentException("bankAccountId is required");
         }
         boolean found = false;
+        long activeAccountCount = bankAccounts.stream().filter(CustomerBankAccount::isActive).count();
         List<CustomerBankAccount> updatedAccounts = new ArrayList<>();
         for (CustomerBankAccount account : bankAccounts) {
             if (bankAccountId.equals(account.id())) {
-                if (!account.isActive()) {
-                    throw new BusinessStateConflictException("BANK_ACCOUNT_NOT_FOUND", "Bank account was not found for the customer");
+                if (account.isPrimaryActive() && activeAccountCount > 1) {
+                    throw new BusinessStateConflictException(
+                            "BANK_ACCOUNT_UPDATE_NOT_ALLOWED",
+                            "Make another active bank account primary before deactivating this primary account."
+                    );
                 }
                 updatedAccounts.add(account.deactivate(now));
                 found = true;
@@ -138,7 +149,10 @@ public record Customer(
             }
         }
         if (!found) {
-            throw new BusinessStateConflictException("BANK_ACCOUNT_NOT_FOUND", "Bank account was not found for the customer");
+            throw new EntityNotFoundException(
+                    "BANK_ACCOUNT_NOT_FOUND",
+                    "Bank account was not found for the customer."
+            );
         }
         return withBankAccounts(updatedAccounts, now);
     }
