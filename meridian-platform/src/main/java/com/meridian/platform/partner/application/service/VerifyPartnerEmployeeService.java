@@ -4,6 +4,8 @@ import com.meridian.platform.partner.application.dto.PartnerEmployeeVerification
 import com.meridian.platform.partner.application.dto.PartnerEmployeeVerificationRequest;
 import com.meridian.platform.partner.application.mapper.PartnerEmployeeVerificationMapper;
 import com.meridian.platform.partner.application.port.in.VerifyPartnerEmployeeUseCase;
+import com.meridian.platform.partner.application.port.out.CustomerIdentityEvidencePort;
+import com.meridian.platform.partner.application.port.out.CustomerIdentityEvidenceSnapshot;
 import com.meridian.platform.partner.application.port.out.CustomerPartnerEmployeeLinkRepository;
 import com.meridian.platform.partner.application.port.out.PartnerCompanyRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportBatchRepository;
@@ -16,6 +18,8 @@ import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatch;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeVerificationResult;
 import com.meridian.platform.partner.domain.service.PartnerEmployeeVerificationPolicy;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +36,7 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
     private final PartnerEmployeeImportBatchRepository importBatchRepository;
     private final PartnerEmployeeRepository partnerEmployeeRepository;
     private final CustomerPartnerEmployeeLinkRepository linkRepository;
+    private final CustomerIdentityEvidencePort customerIdentityEvidencePort;
     private final PartnerEmployeeVerificationMapper verificationMapper;
     private final CurrentUserProvider currentUserProvider;
     private final PartnerEmployeeVerificationPolicy verificationPolicy = new PartnerEmployeeVerificationPolicy();
@@ -41,6 +46,7 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
             PartnerEmployeeImportBatchRepository importBatchRepository,
             PartnerEmployeeRepository partnerEmployeeRepository,
             CustomerPartnerEmployeeLinkRepository linkRepository,
+            CustomerIdentityEvidencePort customerIdentityEvidencePort,
             PartnerEmployeeVerificationMapper verificationMapper,
             CurrentUserProvider currentUserProvider
     ) {
@@ -48,6 +54,7 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
         this.importBatchRepository = importBatchRepository;
         this.partnerEmployeeRepository = partnerEmployeeRepository;
         this.linkRepository = linkRepository;
+        this.customerIdentityEvidencePort = customerIdentityEvidencePort;
         this.verificationMapper = verificationMapper;
         this.currentUserProvider = currentUserProvider;
     }
@@ -62,7 +69,8 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
         Objects.requireNonNull(request, "request must not be null");
 
         UUID customerId = currentUserProvider.currentUser().requireCustomerId();
-        String identityReference = normalizeRequired(request.identityReference(), "identityReference");
+        CustomerIdentityEvidenceSnapshot identityEvidence = loadUsableIdentityEvidence(customerId);
+        String identityReference = normalizeRequired(identityEvidence.identityReference(), "identityReference");
         String employeeCode = normalizeRequired(request.employeeCode(), "employeeCode");
 
         PartnerCompany partnerCompany = partnerCompanyRepository.findById(partnerCompanyId)
@@ -91,6 +99,27 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
                         null,
                         null
                 )));
+    }
+
+    private CustomerIdentityEvidenceSnapshot loadUsableIdentityEvidence(UUID customerId) {
+        CustomerIdentityEvidenceSnapshot identityEvidence = customerIdentityEvidencePort.findIdentityEvidenceByCustomerId(customerId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "CUSTOMER_NOT_FOUND",
+                        "Customer was not found."
+                ));
+        if (!identityEvidence.active()) {
+            throw new BusinessStateConflictException(
+                    "CUSTOMER_NOT_ACTIVE",
+                    "Customer must be active before employee verification."
+            );
+        }
+        if (!identityEvidence.profileComplete()) {
+            throw new BusinessRuleViolationException(
+                    "PROFILE_INCOMPLETE",
+                    "Customer profile must be complete before employee verification."
+            );
+        }
+        return identityEvidence;
     }
 
     private PartnerEmployeeVerificationDto verifyAgainstBatch(

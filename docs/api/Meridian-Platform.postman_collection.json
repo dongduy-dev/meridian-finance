@@ -99,28 +99,13 @@
                          "type":  "string"
                      },
                      {
-                         "key":  "activeIdentityReference",
-                         "value":  "IDREF-MER-001",
-                         "type":  "string"
-                     },
-                     {
                          "key":  "activeEmployeeCode",
                          "value":  "MER-EMP-001",
                          "type":  "string"
                      },
                      {
-                         "key":  "inactiveIdentityReference",
-                         "value":  "IDREF-MER-003",
-                         "type":  "string"
-                     },
-                     {
                          "key":  "inactiveEmployeeCode",
                          "value":  "MER-EMP-003",
-                         "type":  "string"
-                     },
-                     {
-                         "key":  "missingIdentityReference",
-                         "value":  "IDREF-MER-MISSING",
                          "type":  "string"
                      },
                      {
@@ -1002,7 +987,7 @@
                                                       "description":  "Verifies active employee evidence and captures customerPartnerEmployeeLinkId.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"identityReference\": \"{{activeIdentityReference}}\",\n  \"employeeCode\": \"{{activeEmployeeCode}}\"\n}",
+                                                                   "raw":  "{\n  \"employeeCode\": \"{{activeEmployeeCode}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -1070,7 +1055,7 @@
                                                       "description":  "Expected MATCHED_INACTIVE with no active link creation.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"identityReference\": \"{{inactiveIdentityReference}}\",\n  \"employeeCode\": \"{{inactiveEmployeeCode}}\"\n}",
+                                                                   "raw":  "{\n  \"employeeCode\": \"{{inactiveEmployeeCode}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -1132,7 +1117,7 @@
                                                       "description":  "Expected PENDING_MANUAL_REVIEW for missing evidence.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"identityReference\": \"{{missingIdentityReference}}\",\n  \"employeeCode\": \"{{missingEmployeeCode}}\"\n}",
+                                                                   "raw":  "{\n  \"employeeCode\": \"{{missingEmployeeCode}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
