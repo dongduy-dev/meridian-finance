@@ -6,6 +6,12 @@ import com.meridian.platform.approval.application.port.in.SubmitApprovalDecision
 import com.meridian.platform.approval.application.port.in.SubmitReviewRecommendationUseCase;
 import com.meridian.platform.approval.infrastructure.adapter.in.web.ApprovalDecisionController;
 import com.meridian.platform.approval.infrastructure.adapter.in.web.ReviewRecommendationController;
+import com.meridian.platform.customer.application.dto.CustomerDto;
+import com.meridian.platform.customer.application.dto.CustomerProfileDto;
+import com.meridian.platform.customer.application.dto.UpdateCustomerProfileRequest;
+import com.meridian.platform.customer.application.port.in.QueryOwnCustomerUseCase;
+import com.meridian.platform.customer.application.port.in.UpdateOwnCustomerProfileUseCase;
+import com.meridian.platform.customer.infrastructure.adapter.in.web.CustomerProfileController;
 import com.meridian.platform.identity.application.dto.AuthResponse;
 import com.meridian.platform.identity.application.port.in.AuthenticationUseCase;
 import com.meridian.platform.identity.infrastructure.adapter.in.web.AuthController;
@@ -51,11 +57,13 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = {
+        CustomerProfileController.class,
         HealthController.class,
         AuthController.class,
         LoanProductController.class,
@@ -124,6 +132,12 @@ class SecurityConfigTest {
     @MockitoBean
     private VerifyPartnerEmployeeUseCase verifyPartnerEmployeeUseCase;
 
+    @MockitoBean
+    private QueryOwnCustomerUseCase queryOwnCustomerUseCase;
+
+    @MockitoBean
+    private UpdateOwnCustomerProfileUseCase updateOwnCustomerProfileUseCase;
+
     @Test
     void keepsVersionedHealthEndpointPublic() throws Exception {
         mockMvc.perform(get("/api/v1/health"))
@@ -173,6 +187,15 @@ class SecurityConfigTest {
 
     @Test
     void rejectsAnonymousAccessToSensitivePartnerSalaryAdvanceReviewAndDecisionEndpoints() throws Exception {
+        mockMvc.perform(get("/api/v1/customers/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
+
+        mockMvc.perform(put("/api/v1/customers/me/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+
         mockMvc.perform(get("/api/v1/partner-companies"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
@@ -215,6 +238,29 @@ class SecurityConfigTest {
 
     @Test
     void rejectsAuthenticatedUsersWithoutRequiredPermission() throws Exception {
+        mockMvc.perform(get("/api/v1/customers/me")
+                        .with(user("customer").authorities(new SimpleGrantedAuthority("loan:submit"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        mockMvc.perform(put("/api/v1/customers/me/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Customer Demo",
+                                  "identityReference": "IDREF-MER-001",
+                                  "phoneNumber": "0901234567",
+                                  "residentialAddress": "1 Meridian Street",
+                                  "employmentStatus": "SALARIED",
+                                  "employerName": "Meridian Partner Co",
+                                  "termsConsentAccepted": true,
+                                  "dataProcessingConsentAccepted": true
+                                }
+                                """)
+                        .with(user("customer").authorities(new SimpleGrantedAuthority("customer:profile:read:own"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
         mockMvc.perform(get("/api/v1/partner-companies/{partnerCompanyId}/employees", PARTNER_COMPANY_ID)
                         .with(user("customer").authorities(new SimpleGrantedAuthority("loan:submit"))))
                 .andExpect(status().isForbidden())
@@ -258,6 +304,40 @@ class SecurityConfigTest {
                 .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
     }
 
+
+    @Test
+    void allowsCustomerWithProfilePermissionsToReadAndUpdateOwnProfile() throws Exception {
+        when(queryOwnCustomerUseCase.getOwnCustomer()).thenReturn(customerDto());
+        when(updateOwnCustomerProfileUseCase.updateOwnProfile(any(UpdateCustomerProfileRequest.class)))
+                .thenReturn(customerDto());
+
+        mockMvc.perform(get("/api/v1/customers/me")
+                        .with(user("customer")
+                                .authorities(new SimpleGrantedAuthority("customer:profile:read:own"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.customerNumber").value("CUS-000000001"))
+                .andExpect(jsonPath("$.profile.fullName").value("Customer Demo"))
+                .andExpect(jsonPath("$.profile.identityReference").doesNotExist());
+
+        mockMvc.perform(put("/api/v1/customers/me/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Customer Demo",
+                                  "identityReference": "IDREF-MER-001",
+                                  "phoneNumber": "0901234567",
+                                  "residentialAddress": "1 Meridian Street",
+                                  "employmentStatus": "SALARIED",
+                                  "employerName": "Meridian Partner Co",
+                                  "termsConsentAccepted": true,
+                                  "dataProcessingConsentAccepted": true
+                                }
+                                """)
+                        .with(user("customer")
+                                .authorities(new SimpleGrantedAuthority("customer:profile:write:own"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.profile.identityReference").doesNotExist());
+    }
     @Test
     void allowsStaffWithPartnerReadPermissionToProtectedPartnerEmployeeEndpoint() throws Exception {
         when(queryPartnerEmployeeUseCase.getPartnerEmployeesByCompanyId(PARTNER_COMPANY_ID, true))
@@ -379,6 +459,26 @@ class SecurityConfigTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.decisionId").value(decisionId.toString()))
                 .andExpect(jsonPath("$.action").value("APPROVE"));
+    }
+
+    private static CustomerDto customerDto() {
+        return new CustomerDto(
+                UUID.fromString("99999999-9999-9999-9999-999999999999"),
+                "CUS-000000001",
+                "ACTIVE",
+                "UNVERIFIED",
+                "COMPLETE",
+                false,
+                new CustomerProfileDto(
+                        "Customer Demo",
+                        "0901234567",
+                        "1 Meridian Street",
+                        "SALARIED",
+                        "Meridian Partner Co",
+                        true,
+                        true
+                )
+        );
     }
     private static ApprovedOfferDto approvedOffer(String status, List<String> availableActions) {
         return new ApprovedOfferDto(
