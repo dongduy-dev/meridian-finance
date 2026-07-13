@@ -1,7 +1,7 @@
 INSERT INTO permissions (id, code, description)
 VALUES
-    ('00000000-0000-0000-0000-000000000224', 'customer:bank-account:read:own', 'Read own customer bank accounts'),
-    ('00000000-0000-0000-0000-000000000225', 'customer:bank-account:write:own', 'Manage own customer bank accounts')
+    ('00000000-0000-0000-0000-000000000233', 'customer:bank-account:read:own', 'Read own customer bank accounts'),
+    ('00000000-0000-0000-0000-000000000234', 'customer:bank-account:write:own', 'Manage own customer bank accounts')
 ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO role_permissions (role_id, permission_id)

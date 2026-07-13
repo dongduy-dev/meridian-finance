@@ -90,8 +90,10 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
         }
         return false;
     }
+
     private UUID insertApprovalPendingLoanApplication() {
         UUID id = UUID.randomUUID();
+        UUID customerId = insertCustomer();
         jdbcTemplate.update(
                 """
                         insert into %s.loan_applications (
@@ -108,13 +110,31 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
                         ) values (?, ?, ?, ?, 'SALARY_ADVANCE', 'SALARY_BASED', 'APPROVAL_PENDING', ?, 1, ?)
                         """.formatted(TEST_SCHEMA),
                 id,
-                UUID.randomUUID(),
+                customerId,
                 salaryAdvanceProductId(),
                 "SA-ROLLBACK-" + id,
                 BigDecimal.valueOf(3_000_000).setScale(2),
                 NOW.minusDays(1)
         );
         return id;
+    }
+
+    private UUID insertCustomer() {
+        UUID customerId = UUID.randomUUID();
+        jdbcTemplate.update(
+                """
+                        insert into %s.customers (
+                            id,
+                            customer_number,
+                            status,
+                            verification_status,
+                            profile_completion_status
+                        ) values (?, ?, 'ACTIVE', 'UNVERIFIED', 'INCOMPLETE')
+                        """.formatted(TEST_SCHEMA),
+                customerId,
+                "CUST-" + customerId
+        );
+        return customerId;
     }
 
     private UUID insertReviewRecommendation(UUID loanApplicationId) {

@@ -187,6 +187,17 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 
 ---
 
+## Local Backend Configuration
+
+Customer profile and bank-account encryption requires two Base64-encoded keys at startup:
+
+- `MERIDIAN_CUSTOMER_ENCRYPTION_KEY` maps to `meridian.customer.encryption-key` and must decode to 32 bytes for AES-256-GCM.
+- `MERIDIAN_CUSTOMER_FINGERPRINT_KEY` maps to `meridian.customer.fingerprint-key` and must decode to at least 32 bytes for HMAC-SHA-256.
+
+Use non-production values for local and test runs only; do not commit real secrets.
+
+---
+
 ## Roadmap
 
 ### Phase 1 — Core Lending MVP

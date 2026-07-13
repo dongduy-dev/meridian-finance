@@ -2,6 +2,7 @@ package com.meridian.platform.customer.infrastructure.adapter.out.crypto;
 
 import com.meridian.platform.customer.application.port.out.CustomerSensitiveValueProtector;
 import com.meridian.platform.customer.domain.model.ProtectedSensitiveValue;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -29,6 +30,7 @@ public class AesGcmCustomerSensitiveValueProtector implements CustomerSensitiveV
     private final SecretKeySpec fingerprintKey;
     private final SecureRandom secureRandom;
 
+    @Autowired
     public AesGcmCustomerSensitiveValueProtector(
             @Value("${meridian.customer.encryption-key:}") String encryptionKey,
             @Value("${meridian.customer.fingerprint-key:}") String fingerprintKey

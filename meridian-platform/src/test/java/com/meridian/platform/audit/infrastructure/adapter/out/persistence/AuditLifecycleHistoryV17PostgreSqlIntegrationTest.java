@@ -408,6 +408,7 @@ class AuditLifecycleHistoryV17PostgreSqlIntegrationTest {
 
     private UUID insertLoanApplication(String status) {
         UUID id = UUID.randomUUID();
+        UUID customerId = insertCustomer();
         jdbcTemplate.update(
                 """
                         insert into %s.loan_applications (
@@ -424,7 +425,7 @@ class AuditLifecycleHistoryV17PostgreSqlIntegrationTest {
                         ) values (?, ?, ?, ?, 'SALARY_ADVANCE', 'SALARY_BASED', ?, ?, 1, ?)
                         """.formatted(TEST_SCHEMA),
                 id,
-                UUID.randomUUID(),
+                customerId,
                 salaryAdvanceProductId(),
                 "SA-TEST-" + id,
                 status,
@@ -432,6 +433,24 @@ class AuditLifecycleHistoryV17PostgreSqlIntegrationTest {
                 NOW
         );
         return id;
+    }
+
+    private UUID insertCustomer() {
+        UUID customerId = UUID.randomUUID();
+        jdbcTemplate.update(
+                """
+                        insert into %s.customers (
+                            id,
+                            customer_number,
+                            status,
+                            verification_status,
+                            profile_completion_status
+                        ) values (?, ?, 'ACTIVE', 'UNVERIFIED', 'INCOMPLETE')
+                        """.formatted(TEST_SCHEMA),
+                customerId,
+                "CUST-" + customerId
+        );
+        return customerId;
     }
 
     private UUID insertLoanTransition(

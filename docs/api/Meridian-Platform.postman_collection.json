@@ -1,7 +1,7 @@
 {
     "info":  {
                  "name":  "Meridian Platform API - Full Current Endpoint Test Collection",
-                 "description":  "JWT/RBAC Postman collection for all currently implemented Meridian backend endpoints.\n\nRecommended run order:\n1. Run the Auth folder to capture role-specific Bearer tokens.\n2. Run Public and Partner Admin requests.\n3. Run Customer Employee Verification, then Salary Advance Application.\n4. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n\nThe Salary Advance happy path is duplicate-sensitive because the authenticated demo customer can have only one active Salary Advance application. Run it on a fresh local database, or reset test data before repeating the full happy-path flow.",
+                 "description":  "JWT/RBAC Postman collection for all currently implemented Meridian backend endpoints.\n\nRecommended run order:\n1. Run the Auth folder to capture role-specific Bearer tokens.\n2. Run Public and Partner Admin requests.\n3. Run Customer Profile and Bank Accounts, then Customer Employee Verification, then Salary Advance Application.\n4. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n\nThe Salary Advance happy path is duplicate-sensitive because the authenticated demo customer can have only one active Salary Advance application. Run it on a fresh local database, or reset test data before repeating the full happy-path flow.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "auth":  {
@@ -115,6 +115,11 @@
                      },
                      {
                          "key":  "customerPartnerEmployeeLinkId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "customerBankAccountId",
                          "value":  "",
                          "type":  "string"
                      },
@@ -947,8 +952,301 @@
                                   }
                               ]
                  },
+                                  {
+    "name":  "03 Customer Profile and Bank Accounts - customer:profile/customer:bank-account",
+    "item":  [
                  {
-                     "name":  "03 Customer Employee Verification - partner:employee:verify:own",
+                     "name":  "GET own customer profile",
+                     "request":  {
+                                     "method":  "GET",
+                                     "header":  [
+
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{baseUrl}}/api/v1/customers/me",
+                                                 "host":  [
+                                                              "{{baseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "customers",
+                                                              "me"
+                                                          ]
+                                             },
+                                     "auth":  {
+                                                  "type":  "bearer",
+                                                  "bearer":  [
+                                                                 {
+                                                                     "key":  "token",
+                                                                     "value":  "{{customerAccessToken}}",
+                                                                     "type":  "string"
+                                                                 }
+                                                             ]
+                                              },
+                                     "description":  "Reads the authenticated Customer profile. Identity evidence is not returned."
+                                 },
+                     "response":  [
+
+                                  ]
+                 },
+                 {
+                     "name":  "PUT own customer profile - complete readiness profile",
+                     "request":  {
+                                     "method":  "PUT",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json",
+                                                        "type":  "text"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{baseUrl}}/api/v1/customers/me/profile",
+                                                 "host":  [
+                                                              "{{baseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "customers",
+                                                              "me",
+                                                              "profile"
+                                                          ]
+                                             },
+                                     "auth":  {
+                                                  "type":  "bearer",
+                                                  "bearer":  [
+                                                                 {
+                                                                     "key":  "token",
+                                                                     "value":  "{{customerAccessToken}}",
+                                                                     "type":  "string"
+                                                                 }
+                                                             ]
+                                              },
+                                     "description":  "Completes the authenticated Customer profile. identityReference is encrypted and not echoed.",
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\n  \"fullName\": \"Customer Demo\",\n  \"identityReference\": \"IDREF-MER-001\",\n  \"phoneNumber\": \"0901234567\",\n  \"residentialAddress\": \"1 Meridian Street, District 1, Ho Chi Minh City\",\n  \"employmentStatus\": \"SALARIED\",\n  \"employerName\": \"Meridian Partner Co.\",\n  \"termsConsentAccepted\": true,\n  \"dataProcessingConsentAccepted\": true\n}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              }
+                                              }
+                                 },
+                     "response":  [
+
+                                  ]
+                 },
+                 {
+                     "name":  "POST add own bank account - captures bank account id",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json",
+                                                        "type":  "text"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{baseUrl}}/api/v1/customers/me/bank-accounts",
+                                                 "host":  [
+                                                              "{{baseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "customers",
+                                                              "me",
+                                                              "bank-accounts"
+                                                          ]
+                                             },
+                                     "auth":  {
+                                                  "type":  "bearer",
+                                                  "bearer":  [
+                                                                 {
+                                                                     "key":  "token",
+                                                                     "value":  "{{customerAccessToken}}",
+                                                                     "type":  "string"
+                                                                 }
+                                                             ]
+                                              },
+                                     "description":  "Adds an encrypted bank account. The first active account becomes primary; responses show masked values only.",
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\n  \"bankCode\": \"VCB\",\n  \"bankNameSnapshot\": \"Vietcombank\",\n  \"accountHolderName\": \"Customer Demo\",\n  \"accountNumber\": \"1234567890\"\n}",
+                                                  "options":  {
+                                                                  "raw":  {
+                                                                              "language":  "json"
+                                                                          }
+                                                              }
+                                              }
+                                 },
+                     "response":  [
+
+                                  ],
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\"Status is 201\", function () {",
+                                                                   "    pm.response.to.have.status(201);",
+                                                                   "});",
+                                                                   "pm.test(\"Bank account id is captured\", function () {",
+                                                                   "    const json = pm.response.json();",
+                                                                   "    pm.collectionVariables.set(\"customerBankAccountId\", json.customerBankAccountId || \"\");",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "GET own bank accounts",
+                     "request":  {
+                                     "method":  "GET",
+                                     "header":  [
+
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{baseUrl}}/api/v1/customers/me/bank-accounts",
+                                                 "host":  [
+                                                              "{{baseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "customers",
+                                                              "me",
+                                                              "bank-accounts"
+                                                          ]
+                                             },
+                                     "auth":  {
+                                                  "type":  "bearer",
+                                                  "bearer":  [
+                                                                 {
+                                                                     "key":  "token",
+                                                                     "value":  "{{customerAccessToken}}",
+                                                                     "type":  "string"
+                                                                 }
+                                                             ]
+                                              },
+                                     "description":  "Lists the authenticated Customer\u0027s masked bank accounts."
+                                 },
+                     "response":  [
+
+                                  ]
+                 },
+                 {
+                     "name":  "POST make bank account primary",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{baseUrl}}/api/v1/customers/me/bank-accounts/{{customerBankAccountId}}/make-primary",
+                                                 "host":  [
+                                                              "{{baseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "customers",
+                                                              "me",
+                                                              "bank-accounts",
+                                                              "{{customerBankAccountId}}",
+                                                              "make-primary"
+                                                          ]
+                                             },
+                                     "auth":  {
+                                                  "type":  "bearer",
+                                                  "bearer":  [
+                                                                 {
+                                                                     "key":  "token",
+                                                                     "value":  "{{customerAccessToken}}",
+                                                                     "type":  "string"
+                                                                 }
+                                                             ]
+                                              },
+                                     "description":  "Makes the captured active bank account primary. The response remains masked."
+                                 },
+                     "response":  [
+
+                                  ],
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\"Status is 200\", function () {",
+                                                                   "    pm.response.to.have.status(200);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "POST deactivate bank account",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{baseUrl}}/api/v1/customers/me/bank-accounts/{{customerBankAccountId}}/deactivate",
+                                                 "host":  [
+                                                              "{{baseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "customers",
+                                                              "me",
+                                                              "bank-accounts",
+                                                              "{{customerBankAccountId}}",
+                                                              "deactivate"
+                                                          ]
+                                             },
+                                     "auth":  {
+                                                  "type":  "bearer",
+                                                  "bearer":  [
+                                                                 {
+                                                                     "key":  "token",
+                                                                     "value":  "{{customerAccessToken}}",
+                                                                     "type":  "string"
+                                                                 }
+                                                             ]
+                                              },
+                                     "description":  "Deactivates the captured bank account when domain rules allow it. The response remains masked."
+                                 },
+                     "response":  [
+
+                                  ],
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\"Status is 200\", function () {",
+                                                                   "    pm.response.to.have.status(200);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 }
+             ]
+},
+{
+                     "name":  "04 Customer Employee Verification - partner:employee:verify:own",
                      "item":  [
                                   {
                                       "name":  "POST active employee verification - captures link id",
@@ -1145,7 +1443,7 @@
                               ]
                  },
                  {
-                     "name":  "04 Loan Application - Salary Advance",
+                     "name":  "05 Loan Application - Salary Advance",
                      "item":  [
                                   {
                                       "name":  "POST /api/v1/loan-applications/salary-advance - happy path",
@@ -1283,7 +1581,7 @@
                               ]
                  },
                  {
-                     "name":  "05 Loan Officer Review and Recommendation",
+                     "name":  "06 Loan Officer Review and Recommendation",
                      "item":  [
                                   {
                                       "name":  "POST start Loan Officer review",

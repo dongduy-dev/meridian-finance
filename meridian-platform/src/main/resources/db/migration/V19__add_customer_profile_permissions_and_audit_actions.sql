@@ -1,7 +1,7 @@
 INSERT INTO permissions (id, code, description)
 VALUES
-    ('00000000-0000-0000-0000-000000000222', 'customer:profile:read:own', 'Read own customer profile'),
-    ('00000000-0000-0000-0000-000000000223', 'customer:profile:write:own', 'Update own customer profile')
+    ('00000000-0000-0000-0000-000000000231', 'customer:profile:read:own', 'Read own customer profile'),
+    ('00000000-0000-0000-0000-000000000232', 'customer:profile:write:own', 'Update own customer profile')
 ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO role_permissions (role_id, permission_id)
