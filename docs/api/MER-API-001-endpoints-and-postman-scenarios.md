@@ -208,7 +208,7 @@ Expected high-value checks:
 | Customer approved-offer accept | `200`, offer status `ACCEPTED`, application moves to `CONTRACT_PENDING`. |
 | Customer approved-offer decline | `200`, offer status `DECLINED`, application moves to `CUSTOMER_DECLINED`, reservation released exactly once. |
 | Expired offer accept/decline | `409`, `OFFER_EXPIRED`, expiry state and release are committed before the response. |
-| Duplicate Salary Advance for same authenticated customer | `409`, `BLOCKING_APPLICATION_EXISTS`. |
+| Duplicate Salary Advance for same authenticated customer, including concurrent submissions through different verified employee links | `409`, `BLOCKING_APPLICATION_EXISTS`; one complete winner remains. |
 
 Notes:
 

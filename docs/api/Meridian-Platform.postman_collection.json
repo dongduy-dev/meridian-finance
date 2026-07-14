@@ -1612,7 +1612,7 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Run after happy path to verify duplicate active Salary Advance blocking.",
+                                                      "description":  "Run after happy path to verify the stable 409 contract for duplicate active Salary Advance blocking. PostgreSQL concurrency tests cover same-link and different-link races.",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "{\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": {{requestedAmount}},\n  \"requestedTermMonths\": {{requestedTermMonths}}\n}",

@@ -123,6 +123,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         applicationPolicy.validateProduct(salaryAdvanceProduct);
         applicationPolicy.validateRequestedTerm(request.requestedTermMonths());
         applicationPolicy.validateRequestedAmount(salaryAdvanceProduct, request.requestedAmount());
+        loanApplicationRepository.acquireCustomerProductLock(customerId, salaryAdvanceProduct.productCode());
         assertNoBlockingApplicationExists(customerId);
 
         VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot = partnerEligibilityPort.findVerifiedEmployeeLink(

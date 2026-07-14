@@ -285,6 +285,10 @@ class RespondToApprovedOfferServiceTest {
 
     private class FakeLoanApplicationRepository implements LoanApplicationRepository {
 
+        @Override
+        public void acquireCustomerProductLock(UUID customerId, ProductCode productCode) {
+        }
+
         private LoanApplication application = loanApplication(
                 LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING,
                 CUSTOMER_ID

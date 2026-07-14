@@ -571,25 +571,22 @@ Suggested future branch name:
 
 Area: Loan / Salary Advance / Concurrency
 
-Type: Deferred architecture hardening
+Type: Completed architecture hardening
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocks current PR: No
 
-Problem:
-Salary Advance application creation currently serializes same-customer/same-employee-link submissions through the customer-link advisory lock and the `salary_advance_limits` pessimistic row lock. This protects stale limit math for the same link, but same-customer submissions using different employee links can use different advisory lock keys.
+Resolution:
+Salary Advance submission now acquires a transaction-scoped PostgreSQL advisory lock keyed by customer and product before the authoritative blocking-application check. It retains the customer and employee-link advisory lock before limit initialization or row locking and repeats the blocking check defensively.
 
-Risk:
-If a customer can have multiple active employee links, concurrent submissions across different links could race the "one blocking Salary Advance application per customer" business rule before either transaction commits.
+Database fallback:
+The existing `uq_loan_applications_customer_product_active` partial unique index remains authoritative. Insert-specific flush handling translates only SQLSTATE `23505` carrying that exact index name to `BLOCKING_APPLICATION_EXISTS`; unrelated integrity violations pass through unchanged.
 
-Recommendation:
-Consider adding a customer-level Salary Advance application advisory lock keyed by customer and product before the blocking-application check, and evaluate a PostgreSQL partial unique index on `loan_applications(customer_id, product_code)` for blocking Salary Advance statuses as the database-level invariant.
-
-Suggested future branch name:
-`feature/salary-advance-customer-concurrency-hardening`
+Evidence:
+PostgreSQL integration tests cover literal same-link and different-link concurrency, exact fallback translation, unrelated-constraint pass-through, and rollback of a prior limit mutation when the fallback conflict occurs.
 
 ### MER-FU-030 - Enforce Loan-status-sensitive Customer mutation restrictions
 

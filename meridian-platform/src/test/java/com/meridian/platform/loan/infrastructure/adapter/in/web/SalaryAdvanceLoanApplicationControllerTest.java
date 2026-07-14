@@ -4,6 +4,7 @@ import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationDto;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationRequest;
 import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicationUseCase;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.infrastructure.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,6 +69,28 @@ class SalaryAdvanceLoanApplicationControllerTest {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.errorCode").value("INVALID_PRODUCT_AMOUNT"))
                 .andExpect(jsonPath("$.message").value("Requested amount must be a whole VND amount."));
+    }
+
+    @Test
+    void returnsConflictForBlockingApplication() throws Exception {
+        MockMvc conflictMockMvc = buildMockMvc(request -> {
+            throw new BusinessStateConflictException(
+                    "BLOCKING_APPLICATION_EXISTS",
+                    "A blocking Salary Advance application already exists for this customer."
+            );
+        });
+
+        conflictMockMvc.perform(post("/api/v1/loan-applications/salary-advance")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "customerPartnerEmployeeLinkId": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+                                  "requestedAmount": 3000000.00,
+                                  "requestedTermMonths": 1
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("BLOCKING_APPLICATION_EXISTS"));
     }
 
     private MockMvc buildMockMvc(StartSalaryAdvanceApplicationUseCase useCase) {
