@@ -13,12 +13,13 @@ import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
-import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.time.Clock;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -27,6 +28,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SubmitReviewRecommendationServiceTest {
@@ -81,20 +83,40 @@ class SubmitReviewRecommendationServiceTest {
     }
 
     @Test
-    void rejectsCorrectionRecommendationWithoutReason() {
-        BusinessRuleViolationException exception = assertThrows(
-                BusinessRuleViolationException.class,
-                () -> service.submitReviewRecommendation(
-                        LOAN_APPLICATION_ID,
-                        new ReviewRecommendationRequest(
-                                ReviewRecommendationAction.REQUEST_STAFF_CORRECTION,
-                                " ",
-                                null
-                        )
+    void recordsRejectionRecommendation() {
+        ReviewRecommendationDto result = service.submitReviewRecommendation(
+                LOAN_APPLICATION_ID,
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.RECOMMEND_REJECTION,
+                        "Policy reason.",
+                        null
                 )
         );
 
-        assertEquals("RECOMMENDATION_REASON_REQUIRED", exception.getErrorCode());
+        assertEquals("RECOMMEND_REJECTION", result.action());
+        assertNotNull(repository.savedRecommendation);
+        assertNotNull(auditPublisher.publishedEvent);
+        assertNotNull(eventPublisher.publishedEvent);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ReviewRecommendationAction.class,
+            names = {"RETURN_TO_CUSTOMER_REVISION", "REQUEST_STAFF_CORRECTION"}
+    )
+    void rejectsUnavailableRevisionActionsBeforeAnyEffect(ReviewRecommendationAction action) {
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.submitReviewRecommendation(
+                        LOAN_APPLICATION_ID,
+                        new ReviewRecommendationRequest(action, "Correction required.", null)
+                )
+        );
+
+        assertEquals("REVISION_WORKFLOW_NOT_AVAILABLE", exception.getErrorCode());
+        assertNull(repository.savedRecommendation);
+        assertNull(auditPublisher.publishedEvent);
+        assertNull(eventPublisher.publishedEvent);
     }
 
     @Test

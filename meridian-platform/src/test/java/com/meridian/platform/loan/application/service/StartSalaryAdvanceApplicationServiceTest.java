@@ -123,6 +123,7 @@ class StartSalaryAdvanceApplicationServiceTest {
         assertEquals(limit(3_000_000), result.reservedAmountSnapshot());
         assertEquals(limit(3_000_000), result.availableLimitSnapshot());
         assertTrue(salaryAdvanceLimitRepository.lockAcquired);
+        assertTrue(loanApplicationRepository.customerProductLockAcquired);
         assertEquals(LoanApplicationStatus.SUBMITTED, loanApplicationRepository.savedApplications.get(0).status());
         assertEquals(2, salaryAdvanceLimitMovementRepository.savedMovements.size());
         assertEquals(SalaryAdvanceLimitMovementType.INITIALIZED,
@@ -259,6 +260,27 @@ class StartSalaryAdvanceApplicationServiceTest {
     }
 
     @Test
+    void rejectsFractionalVndBeforeAnyLoanWorkflowPersistence() {
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.startSalaryAdvanceApplication(request(new BigDecimal("3000000.50"), 1))
+        );
+
+        assertEquals("INVALID_PRODUCT_AMOUNT", exception.getErrorCode());
+        assertEquals("Requested amount must be a whole VND amount.", exception.getMessage());
+        assertEquals(0, loanApplicationRepository.existsChecks);
+        assertEquals(0, partnerEligibilityPort.findCalls);
+        assertFalse(salaryAdvanceLimitRepository.lockAcquired);
+        assertFalse(loanApplicationRepository.customerProductLockAcquired);
+        assertTrue(loanApplicationRepository.savedApplications.isEmpty());
+        assertTrue(salaryAdvanceLimitRepository.currentLimit.isEmpty());
+        assertTrue(salaryAdvanceLimitMovementRepository.savedMovements.isEmpty());
+        assertTrue(salaryAdvanceVerificationRepository.savedVerification == null);
+        assertTrue(transitionRepository.savedTransitions.isEmpty());
+        assertTrue(auditPublisher.publishedEvents.isEmpty());
+    }
+
+    @Test
     void failsWhenEmployeeConfiguredLimitIsInsufficient() {
         partnerEligibilityPort.snapshot = Optional.of(verifiedPartnerSnapshot(limit(2_000_000)));
 
@@ -367,6 +389,7 @@ class StartSalaryAdvanceApplicationServiceTest {
         assertEquals(0, loanProductRepository.findByProductCodeCalls);
         assertEquals(0, partnerEligibilityPort.findCalls);
         assertFalse(salaryAdvanceLimitRepository.lockAcquired);
+        assertFalse(loanApplicationRepository.customerProductLockAcquired);
         assertTrue(loanApplicationRepository.savedApplications.isEmpty());
         assertTrue(salaryAdvanceLimitMovementRepository.savedMovements.isEmpty());
         assertTrue(salaryAdvanceVerificationRepository.savedVerification == null);
@@ -477,6 +500,13 @@ class StartSalaryAdvanceApplicationServiceTest {
 
     private static class FakeLoanApplicationRepository implements LoanApplicationRepository {
 
+        private boolean customerProductLockAcquired;
+
+        @Override
+        public void acquireCustomerProductLock(UUID customerId, ProductCode productCode) {
+            customerProductLockAcquired = true;
+        }
+
         private final List<LoanApplication> savedApplications = new ArrayList<>();
         private final Deque<Boolean> blockingApplicationResults = new ArrayDeque<>();
         private boolean blockingApplicationExists;
@@ -503,6 +533,9 @@ class StartSalaryAdvanceApplicationServiceTest {
                 ProductCode productCode,
                 Set<LoanApplicationStatus> statuses
         ) {
+            if (!customerProductLockAcquired) {
+                throw new AssertionError("Blocking check occurred before customer-product lock acquisition.");
+            }
             existsChecks++;
             if (!blockingApplicationResults.isEmpty()) {
                 return blockingApplicationResults.removeFirst();

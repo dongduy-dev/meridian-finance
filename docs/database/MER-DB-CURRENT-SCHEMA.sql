@@ -406,6 +406,8 @@ CREATE TABLE loan_applications (
             'EXPIRED'
         )),
     CONSTRAINT chk_loan_applications_requested_amount_positive CHECK (requested_amount > 0),
+    CONSTRAINT chk_loan_applications_requested_amount_whole_vnd
+        CHECK (requested_amount = trunc(requested_amount)),
     CONSTRAINT chk_loan_applications_requested_term_positive CHECK (requested_term_months > 0)
 );
 

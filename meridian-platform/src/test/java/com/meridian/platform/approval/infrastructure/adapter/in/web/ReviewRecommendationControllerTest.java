@@ -3,10 +3,12 @@ package com.meridian.platform.approval.infrastructure.adapter.in.web;
 import com.meridian.platform.approval.application.dto.ReviewRecommendationDto;
 import com.meridian.platform.approval.application.dto.ReviewRecommendationRequest;
 import com.meridian.platform.approval.application.port.in.SubmitReviewRecommendationUseCase;
-import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.infrastructure.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -65,22 +67,24 @@ class ReviewRecommendationControllerTest {
                 .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
     }
 
-    @Test
-    void returnsUnprocessableEntityWhenDomainValidationFails() throws Exception {
-        useCase.failure = new BusinessRuleViolationException(
-                "RECOMMENDATION_REASON_REQUIRED",
-                "A reason is required for this review recommendation action."
+    @ParameterizedTest
+    @ValueSource(strings = {"RETURN_TO_CUSTOMER_REVISION", "REQUEST_STAFF_CORRECTION"})
+    void returnsConflictForUnavailableRevisionActions(String action) throws Exception {
+        useCase.failure = new BusinessStateConflictException(
+                "REVISION_WORKFLOW_NOT_AVAILABLE",
+                "Customer and staff correction workflows are not available yet."
         );
 
         mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/review-recommendations", LOAN_APPLICATION_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "action": "REQUEST_STAFF_CORRECTION"
+                                  "action": "%s",
+                                  "reason": "Correction required."
                                 }
-                                """))
-                .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.errorCode").value("RECOMMENDATION_REASON_REQUIRED"));
+                                """.formatted(action)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("REVISION_WORKFLOW_NOT_AVAILABLE"));
     }
 
     private static class StubUseCase implements SubmitReviewRecommendationUseCase {

@@ -198,7 +198,32 @@ Use non-production values for local and test runs only; do not commit real secre
 
 ---
 
+## Current Salary Advance Implementation Boundary
+
+Executable backend code currently covers authenticated Customer readiness, employee verification, whole-VND Salary Advance submission, limit reservation, Loan Officer review, Approver decision, immutable approved-offer generation, and customer accept/decline/expiry. The furthest successful waiting state is `CONTRACT_PENDING`.
+
+Current workflow contracts:
+
+- mathematically whole amounts such as `3000000`, `3000000.0`, and `3000000.00` are valid; non-zero fractional VND returns `422 INVALID_PRODUCT_AMOUNT`;
+- same-Customer duplicate Salary Advance submissions, including cross-link concurrency, return `409 BLOCKING_APPLICATION_EXISTS` to the losing request;
+- executable review actions are `RECOMMEND_APPROVAL` and `RECOMMEND_REJECTION`;
+- executable approval actions are `APPROVE`, `REJECT`, and `RETURN_TO_LOAN_OFFICER_REVIEW`;
+- revision-producing actions remain target-state values but return `409 REVISION_WORKFLOW_NOT_AVAILABLE` until `MER-FU-031` is implemented;
+- accept or decline against an expired offer returns `409 OFFER_EXPIRED`, including when expiry was already persisted.
+
+Document/correction readiness, contract readiness, manual disbursement, LoanAccount activation, final repayment schedules, repayment servicing, Customer registration, and frontends remain target-state work rather than current executable behavior.
+
+---
+
 ## Roadmap
+
+Current Salary Advance delivery order:
+
+1. Critical-path stabilization. Complete in the current checkpoint.
+2. Document checklist and correction/revision readiness.
+3. Contract readiness.
+4. Manual disbursement and LoanAccount activation.
+5. Repayment, settlement, and closure.
 
 ### Phase 1 — Core Lending MVP
 - [ ] Common loan application lifecycle with state machine

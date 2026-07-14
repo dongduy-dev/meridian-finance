@@ -8,6 +8,7 @@ import com.meridian.platform.approval.application.port.out.ApprovalDecisionEvent
 import com.meridian.platform.approval.application.port.out.ApprovalDecisionRepository;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.domain.model.ApprovalDecision;
+import com.meridian.platform.approval.domain.model.ApprovalDecisionAction;
 import com.meridian.platform.approval.domain.model.ReviewRecommendation;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
@@ -67,6 +68,7 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
         Objects.requireNonNull(request, "request must not be null");
         Objects.requireNonNull(request.action(), "action must not be null");
+        rejectUnavailableRevisionAction(request);
 
         ReviewRecommendation latestRecommendation = reviewRecommendationRepository
                 .findLatestByLoanApplicationId(loanApplicationId)
@@ -113,6 +115,15 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
         approvalDecisionEventPublisher.publish(approvalMapper.toRecordedEvent(savedDecision, operationContext));
 
         return approvalMapper.toDto(savedDecision);
+    }
+
+    private void rejectUnavailableRevisionAction(ApprovalDecisionRequest request) {
+        if (request.action() == ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION) {
+            throw new BusinessStateConflictException(
+                    "REVISION_WORKFLOW_NOT_AVAILABLE",
+                    "Customer and staff correction workflows are not available yet."
+            );
+        }
     }
 
     private void validateMakerChecker(

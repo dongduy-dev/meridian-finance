@@ -8,6 +8,8 @@ import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseC
 import com.meridian.platform.shared.infrastructure.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -46,14 +48,19 @@ class ApprovedOfferControllerTest {
                 .andExpect(jsonPath("$.availableActions[0]").value("ACCEPT"));
     }
 
-    @Test
-    void mapsExpiredActionOutcomeToConflict() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"accept", "decline"})
+    void mapsExpiredActionOutcomeToConflict(String action) throws Exception {
         useCase.nextActionResult = new ApprovedOfferActionResult(
                 ApprovedOfferActionOutcome.EXPIRED,
                 offer("EXPIRED", List.of())
         );
 
-        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept", LOAN_APPLICATION_ID))
+        mockMvc.perform(post(
+                        "/api/v1/loan-applications/{loanApplicationId}/approved-offer/{action}",
+                        LOAN_APPLICATION_ID,
+                        action
+                ))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("OFFER_EXPIRED"));
     }

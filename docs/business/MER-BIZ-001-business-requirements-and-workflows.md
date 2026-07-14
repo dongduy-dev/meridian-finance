@@ -332,6 +332,8 @@ Loan Officer actions:
 | `RETURN_TO_CUSTOMER_REVISION` | `RETURNED_FOR_REVISION` |
 | `REQUEST_STAFF_CORRECTION` | `RETURNED_FOR_REVISION` |
 
+Current implementation note: `RECOMMEND_APPROVAL` and `RECOMMEND_REJECTION` are executable. `RETURN_TO_CUSTOMER_REVISION` and `REQUEST_STAFF_CORRECTION` remain recognized target-state actions, but currently return `409 REVISION_WORKFLOW_NOT_AVAILABLE` before recommendation persistence, audit/event publication, history creation, or Loan status change. The complete correction and resubmission lifecycle remains tracked by `MER-FU-031`.
+
 ### 6.6 Approval Decision
 
 The Approver reviews the application and Loan Officer recommendation. Approval must be separate from Loan Officer review, and the same back-office user cannot record both the Loan Officer recommendation and final Approver decision for the same application.
@@ -353,6 +355,8 @@ Approver actions:
 | `RETURN_TO_LOAN_OFFICER_REVIEW` | `RETURNED_TO_REVIEW` |
 | `REQUEST_CUSTOMER_INFORMATION` | `RETURNED_FOR_REVISION` |
 | `REQUEST_STAFF_CORRECTION` | `RETURNED_FOR_REVISION` |
+
+Current implementation note: `APPROVE`, `REJECT`, and `RETURN_TO_LOAN_OFFICER_REVIEW` are executable. The current API represents target-state customer/staff correction as `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`; it returns `409 REVISION_WORKFLOW_NOT_AVAILABLE` before decision persistence, audit/event publication, history creation, or Loan status change. The target correction requirements above remain valid for the future `MER-FU-031` workflow.
 
 `APPROVED` is a decision status. It should not remain the customer-facing waiting status once approved terms are generated; the customer-facing status becomes `CUSTOMER_ACCEPTANCE_PENDING`.
 
@@ -382,7 +386,7 @@ The customer must accept approved terms before contract preparation and disburse
 
 If the customer accepts a valid unexpired offer, the application moves from `CUSTOMER_ACCEPTANCE_PENDING` to `CONTRACT_PENDING`. If the customer declines a pending Salary Advance offer, the application moves to `CUSTOMER_DECLINED` and the reserved Salary Advance amount is released exactly once in the same controlled business operation. If the offer expires before acceptance, the application moves to `EXPIRED` and the reserved Salary Advance amount is released exactly once in the same controlled business operation.
 
-Same-action retries are idempotent for customer offer responses: accepting an already accepted offer returns the current accepted result, and declining an already declined offer returns the current declined result without releasing reservation again. Contradictory terminal actions are conflicts: accept after decline or expiry is not allowed, and decline after accept or expiry is not allowed.
+Same-action retries are idempotent for customer offer responses: accepting an already accepted offer returns the current accepted result, and declining an already declined offer returns the current declined result without releasing reservation again. Contradictory accepted/declined actions return `OFFER_ACTION_CONFLICT`. Accept or decline against an expired offer consistently returns `OFFER_EXPIRED`: a customer action that first discovers expiry commits expiry and exact-once release, while an already persisted expiry returns the same conflict without additional history, audit, movement, or release effects.
 
 After customer acceptance, the system prepares or records required contract and disbursement documents. MVP document handling may include generated loan agreement record, uploaded signed agreement, uploaded supporting documents, internal approval memo, disbursement instruction record, or manual staff confirmation.
 
@@ -804,6 +808,7 @@ EXPIRED
 | BR-049 | Salary Advance fees are 0 VND, and total repayment amount equals approved principal plus total interest. |
 | BR-050 | Salary Advance provisional repayment items include one item per approved term month, use `ON_SALARY_DATE` as a timing category, and describe first, second, and third salary cycle after disbursement timing as applicable without exact calendar due dates. |
 | BR-051 | Salary Advance provisional item principal and interest are allocated in whole VND, remainders are assigned to the final item, fee due is 0 VND for every item, each item total equals principal plus interest plus fee, and item sums must reconcile to approved principal, total interest, 0 VND fees, and total repayment amount with no unreconciled 1-VND difference. |
+| BR-052 | A Salary Advance requested amount must be mathematically whole VND. Scale-only trailing zeros are valid; a non-zero fractional VND amount must be rejected before workflow or financial persistence. |
 
 ---
 

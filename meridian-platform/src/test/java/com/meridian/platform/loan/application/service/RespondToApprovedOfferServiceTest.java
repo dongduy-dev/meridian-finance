@@ -121,8 +121,7 @@ class RespondToApprovedOfferServiceTest {
 
         assertEquals(ApprovedOfferActionOutcome.SUCCESS, result.outcome());
         assertEquals("ACCEPTED", result.offer().status());
-        assertNull(loanApplicationRepository.savedApplication);
-        assertNull(approvedOfferRepository.savedOffer);
+        assertNoOfferResponseEffects();
     }
 
     @Test
@@ -151,9 +150,7 @@ class RespondToApprovedOfferServiceTest {
 
         assertEquals(ApprovedOfferActionOutcome.SUCCESS, result.outcome());
         assertEquals("DECLINED", result.offer().status());
-        assertNull(loanApplicationRepository.savedApplication);
-        assertNull(approvedOfferRepository.savedOffer);
-        assertTrue(movementRepository.savedMovements.isEmpty());
+        assertNoOfferResponseEffects();
     }
 
     @Test
@@ -183,7 +180,35 @@ class RespondToApprovedOfferServiceTest {
     }
 
     @Test
-    void contradictoryTerminalActionsConflict() {
+    void acceptPersistedExpiredOfferReturnsExpiredWithoutNewEffects() {
+        LocalDateTime persistedExpiredAt = NOW.minusHours(2);
+        loanApplicationRepository.application = loanApplication(LoanApplicationStatus.EXPIRED, CUSTOMER_ID);
+        approvedOfferRepository.offer = pendingOffer(NOW.minusHours(3)).expire(persistedExpiredAt);
+
+        ApprovedOfferActionResult result = service.acceptOffer(LOAN_APPLICATION_ID);
+
+        assertEquals(ApprovedOfferActionOutcome.EXPIRED, result.outcome());
+        assertEquals("EXPIRED", result.offer().status());
+        assertEquals(persistedExpiredAt, result.offer().expiredAt());
+        assertNoOfferResponseEffects();
+    }
+
+    @Test
+    void declinePersistedExpiredOfferReturnsExpiredWithoutNewEffects() {
+        LocalDateTime persistedExpiredAt = NOW.minusHours(2);
+        loanApplicationRepository.application = loanApplication(LoanApplicationStatus.EXPIRED, CUSTOMER_ID);
+        approvedOfferRepository.offer = pendingOffer(NOW.minusHours(3)).expire(persistedExpiredAt);
+
+        ApprovedOfferActionResult result = service.declineOffer(LOAN_APPLICATION_ID);
+
+        assertEquals(ApprovedOfferActionOutcome.EXPIRED, result.outcome());
+        assertEquals("EXPIRED", result.offer().status());
+        assertEquals(persistedExpiredAt, result.offer().expiredAt());
+        assertNoOfferResponseEffects();
+    }
+
+    @Test
+    void acceptAfterDeclineConflicts() {
         loanApplicationRepository.application = loanApplication(LoanApplicationStatus.CUSTOMER_DECLINED, CUSTOMER_ID);
         approvedOfferRepository.offer = pendingOffer(NOW.plusDays(3)).decline(NOW.minusHours(1));
 
@@ -193,6 +218,21 @@ class RespondToApprovedOfferServiceTest {
         );
 
         assertEquals("OFFER_ACTION_CONFLICT", exception.getErrorCode());
+        assertNoOfferResponseEffects();
+    }
+
+    @Test
+    void declineAfterAcceptConflicts() {
+        loanApplicationRepository.application = loanApplication(LoanApplicationStatus.CONTRACT_PENDING, CUSTOMER_ID);
+        approvedOfferRepository.offer = pendingOffer(NOW.plusDays(3)).accept(NOW.minusHours(1));
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.declineOffer(LOAN_APPLICATION_ID)
+        );
+
+        assertEquals("OFFER_ACTION_CONFLICT", exception.getErrorCode());
+        assertNoOfferResponseEffects();
     }
 
     @Test
@@ -209,6 +249,15 @@ class RespondToApprovedOfferServiceTest {
 
         assertEquals("ACCESS_DENIED", exception.getErrorCode());
         assertNull(approvedOfferRepository.savedOffer);
+    }
+
+    private void assertNoOfferResponseEffects() {
+        assertNull(loanApplicationRepository.savedApplication);
+        assertNull(approvedOfferRepository.savedOffer);
+        assertNull(limitRepository.savedLimit);
+        assertTrue(movementRepository.savedMovements.isEmpty());
+        assertTrue(transitionRepository.savedTransitions.isEmpty());
+        assertTrue(auditPublisher.publishedEvents.isEmpty());
     }
 
     private ApprovedOffer pendingOffer(LocalDateTime expiresAt) {
@@ -284,6 +333,10 @@ class RespondToApprovedOfferServiceTest {
     }
 
     private class FakeLoanApplicationRepository implements LoanApplicationRepository {
+
+        @Override
+        public void acquireCustomerProductLock(UUID customerId, ProductCode productCode) {
+        }
 
         private LoanApplication application = loanApplication(
                 LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING,

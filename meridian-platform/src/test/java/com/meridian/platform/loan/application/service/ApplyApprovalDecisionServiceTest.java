@@ -291,6 +291,10 @@ class ApplyApprovalDecisionServiceTest {
 
     private class FakeLoanApplicationRepository implements LoanApplicationRepository {
 
+        @Override
+        public void acquireCustomerProductLock(UUID customerId, ProductCode productCode) {
+        }
+
         private LoanApplication application = loanApplication(LoanApplicationStatus.APPROVAL_PENDING);
         private LoanApplication savedApplication;
 

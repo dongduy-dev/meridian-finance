@@ -65,6 +65,7 @@ This document standardizes the API error codes across all bounded contexts in th
 | 409 | `DECISION_ALREADY_SUBMITTED` | Decision already submitted | A decision has already been recorded for this approval request |
 | 409 | `MAKER_CHECKER_VIOLATION` | Maker-checker violation | The same user cannot record both Loan Officer recommendation and final Approver decision |
 | 422 | `REVIEW_RECOMMENDATION_REQUIRED` | Review recommendation required | Complete Loan Officer review before final approval decision |
+| 409 | `REVISION_WORKFLOW_NOT_AVAILABLE` | Revision workflow unavailable | Use a currently executable action until the complete correction and resubmission workflow is implemented |
 | **DOCUMENT Domain** | | | |
 | 404 | `DOCUMENT_NOT_FOUND` | Document not found | Verify the requested document ID |
 | 415 | `FILE_TYPE_NOT_ALLOWED` | File type not allowed | Upload a supported file format (e.g., PDF, JPG, PNG) |

@@ -212,6 +212,10 @@ class ApprovedOfferExpiryServiceTest {
 
     private static class FakeLoanApplicationRepository implements LoanApplicationRepository {
 
+        @Override
+        public void acquireCustomerProductLock(UUID customerId, ProductCode productCode) {
+        }
+
         private LoanApplication application = loanApplication(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING);
         private LoanApplication savedApplication;
 

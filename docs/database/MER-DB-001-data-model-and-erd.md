@@ -657,6 +657,8 @@ Salary Advance employee verification maps to `ProductVerificationResult` as foll
 - `loan_products.product_code` must be unique.
 - `loan_applications.application_number` and `loan_accounts.account_number` must be unique.
 - A customer may keep multiple draft applications, but may not submit a new active non-terminal application for the same product while a blocking application exists for that product.
+- Salary Advance submission serializes by customer and product before its authoritative blocking check, then by customer and employee link before limit locking; `uq_loan_applications_customer_product_active` remains the database fallback.
+- `loan_applications.requested_amount` must be mathematically whole VND; scale-only trailing zeros remain valid.
 - `loan_applications.status` transitions must follow the business transition matrix.
 - `loan_accounts` must be created only after manual disbursement confirmation.
 - The transition to `DISBURSED`, `loan_accounts` creation, final repayment schedule generation, and account activation must happen as one controlled transaction.

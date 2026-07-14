@@ -1,11 +1,17 @@
 package com.meridian.platform.approval.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.approval.application.dto.ApprovalDecisionRequest;
+import com.meridian.platform.approval.application.dto.ReviewRecommendationRequest;
 import com.meridian.platform.approval.application.service.SubmitApprovalDecisionService;
+import com.meridian.platform.approval.application.service.SubmitReviewRecommendationService;
 import com.meridian.platform.approval.domain.model.ApprovalDecisionAction;
+import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -38,6 +44,9 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
 
     @Autowired
     private SubmitApprovalDecisionService submitApprovalDecisionService;
+
+    @Autowired
+    private SubmitReviewRecommendationService submitReviewRecommendationService;
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
@@ -80,6 +89,59 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
         assertEquals(1, countRows("review_recommendations", "id", recommendationId));
     }
 
+    @ParameterizedTest
+    @EnumSource(
+            value = ReviewRecommendationAction.class,
+            names = {"RETURN_TO_CUSTOMER_REVISION", "REQUEST_STAFF_CORRECTION"}
+    )
+    void gatedReviewRevisionActionsHaveZeroDurableEffects(ReviewRecommendationAction action) {
+        UUID loanApplicationId = insertLoanApplication("UNDER_REVIEW", "SA-RG-");
+        int auditCountBefore = countAllRows("audit_events");
+        authenticateLoanOfficer();
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> submitReviewRecommendationService.submitReviewRecommendation(
+                        loanApplicationId,
+                        new ReviewRecommendationRequest(action, "Correction required.", null)
+                )
+        );
+
+        assertEquals("REVISION_WORKFLOW_NOT_AVAILABLE", exception.getErrorCode());
+        assertEquals(0, countRows("review_recommendations", "loan_application_id", loanApplicationId));
+        assertEquals("UNDER_REVIEW", currentStatus(loanApplicationId));
+        assertEquals(0, countRows("loan_application_status_transitions", "loan_application_id", loanApplicationId));
+        assertEquals(auditCountBefore, countAllRows("audit_events"));
+    }
+
+    @Test
+    void gatedApprovalRevisionActionHasZeroDurableEffects() {
+        UUID loanApplicationId = insertApprovalPendingLoanApplication();
+        UUID recommendationId = insertReviewRecommendation(loanApplicationId);
+        int auditCountBefore = countAllRows("audit_events");
+        authenticateApprover();
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> submitApprovalDecisionService.submitApprovalDecision(
+                        loanApplicationId,
+                        new ApprovalDecisionRequest(
+                                ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
+                                "Correction required.",
+                                null
+                        )
+                )
+        );
+
+        assertEquals("REVISION_WORKFLOW_NOT_AVAILABLE", exception.getErrorCode());
+        assertEquals(0, countRows("approval_decisions", "loan_application_id", loanApplicationId));
+        assertEquals("APPROVAL_PENDING", currentStatus(loanApplicationId));
+        assertEquals(0, countRows("loan_application_status_transitions", "loan_application_id", loanApplicationId));
+        assertEquals(0, countRows("approved_offers", "loan_application_id", loanApplicationId));
+        assertEquals(auditCountBefore, countAllRows("audit_events"));
+        assertEquals(1, countRows("review_recommendations", "id", recommendationId));
+    }
+
     private boolean containsMessage(Throwable exception, String expectedMessage) {
         Throwable current = exception;
         while (current != null) {
@@ -113,6 +175,35 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
                 customerId,
                 salaryAdvanceProductId(),
                 "SA-ROLLBACK-" + id,
+                BigDecimal.valueOf(3_000_000).setScale(2),
+                NOW.minusDays(1)
+        );
+        return id;
+    }
+
+    private UUID insertLoanApplication(String status, String applicationNumberPrefix) {
+        UUID id = UUID.randomUUID();
+        UUID customerId = insertCustomer();
+        jdbcTemplate.update(
+                """
+                        insert into %s.loan_applications (
+                            id,
+                            customer_id,
+                            loan_product_id,
+                            application_number,
+                            product_code,
+                            product_type,
+                            status,
+                            requested_amount,
+                            requested_term_months,
+                            submitted_at
+                        ) values (?, ?, ?, ?, 'SALARY_ADVANCE', 'SALARY_BASED', ?, ?, 1, ?)
+                        """.formatted(TEST_SCHEMA),
+                id,
+                customerId,
+                salaryAdvanceProductId(),
+                applicationNumberPrefix + id,
+                status,
                 BigDecimal.valueOf(3_000_000).setScale(2),
                 NOW.minusDays(1)
         );
@@ -181,6 +272,20 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
         );
     }
 
+    private void authenticateLoanOfficer() {
+        AuthenticatedUser loanOfficer = new AuthenticatedUser(
+                LOAN_OFFICER_USER_ID,
+                "loan.officer@meridian.local",
+                "STAFF",
+                null,
+                Set.of("LOAN_OFFICER"),
+                Set.of("approval:recommend")
+        );
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(new UsernamePasswordAuthenticationToken(loanOfficer, null, List.of()));
+        SecurityContextHolder.setContext(context);
+    }
+
     private void authenticateApprover() {
         AuthenticatedUser approver = new AuthenticatedUser(
                 APPROVER_USER_ID,
@@ -200,6 +305,21 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
                 "select count(*) from " + table(tableName) + " where " + columnName + " = ?",
                 Integer.class,
                 value
+        );
+    }
+
+    private int countAllRows(String tableName) {
+        return jdbcTemplate.queryForObject(
+                "select count(*) from " + table(tableName),
+                Integer.class
+        );
+    }
+
+    private String currentStatus(UUID loanApplicationId) {
+        return jdbcTemplate.queryForObject(
+                "select status from " + table("loan_applications") + " where id = ?",
+                String.class,
+                loanApplicationId
         );
     }
 

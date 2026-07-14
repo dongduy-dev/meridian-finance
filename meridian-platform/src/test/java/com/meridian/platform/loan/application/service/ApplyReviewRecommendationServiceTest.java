@@ -137,6 +137,10 @@ class ApplyReviewRecommendationServiceTest {
 
     private static class FakeLoanApplicationRepository implements LoanApplicationRepository {
 
+        @Override
+        public void acquireCustomerProductLock(UUID customerId, ProductCode productCode) {
+        }
+
         private LoanApplication application = loanApplication();
         private LoanApplication savedApplication;
 

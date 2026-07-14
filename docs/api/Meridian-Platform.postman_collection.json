@@ -187,6 +187,11 @@
                          "key":  "approvedOfferStatus",
                          "value":  "",
                          "type":  "string"
+                     },
+                     {
+                         "key":  "persistedExpiredLoanApplicationId",
+                         "value":  "",
+                         "type":  "string"
                      }
                  ],
     "item":  [
@@ -1446,6 +1451,72 @@
                      "name":  "05 Loan Application - Salary Advance",
                      "item":  [
                                   {
+                                      "name":  "POST /api/v1/loan-applications/salary-advance - fractional VND rejected",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/salary-advance",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "salary-advance"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Verifies that a non-zero fractional VND amount is rejected before any Salary Advance workflow persistence.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": 3000000.50,\n  \"requestedTermMonths\": 1\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 422\", function () {",
+                                                                                    "    pm.response.to.have.status(422);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Fractional VND is rejected by product policy\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"INVALID_PRODUCT_AMOUNT\");",
+                                                                                    "    pm.expect(json.message).to.eql(\"Requested amount must be a whole VND amount.\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
                                       "name":  "POST /api/v1/loan-applications/salary-advance - happy path",
                                       "request":  {
                                                       "method":  "POST",
@@ -1546,7 +1617,7 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Run after happy path to verify duplicate active Salary Advance blocking.",
+                                                      "description":  "Run after happy path to verify the stable 409 contract for duplicate active Salary Advance blocking. PostgreSQL concurrency tests cover same-link and different-link races.",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "{\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": {{requestedAmount}},\n  \"requestedTermMonths\": {{requestedTermMonths}}\n}",
@@ -1850,7 +1921,7 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST return to customer revision example",
+                                      "name":  "POST return to customer revision unavailable - 409",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -1883,7 +1954,7 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Example payload for a separate application still in UNDER_REVIEW or RETURNED_TO_REVIEW.",
+                                                      "description":  "Target-state action currently gated before durable effects until the correction workflow is implemented (MER-FU-031).",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "{\n  \"action\": \"RETURN_TO_CUSTOMER_REVISION\",\n  \"reason\": \"Customer must correct submitted information.\",\n  \"internalNotes\": \"Postman return example.\"\n}",
@@ -1903,8 +1974,12 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\"Status is 201\", function () {",
-                                                                                    "    pm.response.to.have.status(201);",
+                                                                                    "pm.test(\"Status is 409\", function () {",
+                                                                                    "    pm.response.to.have.status(409);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Revision workflow is unavailable\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"REVISION_WORKFLOW_NOT_AVAILABLE\");",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -1912,7 +1987,7 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST request staff correction example",
+                                      "name":  "POST request staff correction unavailable - 409",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -1945,7 +2020,7 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Example payload for a separate application still in UNDER_REVIEW or RETURNED_TO_REVIEW.",
+                                                      "description":  "Target-state action currently gated before durable effects until the correction workflow is implemented (MER-FU-031).",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "{\n  \"action\": \"REQUEST_STAFF_CORRECTION\",\n  \"reason\": \"Back-office data correction is required before approval.\",\n  \"internalNotes\": \"Postman staff correction example.\"\n}",
@@ -1965,8 +2040,78 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\"Status is 201\", function () {",
-                                                                                    "    pm.response.to.have.status(201);",
+                                                                                    "pm.test(\"Status is 409\", function () {",
+                                                                                    "    pm.response.to.have.status(409);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Revision workflow is unavailable\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"REVISION_WORKFLOW_NOT_AVAILABLE\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST request customer or staff correction unavailable - 409",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/approval-decisions",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "approval-decisions"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{approverAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Target-state approval correction action currently gated before decision, audit, event, history, or Loan status effects (MER-FU-031).",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"action\": \"REQUEST_CUSTOMER_OR_STAFF_CORRECTION\",\n  \"reason\": \"Customer or staff correction is required before approval.\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 409\", function () {",
+                                                                                    "    pm.response.to.have.status(409);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Revision workflow is unavailable\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"REVISION_WORKFLOW_NOT_AVAILABLE\");",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -2057,7 +2202,7 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Accepts pending approved offer and moves application toward contract preparation. If the offer expired at action time, API returns 409 OFFER_EXPIRED after committing expiry.",
+                                                      "description":  "Accepts a pending approved offer and moves the application toward contract preparation. Any expired offer returns 409 OFFER_EXPIRED; first discovery commits expiry and release, while persisted expiry produces no additional effects.",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "",
@@ -2145,6 +2290,81 @@
                                                                                     "const json = pm.response.json();",
                                                                                     "if (pm.response.code === 200) { pm.expect(json.status).to.eql(\"DECLINED\"); }",
                                                                                     "if (pm.response.code === 409) { pm.expect([\"OFFER_EXPIRED\", \"OFFER_ACTION_CONFLICT\"]).to.include(json.errorCode); }"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST accept persisted scheduler-expired offer - 409",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{persistedExpiredLoanApplicationId}}/approved-offer/accept",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{persistedExpiredLoanApplicationId}}",
+                                                                               "approved-offer",
+                                                                               "accept"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Optional manual fixture check. Set persistedExpiredLoanApplicationId to a customer-owned application whose offer and application were already expired by scheduled processing. The response must be 409 OFFER_EXPIRED without another release or terminal effect.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "if (!pm.collectionVariables.get(\"persistedExpiredLoanApplicationId\")) {",
+                                                                                    "    console.warn(\"Set persistedExpiredLoanApplicationId to run the persisted-expiry fixture check.\");",
+                                                                                    "    pm.execution.skipRequest();",
+                                                                                    "}"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 409\", function () {",
+                                                                                    "    pm.response.to.have.status(409);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Persisted expiry uses the stable error contract\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"OFFER_EXPIRED\");",
+                                                                                    "});"
                                                                                 ]
                                                                    }
                                                     }
@@ -2418,7 +2638,7 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST recommendation missing required reason - 422",
+                                      "name":  "POST unavailable staff correction without reason - 409",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -2451,7 +2671,7 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Requires an application still in UNDER_REVIEW or RETURNED_TO_REVIEW to reach domain reason validation before status validation.",
+                                                      "description":  "The unavailable revision-workflow gate takes precedence over action-specific reason validation and creates no durable effects.",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "{\n  \"action\": \"REQUEST_STAFF_CORRECTION\"\n}",
@@ -2471,12 +2691,12 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\"Status is 422\", function () {",
-                                                                                    "    pm.response.to.have.status(422);",
+                                                                                    "pm.test(\"Status is 409\", function () {",
+                                                                                    "    pm.response.to.have.status(409);",
                                                                                     "});",
-                                                                                    "pm.test(\"Reason is required\", function () {",
+                                                                                    "pm.test(\"Revision workflow is unavailable\", function () {",
                                                                                     "    const json = pm.response.json();",
-                                                                                    "    pm.expect(json.errorCode).to.eql(\"RECOMMENDATION_REASON_REQUIRED\");",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"REVISION_WORKFLOW_NOT_AVAILABLE\");",
                                                                                     "});"
                                                                                 ]
                                                                    }

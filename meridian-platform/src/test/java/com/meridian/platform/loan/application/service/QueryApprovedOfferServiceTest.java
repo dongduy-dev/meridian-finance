@@ -158,6 +158,10 @@ class QueryApprovedOfferServiceTest {
 
     private static class FakeLoanApplicationRepository implements LoanApplicationRepository {
 
+        @Override
+        public void acquireCustomerProductLock(UUID customerId, ProductCode productCode) {
+        }
+
         private final LoanApplication application;
         private final List<LoanApplication> savedApplications = new java.util.ArrayList<>();
 

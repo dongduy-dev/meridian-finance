@@ -229,8 +229,10 @@ Continue implementation in vertical slices:
 1. Loan officer review/recommendation. Done.
 2. Approval decision. Done.
 3. Salary Advance approved offer and customer acceptance. Done.
-4. Manual disbursement confirmation. Deferred.
-5. Loan account activation. Deferred.
+4. Document/correction readiness through `MER-FU-012` and `MER-FU-031`. Deferred.
+5. Contract readiness. Deferred.
+6. Manual disbursement confirmation and LoanAccount activation. Deferred.
+
 ### MER-FU-011 - Implement repayment tracking
 
 Area: Loan / Repayment
@@ -265,7 +267,7 @@ Problem:
 Docs describe documents/checklists/OCR, but implementation is not present.
 
 Recommendation:
-Implement after core Salary Advance lifecycle is stable.
+Implement after core Salary Advance lifecycle is stable. Coordinate checklist rejection, replacement, and clarification behavior with the complete correction/resubmission workflow in `MER-FU-031`; do not expose revision actions before that continuation exists.
 
 ### MER-FU-013 - Implement audit trail and Loan Application lifecycle history
 
@@ -571,25 +573,22 @@ Suggested future branch name:
 
 Area: Loan / Salary Advance / Concurrency
 
-Type: Deferred architecture hardening
+Type: Completed architecture hardening
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocks current PR: No
 
-Problem:
-Salary Advance application creation currently serializes same-customer/same-employee-link submissions through the customer-link advisory lock and the `salary_advance_limits` pessimistic row lock. This protects stale limit math for the same link, but same-customer submissions using different employee links can use different advisory lock keys.
+Resolution:
+Salary Advance submission now acquires a transaction-scoped PostgreSQL advisory lock keyed by customer and product before the authoritative blocking-application check. It retains the customer and employee-link advisory lock before limit initialization or row locking and repeats the blocking check defensively.
 
-Risk:
-If a customer can have multiple active employee links, concurrent submissions across different links could race the "one blocking Salary Advance application per customer" business rule before either transaction commits.
+Database fallback:
+The existing `uq_loan_applications_customer_product_active` partial unique index remains authoritative. Insert-specific flush handling translates only SQLSTATE `23505` carrying that exact index name to `BLOCKING_APPLICATION_EXISTS`; unrelated integrity violations pass through unchanged.
 
-Recommendation:
-Consider adding a customer-level Salary Advance application advisory lock keyed by customer and product before the blocking-application check, and evaluate a PostgreSQL partial unique index on `loan_applications(customer_id, product_code)` for blocking Salary Advance statuses as the database-level invariant.
-
-Suggested future branch name:
-`feature/salary-advance-customer-concurrency-hardening`
+Evidence:
+PostgreSQL integration tests cover literal same-link and different-link concurrency, exact fallback translation, unrelated-constraint pass-through, and rollback of a prior limit mutation when the fallback conflict occurs.
 
 ### MER-FU-030 - Enforce Loan-status-sensitive Customer mutation restrictions
 
@@ -615,10 +614,50 @@ When application/disbursement snapshot behavior is implemented, add a non-circul
 Suggested future branch name:
 `feature/customer-loan-status-mutation-policy`
 
+### MER-FU-031 - Implement Loan correction and resubmission workflow
+
+Area: Loan / Approval / Document / Customer correction
+
+Type: Deferred workflow
+
+Priority: P1
+
+Status: Open
+
+Blocks current stabilization PR: No
+
+Blocks document/correction readiness checkpoint: Yes
+
+Current stabilization:
+`RETURN_TO_CUSTOMER_REVISION`, `REQUEST_STAFF_CORRECTION`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` remain in the target state model but are rejected with `REVISION_WORKFLOW_NOT_AVAILABLE` before any durable effect. `RETURN_TO_LOAN_OFFICER_REVIEW` remains operational because it has an executable continuation.
+
+Problem:
+The target `RETURNED_FOR_REVISION` state has no complete executable continuation: there is no persisted correction request/task, responsible-party contract, authorized customer/staff correction API, document replacement flow, guarded resubmission command, or rule selecting the appropriate return state.
+
+Recommendation:
+Implement the revision lifecycle as one complete slice: persist the source recommendation/decision, correction reasons and responsible party; expose ownership-checked customer/staff work queues and permitted correction/document actions; preserve or version immutable submitted evidence; revalidate readiness, employment evidence, product rules, blocking applications, and Salary Advance reservation invariants on resubmission; transition with history and PII-safe audit to `VERIFICATION_PENDING`, `DOCUMENTS_PENDING`, or `UNDER_REVIEW` according to an explicit correction-type rule; and define recommendation/decision supersession semantics.
+
+Required scope:
+
+- define Customer, Loan Officer, or authorized-staff ownership for each correction reason and the fields each actor may edit;
+- define document clarification, replacement, and review behavior;
+- define whether requested amount or term may change and how reservation increase, decrease, or release is handled;
+- define when employee verification, Customer readiness, product policy, and limit snapshots must be refreshed;
+- define a guarded resubmission command and the state selected after correction;
+- preserve maker-checker controls and enforce ownership and permissions;
+- record lifecycle history and PII-safe business audit;
+- prove rollback, idempotency, and concurrency behavior before re-enabling the gated actions.
+
+Required proof:
+Add domain, service, controller/security, PostgreSQL rollback, idempotency, and concurrency tests covering each entry action, authorized correction, rejected unauthorized/stale correction, resubmission, history/audit, snapshot behavior, and no duplicate reservation or financial effect.
+
+Suggested future branch name:
+`feature/loan-revision-correction-workflow`
+
 ## Recommended Next Roadmap
 
-1. Review/merge the completed Salary Advance approved-offer and customer-acceptance slice.
-2. Continue with manual disbursement and loan account activation.
-3. Add repayment tracking.
-4. Extend audit trail coverage to future modules and workflow slices.
-5. Add document checklist/manual review/OCR.
+1. Review/merge the Salary Advance critical-path stabilization checkpoint.
+2. Implement document checklist and correction/revision readiness through `MER-FU-012` and `MER-FU-031`.
+3. Implement contract readiness.
+4. Implement manual disbursement and LoanAccount activation.
+5. Implement repayment, settlement, and closure.
