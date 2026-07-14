@@ -20,6 +20,8 @@ import com.meridian.platform.shared.domain.exception.BusinessRuleViolationExcept
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -30,6 +32,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SubmitApprovalDecisionServiceTest {
@@ -79,6 +82,43 @@ class SubmitApprovalDecisionServiceTest {
         assertEquals(auditPublisher.publishedEvent.operationContext(), eventPublisher.publishedEvent.operationContext());
         assertEquals(BusinessAuditAction.APPROVAL_DECISION_RECORDED,
                 auditPublisher.publishedEvent.entries().getFirst().action());
+    }
+
+    @Test
+    void rejectsUnavailableRevisionActionBeforeAnyEffect() {
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.submitApprovalDecision(
+                        LOAN_APPLICATION_ID,
+                        new ApprovalDecisionRequest(
+                                ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
+                                "Correction required.",
+                                null
+                        )
+                )
+        );
+
+        assertEquals("REVISION_WORKFLOW_NOT_AVAILABLE", exception.getErrorCode());
+        assertNull(approvalDecisionRepository.savedDecision);
+        assertNull(auditPublisher.publishedEvent);
+        assertNull(eventPublisher.publishedEvent);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ApprovalDecisionAction.class,
+            names = {"REJECT", "RETURN_TO_LOAN_OFFICER_REVIEW"}
+    )
+    void recordsOtherNonApprovalActions(ApprovalDecisionAction action) {
+        ApprovalDecisionDto result = service.submitApprovalDecision(
+                LOAN_APPLICATION_ID,
+                new ApprovalDecisionRequest(action, "Decision reason.", null)
+        );
+
+        assertEquals(action.name(), result.action());
+        assertNotNull(approvalDecisionRepository.savedDecision);
+        assertNotNull(auditPublisher.publishedEvent);
+        assertNotNull(eventPublisher.publishedEvent);
     }
 
     @Test

@@ -612,6 +612,35 @@ When application/disbursement snapshot behavior is implemented, add a non-circul
 Suggested future branch name:
 `feature/customer-loan-status-mutation-policy`
 
+### MER-FU-031 - Implement the complete customer and staff revision workflow
+
+Area: Approval / Loan / Customer / Document / Audit
+
+Type: Deferred feature
+
+Priority: P1
+
+Status: Open
+
+Blocks current stabilization PR: No
+
+Blocks document/correction readiness checkpoint: Yes
+
+Current stabilization:
+`RETURN_TO_CUSTOMER_REVISION`, `REQUEST_STAFF_CORRECTION`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` remain in the target state model but are rejected with `REVISION_WORKFLOW_NOT_AVAILABLE` before any durable effect. `RETURN_TO_LOAN_OFFICER_REVIEW` remains operational because it has an executable continuation.
+
+Problem:
+The target `RETURNED_FOR_REVISION` state has no complete executable continuation: there is no persisted correction request/task, responsible-party contract, authorized customer/staff correction API, document replacement flow, guarded resubmission command, or rule selecting the appropriate return state.
+
+Recommendation:
+Implement the revision lifecycle as one complete slice: persist the source recommendation/decision, correction reasons and responsible party; expose ownership-checked customer/staff work queues and permitted correction/document actions; preserve or version immutable submitted evidence; revalidate readiness, employment evidence, product rules, blocking applications, and Salary Advance reservation invariants on resubmission; transition with history and PII-safe audit to `VERIFICATION_PENDING`, `DOCUMENTS_PENDING`, or `UNDER_REVIEW` according to an explicit correction-type rule; and define recommendation/decision supersession semantics.
+
+Required proof:
+Add domain, service, controller/security, PostgreSQL rollback, idempotency, and concurrency tests covering each entry action, authorized correction, rejected unauthorized/stale correction, resubmission, history/audit, snapshot behavior, and no duplicate reservation or financial effect.
+
+Suggested future branch name:
+`feature/salary-advance-revision-workflow`
+
 ## Recommended Next Roadmap
 
 1. Review/merge the completed Salary Advance approved-offer and customer-acceptance slice.

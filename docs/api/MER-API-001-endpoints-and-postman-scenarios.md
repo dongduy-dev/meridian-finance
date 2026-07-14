@@ -130,7 +130,8 @@ POST /api/v1/loan-applications/{loanApplicationId}/review/start
 }
 ```
 
-Valid actions are `RECOMMEND_APPROVAL`, `RECOMMEND_REJECTION`, `RETURN_TO_CUSTOMER_REVISION`, and `REQUEST_STAFF_CORRECTION`. A nonblank `reason` is required for all actions except `RECOMMEND_APPROVAL`.
+Current executable actions are `RECOMMEND_APPROVAL` and `RECOMMEND_REJECTION`; rejection requires a nonblank `reason`.
+`RETURN_TO_CUSTOMER_REVISION` and `REQUEST_STAFF_CORRECTION` remain target-state enum values but are temporarily rejected with HTTP `409 REVISION_WORKFLOW_NOT_AVAILABLE` before any recommendation, audit, event, history, or Loan status effect. See `MER-FU-031`.
 
 ### Approval Decision
 
@@ -139,12 +140,14 @@ Valid actions are `RECOMMEND_APPROVAL`, `RECOMMEND_REJECTION`, `RETURN_TO_CUSTOM
 ```json
 {
   "action": "APPROVE",
-  "reason": "Optional for approval; required for reject/return/correction decisions.",
+  "reason": "Optional for approval; required for executable reject/return decisions.",
   "internalNotes": "Optional staff-only note."
 }
 ```
 
-Valid actions are `APPROVE`, `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`. A nonblank `reason` is required for all actions except `APPROVE`. For Salary Advance, `APPROVE` atomically generates the customer approved offer and moves the Loan Application to `CUSTOMER_ACCEPTANCE_PENDING`; `REJECT` transitions the Loan Application to `REJECTED` and releases the reserved Salary Advance limit.
+Current executable actions are `APPROVE`, `REJECT`, and `RETURN_TO_LOAN_OFFICER_REVIEW`; a nonblank `reason` is required except for `APPROVE`. For Salary Advance, `APPROVE` atomically generates the customer approved offer and moves the Loan Application to `CUSTOMER_ACCEPTANCE_PENDING`; `REJECT` transitions the Loan Application to `REJECTED` and releases the reserved Salary Advance limit.
+`REQUEST_CUSTOMER_OR_STAFF_CORRECTION` remains a target-state enum value but is temporarily rejected with HTTP `409 REVISION_WORKFLOW_NOT_AVAILABLE` before any decision, audit, event, history, or Loan status effect. `RETURN_TO_LOAN_OFFICER_REVIEW` remains operational. See `MER-FU-031`.
+
 ### Approved Offer
 
 `customerId` is derived from the authenticated customer token and is not accepted in the path or request body. Offer response actions do not require a request body.

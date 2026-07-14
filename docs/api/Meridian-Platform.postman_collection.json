@@ -1916,7 +1916,7 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST return to customer revision example",
+                                      "name":  "POST return to customer revision unavailable - 409",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -1949,7 +1949,7 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Example payload for a separate application still in UNDER_REVIEW or RETURNED_TO_REVIEW.",
+                                                      "description":  "Target-state action currently gated before durable effects until the correction workflow is implemented (MER-FU-031).",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "{\n  \"action\": \"RETURN_TO_CUSTOMER_REVISION\",\n  \"reason\": \"Customer must correct submitted information.\",\n  \"internalNotes\": \"Postman return example.\"\n}",
@@ -1969,8 +1969,12 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\"Status is 201\", function () {",
-                                                                                    "    pm.response.to.have.status(201);",
+                                                                                    "pm.test(\"Status is 409\", function () {",
+                                                                                    "    pm.response.to.have.status(409);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Revision workflow is unavailable\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"REVISION_WORKFLOW_NOT_AVAILABLE\");",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -1978,7 +1982,7 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST request staff correction example",
+                                      "name":  "POST request staff correction unavailable - 409",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -2011,7 +2015,7 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Example payload for a separate application still in UNDER_REVIEW or RETURNED_TO_REVIEW.",
+                                                      "description":  "Target-state action currently gated before durable effects until the correction workflow is implemented (MER-FU-031).",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "{\n  \"action\": \"REQUEST_STAFF_CORRECTION\",\n  \"reason\": \"Back-office data correction is required before approval.\",\n  \"internalNotes\": \"Postman staff correction example.\"\n}",
@@ -2031,8 +2035,12 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\"Status is 201\", function () {",
-                                                                                    "    pm.response.to.have.status(201);",
+                                                                                    "pm.test(\"Status is 409\", function () {",
+                                                                                    "    pm.response.to.have.status(409);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Revision workflow is unavailable\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"REVISION_WORKFLOW_NOT_AVAILABLE\");",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -2484,7 +2492,7 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST recommendation missing required reason - 422",
+                                      "name":  "POST unavailable staff correction without reason - 409",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -2517,7 +2525,7 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Requires an application still in UNDER_REVIEW or RETURNED_TO_REVIEW to reach domain reason validation before status validation.",
+                                                      "description":  "The unavailable revision-workflow gate takes precedence over action-specific reason validation and creates no durable effects.",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "{\n  \"action\": \"REQUEST_STAFF_CORRECTION\"\n}",
@@ -2537,12 +2545,12 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\"Status is 422\", function () {",
-                                                                                    "    pm.response.to.have.status(422);",
+                                                                                    "pm.test(\"Status is 409\", function () {",
+                                                                                    "    pm.response.to.have.status(409);",
                                                                                     "});",
-                                                                                    "pm.test(\"Reason is required\", function () {",
+                                                                                    "pm.test(\"Revision workflow is unavailable\", function () {",
                                                                                     "    const json = pm.response.json();",
-                                                                                    "    pm.expect(json.errorCode).to.eql(\"RECOMMENDATION_REASON_REQUIRED\");",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"REVISION_WORKFLOW_NOT_AVAILABLE\");",
                                                                                     "});"
                                                                                 ]
                                                                    }

@@ -17,6 +17,7 @@ import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayload;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +61,7 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
         Objects.requireNonNull(request, "request must not be null");
         Objects.requireNonNull(request.action(), "action must not be null");
+        rejectUnavailableRevisionAction(request);
 
         AuthenticatedUser currentUser = currentUserProvider.currentUser();
         LocalDateTime now = LocalDateTime.now(clock);
@@ -95,5 +97,17 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
         reviewRecommendationEventPublisher.publish(approvalMapper.toRecordedEvent(savedRecommendation, operationContext));
 
         return approvalMapper.toDto(savedRecommendation);
+    }
+
+    private void rejectUnavailableRevisionAction(ReviewRecommendationRequest request) {
+        switch (request.action()) {
+            case RETURN_TO_CUSTOMER_REVISION, REQUEST_STAFF_CORRECTION ->
+                    throw new BusinessStateConflictException(
+                            "REVISION_WORKFLOW_NOT_AVAILABLE",
+                            "Customer and staff correction workflows are not available yet."
+                    );
+            default -> {
+            }
+        }
     }
 }

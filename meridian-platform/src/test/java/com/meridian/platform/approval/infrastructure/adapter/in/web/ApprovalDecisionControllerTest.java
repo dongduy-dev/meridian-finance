@@ -4,6 +4,7 @@ import com.meridian.platform.approval.application.dto.ApprovalDecisionDto;
 import com.meridian.platform.approval.application.dto.ApprovalDecisionRequest;
 import com.meridian.platform.approval.application.port.in.SubmitApprovalDecisionUseCase;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.infrastructure.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -83,6 +84,25 @@ class ApprovalDecisionControllerTest {
                                 """))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.errorCode").value("APPROVAL_DECISION_REASON_REQUIRED"));
+    }
+
+    @Test
+    void returnsConflictForUnavailableRevisionAction() throws Exception {
+        useCase.failure = new BusinessStateConflictException(
+                "REVISION_WORKFLOW_NOT_AVAILABLE",
+                "Customer and staff correction workflows are not available yet."
+        );
+
+        mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/approval-decisions", LOAN_APPLICATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "action": "REQUEST_CUSTOMER_OR_STAFF_CORRECTION",
+                                  "reason": "Correction required."
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("REVISION_WORKFLOW_NOT_AVAILABLE"));
     }
 
     private static class StubUseCase implements SubmitApprovalDecisionUseCase {
