@@ -229,8 +229,10 @@ Continue implementation in vertical slices:
 1. Loan officer review/recommendation. Done.
 2. Approval decision. Done.
 3. Salary Advance approved offer and customer acceptance. Done.
-4. Manual disbursement confirmation. Deferred.
-5. Loan account activation. Deferred.
+4. Document/correction readiness through `MER-FU-012` and `MER-FU-031`. Deferred.
+5. Contract readiness. Deferred.
+6. Manual disbursement confirmation and LoanAccount activation. Deferred.
+
 ### MER-FU-011 - Implement repayment tracking
 
 Area: Loan / Repayment
@@ -265,7 +267,7 @@ Problem:
 Docs describe documents/checklists/OCR, but implementation is not present.
 
 Recommendation:
-Implement after core Salary Advance lifecycle is stable.
+Implement after core Salary Advance lifecycle is stable. Coordinate checklist rejection, replacement, and clarification behavior with the complete correction/resubmission workflow in `MER-FU-031`; do not expose revision actions before that continuation exists.
 
 ### MER-FU-013 - Implement audit trail and Loan Application lifecycle history
 
@@ -612,11 +614,11 @@ When application/disbursement snapshot behavior is implemented, add a non-circul
 Suggested future branch name:
 `feature/customer-loan-status-mutation-policy`
 
-### MER-FU-031 - Implement the complete customer and staff revision workflow
+### MER-FU-031 - Implement Loan correction and resubmission workflow
 
-Area: Approval / Loan / Customer / Document / Audit
+Area: Loan / Approval / Document / Customer correction
 
-Type: Deferred feature
+Type: Deferred workflow
 
 Priority: P1
 
@@ -635,16 +637,27 @@ The target `RETURNED_FOR_REVISION` state has no complete executable continuation
 Recommendation:
 Implement the revision lifecycle as one complete slice: persist the source recommendation/decision, correction reasons and responsible party; expose ownership-checked customer/staff work queues and permitted correction/document actions; preserve or version immutable submitted evidence; revalidate readiness, employment evidence, product rules, blocking applications, and Salary Advance reservation invariants on resubmission; transition with history and PII-safe audit to `VERIFICATION_PENDING`, `DOCUMENTS_PENDING`, or `UNDER_REVIEW` according to an explicit correction-type rule; and define recommendation/decision supersession semantics.
 
+Required scope:
+
+- define Customer, Loan Officer, or authorized-staff ownership for each correction reason and the fields each actor may edit;
+- define document clarification, replacement, and review behavior;
+- define whether requested amount or term may change and how reservation increase, decrease, or release is handled;
+- define when employee verification, Customer readiness, product policy, and limit snapshots must be refreshed;
+- define a guarded resubmission command and the state selected after correction;
+- preserve maker-checker controls and enforce ownership and permissions;
+- record lifecycle history and PII-safe business audit;
+- prove rollback, idempotency, and concurrency behavior before re-enabling the gated actions.
+
 Required proof:
 Add domain, service, controller/security, PostgreSQL rollback, idempotency, and concurrency tests covering each entry action, authorized correction, rejected unauthorized/stale correction, resubmission, history/audit, snapshot behavior, and no duplicate reservation or financial effect.
 
 Suggested future branch name:
-`feature/salary-advance-revision-workflow`
+`feature/loan-revision-correction-workflow`
 
 ## Recommended Next Roadmap
 
-1. Review/merge the completed Salary Advance approved-offer and customer-acceptance slice.
-2. Continue with manual disbursement and loan account activation.
-3. Add repayment tracking.
-4. Extend audit trail coverage to future modules and workflow slices.
-5. Add document checklist/manual review/OCR.
+1. Review/merge the Salary Advance critical-path stabilization checkpoint.
+2. Implement document checklist and correction/revision readiness through `MER-FU-012` and `MER-FU-031`.
+3. Implement contract readiness.
+4. Implement manual disbursement and LoanAccount activation.
+5. Implement repayment, settlement, and closure.

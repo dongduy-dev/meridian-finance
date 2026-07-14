@@ -187,6 +187,11 @@
                          "key":  "approvedOfferStatus",
                          "value":  "",
                          "type":  "string"
+                     },
+                     {
+                         "key":  "persistedExpiredLoanApplicationId",
+                         "value":  "",
+                         "type":  "string"
                      }
                  ],
     "item":  [
@@ -2048,6 +2053,72 @@
                                                 ]
                                   },
                                   {
+                                      "name":  "POST request customer or staff correction unavailable - 409",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/approval-decisions",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "approval-decisions"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{approverAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Target-state approval correction action currently gated before decision, audit, event, history, or Loan status effects (MER-FU-031).",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"action\": \"REQUEST_CUSTOMER_OR_STAFF_CORRECTION\",\n  \"reason\": \"Customer or staff correction is required before approval.\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 409\", function () {",
+                                                                                    "    pm.response.to.have.status(409);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Revision workflow is unavailable\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"REVISION_WORKFLOW_NOT_AVAILABLE\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
                                       "name":  "GET approved offer as customer",
                                       "request":  {
                                                       "method":  "GET",
@@ -2131,7 +2202,7 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Accepts pending approved offer and moves application toward contract preparation. If the offer expired at action time, API returns 409 OFFER_EXPIRED after committing expiry.",
+                                                      "description":  "Accepts a pending approved offer and moves the application toward contract preparation. Any expired offer returns 409 OFFER_EXPIRED; first discovery commits expiry and release, while persisted expiry produces no additional effects.",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "",
@@ -2219,6 +2290,81 @@
                                                                                     "const json = pm.response.json();",
                                                                                     "if (pm.response.code === 200) { pm.expect(json.status).to.eql(\"DECLINED\"); }",
                                                                                     "if (pm.response.code === 409) { pm.expect([\"OFFER_EXPIRED\", \"OFFER_ACTION_CONFLICT\"]).to.include(json.errorCode); }"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST accept persisted scheduler-expired offer - 409",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{persistedExpiredLoanApplicationId}}/approved-offer/accept",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{persistedExpiredLoanApplicationId}}",
+                                                                               "approved-offer",
+                                                                               "accept"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Optional manual fixture check. Set persistedExpiredLoanApplicationId to a customer-owned application whose offer and application were already expired by scheduled processing. The response must be 409 OFFER_EXPIRED without another release or terminal effect.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "if (!pm.collectionVariables.get(\"persistedExpiredLoanApplicationId\")) {",
+                                                                                    "    console.warn(\"Set persistedExpiredLoanApplicationId to run the persisted-expiry fixture check.\");",
+                                                                                    "    pm.execution.skipRequest();",
+                                                                                    "}"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 409\", function () {",
+                                                                                    "    pm.response.to.have.status(409);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Persisted expiry uses the stable error contract\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"OFFER_EXPIRED\");",
+                                                                                    "});"
                                                                                 ]
                                                                    }
                                                     }

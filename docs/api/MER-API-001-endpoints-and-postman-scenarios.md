@@ -25,8 +25,8 @@ Current security posture comes from `SecurityConfig`: health, login, and loan pr
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review-recommendations` | Bearer + `approval:recommend` | `ReviewRecommendationController` | Record the authenticated Loan Officer recommendation and trigger Loan-owned status transition. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approval-decisions` | Bearer + `approval:decide` | `ApprovalDecisionController` | Record the authenticated Approver decision and trigger Loan-owned final/return status transition. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/approved-offer` | Bearer + `loan:read:own` | `ApprovedOfferController` | View the authenticated customer's approved offer without mutating expiry, status, or financial movements. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept` | Bearer + `loan:offer:respond:own` | `ApprovedOfferController` | Accept the authenticated customer's pending approved offer and move the application to `CONTRACT_PENDING`; expired offers commit expiry and return `409 OFFER_EXPIRED`. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/decline` | Bearer + `loan:offer:respond:own` | `ApprovedOfferController` | Decline the authenticated customer's pending approved offer, move the application to `CUSTOMER_DECLINED`, and release Salary Advance reservation exactly once. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept` | Bearer + `loan:offer:respond:own` | `ApprovedOfferController` | Accept the authenticated customer's pending approved offer and move the application to `CONTRACT_PENDING`; any expired offer returns `409 OFFER_EXPIRED`, with effects only when the action first discovers expiry. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/decline` | Bearer + `loan:offer:respond:own` | `ApprovedOfferController` | Decline the authenticated customer's pending approved offer and release reservation exactly once; any expired offer returns `409 OFFER_EXPIRED`, with no duplicate effect for persisted expiry. |
 
 ## Authentication
 
@@ -202,18 +202,21 @@ Expected high-value checks:
 | Start Loan Officer review | `200`, `UNDER_REVIEW`. |
 | Recommendation without `approval:recommend` | `403`, `ACCESS_DENIED`. |
 | Recommendation missing required reason | `422`, `RECOMMENDATION_REASON_REQUIRED`. |
-| Recommendation happy path | `201`, recommendation recorded, Loan status moves to `APPROVAL_PENDING` or `RETURNED_FOR_REVISION`. |
+| Recommendation happy path | `201`, recommendation recorded, Loan status moves to `APPROVAL_PENDING`. |
+| Gated review revision/correction action | `409`, `REVISION_WORKFLOW_NOT_AVAILABLE`, with no recommendation, audit, event, history, or Loan status effect. |
 | Approval decision without `approval:decide` | `403`, `ACCESS_DENIED`. |
 | Approval decision maker-checker violation | `422`, `MAKER_CHECKER_VIOLATION`. |
 | Approval decision reject path | `201`, decision recorded, Loan status moves to `REJECTED`, Salary Advance reservation is released. |
 | Approval decision approve path | `201`, Salary Advance decision recorded, approved offer generated, Loan status moves to `CUSTOMER_ACCEPTANCE_PENDING`. |
+| Gated approval correction action | `409`, `REVISION_WORKFLOW_NOT_AVAILABLE`, with no decision, audit, event, history, or Loan status effect. |
 | Customer approved-offer view | `200`, customer-facing offer includes immutable terms, provisional repayment items, and available actions while pending. |
 | Customer approved-offer accept | `200`, offer status `ACCEPTED`, application moves to `CONTRACT_PENDING`. |
 | Customer approved-offer decline | `200`, offer status `DECLINED`, application moves to `CUSTOMER_DECLINED`, reservation released exactly once. |
-| Expired offer accept/decline | `409`, `OFFER_EXPIRED`, expiry state and release are committed before the response. |
+| Expired offer accept/decline | `409`, `OFFER_EXPIRED`; discovery of pending expiry commits expiry and exact-once release before the response, while an already persisted expiry produces no additional writes or release. |
 | Duplicate Salary Advance for same authenticated customer, including concurrent submissions through different verified employee links | `409`, `BLOCKING_APPLICATION_EXISTS`; one complete winner remains. |
 
 Notes:
 
 - Customer-owned endpoints now derive customer identity from the authenticated token.
 - Refresh tokens, logout invalidation, and broader customer ownership hardening remain deferred IAM follow-ups.
+- The optional Postman persisted-expiry check skips unless `persistedExpiredLoanApplicationId` is set to a customer-owned application already expired by scheduled processing.

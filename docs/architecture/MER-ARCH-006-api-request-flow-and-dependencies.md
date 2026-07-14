@@ -280,7 +280,7 @@ Request fields:
 | Field | Notes |
 | --- | --- |
 | `customerPartnerEmployeeLinkId` | Reusable verified employee-link reference. |
-| `requestedAmount` | Requested Salary Advance amount. |
+| `requestedAmount` | Requested Salary Advance amount; must be mathematically whole VND, while scale-only trailing zeros remain valid. |
 | `requestedTermMonths` | Requested term, currently validated by Salary Advance policy. |
 
 Response fields:
@@ -296,6 +296,17 @@ PII behavior:
 
 - The response does not expose Partner Employee salary, identity reference, employee code, bank account data, or raw evidence.
 - Limit snapshots are retained because they explain the lending decision and reservation state for the application.
+
+Concurrency and conflict contract:
+
+1. Acquire the transaction-scoped customer/product advisory lock.
+2. Perform the authoritative blocking-application check.
+3. Load and calculate Partner eligibility.
+4. Acquire the existing customer/employee-link advisory lock.
+5. Repeat the blocking check defensively.
+6. Lock or initialize the Salary Advance limit and perform reservation/application writes.
+
+The V11 `uq_loan_applications_customer_product_active` partial unique index remains the database authority. Only SQLSTATE `23505` naming that exact index is translated to `409 BLOCKING_APPLICATION_EXISTS`; unrelated integrity violations are rethrown.
 
 ```mermaid
 flowchart LR
