@@ -259,6 +259,26 @@ class StartSalaryAdvanceApplicationServiceTest {
     }
 
     @Test
+    void rejectsFractionalVndBeforeAnyLoanWorkflowPersistence() {
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.startSalaryAdvanceApplication(request(new BigDecimal("3000000.50"), 1))
+        );
+
+        assertEquals("INVALID_PRODUCT_AMOUNT", exception.getErrorCode());
+        assertEquals("Requested amount must be a whole VND amount.", exception.getMessage());
+        assertEquals(0, loanApplicationRepository.existsChecks);
+        assertEquals(0, partnerEligibilityPort.findCalls);
+        assertFalse(salaryAdvanceLimitRepository.lockAcquired);
+        assertTrue(loanApplicationRepository.savedApplications.isEmpty());
+        assertTrue(salaryAdvanceLimitRepository.currentLimit.isEmpty());
+        assertTrue(salaryAdvanceLimitMovementRepository.savedMovements.isEmpty());
+        assertTrue(salaryAdvanceVerificationRepository.savedVerification == null);
+        assertTrue(transitionRepository.savedTransitions.isEmpty());
+        assertTrue(auditPublisher.publishedEvents.isEmpty());
+    }
+
+    @Test
     void failsWhenEmployeeConfiguredLimitIsInsufficient() {
         partnerEligibilityPort.snapshot = Optional.of(verifiedPartnerSnapshot(limit(2_000_000)));
 

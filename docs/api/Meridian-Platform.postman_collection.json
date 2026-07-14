@@ -1446,6 +1446,72 @@
                      "name":  "05 Loan Application - Salary Advance",
                      "item":  [
                                   {
+                                      "name":  "POST /api/v1/loan-applications/salary-advance - fractional VND rejected",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/salary-advance",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "salary-advance"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Verifies that a non-zero fractional VND amount is rejected before any Salary Advance workflow persistence.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\",\n  \"requestedAmount\": 3000000.50,\n  \"requestedTermMonths\": 1\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 422\", function () {",
+                                                                                    "    pm.response.to.have.status(422);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Fractional VND is rejected by product policy\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.errorCode).to.eql(\"INVALID_PRODUCT_AMOUNT\");",
+                                                                                    "    pm.expect(json.message).to.eql(\"Requested amount must be a whole VND amount.\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
                                       "name":  "POST /api/v1/loan-applications/salary-advance - happy path",
                                       "request":  {
                                                       "method":  "POST",

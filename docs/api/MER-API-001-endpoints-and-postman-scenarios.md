@@ -194,6 +194,7 @@ Expected high-value checks:
 | Customer missing employee evidence | `200`, `PENDING_MANUAL_REVIEW`. |
 | Salary Advance with missing link | `422`, `EMPLOYEE_NOT_VERIFIED`. |
 | Salary Advance below minimum amount | `422`, `INVALID_PRODUCT_AMOUNT`. |
+| Salary Advance fractional VND amount | `422`, `INVALID_PRODUCT_AMOUNT`; mathematically whole values such as `3000000`, `3000000.0`, and `3000000.00` remain valid. |
 | Salary Advance happy path | `201`, `SUBMITTED`, limit reserved. |
 | Start Loan Officer review | `200`, `UNDER_REVIEW`. |
 | Recommendation without `approval:recommend` | `403`, `ACCESS_DENIED`. |

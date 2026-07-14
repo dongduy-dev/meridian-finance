@@ -49,6 +49,13 @@ public class SalaryAdvanceApplicationPolicy {
             );
         }
 
+        if (requestedAmount.remainder(BigDecimal.ONE).compareTo(ZERO) != 0) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_PRODUCT_AMOUNT",
+                    "Requested amount must be a whole VND amount."
+            );
+        }
+
         if (requestedAmount.compareTo(loanProduct.minAmount()) < 0
                 || requestedAmount.compareTo(loanProduct.maxAmount()) > 0) {
             throw new BusinessRuleViolationException(
