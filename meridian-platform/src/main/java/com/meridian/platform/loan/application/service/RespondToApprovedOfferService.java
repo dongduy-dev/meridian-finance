@@ -100,6 +100,12 @@ public class RespondToApprovedOfferService implements RespondToApprovedOfferUseC
         if (isIdempotentCurrentResult(approvedOffer, action)) {
             return success(approvedOffer, now);
         }
+        if (approvedOffer.status() == ApprovedOfferStatus.EXPIRED) {
+            return new ApprovedOfferActionResult(
+                    ApprovedOfferActionOutcome.EXPIRED,
+                    approvedOfferMapper.toDto(approvedOffer, now)
+            );
+        }
         if (approvedOffer.status() != ApprovedOfferStatus.PENDING) {
             throw offerActionConflict();
         }
