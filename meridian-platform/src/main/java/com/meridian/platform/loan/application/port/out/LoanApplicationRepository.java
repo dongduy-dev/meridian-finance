@@ -9,6 +9,8 @@ import java.util.Set;
 import java.util.UUID;
 
 public interface LoanApplicationRepository {
+    void acquireWorkflowLock(UUID loanApplicationId);
+
     void acquireCustomerProductLock(UUID customerId, ProductCode productCode);
 
     LoanApplication save(LoanApplication loanApplication);

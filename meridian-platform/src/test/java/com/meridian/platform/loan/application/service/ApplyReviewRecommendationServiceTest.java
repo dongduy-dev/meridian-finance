@@ -2,6 +2,7 @@ package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.dto.ApplyReviewRecommendationCommand;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
@@ -11,6 +12,7 @@ import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -35,15 +37,18 @@ class ApplyReviewRecommendationServiceTest {
     private static final LocalDateTime RECOMMENDED_AT = LocalDateTime.of(2026, 7, 6, 9, 0);
 
     private FakeLoanApplicationRepository loanApplicationRepository;
+    private ReadyDocumentChecklistPort documentChecklistPort;
     private FakeLoanApplicationStatusTransitionRepository transitionRepository;
     private ApplyReviewRecommendationService service;
 
     @BeforeEach
     void setUp() {
         loanApplicationRepository = new FakeLoanApplicationRepository();
+        documentChecklistPort = new ReadyDocumentChecklistPort();
         transitionRepository = new FakeLoanApplicationStatusTransitionRepository();
         service = new ApplyReviewRecommendationService(
                 loanApplicationRepository,
+                documentChecklistPort,
                 new LoanApplicationStatusTransitionRecorder(transitionRepository)
         );
     }
@@ -55,6 +60,18 @@ class ApplyReviewRecommendationServiceTest {
         assertEquals(LoanApplicationStatus.APPROVAL_PENDING, loanApplicationRepository.savedApplication.status());
         assertEquals(1, transitionRepository.savedTransitions.size());
         assertEquals(LOAN_OFFICER_USER_ID, transitionRepository.savedTransitions.getFirst().actorUserId());
+    }
+
+    @Test
+    void rejectsRecommendationWhileDocumentsAreNotProcessingReady() {
+        documentChecklistPort.processingReady = false;
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.applyReviewRecommendation(command(validContext()))
+        );
+
+        assertEquals("LOAN_REVIEW_DOCUMENTS_NOT_READY", exception.getErrorCode());
+        assertNull(loanApplicationRepository.savedApplication);
     }
 
     @Test
@@ -135,7 +152,34 @@ class ApplyReviewRecommendationServiceTest {
         );
     }
 
+    private static class ReadyDocumentChecklistPort implements LoanDocumentChecklistPort {
+
+        private boolean processingReady = true;
+
+        @Override
+        public SubmissionChecklistInitialState resolveSubmissionInitialState(ProductCode productCode) {
+            return new SubmissionChecklistInitialState(true);
+        }
+
+        @Override
+        public void createSubmissionChecklist(
+                UUID loanApplicationId,
+                ProductCode productCode,
+                BusinessOperationContext operationContext
+        ) {
+        }
+
+        @Override
+        public boolean isProcessingReady(UUID loanApplicationId) {
+            return processingReady;
+        }
+    }
+
     private static class FakeLoanApplicationRepository implements LoanApplicationRepository {
+        @Override
+        public void acquireWorkflowLock(UUID loanApplicationId) {
+        }
+
 
         @Override
         public void acquireCustomerProductLock(UUID customerId, ProductCode productCode) {

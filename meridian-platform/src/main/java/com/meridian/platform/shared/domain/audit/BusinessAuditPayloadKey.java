@@ -17,7 +17,13 @@ public enum BusinessAuditPayloadKey {
     APPROVAL_DECISION_ACTION("approvalDecisionAction", ValueType.CODE),
     OFFER_STATUS("offerStatus", ValueType.CODE),
     EXPIRY_DISCOVERY_TRIGGER("expiryDiscoveryTrigger", ValueType.CODE),
-    RESERVATION_RELEASE_TRIGGER("reservationReleaseTrigger", ValueType.CODE);
+    RESERVATION_RELEASE_TRIGGER("reservationReleaseTrigger", ValueType.CODE),
+    DOCUMENT_CHECKLIST_ID("documentChecklistId", ValueType.UUID),
+    DOCUMENT_CHECKLIST_ITEM_ID("documentChecklistItemId", ValueType.UUID),
+    DOCUMENT_VERSION_ID("documentVersionId", ValueType.UUID),
+    DOCUMENT_TYPE("documentType", ValueType.CODE),
+    DOCUMENT_REVIEW_OUTCOME("documentReviewOutcome", ValueType.CODE),
+    WAIVER_REASON_CODE("waiverReasonCode", ValueType.CODE);
 
     private final String jsonName;
     private final ValueType valueType;

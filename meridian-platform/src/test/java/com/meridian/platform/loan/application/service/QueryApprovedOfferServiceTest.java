@@ -157,6 +157,10 @@ class QueryApprovedOfferServiceTest {
     }
 
     private static class FakeLoanApplicationRepository implements LoanApplicationRepository {
+        @Override
+        public void acquireWorkflowLock(UUID loanApplicationId) {
+        }
+
 
         @Override
         public void acquireCustomerProductLock(UUID customerId, ProductCode productCode) {
