@@ -1,5 +1,6 @@
 package com.meridian.platform.approval.infrastructure.adapter.out.persistence;
 
+import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
 import com.meridian.platform.approval.domain.model.ReviewRecommendation;
 import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
 import jakarta.persistence.Column;
@@ -23,6 +24,9 @@ public class ReviewRecommendationJpaEntity {
     @Column(name = "loan_application_id", nullable = false)
     private UUID loanApplicationId;
 
+    @Column(name = "review_cycle_id", nullable = false)
+    private UUID reviewCycleId;
+
     @Column(name = "loan_officer_user_id", nullable = false)
     private UUID loanOfficerUserId;
 
@@ -32,6 +36,10 @@ public class ReviewRecommendationJpaEntity {
 
     @Column(name = "reason")
     private String reason;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reason_code")
+    private CorrectionReasonCode reasonCode;
 
     @Column(name = "internal_notes")
     private String internalNotes;
@@ -48,9 +56,11 @@ public class ReviewRecommendationJpaEntity {
     public ReviewRecommendationJpaEntity(ReviewRecommendation recommendation) {
         this.id = recommendation.id();
         this.loanApplicationId = recommendation.loanApplicationId();
+        this.reviewCycleId = recommendation.reviewCycleId();
         this.loanOfficerUserId = recommendation.loanOfficerUserId();
         this.recommendation = recommendation.action();
         this.reason = recommendation.reason();
+        this.reasonCode = recommendation.reasonCode();
         this.internalNotes = recommendation.internalNotes();
         this.submittedAt = recommendation.submittedAt();
         this.createdAt = LocalDateTime.now();
@@ -60,9 +70,11 @@ public class ReviewRecommendationJpaEntity {
         return new ReviewRecommendation(
                 id,
                 loanApplicationId,
+                reviewCycleId,
                 loanOfficerUserId,
                 recommendation,
                 reason,
+                reasonCode,
                 internalNotes,
                 submittedAt
         );

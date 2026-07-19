@@ -1,10 +1,13 @@
 package com.meridian.platform.document.application.service;
 
 import com.meridian.platform.document.application.port.out.DocumentChecklistRepository;
+import com.meridian.platform.document.application.port.out.DocumentRepository;
 import com.meridian.platform.document.domain.model.DocumentChecklist;
 import com.meridian.platform.document.domain.model.DocumentChecklistItem;
 import com.meridian.platform.document.domain.model.DocumentChecklistReadiness;
 import com.meridian.platform.document.domain.model.DocumentChecklistStage;
+import com.meridian.platform.document.domain.model.DocumentRequirementStatus;
+import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
@@ -16,6 +19,7 @@ import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayload;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -26,15 +30,18 @@ import java.util.UUID;
 public class DocumentChecklistService implements LoanDocumentChecklistPort {
 
     private final DocumentChecklistRepository checklistRepository;
+    private final DocumentRepository documentRepository;
     private final SalaryAdvanceDocumentChecklistResolver checklistResolver;
     private final BusinessAuditPublisher businessAuditPublisher;
 
     public DocumentChecklistService(
             DocumentChecklistRepository checklistRepository,
+            DocumentRepository documentRepository,
             SalaryAdvanceDocumentChecklistResolver checklistResolver,
             BusinessAuditPublisher businessAuditPublisher
     ) {
         this.checklistRepository = checklistRepository;
+        this.documentRepository = documentRepository;
         this.checklistResolver = checklistResolver;
         this.businessAuditPublisher = businessAuditPublisher;
     }
@@ -102,5 +109,112 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
                 DocumentChecklistStage.SUBMISSION
         );
         return readiness.processingReady();
+    }
+
+    @Override
+    public ChecklistReadinessSnapshot readiness(UUID loanApplicationId) {
+        requireChecklist(loanApplicationId);
+        DocumentChecklistReadiness readiness = checklistRepository.findReadiness(
+                loanApplicationId, DocumentChecklistStage.SUBMISSION
+        );
+        return new ChecklistReadinessSnapshot(readiness.uploadComplete(), readiness.processingReady());
+    }
+
+    @Override
+    public UUID createRequiredItem(
+            UUID loanApplicationId,
+            DocumentType documentType,
+            BusinessOperationContext operationContext
+    ) {
+        DocumentChecklist checklist = requireChecklist(loanApplicationId);
+        if (checklist.items().stream().anyMatch(item -> item.documentType() == documentType)) {
+            throw new BusinessStateConflictException(
+                    "DOCUMENT_CHECKLIST_ITEM_EXISTS",
+                    "The requested document checklist item already exists; use replacement instead."
+            );
+        }
+        DocumentChecklistItem item = checklistRepository.saveItem(new DocumentChecklistItem(
+                UUID.randomUUID(),
+                checklist.id(),
+                documentType,
+                DocumentRequirementStatus.REQUIRED,
+                null,
+                operationContext.occurredAt(),
+                operationContext.occurredAt()
+        ));
+        businessAuditPublisher.publish(BusinessAuditEvent.single(
+                operationContext,
+                new BusinessAuditEntry(
+                        BusinessAuditAction.DOCUMENT_CHECKLIST_ITEM_CREATED,
+                        BusinessAuditEntityType.DOCUMENT_CHECKLIST_ITEM,
+                        item.id(),
+                        BusinessAuditPayload.builder()
+                                .put(BusinessAuditPayloadKey.LOAN_APPLICATION_ID, loanApplicationId)
+                                .put(BusinessAuditPayloadKey.DOCUMENT_CHECKLIST_ITEM_ID, item.id())
+                                .put(BusinessAuditPayloadKey.DOCUMENT_TYPE, item.documentType())
+                                .build()
+                )
+        ));
+        return item.id();
+    }
+
+    @Override
+    public UUID requireCurrentVersion(UUID loanApplicationId, UUID checklistItemId) {
+        requireOwnedItem(loanApplicationId, checklistItemId);
+        return documentRepository.findDocumentByChecklistItemId(checklistItemId)
+                .filter(document -> document.currentVersionId() != null)
+                .map(document -> document.currentVersionId())
+                .orElseThrow(() -> new BusinessStateConflictException(
+                        "DOCUMENT_UPLOAD_REQUIRED",
+                        "A current document upload is required."
+                ));
+    }
+
+    @Override
+    public void requireCurrentVersion(
+            UUID loanApplicationId,
+            UUID checklistItemId,
+            UUID expectedVersionId
+    ) {
+        UUID currentVersionId = requireCurrentVersion(loanApplicationId, checklistItemId);
+        if (!currentVersionId.equals(expectedVersionId)) {
+            throw new BusinessStateConflictException(
+                    "STALE_DOCUMENT_VERSION",
+                    "The expected document version is no longer current."
+            );
+        }
+    }
+
+    @Override
+    public boolean hasCurrentVersionDifferentFrom(UUID checklistItemId, UUID baselineVersionId) {
+        return documentRepository.findDocumentByChecklistItemId(checklistItemId)
+                .map(document -> document.currentVersionId() != null
+                        && !document.currentVersionId().equals(baselineVersionId))
+                .orElse(false);
+    }
+
+    private DocumentChecklist requireChecklist(UUID loanApplicationId) {
+        return checklistRepository.findByLoanApplicationIdAndStage(
+                loanApplicationId, DocumentChecklistStage.SUBMISSION
+        ).orElseThrow(() -> new EntityNotFoundException(
+                "DOCUMENT_CHECKLIST_NOT_FOUND",
+                "Document checklist was not found."
+        ));
+    }
+
+    private DocumentChecklistItem requireOwnedItem(UUID loanApplicationId, UUID checklistItemId) {
+        DocumentChecklist checklist = requireChecklist(loanApplicationId);
+        DocumentChecklistItem item = checklistRepository.findItemById(checklistItemId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "DOCUMENT_CHECKLIST_ITEM_NOT_FOUND",
+                        "Document checklist item was not found."
+                ));
+        if (!item.checklistId().equals(checklist.id())) {
+            throw new BusinessStateConflictException(
+                    "DOCUMENT_CHECKLIST_ITEM_MISMATCH",
+                    "Document checklist item does not belong to the Loan Application."
+            );
+        }
+        return item;
     }
 }

@@ -27,7 +27,7 @@ public class SalaryAdvanceVerificationRepositoryAdapter implements SalaryAdvance
 
     @Override
     public Optional<SalaryAdvanceVerification> findByLoanApplicationId(UUID loanApplicationId) {
-        return jpaSalaryAdvanceVerificationRepository.findByLoanApplicationId(loanApplicationId)
+        return jpaSalaryAdvanceVerificationRepository.findFirstByLoanApplicationIdOrderByVerificationSequenceDesc(loanApplicationId)
                 .map(this::toDomain);
     }
 
@@ -35,6 +35,8 @@ public class SalaryAdvanceVerificationRepositoryAdapter implements SalaryAdvance
         return new SalaryAdvanceVerification(
                 entity.getId(),
                 entity.getLoanApplicationId(),
+                entity.getVerificationSequence(),
+                entity.getCorrectionRequestId(),
                 entity.getCustomerId(),
                 entity.getCustomerPartnerEmployeeLinkId(),
                 entity.getSalaryAdvanceLimitId(),

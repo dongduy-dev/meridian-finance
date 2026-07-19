@@ -45,7 +45,7 @@ class DocumentFoundationV22PostgreSqlIntegrationTest {
             migrateTo(schema, "21");
             UUID applicationId = insertLoanApplication(schema);
 
-            assertEquals(1, migrateLatest(schema));
+            assertEquals(1, migrateV22(schema));
             UUID checklistId = jdbcTemplate.queryForObject(
                     "SELECT id FROM " + schema + ".document_checklists WHERE loan_application_id = ?",
                     UUID.class,
@@ -130,12 +130,13 @@ class DocumentFoundationV22PostgreSqlIntegrationTest {
                 .migrate();
     }
 
-    private int migrateLatest(String schema) {
+    private int migrateV22(String schema) {
         return Flyway.configure()
                 .dataSource(dataSource)
                 .schemas(schema)
                 .defaultSchema(schema)
                 .locations("classpath:db/migration")
+                .target("22")
                 .load()
                 .migrate()
                 .migrationsExecuted;

@@ -4,7 +4,9 @@ import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
+import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
@@ -29,6 +31,7 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
 
     private final LoanApplicationRepository loanApplicationRepository;
     private final LoanDocumentChecklistPort documentChecklistPort;
+    private final LoanReviewCycleRepository reviewCycleRepository;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
     private final BusinessAuditPublisher businessAuditPublisher;
     private final CurrentUserProvider currentUserProvider;
@@ -37,6 +40,7 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
     public StartLoanApplicationReviewService(
             LoanApplicationRepository loanApplicationRepository,
             LoanDocumentChecklistPort documentChecklistPort,
+            LoanReviewCycleRepository reviewCycleRepository,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
             BusinessAuditPublisher businessAuditPublisher,
             CurrentUserProvider currentUserProvider,
@@ -44,6 +48,7 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
     ) {
         this.loanApplicationRepository = loanApplicationRepository;
         this.documentChecklistPort = documentChecklistPort;
+        this.reviewCycleRepository = reviewCycleRepository;
         this.transitionRecorder = transitionRecorder;
         this.businessAuditPublisher = businessAuditPublisher;
         this.currentUserProvider = currentUserProvider;
@@ -78,6 +83,14 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
 
         LoanApplicationTransitionResult transition = loanApplication.startReview();
         LoanApplication savedApplication = loanApplicationRepository.save(transition.loanApplication());
+        LoanApplicationReviewCycle reviewCycle = reviewCycleRepository.save(
+                LoanApplicationReviewCycle.active(
+                        UUID.randomUUID(),
+                        savedApplication.id(),
+                        reviewCycleRepository.nextCycleNumber(savedApplication.id()),
+                        operationContext.occurredAt()
+                )
+        );
         transitionRecorder.record(operationContext, transition.facts(), null);
         businessAuditPublisher.publish(BusinessAuditEvent.single(
                 operationContext,
@@ -87,10 +100,27 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
                         savedApplication.id()
                 )
         ));
+        businessAuditPublisher.publish(BusinessAuditEvent.single(
+                operationContext,
+                new BusinessAuditEntry(
+                        BusinessAuditAction.REVIEW_CYCLE_CREATED,
+                        BusinessAuditEntityType.LOAN_REVIEW_CYCLE,
+                        reviewCycle.id(),
+                        com.meridian.platform.shared.domain.audit.BusinessAuditPayload.builder()
+                                .put(com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey.LOAN_APPLICATION_ID,
+                                        savedApplication.id())
+                                .put(com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey.REVIEW_CYCLE_ID,
+                                        reviewCycle.id())
+                                .put(com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey.REVIEW_CYCLE_STATUS,
+                                        reviewCycle.status())
+                                .build()
+                )
+        ));
 
         return new LoanApplicationReviewDto(
                 savedApplication.id(),
-                savedApplication.status().name()
+                savedApplication.status().name(),
+                reviewCycle.id()
         );
     }
 }

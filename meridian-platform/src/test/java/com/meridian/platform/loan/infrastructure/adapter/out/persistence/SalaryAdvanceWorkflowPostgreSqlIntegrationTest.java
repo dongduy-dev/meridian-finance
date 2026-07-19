@@ -159,7 +159,7 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
         );
 
         List<String> auditActions = auditActions(loanApplicationId);
-        assertEquals(9, auditActions.size());
+        assertEquals(10, auditActions.size());
         assertEquals(
                 Set.of(
                         "SALARY_ADVANCE_APPLICATION_SUBMITTED",
@@ -167,6 +167,7 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
                         "SALARY_ADVANCE_LIMIT_INITIALIZED",
                         "SALARY_ADVANCE_LIMIT_RESERVED",
                         "LOAN_REVIEW_STARTED",
+                        "REVIEW_CYCLE_CREATED",
                         "REVIEW_RECOMMENDATION_RECORDED",
                         "APPROVAL_DECISION_RECORDED",
                         "APPROVED_OFFER_GENERATED",

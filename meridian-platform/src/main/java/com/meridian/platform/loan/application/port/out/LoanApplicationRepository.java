@@ -25,5 +25,14 @@ public interface LoanApplicationRepository {
             Set<LoanApplicationStatus> statuses
     );
 
+    default boolean existsByCustomerIdAndProductCodeAndStatusInExcludingApplication(
+            UUID customerId,
+            ProductCode productCode,
+            Set<LoanApplicationStatus> statuses,
+            UUID excludedLoanApplicationId
+    ) {
+        return existsByCustomerIdAndProductCodeAndStatusIn(customerId, productCode, statuses);
+    }
+
     long nextApplicationNumberSequence();
 }

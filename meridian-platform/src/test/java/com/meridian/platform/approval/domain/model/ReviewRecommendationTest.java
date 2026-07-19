@@ -47,17 +47,20 @@ class ReviewRecommendationTest {
     }
 
     @Test
-    void trimsReasonForReturnRecommendation() {
+    void usesControlledReasonForReturnRecommendation() {
         ReviewRecommendation recommendation = ReviewRecommendation.recorded(
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 UUID.randomUUID(),
+                UUID.randomUUID(),
                 ReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION,
-                "  missing document  ",
                 null,
+                CorrectionReasonCode.RECENT_PAYSLIP_REQUIRED,
+                "restricted note",
                 LocalDateTime.now()
         );
 
-        assertEquals("missing document", recommendation.reason());
+        assertNull(recommendation.reason());
+        assertEquals(CorrectionReasonCode.RECENT_PAYSLIP_REQUIRED, recommendation.reasonCode());
     }
 }

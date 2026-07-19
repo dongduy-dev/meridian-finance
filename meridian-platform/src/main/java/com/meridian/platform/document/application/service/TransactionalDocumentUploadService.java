@@ -7,6 +7,7 @@ import com.meridian.platform.document.application.port.out.DocumentChecklistRepo
 import com.meridian.platform.document.application.port.out.DocumentRepository;
 import com.meridian.platform.document.application.port.out.DocumentStoragePort;
 import com.meridian.platform.document.application.port.out.DocumentWorkflowEventPublisher;
+import com.meridian.platform.document.application.port.out.LoanDocumentCorrectionPort;
 import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
 import com.meridian.platform.document.application.port.out.StagedDocument;
 import com.meridian.platform.document.application.port.out.StoredObject;
@@ -48,6 +49,7 @@ public class TransactionalDocumentUploadService {
     private final DocumentChecklistRepository checklistRepository;
     private final DocumentRepository documentRepository;
     private final DocumentStoragePort storagePort;
+    private final LoanDocumentCorrectionPort correctionPort;
     private final DocumentWorkflowEventPublisher workflowEventPublisher;
     private final BusinessAuditPublisher auditPublisher;
     private final CurrentUserProvider currentUserProvider;
@@ -58,6 +60,7 @@ public class TransactionalDocumentUploadService {
             DocumentChecklistRepository checklistRepository,
             DocumentRepository documentRepository,
             DocumentStoragePort storagePort,
+            LoanDocumentCorrectionPort correctionPort,
             DocumentWorkflowEventPublisher workflowEventPublisher,
             BusinessAuditPublisher auditPublisher,
             CurrentUserProvider currentUserProvider,
@@ -67,6 +70,7 @@ public class TransactionalDocumentUploadService {
         this.checklistRepository = checklistRepository;
         this.documentRepository = documentRepository;
         this.storagePort = storagePort;
+        this.correctionPort = correctionPort;
         this.workflowEventPublisher = workflowEventPublisher;
         this.auditPublisher = auditPublisher;
         this.currentUserProvider = currentUserProvider;
@@ -134,6 +138,10 @@ public class TransactionalDocumentUploadService {
                 throw idempotencyReused();
             }
             return toDto(idempotent, item.id());
+        }
+        if (command.uploaderActorType() == DocumentUploaderActorType.CUSTOMER) {
+            correctionPort.authorizeCustomerUpload(
+                    command.loanApplicationId(), item.id(), command.expectedCurrentVersionId());
         }
 
         if (!Objects.equals(document.currentVersionId(), command.expectedCurrentVersionId())) {

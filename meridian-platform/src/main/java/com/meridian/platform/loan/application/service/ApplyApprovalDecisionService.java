@@ -5,9 +5,11 @@ import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.in.ApplyApprovalDecisionUseCase;
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyRepository;
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
 import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionFact;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
 import com.meridian.platform.loan.domain.model.LoanApprovalDecisionAction;
@@ -37,6 +39,7 @@ import java.util.UUID;
 public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCase {
 
     private final LoanApplicationRepository loanApplicationRepository;
+    private final LoanReviewCycleRepository reviewCycleRepository;
     private final ApprovedOfferRepository approvedOfferRepository;
     private final SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository;
     private final SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService;
@@ -46,6 +49,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
 
     public ApplyApprovalDecisionService(
             LoanApplicationRepository loanApplicationRepository,
+            LoanReviewCycleRepository reviewCycleRepository,
             ApprovedOfferRepository approvedOfferRepository,
             SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository,
             SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService,
@@ -53,6 +57,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
             BusinessAuditPublisher businessAuditPublisher
     ) {
         this.loanApplicationRepository = loanApplicationRepository;
+        this.reviewCycleRepository = reviewCycleRepository;
         this.approvedOfferRepository = approvedOfferRepository;
         this.salaryAdvanceOfferPolicyRepository = salaryAdvanceOfferPolicyRepository;
         this.salaryAdvanceReservationReleaseService = salaryAdvanceReservationReleaseService;
@@ -73,11 +78,17 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         Objects.requireNonNull(command.operationContext(), "operationContext must not be null");
         validateOperationContext(command);
 
+        loanApplicationRepository.acquireWorkflowLock(command.loanApplicationId());
         LoanApplication loanApplication = loanApplicationRepository.findByIdForUpdate(command.loanApplicationId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "LOAN_APPLICATION_NOT_FOUND",
                         "Loan application was not found."
                 ));
+
+        LoanApplicationReviewCycle activeCycle = reviewCycleRepository
+                .findActiveByLoanApplicationIdForUpdate(command.loanApplicationId())
+                .orElseThrow(() -> new com.meridian.platform.shared.domain.exception.BusinessStateConflictException(
+                        "REVIEW_CYCLE_REQUIRED", "An active review cycle is required."));
 
         LoanApplicationTransitionResult decisionTransition = loanApplication.applyApprovalDecision(command.action());
         LoanApplication transitionedApplication = decisionTransition.loanApplication();
@@ -98,6 +109,25 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
                     command.operationContext(),
                     ReservationReleaseTrigger.APPROVAL_REJECTION
             );
+        }
+
+        switch (command.action()) {
+            case APPROVE, REJECT -> reviewCycleRepository.save(
+                    activeCycle.complete(command.operationContext().occurredAt())
+            );
+            case RETURN_TO_LOAN_OFFICER_REVIEW -> {
+                reviewCycleRepository.save(activeCycle.supersede(command.operationContext().occurredAt()));
+                reviewCycleRepository.save(LoanApplicationReviewCycle.active(
+                        UUID.randomUUID(),
+                        loanApplication.id(),
+                        reviewCycleRepository.nextCycleNumber(loanApplication.id()),
+                        command.operationContext().occurredAt()
+                ));
+            }
+            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION ->
+                    reviewCycleRepository.save(activeCycle.requireCorrection(
+                            command.operationContext().occurredAt()
+                    ));
         }
 
         LoanApplication savedApplication = loanApplicationRepository.save(transitionedApplication);

@@ -742,3 +742,28 @@ Detailed index definitions are out of scope for this document. At implementation
 - Should an implementation physically rename the previous `employee_verifications` table to `salary_advance_verifications`, or keep the old name while exposing the clearer domain language in code and documentation?
 - What exact retention policy should apply to inactive customer employee links and lightweight Salary Advance limit movements?
 - What is the final Phase 2 OCR retry lease, worker ownership, and job locking strategy?
+
+## 14. Implemented document and correction physical model (V22-V23)
+
+- `document_checklists`: one per Loan Application and stage; every Salary Advance
+  application owns a persisted empty `SUBMISSION` checklist.
+- `document_checklist_items`: on-demand `RECENT_PAYSLIP` requirement and mutable
+  pointer to the current review decision.
+- `documents`: one logical document per checklist item and mutable
+  `current_version_id` pointer.
+- `document_versions`: immutable metadata rows with version sequence, upload
+  idempotency key, safe display filename, MIME/size/hash metadata, opaque storage
+  reference, uploader identity, and predecessor version.
+- `document_review_decisions`: immutable version-targeted accept, waive, or
+  replacement decisions with review idempotency and restricted notes.
+- `loan_application_review_cycles`: one numbered history per application and at
+  most one `ACTIVE` cycle.
+- `loan_correction_requests` and `loan_correction_tasks`: explicit source,
+  responsibility, scope, proof baseline, audience-specific instruction, task
+  completion, and resubmission idempotency.
+
+`review_recommendations.review_cycle_id` has a composite foreign key proving that
+the recommendation and cycle belong to the same application. There is one
+recommendation per cycle and one decision per recommendation; decisions do not
+duplicate `review_cycle_id`. Important tuple, active-row, sequence, MIME, size, and
+same-row lifecycle invariants remain database-authoritative.

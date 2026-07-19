@@ -5,6 +5,7 @@ import com.meridian.platform.document.application.dto.ReviewDocumentCommand;
 import com.meridian.platform.document.application.port.in.ReviewDocumentUseCase;
 import com.meridian.platform.document.application.port.out.DocumentChecklistRepository;
 import com.meridian.platform.document.application.port.out.DocumentRepository;
+import com.meridian.platform.document.application.port.out.LoanDocumentReviewCorrectionPort;
 import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
 import com.meridian.platform.document.domain.model.DocumentChecklist;
 import com.meridian.platform.document.domain.model.DocumentChecklistItem;
@@ -40,6 +41,7 @@ public class ReviewDocumentService implements ReviewDocumentUseCase {
     private final LoanDocumentWorkflowPort workflowPort;
     private final DocumentChecklistRepository checklistRepository;
     private final DocumentRepository documentRepository;
+    private final LoanDocumentReviewCorrectionPort correctionPort;
     private final BusinessAuditPublisher auditPublisher;
     private final CurrentUserProvider currentUserProvider;
     private final Clock clock;
@@ -48,6 +50,7 @@ public class ReviewDocumentService implements ReviewDocumentUseCase {
             LoanDocumentWorkflowPort workflowPort,
             DocumentChecklistRepository checklistRepository,
             DocumentRepository documentRepository,
+            LoanDocumentReviewCorrectionPort correctionPort,
             BusinessAuditPublisher auditPublisher,
             CurrentUserProvider currentUserProvider,
             Clock clock
@@ -55,6 +58,7 @@ public class ReviewDocumentService implements ReviewDocumentUseCase {
         this.workflowPort = workflowPort;
         this.checklistRepository = checklistRepository;
         this.documentRepository = documentRepository;
+        this.correctionPort = correctionPort;
         this.auditPublisher = auditPublisher;
         this.currentUserProvider = currentUserProvider;
         this.clock = clock;
@@ -116,6 +120,9 @@ public class ReviewDocumentService implements ReviewDocumentUseCase {
                     command.documentVersionId(),
                     command.outcome(),
                     command.waiverReasonCode(),
+                    command.correctionReasonCode() == null ? null : command.correctionReasonCode().name(),
+                    command.customerInstruction(),
+                    command.restrictedStaffNotes(),
                     currentUser.userId()
             )) {
                 throw new BusinessStateConflictException(
@@ -140,11 +147,23 @@ public class ReviewDocumentService implements ReviewDocumentUseCase {
                 command.reviewRequestId(),
                 command.outcome(),
                 command.waiverReasonCode(),
+                command.correctionReasonCode() == null ? null : command.correctionReasonCode().name(),
+                command.customerInstruction(),
                 command.restrictedStaffNotes(),
                 currentUser.userId(),
                 now
         ));
         checklistRepository.saveItem(item.withCurrentReviewDecision(decision.id(), now));
+        if (command.outcome() == DocumentReviewOutcome.REQUEST_REPLACEMENT) {
+            correctionPort.requestCustomerReplacement(
+                    command.loanApplicationId(),
+                    item.id(),
+                    decision.documentVersionId(),
+                    command.correctionReasonCode(),
+                    command.customerInstruction(),
+                    operation
+            );
+        }
         auditPublisher.publish(BusinessAuditEvent.single(
                 operation,
                 new BusinessAuditEntry(
@@ -194,6 +213,24 @@ public class ReviewDocumentService implements ReviewDocumentUseCase {
             throw new BusinessRuleViolationException(
                     "DOCUMENT_WAIVER_REASON_REQUIRED",
                     "A controlled waiver reason code is required."
+            );
+        }
+        if (command.outcome() == DocumentReviewOutcome.REQUEST_REPLACEMENT) {
+            if (command.correctionReasonCode()
+                    != com.meridian.platform.approval.domain.model.CorrectionReasonCode
+                    .DOCUMENT_REPLACEMENT_REQUIRED
+                    || command.customerInstruction() == null
+                    || command.customerInstruction().trim().isEmpty()
+                    || command.customerInstruction().trim().length() > 500) {
+                throw new BusinessRuleViolationException(
+                        "INVALID_CORRECTION_PLAN",
+                        "Replacement review requires a controlled reason and customer instruction."
+                );
+            }
+        } else if (command.correctionReasonCode() != null || command.customerInstruction() != null) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_CORRECTION_PLAN",
+                    "Replacement correction fields are allowed only for REQUEST_REPLACEMENT."
             );
         }
     }

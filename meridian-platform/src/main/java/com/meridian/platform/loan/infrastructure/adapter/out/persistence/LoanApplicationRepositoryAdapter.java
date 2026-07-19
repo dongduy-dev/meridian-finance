@@ -107,6 +107,21 @@ public class LoanApplicationRepositoryAdapter implements LoanApplicationReposito
     }
 
     @Override
+    public boolean existsByCustomerIdAndProductCodeAndStatusInExcludingApplication(
+            UUID customerId,
+            ProductCode productCode,
+            Set<LoanApplicationStatus> statuses,
+            UUID excludedLoanApplicationId
+    ) {
+        return jpaLoanApplicationRepository.existsByCustomerIdAndProductCodeAndStatusInAndIdNot(
+                customerId,
+                productCode,
+                statuses,
+                excludedLoanApplicationId
+        );
+    }
+
+    @Override
     public long nextApplicationNumberSequence() {
         return jpaLoanApplicationRepository.nextApplicationNumberSequence();
     }

@@ -1035,3 +1035,26 @@ Future releases may revisit:
 8. Separate approval and disbursement responsibilities.
 9. Keep customer-facing steps clear and simple.
 10. Make the workflow realistic without becoming a production banking core.
+
+## Executable customer correction workflow
+
+Salary Advance submission creates one empty `SUBMISSION` checklist, so normal
+applications remain `SUBMITTED`. `RECENT_PAYSLIP` is created only when a controlled
+correction plan requests clarification; it never replaces Customer readiness,
+Partner eligibility, or the verified employee-link rules.
+
+`RETURN_TO_CUSTOMER_REVISION` is executable with an expected active review-cycle
+ID, a controlled reason code, and one to ten exact document tasks. Customer tasks
+use customer-visible instructions; internal Approval notes are never copied into
+tasks, audit, or Loan history. `REQUEST_STAFF_CORRECTION` and
+`REQUEST_CUSTOMER_OR_STAFF_CORRECTION` remain gated until their staff continuation
+is implemented.
+
+The authenticated owner uploads immutable versions, completes tasks only after the
+required upload/replacement proof exists, and resubmits with an idempotency request
+ID. Resubmission revalidates Customer, Partner, product, blocking-application,
+effective-limit, unchanged-reservation, and Document rules and inserts a new
+immutable Salary Advance verification snapshot. Requested amount and term remain
+immutable. Routing is `SUBMITTED` while manual document review is pending and
+`UNDER_REVIEW` with the next active cycle when prior review exists and documents
+are accepted or waived.

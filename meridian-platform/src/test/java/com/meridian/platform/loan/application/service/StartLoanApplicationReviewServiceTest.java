@@ -2,6 +2,7 @@ package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
+import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
@@ -34,6 +35,7 @@ class StartLoanApplicationReviewServiceTest {
     private final UUID applicationId = UUID.randomUUID();
     private LoanApplicationRepository applicationRepository;
     private LoanDocumentChecklistPort documentChecklistPort;
+    private LoanReviewCycleRepository reviewCycleRepository;
     private LoanApplicationStatusTransitionRecorder transitionRecorder;
     private BusinessAuditPublisher auditPublisher;
     private StartLoanApplicationReviewService service;
@@ -42,6 +44,7 @@ class StartLoanApplicationReviewServiceTest {
     void setUp() {
         applicationRepository = mock(LoanApplicationRepository.class);
         documentChecklistPort = mock(LoanDocumentChecklistPort.class);
+        reviewCycleRepository = mock(LoanReviewCycleRepository.class);
         transitionRecorder = mock(LoanApplicationStatusTransitionRecorder.class);
         auditPublisher = mock(BusinessAuditPublisher.class);
         CurrentUserProvider currentUserProvider = mock(CurrentUserProvider.class);
@@ -54,9 +57,12 @@ class StartLoanApplicationReviewServiceTest {
                 Set.of("loan:review")
         ));
         when(applicationRepository.findByIdForUpdate(applicationId)).thenReturn(Optional.of(application()));
+        when(reviewCycleRepository.nextCycleNumber(applicationId)).thenReturn(1);
+        when(reviewCycleRepository.save(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> invocation.getArgument(0));
         service = new StartLoanApplicationReviewService(
                 applicationRepository,
                 documentChecklistPort,
+                reviewCycleRepository,
                 transitionRecorder,
                 auditPublisher,
                 currentUserProvider,

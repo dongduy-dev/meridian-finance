@@ -4,6 +4,8 @@ import com.meridian.platform.loan.application.dto.ApplyReviewRecommendationComma
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
+import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
+import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
@@ -32,12 +34,14 @@ class ApplyReviewRecommendationServiceTest {
 
     private static final UUID LOAN_APPLICATION_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private static final UUID RECOMMENDATION_ID = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+    private static final UUID REVIEW_CYCLE_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
     private static final UUID LOAN_OFFICER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000302");
     private static final UUID CUSTOMER_ID = UUID.fromString("99999999-9999-9999-9999-999999999999");
     private static final LocalDateTime RECOMMENDED_AT = LocalDateTime.of(2026, 7, 6, 9, 0);
 
     private FakeLoanApplicationRepository loanApplicationRepository;
     private ReadyDocumentChecklistPort documentChecklistPort;
+    private LoanReviewCycleRepository reviewCycleRepository;
     private FakeLoanApplicationStatusTransitionRepository transitionRepository;
     private ApplyReviewRecommendationService service;
 
@@ -45,10 +49,16 @@ class ApplyReviewRecommendationServiceTest {
     void setUp() {
         loanApplicationRepository = new FakeLoanApplicationRepository();
         documentChecklistPort = new ReadyDocumentChecklistPort();
+        reviewCycleRepository = org.mockito.Mockito.mock(LoanReviewCycleRepository.class);
+        org.mockito.Mockito.when(reviewCycleRepository.findActiveByLoanApplicationIdForUpdate(LOAN_APPLICATION_ID))
+                .thenReturn(Optional.of(LoanApplicationReviewCycle.active(
+                        REVIEW_CYCLE_ID, LOAN_APPLICATION_ID, 1, RECOMMENDED_AT.minusHours(1))));
         transitionRepository = new FakeLoanApplicationStatusTransitionRepository();
         service = new ApplyReviewRecommendationService(
                 loanApplicationRepository,
                 documentChecklistPort,
+                reviewCycleRepository,
+                org.mockito.Mockito.mock(CustomerCorrectionWorkflowService.class),
                 new LoanApplicationStatusTransitionRecorder(transitionRepository)
         );
     }
@@ -121,8 +131,11 @@ class ApplyReviewRecommendationServiceTest {
         return new ApplyReviewRecommendationCommand(
                 LOAN_APPLICATION_ID,
                 RECOMMENDATION_ID,
+                REVIEW_CYCLE_ID,
                 LOAN_OFFICER_USER_ID,
                 LoanReviewRecommendationAction.RECOMMEND_APPROVAL,
+                null,
+                null,
                 null,
                 RECOMMENDED_AT,
                 operationContext

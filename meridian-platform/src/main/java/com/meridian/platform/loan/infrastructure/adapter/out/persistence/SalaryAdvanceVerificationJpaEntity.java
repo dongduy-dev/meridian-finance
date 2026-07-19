@@ -25,6 +25,12 @@ public class SalaryAdvanceVerificationJpaEntity {
     @Column(name = "loan_application_id", nullable = false)
     private UUID loanApplicationId;
 
+    @Column(name = "verification_sequence", nullable = false)
+    private int verificationSequence;
+
+    @Column(name = "correction_request_id")
+    private UUID correctionRequestId;
+
     @Column(name = "customer_id", nullable = false)
     private UUID customerId;
 
@@ -75,6 +81,8 @@ public class SalaryAdvanceVerificationJpaEntity {
     public SalaryAdvanceVerificationJpaEntity(SalaryAdvanceVerification verification) {
         this.id = verification.id();
         this.loanApplicationId = verification.loanApplicationId();
+        this.verificationSequence = verification.verificationSequence();
+        this.correctionRequestId = verification.correctionRequestId();
         this.customerId = verification.customerId();
         this.customerPartnerEmployeeLinkId = verification.customerPartnerEmployeeLinkId();
         this.salaryAdvanceLimitId = verification.salaryAdvanceLimitId();
@@ -97,6 +105,14 @@ public class SalaryAdvanceVerificationJpaEntity {
 
     public UUID getLoanApplicationId() {
         return loanApplicationId;
+    }
+
+    public int getVerificationSequence() {
+        return verificationSequence;
+    }
+
+    public UUID getCorrectionRequestId() {
+        return correctionRequestId;
     }
 
     public UUID getCustomerId() {

@@ -38,6 +38,12 @@ public class DocumentReviewDecisionJpaEntity {
     @Column(name = "waiver_reason_code")
     private DocumentWaiverReasonCode waiverReasonCode;
 
+    @Column(name = "correction_reason_code")
+    private String correctionReasonCode;
+
+    @Column(name = "customer_instruction")
+    private String customerInstruction;
+
     @Column(name = "restricted_staff_notes")
     private String restrictedStaffNotes;
 
@@ -60,6 +66,8 @@ public class DocumentReviewDecisionJpaEntity {
         this.reviewRequestId = decision.reviewRequestId();
         this.outcome = decision.outcome();
         this.waiverReasonCode = decision.waiverReasonCode();
+        this.correctionReasonCode = decision.correctionReasonCode();
+        this.customerInstruction = decision.customerInstruction();
         this.restrictedStaffNotes = decision.restrictedStaffNotes();
         this.reviewerUserId = decision.reviewerUserId();
         this.decidedAt = decision.decidedAt();
@@ -74,6 +82,8 @@ public class DocumentReviewDecisionJpaEntity {
                 reviewRequestId,
                 outcome,
                 waiverReasonCode,
+                correctionReasonCode,
+                customerInstruction,
                 restrictedStaffNotes,
                 reviewerUserId,
                 decidedAt

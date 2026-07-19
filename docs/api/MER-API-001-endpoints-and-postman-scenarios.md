@@ -130,8 +130,36 @@ POST /api/v1/loan-applications/{loanApplicationId}/review/start
 }
 ```
 
-Current executable actions are `RECOMMEND_APPROVAL` and `RECOMMEND_REJECTION`; rejection requires a nonblank `reason`.
-`RETURN_TO_CUSTOMER_REVISION` and `REQUEST_STAFF_CORRECTION` remain target-state enum values but are temporarily rejected with HTTP `409 REVISION_WORKFLOW_NOT_AVAILABLE` before any recommendation, audit, event, history, or Loan status effect. See `MER-FU-031`.
+Current executable actions are `RECOMMEND_APPROVAL`, `RECOMMEND_REJECTION`, and `RETURN_TO_CUSTOMER_REVISION`; rejection requires a nonblank `reason`.
+`REQUEST_STAFF_CORRECTION` remains gated with HTTP `409 REVISION_WORKFLOW_NOT_AVAILABLE`
+until the staff queue and resubmitter continuation are available.
+
+Customer revision uses controlled fields instead of free-text `reason`:
+
+```json
+{
+  "action": "RETURN_TO_CUSTOMER_REVISION",
+  "reason": null,
+  "internalNotes": "Optional restricted Approval note.",
+  "expectedReviewCycleId": "{{reviewCycleId}}",
+  "reasonCode": "RECENT_PAYSLIP_REQUIRED",
+  "correctionPlan": {
+    "tasks": [
+      {
+        "scope": "SUPPORTING_DOCUMENT_UPLOAD",
+        "responsibleParty": "CUSTOMER",
+        "documentType": "RECENT_PAYSLIP",
+        "createChecklistItem": true,
+        "checklistItemId": null,
+        "baselineDocumentVersionId": null,
+        "customerInstruction": "Upload a recent payslip for clarification.",
+        "staffInstruction": null
+      }
+    ]
+  }
+}
+```
+
 
 ### Approval Decision
 
@@ -147,6 +175,35 @@ Current executable actions are `RECOMMEND_APPROVAL` and `RECOMMEND_REJECTION`; r
 
 Current executable actions are `APPROVE`, `REJECT`, and `RETURN_TO_LOAN_OFFICER_REVIEW`; a nonblank `reason` is required except for `APPROVE`. For Salary Advance, `APPROVE` atomically generates the customer approved offer and moves the Loan Application to `CUSTOMER_ACCEPTANCE_PENDING`; `REJECT` transitions the Loan Application to `REJECTED` and releases the reserved Salary Advance limit.
 `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` remains a target-state enum value but is temporarily rejected with HTTP `409 REVISION_WORKFLOW_NOT_AVAILABLE` before any decision, audit, event, history, or Loan status effect. `RETURN_TO_LOAN_OFFICER_REVIEW` remains operational. See `MER-FU-031`.
+
+### Customer Correction and Document Replacement
+
+Customer ownership is derived from the authenticated token. These endpoints require
+`loan:correction:own` or `document:upload:own` as shown:
+
+```text
+GET  /api/v1/loan-applications/{loanApplicationId}/corrections/tasks
+POST /api/v1/loan-applications/{loanApplicationId}/corrections/tasks/{taskId}/complete
+POST /api/v1/loan-applications/{loanApplicationId}/corrections/resubmit
+POST /api/v1/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions
+```
+
+Task completion and resubmission bodies carry `completionRequestId` and
+`resubmissionRequestId` respectively. Document upload is multipart with
+`uploadRequestId`, optional `expectedCurrentVersionId`, and `file`. Only PDF, JPEG,
+and PNG are accepted, with a 10 MiB limit and signature-to-declared-MIME matching.
+
+Customer responses expose safe IDs, status, `RECENT_PAYSLIP`, controlled reason code,
+customer instruction, and timestamps. They never expose storage keys, hashes, paths,
+restricted notes, salary, employee codes, identity evidence, or bank information.
+
+Resubmission requires every customer task to be completed and revalidates Customer
+readiness, product policy, whole-VND amount, allowed term, blocking applications,
+Partner eligibility, the verified employee link, current effective limit, the
+existing unchanged reservation, and Document readiness. It inserts a new immutable
+Salary Advance verification snapshot and creates no limit movement. The target is
+`SUBMITTED` while document review remains pending, or `UNDER_REVIEW` with a new
+active review cycle when prior review exists and the checklist is processing-ready.
 
 ### Approved Offer
 
@@ -203,7 +260,8 @@ Expected high-value checks:
 | Recommendation without `approval:recommend` | `403`, `ACCESS_DENIED`. |
 | Recommendation missing required reason | `422`, `RECOMMENDATION_REASON_REQUIRED`. |
 | Recommendation happy path | `201`, recommendation recorded, Loan status moves to `APPROVAL_PENDING`. |
-| Gated review revision/correction action | `409`, `REVISION_WORKFLOW_NOT_AVAILABLE`, with no recommendation, audit, event, history, or Loan status effect. |
+| Customer revision recommendation | `201`, controlled plan persisted, Loan status moves to `RETURNED_FOR_REVISION`. |
+| Gated staff correction recommendation | `409`, `REVISION_WORKFLOW_NOT_AVAILABLE`, with no durable effect. |
 | Approval decision without `approval:decide` | `403`, `ACCESS_DENIED`. |
 | Approval decision maker-checker violation | `422`, `MAKER_CHECKER_VIOLATION`. |
 | Approval decision reject path | `201`, decision recorded, Loan status moves to `REJECTED`, Salary Advance reservation is released. |

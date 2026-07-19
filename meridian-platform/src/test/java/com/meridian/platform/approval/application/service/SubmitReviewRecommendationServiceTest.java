@@ -34,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class SubmitReviewRecommendationServiceTest {
 
     private static final UUID LOAN_APPLICATION_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static final UUID REVIEW_CYCLE_ID = UUID.fromString("abababab-abab-abab-abab-abababababab");
     private static final UUID LOAN_OFFICER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000302");
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 7, 6, 10, 0);
     private static final Clock CLOCK = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
@@ -50,6 +51,7 @@ class SubmitReviewRecommendationServiceTest {
         auditPublisher = new FakeBusinessAuditPublisher();
         service = new SubmitReviewRecommendationService(
                 repository,
+                ignored -> Optional.of(REVIEW_CYCLE_ID),
                 eventPublisher,
                 new FixedCurrentUserProvider(),
                 new ApprovalMapper(),
@@ -99,17 +101,17 @@ class SubmitReviewRecommendationServiceTest {
         assertNotNull(eventPublisher.publishedEvent);
     }
 
-    @ParameterizedTest
-    @EnumSource(
-            value = ReviewRecommendationAction.class,
-            names = {"RETURN_TO_CUSTOMER_REVISION", "REQUEST_STAFF_CORRECTION"}
-    )
-    void rejectsUnavailableRevisionActionsBeforeAnyEffect(ReviewRecommendationAction action) {
+    @Test
+    void rejectsUnavailableStaffRevisionActionBeforeAnyEffect() {
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,
                 () -> service.submitReviewRecommendation(
                         LOAN_APPLICATION_ID,
-                        new ReviewRecommendationRequest(action, "Correction required.", null)
+                        new ReviewRecommendationRequest(
+                                ReviewRecommendationAction.REQUEST_STAFF_CORRECTION,
+                                "Correction required.",
+                                null
+                        )
                 )
         );
 

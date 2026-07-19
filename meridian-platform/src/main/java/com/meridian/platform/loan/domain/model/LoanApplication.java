@@ -155,6 +155,33 @@ public record LoanApplication(
         };
     }
 
+    public LoanApplicationTransitionResult requestDocumentReplacementCorrection() {
+        if (status != LoanApplicationStatus.SUBMITTED) {
+            throw new BusinessStateConflictException(
+                    "DOCUMENT_REPLACEMENT_NOT_ALLOWED",
+                    "Pre-review document replacement can only be requested from submitted status."
+            );
+        }
+        return transitionTo(
+                LoanApplicationStatus.RETURNED_FOR_REVISION,
+                LoanApplicationTransitionAction.RETURN_TO_CUSTOMER_REVISION
+        );
+    }
+
+    public LoanApplicationTransitionResult resubmitCorrection(LoanApplicationStatus targetStatus) {
+        if (status != LoanApplicationStatus.RETURNED_FOR_REVISION) {
+            throw new BusinessStateConflictException(
+                    "CORRECTION_RESUBMISSION_NOT_ALLOWED",
+                    "Only an application returned for revision can be resubmitted."
+            );
+        }
+        if (targetStatus != LoanApplicationStatus.SUBMITTED
+                && targetStatus != LoanApplicationStatus.UNDER_REVIEW) {
+            throw new IllegalArgumentException("Correction resubmission target is invalid.");
+        }
+        return transitionTo(targetStatus, LoanApplicationTransitionAction.RESUBMIT_CORRECTION);
+    }
+
     public LoanApplicationTransitionResult markCustomerAcceptancePending() {
         if (status != LoanApplicationStatus.APPROVED) {
             throw new BusinessStateConflictException(

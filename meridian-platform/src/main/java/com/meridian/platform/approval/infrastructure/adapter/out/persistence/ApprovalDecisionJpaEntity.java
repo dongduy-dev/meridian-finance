@@ -2,6 +2,7 @@ package com.meridian.platform.approval.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.approval.domain.model.ApprovalDecision;
 import com.meridian.platform.approval.domain.model.ApprovalDecisionAction;
+import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -36,6 +37,10 @@ public class ApprovalDecisionJpaEntity {
     @Column(name = "reason")
     private String reason;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reason_code")
+    private CorrectionReasonCode reasonCode;
+
     @Column(name = "internal_notes")
     private String internalNotes;
 
@@ -55,6 +60,7 @@ public class ApprovalDecisionJpaEntity {
         this.approverUserId = approvalDecision.approverUserId();
         this.decision = approvalDecision.action();
         this.reason = approvalDecision.reason();
+        this.reasonCode = approvalDecision.reasonCode();
         this.internalNotes = approvalDecision.internalNotes();
         this.decidedAt = approvalDecision.decidedAt();
         this.createdAt = LocalDateTime.now();
@@ -68,6 +74,7 @@ public class ApprovalDecisionJpaEntity {
                 approverUserId,
                 decision,
                 reason,
+                reasonCode,
                 internalNotes,
                 decidedAt
         );
