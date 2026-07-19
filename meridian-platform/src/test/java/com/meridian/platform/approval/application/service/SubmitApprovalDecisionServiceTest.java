@@ -1,5 +1,7 @@
 package com.meridian.platform.approval.application.service;
 
+import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
+import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
 import com.meridian.platform.approval.application.dto.ApprovalDecisionDto;
 import com.meridian.platform.approval.application.dto.ApprovalDecisionRequest;
 import com.meridian.platform.approval.application.event.ApprovalDecisionRecordedEvent;
@@ -9,10 +11,14 @@ import com.meridian.platform.approval.application.port.out.ApprovalDecisionRepos
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.domain.model.ApprovalDecision;
 import com.meridian.platform.approval.domain.model.ApprovalDecisionAction;
+import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
+import com.meridian.platform.approval.domain.model.CorrectionScope;
 import com.meridian.platform.approval.domain.model.ReviewRecommendation;
 import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
+import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
@@ -27,6 +33,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -40,6 +47,7 @@ class SubmitApprovalDecisionServiceTest {
     private static final UUID LOAN_APPLICATION_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private static final UUID RECOMMENDATION_ID = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
     private static final UUID LOAN_OFFICER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000302");
+    private static final UUID REVIEW_CYCLE_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
     private static final UUID APPROVER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000303");
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 7, 6, 11, 0);
     private static final Clock CLOCK = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
@@ -85,23 +93,49 @@ class SubmitApprovalDecisionServiceTest {
     }
 
     @Test
-    void rejectsUnavailableRevisionActionBeforeAnyEffect() {
-        BusinessStateConflictException exception = assertThrows(
-                BusinessStateConflictException.class,
-                () -> service.submitApprovalDecision(
-                        LOAN_APPLICATION_ID,
-                        new ApprovalDecisionRequest(
-                                ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
-                                "Correction required.",
-                                null
-                        )
+    void recordsStructuredMixedCorrectionDecision() {
+        UUID checklistItemId = UUID.randomUUID();
+        UUID baselineVersionId = UUID.randomUUID();
+        CorrectionPlanRequest plan = new CorrectionPlanRequest(List.of(
+                new CorrectionTaskRequest(
+                        CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
+                        CorrectionResponsibility.CUSTOMER,
+                        DocumentType.RECENT_PAYSLIP,
+                        true,
+                        null,
+                        null,
+                        "Upload the requested payslip.",
+                        null
+                ),
+                new CorrectionTaskRequest(
+                        CorrectionScope.DOCUMENT_REVIEW,
+                        CorrectionResponsibility.STAFF,
+                        DocumentType.RECENT_PAYSLIP,
+                        false,
+                        checklistItemId,
+                        baselineVersionId,
+                        null,
+                        "Review the current supporting evidence."
+                )
+        ));
+
+        ApprovalDecisionDto result = service.submitApprovalDecision(
+                LOAN_APPLICATION_ID,
+                new ApprovalDecisionRequest(
+                        ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
+                        null,
+                        "restricted",
+                        REVIEW_CYCLE_ID,
+                        CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED,
+                        plan
                 )
         );
 
-        assertEquals("REVISION_WORKFLOW_NOT_AVAILABLE", exception.getErrorCode());
-        assertNull(approvalDecisionRepository.savedDecision);
-        assertNull(auditPublisher.publishedEvent);
-        assertNull(eventPublisher.publishedEvent);
+        assertEquals("REQUEST_CUSTOMER_OR_STAFF_CORRECTION", result.action());
+        assertEquals(plan, eventPublisher.publishedEvent.correctionPlan());
+        assertEquals(REVIEW_CYCLE_ID, eventPublisher.publishedEvent.reviewCycleId());
+        assertNotNull(approvalDecisionRepository.savedDecision);
+        assertNotNull(auditPublisher.publishedEvent);
     }
 
     @ParameterizedTest
@@ -170,6 +204,7 @@ class SubmitApprovalDecisionServiceTest {
         return new SubmitApprovalDecisionService(
                 reviewRecommendationRepository,
                 approvalDecisionRepository,
+                ignored -> Optional.of(REVIEW_CYCLE_ID),
                 eventPublisher,
                 new FixedCurrentUserProvider(userId),
                 new ApprovalMapper(),
@@ -182,8 +217,10 @@ class SubmitApprovalDecisionServiceTest {
         return ReviewRecommendation.recorded(
                 RECOMMENDATION_ID,
                 LOAN_APPLICATION_ID,
+                REVIEW_CYCLE_ID,
                 LOAN_OFFICER_USER_ID,
                 ReviewRecommendationAction.RECOMMEND_APPROVAL,
+                null,
                 null,
                 null,
                 LocalDateTime.now()

@@ -69,9 +69,28 @@ public class PreReviewDocumentCorrectionService {
         }
         documentChecklistPort.requireCurrentVersion(
                 loanApplicationId, checklistItemId, baselineVersionId);
-        if (correctionRepository.findActiveRequestByApplicationIdForUpdate(loanApplicationId).isPresent()) {
-            throw new BusinessStateConflictException(
-                    "ACTIVE_CORRECTION_REQUEST_EXISTS", "Loan Application already has an active correction request.");
+        var activeRequest = correctionRepository.findActiveRequestByApplicationIdForUpdate(loanApplicationId);
+        if (activeRequest.isPresent()) {
+            LoanCorrectionRequest request = activeRequest.get();
+            var tasks = correctionRepository.findTasksByRequestIdForUpdate(request.id());
+            if (tasks.stream().anyMatch(task ->
+                    task.scope() == LoanCorrectionScope.DOCUMENT_REPLACEMENT
+                            && checklistItemId.equals(task.checklistItemId())
+                            && baselineVersionId.equals(task.baselineDocumentVersionId()))) {
+                throw new BusinessStateConflictException(
+                        "DOCUMENT_REPLACEMENT_ALREADY_REQUESTED",
+                        "A replacement task already exists for this document version."
+                );
+            }
+            correctionRepository.saveRequest(request.reopen());
+            correctionRepository.saveTask(new LoanCorrectionTask(
+                    UUID.randomUUID(), request.id(), correctionRepository.nextTaskSequence(request.id()),
+                    LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionScope.DOCUMENT_REPLACEMENT,
+                    DocumentType.RECENT_PAYSLIP, false, checklistItemId, baselineVersionId,
+                    instruction, null, LoanCorrectionTaskStatus.OPEN, null, null, null,
+                    operation.occurredAt()
+            ));
+            return;
         }
         LoanApplication application = applicationRepository.findByIdForUpdate(loanApplicationId)
                 .orElseThrow(() -> new EntityNotFoundException(

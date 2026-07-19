@@ -67,7 +67,6 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
         Objects.requireNonNull(request, "request must not be null");
         Objects.requireNonNull(request.action(), "action must not be null");
-        rejectUnavailableRevisionAction(request);
         UUID reviewCycleId = loanReviewCyclePort.findActiveReviewCycleId(loanApplicationId)
                 .orElseThrow(() -> new BusinessStateConflictException(
                         "REVIEW_CYCLE_REQUIRED", "An active review cycle is required."));
@@ -113,17 +112,9 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
         return approvalMapper.toDto(savedRecommendation);
     }
 
-    private void rejectUnavailableRevisionAction(ReviewRecommendationRequest request) {
-        if (request.action() == ReviewRecommendationAction.REQUEST_STAFF_CORRECTION) {
-            throw new BusinessStateConflictException(
-                    "REVISION_WORKFLOW_NOT_AVAILABLE",
-                    "Staff correction workflow is not available yet."
-            );
-        }
-    }
-
     private void validateCorrectionContract(ReviewRecommendationRequest request, UUID activeCycleId) {
-        if (request.action() == ReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION) {
+        if (request.action() == ReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION
+                || request.action() == ReviewRecommendationAction.REQUEST_STAFF_CORRECTION) {
             if (!activeCycleId.equals(request.expectedReviewCycleId())) {
                 throw new BusinessStateConflictException(
                         "STALE_REVIEW_CYCLE",
@@ -133,10 +124,14 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
             if (request.reasonCode() == null || request.reason() != null) {
                 throw new com.meridian.platform.shared.domain.exception.BusinessRuleViolationException(
                         "INVALID_CORRECTION_PLAN",
-                        "Customer revision requires a controlled reason code and no free-text reason."
+                        "Revision actions require a controlled reason code and no free-text reason."
                 );
             }
-            correctionPlanPolicy.validateCustomerRevision(request.correctionPlan());
+            if (request.action() == ReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION) {
+                correctionPlanPolicy.validateCustomerRevision(request.correctionPlan());
+            } else {
+                correctionPlanPolicy.validateStaffCorrection(request.correctionPlan());
+            }
             return;
         }
         if (request.expectedReviewCycleId() != null

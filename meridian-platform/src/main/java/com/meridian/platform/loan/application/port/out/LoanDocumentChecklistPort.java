@@ -44,6 +44,22 @@ public interface LoanDocumentChecklistPort {
         throw new UnsupportedOperationException("Document replacement proof is not supported.");
     }
 
+    default boolean isVersionAcceptedOrWaived(
+            UUID loanApplicationId,
+            UUID checklistItemId,
+            UUID documentVersionId
+    ) {
+        throw new UnsupportedOperationException("Document review proof is not supported.");
+    }
+
+    default boolean isVersionReviewed(
+            UUID loanApplicationId,
+            UUID checklistItemId,
+            UUID documentVersionId
+    ) {
+        throw new UnsupportedOperationException("Document review proof is not supported.");
+    }
+
     record SubmissionChecklistInitialState(boolean uploadComplete) {
     }
 

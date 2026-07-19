@@ -323,12 +323,13 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
                         + "(SELECT id FROM loan_applications WHERE customer_id = ?)",
                 fixture.customerId()
         ));
-        assertEquals(3, count(
+        assertEquals(4, count(
                 "SELECT count(*) FROM audit_events WHERE actor_user_id = ?",
                 fixture.userId()
         ));
         assertEquals(
                 List.of(
+                        "DOCUMENT_CHECKLIST_CREATED",
                         "SALARY_ADVANCE_APPLICATION_SUBMITTED",
                         "SALARY_ADVANCE_LIMIT_INITIALIZED",
                         "SALARY_ADVANCE_LIMIT_RESERVED"

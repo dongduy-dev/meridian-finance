@@ -229,7 +229,7 @@ Continue implementation in vertical slices:
 1. Loan officer review/recommendation. Done.
 2. Approval decision. Done.
 3. Salary Advance approved offer and customer acceptance. Done.
-4. Document/correction readiness through `MER-FU-012` and `MER-FU-031`. Deferred.
+4. Document/correction readiness through `MER-FU-012` and `MER-FU-031`. Done in V22-V24.
 5. Contract readiness. Deferred.
 6. Manual disbursement confirmation and LoanAccount activation. Deferred.
 
@@ -251,24 +251,27 @@ Repayment schedule and repayment tracking are not implemented yet.
 Recommendation:
 Implement after loan account activation.
 
-### MER-FU-012 - Implement document checklist/manual document review/OCR integration
+### MER-FU-012 - Implement document checklist and manual document review foundation
 
-Area: Document / OCR
+Area: Document
 
-Type: Deferred feature
+Type: Workflow foundation
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocks next major feature: No
 
-Problem:
-Docs describe documents/checklists/OCR, but implementation is not present.
+Completion:
+V22-V24 implement code-configured per-application checklists, an on-demand
+`RECENT_PAYSLIP` correction requirement, immutable document versions, safe local
+storage behind a port, Customer and authorized-Staff upload, version-targeted manual
+acceptance/waiver/replacement, separate upload-completeness and processing-readiness
+contracts, content authorization, audit, rollback, and PostgreSQL concurrency proof.
 
-Recommendation:
-Implement after core Salary Advance lifecycle is stable. Coordinate checklist rejection, replacement, and clarification behavior with the complete correction/resubmission workflow in `MER-FU-031`; do not expose revision actions before that continuation exists.
-
+OCR was intentionally not included. It is tracked separately by `MER-FU-033`;
+production storage, malware scanning, and retention hardening are `MER-FU-032`.
 ### MER-FU-013 - Implement audit trail and Loan Application lifecycle history
 
 Area: Audit / Workflow
@@ -618,46 +621,145 @@ Suggested future branch name:
 
 Area: Loan / Approval / Document / Customer correction
 
-Type: Deferred workflow
+Type: Workflow
+
+Priority: P1
+
+Status: Done
+
+Blocks current checkpoint: No
+
+Completion:
+V23-V24 provide executable continuations for `RETURN_TO_CUSTOMER_REVISION`,
+`REQUEST_STAFF_CORRECTION`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`. Structured
+plans create persisted single-owner Customer or Staff tasks, including separate
+tasks for mixed requests. Customer and Staff queues/actions enforce identity,
+permission, task proof, stale-version protection, and Staff maker-checker.
+
+Guarded resubmission consumes one request exactly once, revalidates Customer,
+Partner, product, blocking-application, Document, effective-limit, and existing
+reservation invariants, writes a new immutable Salary Advance verification, and
+returns to `SUBMITTED` or a new `UNDER_REVIEW` cycle. Amount and term remain
+immutable, so no reservation adjustment or movement occurs. Review-cycle linkage
+provides immutable recommendation/decision supersession semantics.
+
+Proof:
+Domain/service/controller/security tests and PostgreSQL integration tests cover
+each entry action, synchronous rollback, Customer/Staff/mixed ownership, upload and
+review proof, duplicate completion/resubmission, stale cycles/versions, concurrent
+replacement/review/resubmission, audit/history, and the full return-to-review path.
+
+### MER-FU-032 - Harden document storage, scanning, and retention
+
+Area: Document / Security / Operations
+
+Type: Production hardening
 
 Priority: P1
 
 Status: Open
 
-Blocks current stabilization PR: No
-
-Blocks document/correction readiness checkpoint: Yes
-
-Current stabilization:
-`RETURN_TO_CUSTOMER_REVISION`, `REQUEST_STAFF_CORRECTION`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` remain in the target state model but are rejected with `REVISION_WORKFLOW_NOT_AVAILABLE` before any durable effect. `RETURN_TO_LOAN_OFFICER_REVIEW` remains operational because it has an executable continuation.
+Blocks production deployment: Yes
 
 Problem:
-The target `RETURNED_FOR_REVISION` state has no complete executable continuation: there is no persisted correction request/task, responsible-party contract, authorized customer/staff correction API, document replacement flow, guarded resubmission command, or rule selecting the appropriate return state.
+The MVP local-filesystem adapter validates declared type, file signature, filename,
+size, and opaque references, but does not provide production object storage,
+malware/quarantine scanning, retention schedules, legal hold, or retirement purge.
 
 Recommendation:
-Implement the revision lifecycle as one complete slice: persist the source recommendation/decision, correction reasons and responsible party; expose ownership-checked customer/staff work queues and permitted correction/document actions; preserve or version immutable submitted evidence; revalidate readiness, employment evidence, product rules, blocking applications, and Salary Advance reservation invariants on resubmission; transition with history and PII-safe audit to `VERIFICATION_PENDING`, `DOCUMENTS_PENDING`, or `UNDER_REVIEW` according to an explicit correction-type rule; and define recommendation/decision supersession semantics.
+Add a private object-storage adapter, quarantine-before-availability workflow,
+malware scanner port with fail-closed policy, encrypted storage and key rotation,
+retention/legal-hold decisions, secure retirement, operational retry states, and
+provider-failure integration tests. Never expose provider URLs or storage keys.
 
-Required scope:
+### MER-FU-033 - Add OCR-assisted document processing
 
-- define Customer, Loan Officer, or authorized-staff ownership for each correction reason and the fields each actor may edit;
-- define document clarification, replacement, and review behavior;
-- define whether requested amount or term may change and how reservation increase, decrease, or release is handled;
-- define when employee verification, Customer readiness, product policy, and limit snapshots must be refreshed;
-- define a guarded resubmission command and the state selected after correction;
-- preserve maker-checker controls and enforce ownership and permissions;
-- record lifecycle history and PII-safe business audit;
-- prove rollback, idempotency, and concurrency behavior before re-enabling the gated actions.
+Area: Document / OCR
 
-Required proof:
-Add domain, service, controller/security, PostgreSQL rollback, idempotency, and concurrency tests covering each entry action, authorized correction, rejected unauthorized/stale correction, resubmission, history/audit, snapshot behavior, and no duplicate reservation or financial effect.
+Type: Deferred integration
 
-Suggested future branch name:
-`feature/loan-revision-correction-workflow`
+Priority: P2
+
+Status: Open
+
+Blocks current checkpoint: No
+
+Problem:
+V22-V24 intentionally implement manual review only; no OCR job, extracted text,
+confidence contract, provider, retry lease, or secure result retention exists.
+
+Recommendation:
+Design OCR as an outbound port with explicit job state, retry/idempotency, manual
+fallback, field-level encryption, restricted access, PII-safe audit, and no raw OCR
+text in broad DTOs, logs, URLs, or exceptions.
+
+### MER-FU-034 - Add correction deadlines and notifications
+
+Area: Loan / Notification / Operations
+
+Type: Deferred workflow
+
+Priority: P2
+
+Status: Open
+
+Blocks current checkpoint: No
+
+Problem:
+Correction requests currently have no due date, escalation, expiry, reminder, or
+notification behavior; the Notification module remains a placeholder.
+
+Recommendation:
+Confirm SLA and expiry rules before adding UTC-Clock deadlines, scheduler locking,
+idempotent reminders, safe notification templates, cancellation semantics, and
+overdue workflow transitions.
+
+### MER-FU-035 - Support financial-term corrections and reservation adjustment
+
+Area: Loan / Salary Advance
+
+Type: Deferred financial workflow
+
+Priority: P2
+
+Status: Open
+
+Blocks current checkpoint: No
+
+Problem:
+Requested amount and term are immutable during V23-V24 correction. Reservation
+increase, decrease, and insufficient-limit semantics therefore remain undefined.
+
+Recommendation:
+Obtain explicit product decisions before allowing term or amount changes. Preserve
+the Loan-Application-to-limit lock order and add exact-once movements for deltas,
+insufficient-limit conflicts, full rollback proof, and concurrent resubmission tests.
+
+### MER-FU-036 - Externalize document checklist templates
+
+Area: Document / Product configuration
+
+Type: Deferred configuration
+
+Priority: P2
+
+Status: Open
+
+Blocks current checkpoint: No
+
+Problem:
+Salary Advance checklist policy is intentionally code-configured: no documents on
+initial submission and `RECENT_PAYSLIP` only for a controlled correction.
+
+Recommendation:
+When multiple products or operational template changes require it, introduce
+versioned database configuration with effective dates, immutable per-application
+snapshots, validation, administrative authorization, and migration/backfill rules.
 
 ## Recommended Next Roadmap
 
-1. Review/merge the Salary Advance critical-path stabilization checkpoint.
-2. Implement document checklist and correction/revision readiness through `MER-FU-012` and `MER-FU-031`.
-3. Implement contract readiness.
-4. Implement manual disbursement and LoanAccount activation.
-5. Implement repayment, settlement, and closure.
+1. Review and merge the Document Checklist + Correction/Revision Readiness checkpoint.
+2. Implement contract readiness.
+3. Implement manual disbursement and LoanAccount activation.
+4. Implement repayment, settlement, and closure.
+5. Complete production document hardening before deployment.

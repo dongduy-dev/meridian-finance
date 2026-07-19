@@ -8,6 +8,10 @@ public interface LoanDocumentWorkflowPort {
 
     LoanDocumentWorkflowSnapshot lock(UUID loanApplicationId);
 
+    default LoanDocumentWorkflowSnapshot find(UUID loanApplicationId) {
+        return lock(loanApplicationId);
+    }
+
     record LoanDocumentWorkflowSnapshot(
             UUID loanApplicationId,
             UUID customerId,

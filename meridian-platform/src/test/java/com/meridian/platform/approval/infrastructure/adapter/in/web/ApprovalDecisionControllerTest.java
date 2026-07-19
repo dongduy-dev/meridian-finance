@@ -4,7 +4,6 @@ import com.meridian.platform.approval.application.dto.ApprovalDecisionDto;
 import com.meridian.platform.approval.application.dto.ApprovalDecisionRequest;
 import com.meridian.platform.approval.application.port.in.SubmitApprovalDecisionUseCase;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
-import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.infrastructure.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,22 +86,40 @@ class ApprovalDecisionControllerTest {
     }
 
     @Test
-    void returnsConflictForUnavailableRevisionAction() throws Exception {
-        useCase.failure = new BusinessStateConflictException(
-                "REVISION_WORKFLOW_NOT_AVAILABLE",
-                "Customer and staff correction workflows are not available yet."
-        );
-
+    void acceptsStructuredMixedCorrectionAction() throws Exception {
         mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/approval-decisions", LOAN_APPLICATION_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "action": "REQUEST_CUSTOMER_OR_STAFF_CORRECTION",
-                                  "reason": "Correction required."
+                                  "expectedReviewCycleId": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+                                  "reasonCode": "DOCUMENT_REPLACEMENT_REQUIRED",
+                                  "correctionPlan": {
+                                    "tasks": [
+                                      {
+                                        "scope": "DOCUMENT_REPLACEMENT",
+                                        "responsibleParty": "CUSTOMER",
+                                        "documentType": "RECENT_PAYSLIP",
+                                        "createChecklistItem": false,
+                                        "checklistItemId": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+                                        "baselineDocumentVersionId": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+                                        "customerInstruction": "Upload a clearer payslip."
+                                      },
+                                      {
+                                        "scope": "DOCUMENT_REVIEW",
+                                        "responsibleParty": "STAFF",
+                                        "documentType": "RECENT_PAYSLIP",
+                                        "createChecklistItem": false,
+                                        "checklistItemId": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+                                        "baselineDocumentVersionId": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+                                        "staffInstruction": "Review the replacement payslip."
+                                      }
+                                    ]
+                                  }
                                 }
                                 """))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.errorCode").value("REVISION_WORKFLOW_NOT_AVAILABLE"));
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.action").value("REQUEST_CUSTOMER_OR_STAFF_CORRECTION"));
     }
 
     private static class StubUseCase implements SubmitApprovalDecisionUseCase {

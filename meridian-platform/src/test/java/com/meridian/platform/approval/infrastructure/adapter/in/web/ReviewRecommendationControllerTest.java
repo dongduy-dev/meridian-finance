@@ -3,7 +3,6 @@ package com.meridian.platform.approval.infrastructure.adapter.in.web;
 import com.meridian.platform.approval.application.dto.ReviewRecommendationDto;
 import com.meridian.platform.approval.application.dto.ReviewRecommendationRequest;
 import com.meridian.platform.approval.application.port.in.SubmitReviewRecommendationUseCase;
-import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.infrastructure.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -69,22 +68,33 @@ class ReviewRecommendationControllerTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"RETURN_TO_CUSTOMER_REVISION", "REQUEST_STAFF_CORRECTION"})
-    void returnsConflictForUnavailableRevisionActions(String action) throws Exception {
-        useCase.failure = new BusinessStateConflictException(
-                "REVISION_WORKFLOW_NOT_AVAILABLE",
-                "Customer and staff correction workflows are not available yet."
-        );
+    void acceptsStructuredRevisionActions(String action) throws Exception {
+        String responsibility = action.equals("RETURN_TO_CUSTOMER_REVISION") ? "CUSTOMER" : "STAFF";
 
         mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/review-recommendations", LOAN_APPLICATION_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "action": "%s",
-                                  "reason": "Correction required."
+                                  "expectedReviewCycleId": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+                                  "reasonCode": "RECENT_PAYSLIP_REQUIRED",
+                                  "correctionPlan": {
+                                    "tasks": [{
+                                      "scope": "SUPPORTING_DOCUMENT_UPLOAD",
+                                      "responsibleParty": "%s",
+                                      "documentType": "RECENT_PAYSLIP",
+                                      "createChecklistItem": true,
+                                      "%s": "Upload a recent payslip."
+                                    }]
+                                  }
                                 }
-                                """.formatted(action)))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.errorCode").value("REVISION_WORKFLOW_NOT_AVAILABLE"));
+                                """.formatted(
+                                        action,
+                                        responsibility,
+                                        responsibility.equals("CUSTOMER")
+                                                ? "customerInstruction" : "staffInstruction")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.action").value(action));
     }
 
     private static class StubUseCase implements SubmitReviewRecommendationUseCase {

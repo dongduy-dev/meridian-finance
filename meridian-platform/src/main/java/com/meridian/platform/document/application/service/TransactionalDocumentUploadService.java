@@ -142,6 +142,9 @@ public class TransactionalDocumentUploadService {
         if (command.uploaderActorType() == DocumentUploaderActorType.CUSTOMER) {
             correctionPort.authorizeCustomerUpload(
                     command.loanApplicationId(), item.id(), command.expectedCurrentVersionId());
+        } else {
+            correctionPort.authorizeStaffUpload(
+                    command.loanApplicationId(), item.id(), command.expectedCurrentVersionId());
         }
 
         if (!Objects.equals(document.currentVersionId(), command.expectedCurrentVersionId())) {

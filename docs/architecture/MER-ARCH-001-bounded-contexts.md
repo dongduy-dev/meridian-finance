@@ -187,3 +187,8 @@ Loan Core owns the current Salary Advance limit because it is lending state: tot
 - Customer document and correction APIs derive Customer identity from
   `CurrentUserProvider`. Storage keys, hashes, paths, content, restricted notes, and
   staff instructions never cross the public contracts.
+- Staff APIs require narrow correction, upload, review, or waiver permissions. Staff upload additionally requires an open Staff task, while task completion enforces maker-checker against the correction-request creator.
+- Document content is streamed only through ownership-checked Customer or review-authorized Staff endpoints with attachment, no-store, private-cache, and nosniff response controls.
+- Storage references, local paths, hashes, restricted notes, and document content never cross broad JSON contracts.
+- Audit and Loan history use safe IDs, states, actor types, reason codes, and timestamps.
+- The local-filesystem storage adapter is an MVP infrastructure choice behind a port; it does not leak into Document domain or application contracts.

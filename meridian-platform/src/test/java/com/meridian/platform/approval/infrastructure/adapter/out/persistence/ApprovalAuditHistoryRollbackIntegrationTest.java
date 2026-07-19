@@ -1,13 +1,20 @@
 package com.meridian.platform.approval.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.approval.application.dto.ApprovalDecisionRequest;
+import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
+import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
 import com.meridian.platform.approval.application.dto.ReviewRecommendationRequest;
 import com.meridian.platform.approval.application.service.SubmitApprovalDecisionService;
 import com.meridian.platform.approval.application.service.SubmitReviewRecommendationService;
 import com.meridian.platform.approval.domain.model.ApprovalDecisionAction;
+import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
+import com.meridian.platform.approval.domain.model.CorrectionScope;
 import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
+import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -94,48 +101,102 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
             value = ReviewRecommendationAction.class,
             names = {"RETURN_TO_CUSTOMER_REVISION", "REQUEST_STAFF_CORRECTION"}
     )
-    void gatedReviewRevisionActionsHaveZeroDurableEffects(ReviewRecommendationAction action) {
-        UUID loanApplicationId = insertLoanApplication("UNDER_REVIEW", "SA-RG-");
+    void revisionRecommendationRollsBackWhenCorrectionContinuationFails(ReviewRecommendationAction action) {
+        UUID loanApplicationId = insertLoanApplication("UNDER_REVIEW", "SA-RB-");
+        UUID cycleId = insertActiveReviewCycle(loanApplicationId);
         int auditCountBefore = countAllRows("audit_events");
         authenticateLoanOfficer();
+        CorrectionResponsibility responsibility =
+                action == ReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION
+                        ? CorrectionResponsibility.CUSTOMER
+                        : CorrectionResponsibility.STAFF;
 
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,
                 () -> submitReviewRecommendationService.submitReviewRecommendation(
                         loanApplicationId,
-                        new ReviewRecommendationRequest(action, "Correction required.", null)
+                        new ReviewRecommendationRequest(
+                                action,
+                                null,
+                                "Restricted rollback note.",
+                                cycleId,
+                                CorrectionReasonCode.RECENT_PAYSLIP_REQUIRED,
+                                new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+                                        CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
+                                        responsibility,
+                                        DocumentType.RECENT_PAYSLIP,
+                                        true,
+                                        null,
+                                        null,
+                                        responsibility == CorrectionResponsibility.CUSTOMER
+                                                ? "Upload a recent payslip." : null,
+                                        responsibility == CorrectionResponsibility.STAFF
+                                                ? "Upload a recent payslip." : null
+                                )))
+                        )
                 )
         );
 
-        assertEquals("REVISION_WORKFLOW_NOT_AVAILABLE", exception.getErrorCode());
+        assertEquals("DOCUMENT_CHECKLIST_NOT_FOUND", exception.getErrorCode());
         assertEquals(0, countRows("review_recommendations", "loan_application_id", loanApplicationId));
+        assertEquals(0, countRows("loan_correction_requests", "loan_application_id", loanApplicationId));
         assertEquals("UNDER_REVIEW", currentStatus(loanApplicationId));
+        assertEquals("ACTIVE", cycleStatus(cycleId));
         assertEquals(0, countRows("loan_application_status_transitions", "loan_application_id", loanApplicationId));
         assertEquals(auditCountBefore, countAllRows("audit_events"));
     }
 
     @Test
-    void gatedApprovalRevisionActionHasZeroDurableEffects() {
+    void mixedCorrectionDecisionRollsBackWhenCorrectionContinuationFails() {
         UUID loanApplicationId = insertApprovalPendingLoanApplication();
+        UUID cycleId = activeCycleId(loanApplicationId);
         UUID recommendationId = insertReviewRecommendation(loanApplicationId);
+        UUID checklistItemId = UUID.randomUUID();
+        UUID baselineVersionId = UUID.randomUUID();
         int auditCountBefore = countAllRows("audit_events");
         authenticateApprover();
 
-        BusinessStateConflictException exception = assertThrows(
-                BusinessStateConflictException.class,
+        EntityNotFoundException exception = assertThrows(
+                EntityNotFoundException.class,
                 () -> submitApprovalDecisionService.submitApprovalDecision(
                         loanApplicationId,
                         new ApprovalDecisionRequest(
                                 ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
-                                "Correction required.",
-                                null
+                                null,
+                                "Restricted rollback note.",
+                                cycleId,
+                                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                                new CorrectionPlanRequest(List.of(
+                                        new CorrectionTaskRequest(
+                                                CorrectionScope.DOCUMENT_REPLACEMENT,
+                                                CorrectionResponsibility.CUSTOMER,
+                                                DocumentType.RECENT_PAYSLIP,
+                                                false,
+                                                checklistItemId,
+                                                baselineVersionId,
+                                                "Upload a clearer payslip.",
+                                                null
+                                        ),
+                                        new CorrectionTaskRequest(
+                                                CorrectionScope.DOCUMENT_REVIEW,
+                                                CorrectionResponsibility.STAFF,
+                                                DocumentType.RECENT_PAYSLIP,
+                                                false,
+                                                checklistItemId,
+                                                baselineVersionId,
+                                                null,
+                                                "Review the replacement payslip."
+                                        )
+                                ))
                         )
                 )
         );
 
-        assertEquals("REVISION_WORKFLOW_NOT_AVAILABLE", exception.getErrorCode());
+        assertEquals("DOCUMENT_CHECKLIST_NOT_FOUND", exception.getErrorCode());
         assertEquals(0, countRows("approval_decisions", "loan_application_id", loanApplicationId));
+        assertEquals(0, countRows("loan_correction_requests", "loan_application_id", loanApplicationId));
         assertEquals("APPROVAL_PENDING", currentStatus(loanApplicationId));
+        assertEquals("ACTIVE", cycleStatus(cycleId));
         assertEquals(0, countRows("loan_application_status_transitions", "loan_application_id", loanApplicationId));
         assertEquals(0, countRows("approved_offers", "loan_application_id", loanApplicationId));
         assertEquals(auditCountBefore, countAllRows("audit_events"));
@@ -178,6 +239,7 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
                 BigDecimal.valueOf(3_000_000).setScale(2),
                 NOW.minusDays(1)
         );
+        insertActiveReviewCycle(id);
         return id;
     }
 
@@ -235,17 +297,51 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
                         insert into %s.review_recommendations (
                             id,
                             loan_application_id,
+                            review_cycle_id,
                             loan_officer_user_id,
                             recommendation,
                             submitted_at
-                        ) values (?, ?, ?, 'RECOMMEND_APPROVAL', ?)
+                        ) values (?, ?, ?, ?, 'RECOMMEND_APPROVAL', ?)
                         """.formatted(TEST_SCHEMA),
                 id,
                 loanApplicationId,
+                activeCycleId(loanApplicationId),
                 LOAN_OFFICER_USER_ID,
                 NOW.minusHours(1)
         );
         return id;
+    }
+
+    private UUID insertActiveReviewCycle(UUID loanApplicationId) {
+        UUID cycleId = UUID.randomUUID();
+        jdbcTemplate.update(
+                """
+                        insert into %s.loan_application_review_cycles (
+                            id, loan_application_id, cycle_number, status, started_at
+                        ) values (?, ?, 1, 'ACTIVE', ?)
+                        """.formatted(TEST_SCHEMA),
+                cycleId,
+                loanApplicationId,
+                NOW.minusHours(2)
+        );
+        return cycleId;
+    }
+
+    private UUID activeCycleId(UUID loanApplicationId) {
+        return jdbcTemplate.queryForObject(
+                "select id from " + table("loan_application_review_cycles")
+                        + " where loan_application_id = ? and status = 'ACTIVE'",
+                UUID.class,
+                loanApplicationId
+        );
+    }
+
+    private String cycleStatus(UUID cycleId) {
+        return jdbcTemplate.queryForObject(
+                "select status from " + table("loan_application_review_cycles") + " where id = ?",
+                String.class,
+                cycleId
+        );
     }
 
     private void insertTransitionOverflowSeed(UUID loanApplicationId) {

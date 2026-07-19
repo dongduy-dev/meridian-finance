@@ -37,4 +37,24 @@ public class LoanDocumentCorrectionAdapter implements LoanDocumentCorrectionPort
             );
         }
     }
+
+    @Override
+    public void authorizeStaffUpload(
+            UUID loanApplicationId,
+            UUID checklistItemId,
+            UUID expectedCurrentVersionId
+    ) {
+        LoanCorrectionTask task = correctionRepository.findOpenStaffDocumentTask(
+                        loanApplicationId, checklistItemId)
+                .orElseThrow(() -> new AuthorizationException(
+                        "DOCUMENT_UPLOAD_DENIED",
+                        "No open staff correction task authorizes this document upload."
+                ));
+        if (!Objects.equals(task.baselineDocumentVersionId(), expectedCurrentVersionId)) {
+            throw new BusinessStateConflictException(
+                    "STALE_DOCUMENT_VERSION",
+                    "The staff correction task document baseline no longer matches."
+            );
+        }
+    }
 }

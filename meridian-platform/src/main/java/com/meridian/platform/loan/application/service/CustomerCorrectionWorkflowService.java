@@ -125,6 +125,19 @@ public class CustomerCorrectionWorkflowService {
         return request;
     }
 
+    public LoanCorrectionRequest createFromDecision(
+            LoanApplication application,
+            LoanApplicationReviewCycle activeCycle,
+            String sourceAction,
+            CorrectionReasonCode reasonCode,
+            CorrectionPlanRequest plan,
+            BusinessOperationContext operationContext
+    ) {
+        return createFromRecommendation(
+                application, activeCycle, sourceAction, reasonCode, plan, operationContext
+        );
+    }
+
     private String normalize(String value) {
         return value == null ? null : value.trim();
     }

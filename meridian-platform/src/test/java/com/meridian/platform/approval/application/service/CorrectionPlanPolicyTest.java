@@ -105,6 +105,47 @@ class CorrectionPlanPolicyTest {
         assertEquals("CORRECTION_FIELD_NOT_ALLOWED", exception.getErrorCode());
     }
 
+    @Test
+    void acceptsStaffSupportingUploadAndExactMixedComposition() {
+        CorrectionTaskRequest staffUpload = new CorrectionTaskRequest(
+                CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
+                CorrectionResponsibility.STAFF,
+                DocumentType.RECENT_PAYSLIP,
+                true, null, null, null, "Upload the requested payslip."
+        );
+        assertDoesNotThrow(() ->
+                policy.validateStaffCorrection(new CorrectionPlanRequest(List.of(staffUpload))));
+
+        CorrectionTaskRequest customerUpload = supportingUpload();
+        CorrectionTaskRequest staffReview = new CorrectionTaskRequest(
+                CorrectionScope.DOCUMENT_REVIEW,
+                CorrectionResponsibility.STAFF,
+                DocumentType.RECENT_PAYSLIP,
+                false, UUID.randomUUID(), UUID.randomUUID(),
+                null, "Review the current payslip."
+        );
+        assertDoesNotThrow(() -> policy.validateMixedCorrection(
+                new CorrectionPlanRequest(List.of(customerUpload, staffReview))));
+    }
+
+    @Test
+    void rejectsSingleActorMixedPlanAndDuplicateChecklistCreation() {
+        BusinessRuleViolationException singleActor = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> policy.validateMixedCorrection(
+                        new CorrectionPlanRequest(List.of(supportingUpload())))
+        );
+        assertEquals("INVALID_CORRECTION_PLAN", singleActor.getErrorCode());
+
+        CorrectionTaskRequest staffUpload = new CorrectionTaskRequest(
+                CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
+                CorrectionResponsibility.STAFF,
+                DocumentType.RECENT_PAYSLIP,
+                true, null, null, null, "Upload the requested payslip."
+        );
+        assertInvalid(new CorrectionPlanRequest(List.of(supportingUpload(), staffUpload)));
+    }
+
     private CorrectionTaskRequest supportingUpload() {
         return new CorrectionTaskRequest(
                 CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,

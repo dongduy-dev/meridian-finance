@@ -73,13 +73,25 @@ public class ApprovalMapper {
             ApprovalDecision decision,
             BusinessOperationContext operationContext
     ) {
+        return toRecordedEvent(decision, java.util.UUID.randomUUID(), operationContext, null);
+    }
+
+    public ApprovalDecisionRecordedEvent toRecordedEvent(
+            ApprovalDecision decision,
+            java.util.UUID reviewCycleId,
+            BusinessOperationContext operationContext,
+            CorrectionPlanRequest correctionPlan
+    ) {
         return new ApprovalDecisionRecordedEvent(
                 decision.id(),
                 decision.loanApplicationId(),
+                reviewCycleId,
                 decision.reviewRecommendationId(),
                 decision.approverUserId(),
                 ApprovalDecisionEventAction.valueOf(decision.action().name()),
                 decision.reason(),
+                decision.reasonCode(),
+                correctionPlan,
                 decision.decidedAt(),
                 operationContext
         );

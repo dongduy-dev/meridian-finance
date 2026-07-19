@@ -81,7 +81,8 @@ public class ApplyReviewRecommendationService implements ApplyReviewRecommendati
 
         LoanApplicationTransitionResult transition = loanApplication.applyReviewRecommendation(command.action());
         if (command.action() == com.meridian.platform.loan.domain.model.LoanReviewRecommendationAction
-                .RETURN_TO_CUSTOMER_REVISION) {
+                .RETURN_TO_CUSTOMER_REVISION
+                || command.action() == com.meridian.platform.loan.domain.model.LoanReviewRecommendationAction.REQUEST_STAFF_CORRECTION) {
             Objects.requireNonNull(command.reasonCode(), "reasonCode must not be null");
             Objects.requireNonNull(command.correctionPlan(), "correctionPlan must not be null");
             customerCorrectionWorkflowService.createFromRecommendation(

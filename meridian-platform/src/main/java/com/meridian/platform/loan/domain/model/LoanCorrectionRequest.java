@@ -39,6 +39,18 @@ public record LoanCorrectionRequest(
                 createdAt, Objects.requireNonNull(at), null);
     }
 
+    public LoanCorrectionRequest reopen() {
+        if (status == LoanCorrectionRequestStatus.OPEN) {
+            return this;
+        }
+        if (status != LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION) {
+            throw new BusinessStateConflictException(
+                    "CORRECTION_REQUEST_CONFLICT", "Only a ready correction request can be reopened.");
+        }
+        return new LoanCorrectionRequest(id, loanApplicationId, sourceReviewCycleId, sourceAction, reasonCode,
+                createdByUserId, LoanCorrectionRequestStatus.OPEN, null, createdAt, null, null);
+    }
+
     public LoanCorrectionRequest resubmit(UUID requestId, LocalDateTime at) {
         Objects.requireNonNull(requestId);
         Objects.requireNonNull(at);

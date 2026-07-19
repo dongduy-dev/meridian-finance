@@ -25,8 +25,10 @@ import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayload;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import com.meridian.platform.shared.domain.model.ActorType;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +42,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
 
     private final LoanApplicationRepository loanApplicationRepository;
     private final LoanReviewCycleRepository reviewCycleRepository;
+    private final CustomerCorrectionWorkflowService customerCorrectionWorkflowService;
     private final ApprovedOfferRepository approvedOfferRepository;
     private final SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository;
     private final SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService;
@@ -47,9 +50,11 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
     private final BusinessAuditPublisher businessAuditPublisher;
     private final SalaryAdvanceOfferCalculator salaryAdvanceOfferCalculator = new SalaryAdvanceOfferCalculator();
 
+    @Autowired
     public ApplyApprovalDecisionService(
             LoanApplicationRepository loanApplicationRepository,
             LoanReviewCycleRepository reviewCycleRepository,
+            CustomerCorrectionWorkflowService customerCorrectionWorkflowService,
             ApprovedOfferRepository approvedOfferRepository,
             SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository,
             SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService,
@@ -58,11 +63,26 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
     ) {
         this.loanApplicationRepository = loanApplicationRepository;
         this.reviewCycleRepository = reviewCycleRepository;
+        this.customerCorrectionWorkflowService = customerCorrectionWorkflowService;
         this.approvedOfferRepository = approvedOfferRepository;
         this.salaryAdvanceOfferPolicyRepository = salaryAdvanceOfferPolicyRepository;
         this.salaryAdvanceReservationReleaseService = salaryAdvanceReservationReleaseService;
         this.transitionRecorder = transitionRecorder;
         this.businessAuditPublisher = businessAuditPublisher;
+    }
+
+    ApplyApprovalDecisionService(
+            LoanApplicationRepository loanApplicationRepository,
+            LoanReviewCycleRepository reviewCycleRepository,
+            ApprovedOfferRepository approvedOfferRepository,
+            SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository,
+            SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService,
+            LoanApplicationStatusTransitionRecorder transitionRecorder,
+            BusinessAuditPublisher businessAuditPublisher
+    ) {
+        this(loanApplicationRepository, reviewCycleRepository, null, approvedOfferRepository,
+                salaryAdvanceOfferPolicyRepository, salaryAdvanceReservationReleaseService,
+                transitionRecorder, businessAuditPublisher);
     }
 
     @Override
@@ -87,8 +107,12 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
 
         LoanApplicationReviewCycle activeCycle = reviewCycleRepository
                 .findActiveByLoanApplicationIdForUpdate(command.loanApplicationId())
-                .orElseThrow(() -> new com.meridian.platform.shared.domain.exception.BusinessStateConflictException(
+                .orElseThrow(() -> new BusinessStateConflictException(
                         "REVIEW_CYCLE_REQUIRED", "An active review cycle is required."));
+        if (command.reviewCycleId() != null && !activeCycle.id().equals(command.reviewCycleId())) {
+            throw new BusinessStateConflictException(
+                    "STALE_REVIEW_CYCLE", "The decision review cycle is no longer active.");
+        }
 
         LoanApplicationTransitionResult decisionTransition = loanApplication.applyApprovalDecision(command.action());
         LoanApplication transitionedApplication = decisionTransition.loanApplication();
@@ -124,10 +148,14 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
                         command.operationContext().occurredAt()
                 ));
             }
-            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION ->
-                    reviewCycleRepository.save(activeCycle.requireCorrection(
-                            command.operationContext().occurredAt()
-                    ));
+            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION -> {
+                Objects.requireNonNull(command.reasonCode(), "reasonCode must not be null");
+                Objects.requireNonNull(command.correctionPlan(), "correctionPlan must not be null");
+                customerCorrectionWorkflowService.createFromDecision(
+                        loanApplication, activeCycle, command.action().name(),
+                        command.reasonCode(), command.correctionPlan(), command.operationContext()
+                );
+            }
         }
 
         LoanApplication savedApplication = loanApplicationRepository.save(transitionedApplication);

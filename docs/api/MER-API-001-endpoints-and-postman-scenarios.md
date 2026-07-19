@@ -24,6 +24,18 @@ Current security posture comes from `SecurityConfig`: health, login, and loan pr
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review/start` | Bearer + `loan:review` | `LoanApplicationReviewController` | Start Loan Officer review and transition a submitted application to `UNDER_REVIEW`. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review-recommendations` | Bearer + `approval:recommend` | `ReviewRecommendationController` | Record the authenticated Loan Officer recommendation and trigger Loan-owned status transition. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approval-decisions` | Bearer + `approval:decide` | `ApprovalDecisionController` | Record the authenticated Approver decision and trigger Loan-owned final/return status transition. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/corrections/tasks` | Bearer + `loan:correction:own` | `CustomerCorrectionController` | List the authenticated owner's correction tasks. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/corrections/tasks/{taskId}/complete` | Bearer + `loan:correction:own` | `CustomerCorrectionController` | Complete an owned task after its document proof exists. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/corrections/resubmit` | Bearer + `loan:correction:own` | `CustomerCorrectionController` | Guarded resubmission of a Customer-only correction. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions` | Bearer + `document:upload:own` | `CustomerDocumentController` | Upload or replace an owned correction document version. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | Bearer + `document:read:own` | `DocumentContentController` | Stream an owned immutable version as a private attachment. |
+| GET | `/api/v1/document-review-items?status=AWAITING_REVIEW` | Bearer + `document:review` | `DocumentReviewQueueController` | List current versions awaiting manual review. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/document-review-items/{checklistItemId}/reviews` | Bearer + `document:review` | `DocumentReviewController` | Review the exact current immutable version. |
+| GET | `/api/v1/staff-corrections/tasks?status=OPEN&page=0&size=20` | Bearer + `loan:correction:staff` | `StaffCorrectionController` | List bounded Staff-owned correction tasks. |
+| POST | `/api/v1/staff-corrections/tasks/{taskId}/complete` | Bearer + `loan:correction:staff` | `StaffCorrectionController` | Complete a Staff task with maker-checker and evidence proof. |
+| POST | `/api/v1/staff-corrections/loan-applications/{loanApplicationId}/resubmit` | Bearer + `loan:correction:staff` | `StaffCorrectionController` | Guarded Staff or mixed correction resubmission. |
+| POST | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions` | Bearer + `document:upload:staff` | `StaffDocumentController` | Upload only for an open Staff upload task. |
+| GET | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | Bearer + `document:review` | `DocumentContentController` | Stream a review-authorized immutable version as a private attachment. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/approved-offer` | Bearer + `loan:read:own` | `ApprovedOfferController` | View the authenticated customer's approved offer without mutating expiry, status, or financial movements. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept` | Bearer + `loan:offer:respond:own` | `ApprovedOfferController` | Accept the authenticated customer's pending approved offer and move the application to `CONTRACT_PENDING`; any expired offer returns `409 OFFER_EXPIRED`, with effects only when the action first discovers expiry. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/decline` | Bearer + `loan:offer:respond:own` | `ApprovedOfferController` | Decline the authenticated customer's pending approved offer and release reservation exactly once; any expired offer returns `409 OFFER_EXPIRED`, with no duplicate effect for persisted expiry. |
@@ -130,11 +142,12 @@ POST /api/v1/loan-applications/{loanApplicationId}/review/start
 }
 ```
 
-Current executable actions are `RECOMMEND_APPROVAL`, `RECOMMEND_REJECTION`, and `RETURN_TO_CUSTOMER_REVISION`; rejection requires a nonblank `reason`.
-`REQUEST_STAFF_CORRECTION` remains gated with HTTP `409 REVISION_WORKFLOW_NOT_AVAILABLE`
-until the staff queue and resubmitter continuation are available.
+All actions are executable: `RECOMMEND_APPROVAL`, `RECOMMEND_REJECTION`,
+`RETURN_TO_CUSTOMER_REVISION`, and `REQUEST_STAFF_CORRECTION`. Rejection uses a
+nonblank `reason`; revision actions instead require `expectedReviewCycleId`, a
+controlled `reasonCode`, and one to ten structured tasks.
 
-Customer revision uses controlled fields instead of free-text `reason`:
+Customer revision example:
 
 ```json
 {
@@ -160,6 +173,12 @@ Customer revision uses controlled fields instead of free-text `reason`:
 }
 ```
 
+Staff correction uses the same envelope with action `REQUEST_STAFF_CORRECTION`.
+Its tasks must be Staff-owned `SUPPORTING_DOCUMENT_UPLOAD` or `DOCUMENT_REVIEW`
+tasks. Upload creates an on-demand `RECENT_PAYSLIP` item; review references an
+existing checklist item and immutable baseline version. Staff instructions are
+restricted to the Staff queue and never returned to a Customer.
+
 
 ### Approval Decision
 
@@ -173,37 +192,109 @@ Customer revision uses controlled fields instead of free-text `reason`:
 }
 ```
 
-Current executable actions are `APPROVE`, `REJECT`, and `RETURN_TO_LOAN_OFFICER_REVIEW`; a nonblank `reason` is required except for `APPROVE`. For Salary Advance, `APPROVE` atomically generates the customer approved offer and moves the Loan Application to `CUSTOMER_ACCEPTANCE_PENDING`; `REJECT` transitions the Loan Application to `REJECTED` and releases the reserved Salary Advance limit.
-`REQUEST_CUSTOMER_OR_STAFF_CORRECTION` remains a target-state enum value but is temporarily rejected with HTTP `409 REVISION_WORKFLOW_NOT_AVAILABLE` before any decision, audit, event, history, or Loan status effect. `RETURN_TO_LOAN_OFFICER_REVIEW` remains operational. See `MER-FU-031`.
+All actions are executable: `APPROVE`, `REJECT`,
+`RETURN_TO_LOAN_OFFICER_REVIEW`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`.
+A nonblank `reason` is required except for `APPROVE`; the mixed correction action
+uses controlled correction fields instead. For Salary Advance, `APPROVE` atomically
+generates the customer approved offer and moves the application to
+`CUSTOMER_ACCEPTANCE_PENDING`; `REJECT` moves to `REJECTED` and releases the
+reservation.
 
-### Customer Correction and Document Replacement
+Mixed correction example for an existing payslip:
 
-Customer ownership is derived from the authenticated token. These endpoints require
-`loan:correction:own` or `document:upload:own` as shown:
-
-```text
-GET  /api/v1/loan-applications/{loanApplicationId}/corrections/tasks
-POST /api/v1/loan-applications/{loanApplicationId}/corrections/tasks/{taskId}/complete
-POST /api/v1/loan-applications/{loanApplicationId}/corrections/resubmit
-POST /api/v1/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions
+```json
+{
+  "action": "REQUEST_CUSTOMER_OR_STAFF_CORRECTION",
+  "reason": null,
+  "internalNotes": "Optional restricted Approval note.",
+  "expectedReviewCycleId": "{{reviewCycleId}}",
+  "reasonCode": "DOCUMENT_REPLACEMENT_REQUIRED",
+  "correctionPlan": {
+    "tasks": [
+      {
+        "scope": "DOCUMENT_REPLACEMENT",
+        "responsibleParty": "CUSTOMER",
+        "documentType": "RECENT_PAYSLIP",
+        "createChecklistItem": false,
+        "checklistItemId": "{{checklistItemId}}",
+        "baselineDocumentVersionId": "{{documentVersionId}}",
+        "customerInstruction": "Replace the payslip with a readable current copy.",
+        "staffInstruction": null
+      },
+      {
+        "scope": "DOCUMENT_REVIEW",
+        "responsibleParty": "STAFF",
+        "documentType": "RECENT_PAYSLIP",
+        "createChecklistItem": false,
+        "checklistItemId": "{{checklistItemId}}",
+        "baselineDocumentVersionId": "{{documentVersionId}}",
+        "customerInstruction": null,
+        "staffInstruction": "Review the customer's replacement version."
+      }
+    ]
+  }
+}
 ```
 
-Task completion and resubmission bodies carry `completionRequestId` and
-`resubmissionRequestId` respectively. Document upload is multipart with
-`uploadRequestId`, optional `expectedCurrentVersionId`, and `file`. Only PDF, JPEG,
-and PNG are accepted, with a 10 MiB limit and signature-to-declared-MIME matching.
+### Document Review and Customer/Staff Correction
 
-Customer responses expose safe IDs, status, `RECENT_PAYSLIP`, controlled reason code,
-customer instruction, and timestamps. They never expose storage keys, hashes, paths,
-restricted notes, salary, employee codes, identity evidence, or bank information.
+Customer identity is derived from the authenticated token. Staff endpoints require
+their narrow permissions. The executable endpoints are listed in the inventory
+above; no request accepts a Customer ownership ID.
 
-Resubmission requires every customer task to be completed and revalidates Customer
-readiness, product policy, whole-VND amount, allowed term, blocking applications,
-Partner eligibility, the verified employee link, current effective limit, the
-existing unchanged reservation, and Document readiness. It inserts a new immutable
-Salary Advance verification snapshot and creates no limit movement. The target is
-`SUBMITTED` while document review remains pending, or `UNDER_REVIEW` with a new
-active review cycle when prior review exists and the checklist is processing-ready.
+Task completion and resubmission bodies are:
+
+```json
+{ "completionRequestId": "{{$guid}}" }
+```
+
+```json
+{ "resubmissionRequestId": "{{$guid}}" }
+```
+
+Document upload is multipart with `uploadRequestId`, optional
+`expectedCurrentVersionId`, and `file`. Only PDF, JPEG, and PNG are accepted, with
+a 10 MiB limit and signature-to-declared-MIME matching. Concurrent replacement
+uses the expected version as optimistic proof; a stale client receives
+`409 STALE_DOCUMENT_VERSION`.
+
+Manual review targets `documentVersionId` and supports `ACCEPT_DOCUMENT`,
+`WAIVE_DOCUMENT`, or `REQUEST_REPLACEMENT`. Waiver additionally requires
+`document:waive` and an allowed `waiverReasonCode`. Replacement requires
+`DOCUMENT_REPLACEMENT_REQUIRED` plus a Customer-visible instruction. A decision
+against a version that is no longer current conflicts. Replacing a version
+supersedes the old version and invalidates its acceptance for readiness.
+
+Customer responses expose safe IDs, status, `RECENT_PAYSLIP`, controlled reason
+code, Customer instruction, and timestamps. Staff queue responses expose the Staff
+instruction but not document content or sensitive Customer evidence. JSON never
+exposes storage keys, hashes, paths, restricted Approval notes, salary, employee
+codes, identity evidence, bank information, or OCR text. Content endpoints stream
+only the authorized immutable version with attachment, no-store/private caching,
+and `X-Content-Type-Options: nosniff`.
+
+A Staff upload requires an open Staff SUPPORTING_DOCUMENT_UPLOAD task. A Staff
+DOCUMENT_REVIEW task proves that a review outcome was persisted for the exact
+current version. For a paired mixed request it reviews the Customer replacement
+produced after the task baseline. The staff user who created the correction request
+cannot complete its Staff tasks. Accepted/waived remains the separate processing-
+readiness rule; a replacement request keeps the correction incomplete until its
+new Customer upload task is completed.
+
+Only the authenticated Customer may resubmit a Customer-only request. Only Staff
+with `loan:correction:staff` may resubmit Staff-only or mixed requests. A mixed
+request cannot be resubmitted after only its Customer work is complete.
+Resubmission requires every task and its evidence proof, locks and consumes the
+request exactly once, and revalidates Customer readiness, product policy,
+whole-VND amount, allowed term, blocking applications, Partner eligibility, the
+verified employee link, current effective limit, unchanged reservation, and
+Document readiness. It inserts one immutable verification snapshot and no limit
+movement. Requested amount and term are immutable in this checkpoint.
+
+The target is `SUBMITTED` while manual document review remains pending, or
+`UNDER_REVIEW` with a new active review cycle when prior review exists and the
+checklist is processing-ready. Prior recommendations and decisions remain
+immutable and are historically superseded by their review-cycle linkage.
 
 ### Approved Offer
 
@@ -237,7 +328,11 @@ Import this file into Postman:
 
 `docs/api/Meridian-Platform.postman_collection.json`
 
-Collection note: the Postman collection now uses `POST /api/v1/auth/login`, role-specific Bearer token variables, and the full current endpoint inventory including Loan Officer review, recommendation, approval decision, and customer approved-offer endpoints.
+The collection uses role-specific Bearer tokens and includes Customer, Staff, mixed
+correction, document content, queue, upload, review, completion, resubmission, and
+negative-security requests. Staff and mixed flows require prepared applications;
+set `staffCorrectionScenarioEnabled` or `mixedCorrectionScenarioEnabled` to `true`
+only after supplying the documented review-cycle/checklist/version variables.
 
 Expected high-value checks:
 
@@ -260,13 +355,28 @@ Expected high-value checks:
 | Recommendation without `approval:recommend` | `403`, `ACCESS_DENIED`. |
 | Recommendation missing required reason | `422`, `RECOMMENDATION_REASON_REQUIRED`. |
 | Recommendation happy path | `201`, recommendation recorded, Loan status moves to `APPROVAL_PENDING`. |
-| Customer revision recommendation | `201`, controlled plan persisted, Loan status moves to `RETURNED_FOR_REVISION`. |
-| Gated staff correction recommendation | `409`, `REVISION_WORKFLOW_NOT_AVAILABLE`, with no durable effect. |
+| Customer revision recommendation | `201`, Customer task persisted, Loan status `RETURNED_FOR_REVISION`. |
+| Staff correction recommendation | `201`, Staff task persisted transactionally, Loan status `RETURNED_FOR_REVISION`. |
+| Mixed approval correction action | `201`, separate Customer and Staff tasks persisted, Loan status `RETURNED_FOR_REVISION`. |
+| Stale review-cycle correction action | `409`, `STALE_REVIEW_CYCLE`, with no source Approval or continuation effects. |
+| Staff queue without permission | `403`, `ACCESS_DENIED`. |
+| Customer attempts Staff task | `403`, ownership/permission denial. |
+| Staff correction maker-checker violation | `403`, `STAFF_CORRECTION_MAKER_CHECKER_VIOLATION`. |
+| Staff upload without open upload task | `403`, `DOCUMENT_UPLOAD_DENIED`. |
+| Concurrent document replacement | One immutable version wins; stale expected version receives `409 STALE_DOCUMENT_VERSION`. |
+| Concurrent review and replacement | Review succeeds only for the still-current version; otherwise `409 STALE_DOCUMENT_VERSION`. |
+| Manual accept / waive / replacement | Current version becomes accepted, item becomes waived, or a controlled Customer replacement task is created. |
+| Mixed Customer-only completion | Request remains incomplete; Customer resubmission receives `403 CORRECTION_RESUBMISSION_DENIED`. |
+| Staff task evidence missing | `409`, `CORRECTION_TASK_PROOF_MISSING`. |
+| Duplicate task completion | Same completion request is idempotent; a different request conflicts. |
+| Incomplete resubmission | `409`, `CORRECTION_TASKS_INCOMPLETE`. |
+| Concurrent Staff resubmission | One winner; duplicate request is idempotent and a different request receives `409 CORRECTION_ALREADY_RESUBMITTED`. |
+| Resubmission revalidation failure | Transaction rolls back status, request consumption, cycle, verification, audit/history, and reservation-related work. |
+| Successful correction return to review | New verification and active review cycle, `UNDER_REVIEW`, prior cycle records historically superseded. |
 | Approval decision without `approval:decide` | `403`, `ACCESS_DENIED`. |
-| Approval decision maker-checker violation | `422`, `MAKER_CHECKER_VIOLATION`. |
-| Approval decision reject path | `201`, decision recorded, Loan status moves to `REJECTED`, Salary Advance reservation is released. |
-| Approval decision approve path | `201`, Salary Advance decision recorded, approved offer generated, Loan status moves to `CUSTOMER_ACCEPTANCE_PENDING`. |
-| Gated approval correction action | `409`, `REVISION_WORKFLOW_NOT_AVAILABLE`, with no decision, audit, event, history, or Loan status effect. |
+| Approval decision maker-checker violation | `409`, `MAKER_CHECKER_VIOLATION`. |
+| Approval decision reject path | `201`, decision recorded, Loan status `REJECTED`, reservation released. |
+| Approval decision approve path | `201`, offer generated, Loan status `CUSTOMER_ACCEPTANCE_PENDING`. |
 | Customer approved-offer view | `200`, customer-facing offer includes immutable terms, provisional repayment items, and available actions while pending. |
 | Customer approved-offer accept | `200`, offer status `ACCEPTED`, application moves to `CONTRACT_PENDING`. |
 | Customer approved-offer decline | `200`, offer status `DECLINED`, application moves to `CUSTOMER_DECLINED`, reservation released exactly once. |

@@ -73,7 +73,7 @@ class CustomerCorrectionV23PostgreSqlIntegrationTest {
             insertDecision(schema, multipleCycles, first, "RETURN_TO_LOAN_OFFICER_REVIEW", 2);
             insertRecommendation(schema, multipleCycles, "RECOMMEND_APPROVAL", 3);
 
-            assertEquals(2, migrateLatest(schema));
+            assertEquals(3, migrateLatest(schema));
             assertCycleCount(schema, submitted, 0);
             assertCycle(schema, underReview, 1, "ACTIVE");
             assertCycle(schema, approvalPending, 1, "ACTIVE");

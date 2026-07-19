@@ -3,6 +3,7 @@ package com.meridian.platform.loan.application.service;
 import com.meridian.platform.loan.application.dto.CorrectionResubmissionDto;
 import com.meridian.platform.loan.application.dto.CorrectionResubmissionRequest;
 import com.meridian.platform.loan.application.port.in.ResubmitOwnCorrectionUseCase;
+import com.meridian.platform.loan.application.port.in.ResubmitStaffCorrectionUseCase;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
@@ -55,7 +56,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionUseCase {
+public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionUseCase, ResubmitStaffCorrectionUseCase {
     private final LoanApplicationRepository applicationRepository;
     private final LoanCorrectionRepository correctionRepository;
     private final LoanReviewCycleRepository reviewCycleRepository;
@@ -110,8 +111,30 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
             UUID loanApplicationId,
             CorrectionResubmissionRequest command
     ) {
+        return resubmitInternal(loanApplicationId, command, ResubmissionActor.CUSTOMER);
+    }
+
+    @Override
+    @Transactional
+    public CorrectionResubmissionDto resubmitAsStaff(
+            UUID loanApplicationId,
+            CorrectionResubmissionRequest command
+    ) {
+        return resubmitInternal(loanApplicationId, command, ResubmissionActor.STAFF);
+    }
+
+    private CorrectionResubmissionDto resubmitInternal(
+            UUID loanApplicationId,
+            CorrectionResubmissionRequest command,
+            ResubmissionActor actor
+    ) {
         AuthenticatedUser user = currentUserProvider.currentUser();
-        UUID customerId = user.requireCustomerId();
+        UUID authenticatedCustomerId = actor == ResubmissionActor.CUSTOMER
+                ? user.requireCustomerId() : null;
+        if (actor == ResubmissionActor.STAFF && !user.hasPermission("loan:correction:staff")) {
+            throw new AuthorizationException(
+                    "CORRECTION_RESUBMISSION_DENIED", "Staff correction permission is required.");
+        }
         LocalDateTime now = LocalDateTime.now(clock);
         BusinessOperationContext operation = BusinessOperationContext.user(UUID.randomUUID(), user.userId(), now);
 
@@ -119,15 +142,20 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
         LoanApplication application = applicationRepository.findByIdForUpdate(loanApplicationId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "LOAN_APPLICATION_NOT_FOUND", "Loan Application was not found."));
-        if (!application.customerId().equals(customerId)) {
+        if (actor == ResubmissionActor.CUSTOMER
+                && !application.customerId().equals(authenticatedCustomerId)) {
             throw new AuthorizationException(
                     "CORRECTION_ACCESS_DENIED", "Customer cannot resubmit another Loan Application.");
         }
+        UUID customerId = application.customerId();
 
         LoanCorrectionRequest latest = correctionRepository.findLatestRequestByApplicationId(loanApplicationId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "CORRECTION_REQUEST_NOT_FOUND", "Correction request was not found."));
         if (latest.status() == LoanCorrectionRequestStatus.RESUBMITTED) {
+            List<LoanCorrectionTask> completedTasks =
+                    correctionRepository.findTasksByRequestIdForUpdate(latest.id());
+            validateResubmitter(actor, completedTasks);
             if (command.resubmissionRequestId().equals(latest.resubmissionRequestId())) {
                 return toDto(latest, application);
             }
@@ -140,10 +168,7 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
                 .orElseThrow(() -> new BusinessStateConflictException(
                         "CORRECTION_REQUEST_CONFLICT", "No active correction request is available."));
         List<LoanCorrectionTask> tasks = correctionRepository.findTasksByRequestIdForUpdate(request.id());
-        if (tasks.stream().anyMatch(task -> task.responsibleParty() != LoanCorrectionResponsibility.CUSTOMER)) {
-            throw new AuthorizationException(
-                    "CORRECTION_RESUBMISSION_DENIED", "Customer cannot resubmit a correction containing staff work.");
-        }
+        validateResubmitter(actor, tasks);
         if (tasks.stream().anyMatch(task -> task.status() != LoanCorrectionTaskStatus.COMPLETED)) {
             throw new BusinessStateConflictException(
                     "CORRECTION_TASKS_INCOMPLETE", "Every correction task must be complete before resubmission.");
@@ -238,6 +263,26 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
         return toDto(resubmitted, savedApplication);
     }
 
+    private void validateResubmitter(
+            ResubmissionActor actor,
+            List<LoanCorrectionTask> tasks
+    ) {
+        boolean hasCustomerTasks = tasks.stream().anyMatch(
+                task -> task.responsibleParty() == LoanCorrectionResponsibility.CUSTOMER);
+        boolean hasStaffTasks = tasks.stream().anyMatch(
+                task -> task.responsibleParty() == LoanCorrectionResponsibility.STAFF);
+        if (tasks.isEmpty()
+                || (actor == ResubmissionActor.CUSTOMER && hasStaffTasks)
+                || (actor == ResubmissionActor.STAFF && !hasStaffTasks)) {
+            throw new AuthorizationException(
+                    "CORRECTION_RESUBMISSION_DENIED",
+                    hasCustomerTasks && hasStaffTasks
+                            ? "Only authorized staff can resubmit a mixed correction request."
+                            : "The authenticated actor cannot resubmit this correction request."
+            );
+        }
+    }
+
     private void validateCustomerReadiness(UUID customerId) {
         CustomerReadinessSnapshot readiness = customerReadinessPort.findReadinessByCustomerId(customerId)
                 .orElseThrow(() -> new EntityNotFoundException(
@@ -287,5 +332,9 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
                 request.id(), application.id(), application.status().name(),
                 request.resubmissionRequestId(), request.resubmittedAt()
         );
+    }
+
+    private enum ResubmissionActor {
+        CUSTOMER, STAFF
     }
 }

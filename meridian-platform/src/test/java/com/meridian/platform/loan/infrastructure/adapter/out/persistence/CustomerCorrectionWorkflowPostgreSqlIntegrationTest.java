@@ -28,14 +28,21 @@ import com.meridian.platform.loan.application.dto.CorrectionResubmissionRequest;
 import com.meridian.platform.loan.application.dto.CustomerCorrectionTaskDto;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationDto;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationRequest;
+import com.meridian.platform.loan.application.dto.StaffCorrectionTaskDto;
 import com.meridian.platform.loan.application.port.in.CompleteOwnCorrectionTaskUseCase;
+import com.meridian.platform.loan.application.port.in.CompleteStaffCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.QueryOwnCorrectionTasksUseCase;
+import com.meridian.platform.loan.application.port.in.QueryStaffCorrectionTasksUseCase;
 import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.ResubmitOwnCorrectionUseCase;
+import com.meridian.platform.loan.application.port.in.ResubmitStaffCorrectionUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicationUseCase;
+import com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.exception.AuthorizationException;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,8 +62,14 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(
@@ -85,6 +98,10 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
             UUID.fromString("00000000-0000-0000-0000-000000000302");
     private static final UUID APPROVER_USER_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000303");
+    private static final UUID STAFF_WORKER_USER_ID =
+            UUID.fromString("00000000-0000-0000-0000-000000000304");
+    private static final UUID BACK_OFFICE_USER_ID =
+            UUID.fromString("00000000-0000-0000-0000-000000000305");
     private static final byte[] PDF = "%PDF-1.7\n% Meridian test evidence\n"
             .getBytes(StandardCharsets.US_ASCII);
 
@@ -98,6 +115,9 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
     @Autowired private QueryOwnCorrectionTasksUseCase customerTaskQuery;
     @Autowired private CompleteOwnCorrectionTaskUseCase customerTaskCompletion;
     @Autowired private ResubmitOwnCorrectionUseCase customerResubmission;
+    @Autowired private QueryStaffCorrectionTasksUseCase staffTaskQuery;
+    @Autowired private CompleteStaffCorrectionTaskUseCase staffTaskCompletion;
+    @Autowired private ResubmitStaffCorrectionUseCase staffResubmission;
     @Autowired private RespondToApprovedOfferUseCase offerResponseUseCase;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private ThreadLocalCurrentUserProvider currentUserProvider;
@@ -251,6 +271,385 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                 + "OR payload::text LIKE '%Restricted%'"));
     }
 
+
+    @Test
+    void staffAndMixedCorrectionsReturnToReviewAndReachContractPending() throws Exception {
+        SalaryAdvanceApplicationDto application = submissionUseCase.startSalaryAdvanceApplication(
+                new SalaryAdvanceApplicationRequest(fixture.linkId(), money(3_000_000), 1)
+        );
+        UUID applicationId = application.loanApplicationId();
+
+        useLoanOfficer();
+        reviewStartUseCase.startReview(applicationId);
+        UUID cycle1 = activeCycle(applicationId);
+        recommendationUseCase.submitReviewRecommendation(
+                applicationId,
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.REQUEST_STAFF_CORRECTION,
+                        null,
+                        "Restricted staff-correction note.",
+                        cycle1,
+                        CorrectionReasonCode.RECENT_PAYSLIP_REQUIRED,
+                        new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+                                CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
+                                CorrectionResponsibility.STAFF,
+                                DocumentType.RECENT_PAYSLIP,
+                                true,
+                                null,
+                                null,
+                                null,
+                                "Upload the requested recent payslip."
+                        )))
+                )
+        );
+        assertEquals("RETURNED_FOR_REVISION", status(applicationId));
+        assertEquals("CORRECTION_REQUIRED", cycleStatus(cycle1));
+
+        useStaffWorker();
+        StaffCorrectionTaskDto uploadTask = onlyStaffTask(applicationId);
+        useBackOffice();
+        DocumentVersionDto version1 = uploadAsStaff(
+                applicationId, uploadTask.checklistItemId(), null, "staff-payslip.pdf");
+
+        useLoanOfficer();
+        documentReviewUseCase.review(new ReviewDocumentCommand(
+                applicationId,
+                uploadTask.checklistItemId(),
+                version1.documentVersionId(),
+                UUID.randomUUID(),
+                DocumentReviewOutcome.ACCEPT_DOCUMENT,
+                null,
+                "Restricted staff-upload acceptance note.",
+                LOAN_OFFICER_USER_ID,
+                false
+        ));
+
+        useStaffWorker();
+        UUID staffCompletionId = UUID.randomUUID();
+        staffTaskCompletion.complete(
+                uploadTask.taskId(),
+                new CompleteCorrectionTaskRequest(staffCompletionId)
+        );
+        staffTaskCompletion.complete(
+                uploadTask.taskId(),
+                new CompleteCorrectionTaskRequest(staffCompletionId)
+        );
+        UUID staffResubmissionId = raceStaffResubmissions(applicationId);
+        assertEquals("UNDER_REVIEW", staffResubmission.resubmitAsStaff(
+                applicationId,
+                new CorrectionResubmissionRequest(staffResubmissionId)
+        ).loanApplicationStatus());
+        assertEquals(2, count(
+                "SELECT count(*) FROM salary_advance_verifications WHERE loan_application_id = ?",
+                applicationId
+        ));
+        assertEquals("CORRECTED", cycleStatus(cycle1));
+
+        UUID cycle2 = activeCycle(applicationId);
+        assertEquals(2, cycleNumber(cycle2));
+        useLoanOfficer();
+        recommendationUseCase.submitReviewRecommendation(
+                applicationId,
+                new ReviewRecommendationRequest(ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null)
+        );
+
+        useApprover();
+        decisionUseCase.submitApprovalDecision(
+                applicationId,
+                new ApprovalDecisionRequest(
+                        ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
+                        null,
+                        "Restricted mixed-correction note.",
+                        cycle2,
+                        CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                        new CorrectionPlanRequest(List.of(
+                                new CorrectionTaskRequest(
+                                        CorrectionScope.DOCUMENT_REPLACEMENT,
+                                        CorrectionResponsibility.CUSTOMER,
+                                        DocumentType.RECENT_PAYSLIP,
+                                        false,
+                                        uploadTask.checklistItemId(),
+                                        version1.documentVersionId(),
+                                        "Upload a clearer replacement payslip.",
+                                        null
+                                ),
+                                new CorrectionTaskRequest(
+                                        CorrectionScope.DOCUMENT_REVIEW,
+                                        CorrectionResponsibility.STAFF,
+                                        DocumentType.RECENT_PAYSLIP,
+                                        false,
+                                        uploadTask.checklistItemId(),
+                                        version1.documentVersionId(),
+                                        null,
+                                        "Review the replacement payslip."
+                                )
+                        ))
+                )
+        );
+        assertEquals("RETURNED_FOR_REVISION", status(applicationId));
+        assertEquals("CORRECTION_REQUIRED", cycleStatus(cycle2));
+
+        useCustomer();
+        CustomerCorrectionTaskDto replacementTask = onlyTask(applicationId);
+        DocumentVersionDto version2 = raceReplacementAndReview(
+                applicationId,
+                replacementTask.checklistItemId(),
+                version1.documentVersionId()
+        );
+        customerTaskCompletion.complete(
+                applicationId,
+                replacementTask.correctionTaskId(),
+                new CompleteCorrectionTaskRequest(UUID.randomUUID())
+        );
+        AuthorizationException denied = assertThrows(
+                AuthorizationException.class,
+                () -> customerResubmission.resubmit(
+                        applicationId,
+                        new CorrectionResubmissionRequest(UUID.randomUUID()))
+        );
+        assertEquals("CORRECTION_RESUBMISSION_DENIED", denied.getErrorCode());
+
+        useLoanOfficer();
+        documentReviewUseCase.review(new ReviewDocumentCommand(
+                applicationId,
+                replacementTask.checklistItemId(),
+                version2.documentVersionId(),
+                UUID.randomUUID(),
+                DocumentReviewOutcome.ACCEPT_DOCUMENT,
+                null,
+                "Restricted replacement acceptance note.",
+                LOAN_OFFICER_USER_ID,
+                false
+        ));
+        StaffCorrectionTaskDto reviewTask = onlyStaffTask(applicationId);
+        staffTaskCompletion.complete(
+                reviewTask.taskId(),
+                new CompleteCorrectionTaskRequest(UUID.randomUUID())
+        );
+        UUID mixedResubmissionId = UUID.randomUUID();
+        assertEquals("UNDER_REVIEW", staffResubmission.resubmitAsStaff(
+                applicationId,
+                new CorrectionResubmissionRequest(mixedResubmissionId)
+        ).loanApplicationStatus());
+
+        UUID cycle3 = activeCycle(applicationId);
+        assertEquals(3, cycleNumber(cycle3));
+        assertEquals("CORRECTED", cycleStatus(cycle2));
+        assertEquals(1, count("""
+                SELECT count(*)
+                FROM approval_decisions decision
+                JOIN review_recommendations recommendation
+                  ON recommendation.id = decision.review_recommendation_id
+                WHERE decision.loan_application_id = ?
+                  AND recommendation.review_cycle_id = ?
+                  AND decision.decision = 'REQUEST_CUSTOMER_OR_STAFF_CORRECTION'
+                """, applicationId, cycle2));
+
+        useLoanOfficer();
+        recommendationUseCase.submitReviewRecommendation(
+                applicationId,
+                new ReviewRecommendationRequest(ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null)
+        );
+        useApprover();
+        decisionUseCase.submitApprovalDecision(
+                applicationId,
+                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+        );
+        useCustomer();
+        assertEquals(ApprovedOfferActionOutcome.SUCCESS, offerResponseUseCase.acceptOffer(applicationId).outcome());
+        assertEquals("CONTRACT_PENDING", status(applicationId));
+        assertEquals("COMPLETED", cycleStatus(cycle3));
+        assertEquals(2, count(
+                "SELECT count(*) FROM loan_correction_requests "
+                        + "WHERE loan_application_id = ? AND status = 'RESUBMITTED'",
+                applicationId
+        ));
+        assertEquals(0, count("SELECT count(*) FROM audit_events WHERE payload::text LIKE '%Restricted%'"));
+    }
+
+
+
+    private UUID raceStaffResubmissions(UUID applicationId) throws Exception {
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        UUID firstRequestId = UUID.randomUUID();
+        UUID secondRequestId = UUID.randomUUID();
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<StaffResubmissionRaceOutcome> first = executor.submit(() ->
+                    raceStaffResubmission(applicationId, firstRequestId, ready, start));
+            Future<StaffResubmissionRaceOutcome> second = executor.submit(() ->
+                    raceStaffResubmission(applicationId, secondRequestId, ready, start));
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+
+            List<StaffResubmissionRaceOutcome> outcomes = List.of(
+                    first.get(15, TimeUnit.SECONDS),
+                    second.get(15, TimeUnit.SECONDS)
+            );
+            List<StaffResubmissionRaceOutcome> successes = outcomes.stream()
+                    .filter(outcome -> outcome.failure() == null)
+                    .toList();
+            List<RuntimeException> failures = outcomes.stream()
+                    .map(StaffResubmissionRaceOutcome::failure)
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+            assertEquals(1, successes.size());
+            assertEquals("UNDER_REVIEW", successes.getFirst().status());
+            assertEquals(1, failures.size());
+            assertEquals(
+                    "CORRECTION_ALREADY_RESUBMITTED",
+                    ((BusinessStateConflictException) failures.getFirst()).getErrorCode()
+            );
+            return successes.getFirst().requestId();
+        }
+    }
+
+    private StaffResubmissionRaceOutcome raceStaffResubmission(
+            UUID applicationId,
+            UUID requestId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) throws InterruptedException {
+        currentUserProvider.use(new AuthenticatedUser(
+                STAFF_WORKER_USER_ID, "staff.worker@meridian.local", "STAFF", null,
+                Set.of("LOAN_OFFICER"), Set.of("loan:correction:staff")
+        ));
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Staff resubmission race did not start.");
+        }
+        try {
+            return new StaffResubmissionRaceOutcome(
+                    requestId,
+                    staffResubmission.resubmitAsStaff(
+                            applicationId,
+                            new CorrectionResubmissionRequest(requestId)
+                    ).loanApplicationStatus(),
+                    null
+            );
+        } catch (RuntimeException exception) {
+            return new StaffResubmissionRaceOutcome(requestId, null, exception);
+        } finally {
+            currentUserProvider.clear();
+        }
+    }
+    private DocumentVersionDto raceReplacementAndReview(
+            UUID applicationId,
+            UUID checklistItemId,
+            UUID baselineVersionId
+    ) throws Exception {
+        CountDownLatch ready = new CountDownLatch(3);
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(3)) {
+            Future<DocumentRaceOutcome> firstUpload = executor.submit(() ->
+                    raceCustomerUpload(
+                            applicationId, checklistItemId, baselineVersionId,
+                            "customer-payslip-v2-a.pdf", ready, start));
+            Future<DocumentRaceOutcome> secondUpload = executor.submit(() ->
+                    raceCustomerUpload(
+                            applicationId, checklistItemId, baselineVersionId,
+                            "customer-payslip-v2-b.pdf", ready, start));
+            Future<DocumentRaceOutcome> review = executor.submit(() ->
+                    raceBaselineReview(
+                            applicationId, checklistItemId, baselineVersionId, ready, start));
+
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            List<DocumentRaceOutcome> uploads = List.of(
+                    firstUpload.get(15, TimeUnit.SECONDS),
+                    secondUpload.get(15, TimeUnit.SECONDS)
+            );
+            DocumentRaceOutcome reviewOutcome = review.get(15, TimeUnit.SECONDS);
+
+            List<DocumentRaceOutcome> successfulUploads = uploads.stream()
+                    .filter(outcome -> outcome.version() != null)
+                    .toList();
+            assertEquals(1, successfulUploads.size());
+            List<RuntimeException> uploadFailures = uploads.stream()
+                    .map(DocumentRaceOutcome::failure)
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+            assertEquals(1, uploadFailures.size());
+            assertEquals(
+                    "STALE_DOCUMENT_VERSION",
+                    ((BusinessStateConflictException) uploadFailures.getFirst()).getErrorCode()
+            );
+            if (reviewOutcome.failure() != null) {
+                assertEquals(
+                        "STALE_DOCUMENT_VERSION",
+                        ((BusinessStateConflictException) reviewOutcome.failure()).getErrorCode()
+                );
+            } else {
+                assertTrue(reviewOutcome.reviewed());
+            }
+            return successfulUploads.getFirst().version();
+        }
+    }
+
+    private DocumentRaceOutcome raceCustomerUpload(
+            UUID applicationId,
+            UUID checklistItemId,
+            UUID baselineVersionId,
+            String filename,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) throws InterruptedException {
+        currentUserProvider.use(new AuthenticatedUser(
+                fixture.customerUserId(), "correction-customer@meridian.test", "CUSTOMER",
+                fixture.customerId(), Set.of("CUSTOMER"),
+                Set.of("document:upload:own", "loan:correction:own")
+        ));
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Document race did not start.");
+        }
+        try {
+            return new DocumentRaceOutcome(
+                    upload(applicationId, checklistItemId, baselineVersionId, filename),
+                    false,
+                    null
+            );
+        } catch (RuntimeException exception) {
+            return new DocumentRaceOutcome(null, false, exception);
+        } finally {
+            currentUserProvider.clear();
+        }
+    }
+
+    private DocumentRaceOutcome raceBaselineReview(
+            UUID applicationId,
+            UUID checklistItemId,
+            UUID baselineVersionId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) throws InterruptedException {
+        currentUserProvider.use(new AuthenticatedUser(
+                LOAN_OFFICER_USER_ID, "loan.officer@meridian.local", "STAFF", null,
+                Set.of("LOAN_OFFICER"), Set.of("document:review")
+        ));
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Document race did not start.");
+        }
+        try {
+            documentReviewUseCase.review(new ReviewDocumentCommand(
+                    applicationId,
+                    checklistItemId,
+                    baselineVersionId,
+                    UUID.randomUUID(),
+                    DocumentReviewOutcome.ACCEPT_DOCUMENT,
+                    null,
+                    "Restricted concurrent baseline review.",
+                    LOAN_OFFICER_USER_ID,
+                    false
+            ));
+            return new DocumentRaceOutcome(null, true, null);
+        } catch (RuntimeException exception) {
+            return new DocumentRaceOutcome(null, false, exception);
+        } finally {
+            currentUserProvider.clear();
+        }
+    }
     private DocumentVersionDto upload(
             UUID applicationId, UUID checklistItemId, UUID expectedVersionId, String filename
     ) {
@@ -268,9 +667,36 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
         ));
     }
 
+    private DocumentVersionDto uploadAsStaff(
+            UUID applicationId, UUID checklistItemId, UUID expectedVersionId, String filename
+    ) {
+        return uploadUseCase.upload(new UploadDocumentCommand(
+                applicationId,
+                checklistItemId,
+                UUID.randomUUID(),
+                expectedVersionId,
+                filename,
+                "application/pdf",
+                new ByteArrayInputStream(PDF),
+                DocumentUploaderActorType.STAFF,
+                BACK_OFFICE_USER_ID,
+                null
+        ));
+    }
+
     private CustomerCorrectionTaskDto onlyTask(UUID applicationId) {
         List<CustomerCorrectionTaskDto> tasks = customerTaskQuery.findOwnTasks(applicationId);
         List<CustomerCorrectionTaskDto> open = tasks.stream().filter(task -> "OPEN".equals(task.status())).toList();
+        assertEquals(1, open.size());
+        return open.getFirst();
+    }
+
+    private StaffCorrectionTaskDto onlyStaffTask(UUID applicationId) {
+        List<StaffCorrectionTaskDto> open = staffTaskQuery.findStaffTasks(
+                        LoanCorrectionTaskStatus.OPEN, 0, 50
+                ).stream()
+                .filter(task -> task.loanApplicationId().equals(applicationId))
+                .toList();
         assertEquals(1, open.size());
         return open.getFirst();
     }
@@ -356,7 +782,8 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
     private void useLoanOfficer() {
         currentUserProvider.use(new AuthenticatedUser(
                 LOAN_OFFICER_USER_ID, "loan.officer@meridian.local", "STAFF", null,
-                Set.of("LOAN_OFFICER"), Set.of("loan:review", "approval:recommend", "document:review")
+                Set.of("LOAN_OFFICER"), Set.of(
+                        "loan:review", "approval:recommend", "document:review", "loan:correction:staff")
         ));
     }
 
@@ -367,8 +794,36 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
         ));
     }
 
+    private void useStaffWorker() {
+        currentUserProvider.use(new AuthenticatedUser(
+                STAFF_WORKER_USER_ID, "staff.worker@meridian.local", "STAFF", null,
+                Set.of("LOAN_OFFICER"), Set.of("loan:correction:staff")
+        ));
+    }
+
+    private void useBackOffice() {
+        currentUserProvider.use(new AuthenticatedUser(
+                BACK_OFFICE_USER_ID, "backoffice.admin@meridian.local", "STAFF", null,
+                Set.of("BACK_OFFICE_ADMIN"), Set.of("document:upload:staff")
+        ));
+    }
+
     private static BigDecimal money(long value) {
         return BigDecimal.valueOf(value).setScale(2);
+    }
+
+    private record StaffResubmissionRaceOutcome(
+            UUID requestId,
+            String status,
+            RuntimeException failure
+    ) {
+    }
+
+    private record DocumentRaceOutcome(
+            DocumentVersionDto version,
+            boolean reviewed,
+            RuntimeException failure
+    ) {
     }
 
     private record Fixture(UUID customerId, UUID customerUserId, UUID linkId) {

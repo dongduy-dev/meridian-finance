@@ -21,13 +21,38 @@ public class CorrectionPlanPolicy {
         }
     }
 
+    public void validateStaffCorrection(CorrectionPlanRequest plan) {
+        validate(plan);
+        if (plan.tasks().stream().anyMatch(task -> task.responsibleParty() != CorrectionResponsibility.STAFF)) {
+            throw invalid("Staff correction plans may contain only staff-owned tasks.");
+        }
+    }
+
+    public void validateMixedCorrection(CorrectionPlanRequest plan) {
+        validate(plan);
+        boolean hasCustomerTask = plan.tasks().stream()
+                .anyMatch(task -> task.responsibleParty() == CorrectionResponsibility.CUSTOMER);
+        boolean hasStaffTask = plan.tasks().stream()
+                .anyMatch(task -> task.responsibleParty() == CorrectionResponsibility.STAFF);
+        if (!hasCustomerTask || !hasStaffTask) {
+            throw invalid(
+                    "Customer-or-staff correction plans require separate customer-owned and staff-owned tasks."
+            );
+        }
+    }
+
     public void validate(CorrectionPlanRequest plan) {
         if (plan == null || plan.tasks() == null || plan.tasks().isEmpty() || plan.tasks().size() > 10) {
             throw invalid("A correction plan must contain between 1 and 10 tasks.");
         }
+        Set<DocumentType> createdDocumentTypes = new HashSet<>();
         Set<TaskTuple> tuples = new HashSet<>();
         for (CorrectionTaskRequest task : plan.tasks()) {
             validateTask(task);
+            if (task.createChecklistItem() && !createdDocumentTypes.add(task.documentType())) {
+                throw invalid("A correction plan cannot create the same checklist item more than once.");
+            }
+
             TaskTuple tuple = new TaskTuple(
                     task.responsibleParty(), task.scope(), task.documentType(),
                     task.checklistItemId(), task.baselineDocumentVersionId()
@@ -45,8 +70,7 @@ public class CorrectionPlanPolicy {
         validateInstruction(task);
         switch (task.scope()) {
             case SUPPORTING_DOCUMENT_UPLOAD -> {
-                if (task.responsibleParty() != CorrectionResponsibility.CUSTOMER
-                        || task.documentType() != DocumentType.RECENT_PAYSLIP
+                if (task.documentType() != DocumentType.RECENT_PAYSLIP
                         || !task.createChecklistItem()
                         || task.checklistItemId() != null
                         || task.baselineDocumentVersionId() != null) {
@@ -64,6 +88,7 @@ public class CorrectionPlanPolicy {
             }
             case DOCUMENT_REVIEW -> {
                 if (task.responsibleParty() != CorrectionResponsibility.STAFF
+                        || task.documentType() != DocumentType.RECENT_PAYSLIP
                         || task.createChecklistItem()
                         || task.checklistItemId() == null
                         || task.baselineDocumentVersionId() == null) {

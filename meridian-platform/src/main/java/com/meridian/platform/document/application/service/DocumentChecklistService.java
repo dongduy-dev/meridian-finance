@@ -6,6 +6,7 @@ import com.meridian.platform.document.domain.model.DocumentChecklist;
 import com.meridian.platform.document.domain.model.DocumentChecklistItem;
 import com.meridian.platform.document.domain.model.DocumentChecklistReadiness;
 import com.meridian.platform.document.domain.model.DocumentChecklistStage;
+import com.meridian.platform.document.domain.model.DocumentReviewOutcome;
 import com.meridian.platform.document.domain.model.DocumentRequirementStatus;
 import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
@@ -190,6 +191,40 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
         return documentRepository.findDocumentByChecklistItemId(checklistItemId)
                 .map(document -> document.currentVersionId() != null
                         && !document.currentVersionId().equals(baselineVersionId))
+                .orElse(false);
+    }
+
+    @Override
+    public boolean isVersionAcceptedOrWaived(
+            UUID loanApplicationId,
+            UUID checklistItemId,
+            UUID documentVersionId
+    ) {
+        DocumentChecklistItem item = requireOwnedItem(loanApplicationId, checklistItemId);
+        return documentRepository.findDocumentByChecklistItemId(checklistItemId)
+                .filter(document -> documentVersionId.equals(document.currentVersionId()))
+                .flatMap(document -> item.currentReviewDecisionId() == null
+                        ? java.util.Optional.empty()
+                        : documentRepository.findReviewDecisionById(item.currentReviewDecisionId()))
+                .filter(decision -> decision.documentVersionId().equals(documentVersionId))
+                .map(decision -> decision.outcome() == DocumentReviewOutcome.ACCEPT_DOCUMENT
+                        || decision.outcome() == DocumentReviewOutcome.WAIVE_DOCUMENT)
+                .orElse(false);
+    }
+
+    @Override
+    public boolean isVersionReviewed(
+            UUID loanApplicationId,
+            UUID checklistItemId,
+            UUID documentVersionId
+    ) {
+        DocumentChecklistItem item = requireOwnedItem(loanApplicationId, checklistItemId);
+        return documentRepository.findDocumentByChecklistItemId(checklistItemId)
+                .filter(document -> documentVersionId.equals(document.currentVersionId()))
+                .flatMap(document -> item.currentReviewDecisionId() == null
+                        ? java.util.Optional.empty()
+                        : documentRepository.findReviewDecisionById(item.currentReviewDecisionId()))
+                .map(decision -> decision.documentVersionId().equals(documentVersionId))
                 .orElse(false);
     }
 

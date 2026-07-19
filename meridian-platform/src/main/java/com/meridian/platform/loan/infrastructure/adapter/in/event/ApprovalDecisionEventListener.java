@@ -23,10 +23,13 @@ public class ApprovalDecisionEventListener {
         applyApprovalDecisionUseCase.applyApprovalDecision(new ApplyApprovalDecisionCommand(
                 event.loanApplicationId(),
                 event.decisionId(),
+                event.reviewCycleId(),
                 event.reviewRecommendationId(),
                 event.approverUserId(),
                 toLoanAction(event.action()),
                 event.reason(),
+                event.reasonCode(),
+                event.correctionPlan(),
                 event.decidedAt(),
                 event.operationContext()
         ));

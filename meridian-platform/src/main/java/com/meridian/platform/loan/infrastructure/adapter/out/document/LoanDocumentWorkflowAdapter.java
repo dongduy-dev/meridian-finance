@@ -31,4 +31,18 @@ public class LoanDocumentWorkflowAdapter implements LoanDocumentWorkflowPort {
                 loanApplication.status()
         );
     }
+
+    @Override
+    public LoanDocumentWorkflowSnapshot find(UUID loanApplicationId) {
+        LoanApplication loanApplication = loanApplicationRepository.findById(loanApplicationId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "LOAN_APPLICATION_NOT_FOUND",
+                        "Loan application was not found."
+                ));
+        return new LoanDocumentWorkflowSnapshot(
+                loanApplication.id(),
+                loanApplication.customerId(),
+                loanApplication.status()
+        );
+    }
 }

@@ -2,6 +2,7 @@ package com.meridian.platform.loan.application.port.out;
 
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTask;
+import com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus;
 
 import java.util.List;
 import java.util.Optional;
@@ -28,4 +29,13 @@ public interface LoanCorrectionRepository {
             UUID loanApplicationId,
             UUID checklistItemId
     );
+
+    List<LoanCorrectionTask> findStaffTasks(LoanCorrectionTaskStatus status, int page, int size);
+
+    Optional<LoanCorrectionTask> findOpenStaffDocumentTask(
+            UUID loanApplicationId,
+            UUID checklistItemId
+    );
+
+    int nextTaskSequence(UUID correctionRequestId);
 }
