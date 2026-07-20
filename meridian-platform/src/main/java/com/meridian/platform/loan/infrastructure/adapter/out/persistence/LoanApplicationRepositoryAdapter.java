@@ -33,6 +33,19 @@ public class LoanApplicationRepositoryAdapter implements LoanApplicationReposito
     }
 
     @Override
+    public void acquireWorkflowLock(UUID loanApplicationId) {
+        String lockKey = "loan-application:workflow:" + loanApplicationId;
+        entityManager.createNativeQuery("""
+                        WITH lock AS (
+                            SELECT pg_advisory_xact_lock(hashtextextended(CAST(:lockKey AS text), 0))
+                        )
+                        SELECT 1 FROM lock
+                        """)
+                .setParameter("lockKey", lockKey)
+                .getSingleResult();
+    }
+
+    @Override
     public void acquireCustomerProductLock(UUID customerId, ProductCode productCode) {
         String lockKey = "loan-application:customer-product:" + customerId + ":" + productCode;
         entityManager.createNativeQuery("""
@@ -90,6 +103,21 @@ public class LoanApplicationRepositoryAdapter implements LoanApplicationReposito
                 customerId,
                 productCode,
                 statuses
+        );
+    }
+
+    @Override
+    public boolean existsByCustomerIdAndProductCodeAndStatusInExcludingApplication(
+            UUID customerId,
+            ProductCode productCode,
+            Set<LoanApplicationStatus> statuses,
+            UUID excludedLoanApplicationId
+    ) {
+        return jpaLoanApplicationRepository.existsByCustomerIdAndProductCodeAndStatusInAndIdNot(
+                customerId,
+                productCode,
+                statuses,
+                excludedLoanApplicationId
         );
     }
 

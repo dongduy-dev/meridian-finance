@@ -2,6 +2,7 @@ package com.meridian.platform.loan.domain.model;
 
 public enum LoanApplicationTransitionAction {
     SUBMIT_APPLICATION,
+    COMPLETE_DOCUMENT_UPLOADS,
     START_REVIEW,
     RECOMMEND_APPROVAL,
     RECOMMEND_REJECTION,
@@ -11,6 +12,7 @@ public enum LoanApplicationTransitionAction {
     REJECT,
     RETURN_TO_LOAN_OFFICER_REVIEW,
     REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
+    RESUBMIT_CORRECTION,
     GENERATE_APPROVED_OFFER,
     ACCEPT_APPROVED_OFFER,
     DECLINE_APPROVED_OFFER,

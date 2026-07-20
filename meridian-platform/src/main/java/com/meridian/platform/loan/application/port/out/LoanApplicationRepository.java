@@ -9,6 +9,8 @@ import java.util.Set;
 import java.util.UUID;
 
 public interface LoanApplicationRepository {
+    void acquireWorkflowLock(UUID loanApplicationId);
+
     void acquireCustomerProductLock(UUID customerId, ProductCode productCode);
 
     LoanApplication save(LoanApplication loanApplication);
@@ -22,6 +24,15 @@ public interface LoanApplicationRepository {
             ProductCode productCode,
             Set<LoanApplicationStatus> statuses
     );
+
+    default boolean existsByCustomerIdAndProductCodeAndStatusInExcludingApplication(
+            UUID customerId,
+            ProductCode productCode,
+            Set<LoanApplicationStatus> statuses,
+            UUID excludedLoanApplicationId
+    ) {
+        return existsByCustomerIdAndProductCodeAndStatusIn(customerId, productCode, statuses);
+    }
 
     long nextApplicationNumberSequence();
 }

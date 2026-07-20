@@ -5,9 +5,11 @@ import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.in.ApplyApprovalDecisionUseCase;
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyRepository;
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
 import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionFact;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
 import com.meridian.platform.loan.domain.model.LoanApprovalDecisionAction;
@@ -23,8 +25,10 @@ import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayload;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import com.meridian.platform.shared.domain.model.ActorType;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +41,8 @@ import java.util.UUID;
 public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCase {
 
     private final LoanApplicationRepository loanApplicationRepository;
+    private final LoanReviewCycleRepository reviewCycleRepository;
+    private final CustomerCorrectionWorkflowService customerCorrectionWorkflowService;
     private final ApprovedOfferRepository approvedOfferRepository;
     private final SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository;
     private final SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService;
@@ -44,8 +50,11 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
     private final BusinessAuditPublisher businessAuditPublisher;
     private final SalaryAdvanceOfferCalculator salaryAdvanceOfferCalculator = new SalaryAdvanceOfferCalculator();
 
+    @Autowired
     public ApplyApprovalDecisionService(
             LoanApplicationRepository loanApplicationRepository,
+            LoanReviewCycleRepository reviewCycleRepository,
+            CustomerCorrectionWorkflowService customerCorrectionWorkflowService,
             ApprovedOfferRepository approvedOfferRepository,
             SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository,
             SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService,
@@ -53,11 +62,27 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
             BusinessAuditPublisher businessAuditPublisher
     ) {
         this.loanApplicationRepository = loanApplicationRepository;
+        this.reviewCycleRepository = reviewCycleRepository;
+        this.customerCorrectionWorkflowService = customerCorrectionWorkflowService;
         this.approvedOfferRepository = approvedOfferRepository;
         this.salaryAdvanceOfferPolicyRepository = salaryAdvanceOfferPolicyRepository;
         this.salaryAdvanceReservationReleaseService = salaryAdvanceReservationReleaseService;
         this.transitionRecorder = transitionRecorder;
         this.businessAuditPublisher = businessAuditPublisher;
+    }
+
+    ApplyApprovalDecisionService(
+            LoanApplicationRepository loanApplicationRepository,
+            LoanReviewCycleRepository reviewCycleRepository,
+            ApprovedOfferRepository approvedOfferRepository,
+            SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository,
+            SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService,
+            LoanApplicationStatusTransitionRecorder transitionRecorder,
+            BusinessAuditPublisher businessAuditPublisher
+    ) {
+        this(loanApplicationRepository, reviewCycleRepository, null, approvedOfferRepository,
+                salaryAdvanceOfferPolicyRepository, salaryAdvanceReservationReleaseService,
+                transitionRecorder, businessAuditPublisher);
     }
 
     @Override
@@ -73,11 +98,21 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         Objects.requireNonNull(command.operationContext(), "operationContext must not be null");
         validateOperationContext(command);
 
+        loanApplicationRepository.acquireWorkflowLock(command.loanApplicationId());
         LoanApplication loanApplication = loanApplicationRepository.findByIdForUpdate(command.loanApplicationId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "LOAN_APPLICATION_NOT_FOUND",
                         "Loan application was not found."
                 ));
+
+        LoanApplicationReviewCycle activeCycle = reviewCycleRepository
+                .findActiveByLoanApplicationIdForUpdate(command.loanApplicationId())
+                .orElseThrow(() -> new BusinessStateConflictException(
+                        "REVIEW_CYCLE_REQUIRED", "An active review cycle is required."));
+        if (command.reviewCycleId() != null && !activeCycle.id().equals(command.reviewCycleId())) {
+            throw new BusinessStateConflictException(
+                    "STALE_REVIEW_CYCLE", "The decision review cycle is no longer active.");
+        }
 
         LoanApplicationTransitionResult decisionTransition = loanApplication.applyApprovalDecision(command.action());
         LoanApplication transitionedApplication = decisionTransition.loanApplication();
@@ -98,6 +133,29 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
                     command.operationContext(),
                     ReservationReleaseTrigger.APPROVAL_REJECTION
             );
+        }
+
+        switch (command.action()) {
+            case APPROVE, REJECT -> reviewCycleRepository.save(
+                    activeCycle.complete(command.operationContext().occurredAt())
+            );
+            case RETURN_TO_LOAN_OFFICER_REVIEW -> {
+                reviewCycleRepository.save(activeCycle.supersede(command.operationContext().occurredAt()));
+                reviewCycleRepository.save(LoanApplicationReviewCycle.active(
+                        UUID.randomUUID(),
+                        loanApplication.id(),
+                        reviewCycleRepository.nextCycleNumber(loanApplication.id()),
+                        command.operationContext().occurredAt()
+                ));
+            }
+            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION -> {
+                Objects.requireNonNull(command.reasonCode(), "reasonCode must not be null");
+                Objects.requireNonNull(command.correctionPlan(), "correctionPlan must not be null");
+                customerCorrectionWorkflowService.createFromDecision(
+                        loanApplication, activeCycle, command.action().name(),
+                        command.reasonCode(), command.correctionPlan(), command.operationContext()
+                );
+            }
         }
 
         LoanApplication savedApplication = loanApplicationRepository.save(transitionedApplication);

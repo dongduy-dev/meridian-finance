@@ -8,5 +8,5 @@ import java.util.UUID;
 public interface JpaSalaryAdvanceVerificationRepository
         extends JpaRepository<SalaryAdvanceVerificationJpaEntity, UUID> {
 
-    Optional<SalaryAdvanceVerificationJpaEntity> findByLoanApplicationId(UUID loanApplicationId);
+    Optional<SalaryAdvanceVerificationJpaEntity> findFirstByLoanApplicationIdOrderByVerificationSequenceDesc(UUID loanApplicationId);
 }

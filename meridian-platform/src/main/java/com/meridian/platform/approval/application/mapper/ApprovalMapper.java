@@ -1,6 +1,7 @@
 package com.meridian.platform.approval.application.mapper;
 
 import com.meridian.platform.approval.application.dto.ApprovalDecisionDto;
+import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
 import com.meridian.platform.approval.application.dto.ReviewRecommendationDto;
 import com.meridian.platform.approval.application.event.ApprovalDecisionEventAction;
 import com.meridian.platform.approval.application.event.ApprovalDecisionRecordedEvent;
@@ -18,10 +19,12 @@ public class ApprovalMapper {
         return new ReviewRecommendationDto(
                 recommendation.id(),
                 recommendation.loanApplicationId(),
+                recommendation.reviewCycleId(),
                 recommendation.loanOfficerUserId(),
                 recommendation.action().name(),
                 recommendation.reason(),
                 recommendation.internalNotes(),
+                recommendation.reasonCode() == null ? null : recommendation.reasonCode().name(),
                 recommendation.submittedAt()
         );
     }
@@ -30,12 +33,23 @@ public class ApprovalMapper {
             ReviewRecommendation recommendation,
             BusinessOperationContext operationContext
     ) {
+        return toRecordedEvent(recommendation, operationContext, null);
+    }
+
+    public ReviewRecommendationRecordedEvent toRecordedEvent(
+            ReviewRecommendation recommendation,
+            BusinessOperationContext operationContext,
+            CorrectionPlanRequest correctionPlan
+    ) {
         return new ReviewRecommendationRecordedEvent(
                 recommendation.id(),
                 recommendation.loanApplicationId(),
+                recommendation.reviewCycleId(),
                 recommendation.loanOfficerUserId(),
                 ReviewRecommendationEventAction.valueOf(recommendation.action().name()),
                 recommendation.reason(),
+                recommendation.reasonCode(),
+                correctionPlan,
                 recommendation.submittedAt(),
                 operationContext
         );
@@ -49,6 +63,7 @@ public class ApprovalMapper {
                 decision.approverUserId(),
                 decision.action().name(),
                 decision.reason(),
+                decision.reasonCode() == null ? null : decision.reasonCode().name(),
                 decision.internalNotes(),
                 decision.decidedAt()
         );
@@ -58,13 +73,25 @@ public class ApprovalMapper {
             ApprovalDecision decision,
             BusinessOperationContext operationContext
     ) {
+        return toRecordedEvent(decision, java.util.UUID.randomUUID(), operationContext, null);
+    }
+
+    public ApprovalDecisionRecordedEvent toRecordedEvent(
+            ApprovalDecision decision,
+            java.util.UUID reviewCycleId,
+            BusinessOperationContext operationContext,
+            CorrectionPlanRequest correctionPlan
+    ) {
         return new ApprovalDecisionRecordedEvent(
                 decision.id(),
                 decision.loanApplicationId(),
+                reviewCycleId,
                 decision.reviewRecommendationId(),
                 decision.approverUserId(),
                 ApprovalDecisionEventAction.valueOf(decision.action().name()),
                 decision.reason(),
+                decision.reasonCode(),
+                correctionPlan,
                 decision.decidedAt(),
                 operationContext
         );

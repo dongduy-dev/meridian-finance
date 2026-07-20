@@ -192,6 +192,66 @@
                          "key":  "persistedExpiredLoanApplicationId",
                          "value":  "",
                          "type":  "string"
+                     },
+                     {
+                         "key":  "reviewCycleId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "correctionTaskId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "checklistItemId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "documentVersionId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "uploadRequestId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "completionRequestId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "reviewRequestId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "resubmissionRequestId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "staffUploadRequestId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "staffCorrectionTaskId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "staffCorrectionScenarioEnabled",
+                         "value":  "false",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "mixedCorrectionScenarioEnabled",
+                         "value":  "false",
+                         "type":  "string"
                      }
                  ],
     "item":  [
@@ -957,300 +1017,300 @@
                                   }
                               ]
                  },
+                 {
+                     "name":  "03 Customer Profile and Bank Accounts - customer:profile/customer:bank-account",
+                     "item":  [
                                   {
-    "name":  "03 Customer Profile and Bank Accounts - customer:profile/customer:bank-account",
-    "item":  [
-                 {
-                     "name":  "GET own customer profile",
-                     "request":  {
-                                     "method":  "GET",
-                                     "header":  [
+                                      "name":  "GET own customer profile",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
 
-                                                ],
-                                     "url":  {
-                                                 "raw":  "{{baseUrl}}/api/v1/customers/me",
-                                                 "host":  [
-                                                              "{{baseUrl}}"
-                                                          ],
-                                                 "path":  [
-                                                              "api",
-                                                              "v1",
-                                                              "customers",
-                                                              "me"
-                                                          ]
-                                             },
-                                     "auth":  {
-                                                  "type":  "bearer",
-                                                  "bearer":  [
-                                                                 {
-                                                                     "key":  "token",
-                                                                     "value":  "{{customerAccessToken}}",
-                                                                     "type":  "string"
-                                                                 }
-                                                             ]
-                                              },
-                                     "description":  "Reads the authenticated Customer profile. Identity evidence is not returned."
-                                 },
-                     "response":  [
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/customers/me",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "customers",
+                                                                               "me"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Reads the authenticated Customer profile. Identity evidence is not returned."
+                                                  },
+                                      "response":  [
 
-                                  ]
-                 },
-                 {
-                     "name":  "PUT own customer profile - complete readiness profile",
-                     "request":  {
-                                     "method":  "PUT",
-                                     "header":  [
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "PUT own customer profile - complete readiness profile",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/customers/me/profile",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "customers",
+                                                                               "me",
+                                                                               "profile"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Completes the authenticated Customer profile. identityReference is encrypted and not echoed.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"fullName\": \"Customer Demo\",\n  \"identityReference\": \"IDREF-MER-001\",\n  \"phoneNumber\": \"0901234567\",\n  \"residentialAddress\": \"1 Meridian Street, District 1, Ho Chi Minh City\",\n  \"employmentStatus\": \"SALARIED\",\n  \"employerName\": \"Meridian Partner Co.\",\n  \"termsConsentAccepted\": true,\n  \"dataProcessingConsentAccepted\": true\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "POST add own bank account - captures bank account id",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/customers/me/bank-accounts",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "customers",
+                                                                               "me",
+                                                                               "bank-accounts"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Adds an encrypted bank account. The first active account becomes primary; responses show masked values only.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"bankCode\": \"VCB\",\n  \"bankNameSnapshot\": \"Vietcombank\",\n  \"accountHolderName\": \"Customer Demo\",\n  \"accountNumber\": \"1234567890\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
                                                     {
-                                                        "key":  "Content-Type",
-                                                        "value":  "application/json",
-                                                        "type":  "text"
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 201\", function () {",
+                                                                                    "    pm.response.to.have.status(201);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Bank account id is captured\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.collectionVariables.set(\"customerBankAccountId\", json.customerBankAccountId || \"\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
                                                     }
-                                                ],
-                                     "url":  {
-                                                 "raw":  "{{baseUrl}}/api/v1/customers/me/profile",
-                                                 "host":  [
-                                                              "{{baseUrl}}"
-                                                          ],
-                                                 "path":  [
-                                                              "api",
-                                                              "v1",
-                                                              "customers",
-                                                              "me",
-                                                              "profile"
-                                                          ]
-                                             },
-                                     "auth":  {
-                                                  "type":  "bearer",
-                                                  "bearer":  [
-                                                                 {
-                                                                     "key":  "token",
-                                                                     "value":  "{{customerAccessToken}}",
-                                                                     "type":  "string"
-                                                                 }
-                                                             ]
-                                              },
-                                     "description":  "Completes the authenticated Customer profile. identityReference is encrypted and not echoed.",
-                                     "body":  {
-                                                  "mode":  "raw",
-                                                  "raw":  "{\n  \"fullName\": \"Customer Demo\",\n  \"identityReference\": \"IDREF-MER-001\",\n  \"phoneNumber\": \"0901234567\",\n  \"residentialAddress\": \"1 Meridian Street, District 1, Ho Chi Minh City\",\n  \"employmentStatus\": \"SALARIED\",\n  \"employerName\": \"Meridian Partner Co.\",\n  \"termsConsentAccepted\": true,\n  \"dataProcessingConsentAccepted\": true\n}",
-                                                  "options":  {
-                                                                  "raw":  {
-                                                                              "language":  "json"
-                                                                          }
-                                                              }
-                                              }
-                                 },
-                     "response":  [
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET own bank accounts",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
 
-                                  ]
-                 },
-                 {
-                     "name":  "POST add own bank account - captures bank account id",
-                     "request":  {
-                                     "method":  "POST",
-                                     "header":  [
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/customers/me/bank-accounts",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "customers",
+                                                                               "me",
+                                                                               "bank-accounts"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Lists the authenticated Customer\u0027s masked bank accounts."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "POST make bank account primary",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/customers/me/bank-accounts/{{customerBankAccountId}}/make-primary",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "customers",
+                                                                               "me",
+                                                                               "bank-accounts",
+                                                                               "{{customerBankAccountId}}",
+                                                                               "make-primary"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Makes the captured active bank account primary. The response remains masked."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
                                                     {
-                                                        "key":  "Content-Type",
-                                                        "value":  "application/json",
-                                                        "type":  "text"
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
                                                     }
-                                                ],
-                                     "url":  {
-                                                 "raw":  "{{baseUrl}}/api/v1/customers/me/bank-accounts",
-                                                 "host":  [
-                                                              "{{baseUrl}}"
-                                                          ],
-                                                 "path":  [
-                                                              "api",
-                                                              "v1",
-                                                              "customers",
-                                                              "me",
-                                                              "bank-accounts"
-                                                          ]
-                                             },
-                                     "auth":  {
-                                                  "type":  "bearer",
-                                                  "bearer":  [
-                                                                 {
-                                                                     "key":  "token",
-                                                                     "value":  "{{customerAccessToken}}",
-                                                                     "type":  "string"
-                                                                 }
-                                                             ]
-                                              },
-                                     "description":  "Adds an encrypted bank account. The first active account becomes primary; responses show masked values only.",
-                                     "body":  {
-                                                  "mode":  "raw",
-                                                  "raw":  "{\n  \"bankCode\": \"VCB\",\n  \"bankNameSnapshot\": \"Vietcombank\",\n  \"accountHolderName\": \"Customer Demo\",\n  \"accountNumber\": \"1234567890\"\n}",
-                                                  "options":  {
-                                                                  "raw":  {
-                                                                              "language":  "json"
-                                                                          }
-                                                              }
-                                              }
-                                 },
-                     "response":  [
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST deactivate bank account",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
 
-                                  ],
-                     "event":  [
-                                   {
-                                       "listen":  "test",
-                                       "script":  {
-                                                      "type":  "text/javascript",
-                                                      "exec":  [
-                                                                   "pm.test(\"Status is 201\", function () {",
-                                                                   "    pm.response.to.have.status(201);",
-                                                                   "});",
-                                                                   "pm.test(\"Bank account id is captured\", function () {",
-                                                                   "    const json = pm.response.json();",
-                                                                   "    pm.collectionVariables.set(\"customerBankAccountId\", json.customerBankAccountId || \"\");",
-                                                                   "});"
-                                                               ]
-                                                  }
-                                   }
-                               ]
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/customers/me/bank-accounts/{{customerBankAccountId}}/deactivate",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "customers",
+                                                                               "me",
+                                                                               "bank-accounts",
+                                                                               "{{customerBankAccountId}}",
+                                                                               "deactivate"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Deactivates the captured bank account when domain rules allow it. The response remains masked."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
                  },
                  {
-                     "name":  "GET own bank accounts",
-                     "request":  {
-                                     "method":  "GET",
-                                     "header":  [
-
-                                                ],
-                                     "url":  {
-                                                 "raw":  "{{baseUrl}}/api/v1/customers/me/bank-accounts",
-                                                 "host":  [
-                                                              "{{baseUrl}}"
-                                                          ],
-                                                 "path":  [
-                                                              "api",
-                                                              "v1",
-                                                              "customers",
-                                                              "me",
-                                                              "bank-accounts"
-                                                          ]
-                                             },
-                                     "auth":  {
-                                                  "type":  "bearer",
-                                                  "bearer":  [
-                                                                 {
-                                                                     "key":  "token",
-                                                                     "value":  "{{customerAccessToken}}",
-                                                                     "type":  "string"
-                                                                 }
-                                                             ]
-                                              },
-                                     "description":  "Lists the authenticated Customer\u0027s masked bank accounts."
-                                 },
-                     "response":  [
-
-                                  ]
-                 },
-                 {
-                     "name":  "POST make bank account primary",
-                     "request":  {
-                                     "method":  "POST",
-                                     "header":  [
-
-                                                ],
-                                     "url":  {
-                                                 "raw":  "{{baseUrl}}/api/v1/customers/me/bank-accounts/{{customerBankAccountId}}/make-primary",
-                                                 "host":  [
-                                                              "{{baseUrl}}"
-                                                          ],
-                                                 "path":  [
-                                                              "api",
-                                                              "v1",
-                                                              "customers",
-                                                              "me",
-                                                              "bank-accounts",
-                                                              "{{customerBankAccountId}}",
-                                                              "make-primary"
-                                                          ]
-                                             },
-                                     "auth":  {
-                                                  "type":  "bearer",
-                                                  "bearer":  [
-                                                                 {
-                                                                     "key":  "token",
-                                                                     "value":  "{{customerAccessToken}}",
-                                                                     "type":  "string"
-                                                                 }
-                                                             ]
-                                              },
-                                     "description":  "Makes the captured active bank account primary. The response remains masked."
-                                 },
-                     "response":  [
-
-                                  ],
-                     "event":  [
-                                   {
-                                       "listen":  "test",
-                                       "script":  {
-                                                      "type":  "text/javascript",
-                                                      "exec":  [
-                                                                   "pm.test(\"Status is 200\", function () {",
-                                                                   "    pm.response.to.have.status(200);",
-                                                                   "});"
-                                                               ]
-                                                  }
-                                   }
-                               ]
-                 },
-                 {
-                     "name":  "POST deactivate bank account",
-                     "request":  {
-                                     "method":  "POST",
-                                     "header":  [
-
-                                                ],
-                                     "url":  {
-                                                 "raw":  "{{baseUrl}}/api/v1/customers/me/bank-accounts/{{customerBankAccountId}}/deactivate",
-                                                 "host":  [
-                                                              "{{baseUrl}}"
-                                                          ],
-                                                 "path":  [
-                                                              "api",
-                                                              "v1",
-                                                              "customers",
-                                                              "me",
-                                                              "bank-accounts",
-                                                              "{{customerBankAccountId}}",
-                                                              "deactivate"
-                                                          ]
-                                             },
-                                     "auth":  {
-                                                  "type":  "bearer",
-                                                  "bearer":  [
-                                                                 {
-                                                                     "key":  "token",
-                                                                     "value":  "{{customerAccessToken}}",
-                                                                     "type":  "string"
-                                                                 }
-                                                             ]
-                                              },
-                                     "description":  "Deactivates the captured bank account when domain rules allow it. The response remains masked."
-                                 },
-                     "response":  [
-
-                                  ],
-                     "event":  [
-                                   {
-                                       "listen":  "test",
-                                       "script":  {
-                                                      "type":  "text/javascript",
-                                                      "exec":  [
-                                                                   "pm.test(\"Status is 200\", function () {",
-                                                                   "    pm.response.to.have.status(200);",
-                                                                   "});"
-                                                               ]
-                                                  }
-                                   }
-                               ]
-                 }
-             ]
-},
-{
                      "name":  "04 Customer Employee Verification - partner:employee:verify:own",
                      "item":  [
                                   {
@@ -1716,6 +1776,7 @@
                                                                                     "    const json = pm.response.json();",
                                                                                     "    pm.expect(json.status).to.eql(\"UNDER_REVIEW\");",
                                                                                     "    pm.collectionVariables.set(\"loanApplicationStatus\", json.status);",
+                                                                                    "    pm.collectionVariables.set(\"reviewCycleId\", json.activeReviewCycleId);",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -1921,7 +1982,7 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST return to customer revision unavailable - 409",
+                                      "name":  "POST return to customer revision with RECENT_PAYSLIP task",
                                       "request":  {
                                                       "method":  "POST",
                                                       "header":  [
@@ -1954,10 +2015,10 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Target-state action currently gated before durable effects until the correction workflow is implemented (MER-FU-031).",
+                                                      "description":  "Creates a customer-owned RECENT_PAYSLIP correction against the active review cycle.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"action\": \"RETURN_TO_CUSTOMER_REVISION\",\n  \"reason\": \"Customer must correct submitted information.\",\n  \"internalNotes\": \"Postman return example.\"\n}",
+                                                                   "raw":  "{\n  \"action\": \"RETURN_TO_CUSTOMER_REVISION\",\n  \"reason\": null,\n  \"internalNotes\": \"Postman restricted note.\",\n  \"expectedReviewCycleId\": \"{{reviewCycleId}}\",\n  \"reasonCode\": \"RECENT_PAYSLIP_REQUIRED\",\n  \"correctionPlan\": {\n    \"tasks\": [{\n      \"scope\": \"SUPPORTING_DOCUMENT_UPLOAD\",\n      \"responsibleParty\": \"CUSTOMER\",\n      \"documentType\": \"RECENT_PAYSLIP\",\n      \"createChecklistItem\": true,\n      \"checklistItemId\": null,\n      \"baselineDocumentVersionId\": null,\n      \"customerInstruction\": \"Upload a recent payslip for clarification.\",\n      \"staffInstruction\": null\n    }]\n  }\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -1974,12 +2035,8 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\"Status is 409\", function () {",
-                                                                                    "    pm.response.to.have.status(409);",
-                                                                                    "});",
-                                                                                    "pm.test(\"Revision workflow is unavailable\", function () {",
-                                                                                    "    const json = pm.response.json();",
-                                                                                    "    pm.expect(json.errorCode).to.eql(\"REVISION_WORKFLOW_NOT_AVAILABLE\");",
+                                                                                    "pm.test(\"Status is 201\", function () {",
+                                                                                    "    pm.response.to.have.status(201);",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -1987,16 +2044,14 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST request staff correction unavailable - 409",
+                                      "name":  "POST request staff correction with structured plan",
                                       "request":  {
                                                       "method":  "POST",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Content-Type",
-                                                                         "value":  "application/json",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
+                                                      "header":  {
+                                                                     "key":  "Content-Type",
+                                                                     "value":  "application/json",
+                                                                     "type":  "text"
+                                                                 },
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/review-recommendations",
                                                                   "host":  [
@@ -2020,10 +2075,10 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Target-state action currently gated before durable effects until the correction workflow is implemented (MER-FU-031).",
+                                                      "description":  "Manual scenario: requires a separate UNDER_REVIEW application and active reviewCycleId. Creates a Staff-owned correction transactionally.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"action\": \"REQUEST_STAFF_CORRECTION\",\n  \"reason\": \"Back-office data correction is required before approval.\",\n  \"internalNotes\": \"Postman staff correction example.\"\n}",
+                                                                   "raw":  "{\r\n    \"action\":  \"REQUEST_STAFF_CORRECTION\",\r\n    \"reason\":  null,\r\n    \"internalNotes\":  \"Restricted Postman staff-correction example.\",\r\n    \"expectedReviewCycleId\":  \"{{reviewCycleId}}\",\r\n    \"reasonCode\":  \"RECENT_PAYSLIP_REQUIRED\",\r\n    \"correctionPlan\":  {\r\n                           \"tasks\":  [\r\n                                         {\r\n                                             \"scope\":  \"SUPPORTING_DOCUMENT_UPLOAD\",\r\n                                             \"responsibleParty\":  \"STAFF\",\r\n                                             \"documentType\":  \"RECENT_PAYSLIP\",\r\n                                             \"createChecklistItem\":  true,\r\n                                             \"checklistItemId\":  null,\r\n                                             \"baselineDocumentVersionId\":  null,\r\n                                             \"customerInstruction\":  null,\r\n                                             \"staffInstruction\":  \"Upload a recent payslip from an authorized source.\"\r\n                                         }\r\n                                     ]\r\n                       }\r\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -2036,33 +2091,35 @@
                                                    ],
                                       "event":  [
                                                     {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "if (pm.collectionVariables.get(\"staffCorrectionScenarioEnabled\") !== \"true\") { console.warn(\"Set staffCorrectionScenarioEnabled=true and prepare a fresh UNDER_REVIEW application.\"); pm.execution.skipRequest(); }"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
                                                         "listen":  "test",
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\"Status is 409\", function () {",
-                                                                                    "    pm.response.to.have.status(409);",
-                                                                                    "});",
-                                                                                    "pm.test(\"Revision workflow is unavailable\", function () {",
-                                                                                    "    const json = pm.response.json();",
-                                                                                    "    pm.expect(json.errorCode).to.eql(\"REVISION_WORKFLOW_NOT_AVAILABLE\");",
-                                                                                    "});"
+                                                                                    "pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+                                                                                    "const json = pm.response.json(); pm.collectionVariables.set(\"reviewRecommendationId\", json.recommendationId);"
                                                                                 ]
                                                                    }
                                                     }
                                                 ]
                                   },
                                   {
-                                      "name":  "POST request customer or staff correction unavailable - 409",
+                                      "name":  "POST request mixed customer and staff correction",
                                       "request":  {
                                                       "method":  "POST",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Content-Type",
-                                                                         "value":  "application/json",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
+                                                      "header":  {
+                                                                     "key":  "Content-Type",
+                                                                     "value":  "application/json",
+                                                                     "type":  "text"
+                                                                 },
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/approval-decisions",
                                                                   "host":  [
@@ -2086,10 +2143,10 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Target-state approval correction action currently gated before decision, audit, event, history, or Loan status effects (MER-FU-031).",
+                                                      "description":  "Manual scenario: requires APPROVAL_PENDING plus current checklistItemId/documentVersionId and a different Approver from the recommender.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"action\": \"REQUEST_CUSTOMER_OR_STAFF_CORRECTION\",\n  \"reason\": \"Customer or staff correction is required before approval.\"\n}",
+                                                                   "raw":  "{\r\n    \"action\":  \"REQUEST_CUSTOMER_OR_STAFF_CORRECTION\",\r\n    \"reason\":  null,\r\n    \"internalNotes\":  \"Restricted Postman mixed-correction example.\",\r\n    \"expectedReviewCycleId\":  \"{{reviewCycleId}}\",\r\n    \"reasonCode\":  \"DOCUMENT_REPLACEMENT_REQUIRED\",\r\n    \"correctionPlan\":  {\r\n                           \"tasks\":  [\r\n                                         {\r\n                                             \"scope\":  \"DOCUMENT_REPLACEMENT\",\r\n                                             \"responsibleParty\":  \"CUSTOMER\",\r\n                                             \"documentType\":  \"RECENT_PAYSLIP\",\r\n                                             \"createChecklistItem\":  false,\r\n                                             \"checklistItemId\":  \"{{checklistItemId}}\",\r\n                                             \"baselineDocumentVersionId\":  \"{{documentVersionId}}\",\r\n                                             \"customerInstruction\":  \"Replace the payslip with a readable current copy.\",\r\n                                             \"staffInstruction\":  null\r\n                                         },\r\n                                         {\r\n                                             \"scope\":  \"DOCUMENT_REVIEW\",\r\n                                             \"responsibleParty\":  \"STAFF\",\r\n                                             \"documentType\":  \"RECENT_PAYSLIP\",\r\n                                             \"createChecklistItem\":  false,\r\n                                             \"checklistItemId\":  \"{{checklistItemId}}\",\r\n                                             \"baselineDocumentVersionId\":  \"{{documentVersionId}}\",\r\n                                             \"customerInstruction\":  null,\r\n                                             \"staffInstruction\":  \"Review the customer replacement version.\"\r\n                                         }\r\n                                     ]\r\n                       }\r\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -2102,17 +2159,21 @@
                                                    ],
                                       "event":  [
                                                     {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "if (pm.collectionVariables.get(\"mixedCorrectionScenarioEnabled\") !== \"true\") { console.warn(\"Set mixedCorrectionScenarioEnabled=true and prepare an APPROVAL_PENDING application with a current payslip.\"); pm.execution.skipRequest(); }"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
                                                         "listen":  "test",
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\"Status is 409\", function () {",
-                                                                                    "    pm.response.to.have.status(409);",
-                                                                                    "});",
-                                                                                    "pm.test(\"Revision workflow is unavailable\", function () {",
-                                                                                    "    const json = pm.response.json();",
-                                                                                    "    pm.expect(json.errorCode).to.eql(\"REVISION_WORKFLOW_NOT_AVAILABLE\");",
-                                                                                    "});"
+                                                                                    "pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+                                                                                    "const json = pm.response.json(); pm.collectionVariables.set(\"approvalDecisionId\", json.decisionId);"
                                                                                 ]
                                                                    }
                                                     }
@@ -2371,6 +2432,822 @@
                                                 ]
                                   }
                               ]
+                 },
+                 {
+                     "name":  "07 Document Review and Customer Correction",
+                     "item":  [
+                                  {
+                                      "name":  "GET own correction tasks",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/corrections/tasks",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "corrections",
+                                                                               "tasks"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Returns only customer-safe correction task fields for the authenticated owner."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "const tasks = pm.response.json();",
+                                                                                    "const task = tasks.find(item =\u003e item.status === \"OPEN\");",
+                                                                                    "if (task) { pm.collectionVariables.set(\"correctionTaskId\", task.correctionTaskId); pm.collectionVariables.set(\"checklistItemId\", task.checklistItemId); }"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST upload own correction document",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/documents/{{checklistItemId}}/versions",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "documents",
+                                                                               "{{checklistItemId}}",
+                                                                               "versions"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Select a local PDF, JPEG, or PNG file. Maximum 10 MiB.",
+                                                      "body":  {
+                                                                   "mode":  "formdata",
+                                                                   "formdata":  [
+                                                                                    {
+                                                                                        "key":  "uploadRequestId",
+                                                                                        "value":  "{{uploadRequestId}}",
+                                                                                        "type":  "text"
+                                                                                    },
+                                                                                    {
+                                                                                        "key":  "file",
+                                                                                        "type":  "file",
+                                                                                        "src":  [
+
+                                                                                                ]
+                                                                                    }
+                                                                                ]
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.collectionVariables.set(\"uploadRequestId\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "const json = pm.response.json(); pm.collectionVariables.set(\"documentVersionId\", json.documentVersionId);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST complete own correction task",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/corrections/tasks/{{correctionTaskId}}/complete",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "corrections",
+                                                                               "tasks",
+                                                                               "{{correctionTaskId}}",
+                                                                               "complete"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"completionRequestId\": \"{{completionRequestId}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.collectionVariables.set(\"completionRequestId\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST resubmit own correction",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/corrections/resubmit",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "corrections",
+                                                                               "resubmit"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"resubmissionRequestId\": \"{{$guid}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "description":  "Revalidates readiness and preserves the Salary Advance reservation unchanged."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET own immutable document content",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  {
+                                                                     "key":  "Content-Type",
+                                                                     "value":  "application/json",
+                                                                     "type":  "text"
+                                                                 },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/documents/{{checklistItemId}}/versions/{{documentVersionId}}/content",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "documents",
+                                                                               "{{checklistItemId}}",
+                                                                               "versions",
+                                                                               "{{documentVersionId}}",
+                                                                               "content"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Streams only the authenticated owner version as a private attachment; no storage reference is exposed.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "pm.test(\"Content is private and non-sniffable\", function () { pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"); pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\"); });"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET document review queue",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  {
+                                                                     "key":  "Content-Type",
+                                                                     "value":  "application/json",
+                                                                     "type":  "text"
+                                                                 },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/document-review-items?status=AWAITING_REVIEW\u0026page=0\u0026size=20",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "document-review-items"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{loanOfficerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Lists only current immutable versions awaiting manual review.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "const rows = pm.response.json(); const row = rows.find(item =\u003e item.loanApplicationId === pm.collectionVariables.get(\"loanApplicationId\")); if (row) { pm.collectionVariables.set(\"checklistItemId\", row.checklistItemId); pm.collectionVariables.set(\"documentVersionId\", row.currentVersionId); }"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST accept current document version",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  {
+                                                                     "key":  "Content-Type",
+                                                                     "value":  "application/json",
+                                                                     "type":  "text"
+                                                                 },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/document-review-items/{{checklistItemId}}/reviews",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "document-review-items",
+                                                                               "{{checklistItemId}}",
+                                                                               "reviews"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{loanOfficerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Targets the exact immutable current version; replacement racing this decision returns STALE_DOCUMENT_VERSION.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\r\n    \"reviewRequestId\":  \"{{reviewRequestId}}\",\r\n    \"documentVersionId\":  \"{{documentVersionId}}\",\r\n    \"outcome\":  \"ACCEPT_DOCUMENT\",\r\n    \"waiverReasonCode\":  null,\r\n    \"restrictedStaffNotes\":  \"Restricted manual review note.\",\r\n    \"correctionReasonCode\":  null,\r\n    \"customerInstruction\":  null\r\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.collectionVariables.set(\"reviewRequestId\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "pm.expect(pm.response.json().outcome).to.eql(\"ACCEPT_DOCUMENT\");"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "08 Staff Correction Operations",
+                     "item":  [
+                                  {
+                                      "name":  "GET open Staff correction tasks",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  {
+                                                                     "key":  "Content-Type",
+                                                                     "value":  "application/json",
+                                                                     "type":  "text"
+                                                                 },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff-corrections/tasks?status=OPEN\u0026page=0\u0026size=20",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "staff-corrections",
+                                                                               "tasks"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{loanOfficerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Requires loan:correction:staff. Captures the first open task for the selected Loan Application.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "if (pm.collectionVariables.get(\"staffCorrectionScenarioEnabled\") !== \"true\" \u0026\u0026 pm.collectionVariables.get(\"mixedCorrectionScenarioEnabled\") !== \"true\") { console.warn(\"Enable a Staff or mixed correction manual scenario first.\"); pm.execution.skipRequest(); }"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "const rows = pm.response.json(); const row = rows.find(item =\u003e item.loanApplicationId === pm.collectionVariables.get(\"loanApplicationId\")); if (row) { pm.collectionVariables.set(\"staffCorrectionTaskId\", row.taskId); pm.collectionVariables.set(\"checklistItemId\", row.checklistItemId); }"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST upload for open Staff task",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/documents/{{checklistItemId}}/versions",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "staff",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "documents",
+                                                                               "{{checklistItemId}}",
+                                                                               "versions"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{backOfficeAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Requires document:upload:staff and an open Staff upload task. Select a PDF, JPEG, or PNG up to 10 MiB.",
+                                                      "body":  {
+                                                                   "mode":  "formdata",
+                                                                   "formdata":  [
+                                                                                    {
+                                                                                        "key":  "uploadRequestId",
+                                                                                        "value":  "{{staffUploadRequestId}}",
+                                                                                        "type":  "text"
+                                                                                    },
+                                                                                    {
+                                                                                        "key":  "file",
+                                                                                        "type":  "file",
+                                                                                        "src":  [
+
+                                                                                                ]
+                                                                                    }
+                                                                                ]
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.collectionVariables.set(\"staffUploadRequestId\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "const json = pm.response.json(); pm.collectionVariables.set(\"documentVersionId\", json.documentVersionId);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET Staff-authorized immutable document content",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  {
+                                                                     "key":  "Content-Type",
+                                                                     "value":  "application/json",
+                                                                     "type":  "text"
+                                                                 },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/documents/{{checklistItemId}}/versions/{{documentVersionId}}/content",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "staff",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "documents",
+                                                                               "{{checklistItemId}}",
+                                                                               "versions",
+                                                                               "{{documentVersionId}}",
+                                                                               "content"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{loanOfficerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Requires document:review and returns a private attachment without storage metadata.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "pm.test(\"Content is private and non-sniffable\", function () { pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"); pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\"); });"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST complete Staff correction task",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  {
+                                                                     "key":  "Content-Type",
+                                                                     "value":  "application/json",
+                                                                     "type":  "text"
+                                                                 },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff-corrections/tasks/{{staffCorrectionTaskId}}/complete",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "staff-corrections",
+                                                                               "tasks",
+                                                                               "{{staffCorrectionTaskId}}",
+                                                                               "complete"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{loanOfficerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Requires evidence proof and a completer different from the staff request creator.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\r\n    \"completionRequestId\":  \"{{completionRequestId}}\"\r\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.collectionVariables.set(\"completionRequestId\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "pm.expect(pm.response.json().status).to.eql(\"COMPLETED\");"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST resubmit Staff or mixed correction",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  {
+                                                                     "key":  "Content-Type",
+                                                                     "value":  "application/json",
+                                                                     "type":  "text"
+                                                                 },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff-corrections/loan-applications/{{loanApplicationId}}/resubmit",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "staff-corrections",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "resubmit"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{loanOfficerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Consumes a complete Staff or mixed request exactly once and revalidates the full Salary Advance workflow.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\r\n    \"resubmissionRequestId\":  \"{{resubmissionRequestId}}\"\r\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.collectionVariables.set(\"resubmissionRequestId\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "pm.expect([\"SUBMITTED\", \"UNDER_REVIEW\"]).to.include(pm.response.json().loanApplicationStatus);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ],
+                     "event":  [
+                                   {
+                                       "listen":  "prerequest",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "if (pm.collectionVariables.get(\"staffCorrectionScenarioEnabled\") !== \"true\" \u0026\u0026 pm.collectionVariables.get(\"mixedCorrectionScenarioEnabled\") !== \"true\") { console.warn(\"Enable a Staff or mixed correction manual scenario first.\"); pm.execution.skipRequest(); }"
+                                                               ]
+                                                  }
+                                   }
+                               ]
                  },
                  {
                      "name":  "90 Negative Auth and Validation Checks",
@@ -2638,16 +3515,14 @@
                                                 ]
                                   },
                                   {
-                                      "name":  "POST unavailable staff correction without reason - 409",
+                                      "name":  "POST Staff correction without structured plan - 422",
                                       "request":  {
                                                       "method":  "POST",
-                                                      "header":  [
-                                                                     {
-                                                                         "key":  "Content-Type",
-                                                                         "value":  "application/json",
-                                                                         "type":  "text"
-                                                                     }
-                                                                 ],
+                                                      "header":  {
+                                                                     "key":  "Content-Type",
+                                                                     "value":  "application/json",
+                                                                     "type":  "text"
+                                                                 },
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/review-recommendations",
                                                                   "host":  [
@@ -2671,10 +3546,10 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "The unavailable revision-workflow gate takes precedence over action-specific reason validation and creates no durable effects.",
+                                                      "description":  "Executable revision actions require a non-empty structured plan.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"action\": \"REQUEST_STAFF_CORRECTION\"\n}",
+                                                                   "raw":  "{\r\n    \"action\":  \"REQUEST_STAFF_CORRECTION\",\r\n    \"expectedReviewCycleId\":  \"{{reviewCycleId}}\",\r\n    \"reasonCode\":  \"RECENT_PAYSLIP_REQUIRED\",\r\n    \"correctionPlan\":  null\r\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -2691,13 +3566,8 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\"Status is 409\", function () {",
-                                                                                    "    pm.response.to.have.status(409);",
-                                                                                    "});",
-                                                                                    "pm.test(\"Revision workflow is unavailable\", function () {",
-                                                                                    "    const json = pm.response.json();",
-                                                                                    "    pm.expect(json.errorCode).to.eql(\"REVISION_WORKFLOW_NOT_AVAILABLE\");",
-                                                                                    "});"
+                                                                                    "pm.test(\"Status is 422\", function () { pm.response.to.have.status(422); });",
+                                                                                    "pm.expect(pm.response.json().errorCode).to.eql(\"INVALID_CORRECTION_PLAN\");"
                                                                                 ]
                                                                    }
                                                     }

@@ -362,3 +362,66 @@ Notes:
 - Mapper maps domain model to DTO.
 - Domain imports no Spring, no JPA, no DTO, no web.
 - Flyway owns database schema changes.
+
+## 12. Document and Correction Continuation
+
+Revision-producing recommendation and decision actions remain synchronously
+coordinated with Loan. Approval records the immutable source action and publishes
+the structured plan; the Loan listener locks the workflow, transitions the
+application, creates the correction aggregate and checklist evidence, and records
+audit/history in the originating transaction.
+
+```mermaid
+flowchart LR
+    StaffClient["Loan Officer or Approver"]
+    ApprovalController["Approval controller"]
+    ApprovalService["Approval application service"]
+    ApprovalStore["Immutable recommendation or decision"]
+    SyncEvent["Synchronous application event"]
+    LoanService["Loan correction workflow service"]
+    LoanStore["Review cycle + correction request/tasks"]
+    DocumentPort["Document correction port"]
+    DocumentStore["Checklist item + version baseline"]
+    AuditStore["Audit + Loan status history"]
+
+    StaffClient --> ApprovalController --> ApprovalService --> ApprovalStore --> SyncEvent
+    SyncEvent --> LoanService --> LoanStore
+    LoanService --> DocumentPort --> DocumentStore
+    LoanService --> AuditStore
+```
+
+Customer APIs derive the exact owner from `CurrentUserProvider`. Staff queue,
+completion, upload, content-read, review, waiver, and resubmission endpoints each
+require their narrow authority; task ownership and maker-checker are enforced again
+inside the application service.
+
+```mermaid
+flowchart LR
+    Actor["Authenticated Customer or Staff"]
+    Controller["Correction or Document controller"]
+    UseCase["Input port"]
+    Service["Transactional application service"]
+    WorkflowLock["Loan Application workflow lock"]
+    CorrectionLock["Correction request/task locks"]
+    DocumentLock["Checklist item/document locks"]
+    Revalidate["Customer + Partner + product + document + reservation revalidation"]
+    Persist["New verification + status/cycle + audit/history"]
+
+    Actor --> Controller --> UseCase --> Service --> WorkflowLock --> CorrectionLock
+    CorrectionLock --> DocumentLock --> Revalidate --> Persist
+```
+
+Concurrency rules:
+
+1. Replacement locks the Loan workflow, then the checklist item and logical
+   document, and appends a version only when the expected current-version ID still
+   matches.
+2. Manual review targets a specific immutable version and rejects the decision if
+   that version is no longer current.
+3. Task completion locks the task and request; the same completion request is
+   idempotent, while a different request conflicts after completion.
+4. Resubmission locks the Loan workflow first, then correction rows, Document
+   readiness, customer/product advisory scope, and Salary Advance limit in the
+   existing order. It consumes one request exactly once.
+5. Synchronous Approval-to-Loan failure rolls back the source Approval row and all
+   Loan, Document, Audit, event-publication, and history effects.

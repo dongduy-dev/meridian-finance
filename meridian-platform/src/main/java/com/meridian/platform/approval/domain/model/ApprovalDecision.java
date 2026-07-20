@@ -13,6 +13,7 @@ public record ApprovalDecision(
         UUID approverUserId,
         ApprovalDecisionAction action,
         String reason,
+        CorrectionReasonCode reasonCode,
         String internalNotes,
         LocalDateTime decidedAt
 ) {
@@ -24,12 +25,26 @@ public record ApprovalDecision(
             UUID approverUserId,
             ApprovalDecisionAction action,
             String reason,
+            CorrectionReasonCode reasonCode,
             String internalNotes,
             LocalDateTime decidedAt
     ) {
         Objects.requireNonNull(action, "action must not be null");
         String normalizedReason = normalizeOptionalText(reason);
-        if (action.requiresReason() && normalizedReason == null) {
+        boolean revision = action == ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION;
+        if (revision && (normalizedReason != null || reasonCode == null)) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_CORRECTION_PLAN",
+                    "Revision decisions require a controlled reason code and no free-text reason."
+            );
+        }
+        if (!revision && reasonCode != null) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_CORRECTION_PLAN",
+                    "Non-revision decisions cannot contain correction fields."
+            );
+        }
+        if (!revision && action.requiresReason() && normalizedReason == null) {
             throw new BusinessRuleViolationException(
                     "APPROVAL_DECISION_REASON_REQUIRED",
                     "A reason is required for this approval decision action."
@@ -43,9 +58,24 @@ public record ApprovalDecision(
                 Objects.requireNonNull(approverUserId, "approverUserId must not be null"),
                 action,
                 normalizedReason,
+                reasonCode,
                 normalizeOptionalText(internalNotes),
                 Objects.requireNonNull(decidedAt, "decidedAt must not be null")
         );
+    }
+
+    public static ApprovalDecision recorded(
+            UUID id,
+            UUID loanApplicationId,
+            UUID reviewRecommendationId,
+            UUID approverUserId,
+            ApprovalDecisionAction action,
+            String reason,
+            String internalNotes,
+            LocalDateTime decidedAt
+    ) {
+        return recorded(id, loanApplicationId, reviewRecommendationId, approverUserId,
+                action, reason, null, internalNotes, decidedAt);
     }
 
     private static String normalizeOptionalText(String value) {

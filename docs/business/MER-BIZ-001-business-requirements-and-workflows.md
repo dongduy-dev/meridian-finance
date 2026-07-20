@@ -332,7 +332,13 @@ Loan Officer actions:
 | `RETURN_TO_CUSTOMER_REVISION` | `RETURNED_FOR_REVISION` |
 | `REQUEST_STAFF_CORRECTION` | `RETURNED_FOR_REVISION` |
 
-Current implementation note: `RECOMMEND_APPROVAL` and `RECOMMEND_REJECTION` are executable. `RETURN_TO_CUSTOMER_REVISION` and `REQUEST_STAFF_CORRECTION` remain recognized target-state actions, but currently return `409 REVISION_WORKFLOW_NOT_AVAILABLE` before recommendation persistence, audit/event publication, history creation, or Loan status change. The complete correction and resubmission lifecycle remains tracked by `MER-FU-031`.
+All four actions are executable. Revision-producing recommendations require the
+expected active review-cycle ID, a controlled correction reason, and a structured
+correction plan. `RETURN_TO_CUSTOMER_REVISION` creates Customer-owned document
+replacement tasks. `REQUEST_STAFF_CORRECTION` creates Staff-owned upload or
+document-review tasks. Recommendation persistence, Loan transition, correction
+request/task creation, audit, and status history are one transaction; failure of
+the synchronous Loan continuation rolls back the recommendation.
 
 ### 6.6 Approval Decision
 
@@ -353,10 +359,15 @@ Approver actions:
 | `APPROVE` | `APPROVED`, then `CUSTOMER_ACCEPTANCE_PENDING` after approved terms are generated |
 | `REJECT` | `REJECTED` |
 | `RETURN_TO_LOAN_OFFICER_REVIEW` | `RETURNED_TO_REVIEW` |
-| `REQUEST_CUSTOMER_INFORMATION` | `RETURNED_FOR_REVISION` |
-| `REQUEST_STAFF_CORRECTION` | `RETURNED_FOR_REVISION` |
+| `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` | `RETURNED_FOR_REVISION` |
 
-Current implementation note: `APPROVE`, `REJECT`, and `RETURN_TO_LOAN_OFFICER_REVIEW` are executable. The current API represents target-state customer/staff correction as `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`; it returns `409 REVISION_WORKFLOW_NOT_AVAILABLE` before decision persistence, audit/event publication, history creation, or Loan status change. The target correction requirements above remain valid for the future `MER-FU-031` workflow.
+All four actions are executable. The mixed correction action requires the
+expected active review-cycle ID, a controlled reason, and a structured plan with
+separate Customer- or Staff-owned tasks. One correction task never has multiple
+responsible actor types. Decision persistence, Loan transition, correction
+request/task creation, review-cycle linkage, audit, and status history are one
+transaction; failure of the synchronous Loan continuation rolls back the
+decision.
 
 `APPROVED` is a decision status. It should not remain the customer-facing waiting status once approved terms are generated; the customer-facing status becomes `CUSTOMER_ACCEPTANCE_PENDING`.
 
@@ -1035,3 +1046,42 @@ Future releases may revisit:
 8. Separate approval and disbursement responsibilities.
 9. Keep customer-facing steps clear and simple.
 10. Make the workflow realistic without becoming a production banking core.
+
+## Executable document and correction workflow
+
+Salary Advance submission creates one empty `SUBMISSION` checklist, so normal
+applications remain `SUBMITTED`. `RECENT_PAYSLIP` is created only when a controlled
+correction plan requests clarification; it never replaces Customer readiness,
+Partner eligibility, or the verified employee-link rules.
+
+`RETURN_TO_CUSTOMER_REVISION`, `REQUEST_STAFF_CORRECTION`, and
+`REQUEST_CUSTOMER_OR_STAFF_CORRECTION` are executable with an expected active
+review-cycle ID, a controlled reason code, and one to ten exact document tasks.
+Customer tasks use customer-visible instructions; internal Approval notes are
+never copied into tasks, audit, or Loan history. A mixed request contains separate
+single-owner tasks rather than a task with ambiguous Customer-or-Staff ownership.
+
+The authenticated owner uploads immutable versions, completes tasks only after the
+required upload or replacement proof exists, and resubmits with an idempotency
+request ID. Staff work is exposed through a permission-protected task queue.
+Staff upload is permitted only for an open Staff upload task. A document-review
+task requires review of the specific current `RECENT_PAYSLIP` version and rejects
+a stale-version decision. The same staff user who created the correction request
+cannot complete its task.
+
+Manual review outcomes are `ACCEPT`, `WAIVE`, and `REQUEST_REPLACEMENT`. Waiver is
+restricted to Loan Officers. Upload completeness means a required item has a
+current version; processing readiness additionally requires the current version
+to be accepted or the item to be waived. Replacing a document supersedes the prior
+version and invalidates its accepted outcome.
+
+Only a Customer may resubmit a Customer-only correction, and only authorized
+staff may resubmit a Staff-only or mixed correction. A mixed request cannot become
+ready after only its Customer portion is complete. Resubmission locks the Loan
+workflow, consumes the request exactly once, revalidates Customer readiness,
+Partner eligibility, product policy, blocking-application, document readiness,
+effective limit, and unchanged Salary Advance reservation, and inserts a new
+immutable verification snapshot. Requested amount and term remain immutable, so
+V24 neither increases nor decreases the reservation.
+
+Routing is `SUBMITTED` while manual document review is pending and `UNDER_REVIEW`

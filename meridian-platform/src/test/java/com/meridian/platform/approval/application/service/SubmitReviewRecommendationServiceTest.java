@@ -1,5 +1,7 @@
 package com.meridian.platform.approval.application.service;
 
+import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
+import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
 import com.meridian.platform.approval.application.dto.ReviewRecommendationDto;
 import com.meridian.platform.approval.application.dto.ReviewRecommendationRequest;
 import com.meridian.platform.approval.application.event.ReviewRecommendationRecordedEvent;
@@ -7,10 +9,14 @@ import com.meridian.platform.approval.application.mapper.ApprovalMapper;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationEventPublisher;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.domain.model.ReviewRecommendation;
+import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
+import com.meridian.platform.approval.domain.model.CorrectionScope;
 import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
+import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
@@ -25,6 +31,7 @@ import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -34,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class SubmitReviewRecommendationServiceTest {
 
     private static final UUID LOAN_APPLICATION_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static final UUID REVIEW_CYCLE_ID = UUID.fromString("abababab-abab-abab-abab-abababababab");
     private static final UUID LOAN_OFFICER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000302");
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 7, 6, 10, 0);
     private static final Clock CLOCK = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
@@ -50,6 +58,7 @@ class SubmitReviewRecommendationServiceTest {
         auditPublisher = new FakeBusinessAuditPublisher();
         service = new SubmitReviewRecommendationService(
                 repository,
+                ignored -> Optional.of(REVIEW_CYCLE_ID),
                 eventPublisher,
                 new FixedCurrentUserProvider(),
                 new ApprovalMapper(),
@@ -99,24 +108,38 @@ class SubmitReviewRecommendationServiceTest {
         assertNotNull(eventPublisher.publishedEvent);
     }
 
-    @ParameterizedTest
-    @EnumSource(
-            value = ReviewRecommendationAction.class,
-            names = {"RETURN_TO_CUSTOMER_REVISION", "REQUEST_STAFF_CORRECTION"}
-    )
-    void rejectsUnavailableRevisionActionsBeforeAnyEffect(ReviewRecommendationAction action) {
-        BusinessStateConflictException exception = assertThrows(
-                BusinessStateConflictException.class,
-                () -> service.submitReviewRecommendation(
-                        LOAN_APPLICATION_ID,
-                        new ReviewRecommendationRequest(action, "Correction required.", null)
+    @Test
+    void recordsStructuredStaffCorrectionRecommendation() {
+        CorrectionPlanRequest plan = new CorrectionPlanRequest(List.of(
+                new CorrectionTaskRequest(
+                        CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
+                        CorrectionResponsibility.STAFF,
+                        DocumentType.RECENT_PAYSLIP,
+                        true,
+                        null,
+                        null,
+                        null,
+                        "Upload and verify the requested payslip."
+                )
+        ));
+
+        ReviewRecommendationDto result = service.submitReviewRecommendation(
+                LOAN_APPLICATION_ID,
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.REQUEST_STAFF_CORRECTION,
+                        null,
+                        "restricted",
+                        REVIEW_CYCLE_ID,
+                        CorrectionReasonCode.RECENT_PAYSLIP_REQUIRED,
+                        plan
                 )
         );
 
-        assertEquals("REVISION_WORKFLOW_NOT_AVAILABLE", exception.getErrorCode());
-        assertNull(repository.savedRecommendation);
-        assertNull(auditPublisher.publishedEvent);
-        assertNull(eventPublisher.publishedEvent);
+        assertEquals("REQUEST_STAFF_CORRECTION", result.action());
+        assertEquals(REVIEW_CYCLE_ID, result.reviewCycleId());
+        assertEquals(plan, eventPublisher.publishedEvent.correctionPlan());
+        assertNotNull(repository.savedRecommendation);
+        assertNotNull(auditPublisher.publishedEvent);
     }
 
     @Test

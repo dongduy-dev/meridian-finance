@@ -6,6 +6,7 @@ import com.meridian.platform.loan.application.mapper.LoanMapper;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanProductRepository;
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityPort;
@@ -66,6 +67,7 @@ class StartSalaryAdvanceApplicationServiceTest {
 
     private FakeLoanProductRepository loanProductRepository;
     private FakeLoanApplicationRepository loanApplicationRepository;
+    private FakeLoanDocumentChecklistPort documentChecklistPort;
     private FakeSalaryAdvanceLimitRepository salaryAdvanceLimitRepository;
     private FakeSalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository;
     private FakeSalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository;
@@ -79,6 +81,7 @@ class StartSalaryAdvanceApplicationServiceTest {
     void setUp() {
         loanProductRepository = new FakeLoanProductRepository();
         loanApplicationRepository = new FakeLoanApplicationRepository();
+        documentChecklistPort = new FakeLoanDocumentChecklistPort();
         salaryAdvanceLimitRepository = new FakeSalaryAdvanceLimitRepository();
         salaryAdvanceLimitMovementRepository = new FakeSalaryAdvanceLimitMovementRepository();
         salaryAdvanceVerificationRepository = new FakeSalaryAdvanceVerificationRepository();
@@ -89,6 +92,7 @@ class StartSalaryAdvanceApplicationServiceTest {
         service = new StartSalaryAdvanceApplicationService(
                 loanProductRepository,
                 loanApplicationRepository,
+                documentChecklistPort,
                 salaryAdvanceLimitRepository,
                 salaryAdvanceLimitMovementRepository,
                 salaryAdvanceVerificationRepository,
@@ -112,6 +116,7 @@ class StartSalaryAdvanceApplicationServiceTest {
         assertEquals("SALARY_ADVANCE", result.productCode());
         assertEquals("SALARY_BASED", result.productType());
         assertEquals("SUBMITTED", result.status());
+        assertTrue(documentChecklistPort.checklistCreated);
         assertEquals(limit(3_000_000), result.requestedAmount());
         assertEquals(1, result.requestedTermMonths());
         assertEquals(linkId, result.customerPartnerEmployeeLinkId());
@@ -144,6 +149,16 @@ class StartSalaryAdvanceApplicationServiceTest {
                         BusinessAuditAction.SALARY_ADVANCE_LIMIT_RESERVED
                 ),
                 auditPublisher.lastEvent().entries().stream().map(entry -> entry.action()).toList());
+    }
+
+    @Test
+    void startsInDocumentsPendingWhenResolvedChecklistNeedsAnUpload() {
+        documentChecklistPort.uploadComplete = false;
+
+        SalaryAdvanceApplicationDto result = service.startSalaryAdvanceApplication(request(limit(3_000_000), 1));
+
+        assertEquals("DOCUMENTS_PENDING", result.status());
+        assertEquals(LoanApplicationStatus.DOCUMENTS_PENDING, transitionRepository.savedTransitions.getFirst().toStatus());
     }
 
     @Test
@@ -498,7 +513,36 @@ class StartSalaryAdvanceApplicationServiceTest {
         }
     }
 
+    private static class FakeLoanDocumentChecklistPort implements LoanDocumentChecklistPort {
+
+        private boolean uploadComplete = true;
+        private boolean checklistCreated;
+
+        @Override
+        public SubmissionChecklistInitialState resolveSubmissionInitialState(ProductCode productCode) {
+            return new SubmissionChecklistInitialState(uploadComplete);
+        }
+
+        @Override
+        public void createSubmissionChecklist(
+                UUID loanApplicationId,
+                ProductCode productCode,
+                com.meridian.platform.shared.application.operation.BusinessOperationContext operationContext
+        ) {
+            checklistCreated = true;
+        }
+
+        @Override
+        public boolean isProcessingReady(UUID loanApplicationId) {
+            return true;
+        }
+    }
+
     private static class FakeLoanApplicationRepository implements LoanApplicationRepository {
+        @Override
+        public void acquireWorkflowLock(UUID loanApplicationId) {
+        }
+
 
         private boolean customerProductLockAcquired;
 

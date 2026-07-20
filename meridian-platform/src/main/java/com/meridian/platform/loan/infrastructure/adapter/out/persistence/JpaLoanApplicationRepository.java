@@ -20,6 +20,13 @@ public interface JpaLoanApplicationRepository extends JpaRepository<LoanApplicat
             Collection<LoanApplicationStatus> statuses
     );
 
+    boolean existsByCustomerIdAndProductCodeAndStatusInAndIdNot(
+            UUID customerId,
+            ProductCode productCode,
+            Collection<LoanApplicationStatus> statuses,
+            UUID excludedLoanApplicationId
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select loanApplication from LoanApplicationJpaEntity loanApplication where loanApplication.id = :id")
     Optional<LoanApplicationJpaEntity> findByIdForUpdate(@Param("id") UUID id);

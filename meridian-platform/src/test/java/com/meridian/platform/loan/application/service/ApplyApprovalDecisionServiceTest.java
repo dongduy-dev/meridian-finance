@@ -5,6 +5,7 @@ import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
+import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyRepository;
@@ -12,6 +13,7 @@ import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerification
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
 import com.meridian.platform.loan.domain.model.InterestCalculationMethod;
 import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
 import com.meridian.platform.loan.domain.model.LoanApprovalDecisionAction;
@@ -62,6 +64,7 @@ class ApplyApprovalDecisionServiceTest {
     private static final LocalDateTime DECIDED_AT = LocalDateTime.of(2026, 7, 6, 9, 30);
 
     private FakeLoanApplicationRepository loanApplicationRepository;
+    private LoanReviewCycleRepository reviewCycleRepository;
     private FakeApprovedOfferRepository approvedOfferRepository;
     private FakeSalaryAdvanceOfferPolicyRepository offerPolicyRepository;
     private FakeSalaryAdvanceVerificationRepository verificationRepository;
@@ -74,6 +77,14 @@ class ApplyApprovalDecisionServiceTest {
     @BeforeEach
     void setUp() {
         loanApplicationRepository = new FakeLoanApplicationRepository();
+        reviewCycleRepository = org.mockito.Mockito.mock(LoanReviewCycleRepository.class);
+        org.mockito.Mockito.when(reviewCycleRepository.findActiveByLoanApplicationIdForUpdate(LOAN_APPLICATION_ID))
+                .thenReturn(Optional.of(LoanApplicationReviewCycle.active(
+                        UUID.fromString("abababab-abab-abab-abab-abababababab"),
+                        LOAN_APPLICATION_ID, 1, DECIDED_AT.minusHours(1))));
+        org.mockito.Mockito.when(reviewCycleRepository.nextCycleNumber(LOAN_APPLICATION_ID)).thenReturn(2);
+        org.mockito.Mockito.when(reviewCycleRepository.save(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         approvedOfferRepository = new FakeApprovedOfferRepository();
         offerPolicyRepository = new FakeSalaryAdvanceOfferPolicyRepository();
         verificationRepository = new FakeSalaryAdvanceVerificationRepository();
@@ -89,6 +100,7 @@ class ApplyApprovalDecisionServiceTest {
         );
         service = new ApplyApprovalDecisionService(
                 loanApplicationRepository,
+                reviewCycleRepository,
                 approvedOfferRepository,
                 offerPolicyRepository,
                 releaseService,
@@ -290,6 +302,10 @@ class ApplyApprovalDecisionServiceTest {
     }
 
     private class FakeLoanApplicationRepository implements LoanApplicationRepository {
+        @Override
+        public void acquireWorkflowLock(UUID loanApplicationId) {
+        }
+
 
         @Override
         public void acquireCustomerProductLock(UUID customerId, ProductCode productCode) {

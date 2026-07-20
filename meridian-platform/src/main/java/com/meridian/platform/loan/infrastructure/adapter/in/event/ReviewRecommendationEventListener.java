@@ -23,9 +23,12 @@ public class ReviewRecommendationEventListener {
         applyReviewRecommendationUseCase.applyReviewRecommendation(new ApplyReviewRecommendationCommand(
                 event.loanApplicationId(),
                 event.recommendationId(),
+                event.reviewCycleId(),
                 event.loanOfficerUserId(),
                 toLoanAction(event.action()),
                 event.reason(),
+                event.reasonCode(),
+                event.correctionPlan(),
                 event.recordedAt(),
                 event.operationContext()
         ));

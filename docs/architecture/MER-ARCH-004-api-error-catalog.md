@@ -65,7 +65,25 @@ This document standardizes the API error codes across all bounded contexts in th
 | 409 | `DECISION_ALREADY_SUBMITTED` | Decision already submitted | A decision has already been recorded for this approval request |
 | 409 | `MAKER_CHECKER_VIOLATION` | Maker-checker violation | The same user cannot record both Loan Officer recommendation and final Approver decision |
 | 422 | `REVIEW_RECOMMENDATION_REQUIRED` | Review recommendation required | Complete Loan Officer review before final approval decision |
-| 409 | `REVISION_WORKFLOW_NOT_AVAILABLE` | Revision workflow unavailable | Use a currently executable action until the complete correction and resubmission workflow is implemented |
+| 409 | `REVIEW_CYCLE_REQUIRED` | Active review cycle required | Start or return to Loan Officer review before recommending |
+| 409 | `STALE_REVIEW_CYCLE` | Expected review cycle is stale | Refresh the application and submit against the active cycle |
+| 422 | `INVALID_CORRECTION_PLAN` | Invalid structured correction plan | Use one to ten supported document tasks with exact ownership fields |
+| 422 | `CORRECTION_FIELD_NOT_ALLOWED` | Financial correction field not allowed | Requested amount and term are immutable in this checkpoint |
+| 403 | `CORRECTION_ACCESS_DENIED` | Customer correction access denied | Use the authenticated owner of the Loan Application |
+| 403 | `STAFF_CORRECTION_ACCESS_DENIED` | Staff correction access denied | Use a Staff-owned task with the required permission |
+| 403 | `STAFF_CORRECTION_MAKER_CHECKER_VIOLATION` | Staff correction maker-checker violation | A different authorized staff user must complete the task |
+| 403 | `CORRECTION_RESUBMISSION_DENIED` | Correction resubmission denied | Customer-only requests require the owner; Staff or mixed requests require authorized staff |
+| 404 | `CORRECTION_REQUEST_NOT_FOUND` | Correction request not found | Refresh the Loan Application correction state |
+| 404 | `CORRECTION_TASK_NOT_FOUND` | Correction task not found | Refresh the correction task queue |
+| 409 | `CORRECTION_REQUEST_CONFLICT` | No active correction request | Refresh the workflow before resubmitting |
+| 409 | `CORRECTION_TASK_ALREADY_COMPLETED` | Correction task already completed | Treat the same completion request as success; otherwise refresh |
+| 422 | `INVALID_STAFF_CORRECTION_QUERY` | Invalid Staff correction query | Use a valid status, non-negative page, and size from 1 to 50 |
+| 409 | `REVIEW_CYCLE_CONFLICT` | Correction review-cycle conflict | Refresh the application and active review cycle |
+| 409 | `CORRECTION_TASKS_INCOMPLETE` | Correction tasks incomplete | Complete every authorized task and its evidence proof |
+| 409 | `CORRECTION_ALREADY_RESUBMITTED` | Correction already resubmitted | Treat same-request retry as success; otherwise refresh state |
+| 409 | `CORRECTION_DOCUMENTS_INCOMPLETE` | Correction uploads incomplete | Upload a current version for every required item |
+| 409 | `SALARY_ADVANCE_RESERVATION_INVALID` | Existing reservation invalid | Escalate because correction resubmission never adjusts reservation |
+| 409 | `LOAN_REVIEW_DOCUMENTS_NOT_READY` | Documents not processing-ready | Complete manual acceptance or authorized waiver before review |
 | **DOCUMENT Domain** | | | |
 | 404 | `DOCUMENT_NOT_FOUND` | Document not found | Verify the requested document ID |
 | 415 | `FILE_TYPE_NOT_ALLOWED` | File type not allowed | Upload a supported file format (e.g., PDF, JPG, PNG) |
@@ -77,6 +95,13 @@ This document standardizes the API error codes across all bounded contexts in th
 | 409 | `DOCUMENT_REPLACEMENT_REQUIRED` | Document replacement required | Replace the rejected or expired document before continuing |
 | 409 | `DOCUMENT_ALREADY_ACCEPTED` | Document already accepted | Accepted documents cannot be replaced without an authorized correction flow |
 | 503 | `DOCUMENT_STORAGE_UNAVAILABLE` | Document storage unavailable | Try again later or contact support |
+| 403 | `DOCUMENT_ACCESS_DENIED` | Document access denied | Authenticate as the exact customer owner or authorized staff actor |
+| 403 | `DOCUMENT_UPLOAD_DENIED` | Document upload not authorized | Use the open correction task for this checklist item |
+| 409 | `STALE_DOCUMENT_VERSION` | Document version is stale | Refresh the current immutable version before replacing or reviewing |
+| 409 | `DOCUMENT_UPLOAD_REQUIRED` | Current upload required | Upload a document version before manual review |
+| 403 | `DOCUMENT_WAIVER_DENIED` | Waiver permission required | Use a Loan Officer with separate `document:waive` authority |
+| 422 | `DOCUMENT_WAIVER_REASON_REQUIRED` | Controlled waiver reason required | Supply an approved waiver reason code |
+| 409 | `CORRECTION_TASK_PROOF_MISSING` | Correction proof missing | Upload the required new version before completing the task |
 | **DOCUMENT Domain — OCR-Assisted Processing (Planned Phase 2)** | | | |
 | 404 | `OCR_JOB_NOT_FOUND` | OCR job not found | Verify the document has an associated OCR job |
 | 409 | `OCR_JOB_PENDING` | OCR job pending | Wait for OCR-assisted processing to complete or continue with manual review where allowed |
@@ -101,6 +126,7 @@ This document standardizes the API error codes across all bounded contexts in th
 | **VALIDATION Domain** | | | |
 | 400 | `VALIDATION_FAILED` | Input validation failed | Check the field errors in the response payload |
 | 400 | `NATIONAL_ID_FORMAT_INVALID` | National ID format invalid | Ensure the National ID is exactly 9 (CMND) or 12 (CCCD) digits |
+| 409 | `IDEMPOTENCY_KEY_REUSED` | Request ID reused for different content | Use the original logical content or a new request ID |
 | 400 | `PHONE_NUMBER_FORMAT_INVALID` | Phone number format invalid | Provide a valid Vietnamese phone number format |
 | **SYSTEM Domain** | | | |
 | 500 | `INTERNAL_SERVER_ERROR` | Internal server error | An unexpected error occurred. Please contact support. |

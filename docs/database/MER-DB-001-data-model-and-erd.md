@@ -742,3 +742,49 @@ Detailed index definitions are out of scope for this document. At implementation
 - Should an implementation physically rename the previous `employee_verifications` table to `salary_advance_verifications`, or keep the old name while exposing the clearer domain language in code and documentation?
 - What exact retention policy should apply to inactive customer employee links and lightweight Salary Advance limit movements?
 - What is the final Phase 2 OCR retry lease, worker ownership, and job locking strategy?
+
+## 14. Implemented document and correction physical model (V22-V24)
+
+- `document_checklists`: one per Loan Application and stage; every Salary Advance
+  application owns a persisted empty `SUBMISSION` checklist.
+- `document_checklist_items`: on-demand `RECENT_PAYSLIP` requirement and mutable
+  pointer to the current review decision.
+- `documents`: one logical document per checklist item and mutable
+  `current_version_id` pointer.
+- `document_versions`: immutable metadata rows with version sequence, upload
+  idempotency key, safe display filename, MIME/size/hash metadata, opaque storage
+  reference, uploader identity, and predecessor version.
+- `document_review_decisions`: immutable version-targeted accept, waive, or
+  replacement decisions with review idempotency and restricted notes.
+- `loan_application_review_cycles`: one numbered history per application and at
+  most one `ACTIVE` cycle.
+- `loan_correction_requests` and `loan_correction_tasks`: explicit source,
+  responsibility, scope, proof baseline, audience-specific instruction, task
+  completion, and resubmission idempotency.
+
+`review_recommendations.review_cycle_id` has a composite foreign key proving that
+the recommendation and cycle belong to the same application. There is one
+recommendation per cycle and one decision per recommendation; decisions do not
+duplicate `review_cycle_id`. Important tuple, active-row, sequence, MIME, size, and
+same-row lifecycle invariants remain database-authoritative.
+
+V24 enables the Staff-owned and mixed-actor continuation without changing the
+single-owner task aggregate introduced in V23:
+
+- `SUPPORTING_DOCUMENT_UPLOAD` may be Customer- or Staff-owned;
+- `DOCUMENT_REPLACEMENT` remains Customer-owned;
+- `DOCUMENT_REVIEW` is Staff-owned and is constrained to `RECENT_PAYSLIP`;
+- `idx_loan_correction_tasks_staff_queue` supports the bounded Staff queue;
+- `loan:correction:staff`, `document:upload:staff`, and `document:waive` are
+  seeded permissions with role-specific grants.
+
+The task scope check is the database authority for allowed actor/scope/document
+combinations. Application policy additionally enforces structured-plan shape,
+maker-checker, ownership, workflow state, exact current-version proof, and
+resubmission revalidation. Recommendation and decision rows remain immutable;
+their review-cycle linkage determines historical supersession when the next
+cycle is opened.
+
+Document binaries use a local-filesystem adapter behind the Document storage port
+for MVP. Database rows store only opaque references and safe metadata; retention,
+malware scanning, object storage, and OCR remain explicit follow-ups.

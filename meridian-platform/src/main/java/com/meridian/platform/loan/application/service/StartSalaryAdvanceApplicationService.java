@@ -7,6 +7,7 @@ import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicat
 import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanProductRepository;
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityPort;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
@@ -56,6 +57,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
 
     private final LoanProductRepository loanProductRepository;
     private final LoanApplicationRepository loanApplicationRepository;
+    private final LoanDocumentChecklistPort documentChecklistPort;
     private final SalaryAdvanceLimitRepository salaryAdvanceLimitRepository;
     private final SalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository;
     private final SalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository;
@@ -71,6 +73,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
     public StartSalaryAdvanceApplicationService(
             LoanProductRepository loanProductRepository,
             LoanApplicationRepository loanApplicationRepository,
+            LoanDocumentChecklistPort documentChecklistPort,
             SalaryAdvanceLimitRepository salaryAdvanceLimitRepository,
             SalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository,
             SalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository,
@@ -84,6 +87,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
     ) {
         this.loanProductRepository = loanProductRepository;
         this.loanApplicationRepository = loanApplicationRepository;
+        this.documentChecklistPort = documentChecklistPort;
         this.salaryAdvanceLimitRepository = salaryAdvanceLimitRepository;
         this.salaryAdvanceLimitMovementRepository = salaryAdvanceLimitMovementRepository;
         this.salaryAdvanceVerificationRepository = salaryAdvanceVerificationRepository;
@@ -156,6 +160,10 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         SalaryAdvanceLimit reservedLimit = preparedLimit.limit().reserve(request.requestedAmount());
 
         long applicationSequence = loanApplicationRepository.nextApplicationNumberSequence();
+        LoanDocumentChecklistPort.SubmissionChecklistInitialState checklistInitialState =
+                documentChecklistPort.resolveSubmissionInitialState(salaryAdvanceProduct.productCode());
+        LoanApplicationStatus initialStatus = checklistInitialState.uploadComplete()
+                ? LoanApplicationStatus.SUBMITTED : LoanApplicationStatus.DOCUMENTS_PENDING;
         LoanApplicationTransitionResult submission = LoanApplication.submit(
                 UUID.randomUUID(),
                 customerId,
@@ -163,10 +171,16 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
                 formatApplicationNumber(applicationSequence, now),
                 request.requestedAmount(),
                 request.requestedTermMonths(),
-                now
+                now,
+                initialStatus
         );
 
         LoanApplication savedApplication = loanApplicationRepository.save(submission.loanApplication());
+        documentChecklistPort.createSubmissionChecklist(
+                savedApplication.id(),
+                savedApplication.productCode(),
+                operationContext
+        );
         SalaryAdvanceLimit savedReservedLimit = salaryAdvanceLimitRepository.save(reservedLimit);
         SalaryAdvanceLimitMovement reservedMovement = salaryAdvanceLimitMovementRepository.save(
                 SalaryAdvanceLimitMovement.reserved(

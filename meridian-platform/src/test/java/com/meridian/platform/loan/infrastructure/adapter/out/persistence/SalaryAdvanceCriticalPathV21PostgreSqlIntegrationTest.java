@@ -44,7 +44,7 @@ class SalaryAdvanceCriticalPathV21PostgreSqlIntegrationTest {
             migrateTo(schema, "20");
             UUID applicationId = insertLoanApplication(schema, new BigDecimal("3000000.00"));
 
-            assertEquals(1, migrateLatest(schema));
+            assertEquals(4, migrateLatest(schema));
             assertEquals(1, jdbcTemplate.queryForObject(
                     """
                             SELECT count(*)

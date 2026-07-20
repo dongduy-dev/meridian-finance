@@ -6,6 +6,7 @@ import com.meridian.platform.approval.application.mapper.ApprovalMapper;
 import com.meridian.platform.approval.application.port.in.SubmitApprovalDecisionUseCase;
 import com.meridian.platform.approval.application.port.out.ApprovalDecisionEventPublisher;
 import com.meridian.platform.approval.application.port.out.ApprovalDecisionRepository;
+import com.meridian.platform.approval.application.port.out.ApprovalLoanReviewCyclePort;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.domain.model.ApprovalDecision;
 import com.meridian.platform.approval.domain.model.ApprovalDecisionAction;
@@ -35,15 +36,18 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
 
     private final ReviewRecommendationRepository reviewRecommendationRepository;
     private final ApprovalDecisionRepository approvalDecisionRepository;
+    private final ApprovalLoanReviewCyclePort loanReviewCyclePort;
     private final ApprovalDecisionEventPublisher approvalDecisionEventPublisher;
     private final CurrentUserProvider currentUserProvider;
     private final ApprovalMapper approvalMapper;
     private final BusinessAuditPublisher businessAuditPublisher;
     private final Clock clock;
+    private final CorrectionPlanPolicy correctionPlanPolicy = new CorrectionPlanPolicy();
 
     public SubmitApprovalDecisionService(
             ReviewRecommendationRepository reviewRecommendationRepository,
             ApprovalDecisionRepository approvalDecisionRepository,
+            ApprovalLoanReviewCyclePort loanReviewCyclePort,
             ApprovalDecisionEventPublisher approvalDecisionEventPublisher,
             CurrentUserProvider currentUserProvider,
             ApprovalMapper approvalMapper,
@@ -52,6 +56,7 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
     ) {
         this.reviewRecommendationRepository = reviewRecommendationRepository;
         this.approvalDecisionRepository = approvalDecisionRepository;
+        this.loanReviewCyclePort = loanReviewCyclePort;
         this.approvalDecisionEventPublisher = approvalDecisionEventPublisher;
         this.currentUserProvider = currentUserProvider;
         this.approvalMapper = approvalMapper;
@@ -68,7 +73,6 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
         Objects.requireNonNull(request, "request must not be null");
         Objects.requireNonNull(request.action(), "action must not be null");
-        rejectUnavailableRevisionAction(request);
 
         ReviewRecommendation latestRecommendation = reviewRecommendationRepository
                 .findLatestByLoanApplicationId(loanApplicationId)
@@ -76,6 +80,7 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
                         "REVIEW_RECOMMENDATION_REQUIRED",
                         "An approval decision requires a Loan Officer recommendation."
                 ));
+        validateCorrectionContract(request, latestRecommendation);
 
         AuthenticatedUser currentUser = currentUserProvider.currentUser();
         validateMakerChecker(latestRecommendation, currentUser);
@@ -94,6 +99,7 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
                 currentUser.userId(),
                 request.action(),
                 request.reason(),
+                request.reasonCode(),
                 request.internalNotes(),
                 now
         );
@@ -112,16 +118,42 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
                                 .build()
                 )
         ));
-        approvalDecisionEventPublisher.publish(approvalMapper.toRecordedEvent(savedDecision, operationContext));
+        approvalDecisionEventPublisher.publish(approvalMapper.toRecordedEvent(
+                savedDecision, latestRecommendation.reviewCycleId(), operationContext, request.correctionPlan()
+        ));
 
         return approvalMapper.toDto(savedDecision);
     }
 
-    private void rejectUnavailableRevisionAction(ApprovalDecisionRequest request) {
+    private void validateCorrectionContract(
+            ApprovalDecisionRequest request,
+            ReviewRecommendation latestRecommendation
+    ) {
         if (request.action() == ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION) {
-            throw new BusinessStateConflictException(
-                    "REVISION_WORKFLOW_NOT_AVAILABLE",
-                    "Customer and staff correction workflows are not available yet."
+            UUID activeCycleId = loanReviewCyclePort.findActiveReviewCycleId(
+                            latestRecommendation.loanApplicationId())
+                    .orElseThrow(() -> new BusinessStateConflictException(
+                            "REVIEW_CYCLE_REQUIRED", "An active review cycle is required."));
+            if (!activeCycleId.equals(request.expectedReviewCycleId())
+                    || !activeCycleId.equals(latestRecommendation.reviewCycleId())) {
+                throw new BusinessStateConflictException(
+                        "STALE_REVIEW_CYCLE", "The expected review cycle is no longer active.");
+            }
+            if (request.reasonCode() == null || request.reason() != null) {
+                throw new BusinessRuleViolationException(
+                        "INVALID_CORRECTION_PLAN",
+                        "Revision decisions require a controlled reason code and no free-text reason."
+                );
+            }
+            correctionPlanPolicy.validateMixedCorrection(request.correctionPlan());
+            return;
+        }
+        if (request.expectedReviewCycleId() != null
+                || request.reasonCode() != null
+                || request.correctionPlan() != null) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_CORRECTION_PLAN",
+                    "Correction fields are allowed only for revision-producing actions."
             );
         }
     }

@@ -35,7 +35,36 @@ public record LoanApplication(
             int requestedTermMonths,
             LocalDateTime submittedAt
     ) {
+        return submit(
+                id,
+                customerId,
+                loanProduct,
+                applicationNumber,
+                requestedAmount,
+                requestedTermMonths,
+                submittedAt,
+                LoanApplicationStatus.SUBMITTED
+        );
+    }
+
+    public static LoanApplicationTransitionResult submit(
+            UUID id,
+            UUID customerId,
+            LoanProduct loanProduct,
+            String applicationNumber,
+            BigDecimal requestedAmount,
+            int requestedTermMonths,
+            LocalDateTime submittedAt,
+            LoanApplicationStatus initialStatus
+    ) {
         Objects.requireNonNull(loanProduct, "loanProduct must not be null");
+        Objects.requireNonNull(initialStatus, "initialStatus must not be null");
+        if (initialStatus != LoanApplicationStatus.SUBMITTED
+                && initialStatus != LoanApplicationStatus.DOCUMENTS_PENDING) {
+            throw new IllegalArgumentException(
+                    "Initial Loan Application status must be SUBMITTED or DOCUMENTS_PENDING."
+            );
+        }
         LoanApplication loanApplication = new LoanApplication(
                 Objects.requireNonNull(id, "id must not be null"),
                 Objects.requireNonNull(customerId, "customerId must not be null"),
@@ -43,7 +72,7 @@ public record LoanApplication(
                 Objects.requireNonNull(applicationNumber, "applicationNumber must not be null"),
                 loanProduct.productCode(),
                 loanProduct.productType(),
-                LoanApplicationStatus.SUBMITTED,
+                initialStatus,
                 Objects.requireNonNull(requestedAmount, "requestedAmount must not be null"),
                 requestedTermMonths,
                 Objects.requireNonNull(submittedAt, "submittedAt must not be null")
@@ -53,10 +82,20 @@ public record LoanApplication(
                 new LoanApplicationTransitionFact(
                         loanApplication.id(),
                         null,
-                        LoanApplicationStatus.SUBMITTED,
+                        initialStatus,
                         LoanApplicationTransitionAction.SUBMIT_APPLICATION
                 )
         );
+    }
+
+    public LoanApplicationTransitionResult completeDocumentUploads() {
+        if (status != LoanApplicationStatus.DOCUMENTS_PENDING) {
+            throw new BusinessStateConflictException(
+                    "DOCUMENT_UPLOAD_COMPLETION_NOT_ALLOWED",
+                    "Document uploads can only be completed while documents are pending."
+            );
+        }
+        return transitionTo(LoanApplicationStatus.SUBMITTED, LoanApplicationTransitionAction.COMPLETE_DOCUMENT_UPLOADS);
     }
 
     public LoanApplicationTransitionResult startReview() {
@@ -114,6 +153,33 @@ public record LoanApplication(
                             LoanApplicationTransitionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION
                     );
         };
+    }
+
+    public LoanApplicationTransitionResult requestDocumentReplacementCorrection() {
+        if (status != LoanApplicationStatus.SUBMITTED) {
+            throw new BusinessStateConflictException(
+                    "DOCUMENT_REPLACEMENT_NOT_ALLOWED",
+                    "Pre-review document replacement can only be requested from submitted status."
+            );
+        }
+        return transitionTo(
+                LoanApplicationStatus.RETURNED_FOR_REVISION,
+                LoanApplicationTransitionAction.RETURN_TO_CUSTOMER_REVISION
+        );
+    }
+
+    public LoanApplicationTransitionResult resubmitCorrection(LoanApplicationStatus targetStatus) {
+        if (status != LoanApplicationStatus.RETURNED_FOR_REVISION) {
+            throw new BusinessStateConflictException(
+                    "CORRECTION_RESUBMISSION_NOT_ALLOWED",
+                    "Only an application returned for revision can be resubmitted."
+            );
+        }
+        if (targetStatus != LoanApplicationStatus.SUBMITTED
+                && targetStatus != LoanApplicationStatus.UNDER_REVIEW) {
+            throw new IllegalArgumentException("Correction resubmission target is invalid.");
+        }
+        return transitionTo(targetStatus, LoanApplicationTransitionAction.RESUBMIT_CORRECTION);
     }
 
     public LoanApplicationTransitionResult markCustomerAcceptancePending() {

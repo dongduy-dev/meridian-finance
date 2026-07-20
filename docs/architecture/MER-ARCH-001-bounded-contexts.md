@@ -170,3 +170,25 @@ Loan Core owns the current Salary Advance limit because it is lending state: tot
 
 > **Current workflow coordination is synchronous for this checkpoint.**
 > Approval-to-Loan listeners and Audit recording use Spring `@EventListener` and participate in the originating transaction. The `event_publication` table remains a Spring Modulith infrastructure table, but this checkpoint does not introduce async audit, after-commit listeners, outbox processing, or retry infrastructure.
+
+### Document and correction ownership
+
+- Document owns application checklists, checklist items, logical documents, immutable
+  versions, the current-version pointer, review decisions, staging, and local storage.
+- Loan owns `RETURNED_FOR_REVISION`, review cycles, correction requests/tasks,
+  correction actor authorization, resubmission, Salary Advance revalidation, and
+  every Loan Application status transition.
+- Approval owns immutable recommendation/decision source records and the exact
+  structured correction-plan request contract. A recommendation references the
+  Loan-owned active review cycle by ID; a decision derives its cycle through its
+  recommendation.
+- Document calls narrow Loan application ports for workflow locking, ownership, and
+  correction-task proof. Loan calls a narrow Document readiness/checklist port.
+- Customer document and correction APIs derive Customer identity from
+  `CurrentUserProvider`. Storage keys, hashes, paths, content, restricted notes, and
+  staff instructions never cross the public contracts.
+- Staff APIs require narrow correction, upload, review, or waiver permissions. Staff upload additionally requires an open Staff task, while task completion enforces maker-checker against the correction-request creator.
+- Document content is streamed only through ownership-checked Customer or review-authorized Staff endpoints with attachment, no-store, private-cache, and nosniff response controls.
+- Storage references, local paths, hashes, restricted notes, and document content never cross broad JSON contracts.
+- Audit and Loan history use safe IDs, states, actor types, reason codes, and timestamps.
+- The local-filesystem storage adapter is an MVP infrastructure choice behind a port; it does not leak into Document domain or application contracts.
