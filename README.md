@@ -189,36 +189,72 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 
 ## Roadmap
 
-### Platform Foundation
+### Phase 1 — Core Lending MVP
 
-- [x] Modular Spring backend with Flyway-managed PostgreSQL, ArchUnit boundary checks, and GitHub Actions verification
-- [x] JWT access-token authentication and permission-based RBAC foundations
-- [x] Customer profile and bank-account readiness, Partner employee eligibility, and loan-product catalog foundations
+- [x] Common loan application lifecycle with state machine, product catalog, and product-policy framework
+- [x] Customer profile, bank-account readiness, Partner Employee verification, and Salary Advance eligibility
+- [x] Salary Advance submission, limit reservation, verification snapshots, and concurrency protection
+- [x] Controlled review, approval, maker-checker, audit, and status-history workflows
+- [x] Versioned document upload, checklist, review, correction, and guarded resubmission
+- [x] Approved-offer generation, expiry, customer acceptance, and decline
+- [ ] Contract readiness and immutable disbursement preparation
+- [ ] Manual disbursement confirmation and LoanAccount activation
+- [ ] Final repayment schedules, repayment tracking, settlement, and closure
+- [ ] Streamlined Unsecured Consumer Loan workflow
+- [ ] Streamlined Collateral Loan workflow
+- [x] JWT authentication and permission-based RBAC
+- [x] Idempotent critical workflow operations
+- [x] Flyway migrations, Spring Modulith structure, event-publication persistence, and architecture verification
+- [ ] Startup replay and recovery for incomplete event publications
+- [ ] Docker Compose for PostgreSQL and the application
+- [ ] Structured JSON logging with request and business correlation
+- [x] GitHub Actions build and verification pipeline
 
-### Salary Advance
+### Phase 2 — OCR-Assisted Document Processing
 
-- [x] Origination through eligibility, limit reservation, versioned document and correction handling, review, approval, and approved-offer response
-- [ ] Contract readiness, manual disbursement, LoanAccount activation, final repayment schedules, repayment, settlement, and closure
+- [ ] Containerized Python FastAPI OCR service
+- [ ] Vietnamese TrOCR model integration
+- [ ] Whole-page text detection, line segmentation, and reading-order reconstruction
+- [ ] PostgreSQL-backed asynchronous OCR jobs and result persistence
+- [ ] Manual review UI for OCR-assisted document results
 
-### Multi-Product Expansion
+### Phase 3 — Customer and Staff Experience
 
-- [ ] End-to-end Unsecured Consumer Loan workflow on the shared lending core
-- [ ] End-to-end Collateral Loan workflow with collateral assessment
+- [ ] Customer web portal for profile, applications, documents, offers, and loan tracking
+- [ ] Staff web portal for review, approval, correction, disbursement, and repayment operations
+- [ ] Back-office administration for products, partners, users, and configuration
 
-### User Experience and Document Intelligence
+### Phase 4 — Operational Maturity
 
-- [ ] Customer and staff web applications for self-service and back-office operations
-- [ ] OCR-assisted document processing with manual-review integration
+- [ ] Production object storage, malware scanning, retention, and recovery controls
+- [ ] Redis for session controls, rate limiting, and appropriate idempotency caching
+- [ ] Prometheus metrics and Grafana dashboards
+- [ ] OpenTelemetry distributed tracing
+- [ ] Performance profiling, load testing, and security hardening
 
-### Operational Maturity
+### Phase 5 — Analytics and Risk
 
-- [ ] Production document storage, malware scanning, retention, and hardened IAM/session controls
-- [ ] Advanced observability, performance engineering, search, reporting, and analytics
+- [ ] Elasticsearch-backed loan search and audit-log analytics
+- [ ] Reporting dashboards
+- [ ] Rule-based risk assessment engine
+- [ ] Loan eligibility scoring
 
-### Future Integrations
+### Future Considerations
 
-- [ ] Payroll/employer, banking/payment, and credit-bureau integrations
-- [ ] Notifications, mobile channels, and accounting/ledger capabilities
+- Notification service for email, SMS, and in-app messages
+- Mobile application support
+- Payroll provider, employer API, payment gateway, bank transfer, and credit-bureau integrations
+- Multi-level and configurable approval workflows
+- Microservice extraction where justified, with Kafka-backed event streaming
+
+#### Financial Ledger and Accounting
+
+- Double-entry accounting ledger
+- Journal-entry engine with debit and credit posting
+- Chart of accounts management
+- Automated disbursement and repayment posting
+- Financial reconciliation and balance validation
+- Accounting audit reports
 
 ---
 
