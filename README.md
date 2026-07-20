@@ -141,7 +141,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 | Technology | Purpose |
 |---|---|
 | **Java 25** | LTS runtime with virtual threads and pattern matching |
-| **Spring Boot 4.0.x** | Application framework |
+| **Spring Boot 4.1.x** | Application framework |
 | **Spring Modulith** | Module boundary enforcement, event publication, transactional outbox (`spring-modulith-events-jdbc`) |
 | **Spring Security** | Authentication & authorization |
 | **Spring Data JPA / Hibernate** | Data persistence |
@@ -187,100 +187,38 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 
 ---
 
-## Local Backend Configuration
-
-Customer profile and bank-account encryption requires two Base64-encoded keys at startup:
-
-- `MERIDIAN_CUSTOMER_ENCRYPTION_KEY` maps to `meridian.customer.encryption-key` and must decode to 32 bytes for AES-256-GCM.
-- `MERIDIAN_CUSTOMER_FINGERPRINT_KEY` maps to `meridian.customer.fingerprint-key` and must decode to at least 32 bytes for HMAC-SHA-256.
-
-Use non-production values for local and test runs only; do not commit real secrets.
-
----
-
-## Current Salary Advance Implementation Boundary
-
-Executable backend code currently covers authenticated Customer readiness, employee verification, whole-VND Salary Advance submission, limit reservation, versioned document checklists and manual review, customer/staff correction and resubmission, Loan Officer review, Approver decision, immutable approved-offer generation, and customer accept/decline/expiry. The furthest successful waiting state remains `CONTRACT_PENDING`.
-
-Current workflow contracts:
-
-- mathematically whole amounts such as `3000000`, `3000000.0`, and `3000000.00` are valid; non-zero fractional VND returns `422 INVALID_PRODUCT_AMOUNT`;
-- same-Customer duplicate Salary Advance submissions, including cross-link concurrency, return `409 BLOCKING_APPLICATION_EXISTS` to the losing request;
-- all review actions are executable: `RECOMMEND_APPROVAL`, `RECOMMEND_REJECTION`, `RETURN_TO_CUSTOMER_REVISION`, and `REQUEST_STAFF_CORRECTION`;
-- all approval actions are executable: `APPROVE`, `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`;
-- revision actions require the expected active review cycle, a controlled reason code, and an exact structured correction plan;
-- Salary Advance requires no document at initial submission; `RECENT_PAYSLIP` is created only by an authorized correction plan;
-- document versions and review decisions are immutable; upload completeness is distinct from accepted/waived processing readiness;
-- correction resubmission revalidates Customer, Partner employee, product, blocking-application, document, and reservation invariants; requested amount and term remain immutable and the existing reservation is preserved;
-- customer, Loan Officer, and Back-Office document/correction operations are permission- and ownership-checked, and document content responses use private no-store attachment delivery;
-- local filesystem binary storage is the MVP adapter behind a storage port; PDF, JPEG, and PNG are limited to 10 MiB, while malware scanning, object storage, retention/deletion, and OCR remain deferred;
-- accept or decline against an expired offer returns `409 OFFER_EXPIRED`, including when expiry was already persisted.
-
-Contract readiness, manual disbursement, LoanAccount activation, final repayment schedules, repayment servicing, Customer registration, and frontends remain target-state work rather than current executable behavior.
-
----
-
 ## Roadmap
 
-Current Salary Advance delivery order:
+### Platform Foundation
 
-1. Critical-path stabilization. Complete in the current checkpoint.
-2. Document checklist and correction/revision readiness. Complete through V24.
-3. Contract readiness. Next checkpoint.
-4. Manual disbursement and LoanAccount activation.
-5. Repayment, settlement, and closure.
+- [x] Modular Spring backend with Flyway-managed PostgreSQL, ArchUnit boundary checks, and GitHub Actions verification
+- [x] JWT access-token authentication and permission-based RBAC foundations
+- [x] Customer profile and bank-account readiness, Partner employee eligibility, and loan-product catalog foundations
 
-### Phase 1 — Core Lending MVP
-- [ ] Common loan application lifecycle with state machine
-- [ ] Loan product catalog and product policy framework
-- [ ] Salary Advance workflow with Partner Company and Partner Employee eligibility support
-- [ ] Streamlined Unsecured Consumer Loan and Collateral Loan workflows
-- [ ] Controlled review and approval workflow
-- [ ] Document upload, checklist handling, and metadata management
-- [ ] Customer acceptance, manual disbursement confirmation, and repayment tracking
-- [ ] JWT authentication + RBAC
-- [ ] Idempotency framework
-- [ ] Flyway database migrations
-- [ ] Spring Modulith structure + verification tests
-- [ ] Event Publication Registry (`event_publication` Flyway migration + startup replay scheduler)
-- [ ] Docker Compose (PostgreSQL + application)
-- [ ] Structured JSON logging
-- [ ] GitHub Actions CI pipeline
+### Salary Advance
 
-### Phase 2 — OCR-Assisted Document Processing
-- [ ] Python FastAPI OCR service (containerized)
-- [ ] Vietnamese TrOCR model integration
-- [ ] Async job queue (PostgreSQL-backed)
-- [ ] OCR result persistence
-- [ ] Manual review UI for OCR-assisted document results
+- [x] Origination through eligibility, limit reservation, versioned document and correction handling, review, approval, and approved-offer response
+- [ ] Contract readiness, manual disbursement, LoanAccount activation, final repayment schedules, repayment, settlement, and closure
 
-### Phase 3 — Operational Maturity
-- [ ] Redis (JWT blacklist, rate limiting, idempotency cache)
-- [ ] Prometheus metrics + Grafana dashboards
-- [ ] OpenTelemetry distributed tracing
-- [ ] Performance profiling and optimization
+### Multi-Product Expansion
 
-### Phase 4 — Analytics & Risk
-- [ ] Elasticsearch (loan search, audit log analytics)
-- [ ] Reporting dashboards
-- [ ] Rule-based risk assessment engine
-- [ ] Loan eligibility scoring
+- [ ] End-to-end Unsecured Consumer Loan workflow on the shared lending core
+- [ ] End-to-end Collateral Loan workflow with collateral assessment
 
-### Future Considerations
-- Notification service (email, SMS, in-app)
-- Mobile application support
-- Payroll provider, employer API, payment gateway, bank transfer, and credit bureau integrations
-- Multi-level approval workflows
-- Microservice extraction (documented path, deferred execution) + Kafka
+### User Experience and Document Intelligence
 
-#### Financial Ledger & Accounting
+- [ ] Customer and staff web applications for self-service and back-office operations
+- [ ] OCR-assisted document processing with manual-review integration
 
-- Double-Entry Accounting Ledger
-- Journal Entry Engine (Debit/Credit)
-- Chart of Accounts Management
-- Automated Repayment Posting
-- Financial Reconciliation & Balance Validation
-- Accounting Audit Reports
+### Operational Maturity
+
+- [ ] Production document storage, malware scanning, retention, and hardened IAM/session controls
+- [ ] Advanced observability, performance engineering, search, reporting, and analytics
+
+### Future Integrations
+
+- [ ] Payroll/employer, banking/payment, and credit-bureau integrations
+- [ ] Notifications, mobile channels, and accounting/ledger capabilities
 
 ---
 
@@ -302,7 +240,7 @@ com.meridian.platform/
 ├── partner/                 # Partner company and employee import bounded context
 ├── loan/                    # Generic lending core (product policies + full hexagonal)
 ├── approval/                # Approval workflow
-├── document/                # Document management + OCR-assisted processing
+├── document/                # Document checklist, review, and correction workflows
 ├── audit/                   # Audit & compliance controls
 └── notification/            # Optional later
 ```
@@ -330,9 +268,17 @@ module/
     └── config/               # Module-specific configuration
 ```
 
-Controllers call application input ports and return DTOs. Application services implement input ports, call output ports, and map domain objects to DTOs. JPA entities stay inside infrastructure persistence adapters.
+Feature modules follow Meridian's practical hexagonal structure; detailed layer and dependency rules are documented in [MER-ARCH-003](docs/architecture/MER-ARCH-003-dependency-rules.md).
 
-`shared/` keeps a simpler shape: `shared/domain/model`, `shared/domain/exception`, `shared/application`, and `shared/infrastructure/{config,persistence,web}`. Cross-cutting web infrastructure such as health checks, global exception handling, and API error responses belongs in `shared/infrastructure/web`.
+---
+
+## Documentation
+
+- [Business requirements and workflows](docs/business/MER-BIZ-001-business-requirements-and-workflows.md)
+- [Architecture and dependency rules](docs/architecture/MER-ARCH-003-dependency-rules.md)
+- [Data model and ERD](docs/database/MER-DB-001-data-model-and-erd.md) and [current physical schema snapshot](docs/database/MER-DB-CURRENT-SCHEMA.sql)
+- [API endpoint and scenario guide](docs/api/MER-API-001-endpoints-and-postman-scenarios.md)
+- [Follow-up register](docs/project/MER-TRACK-001-follow-up-register.md)
 
 ---
 
