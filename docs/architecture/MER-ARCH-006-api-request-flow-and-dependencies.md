@@ -425,3 +425,32 @@ Concurrency rules:
    existing order. It consumes one request exactly once.
 5. Synchronous Approval-to-Loan failure rolls back the source Approval row and all
    Loan, Document, Audit, event-publication, and history effects.
+
+
+## 13. Contract Readiness Flow
+
+```mermaid
+sequenceDiagram
+    participant A as Accounting Officer
+    participant L as Loan
+    participant C as Customer boundary
+    participant D as Document
+    participant S as Salary Advance state
+    participant U as Customer owner
+
+    A->>L: Prepare current contract
+    L->>D: Check processingReady
+    L->>C: Capture primary active destination
+    C-->>L: Mutable sensitive boundary value
+    L->>L: Encrypt Loan-purpose snapshot and clear buffers
+    L-->>A: Safe masked contract DTO
+    U->>L: Read and acknowledge exact current version
+    A->>L: Read advisory blocker codes
+    A->>L: Confirm readiness
+    L->>D: Recheck processingReady under transaction
+    L->>C: Lock and inspect captured source account
+    L->>S: Lock and validate unreleased reservation
+    L->>L: Contract READY + application DISBURSEMENT_PENDING + audit/history
+```
+
+The advisory readiness GET uses non-locking reads and never persists a readiness Boolean. Confirmation follows the established workflow lock order and recomputes all blockers. The full destination value never leaves internal ports and no REST endpoint reveals it. Actual disbursement, LoanAccount creation, final schedule generation, and reserved-to-used conversion are outside this flow.

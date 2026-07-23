@@ -121,8 +121,35 @@ class LoanContractReadinessServiceTest {
         verify(contracts, never()).save(any());
     }
 
+    @Test void currentContractQueryEnforcesCustomerOwnershipAndAccountingAuthority() {
+        Fixture f = fixture();
+        LoanContract current = contract(f, 1, LoanContractStatus.PREPARED);
+        when(applications.findById(f.application.id())).thenReturn(Optional.of(f.application));
+        when(contracts.findCurrentByApplicationId(f.application.id())).thenReturn(Optional.of(current));
+
+        when(users.currentUser()).thenReturn(new AuthenticatedUser(
+                UUID.randomUUID(), "owner@meridian.test", "CUSTOMER",
+                f.application.customerId(), Set.of("CUSTOMER"), Set.of("loan:read:own")
+        ));
+        assertSame(current, service.findCurrent(f.application.id()).orElseThrow());
+
+        when(users.currentUser()).thenReturn(new AuthenticatedUser(
+                UUID.randomUUID(), "other@meridian.test", "CUSTOMER",
+                UUID.randomUUID(), Set.of("CUSTOMER"), Set.of("loan:read:own")
+        ));
+        AuthorizationException denial = assertThrows(
+                AuthorizationException.class,
+                () -> service.findCurrent(f.application.id())
+        );
+        assertEquals("LOAN_APPLICATION_ACCESS_DENIED", denial.getErrorCode());
+
+        when(users.currentUser()).thenReturn(staff());
+        assertSame(current, service.findCurrent(f.application.id()).orElseThrow());
+    }
+
     @Test void readinessReportsInactiveCapturedAccountAndReleasedReservation() {
         Fixture f = fixture(); LoanContract acknowledged = contract(f, 1, LoanContractStatus.ACKNOWLEDGED);
+        when(users.currentUser()).thenReturn(staff());
         when(applications.findById(f.application.id())).thenReturn(Optional.of(f.application));
         when(offers.findByLoanApplicationId(f.application.id())).thenReturn(Optional.of(f.offer));
         when(contracts.findCurrentByApplicationId(f.application.id())).thenReturn(Optional.of(acknowledged));
@@ -133,9 +160,12 @@ class LoanContractReadinessServiceTest {
         when(verifications.findByLoanApplicationId(f.application.id())).thenReturn(Optional.of(f.verification));
         when(limits.findById(f.limit.id())).thenReturn(Optional.of(f.limit));
         when(movements.existsByLoanApplicationIdAndMovementType(f.application.id(), SalaryAdvanceLimitMovementType.RESERVATION_RELEASED)).thenReturn(true);
-        QueryContractReadinessUseCase.Snapshot snapshot = service.query(f.application.id(), 1);
+        QueryContractReadinessUseCase.Snapshot snapshot = service.query(f.application.id(), null);
         assertTrue(snapshot.blockers().contains(ContractReadinessBlockerCode.CAPTURED_ACCOUNT_INACTIVE));
         assertTrue(snapshot.blockers().contains(ContractReadinessBlockerCode.SALARY_ADVANCE_RESERVATION_RELEASED));
+        assertFalse(snapshot.blockers().contains(ContractReadinessBlockerCode.CONTRACT_VERSION_STALE));
+        verify(bankAccounts).inspectCaptured(f.application.customerId(), f.accountId);
+        verify(bankAccounts, never()).inspectCapturedForUpdate(any(), any());
     }
 
     @Test void activeCorrectionBlocksPreparationBeforeCustomerOrReservationChecks() {

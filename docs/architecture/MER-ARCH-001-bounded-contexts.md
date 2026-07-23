@@ -82,14 +82,18 @@ Partner Management owns Partner Company and Partner Employee source data. It als
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Generic loan application lifecycle, product definition, `LoanProductPolicy` selection, product-specific policies/strategies, eligibility, Salary Advance limit state and usage, offer terms, manual disbursement confirmation state, repayment schedule, state machine, Loan Application lifecycle history |
-| **Entities** | `LoanApplication` (aggregate root), `LoanProduct`, `LoanProductPolicy`, `SalaryAdvanceLimit`, `SalaryAdvanceLimitMovement`, `SalaryAdvanceVerification`, `LoanApplicationStatusTransition`, `LoanAccount`, `OfferTerms`, `DisbursementRecord`, `RepaymentSchedule`, `ProductVerificationResult`, `Money` (VO), `LoanTerm` (VO), `InterestRate` (VO), `RejectionReason` (VO) |
+| **Responsibilities** | Generic loan application lifecycle, product definition, `LoanProductPolicy` selection, product-specific policies/strategies, eligibility, Salary Advance limit state and usage, approved offers, operational Loan Contracts and readiness, later manual disbursement, repayment schedule, state machine, Loan Application lifecycle history |
+| **Entities** | `LoanApplication` (aggregate root), `LoanProduct`, `LoanProductPolicy`, `SalaryAdvanceLimit`, `SalaryAdvanceLimitMovement`, `SalaryAdvanceVerification`, `ApprovedOffer`, `LoanContract`, `ProtectedDisbursementBankAccount`, `LoanApplicationStatusTransition`, later `LoanAccount`, `DisbursementRecord`, and final `RepaymentSchedule` |
 | **State Machine** | `DRAFT → SUBMITTED → VERIFICATION_PENDING/DOCUMENTS_PENDING → UNDER_REVIEW → APPROVAL_PENDING → APPROVED → CUSTOMER_ACCEPTANCE_PENDING → CONTRACT_PENDING → DISBURSEMENT_PENDING → DISBURSED → SETTLED/CLOSED` (also `→ RETURNED_FOR_REVISION`, `→ RETURNED_TO_REVIEW`, `→ REJECTED`, `→ CANCELLED`, `→ EXPIRED`) |
 | **Public Interface** | `LoanApplicationPort.submit()`, `.getApplication()`, `.listApplications()`, `SalaryAdvanceLimitPort.getCurrentLimit()`, `.startApplicationUsingLimit()` |
 | **Events Published** | `LoanSubmittedEvent` (carries: loanId, customerId, productId, requestedAmount, submittedAt), `SalaryAdvanceLimitReservedEvent`, `SalaryAdvanceLimitReleasedEvent`, `LoanReviewStartedEvent`, `LoanSentForApprovalEvent`, `LoanApprovedEvent`, `LoanRejectedEvent`, `LoanCancelledEvent`, `LoanDisbursedEvent`, `LoanCompletedEvent` |
 | **Microservice Candidacy** | LAST to extract |
 
 Loan Core owns the current Salary Advance limit because it is lending state: total, used, reserved, available, status, reservation, disbursement usage, repayment release, suspension, and disablement. The application-level `SalaryAdvanceVerification` snapshot belongs to the Salary Advance loan application workflow. It stores the employee link and limit values used for one application, but it is not the reusable employee relationship and not the current limit account.
+
+Loan owns the operational contract, immutable accepted-term and repayment snapshots, contract version lifecycle, readiness blockers, and `CONTRACT_PENDING → DISBURSEMENT_PENDING`. Customer continues to own source bank-account data and Customer encryption. A narrow Customer application contract performs mutable-buffer reveal inside Customer; Loan immediately re-protects the value with a versioned Loan-purpose AES-GCM envelope bound to stable identifiers. Customer ciphertext and fingerprint do not cross into Loan.
+
+Document remains the authority for `processingReady`. Contract APIs expose only explicit safe DTOs: masked destination metadata may be returned, but full account number, ciphertext, nonce, authentication tag, key ID, AAD, fingerprint, and internal persistence state never cross REST.
 
 ---
 

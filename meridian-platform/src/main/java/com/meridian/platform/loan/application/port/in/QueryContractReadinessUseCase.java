@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface QueryContractReadinessUseCase {
-    Snapshot query(UUID loanApplicationId, int expectedContractVersion);
+    Snapshot query(UUID loanApplicationId, Integer expectedContractVersion);
     record Snapshot(UUID loanApplicationId, UUID contractId, Integer contractVersion,
                     boolean ready, List<ContractReadinessBlockerCode> blockers) {
         public Snapshot { blockers = List.copyOf(blockers); }

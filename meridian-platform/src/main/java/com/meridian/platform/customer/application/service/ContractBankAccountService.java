@@ -46,9 +46,20 @@ public class ContractBankAccountService implements ContractBankAccountUseCase {
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public ContractBankAccountState inspectCaptured(UUID customerId, UUID bankAccountId) {
-        Customer customer = lockCustomer(customerId);
+        Customer customer = customers.findById(customerId).orElseThrow(() -> new EntityNotFoundException(
+                "CUSTOMER_NOT_FOUND", "Customer was not found."));
+        return inspectCaptured(customer, bankAccountId);
+    }
+
+    @Override
+    @Transactional
+    public ContractBankAccountState inspectCapturedForUpdate(UUID customerId, UUID bankAccountId) {
+        return inspectCaptured(lockCustomer(customerId), bankAccountId);
+    }
+
+    private ContractBankAccountState inspectCaptured(Customer customer, UUID bankAccountId) {
         return customer.bankAccounts().stream()
                 .filter(account -> account.id().equals(bankAccountId))
                 .findFirst()

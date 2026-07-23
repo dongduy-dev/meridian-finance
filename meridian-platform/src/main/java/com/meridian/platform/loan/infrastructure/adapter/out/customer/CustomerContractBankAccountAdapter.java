@@ -37,4 +37,11 @@ public class CustomerContractBankAccountAdapter implements ContractBankAccountPo
                 customerBankAccounts.inspectCaptured(customerId, bankAccountId);
         return new ContractBankAccountState(state.customerActive(), state.accountExists(), state.accountActive());
     }
+
+    @Override
+    public ContractBankAccountState inspectCapturedForUpdate(UUID customerId, UUID bankAccountId) {
+        ContractBankAccountUseCase.ContractBankAccountState state =
+                customerBankAccounts.inspectCapturedForUpdate(customerId, bankAccountId);
+        return new ContractBankAccountState(state.customerActive(), state.accountExists(), state.accountActive());
+    }
 }

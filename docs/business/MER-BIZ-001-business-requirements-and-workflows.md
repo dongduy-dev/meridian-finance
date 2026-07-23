@@ -399,9 +399,15 @@ If the customer accepts a valid unexpired offer, the application moves from `CUS
 
 Same-action retries are idempotent for customer offer responses: accepting an already accepted offer returns the current accepted result, and declining an already declined offer returns the current declined result without releasing reservation again. Contradictory accepted/declined actions return `OFFER_ACTION_CONFLICT`. Accept or decline against an expired offer consistently returns `OFFER_EXPIRED`: a customer action that first discovers expiry commits expiry and exact-once release, while an already persisted expiry returns the same conflict without additional history, audit, movement, or release effects.
 
-After customer acceptance, the system prepares or records required contract and disbursement documents. MVP document handling may include generated loan agreement record, uploaded signed agreement, uploaded supporting documents, internal approval memo, disbursement instruction record, or manual staff confirmation.
+After customer acceptance, an Accounting Officer prepares an operational Loan Contract. This is an immutable versioned record of the accepted approved-offer financial terms, provisional repayment items, and the destination bank account captured for later disbursement. It is not a PDF, uploaded signed agreement, electronic signature, digital signature, or legal execution of an agreement.
 
-The Accounting Officer confirms approved amount, customer bank account information, required document readiness, approval validity, customer acceptance, and `DISBURSEMENT_PENDING` status before marking disbursement as completed. Meridian does not execute real bank transfers in the MVP.
+The Customer retrieves the current contract using authenticated ownership and acknowledges the exact current version. Acknowledgment is immutable operational evidence and cannot be withdrawn. It does not represent electronic signing or legal acceptance of a generated agreement.
+
+Before final readiness, Accounting may regenerate a `PREPARED` or `ACKNOWLEDGED` contract only with `DISBURSEMENT_ACCOUNT_REFRESH`. The prior version becomes `SUPERSEDED`; accepted financial terms and repayment items remain identical; the current primary active destination is recaptured; and the new version requires a fresh Customer acknowledgment.
+
+Readiness is a calculated, point-in-time advisory result with stable blocker codes. Final confirmation recomputes readiness transactionally and requires the accepted offer, current acknowledged version, active Customer, active captured source account, processing-ready documents, no active correction request, and a valid unreleased Salary Advance reservation. It does not recheck profile completeness, current account primacy, current product pricing, or accepted-offer expiry.
+
+Successful readiness confirmation moves the contract to `READY_FOR_DISBURSEMENT` and the Loan Application from `CONTRACT_PENDING` to `DISBURSEMENT_PENDING` in one transaction with PII-safe audit and status history. It does not execute a transfer, create or activate a LoanAccount, create a final repayment schedule, or convert reserved Salary Advance limit to used limit. Those effects remain part of later manual disbursement.
 
 ### 6.8 Repayment, Settlement, and Closure
 
@@ -715,7 +721,7 @@ EXPIRED
 | `CUSTOMER_ACCEPTANCE_PENDING` | Accept offer | Customer | Authenticated owner; offer pending; current time is before expiry | `CONTRACT_PENDING` | No |
 | `CUSTOMER_ACCEPTANCE_PENDING` | Decline offer | Customer | Authenticated owner; offer pending | `CUSTOMER_DECLINED` | No |
 | `CUSTOMER_ACCEPTANCE_PENDING` | Offer expires | System | Offer pending; current time is at or after expiry | `EXPIRED` | No |
-| `CONTRACT_PENDING` | Required contract/disbursement documents ready | Staff or system | Documents accepted/not required/waived | `DISBURSEMENT_PENDING` | No |
+| `CONTRACT_PENDING` | Confirm operational contract readiness | Accounting Officer | Current contract acknowledged; active captured account; documents processing-ready; no active correction; valid unreleased reservation | `DISBURSEMENT_PENDING` | No |
 | `DISBURSEMENT_PENDING` | Confirm manual disbursement | Accounting Officer | Approved, accepted, document-ready, bank account confirmed | `DISBURSED` | No |
 | Any pre-`DISBURSED` non-terminal status | Cancel application | Customer or authorized back-office user | Cancellation allowed by actor/status rule | `CANCELLED` | Yes for staff cancellation |
 
@@ -752,7 +758,8 @@ EXPIRED
 | FR-APR-001 | The system shall allow Approvers to approve, reject, return to Loan Officer review, request customer information, or request staff correction. |
 | FR-APR-002 | The system shall enforce maker-checker separation between Loan Officer recommendation and Approver decision. |
 | FR-OFFER-001 | The system shall generate one immutable approved financial-terms snapshot after approval, present confirmed customer-visible terms to the authenticated customer owner, support customer acceptance/decline, and expire pending offers after the configured validity period. Salary Advance approved offers include approved principal, approved term, flat monthly interest rate, total interest, 0 VND fees, total repayment amount, `ON_SALARY_DATE` repayment timing category, and provisional repayment items defined by Salary Advance rules, without exact calendar due dates or the final repayment schedule at offer time. |
-| FR-CON-001 | The system shall support contract and disbursement document preparation after customer acceptance, including uploaded signed documents or manual confirmation for MVP handling. |
+| FR-CON-001 | The system shall let Accounting prepare an immutable operational contract from the accepted offer and a purpose-protected destination snapshot, let the authenticated Customer owner acknowledge the exact current version, and expose structured readiness. |
+| FR-CON-002 | The system shall allow only `DISBURSEMENT_ACCOUNT_REFRESH` regeneration before readiness and shall transactionally confirm an acknowledged ready contract into `DISBURSEMENT_PENDING` without performing disbursement. |
 | FR-DIS-001 | The system shall allow only Accounting Officers to confirm manual disbursement after approval, customer acceptance, document readiness, and bank account confirmation. |
 | FR-DIS-002 | The system shall move the application to `DISBURSED`, create the LoanAccount, generate the final repayment schedule, activate the LoanAccount, and audit all actions in one controlled post-disbursement transaction. |
 | FR-REP-001 | The system shall generate and track repayment schedules, due amounts, paid amounts, outstanding balance, repayment status, overdue status, settlement, and administrative closure. |
@@ -820,6 +827,12 @@ EXPIRED
 | BR-050 | Salary Advance provisional repayment items include one item per approved term month, use `ON_SALARY_DATE` as a timing category, and describe first, second, and third salary cycle after disbursement timing as applicable without exact calendar due dates. |
 | BR-051 | Salary Advance provisional item principal and interest are allocated in whole VND, remainders are assigned to the final item, fee due is 0 VND for every item, each item total equals principal plus interest plus fee, and item sums must reconcile to approved principal, total interest, 0 VND fees, and total repayment amount with no unreconciled 1-VND difference. |
 | BR-052 | A Salary Advance requested amount must be mathematically whole VND. Scale-only trailing zeros are valid; a non-zero fractional VND amount must be rejected before workflow or financial persistence. |
+| BR-053 | An operational Loan Contract copies the accepted approved-offer terms and repayment preview exactly and never treats mutable Customer data as historical financial authority. |
+| BR-054 | Customer contract acknowledgment is operational evidence for the exact current version, is immutable, and is not electronic signing, digital signing, or legal execution of an agreement. |
+| BR-055 | Contract regeneration is allowed before readiness only for `DISBURSEMENT_ACCOUNT_REFRESH`; it supersedes the current version and requires a fresh acknowledgment. |
+| BR-056 | The full destination account number exists at rest only in purpose-specific authenticated encryption envelopes and is never returned through REST, logged, audited, placed in errors, or written to status history. |
+| BR-057 | Final readiness confirmation atomically marks the contract ready, moves the application to `DISBURSEMENT_PENDING`, and records PII-safe audit/history after recomputing readiness under locks. |
+| BR-058 | Readiness confirmation does not disburse funds, create a LoanAccount or final schedule, or convert a Salary Advance reservation to used amount. |
 
 ---
 

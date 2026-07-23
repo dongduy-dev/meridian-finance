@@ -51,8 +51,8 @@ class LoanContractV25PostgreSqlIntegrationTest {
     @BeforeEach void reset() { audit.failReadiness = false; currentUser.clear(); }
 
     @Test void migrationAndInternalWorkflowReachDisbursementPendingWithSafeExactOnceEvidence() {
-        assertEquals("25", jdbc.queryForObject("select version from " + SCHEMA
-                + ".flyway_schema_history where success order by installed_rank desc limit 1", String.class));
+        assertEquals(1, jdbc.queryForObject("select count(*) from " + SCHEMA
+                + ".flyway_schema_history where version = '25' and success", Integer.class));
         Fixture f = fixture();
         currentUser.set(staff());
         UUID preparationRequest = UUID.randomUUID();

@@ -147,13 +147,39 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
     @Override
     @Transactional(readOnly = true)
     public Optional<LoanContract> findCurrent(UUID loanApplicationId) {
-        return contracts.findCurrentByApplicationId(Objects.requireNonNull(loanApplicationId));
+        Objects.requireNonNull(loanApplicationId);
+        AuthenticatedUser actor = currentUserProvider.currentUser();
+        LoanApplication application = applications.findById(loanApplicationId).orElseThrow(
+                () -> new EntityNotFoundException(
+                        "LOAN_APPLICATION_NOT_FOUND",
+                        "Loan application was not found."
+                )
+        );
+        if (actor.optionalCustomerId().isPresent()) {
+            if (!application.customerId().equals(actor.requireCustomerId())) {
+                throw new com.meridian.platform.shared.domain.exception.AuthorizationException(
+                        "LOAN_APPLICATION_ACCESS_DENIED",
+                        "Loan application does not belong to the authenticated customer."
+                );
+            }
+        } else {
+            requireAccounting(actor);
+        }
+        if (application.status() != LoanApplicationStatus.CONTRACT_PENDING
+                && application.status() != LoanApplicationStatus.DISBURSEMENT_PENDING) {
+            throw conflict("INVALID_APPLICATION_STATE", "Loan application is not in a contract-readable state.");
+        }
+        return contracts.findCurrentByApplicationId(loanApplicationId);
     }
 
     @Override
-    @Transactional
-    public QueryContractReadinessUseCase.Snapshot query(UUID loanApplicationId, int expectedContractVersion) {
+    @Transactional(readOnly = true)
+    public QueryContractReadinessUseCase.Snapshot query(UUID loanApplicationId, Integer expectedContractVersion) {
         Objects.requireNonNull(loanApplicationId);
+        if (expectedContractVersion != null && expectedContractVersion <= 0) {
+            throw new IllegalArgumentException("expectedContractVersion must be positive.");
+        }
+        requireAccounting(currentUserProvider.currentUser());
         LoanApplication application = applications.findById(loanApplicationId).orElse(null);
         ApprovedOffer offer = offers.findByLoanApplicationId(loanApplicationId).orElse(null);
         LoanContract contract = contracts.findCurrentByApplicationId(loanApplicationId).orElse(null);
@@ -199,7 +225,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
 
     private List<ContractReadinessBlockerCode> readinessBlockers(
             LoanApplication application, ApprovedOffer offer, LoanContract contract,
-            int expectedVersion, boolean lockReservation
+            Integer expectedVersion, boolean lockReservation
     ) {
         LinkedHashSet<ContractReadinessBlockerCode> blockers = new LinkedHashSet<>();
         if (application == null || application.status() != LoanApplicationStatus.CONTRACT_PENDING) {
@@ -215,7 +241,8 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
         else if (offer.status() != ApprovedOfferStatus.ACCEPTED) blockers.add(ContractReadinessBlockerCode.ACCEPTED_OFFER_NOT_ACCEPTED);
         if (contract == null) blockers.add(ContractReadinessBlockerCode.CURRENT_CONTRACT_MISSING);
         else {
-            if (contract.contractVersion() != expectedVersion) blockers.add(ContractReadinessBlockerCode.CONTRACT_VERSION_STALE);
+            if (expectedVersion != null && contract.contractVersion() != expectedVersion)
+                blockers.add(ContractReadinessBlockerCode.CONTRACT_VERSION_STALE);
             if (contract.status() != LoanContractStatus.ACKNOWLEDGED) {
                 if (contract.status() == LoanContractStatus.READY_FOR_DISBURSEMENT) {
                     blockers.add(application != null && application.status() == LoanApplicationStatus.DISBURSEMENT_PENDING
@@ -232,8 +259,11 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
                     : corrections.existsActiveRequestByApplicationId(application.id());
             if (activeCorrection)
                 blockers.add(ContractReadinessBlockerCode.ACTIVE_CORRECTION_REQUEST);
-            ContractBankAccountPort.ContractBankAccountState account = bankAccounts.inspectCaptured(
-                    application.customerId(), contract.disbursementBankAccount().sourceBankAccountId());
+            ContractBankAccountPort.ContractBankAccountState account = lockReservation
+                    ? bankAccounts.inspectCapturedForUpdate(application.customerId(),
+                            contract.disbursementBankAccount().sourceBankAccountId())
+                    : bankAccounts.inspectCaptured(application.customerId(),
+                            contract.disbursementBankAccount().sourceBankAccountId());
             if (!account.customerActive()) blockers.add(ContractReadinessBlockerCode.CUSTOMER_INACTIVE);
             if (!account.accountExists()) blockers.add(ContractReadinessBlockerCode.CAPTURED_ACCOUNT_MISSING);
             else if (!account.accountActive()) blockers.add(ContractReadinessBlockerCode.CAPTURED_ACCOUNT_INACTIVE);
