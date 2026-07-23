@@ -243,6 +243,19 @@ public record LoanApplication(
         );
     }
 
+    public LoanApplicationTransitionResult confirmDisbursementReadiness() {
+        if (status != LoanApplicationStatus.CONTRACT_PENDING) {
+            throw new BusinessStateConflictException(
+                    "CONTRACT_READINESS_NOT_ALLOWED",
+                    "Only a contract-pending loan application may be confirmed for disbursement."
+            );
+        }
+        return transitionTo(
+                LoanApplicationStatus.DISBURSEMENT_PENDING,
+                LoanApplicationTransitionAction.CONFIRM_DISBURSEMENT_READINESS
+        );
+    }
+
     private LoanApplicationTransitionResult transitionTo(
             LoanApplicationStatus nextStatus,
             LoanApplicationTransitionAction action

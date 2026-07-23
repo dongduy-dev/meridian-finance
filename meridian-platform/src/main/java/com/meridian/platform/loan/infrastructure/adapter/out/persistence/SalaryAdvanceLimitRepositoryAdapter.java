@@ -46,6 +46,16 @@ public class SalaryAdvanceLimitRepositoryAdapter implements SalaryAdvanceLimitRe
     }
 
     @Override
+    public Optional<SalaryAdvanceLimit> findById(UUID salaryAdvanceLimitId) {
+        return jpaSalaryAdvanceLimitRepository.findById(salaryAdvanceLimitId).map(this::toDomain);
+    }
+
+    @Override
+    public Optional<SalaryAdvanceLimit> findByIdForUpdate(UUID salaryAdvanceLimitId) {
+        return jpaSalaryAdvanceLimitRepository.findByIdForUpdate(salaryAdvanceLimitId).map(this::toDomain);
+    }
+
+    @Override
     public SalaryAdvanceLimit save(SalaryAdvanceLimit salaryAdvanceLimit) {
         SalaryAdvanceLimitJpaEntity entity = jpaSalaryAdvanceLimitRepository.findById(salaryAdvanceLimit.id())
                 .map(existingEntity -> {

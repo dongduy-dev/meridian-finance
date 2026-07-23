@@ -35,10 +35,10 @@ class StaffCorrectionV24PostgreSqlIntegrationTest {
 
     @Test
     void cleanMigrationReachesV24WithExactRoleGrantsAndStaffScopeConstraint() {
-        assertEquals("24", jdbcTemplate.queryForObject(
-                "select version from " + SCHEMA
-                        + ".flyway_schema_history where success order by installed_rank desc limit 1",
-                String.class
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "select count(*) from " + SCHEMA
+                        + ".flyway_schema_history where success and version = '24'",
+                Integer.class
         ));
 
         assertEquals(1, roleGrantCount("LOAN_OFFICER", "loan:correction:staff"));
