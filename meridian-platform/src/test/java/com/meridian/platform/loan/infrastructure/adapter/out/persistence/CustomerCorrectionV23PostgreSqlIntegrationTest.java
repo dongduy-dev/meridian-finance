@@ -73,7 +73,8 @@ class CustomerCorrectionV23PostgreSqlIntegrationTest {
             insertDecision(schema, multipleCycles, first, "RETURN_TO_LOAN_OFFICER_REVIEW", 2);
             insertRecommendation(schema, multipleCycles, "RECOMMEND_APPROVAL", 3);
 
-            assertEquals(3, migrateLatest(schema));
+            migrateLatest(schema);
+            assertMigrationSucceeded(schema, "23");
             assertCycleCount(schema, submitted, 0);
             assertCycle(schema, underReview, 1, "ACTIVE");
             assertCycle(schema, approvalPending, 1, "ACTIVE");
@@ -225,9 +226,17 @@ class CustomerCorrectionV23PostgreSqlIntegrationTest {
                 .locations("classpath:db/migration").target(target).load().migrate();
     }
 
-    private int migrateLatest(String schema) {
-        return Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema)
-                .locations("classpath:db/migration").load().migrate().migrationsExecuted;
+    private void migrateLatest(String schema) {
+        Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema)
+                .locations("classpath:db/migration").load().migrate();
+    }
+
+    private void assertMigrationSucceeded(String schema, String version) {
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM " + schema + ".flyway_schema_history WHERE version = ? AND success",
+                Integer.class,
+                version
+        ));
     }
 
     private void dropSchema(String schema) {

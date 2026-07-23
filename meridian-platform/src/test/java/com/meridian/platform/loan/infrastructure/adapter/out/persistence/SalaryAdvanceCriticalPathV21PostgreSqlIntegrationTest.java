@@ -44,7 +44,8 @@ class SalaryAdvanceCriticalPathV21PostgreSqlIntegrationTest {
             migrateTo(schema, "20");
             UUID applicationId = insertLoanApplication(schema, new BigDecimal("3000000.00"));
 
-            assertEquals(4, migrateLatest(schema));
+            migrateLatest(schema);
+            assertMigrationSucceeded(schema, "21");
             assertEquals(1, jdbcTemplate.queryForObject(
                     """
                             SELECT count(*)
@@ -107,15 +108,22 @@ class SalaryAdvanceCriticalPathV21PostgreSqlIntegrationTest {
                 .migrate();
     }
 
-    private int migrateLatest(String schema) {
-        return Flyway.configure()
+    private void migrateLatest(String schema) {
+        Flyway.configure()
                 .dataSource(dataSource)
                 .schemas(schema)
                 .defaultSchema(schema)
                 .locations("classpath:db/migration")
                 .load()
-                .migrate()
-                .migrationsExecuted;
+                .migrate();
+    }
+
+    private void assertMigrationSucceeded(String schema, String version) {
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM " + schema + ".flyway_schema_history WHERE version = ? AND success",
+                Integer.class,
+                version
+        ));
     }
 
     private UUID insertLoanApplication(String schema, BigDecimal requestedAmount) {
