@@ -36,7 +36,7 @@ public record LoanContract(
         repaymentItems = List.copyOf(Objects.requireNonNull(repaymentItems)).stream()
                 .sorted(Comparator.comparingInt(LoanContractRepaymentItem::installmentNumber)).toList();
         validateRepayment(financialTerms, repaymentItems);
-        validateLifecycle(status, acknowledgmentRequestId, acknowledgedByUserId, acknowledgedAt,
+        validateLifecycle(status, preparedAt, acknowledgmentRequestId, acknowledgedByUserId, acknowledgedAt,
                 confirmationRequestId, confirmedByUserId, confirmedAt, supersededByUserId, supersededAt);
         if (contractVersion == 1 && (expectedPreviousVersion != null || supersessionReason != null || supersedesContractId != null)) {
             throw invalid("First contract cannot supersede an earlier version.");
@@ -123,7 +123,8 @@ public record LoanContract(
     }
 
     private static void validateLifecycle(
-            LoanContractStatus status, UUID ackRequest, UUID ackActor, LocalDateTime ackAt,
+            LoanContractStatus status, LocalDateTime preparedAt,
+            UUID ackRequest, UUID ackActor, LocalDateTime ackAt,
             UUID confirmRequest, UUID confirmActor, LocalDateTime confirmAt,
             UUID supersedeActor, LocalDateTime supersedeAt
     ) {
@@ -142,6 +143,12 @@ public record LoanContract(
             case SUPERSEDED -> !confirmComplete && supersedeComplete;
         };
         if (!valid) throw invalid("Contract lifecycle state is inconsistent.");
+        if (ackComplete && ackAt.isBefore(preparedAt)
+                || confirmComplete && confirmAt.isBefore(ackAt)
+                || supersedeComplete && supersedeAt.isBefore(preparedAt)
+                || ackComplete && supersedeComplete && supersedeAt.isBefore(ackAt)) {
+            throw invalid("Contract lifecycle timestamps are out of order.");
+        }
     }
 
     private static BusinessStateConflictException invalid(String message) {

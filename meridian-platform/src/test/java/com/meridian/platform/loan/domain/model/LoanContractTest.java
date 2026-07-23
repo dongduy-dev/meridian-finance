@@ -23,14 +23,15 @@ class LoanContractTest {
     }
 
     @Test void acknowledgmentAndReadinessAreOneWay() {
-        LocalDateTime now = LocalDateTime.now();
-        LoanContract acknowledged = prepared(List.of(item())).acknowledge(UUID.randomUUID(), UUID.randomUUID(), now);
-        LoanContract ready = acknowledged.confirmReady(UUID.randomUUID(), UUID.randomUUID(), now.plusSeconds(1));
+        LoanContract contract = prepared(List.of(item()));
+        LocalDateTime acknowledgedAt = contract.preparedAt().plusSeconds(1);
+        LoanContract acknowledged = contract.acknowledge(UUID.randomUUID(), UUID.randomUUID(), acknowledgedAt);
+        LoanContract ready = acknowledged.confirmReady(UUID.randomUUID(), UUID.randomUUID(), acknowledgedAt.plusSeconds(1));
         assertEquals(LoanContractStatus.READY_FOR_DISBURSEMENT, ready.status());
         assertThrows(BusinessStateConflictException.class,
-                () -> ready.acknowledge(UUID.randomUUID(), UUID.randomUUID(), now));
+                () -> ready.acknowledge(UUID.randomUUID(), UUID.randomUUID(), acknowledgedAt));
         assertThrows(BusinessStateConflictException.class,
-                () -> ready.supersede(UUID.randomUUID(), now));
+                () -> ready.supersede(UUID.randomUUID(), acknowledgedAt));
     }
 
     @Test void supersessionRequiresFreshAcknowledgmentOnNewVersion() {
@@ -43,6 +44,68 @@ class LoanContractTest {
                 LocalDateTime.now(), first.id());
         assertEquals(LoanContractStatus.PREPARED, second.status());
         assertNull(second.acknowledgedAt());
+    }
+    @Test void rejectsEveryPartialLifecycleEvidenceGroup() {
+        LoanContract base = prepared(List.of(item()));
+        UUID request = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        LocalDateTime afterPreparation = base.preparedAt().plusMinutes(1);
+
+        for (int mask = 1; mask < 7; mask++) {
+            int partial = mask;
+            assertThrows(BusinessStateConflictException.class, () -> rehydrate(base, LoanContractStatus.SUPERSEDED,
+                    (partial & 1) == 0 ? null : request,
+                    (partial & 2) == 0 ? null : actor,
+                    (partial & 4) == 0 ? null : afterPreparation,
+                    null, null, null, actor, afterPreparation.plusMinutes(1)));
+            assertThrows(BusinessStateConflictException.class, () -> rehydrate(base, LoanContractStatus.READY_FOR_DISBURSEMENT,
+                    request, actor, afterPreparation,
+                    (partial & 1) == 0 ? null : UUID.randomUUID(),
+                    (partial & 2) == 0 ? null : UUID.randomUUID(),
+                    (partial & 4) == 0 ? null : afterPreparation.plusMinutes(1),
+                    null, null));
+        }
+
+        assertThrows(BusinessStateConflictException.class, () -> rehydrate(base, LoanContractStatus.SUPERSEDED,
+                null, null, null, null, null, null, actor, null));
+        assertThrows(BusinessStateConflictException.class, () -> rehydrate(base, LoanContractStatus.SUPERSEDED,
+                null, null, null, null, null, null, null, afterPreparation));
+    }
+
+    @Test void rejectsRetrogradeLifecycleTimestampsAndAllowsBothSupersessionOrigins() {
+        LoanContract base = prepared(List.of(item()));
+        UUID request = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        assertThrows(BusinessStateConflictException.class,
+                () -> base.acknowledge(request, actor, base.preparedAt().minusNanos(1)));
+        assertThrows(BusinessStateConflictException.class,
+                () -> base.supersede(actor, base.preparedAt().minusNanos(1)));
+
+        LoanContract acknowledged = base.acknowledge(request, actor, base.preparedAt().plusMinutes(1));
+        assertThrows(BusinessStateConflictException.class,
+                () -> acknowledged.confirmReady(UUID.randomUUID(), UUID.randomUUID(),
+                        acknowledged.acknowledgedAt().minusNanos(1)));
+        assertThrows(BusinessStateConflictException.class,
+                () -> acknowledged.supersede(UUID.randomUUID(), acknowledged.acknowledgedAt().minusNanos(1)));
+
+        assertEquals(LoanContractStatus.SUPERSEDED,
+                base.supersede(UUID.randomUUID(), base.preparedAt()).status());
+        assertEquals(LoanContractStatus.SUPERSEDED,
+                acknowledged.supersede(UUID.randomUUID(), acknowledged.acknowledgedAt()).status());
+    }
+
+    private static LoanContract rehydrate(
+            LoanContract base, LoanContractStatus status,
+            UUID ackRequest, UUID ackActor, LocalDateTime ackAt,
+            UUID confirmRequest, UUID confirmActor, LocalDateTime confirmAt,
+            UUID supersedeActor, LocalDateTime supersedeAt
+    ) {
+        return new LoanContract(base.id(), base.loanApplicationId(), base.approvedOfferId(),
+                base.contractReference(), base.contractVersion(), status, base.financialTerms(),
+                base.repaymentItems(), base.disbursementBankAccount(), base.preparationRequestId(),
+                base.expectedPreviousVersion(), base.supersessionReason(), base.preparedByUserId(),
+                base.preparedAt(), ackRequest, ackActor, ackAt, confirmRequest, confirmActor, confirmAt,
+                base.supersedesContractId(), supersedeActor, supersedeAt);
     }
 
     @Test void rejectsRepaymentMismatch() {

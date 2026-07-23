@@ -39,10 +39,10 @@ class ContractReadinessV26PostgreSqlIntegrationTest {
 
     @Test
     void assignsOnlyCustomerAcknowledgmentAndAccountingPreparationPermissions() {
-        assertEquals("26", jdbc.queryForObject(
-                "select version from " + SCHEMA
-                        + ".flyway_schema_history where success order by installed_rank desc limit 1",
-                String.class
+        assertEquals(1, jdbc.queryForObject(
+                "select count(*) from " + SCHEMA
+                        + ".flyway_schema_history where success and version = '26'",
+                Integer.class
         ));
         assertEquals(1, roleGrantCount("CUSTOMER", "loan:contract:acknowledge:own"));
         assertEquals(0, roleGrantCount("CUSTOMER", "loan:contract:prepare"));

@@ -199,12 +199,97 @@ class LoanContractReadinessServiceTest {
 
     @Test void invalidReservationBlocksPreparationWithoutPersistingContract() {
         Fixture f = fixture(); stubPreparation(f);
-        when(movements.existsByLoanApplicationIdAndMovementType(
-                f.application.id(), SalaryAdvanceLimitMovementType.RESERVED)).thenReturn(false);
+        when(movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                f.application.id(), SalaryAdvanceLimitMovementType.RESERVED)).thenReturn(List.of());
         BusinessStateConflictException error = assertThrows(BusinessStateConflictException.class,
                 () -> service.prepare(new PrepareLoanContractUseCase.Command(UUID.randomUUID(), f.application.id(), 0, null)));
         assertEquals("SALARY_ADVANCE_RESERVATION_INVALID", error.getErrorCode());
         verify(contracts, never()).save(any());
+    }
+
+    @Test void reservationAmountMustExactlyEqualContractPrincipal() {
+        for (long amount : List.of(999L, 1001L)) {
+            Fixture f = fixture();
+            stubPreparation(f);
+            when(movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                    f.application.id(), SalaryAdvanceLimitMovementType.RESERVED))
+                    .thenReturn(List.of(reservation(f, f.limit.id(), money(amount))));
+            assertPreparationBlocked(f, "SALARY_ADVANCE_RESERVATION_INVALID");
+        }
+        verify(contracts, never()).save(any());
+    }
+
+    @Test void reservationMustReferenceVerificationLimitAndBeUnique() {
+        Fixture wrongLimit = fixture();
+        stubPreparation(wrongLimit);
+        when(movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                wrongLimit.application.id(), SalaryAdvanceLimitMovementType.RESERVED))
+                .thenReturn(List.of(reservation(wrongLimit, UUID.randomUUID(), money(1000))));
+        assertPreparationBlocked(wrongLimit, "SALARY_ADVANCE_RESERVATION_INVALID");
+
+        Fixture duplicate = fixture();
+        stubPreparation(duplicate);
+        when(movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                duplicate.application.id(), SalaryAdvanceLimitMovementType.RESERVED))
+                .thenReturn(List.of(
+                        reservation(duplicate, duplicate.limit.id(), money(1000)),
+                        reservation(duplicate, duplicate.limit.id(), money(1000))));
+        assertPreparationBlocked(duplicate, "SALARY_ADVANCE_RESERVATION_INVALID");
+        verify(contracts, never()).save(any());
+    }
+
+    @Test void limitReservedBalanceMustReconcileWithOutstandingMovements() {
+        Fixture f = fixture();
+        stubPreparation(f);
+        when(movements.calculateOutstandingReservedAmount(f.limit.id())).thenReturn(money(999));
+        assertPreparationBlocked(f, "SALARY_ADVANCE_RESERVATION_INVALID");
+        verify(contracts, never()).save(any());
+    }
+
+    @Test void releasedReservationBlocksPreparation() {
+        Fixture f = fixture();
+        stubPreparation(f);
+        when(movements.existsByLoanApplicationIdAndMovementType(
+                f.application.id(), SalaryAdvanceLimitMovementType.RESERVATION_RELEASED)).thenReturn(true);
+        assertPreparationBlocked(f, "SALARY_ADVANCE_RESERVATION_RELEASED");
+        verify(contracts, never()).save(any());
+    }
+
+    @Test void confirmationUsesImmutableContractPrincipalInsteadOfCurrentOfferData() {
+        Fixture f = fixture();
+        LoanContract acknowledged = contract(f, 1, LoanContractStatus.ACKNOWLEDGED);
+        ApprovedOffer changedOffer = changedOffer(f, money(2000));
+        when(users.currentUser()).thenReturn(staff());
+        when(contracts.findByConfirmationRequestId(any())).thenReturn(Optional.empty());
+        when(applications.findByIdForUpdate(f.application.id())).thenReturn(Optional.of(f.application));
+        when(offers.findByLoanApplicationIdForUpdate(f.application.id())).thenReturn(Optional.of(changedOffer));
+        when(contracts.findCurrentByApplicationIdForUpdate(f.application.id())).thenReturn(Optional.of(acknowledged));
+        when(documents.isProcessingReady(f.application.id())).thenReturn(true);
+        when(corrections.findActiveRequestByApplicationIdForUpdate(f.application.id())).thenReturn(Optional.empty());
+        when(bankAccounts.inspectCapturedForUpdate(f.application.customerId(), f.accountId))
+                .thenReturn(new ContractBankAccountPort.ContractBankAccountState(true, true, true));
+        when(verifications.findByLoanApplicationId(f.application.id())).thenReturn(Optional.of(f.verification));
+        when(limits.findByIdForUpdate(f.limit.id())).thenReturn(Optional.of(f.limit));
+        when(movements.existsByLoanApplicationIdAndMovementType(
+                f.application.id(), SalaryAdvanceLimitMovementType.RESERVATION_RELEASED)).thenReturn(false);
+        when(movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                f.application.id(), SalaryAdvanceLimitMovementType.RESERVED))
+                .thenReturn(List.of(reservation(f, f.limit.id(), money(1000))));
+        when(movements.calculateOutstandingReservedAmount(f.limit.id())).thenReturn(money(1000));
+        when(contracts.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(applications.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        LoanContract ready = service.confirm(new ConfirmContractReadinessUseCase.Command(
+                UUID.randomUUID(), f.application.id(), acknowledged.id(), 1));
+
+        assertEquals(LoanContractStatus.READY_FOR_DISBURSEMENT, ready.status());
+    }
+
+    private void assertPreparationBlocked(Fixture f, String expectedCode) {
+        BusinessStateConflictException error = assertThrows(BusinessStateConflictException.class,
+                () -> service.prepare(new PrepareLoanContractUseCase.Command(
+                        UUID.randomUUID(), f.application.id(), 0, null)));
+        assertEquals(expectedCode, error.getErrorCode());
     }
     private void stubPreparation(Fixture f) {
         when(users.currentUser()).thenReturn(staff());
@@ -220,7 +305,10 @@ class LoanContractReadinessServiceTest {
         when(verifications.findByLoanApplicationId(f.application.id())).thenReturn(Optional.of(f.verification));
         when(limits.findByIdForUpdate(f.limit.id())).thenReturn(Optional.of(f.limit));
         when(movements.existsByLoanApplicationIdAndMovementType(f.application.id(), SalaryAdvanceLimitMovementType.RESERVATION_RELEASED)).thenReturn(false);
-        when(movements.existsByLoanApplicationIdAndMovementType(f.application.id(), SalaryAdvanceLimitMovementType.RESERVED)).thenReturn(true);
+        lenient().when(movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                f.application.id(), SalaryAdvanceLimitMovementType.RESERVED))
+                .thenReturn(List.of(reservation(f, f.limit.id(), money(1000))));
+        lenient().when(movements.calculateOutstandingReservedAmount(f.limit.id())).thenReturn(money(1000));
     }
 
     private static AuthenticatedUser staff() {
@@ -246,16 +334,32 @@ class LoanContractReadinessServiceTest {
                 "VCB", "Vietcombank", "MERIDIAN CUSTOMER", "7890", new byte[]{1,2,3,4,5,6});
         return new Fixture(application, offer, limit, verification, accountId, sensitive);
     }
+    private static ApprovedOffer changedOffer(Fixture f, BigDecimal principal) {
+        ApprovedOfferFinancialTerms changedTerms = new ApprovedOfferFinancialTerms(principal, 1,
+                InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL, new BigDecimal("0.100000"),
+                money(100), money(0), principal.add(money(100)), RepaymentMethod.ON_SALARY_DATE);
+        return new ApprovedOffer(f.offer.id(), f.application.id(), f.offer.sourceLoanProductPolicyId(),
+                ApprovedOfferStatus.ACCEPTED, changedTerms,
+                List.of(new ProvisionalRepaymentItem(UUID.randomUUID(), 1,
+                        principal, money(100), money(0), principal.add(money(100)))),
+                f.offer.generatedAt(), f.offer.expiresAt(), f.offer.acceptedAt(), null, null);
+    }
+
+    private static SalaryAdvanceLimitMovement reservation(Fixture f, UUID limitId, BigDecimal amount) {
+        return SalaryAdvanceLimitMovement.reserved(
+                UUID.randomUUID(), limitId, f.application.id(), amount, java.time.LocalDateTime.now());
+    }
     private static LoanContract contract(Fixture f, int version, LoanContractStatus status) {
+        java.time.LocalDateTime preparedAt = java.time.LocalDateTime.of(2026, 7, 22, 23, 0);
         LoanContract prepared = LoanContract.prepared(UUID.randomUUID(), f.application.id(), f.offer.id(), "MCT-" + version, version,
                 f.offer.financialTerms(), List.of(new LoanContractRepaymentItem(UUID.randomUUID(), f.offer.repaymentItems().getFirst().id(),
                         1, money(1000), money(100), money(0), money(1100))),
                 new ProtectedDisbursementBankAccount(f.application.customerId(), f.accountId, "VCB", "Vietcombank", "MERIDIAN CUSTOMER",
-                        "7890", true, true, java.time.LocalDateTime.now(), "AES-256-GCM", "v1", new byte[12], new byte[]{1}, "DISBURSEMENT_ACCOUNT_V1"),
+                        "7890", true, true, preparedAt, "AES-256-GCM", "v1", new byte[12], new byte[]{1}, "DISBURSEMENT_ACCOUNT_V1"),
                 UUID.randomUUID(), version == 1 ? null : version - 1, version == 1 ? null : ContractSupersessionReason.DISBURSEMENT_ACCOUNT_REFRESH,
-                UUID.randomUUID(), java.time.LocalDateTime.now(), version == 1 ? null : UUID.randomUUID());
+                UUID.randomUUID(), preparedAt, version == 1 ? null : UUID.randomUUID());
         return status == LoanContractStatus.ACKNOWLEDGED
-                ? prepared.acknowledge(UUID.randomUUID(), UUID.randomUUID(), java.time.LocalDateTime.now()) : prepared;
+                ? prepared.acknowledge(UUID.randomUUID(), UUID.randomUUID(), preparedAt.plusMinutes(1)) : prepared;
     }
     private static ApprovedOfferFinancialTerms terms() { return new ApprovedOfferFinancialTerms(money(1000), 1,
             InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL, new BigDecimal("0.100000"), money(100), money(0), money(1100), RepaymentMethod.ON_SALARY_DATE); }

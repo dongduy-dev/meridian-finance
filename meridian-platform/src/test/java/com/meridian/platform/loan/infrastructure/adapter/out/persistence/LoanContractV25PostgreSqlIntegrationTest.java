@@ -15,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.*;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -150,6 +151,101 @@ class LoanContractV25PostgreSqlIntegrationTest {
                         com.meridian.platform.loan.domain.model.ContractSupersessionReason.DISBURSEMENT_ACCOUNT_REFRESH)));
         assertEquals("INVALID_APPLICATION_STATE", regeneration.getErrorCode());
         assertEquals(1, count("select count(*) from loan_contracts where loan_application_id = ? and status <> 'SUPERSEDED'", f.applicationId));
+    }
+
+    @Test void invalidReservationLeavesTheCurrentContractAndAuditUntouched() {
+        Fixture f = fixture();
+        currentUser.set(staff());
+        LoanContract first = prepare.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), f.applicationId, 0, null));
+        jdbc.update("update salary_advance_limit_movements set amount = 999 "
+                + "where loan_application_id = ? and movement_type = 'RESERVED'", f.applicationId);
+
+        BusinessStateConflictException failure = assertThrows(BusinessStateConflictException.class,
+                () -> prepare.prepare(new PrepareLoanContractUseCase.Command(
+                        UUID.randomUUID(), f.applicationId, 1,
+                        com.meridian.platform.loan.domain.model.ContractSupersessionReason.DISBURSEMENT_ACCOUNT_REFRESH)));
+
+        assertEquals("SALARY_ADVANCE_RESERVATION_INVALID", failure.getErrorCode());
+        assertEquals("PREPARED", scalar("select status from loan_contracts where id = ?", first.id()));
+        assertEquals(1, count("select count(*) from loan_contracts where loan_application_id = ?", f.applicationId));
+        assertEquals(0, count("select count(*) from audit_events where entity_id = ? "
+                + "and action = 'LOAN_CONTRACT_SUPERSEDED'", first.id()));
+    }
+
+    @Test void databaseRejectsEveryPartialLifecycleEvidenceGroup() {
+        Fixture preparedFixture = fixture();
+        currentUser.set(staff());
+        LoanContract prepared = prepare.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), preparedFixture.applicationId, 0, null));
+        for (int mask = 1; mask < 7; mask++) {
+            int partial = mask;
+            assertThrows(DataAccessException.class, () -> jdbc.update("update loan_contracts set "
+                            + "status='SUPERSEDED', acknowledgment_request_id=?, acknowledged_by_user_id=?, "
+                            + "acknowledged_at=?, superseded_by_user_id=?, superseded_at=prepared_at where id=?",
+                    (partial & 1) == 0 ? null : UUID.randomUUID(),
+                    (partial & 2) == 0 ? null : preparedFixture.customerUserId,
+                    (partial & 4) == 0 ? null : prepared.preparedAt(), ACCOUNTING, prepared.id()));
+        }
+
+        assertThrows(DataAccessException.class, () -> jdbc.update("update loan_contracts set "
+                        + "status='SUPERSEDED', superseded_by_user_id=?, superseded_at=null where id=?",
+                ACCOUNTING, prepared.id()));
+        assertThrows(DataAccessException.class, () -> jdbc.update("update loan_contracts set "
+                        + "status='SUPERSEDED', superseded_by_user_id=null, superseded_at=prepared_at where id=?",
+                prepared.id()));
+
+        Fixture acknowledgedFixture = fixture();
+        LoanContract anotherPrepared = prepare.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), acknowledgedFixture.applicationId, 0, null));
+        currentUser.set(customer(acknowledgedFixture));
+        LoanContract acknowledged = acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                UUID.randomUUID(), acknowledgedFixture.applicationId, anotherPrepared.id(), 1));
+        for (int mask = 1; mask < 7; mask++) {
+            int partial = mask;
+            assertThrows(DataAccessException.class, () -> jdbc.update("update loan_contracts set "
+                            + "status='READY_FOR_DISBURSEMENT', confirmation_request_id=?, "
+                            + "confirmed_by_user_id=?, confirmed_at=? where id=?",
+                    (partial & 1) == 0 ? null : UUID.randomUUID(),
+                    (partial & 2) == 0 ? null : ACCOUNTING,
+                    (partial & 4) == 0 ? null : acknowledged.acknowledgedAt(), acknowledged.id()));
+        }
+    }
+
+    @Test void databaseRejectsRetrogradeLifecycleTimestampsAndAcceptsBothSupersessionOrigins() {
+        Fixture f = fixture();
+        currentUser.set(staff());
+        LoanContract prepared = prepare.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), f.applicationId, 0, null));
+        assertThrows(DataAccessException.class, () -> jdbc.update("update loan_contracts set "
+                        + "status='ACKNOWLEDGED', acknowledgment_request_id=?, acknowledged_by_user_id=?, "
+                        + "acknowledged_at=prepared_at-interval '1 second' where id=?",
+                UUID.randomUUID(), f.customerUserId, prepared.id()));
+        assertThrows(DataAccessException.class, () -> jdbc.update("update loan_contracts set "
+                        + "status='SUPERSEDED', superseded_by_user_id=?, "
+                        + "superseded_at=prepared_at-interval '1 second' where id=?",
+                ACCOUNTING, prepared.id()));
+
+        currentUser.set(customer(f));
+        LoanContract acknowledged = acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                UUID.randomUUID(), f.applicationId, prepared.id(), 1));
+        assertThrows(DataAccessException.class, () -> jdbc.update("update loan_contracts set "
+                        + "status='READY_FOR_DISBURSEMENT', confirmation_request_id=?, confirmed_by_user_id=?, "
+                        + "confirmed_at=acknowledged_at-interval '1 second' where id=?",
+                UUID.randomUUID(), ACCOUNTING, acknowledged.id()));
+        assertThrows(DataAccessException.class, () -> jdbc.update("update loan_contracts set "
+                        + "status='SUPERSEDED', superseded_by_user_id=?, "
+                        + "superseded_at=acknowledged_at-interval '1 second' where id=?",
+                ACCOUNTING, acknowledged.id()));
+
+        currentUser.set(staff());
+        LoanContract regenerated = prepare.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), f.applicationId, 1,
+                com.meridian.platform.loan.domain.model.ContractSupersessionReason.DISBURSEMENT_ACCOUNT_REFRESH));
+        assertEquals(2, regenerated.contractVersion());
+        assertEquals("SUPERSEDED", scalar("select status from loan_contracts where id = ?", acknowledged.id()));
+        assertNotNull(jdbc.queryForObject("select acknowledgment_request_id from loan_contracts where id = ?",
+                UUID.class, acknowledged.id()));
     }
     private Fixture fixture() {
         UUID customerId = UUID.randomUUID(), customerUserId = UUID.randomUUID(), bankId = UUID.randomUUID();

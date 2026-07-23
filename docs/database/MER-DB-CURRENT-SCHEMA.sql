@@ -1,7 +1,7 @@
 -- Meridian current physical schema snapshot.
 -- Documentation only. Flyway migrations under meridian-platform/src/main/resources/db/migration
 -- remain the executable database history.
--- Snapshot source: migrations V1 through V26.
+-- Snapshot source: migrations V1 through V27.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -516,6 +516,11 @@ CREATE UNIQUE INDEX uq_salary_advance_limit_movements_application_release
     ON salary_advance_limit_movements (loan_application_id)
     WHERE movement_type = 'RESERVATION_RELEASED'
       AND loan_application_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_salary_advance_limit_movements_application_reserved
+    ON salary_advance_limit_movements (loan_application_id)
+    WHERE movement_type = 'RESERVED'
+      AND loan_application_id IS NOT NULL;
+
 
 CREATE TABLE salary_advance_verifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -2038,20 +2043,53 @@ CREATE TABLE loan_contracts (
     ),
     CONSTRAINT chk_loan_contracts_lifecycle CHECK (
         (status = 'PREPARED'
-            AND acknowledgment_request_id IS NULL AND acknowledged_by_user_id IS NULL AND acknowledged_at IS NULL
-            AND confirmation_request_id IS NULL AND confirmed_by_user_id IS NULL AND confirmed_at IS NULL
-            AND superseded_by_user_id IS NULL AND superseded_at IS NULL)
+            AND acknowledgment_request_id IS NULL
+            AND acknowledged_by_user_id IS NULL
+            AND acknowledged_at IS NULL
+            AND confirmation_request_id IS NULL
+            AND confirmed_by_user_id IS NULL
+            AND confirmed_at IS NULL
+            AND superseded_by_user_id IS NULL
+            AND superseded_at IS NULL)
         OR (status = 'ACKNOWLEDGED'
-            AND acknowledgment_request_id IS NOT NULL AND acknowledged_by_user_id IS NOT NULL AND acknowledged_at IS NOT NULL
-            AND confirmation_request_id IS NULL AND confirmed_by_user_id IS NULL AND confirmed_at IS NULL
-            AND superseded_by_user_id IS NULL AND superseded_at IS NULL)
+            AND acknowledgment_request_id IS NOT NULL
+            AND acknowledged_by_user_id IS NOT NULL
+            AND acknowledged_at IS NOT NULL
+            AND acknowledged_at >= prepared_at
+            AND confirmation_request_id IS NULL
+            AND confirmed_by_user_id IS NULL
+            AND confirmed_at IS NULL
+            AND superseded_by_user_id IS NULL
+            AND superseded_at IS NULL)
         OR (status = 'READY_FOR_DISBURSEMENT'
-            AND acknowledgment_request_id IS NOT NULL AND acknowledged_by_user_id IS NOT NULL AND acknowledged_at IS NOT NULL
-            AND confirmation_request_id IS NOT NULL AND confirmed_by_user_id IS NOT NULL AND confirmed_at IS NOT NULL
-            AND superseded_by_user_id IS NULL AND superseded_at IS NULL)
+            AND acknowledgment_request_id IS NOT NULL
+            AND acknowledged_by_user_id IS NOT NULL
+            AND acknowledged_at IS NOT NULL
+            AND acknowledged_at >= prepared_at
+            AND confirmation_request_id IS NOT NULL
+            AND confirmed_by_user_id IS NOT NULL
+            AND confirmed_at IS NOT NULL
+            AND confirmed_at >= acknowledged_at
+            AND superseded_by_user_id IS NULL
+            AND superseded_at IS NULL)
         OR (status = 'SUPERSEDED'
-            AND confirmation_request_id IS NULL AND confirmed_by_user_id IS NULL AND confirmed_at IS NULL
-            AND superseded_by_user_id IS NOT NULL AND superseded_at IS NOT NULL)
+            AND (
+                (acknowledgment_request_id IS NULL
+                    AND acknowledged_by_user_id IS NULL
+                    AND acknowledged_at IS NULL)
+                OR
+                (acknowledgment_request_id IS NOT NULL
+                    AND acknowledged_by_user_id IS NOT NULL
+                    AND acknowledged_at IS NOT NULL
+                    AND acknowledged_at >= prepared_at)
+            )
+            AND confirmation_request_id IS NULL
+            AND confirmed_by_user_id IS NULL
+            AND confirmed_at IS NULL
+            AND superseded_by_user_id IS NOT NULL
+            AND superseded_at IS NOT NULL
+            AND superseded_at >= prepared_at
+            AND (acknowledged_at IS NULL OR superseded_at >= acknowledged_at))
     )
 );
 

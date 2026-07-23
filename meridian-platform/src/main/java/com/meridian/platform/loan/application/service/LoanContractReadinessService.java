@@ -13,6 +13,7 @@ import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -96,7 +97,6 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
                 Arrays.fill(plaintext, (byte) 0);
             }
         }
-        requireValidReservation(application, offer.financialTerms(), true);
 
         int version = current == null ? 1 : current.contractVersion() + 1;
         List<LoanContractRepaymentItem> repaymentItems = offer.repaymentItems().stream()
@@ -107,6 +107,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
                 "MCT-" + contractId.toString().toUpperCase(Locale.ROOT), version, offer.financialTerms(),
                 repaymentItems, protectedAccount, command.requestId(), current == null ? null : current.contractVersion(),
                 command.supersessionReason(), actor.userId(), now, current == null ? null : current.id());
+        requireValidReservation(application, prepared.financialTerms().approvedPrincipal(), true);
 
         BusinessOperationContext operation = BusinessOperationContext.user(UUID.randomUUID(), actor.userId(), now);
         if (current != null) {
@@ -267,21 +268,20 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
             if (!account.customerActive()) blockers.add(ContractReadinessBlockerCode.CUSTOMER_INACTIVE);
             if (!account.accountExists()) blockers.add(ContractReadinessBlockerCode.CAPTURED_ACCOUNT_MISSING);
             else if (!account.accountActive()) blockers.add(ContractReadinessBlockerCode.CAPTURED_ACCOUNT_INACTIVE);
-            if (offer != null) {
-                ContractReadinessBlockerCode reservation = reservationBlocker(application, offer.financialTerms(), lockReservation);
-                if (reservation != null) blockers.add(reservation);
-            }
+            ContractReadinessBlockerCode reservation = reservationBlocker(
+                    application, contract.financialTerms().approvedPrincipal(), lockReservation);
+            if (reservation != null) blockers.add(reservation);
         }
         return List.copyOf(blockers);
     }
 
-    private void requireValidReservation(LoanApplication application, ApprovedOfferFinancialTerms terms, boolean lock) {
-        ContractReadinessBlockerCode blocker = reservationBlocker(application, terms, lock);
+    private void requireValidReservation(LoanApplication application, BigDecimal approvedPrincipal, boolean lock) {
+        ContractReadinessBlockerCode blocker = reservationBlocker(application, approvedPrincipal, lock);
         if (blocker != null) throw conflict(blocker.name(), "Salary Advance reservation is not valid.");
     }
 
     private ContractReadinessBlockerCode reservationBlocker(
-            LoanApplication application, ApprovedOfferFinancialTerms terms, boolean lock
+            LoanApplication application, BigDecimal approvedPrincipal, boolean lock
     ) {
         SalaryAdvanceVerification verification = verifications.findByLoanApplicationId(application.id()).orElse(null);
         if (verification == null || !verification.customerId().equals(application.customerId()))
@@ -293,9 +293,21 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
             return ContractReadinessBlockerCode.SALARY_ADVANCE_RESERVATION_RELEASED;
         if (limit == null || limit.status() != SalaryAdvanceLimitStatus.ACTIVE
                 || !limit.customerId().equals(application.customerId())
-                || !limit.customerPartnerEmployeeLinkId().equals(verification.customerPartnerEmployeeLinkId())
-                || limit.reservedAmount().compareTo(terms.approvedPrincipal()) < 0
-                || !movements.existsByLoanApplicationIdAndMovementType(application.id(), SalaryAdvanceLimitMovementType.RESERVED))
+                || !limit.customerPartnerEmployeeLinkId().equals(verification.customerPartnerEmployeeLinkId()))
+            return ContractReadinessBlockerCode.SALARY_ADVANCE_RESERVATION_INVALID;
+
+        List<SalaryAdvanceLimitMovement> reservations = lock
+                ? movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                        application.id(), SalaryAdvanceLimitMovementType.RESERVED)
+                : movements.findByLoanApplicationIdAndMovementType(
+                        application.id(), SalaryAdvanceLimitMovementType.RESERVED);
+        BigDecimal outstandingReservedAmount = movements.calculateOutstandingReservedAmount(limit.id());
+        if (reservations.size() != 1
+                || !application.id().equals(reservations.getFirst().loanApplicationId())
+                || !limit.id().equals(reservations.getFirst().salaryAdvanceLimitId())
+                || reservations.getFirst().amount().compareTo(approvedPrincipal) != 0
+                || outstandingReservedAmount == null
+                || limit.reservedAmount().compareTo(outstandingReservedAmount) != 0)
             return ContractReadinessBlockerCode.SALARY_ADVANCE_RESERVATION_INVALID;
         return null;
     }
