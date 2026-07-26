@@ -252,6 +252,66 @@
                          "key":  "mixedCorrectionScenarioEnabled",
                          "value":  "false",
                          "type":  "string"
+                     },
+                     {
+                         "key":  "contractPreparationRequestId",
+                         "value":  "10000000-0000-0000-0000-000000000001",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "contractAcknowledgmentRequestId",
+                         "value":  "20000000-0000-0000-0000-000000000001",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "contractConfirmationRequestId",
+                         "value":  "30000000-0000-0000-0000-000000000001",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "wrongRolePreparationRequestId",
+                         "value":  "10000000-0000-0000-0000-000000000002",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "contractId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "contractVersion",
+                         "value":  "1",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "crossCustomerLoanApplicationId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "regenerationLoanApplicationId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "regenerationExpectedVersion",
+                         "value":  "1",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "regenerationPreparationRequestId",
+                         "value":  "10000000-0000-0000-0000-000000000003",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "stalePreparationRequestId",
+                         "value":  "10000000-0000-0000-0000-000000000004",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "staleContractVersion",
+                         "value":  "1",
+                         "type":  "string"
                      }
                  ],
     "item":  [
@@ -3248,6 +3308,633 @@
                                                   }
                                    }
                                ]
+                 },
+                 {
+                     "name":  "09 Operational Contract Readiness",
+                     "description":  "Run after an application reaches CONTRACT_PENDING. Regeneration and cross-Customer requests use their separately documented collection variables. Preparation expects 404 APPROVED_OFFER_NOT_FOUND when no approved offer exists and 422 OFFER_NOT_ACCEPTED when an offer exists but is not accepted.",
+                     "item":  [
+                                  {
+                                      "name":  "Accounting - prepare first operational contract",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/contracts",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "contracts"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Version 1 requires expectedCurrentContractVersion 0 and no supersession reason. Canonical preparation failures are 404 APPROVED_OFFER_NOT_FOUND for a missing offer and 422 OFFER_NOT_ACCEPTED for a non-accepted offer, both with safe catalog messages.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"preparationRequestId\": \"{{contractPreparationRequestId}}\",\n  \"expectedCurrentContractVersion\": 0,\n  \"supersessionReasonCode\": null\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Prepared contract is captured\", function () {",
+                                                                                    "    pm.expect(json.status).to.eql(\"PREPARED\");",
+                                                                                    "    pm.expect(json.contractVersion).to.eql(1);",
+                                                                                    "    pm.collectionVariables.set(\"contractId\", json.contractId);",
+                                                                                    "    pm.collectionVariables.set(\"contractVersion\", String(json.contractVersion));",
+                                                                                    "});",
+                                                                                    "pm.test(\"No protected destination fields are exposed\", function () {",
+                                                                                    "    const raw = pm.response.text();",
+                                                                                    "    [\"protectedAccountNumber\", \"ciphertext\", \"nonce\", \"keyId\", \"aadVersion\", \"fingerprint\"].forEach(field =\u003e pm.expect(raw).not.to.include(field));",
+                                                                                    "    pm.expect(json.disbursementBankAccount.maskedAccountNumber).to.match(/^\\*\\*\\*\\*.+/);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Accounting - readiness blocker before acknowledgment",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/contracts/current/readiness?expectedContractVersion={{contractVersion}}",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "contracts",
+                                                                               "current",
+                                                                               "readiness"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "expectedContractVersion",
+                                                                                    "value":  "{{contractVersion}}"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Advisory readiness is non-mutating and reports stable blocker codes."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Acknowledgment blocker is stable\", function () {",
+                                                                                    "    pm.expect(json.ready).to.eql(false);",
+                                                                                    "    pm.expect(json.blockerCodes).to.include(\"ACKNOWLEDGMENT_MISSING\");",
+                                                                                    "    pm.expect(json.calculationSemantics).to.eql(\"POINT_IN_TIME_ADVISORY\");",
+                                                                                    "    pm.expect(json.recomputedDuringConfirmation).to.eql(true);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Customer owner - retrieve current operational contract",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/contracts/current",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "contracts",
+                                                                               "current"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Customer identity is derived from the Bearer token; no Customer ID is accepted."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Safe Customer contract\", function () {",
+                                                                                    "    pm.expect(json.contractId).to.eql(pm.collectionVariables.get(\"contractId\"));",
+                                                                                    "    pm.expect(json.availableCustomerAction).to.eql(\"ACKNOWLEDGE\");",
+                                                                                    "    pm.expect(json.disbursementBankAccount.maskedAccountNumber).to.match(/^\\*\\*\\*\\*.+/);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Customer owner - acknowledge current version",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/contracts/current/acknowledgment",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "contracts",
+                                                                               "current",
+                                                                               "acknowledgment"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Operational acknowledgment is immutable evidence, not an electronic or digital signature. An identical retry is keyed by request UUID, application, expected version, and Customer actor, so a version 1 replay still returns version 1 after regeneration and never acknowledges version 2.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"acknowledgmentRequestId\": \"{{contractAcknowledgmentRequestId}}\",\n  \"expectedContractVersion\": \"{{contractVersion}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Current version is acknowledged\", function () {",
+                                                                                    "    pm.expect(json.status).to.eql(\"ACKNOWLEDGED\");",
+                                                                                    "    pm.expect(json.acknowledgedAt).to.be.a(\"string\").and.not.empty;",
+                                                                                    "    pm.expect(json.availableCustomerAction).to.eql(null);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Accounting - readiness is complete",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/contracts/current/readiness?expectedContractVersion={{contractVersion}}",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "contracts",
+                                                                               "current",
+                                                                               "readiness"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "expectedContractVersion",
+                                                                                    "value":  "{{contractVersion}}"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "A ready advisory result is still recomputed transactionally by confirmation."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Readiness is complete\", function () {",
+                                                                                    "    pm.expect(json.ready).to.eql(true);",
+                                                                                    "    pm.expect(json.blockerCodes).to.eql([]);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Accounting - confirm readiness",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/contracts/current/readiness/confirm",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "contracts",
+                                                                               "current",
+                                                                               "readiness",
+                                                                               "confirm"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Moves only the contract and Loan Application readiness states; no disbursement occurs.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"confirmationRequestId\": \"{{contractConfirmationRequestId}}\",\n  \"expectedContractVersion\": \"{{contractVersion}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Contract is ready for later disbursement\", function () {",
+                                                                                    "    pm.expect(json.status).to.eql(\"READY_FOR_DISBURSEMENT\");",
+                                                                                    "    pm.expect(json.readinessConfirmedAt).to.be.a(\"string\").and.not.empty;",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Wrong role - Customer cannot prepare",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/contracts",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "contracts"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Customer lacks loan:contract:prepare.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"preparationRequestId\": \"{{wrongRolePreparationRequestId}}\",\n  \"expectedCurrentContractVersion\": 0,\n  \"supersessionReasonCode\": null\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 403\", () =\u003e pm.response.to.have.status(403));",
+                                                                                    "pm.test(\"Access is denied\", () =\u003e pm.expect(pm.response.json().errorCode).to.eql(\"ACCESS_DENIED\"));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Cross-Customer - current contract denied",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{crossCustomerLoanApplicationId}}/contracts/current",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{crossCustomerLoanApplicationId}}",
+                                                                               "contracts",
+                                                                               "current"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Set crossCustomerLoanApplicationId to an application owned by a different Customer."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 403\", () =\u003e pm.response.to.have.status(403));",
+                                                                                    "pm.test(\"Ownership is denied\", () =\u003e pm.expect(pm.response.json().errorCode).to.eql(\"LOAN_APPLICATION_ACCESS_DENIED\"));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Accounting - controlled destination regeneration",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{regenerationLoanApplicationId}}/contracts",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{regenerationLoanApplicationId}}",
+                                                                               "contracts"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Use a separate PREPARED or ACKNOWLEDGED application after changing its primary active destination.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"preparationRequestId\": \"{{regenerationPreparationRequestId}}\",\n  \"expectedCurrentContractVersion\": \"{{regenerationExpectedVersion}}\",\n  \"supersessionReasonCode\": \"DISBURSEMENT_ACCOUNT_REFRESH\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"New current version requires acknowledgment\", function () {",
+                                                                                    "    pm.expect(json.status).to.eql(\"PREPARED\");",
+                                                                                    "    pm.expect(json.contractVersion).to.be.above(Number(pm.collectionVariables.get(\"regenerationExpectedVersion\")));",
+                                                                                    "    pm.expect(json.acknowledgedAt).to.eql(null);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Accounting - stale version regeneration fails",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{regenerationLoanApplicationId}}/contracts",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{regenerationLoanApplicationId}}",
+                                                                               "contracts"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Run after controlled regeneration while staleContractVersion still identifies the superseded version.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"preparationRequestId\": \"{{stalePreparationRequestId}}\",\n  \"expectedCurrentContractVersion\": \"{{staleContractVersion}}\",\n  \"supersessionReasonCode\": \"DISBURSEMENT_ACCOUNT_REFRESH\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 409\", () =\u003e pm.response.to.have.status(409));",
+                                                                                    "pm.test(\"Version is stale\", () =\u003e pm.expect(pm.response.json().errorCode).to.eql(\"CONTRACT_VERSION_STALE\"));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
                  },
                  {
                      "name":  "90 Negative Auth and Validation Checks",

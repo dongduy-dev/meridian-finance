@@ -115,6 +115,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - **Salary Advance Workflow** — Employer-linked salary advance with Partner Company, Partner Employee, and eligibility verification support
 - **Streamlined Product Workflows** — Unsecured Consumer Loan and Collateral Loan support through shared lifecycle capabilities
 - **Controlled Review & Approval Workflow** — Loan Officer review, Approver decision, customer acceptance, and maker-checker controls
+- **Operational Contract Readiness** — Immutable accepted-term and repayment snapshots, protected destination capture, Customer acknowledgment, structured blockers, controlled destination refresh, and Accounting confirmation
 - **Document Upload & Management** — Checklist handling, metadata, storage abstraction, manual review, waiver, replacement, readiness checks, and OCR-assisted processing
 - **JWT Authentication & RBAC** — RS256 tokens, refresh rotation, role/action permission model
 - **Idempotent Financial Operations** — `Idempotency-Key` header processing for critical mutation endpoints
@@ -129,7 +130,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 | **Customer** | `loan:submit`, `loan:read` (own), `loan:cancel` (own), `document:upload`, `document:read` (own) | Self-service only; service layer enforces ownership |
 | **Loan Officer** | `loan:read`, `loan:review`, `approval:submit`, `document:review`, `customer:read` | Reviews applications, documents, product verification results, and recommendations |
 | **Approver** | `loan:read`, `approval:decide`, `document:read`, `audit:read` | Approves, rejects, or returns applications after Loan Officer review |
-| **Accounting Officer** | `loan:read`, `loan:disburse`, `repayment:update`, `document:read` | Confirms manual disbursement and records repayment updates |
+| **Accounting Officer** | `loan:contract:prepare`, `loan:contract:read`, `loan:disbursement:prepare`; later `loan:disburse` | Prepares operational contracts and confirms readiness; actual disbursement remains a later workflow |
 | **Back-Office Admin** | `loan:product:manage`, `partner:manage`, `admin:user:manage`, `admin:config`, `audit:read` | Manages products, partner data, internal users, and MVP configuration |
 
 ---
@@ -197,7 +198,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - [x] Controlled review, approval, maker-checker, audit, and status-history workflows
 - [x] Versioned document upload, checklist, review, correction, and guarded resubmission
 - [x] Approved-offer generation, expiry, customer acceptance, and decline
-- [ ] Contract readiness and immutable disbursement preparation
+- [x] Contract readiness and immutable disbursement preparation
 - [ ] Manual disbursement confirmation and LoanAccount activation
 - [ ] Final repayment schedules, repayment tracking, settlement, and closure
 - [ ] Streamlined Unsecured Consumer Loan workflow

@@ -63,6 +63,9 @@ graph TB
 - `JwtAuthenticationFilter`, `JwtTokenService`, and Spring Security adapters belong to identity infrastructure.
 - Identity owns the user-to-customer login mapping through `users.customer_id`. Customer owns Customer profile and bank-account data and must not add a redundant `customers.user_id` foreign key.
 - Loan and Partner may consume Customer facts only through narrow application/public contracts. They must not import Customer domain models, JPA entities, persistence repositories, or web DTOs.
+- Customer owns source bank-account decryption. Contract capture crosses the Customer-to-Loan boundary only through a narrow non-serializable sensitive value whose `toString()` is redacted; Loan encrypts immediately into its purpose-specific envelope and clears temporary mutable buffers.
+- Loan must never copy Customer ciphertext or fingerprint into a contract. The Loan envelope uses its own versioned key configuration and AAD bound to stable contract, application, Customer, and source-account identifiers.
+- Contract REST adapters return explicit safe DTOs and must never expose the full account number, any encryption envelope field, key identifier, AAD, fingerprint, or persistence entity.
 - Partner employee verification must derive identity evidence from Customer through an internal Customer contract, not from an unrestricted customer request field.
 - Customer must not call Loan to decide profile or bank-account mutation rules. Loan-status-sensitive Customer mutation restrictions require immutable snapshots or an explicit non-circular policy design before implementation.
 - OCR integration should be treated as an external or infrastructure-facing capability behind a document/OCR port.

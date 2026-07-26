@@ -221,7 +221,7 @@ Status: Open
 Blocks next major feature: No
 
 Problem:
-Application creation, Loan Officer review/recommendation, Approver decision, and Salary Advance approved-offer customer acceptance now exist. Manual disbursement confirmation and LoanAccount activation remain deferred.
+Application creation, review/recommendation, approval, accepted offers, document/correction readiness, and immutable operational contract readiness now exist. Manual disbursement confirmation and LoanAccount activation remain deferred.
 
 Recommendation:
 Continue implementation in vertical slices:
@@ -230,7 +230,7 @@ Continue implementation in vertical slices:
 2. Approval decision. Done.
 3. Salary Advance approved offer and customer acceptance. Done.
 4. Document/correction readiness through `MER-FU-012` and `MER-FU-031`. Done in V22-V24.
-5. Contract readiness. Deferred.
+5. Contract readiness and `CONTRACT_PENDING → DISBURSEMENT_PENDING`. Done in V25-V26.
 6. Manual disbursement confirmation and LoanAccount activation. Deferred.
 
 ### MER-FU-011 - Implement repayment tracking
@@ -606,13 +606,13 @@ Status: Open
 Blocks current PR: No
 
 Problem:
-Customer profile and bank-account changes after loan submission need status-aware restrictions, but implementing those restrictions directly in Customer would create a Customer-to-Loan dependency cycle before immutable application and disbursement snapshots exist.
+Customer profile and bank-account changes after loan submission still need a deliberately scoped status-aware mutation policy. Customer must not acquire a dependency on Loan.
 
 Risk:
-Customers may update contact, employment, address, or bank-account data after an application is submitted. Current lending flows preserve their own application, approval, offer, and future disbursement snapshots, so the immediate MVP risk is controlled by auditability and by not using Customer as a mutable historical source of truth.
+V25 now captures a Loan-owned immutable, purpose-protected destination snapshot for each operational contract version, and final readiness requires the captured source account to remain active. This controls historical contract/disbursement preparation without restricting Customer-owned mutations. Broader status-sensitive mutation policy remains unresolved.
 
 Recommendation:
-When application/disbursement snapshot behavior is implemented, add a non-circular mutation policy. Prefer Loan-owned immutable snapshots and a Customer-owned neutral change policy, or a Loan-provided application port consumed by Customer only if module boundaries and tests prove there is no cycle.
+Design the remaining mutation policy as a separate non-circular checkpoint. Preserve Loan-owned snapshots, Customer ownership, explicit regeneration through `DISBURSEMENT_ACCOUNT_REFRESH`, and module-boundary tests.
 
 Suggested future branch name:
 `feature/customer-loan-status-mutation-policy`
@@ -759,7 +759,7 @@ snapshots, validation, administrative authorization, and migration/backfill rule
 ## Recommended Next Roadmap
 
 1. Review and merge the Document Checklist + Correction/Revision Readiness checkpoint.
-2. Implement contract readiness.
+2. Review and merge contract readiness and immutable disbursement preparation.
 3. Implement manual disbursement and LoanAccount activation.
 4. Implement repayment, settlement, and closure.
 5. Complete production document hardening before deployment.

@@ -19,5 +19,10 @@ public interface JpaLoanCorrectionRequestRepository extends JpaRepository<LoanCo
             @Param("statuses") Collection<LoanCorrectionRequestStatus> statuses
     );
 
+    boolean existsByLoanApplicationIdAndStatusIn(
+            UUID loanApplicationId,
+            Collection<LoanCorrectionRequestStatus> statuses
+    );
+
     Optional<LoanCorrectionRequestJpaEntity> findFirstByLoanApplicationIdOrderByCreatedAtDesc(UUID loanApplicationId);
 }

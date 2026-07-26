@@ -8,14 +8,21 @@ import com.meridian.platform.approval.application.port.in.SubmitApprovalDecision
 import com.meridian.platform.approval.application.port.in.SubmitReviewRecommendationUseCase;
 import com.meridian.platform.approval.domain.model.ApprovalDecisionAction;
 import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
+import com.meridian.platform.customer.application.port.out.CustomerSensitiveValueProtector;
+import com.meridian.platform.customer.domain.model.ProtectedSensitiveValue;
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionOutcome;
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionResult;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationDto;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationRequest;
 import com.meridian.platform.loan.application.port.in.ExpireApprovedOfferUseCase;
+import com.meridian.platform.loan.application.port.in.AcknowledgeLoanContractUseCase;
+import com.meridian.platform.loan.application.port.in.ConfirmContractReadinessUseCase;
+import com.meridian.platform.loan.application.port.in.PrepareLoanContractUseCase;
 import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicationUseCase;
+import com.meridian.platform.loan.domain.model.LoanContract;
+import com.meridian.platform.loan.domain.model.LoanContractStatus;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
@@ -71,6 +78,8 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
             UUID.fromString("00000000-0000-0000-0000-000000000302");
     private static final UUID APPROVER_USER_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000303");
+    private static final UUID ACCOUNTING_USER_ID =
+            UUID.fromString("00000000-0000-0000-0000-000000000305");
     private static final BigDecimal REQUESTED_AMOUNT = money(3_000_000);
 
     @Autowired
@@ -90,6 +99,18 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
 
     @Autowired
     private ExpireApprovedOfferUseCase expiryUseCase;
+
+    @Autowired
+    private PrepareLoanContractUseCase prepareLoanContractUseCase;
+
+    @Autowired
+    private AcknowledgeLoanContractUseCase acknowledgeLoanContractUseCase;
+
+    @Autowired
+    private ConfirmContractReadinessUseCase confirmContractReadinessUseCase;
+
+    @Autowired
+    private CustomerSensitiveValueProtector sensitiveValueProtector;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -119,7 +140,7 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
     }
 
     @Test
-    void completeSalaryAdvanceHappyPathReachesContractPendingWithRealHistoryAndAudit() {
+    void completeSalaryAdvanceHappyPathReachesDisbursementPendingWithImmutableContract() {
         UUID loanApplicationId = createCustomerAcceptancePendingApplication();
 
         useCustomer();
@@ -128,6 +149,21 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
         assertEquals(ApprovedOfferActionOutcome.SUCCESS, acceptance.outcome());
         assertEquals("ACCEPTED", acceptance.offer().status());
         assertEquals("CONTRACT_PENDING", applicationStatus(loanApplicationId));
+
+        useAccounting();
+        LoanContract prepared = prepareLoanContractUseCase.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), loanApplicationId, 0, null));
+        useCustomer();
+        LoanContract acknowledged = acknowledgeLoanContractUseCase.acknowledge(
+                new AcknowledgeLoanContractUseCase.Command(
+                        UUID.randomUUID(), loanApplicationId, prepared.contractVersion()));
+        useAccounting();
+        LoanContract ready = confirmContractReadinessUseCase.confirm(
+                new ConfirmContractReadinessUseCase.Command(
+                        UUID.randomUUID(), loanApplicationId, acknowledged.id(), acknowledged.contractVersion()));
+
+        assertEquals(LoanContractStatus.READY_FOR_DISBURSEMENT, ready.status());
+        assertEquals("DISBURSEMENT_PENDING", applicationStatus(loanApplicationId));
         assertEquals("ACCEPTED", offerStatus(loanApplicationId));
         assertEquals(1, count(
                 "SELECT count(*) FROM approved_offer_repayment_items WHERE approved_offer_id = "
@@ -140,7 +176,23 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
                 fixture.customerId(),
                 fixture.linkId()
         ));
+        assertEquals(money(0), amount(
+                "SELECT used_amount FROM salary_advance_limits WHERE customer_id = ? "
+                        + "AND customer_partner_employee_link_id = ?",
+                fixture.customerId(),
+                fixture.linkId()
+        ));
         assertEquals(0, releaseMovementCount(loanApplicationId));
+        assertEquals(0, count(
+                "SELECT count(*) FROM salary_advance_limit_movements "
+                        + "WHERE loan_application_id = ? AND movement_type = 'DISBURSED_TO_USED'",
+                loanApplicationId
+        ));
+        assertEquals(1, count(
+                "SELECT count(*) FROM loan_contracts WHERE loan_application_id = ? "
+                        + "AND superseded_at IS NULL AND status = 'READY_FOR_DISBURSEMENT'",
+                loanApplicationId
+        ));
         assertEquals(
                 List.of(
                         "SUBMIT_APPLICATION",
@@ -148,7 +200,8 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
                         "RECOMMEND_APPROVAL",
                         "APPROVE",
                         "GENERATE_APPROVED_OFFER",
-                        "ACCEPT_APPROVED_OFFER"
+                        "ACCEPT_APPROVED_OFFER",
+                        "CONFIRM_DISBURSEMENT_READINESS"
                 ),
                 jdbcTemplate.queryForList(
                         "SELECT action FROM loan_application_status_transitions "
@@ -159,7 +212,7 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
         );
 
         List<String> auditActions = auditActions(loanApplicationId);
-        assertEquals(10, auditActions.size());
+        assertEquals(13, auditActions.size());
         assertEquals(
                 Set.of(
                         "SALARY_ADVANCE_APPLICATION_SUBMITTED",
@@ -171,7 +224,10 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
                         "REVIEW_RECOMMENDATION_RECORDED",
                         "APPROVAL_DECISION_RECORDED",
                         "APPROVED_OFFER_GENERATED",
-                        "APPROVED_OFFER_ACCEPTED"
+                        "APPROVED_OFFER_ACCEPTED",
+                        "LOAN_CONTRACT_PREPARED",
+                        "LOAN_CONTRACT_ACKNOWLEDGED",
+                        "LOAN_CONTRACT_READINESS_CONFIRMED"
                 ),
                 new HashSet<>(auditActions)
         );
@@ -494,6 +550,8 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
                 "cipher-" + unique,
                 "fingerprint-" + unique
         );
+        ProtectedSensitiveValue bankAccount =
+                sensitiveValueProtector.protectBankAccountNumber("TEST", "0000123456785678");
         jdbcTemplate.update(
                 """
                         INSERT INTO customer_bank_accounts (
@@ -505,8 +563,8 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
                         """,
                 UUID.randomUUID(),
                 customerId,
-                "bank-cipher-" + unique,
-                "bank-fingerprint-" + unique
+                bankAccount.ciphertext(),
+                bankAccount.fingerprint()
         );
         jdbcTemplate.update(
                 """
@@ -654,6 +712,17 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
                 null,
                 Set.of("APPROVER"),
                 Set.of("loan:read", "approval:decide")
+        ));
+    }
+
+    private void useAccounting() {
+        currentUserProvider.use(new AuthenticatedUser(
+                ACCOUNTING_USER_ID,
+                "accounting@meridian.local",
+                "STAFF",
+                null,
+                Set.of("ACCOUNTING_OFFICER"),
+                Set.of("loan:contract:prepare", "loan:contract:read", "loan:disbursement:prepare")
         ));
     }
 

@@ -113,6 +113,21 @@ This document standardizes the API error codes across all bounded contexts in th
 | 409 | `OFFER_EXPIRED` | Offer expired | Generate or request a new approved offer according to product rules |
 | 409 | `OFFER_ACTION_CONFLICT` | Offer action conflict | Refresh the approved offer state and do not submit contradictory terminal actions |
 | 404 | `APPROVED_OFFER_NOT_FOUND` | Approved offer not found | Verify the loan application has an approved offer generated for the authenticated customer |
+| 404 | `CURRENT_CONTRACT_MISSING` | Current operational contract not found | Prepare the first contract for the accepted offer |
+| 409 | `CONTRACT_VERSION_STALE` | Expected contract version is stale | Refresh the current contract and retry with its exact version |
+| 409 | `CONTRACT_SUPERSESSION_REASON_NOT_ALLOWED` | First preparation included a supersession reason | Omit the reason for version 1 |
+| 409 | `CONTRACT_SUPERSESSION_REASON_REQUIRED` | Controlled regeneration reason required | Use only `DISBURSEMENT_ACCOUNT_REFRESH` |
+| 409 | `CONTRACT_REGENERATION_NOT_ALLOWED` | Contract regeneration is not allowed | Ready contracts and superseded versions cannot be regenerated |
+| 409 | `CONTRACT_ACKNOWLEDGMENT_NOT_ALLOWED` | Contract acknowledgment is not allowed | Acknowledge only the current `PREPARED` version |
+| 409 | `ACKNOWLEDGMENT_MISSING` | Current version has not been acknowledged | Customer must acknowledge the exact current version |
+| 409 | `DOCUMENTS_NOT_PROCESSING_READY` | Documents are not processing-ready | Complete required document review before preparation or confirmation |
+| 409 | `ACTIVE_CORRECTION_REQUEST` | Active correction blocks contract readiness | Complete and resubmit the correction first |
+| 409 | `CUSTOMER_INACTIVE` | Customer is inactive | Restore the Customer to an eligible active state before continuing |
+| 409 | `CAPTURED_ACCOUNT_MISSING` | Captured destination no longer exists | Regenerate from the current primary active destination when permitted |
+| 409 | `CAPTURED_ACCOUNT_INACTIVE` | Captured destination is inactive | Regenerate with `DISBURSEMENT_ACCOUNT_REFRESH` before readiness |
+| 409 | `SALARY_ADVANCE_RESERVATION_INVALID` | Salary Advance reservation is invalid | Restore or reconcile the reservation before readiness |
+| 409 | `SALARY_ADVANCE_RESERVATION_RELEASED` | Salary Advance reservation was released | Do not confirm readiness for a released application |
+| 409 | `READINESS_ALREADY_CONFIRMED` | Contract readiness was already confirmed | Treat an identical request ID as replay; otherwise refresh state |
 | 422 | `OFFER_NOT_ACCEPTED` | Offer not accepted | Customer must accept approved terms before contract preparation and disbursement |
 | 422 | `CONTRACT_DOCUMENTS_NOT_READY` | Contract documents not ready | Complete required contract or disbursement documents before manual disbursement |
 | 422 | `DISBURSEMENT_NOT_READY` | Disbursement not ready | Confirm approval, customer acceptance, document readiness, and bank account information |

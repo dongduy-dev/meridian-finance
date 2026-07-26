@@ -542,6 +542,8 @@ Logical tables:
 - `loan_application_status_transitions` - ordered Loan-owned status transition history for `loan_applications`, keyed by `loan_application_id` rather than generic polymorphic entity references.
 - `approved_offers` - immutable customer-facing approved-offer snapshots generated after approval and before customer acceptance.
 - `approved_offer_repayment_items` - provisional installment-level principal, interest, fee, and total-due items owned by an approved offer.
+- `loan_contracts` - immutable versioned operational contract snapshot, purpose-protected destination, command identities, and controlled lifecycle evidence.
+- `loan_contract_repayment_items` - immutable exact copies of the accepted offer's provisional repayment items, reconciled to the contract totals.
 - `loan_accounts` - active loan record created only after manual disbursement confirmation.
 - `disbursement_records` - manual disbursement confirmation details.
 - `repayment_schedules` - provisional or final repayment schedule headers.
@@ -788,3 +790,21 @@ cycle is opened.
 Document binaries use a local-filesystem adapter behind the Document storage port
 for MVP. Database rows store only opaque references and safe metadata; retention,
 malware scanning, object storage, and OCR remain explicit follow-ups.
+
+## 15. Implemented operational contract physical model (V25-V26)
+
+`loan_contracts` has unique application/version and command-specific request identities, plus a partial unique index allowing only one non-superseded current version. Composite ownership foreign keys prove that the accepted offer belongs to the application and the captured source bank account belongs to the application Customer.
+
+Financial terms, repayment items, destination metadata, and the AES-GCM envelope are immutable. Deferred reconciliation triggers prove contract totals, exact accepted-offer source terms/items, and the `READY_FOR_DISBURSEMENT` / `DISBURSEMENT_PENDING` lifecycle pair at commit. Lifecycle metadata permits only:
+
+- `PREPARED → ACKNOWLEDGED → READY_FOR_DISBURSEMENT`;
+- `PREPARED` or `ACKNOWLEDGED → SUPERSEDED`.
+
+The encrypted full account number is stored only in `protected_account_number` with its purpose-specific scheme, key ID, nonce, and AAD version. These fields are internal persistence data and are not REST, audit, error, or status-history fields. Customer ciphertext and deterministic fingerprint are not copied.
+
+V26 adds four idempotent permission seeds:
+
+- Customer: `loan:contract:acknowledge:own`;
+- Accounting Officer: `loan:contract:prepare`, `loan:contract:read`, and `loan:disbursement:prepare`.
+
+The existing `loan:disburse` permission is unchanged and reserved for the later actual-disbursement checkpoint. No LoanAccount, disbursement, or final repayment-schedule table is introduced by V25-V26.

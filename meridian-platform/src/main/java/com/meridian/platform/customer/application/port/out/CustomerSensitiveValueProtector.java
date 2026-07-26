@@ -8,5 +8,9 @@ public interface CustomerSensitiveValueProtector {
 
     ProtectedSensitiveValue protectBankAccountNumber(String bankCode, String accountNumber);
 
+    default byte[] revealToBytes(ProtectedSensitiveValue protectedValue) {
+        throw new UnsupportedOperationException("Mutable sensitive-value reveal is not supported.");
+    }
+
     String reveal(ProtectedSensitiveValue protectedValue);
 }

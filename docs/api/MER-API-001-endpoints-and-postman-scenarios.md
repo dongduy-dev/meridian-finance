@@ -39,6 +39,11 @@ Current security posture comes from `SecurityConfig`: health, login, and loan pr
 | GET | `/api/v1/loan-applications/{loanApplicationId}/approved-offer` | Bearer + `loan:read:own` | `ApprovedOfferController` | View the authenticated customer's approved offer without mutating expiry, status, or financial movements. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept` | Bearer + `loan:offer:respond:own` | `ApprovedOfferController` | Accept the authenticated customer's pending approved offer and move the application to `CONTRACT_PENDING`; any expired offer returns `409 OFFER_EXPIRED`, with effects only when the action first discovers expiry. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/decline` | Bearer + `loan:offer:respond:own` | `ApprovedOfferController` | Decline the authenticated customer's pending approved offer and release reservation exactly once; any expired offer returns `409 OFFER_EXPIRED`, with no duplicate effect for persisted expiry. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/contracts` | Bearer + `loan:contract:prepare` | `LoanContractController` | Accounting prepares version 1 or regenerates with `DISBURSEMENT_ACCOUNT_REFRESH`. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/contracts/current` | Bearer + owner `loan:read:own` or staff `loan:contract:read` | `LoanContractController` | Return the current safe masked operational contract to its Customer owner or Accounting. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/acknowledgment` | Bearer + `loan:contract:acknowledge:own` | `LoanContractController` | Customer owner acknowledges the exact current prepared version. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness` | Bearer + `loan:contract:read` | `LoanContractController` | Accounting reads calculated point-in-time blocker codes; this GET does not mutate or lock workflow rows. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness/confirm` | Bearer + `loan:disbursement:prepare` | `LoanContractController` | Accounting recomputes readiness and atomically moves contract/application to ready/`DISBURSEMENT_PENDING`. |
 
 ## Authentication
 
@@ -310,6 +315,60 @@ Safe response fields include approved principal, approved term, interest calcula
 
 GET is read-only. If a persisted pending offer is already expired, GET returns `status = EXPIRED` and `availableActions = []` without changing the application, offer, reservation, or financial movements.
 
+### Operational Contract Readiness
+
+Preparation uses a command UUID, `expectedCurrentContractVersion = 0` and no reason for version 1. Regeneration uses the exact current version and the only supported reason:
+
+Preparation returns the established `404 APPROVED_OFFER_NOT_FOUND` contract when no approved offer exists and `422 OFFER_NOT_ACCEPTED` when an offer exists but has not been accepted. Both responses use the safe catalog messages and expose no offer or contract details.
+
+```json
+{
+  "preparationRequestId": "10000000-0000-0000-0000-000000000001",
+  "expectedCurrentContractVersion": 1,
+  "supersessionReasonCode": "DISBURSEMENT_ACCOUNT_REFRESH"
+}
+```
+
+Customer acknowledgment uses no request Customer ID; ownership comes from the token:
+
+```json
+{
+  "acknowledgmentRequestId": "20000000-0000-0000-0000-000000000001",
+  "expectedContractVersion": 1
+}
+```
+
+An acknowledgment replay is identified by request UUID, Loan Application ID, expected contract version, and authenticated Customer actor. A successful version 1 request therefore remains replayable after version 2 becomes current: the replay returns the persisted version 1 result, creates no additional audit/history, and never acknowledges version 2.
+
+Readiness confirmation:
+
+```json
+{
+  "confirmationRequestId": "30000000-0000-0000-0000-000000000001",
+  "expectedContractVersion": 1
+}
+```
+
+The advisory readiness response identifies calculated point-in-time semantics and stable blockers:
+
+```json
+{
+  "loanApplicationId": "40000000-0000-0000-0000-000000000001",
+  "contractId": "50000000-0000-0000-0000-000000000001",
+  "contractVersion": 1,
+  "ready": false,
+  "blockerCodes": ["ACKNOWLEDGMENT_MISSING"],
+  "calculationSemantics": "POINT_IN_TIME_ADVISORY",
+  "recomputedDuringConfirmation": true
+}
+```
+
+Contract responses may contain IDs, reference/version/status, immutable accepted terms and repayment items, safe bank name/code, account-holder name, `maskedAccountNumber`, timestamps, and available action. They never contain the full account number, protected account number, ciphertext, nonce/IV, authentication tag, key ID, AAD/version, fingerprint, Customer envelope, hashes, or JPA/internal state. Customer acknowledgment is operational evidence, not electronic or digital signing.
+
+Stable conflicts include `CONTRACT_VERSION_STALE`, `CONTRACT_REGENERATION_NOT_ALLOWED`, `CONTRACT_ACKNOWLEDGMENT_NOT_ALLOWED`, `DOCUMENTS_NOT_PROCESSING_READY`, `ACTIVE_CORRECTION_REQUEST`, `CUSTOMER_INACTIVE`, `CAPTURED_ACCOUNT_MISSING`, `CAPTURED_ACCOUNT_INACTIVE`, `SALARY_ADVANCE_RESERVATION_INVALID`, `SALARY_ADVANCE_RESERVATION_RELEASED`, `READINESS_ALREADY_CONFIRMED`, and `IDEMPOTENCY_KEY_REUSED`.
+
+Preparation, acknowledgment, and confirmation serialize each command category by request UUID before taking the Loan Application workflow lock. Identical logical requests replay their persisted result; reuse with a different application, version/content, or actor returns `409 IDEMPOTENCY_KEY_REUSED` without translating unrelated database integrity failures.
+
 ## Seed Data Useful For API Verification
 
 | Purpose | Value |
@@ -381,6 +440,18 @@ Expected high-value checks:
 | Customer approved-offer accept | `200`, offer status `ACCEPTED`, application moves to `CONTRACT_PENDING`. |
 | Customer approved-offer decline | `200`, offer status `DECLINED`, application moves to `CUSTOMER_DECLINED`, reservation released exactly once. |
 | Expired offer accept/decline | `409`, `OFFER_EXPIRED`; discovery of pending expiry commits expiry and exact-once release before the response, while an already persisted expiry produces no additional writes or release. |
+| Accounting prepares contract | `200`, version 1 `PREPARED`, exact accepted terms/items and safe masked destination. |
+| Contract preparation without an approved offer | `404`, `APPROVED_OFFER_NOT_FOUND`, safe catalog message. |
+| Contract preparation with a non-accepted offer | `422`, `OFFER_NOT_ACCEPTED`, safe catalog message. |
+| Customer current-contract read | `200` for the owner in `CONTRACT_PENDING` or `DISBURSEMENT_PENDING`; cross-Customer access is `403`. |
+| Customer acknowledgment | `200`, current version `ACKNOWLEDGED`; identical request replay creates no duplicate audit and remains replayable after a later version becomes current. |
+| Readiness before acknowledgment | `200`, `ready = false`, blocker includes `ACKNOWLEDGMENT_MISSING`. |
+| Accounting readiness read | `200`, stable point-in-time blocker codes and no durable mutation. |
+| Accounting confirms readiness | `200`, contract `READY_FOR_DISBURSEMENT`, application `DISBURSEMENT_PENDING`; no actual disbursement or reserved-to-used conversion. |
+| Stale contract version | `409`, `CONTRACT_VERSION_STALE`. |
+| Wrong role or missing permission | `403`, `ACCESS_DENIED`. |
+| Controlled regeneration | Prior version `SUPERSEDED`; new version `PREPARED`, unchanged financial/repayment snapshot, refreshed masked destination, fresh acknowledgment required. |
+| Incomplete readiness | `200` advisory blocker list; confirmation returns `409` with the first deterministic blocker code and rolls back all effects. |
 | Duplicate Salary Advance for same authenticated customer, including concurrent submissions through different verified employee links | `409`, `BLOCKING_APPLICATION_EXISTS`; one complete winner remains. |
 
 Notes:

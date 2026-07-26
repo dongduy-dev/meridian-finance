@@ -13,6 +13,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Locale;
 
@@ -64,6 +65,16 @@ public class AesGcmCustomerSensitiveValueProtector implements CustomerSensitiveV
 
     @Override
     public String reveal(ProtectedSensitiveValue protectedValue) {
+        byte[] plaintext = revealToBytes(protectedValue);
+        try {
+            return new String(plaintext, StandardCharsets.UTF_8);
+        } finally {
+            Arrays.fill(plaintext, (byte) 0);
+        }
+    }
+
+    @Override
+    public byte[] revealToBytes(ProtectedSensitiveValue protectedValue) {
         String[] envelopeParts = protectedValue.ciphertext().split(":", 4);
         if (envelopeParts.length != 4 || !protectedValue.ciphertext().startsWith(CIPHERTEXT_PREFIX)) {
             throw new IllegalArgumentException("Unsupported customer sensitive-value envelope.");
@@ -73,7 +84,7 @@ public class AesGcmCustomerSensitiveValueProtector implements CustomerSensitiveV
             byte[] ciphertext = Base64.getUrlDecoder().decode(envelopeParts[3]);
             Cipher cipher = Cipher.getInstance(CIPHER_ALGORITHM);
             cipher.init(Cipher.DECRYPT_MODE, encryptionKey, new GCMParameterSpec(GCM_TAG_BITS, iv));
-            return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
+            return cipher.doFinal(ciphertext);
         } catch (IllegalArgumentException | GeneralSecurityException exception) {
             throw new IllegalArgumentException("Customer sensitive-value envelope could not be decrypted.", exception);
         }

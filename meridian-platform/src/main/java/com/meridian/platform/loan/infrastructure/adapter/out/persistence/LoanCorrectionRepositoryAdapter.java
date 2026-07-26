@@ -53,6 +53,14 @@ public class LoanCorrectionRepositoryAdapter implements LoanCorrectionRepository
     }
 
     @Override
+    public boolean existsActiveRequestByApplicationId(UUID loanApplicationId) {
+        return requestRepository.existsByLoanApplicationIdAndStatusIn(loanApplicationId, Set.of(
+                LoanCorrectionRequestStatus.OPEN,
+                LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION
+        ));
+    }
+
+    @Override
     public Optional<LoanCorrectionRequest> findLatestRequestByApplicationId(UUID loanApplicationId) {
         return requestRepository.findFirstByLoanApplicationIdOrderByCreatedAtDesc(loanApplicationId)
                 .map(LoanCorrectionRequestJpaEntity::toDomain);

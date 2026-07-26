@@ -15,6 +15,8 @@ public interface LoanCorrectionRepository {
 
     Optional<LoanCorrectionRequest> findActiveRequestByApplicationIdForUpdate(UUID loanApplicationId);
 
+    boolean existsActiveRequestByApplicationId(UUID loanApplicationId);
+
     Optional<LoanCorrectionRequest> findLatestRequestByApplicationId(UUID loanApplicationId);
 
     Optional<LoanCorrectionRequest> findRequestById(UUID correctionRequestId);
