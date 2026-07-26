@@ -3,6 +3,7 @@ package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 import com.meridian.platform.loan.application.port.out.LoanContractRepository;
 import com.meridian.platform.loan.domain.model.LoanContract;
 import com.meridian.platform.loan.domain.model.LoanContractStatus;
+import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -12,12 +13,37 @@ import java.util.UUID;
 public class LoanContractRepositoryAdapter implements LoanContractRepository {
     private final JpaLoanContractRepository contracts;
     private final JpaLoanContractRepaymentItemRepository items;
+    private final EntityManager entityManager;
 
-    public LoanContractRepositoryAdapter(JpaLoanContractRepository contracts, JpaLoanContractRepaymentItemRepository items) {
+    public LoanContractRepositoryAdapter(
+            JpaLoanContractRepository contracts,
+            JpaLoanContractRepaymentItemRepository items,
+            EntityManager entityManager
+    ) {
         this.contracts = contracts;
         this.items = items;
+        this.entityManager = entityManager;
     }
 
+    @Override public void acquirePreparationRequestLock(UUID requestId) {
+        acquireRequestLock("loan-contract:prepare-request:" + requestId);
+    }
+    @Override public void acquireAcknowledgmentRequestLock(UUID requestId) {
+        acquireRequestLock("loan-contract:acknowledge-request:" + requestId);
+    }
+    @Override public void acquireConfirmationRequestLock(UUID requestId) {
+        acquireRequestLock("loan-contract:confirm-request:" + requestId);
+    }
+    private void acquireRequestLock(String lockKey) {
+        entityManager.createNativeQuery("""
+                        WITH lock AS (
+                            SELECT pg_advisory_xact_lock(hashtextextended(CAST(:lockKey AS text), 0))
+                        )
+                        SELECT 1 FROM lock
+                        """)
+                .setParameter("lockKey", lockKey)
+                .getSingleResult();
+    }
     @Override public LoanContract save(LoanContract contract) { return persist(contract, false); }
     @Override public LoanContract saveAndFlush(LoanContract contract) { return persist(contract, true); }
 

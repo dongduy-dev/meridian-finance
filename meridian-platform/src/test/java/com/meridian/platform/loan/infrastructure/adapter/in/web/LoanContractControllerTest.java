@@ -9,6 +9,8 @@ import com.meridian.platform.loan.application.port.in.QueryCurrentLoanContractUs
 import com.meridian.platform.loan.domain.model.LoanContract;
 import com.meridian.platform.loan.testsupport.LoanContractTestData;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import com.meridian.platform.shared.infrastructure.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -82,6 +84,10 @@ class LoanContractControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ACKNOWLEDGED"));
 
+        assertEquals(acknowledgmentRequestId, useCases.acknowledgment.requestId());
+        assertEquals(LoanContractTestData.APPLICATION_ID, useCases.acknowledgment.loanApplicationId());
+        assertEquals(1, useCases.acknowledgment.expectedContractVersion());
+        assertEquals(1, useCases.currentQueryCount);
         mockMvc.perform(get("/api/v1/loan-applications/{id}/contracts/current/readiness",
                         LoanContractTestData.APPLICATION_ID))
                 .andExpect(status().isOk())
@@ -137,6 +143,31 @@ class LoanContractControllerTest {
                 .andExpect(jsonPath("$.errorCode").value("CONTRACT_VERSION_STALE"));
     }
 
+    @Test
+    void mapsCanonicalApprovedOfferErrorsExactly() throws Exception {
+        useCases.preparationFailure = new EntityNotFoundException(
+                "APPROVED_OFFER_NOT_FOUND", "Approved offer was not found.");
+        mockMvc.perform(post("/api/v1/loan-applications/{id}/contracts", LoanContractTestData.APPLICATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"preparationRequestId":"%s","expectedCurrentContractVersion":0}
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.errorCode").value("APPROVED_OFFER_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Approved offer was not found."));
+        useCases.preparationFailure = new BusinessRuleViolationException(
+                "OFFER_NOT_ACCEPTED", "Approved offer has not been accepted.");
+        mockMvc.perform(post("/api/v1/loan-applications/{id}/contracts", LoanContractTestData.APPLICATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"preparationRequestId":"%s","expectedCurrentContractVersion":0}
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.errorCode").value("OFFER_NOT_ACCEPTED"))
+                .andExpect(jsonPath("$.message").value("Approved offer has not been accepted."));
+    }
     private static final class StubContractUseCases implements
             PrepareLoanContractUseCase,
             QueryCurrentLoanContractUseCase,
@@ -146,6 +177,8 @@ class LoanContractControllerTest {
 
         private PrepareLoanContractUseCase.Command preparation;
         private Integer expectedReadinessVersion;
+        private AcknowledgeLoanContractUseCase.Command acknowledgment;
+        private int currentQueryCount;
         private RuntimeException preparationFailure;
 
         @Override
@@ -159,11 +192,13 @@ class LoanContractControllerTest {
 
         @Override
         public Optional<LoanContract> findCurrent(UUID loanApplicationId) {
+            currentQueryCount++;
             return Optional.of(LoanContractTestData.prepared());
         }
 
         @Override
         public LoanContract acknowledge(AcknowledgeLoanContractUseCase.Command command) {
+            acknowledgment = command;
             return LoanContractTestData.acknowledged();
         }
 

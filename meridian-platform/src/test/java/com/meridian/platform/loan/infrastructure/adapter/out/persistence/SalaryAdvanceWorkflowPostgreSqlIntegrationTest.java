@@ -156,7 +156,7 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
         useCustomer();
         LoanContract acknowledged = acknowledgeLoanContractUseCase.acknowledge(
                 new AcknowledgeLoanContractUseCase.Command(
-                        UUID.randomUUID(), loanApplicationId, prepared.id(), prepared.contractVersion()));
+                        UUID.randomUUID(), loanApplicationId, prepared.contractVersion()));
         useAccounting();
         LoanContract ready = confirmContractReadinessUseCase.confirm(
                 new ConfirmContractReadinessUseCase.Command(

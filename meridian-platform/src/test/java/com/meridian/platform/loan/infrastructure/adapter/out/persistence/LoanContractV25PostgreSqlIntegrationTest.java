@@ -64,9 +64,9 @@ class LoanContractV25PostgreSqlIntegrationTest {
         currentUser.set(customer(f));
         UUID acknowledgmentRequest = UUID.randomUUID();
         LoanContract acknowledged = acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
-                acknowledgmentRequest, f.applicationId, prepared.id(), 1));
+                acknowledgmentRequest, f.applicationId, 1));
         assertEquals(acknowledged.id(), acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
-                acknowledgmentRequest, f.applicationId, prepared.id(), 1)).id());
+                acknowledgmentRequest, f.applicationId, 1)).id());
         currentUser.set(staff());
         UUID confirmationRequest = UUID.randomUUID();
         LoanContract ready = confirm.confirm(new ConfirmContractReadinessUseCase.Command(
@@ -116,7 +116,7 @@ class LoanContractV25PostgreSqlIntegrationTest {
         Fixture f = fixture(); currentUser.set(staff());
         LoanContract prepared = prepare.prepare(new PrepareLoanContractUseCase.Command(UUID.randomUUID(), f.applicationId, 0, null));
         currentUser.set(customer(f));
-        acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(UUID.randomUUID(), f.applicationId, prepared.id(), 1));
+        acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(UUID.randomUUID(), f.applicationId, 1));
         currentUser.set(staff()); audit.failReadiness = true;
         assertThrows(IllegalStateException.class, () -> confirm.confirm(new ConfirmContractReadinessUseCase.Command(
                 UUID.randomUUID(), f.applicationId, prepared.id(), 1)));
@@ -138,10 +138,10 @@ class LoanContractV25PostgreSqlIntegrationTest {
         currentUser.set(customer(f));
         BusinessStateConflictException stale = assertThrows(BusinessStateConflictException.class,
                 () -> acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
-                        UUID.randomUUID(), f.applicationId, first.id(), 1)));
+                        UUID.randomUUID(), f.applicationId, 1)));
         assertEquals("CONTRACT_VERSION_STALE", stale.getErrorCode());
         acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
-                UUID.randomUUID(), f.applicationId, second.id(), 2));
+                UUID.randomUUID(), f.applicationId, 2));
         currentUser.set(staff());
         confirm.confirm(new ConfirmContractReadinessUseCase.Command(
                 UUID.randomUUID(), f.applicationId, second.id(), 2));
@@ -200,7 +200,7 @@ class LoanContractV25PostgreSqlIntegrationTest {
                 UUID.randomUUID(), acknowledgedFixture.applicationId, 0, null));
         currentUser.set(customer(acknowledgedFixture));
         LoanContract acknowledged = acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
-                UUID.randomUUID(), acknowledgedFixture.applicationId, anotherPrepared.id(), 1));
+                UUID.randomUUID(), acknowledgedFixture.applicationId, 1));
         for (int mask = 1; mask < 7; mask++) {
             int partial = mask;
             assertThrows(DataAccessException.class, () -> jdbc.update("update loan_contracts set "
@@ -228,7 +228,7 @@ class LoanContractV25PostgreSqlIntegrationTest {
 
         currentUser.set(customer(f));
         LoanContract acknowledged = acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
-                UUID.randomUUID(), f.applicationId, prepared.id(), 1));
+                UUID.randomUUID(), f.applicationId, 1));
         assertThrows(DataAccessException.class, () -> jdbc.update("update loan_contracts set "
                         + "status='READY_FOR_DISBURSEMENT', confirmation_request_id=?, confirmed_by_user_id=?, "
                         + "confirmed_at=acknowledged_at-interval '1 second' where id=?",

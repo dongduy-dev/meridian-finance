@@ -5,5 +5,5 @@ import java.util.UUID;
 
 public interface AcknowledgeLoanContractUseCase {
     LoanContract acknowledge(Command command);
-    record Command(UUID requestId, UUID loanApplicationId, UUID contractId, int expectedContractVersion) {}
+    record Command(UUID requestId, UUID loanApplicationId, int expectedContractVersion) {}
 }

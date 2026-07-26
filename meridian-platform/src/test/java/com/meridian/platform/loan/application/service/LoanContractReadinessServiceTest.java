@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -110,6 +111,27 @@ class LoanContractReadinessServiceTest {
         verifyNoInteractions(applications);
     }
 
+    @Test void acknowledgedVersionReplaysAfterAnotherVersionBecomesCurrent() {
+        Fixture f = fixture();
+        LoanContract acknowledgedV1 = contract(f, 1, LoanContractStatus.ACKNOWLEDGED);
+        UUID requestId = acknowledgedV1.acknowledgmentRequestId();
+        AuthenticatedUser customer = new AuthenticatedUser(
+                acknowledgedV1.acknowledgedByUserId(), "owner@meridian.test", "CUSTOMER",
+                f.application.customerId(), Set.of("CUSTOMER"), Set.of());
+        when(users.currentUser()).thenReturn(customer);
+        when(contracts.findByAcknowledgmentRequestId(requestId)).thenReturn(Optional.of(acknowledgedV1));
+        LoanContract replay = service.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                requestId, f.application.id(), 1));
+        assertSame(acknowledgedV1, replay);
+        var lockOrder = inOrder(contracts);
+        lockOrder.verify(contracts).acquireAcknowledgmentRequestLock(requestId);
+        lockOrder.verify(contracts).findByAcknowledgmentRequestId(requestId);
+        verifyNoInteractions(applications);
+        BusinessStateConflictException reused = assertThrows(BusinessStateConflictException.class,
+                () -> service.acknowledge(new AcknowledgeLoanContractUseCase.Command(requestId, f.application.id(), 2)));
+        assertEquals("IDEMPOTENCY_KEY_REUSED", reused.getErrorCode());
+        verify(contracts, never()).save(any());
+    }
     @Test void acknowledgmentRequiresAuthenticatedCustomerOwnership() {
         Fixture f = fixture(); LoanContract current = contract(f, 1, LoanContractStatus.PREPARED);
         when(users.currentUser()).thenReturn(new AuthenticatedUser(UUID.randomUUID(), "c@meridian.test", "CUSTOMER",
@@ -117,7 +139,7 @@ class LoanContractReadinessServiceTest {
         when(contracts.findByAcknowledgmentRequestId(any())).thenReturn(Optional.empty());
         when(applications.findByIdForUpdate(f.application.id())).thenReturn(Optional.of(f.application));
         assertThrows(AuthorizationException.class, () -> service.acknowledge(
-                new AcknowledgeLoanContractUseCase.Command(UUID.randomUUID(), f.application.id(), current.id(), 1)));
+                new AcknowledgeLoanContractUseCase.Command(UUID.randomUUID(), f.application.id(), 1)));
         verify(contracts, never()).save(any());
     }
 
@@ -285,6 +307,53 @@ class LoanContractReadinessServiceTest {
         assertEquals(LoanContractStatus.READY_FOR_DISBURSEMENT, ready.status());
     }
 
+    @Test void preparationPassesThroughUnrelatedConstraintFailures() {
+        Fixture f = fixture();
+        stubPreparation(f);
+        DataIntegrityViolationException failure = new DataIntegrityViolationException("unrelated constraint");
+        when(contracts.save(any())).thenThrow(failure);
+
+        DataIntegrityViolationException thrown = assertThrows(DataIntegrityViolationException.class,
+                () -> service.prepare(new PrepareLoanContractUseCase.Command(
+                        UUID.randomUUID(), f.application.id(), 0, null)));
+
+        assertSame(failure, thrown);
+    }
+
+    @Test void acknowledgmentPassesThroughUnrelatedConstraintFailures() {
+        Fixture f = fixture();
+        LoanContract prepared = contract(f, 1, LoanContractStatus.PREPARED);
+        AuthenticatedUser owner = new AuthenticatedUser(
+                UUID.randomUUID(), "owner@meridian.test", "CUSTOMER", f.application.customerId(),
+                Set.of("CUSTOMER"), Set.of());
+        when(users.currentUser()).thenReturn(owner);
+        when(contracts.findByAcknowledgmentRequestId(any())).thenReturn(Optional.empty());
+        when(applications.findByIdForUpdate(f.application.id())).thenReturn(Optional.of(f.application));
+        when(contracts.findCurrentByApplicationIdForUpdate(f.application.id())).thenReturn(Optional.of(prepared));
+        DataIntegrityViolationException failure = new DataIntegrityViolationException("unrelated constraint");
+        when(contracts.save(any())).thenThrow(failure);
+
+        DataIntegrityViolationException thrown = assertThrows(DataIntegrityViolationException.class,
+                () -> service.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                        UUID.randomUUID(), f.application.id(), 1)));
+
+        assertSame(failure, thrown);
+    }
+
+    @Test void confirmationPassesThroughUnrelatedConstraintFailures() {
+        Fixture f = fixture();
+        LoanContract acknowledged = contract(f, 1, LoanContractStatus.ACKNOWLEDGED);
+        stubConfirmation(f, acknowledged, f.offer);
+        DataIntegrityViolationException failure = new DataIntegrityViolationException("unrelated constraint");
+        when(contracts.save(any())).thenThrow(failure);
+
+        DataIntegrityViolationException thrown = assertThrows(DataIntegrityViolationException.class,
+                () -> service.confirm(new ConfirmContractReadinessUseCase.Command(
+                        UUID.randomUUID(), f.application.id(), acknowledged.id(), 1)));
+
+        assertSame(failure, thrown);
+    }
+
     private void assertPreparationBlocked(Fixture f, String expectedCode) {
         BusinessStateConflictException error = assertThrows(BusinessStateConflictException.class,
                 () -> service.prepare(new PrepareLoanContractUseCase.Command(
@@ -309,6 +378,26 @@ class LoanContractReadinessServiceTest {
                 f.application.id(), SalaryAdvanceLimitMovementType.RESERVED))
                 .thenReturn(List.of(reservation(f, f.limit.id(), money(1000))));
         lenient().when(movements.calculateOutstandingReservedAmount(f.limit.id())).thenReturn(money(1000));
+    }
+
+    private void stubConfirmation(Fixture f, LoanContract acknowledged, ApprovedOffer offer) {
+        when(users.currentUser()).thenReturn(staff());
+        when(contracts.findByConfirmationRequestId(any())).thenReturn(Optional.empty());
+        when(applications.findByIdForUpdate(f.application.id())).thenReturn(Optional.of(f.application));
+        when(offers.findByLoanApplicationIdForUpdate(f.application.id())).thenReturn(Optional.of(offer));
+        when(contracts.findCurrentByApplicationIdForUpdate(f.application.id())).thenReturn(Optional.of(acknowledged));
+        when(documents.isProcessingReady(f.application.id())).thenReturn(true);
+        when(corrections.findActiveRequestByApplicationIdForUpdate(f.application.id())).thenReturn(Optional.empty());
+        when(bankAccounts.inspectCapturedForUpdate(f.application.customerId(), f.accountId))
+                .thenReturn(new ContractBankAccountPort.ContractBankAccountState(true, true, true));
+        when(verifications.findByLoanApplicationId(f.application.id())).thenReturn(Optional.of(f.verification));
+        when(limits.findByIdForUpdate(f.limit.id())).thenReturn(Optional.of(f.limit));
+        when(movements.existsByLoanApplicationIdAndMovementType(
+                f.application.id(), SalaryAdvanceLimitMovementType.RESERVATION_RELEASED)).thenReturn(false);
+        when(movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                f.application.id(), SalaryAdvanceLimitMovementType.RESERVED))
+                .thenReturn(List.of(reservation(f, f.limit.id(), money(1000))));
+        when(movements.calculateOutstandingReservedAmount(f.limit.id())).thenReturn(money(1000));
     }
 
     private static AuthenticatedUser staff() {

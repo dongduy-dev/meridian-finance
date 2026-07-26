@@ -10,6 +10,7 @@ import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.audit.*;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +61,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
     public LoanContract prepare(PrepareLoanContractUseCase.Command command) {
         requirePrepareCommand(command);
         AuthenticatedUser actor = currentUserProvider.currentUser();
+        contracts.acquirePreparationRequestLock(command.requestId());
         LoanContract replay = contracts.findByPreparationRequestId(command.requestId()).orElse(null);
         if (replay != null) return validatePreparationReplay(replay, command, actor.userId());
 
@@ -125,6 +127,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
         requireAcknowledgmentCommand(command);
         AuthenticatedUser actor = currentUserProvider.currentUser();
         UUID customerId = actor.requireCustomerId();
+        contracts.acquireAcknowledgmentRequestLock(command.requestId());
         LoanContract replay = contracts.findByAcknowledgmentRequestId(command.requestId()).orElse(null);
         if (replay != null) return validateAcknowledgmentReplay(replay, command, actor.userId());
 
@@ -135,7 +138,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
                     "LOAN_APPLICATION_ACCESS_DENIED", "Loan application does not belong to the authenticated customer.");
         }
         LoanContract current = requireCurrentContractForUpdate(application.id());
-        requireContractIdentity(current, command.contractId(), command.expectedContractVersion());
+        requireContractVersion(current, command.expectedContractVersion());
         replay = contracts.findByAcknowledgmentRequestId(command.requestId()).orElse(null);
         if (replay != null) return validateAcknowledgmentReplay(replay, command, actor.userId());
         LocalDateTime now = LocalDateTime.now(clock);
@@ -196,6 +199,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
     public LoanContract confirm(ConfirmContractReadinessUseCase.Command command) {
         requireConfirmationCommand(command);
         AuthenticatedUser actor = currentUserProvider.currentUser();
+        contracts.acquireConfirmationRequestLock(command.requestId());
         LoanContract replay = contracts.findByConfirmationRequestId(command.requestId()).orElse(null);
         if (replay != null) return validateConfirmationReplay(replay, command, actor.userId());
 
@@ -318,9 +322,9 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
     }
     private ApprovedOffer lockAcceptedOffer(UUID applicationId) {
         ApprovedOffer offer = offers.findByLoanApplicationIdForUpdate(applicationId).orElseThrow(() -> new EntityNotFoundException(
-                "ACCEPTED_OFFER_MISSING", "Accepted approved offer was not found."));
-        if (offer.status() != ApprovedOfferStatus.ACCEPTED) throw conflict(
-                "ACCEPTED_OFFER_NOT_ACCEPTED", "Approved offer has not been accepted.");
+                "APPROVED_OFFER_NOT_FOUND", "Approved offer was not found."));
+        if (offer.status() != ApprovedOfferStatus.ACCEPTED) throw new BusinessRuleViolationException(
+                "OFFER_NOT_ACCEPTED", "Approved offer has not been accepted.");
         return offer;
     }
     private LoanContract requireCurrentContractForUpdate(UUID applicationId) {
@@ -352,14 +356,18 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
                 && replay.preparedByUserId().equals(actor)) return replay;
         throw idempotencyReused();
     }
+    private static void requireContractVersion(LoanContract contract, int version) {
+        if (contract.contractVersion() != version) throw stale();
+    }
     private static LoanContract validateAcknowledgmentReplay(LoanContract replay, AcknowledgeLoanContractUseCase.Command command, UUID actor) {
-        if (replay.loanApplicationId().equals(command.loanApplicationId()) && replay.id().equals(command.contractId())
+        if (replay.loanApplicationId().equals(command.loanApplicationId())
                 && replay.contractVersion() == command.expectedContractVersion()
                 && actor.equals(replay.acknowledgedByUserId())) return replay;
         throw idempotencyReused();
     }
     private static LoanContract validateConfirmationReplay(LoanContract replay, ConfirmContractReadinessUseCase.Command command, UUID actor) {
-        if (replay.loanApplicationId().equals(command.loanApplicationId()) && replay.id().equals(command.contractId())
+        if (replay.loanApplicationId().equals(command.loanApplicationId())
+                && replay.id().equals(command.contractId())
                 && replay.contractVersion() == command.expectedContractVersion()
                 && actor.equals(replay.confirmedByUserId())) return replay;
         throw idempotencyReused();
@@ -382,7 +390,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
     }
     private static void requireAcknowledgmentCommand(AcknowledgeLoanContractUseCase.Command command) {
         Objects.requireNonNull(command); Objects.requireNonNull(command.requestId()); Objects.requireNonNull(command.loanApplicationId());
-        Objects.requireNonNull(command.contractId()); if (command.expectedContractVersion() <= 0) throw new IllegalArgumentException("expectedContractVersion must be positive.");
+        if (command.expectedContractVersion() <= 0) throw new IllegalArgumentException("expectedContractVersion must be positive.");
     }
     private static void requireConfirmationCommand(ConfirmContractReadinessUseCase.Command command) {
         Objects.requireNonNull(command); Objects.requireNonNull(command.requestId()); Objects.requireNonNull(command.loanApplicationId());

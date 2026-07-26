@@ -8,6 +8,7 @@ import com.meridian.platform.loan.application.port.in.AcknowledgeLoanContractUse
 import com.meridian.platform.loan.application.port.in.ConfirmContractReadinessUseCase;
 import com.meridian.platform.loan.application.port.in.PrepareLoanContractUseCase;
 import com.meridian.platform.loan.domain.model.ContractSupersessionReason;
+import com.meridian.platform.loan.application.port.out.LoanContractRepository;
 import com.meridian.platform.loan.domain.model.LoanContract;
 import com.meridian.platform.loan.domain.model.LoanContractStatus;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
@@ -37,6 +38,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -54,6 +56,7 @@ class LoanContractConcurrencyV25PostgreSqlIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired PrepareLoanContractUseCase prepare;
     @Autowired AcknowledgeLoanContractUseCase acknowledge;
+    @Autowired LoanContractRepository contractRepository;
     @Autowired ConfirmContractReadinessUseCase confirm;
     @Autowired CustomerSensitiveValueProtector customerProtector;
     @Autowired LoanDocumentWorkflowPort documentWorkflow;
@@ -81,7 +84,7 @@ class LoanContractConcurrencyV25PostgreSqlIntegrationTest {
                 await(start);
                 try {
                     return acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
-                            UUID.randomUUID(), fixture.applicationId(), first.id(), 1));
+                            UUID.randomUUID(), fixture.applicationId(), 1));
                 } catch (BusinessStateConflictException exception) {
                     return exception.getErrorCode();
                 } finally {
@@ -126,7 +129,7 @@ class LoanContractConcurrencyV25PostgreSqlIntegrationTest {
                 await(start);
                 try {
                     return acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
-                            UUID.randomUUID(), fixture.applicationId(), prepared.id(), 1));
+                            UUID.randomUUID(), fixture.applicationId(), 1));
                 } finally {
                     currentUser.clear();
                 }
@@ -156,6 +159,285 @@ class LoanContractConcurrencyV25PostgreSqlIntegrationTest {
         assertEquals(contractStatus.equals("READY_FOR_DISBURSEMENT")
                         ? "DISBURSEMENT_PENDING" : "CONTRACT_PENDING",
                 scalar("select status from loan_applications where id = ?", fixture.applicationId()));
+    }
+    @Test
+    void acknowledgmentWinsBeforeRegenerationWithNoPartialEffects() throws Exception {
+        Fixture fixture = fixture();
+        currentUser.set(staff());
+        LoanContract first = prepare.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), fixture.applicationId(), 0, null));
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
+            Future<Object> winner = workflowLockWinner(pool, fixture, customer(fixture), locked, release,
+                    () -> acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                            UUID.randomUUID(), fixture.applicationId(), 1)));
+            assertTrue(locked.await(10, TimeUnit.SECONDS));
+            Future<Object> peer = submitOutcome(pool, staff(), () -> prepare.prepare(
+                    new PrepareLoanContractUseCase.Command(UUID.randomUUID(), fixture.applicationId(), 1,
+                            ContractSupersessionReason.DISBURSEMENT_ACCOUNT_REFRESH)));
+            assertThrows(TimeoutException.class, () -> peer.get(250, TimeUnit.MILLISECONDS));
+            release.countDown();
+            assertEquals(LoanContractStatus.ACKNOWLEDGED, ((LoanContract) winner.get(30, TimeUnit.SECONDS)).status());
+            assertEquals(2, ((LoanContract) peer.get(30, TimeUnit.SECONDS)).contractVersion());
+        }
+        assertEquals(1, count("select count(*) from loan_contracts where id = ? and status = 'SUPERSEDED' "
+                + "and acknowledgment_request_id is not null", first.id()));
+        assertEquals("PREPARED", scalar("select status from loan_contracts where loan_application_id = ? "
+                + "and contract_version = 2", fixture.applicationId()));
+        assertRaceEffects(fixture, first, 1, 0, 0);
+    }
+
+    @Test
+    void regenerationWinsBeforeAcknowledgmentAndMakesTheVersionStale() throws Exception {
+        Fixture fixture = fixture();
+        currentUser.set(staff());
+        LoanContract first = prepare.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), fixture.applicationId(), 0, null));
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
+            Future<Object> winner = workflowLockWinner(pool, fixture, staff(), locked, release,
+                    () -> prepare.prepare(new PrepareLoanContractUseCase.Command(
+                            UUID.randomUUID(), fixture.applicationId(), 1,
+                            ContractSupersessionReason.DISBURSEMENT_ACCOUNT_REFRESH)));
+            assertTrue(locked.await(10, TimeUnit.SECONDS));
+            Future<Object> peer = submitOutcome(pool, customer(fixture), () -> acknowledge.acknowledge(
+                    new AcknowledgeLoanContractUseCase.Command(UUID.randomUUID(), fixture.applicationId(), 1)));
+            assertThrows(TimeoutException.class, () -> peer.get(250, TimeUnit.MILLISECONDS));
+            release.countDown();
+            assertEquals(2, ((LoanContract) winner.get(30, TimeUnit.SECONDS)).contractVersion());
+            assertEquals("CONTRACT_VERSION_STALE", peer.get(30, TimeUnit.SECONDS));
+        }
+        assertEquals(1, count("select count(*) from loan_contracts where id = ? and status = 'SUPERSEDED' "
+                + "and acknowledgment_request_id is null", first.id()));
+        assertEquals("PREPARED", scalar("select status from loan_contracts where loan_application_id = ? "
+                + "and contract_version = 2", fixture.applicationId()));
+        assertRaceEffects(fixture, first, 0, 0, 0);
+    }
+
+    @Test
+    void acknowledgmentWinsBeforeConfirmationAndConfirmationThenCompletes() throws Exception {
+        Fixture fixture = fixture();
+        currentUser.set(staff());
+        LoanContract prepared = prepare.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), fixture.applicationId(), 0, null));
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
+            Future<Object> winner = workflowLockWinner(pool, fixture, customer(fixture), locked, release,
+                    () -> acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                            UUID.randomUUID(), fixture.applicationId(), 1)));
+            assertTrue(locked.await(10, TimeUnit.SECONDS));
+            Future<Object> peer = submitOutcome(pool, staff(), () -> confirm.confirm(
+                    new ConfirmContractReadinessUseCase.Command(
+                            UUID.randomUUID(), fixture.applicationId(), prepared.id(), 1)));
+            assertThrows(TimeoutException.class, () -> peer.get(250, TimeUnit.MILLISECONDS));
+            release.countDown();
+            assertEquals(LoanContractStatus.ACKNOWLEDGED, ((LoanContract) winner.get(30, TimeUnit.SECONDS)).status());
+            assertEquals(LoanContractStatus.READY_FOR_DISBURSEMENT,
+                    ((LoanContract) peer.get(30, TimeUnit.SECONDS)).status());
+        }
+        assertEquals(1, count("select count(*) from loan_contracts where id = ? and status = 'READY_FOR_DISBURSEMENT' "
+                + "and acknowledgment_request_id is not null and confirmation_request_id is not null", prepared.id()));
+        assertRaceEffects(fixture, prepared, 1, 1, 1);
+    }
+
+    @Test
+    void confirmationAttemptWinsBeforeAcknowledgmentAndIsBlockedWithoutEffects() throws Exception {
+        Fixture fixture = fixture();
+        currentUser.set(staff());
+        LoanContract prepared = prepare.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), fixture.applicationId(), 0, null));
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
+            Future<Object> winner = workflowLockWinner(pool, fixture, staff(), locked, release,
+                    () -> confirm.confirm(new ConfirmContractReadinessUseCase.Command(
+                            UUID.randomUUID(), fixture.applicationId(), prepared.id(), 1)));
+            assertTrue(locked.await(10, TimeUnit.SECONDS));
+            Future<Object> peer = submitOutcome(pool, customer(fixture), () -> acknowledge.acknowledge(
+                    new AcknowledgeLoanContractUseCase.Command(UUID.randomUUID(), fixture.applicationId(), 1)));
+            assertThrows(TimeoutException.class, () -> peer.get(250, TimeUnit.MILLISECONDS));
+            release.countDown();
+            assertEquals("ACKNOWLEDGMENT_MISSING", winner.get(30, TimeUnit.SECONDS));
+            assertEquals(LoanContractStatus.ACKNOWLEDGED, ((LoanContract) peer.get(30, TimeUnit.SECONDS)).status());
+        }
+        assertEquals(1, count("select count(*) from loan_contracts where id = ? and status = 'ACKNOWLEDGED' "
+                + "and acknowledgment_request_id is not null and confirmation_request_id is null", prepared.id()));
+        assertRaceEffects(fixture, prepared, 1, 0, 0);
+    }
+
+
+    @Test
+    void identicalConcurrentRequestIdsReplayForEveryCommandCategory() throws Exception {
+        Fixture fixture = fixture();
+        UUID preparationRequest = UUID.randomUUID();
+        RaceResults preparation = requestRace(staff(), staff(),
+                () -> contractRepository.acquirePreparationRequestLock(preparationRequest),
+                () -> prepare.prepare(new PrepareLoanContractUseCase.Command(
+                        preparationRequest, fixture.applicationId(), 0, null)),
+                () -> prepare.prepare(new PrepareLoanContractUseCase.Command(
+                        preparationRequest, fixture.applicationId(), 0, null)));
+        LoanContract prepared = (LoanContract) preparation.winner();
+        assertEquals(prepared.id(), ((LoanContract) preparation.peer()).id());
+        assertEquals(1, count("select count(*) from audit_events where entity_id = ? "
+                + "and action = 'LOAN_CONTRACT_PREPARED'", prepared.id()));
+
+        UUID acknowledgmentRequest = UUID.randomUUID();
+        RaceResults acknowledgment = requestRace(customer(fixture), customer(fixture),
+                () -> contractRepository.acquireAcknowledgmentRequestLock(acknowledgmentRequest),
+                () -> acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                        acknowledgmentRequest, fixture.applicationId(), 1)),
+                () -> acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                        acknowledgmentRequest, fixture.applicationId(), 1)));
+        LoanContract acknowledged = (LoanContract) acknowledgment.winner();
+        assertEquals(acknowledged.id(), ((LoanContract) acknowledgment.peer()).id());
+        assertEquals(1, count("select count(*) from audit_events where entity_id = ? "
+                + "and action = 'LOAN_CONTRACT_ACKNOWLEDGED'", acknowledged.id()));
+
+        UUID confirmationRequest = UUID.randomUUID();
+        RaceResults confirmation = requestRace(staff(), staff(),
+                () -> contractRepository.acquireConfirmationRequestLock(confirmationRequest),
+                () -> confirm.confirm(new ConfirmContractReadinessUseCase.Command(
+                        confirmationRequest, fixture.applicationId(), acknowledged.id(), 1)),
+                () -> confirm.confirm(new ConfirmContractReadinessUseCase.Command(
+                        confirmationRequest, fixture.applicationId(), acknowledged.id(), 1)));
+        LoanContract ready = (LoanContract) confirmation.winner();
+        assertEquals(ready.id(), ((LoanContract) confirmation.peer()).id());
+        assertRaceEffects(fixture, ready, 1, 1, 1);
+    }
+
+    @Test
+    void concurrentRequestIdReuseAcrossApplicationsIsAConflictForEveryCategory() throws Exception {
+        Fixture first = fixture();
+        Fixture second = fixture();
+        UUID preparationRequest = UUID.randomUUID();
+        RaceResults preparation = requestRace(staff(), staff(),
+                () -> contractRepository.acquirePreparationRequestLock(preparationRequest),
+                () -> prepare.prepare(new PrepareLoanContractUseCase.Command(
+                        preparationRequest, first.applicationId(), 0, null)),
+                () -> prepare.prepare(new PrepareLoanContractUseCase.Command(
+                        preparationRequest, second.applicationId(), 0, null)));
+        LoanContract firstPrepared = (LoanContract) preparation.winner();
+        assertEquals("IDEMPOTENCY_KEY_REUSED", preparation.peer());
+        currentUser.set(staff());
+        LoanContract secondPrepared = prepare.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), second.applicationId(), 0, null));
+
+        UUID acknowledgmentRequest = UUID.randomUUID();
+        RaceResults acknowledgment = requestRace(customer(first), customer(second),
+                () -> contractRepository.acquireAcknowledgmentRequestLock(acknowledgmentRequest),
+                () -> acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                        acknowledgmentRequest, first.applicationId(), 1)),
+                () -> acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                        acknowledgmentRequest, second.applicationId(), 1)));
+        LoanContract firstAcknowledged = (LoanContract) acknowledgment.winner();
+        assertEquals("IDEMPOTENCY_KEY_REUSED", acknowledgment.peer());
+        currentUser.set(customer(second));
+        LoanContract secondAcknowledged = acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                UUID.randomUUID(), second.applicationId(), 1));
+
+        UUID confirmationRequest = UUID.randomUUID();
+        RaceResults confirmation = requestRace(staff(), staff(),
+                () -> contractRepository.acquireConfirmationRequestLock(confirmationRequest),
+                () -> confirm.confirm(new ConfirmContractReadinessUseCase.Command(
+                        confirmationRequest, first.applicationId(), firstAcknowledged.id(), 1)),
+                () -> confirm.confirm(new ConfirmContractReadinessUseCase.Command(
+                        confirmationRequest, second.applicationId(), secondAcknowledged.id(), 1)));
+        assertTrue(confirmation.winner() instanceof LoanContract);
+        assertEquals("IDEMPOTENCY_KEY_REUSED", confirmation.peer());
+        assertEquals("ACKNOWLEDGED", scalar("select status from loan_contracts where id = ?", secondPrepared.id()));
+        assertEquals(0, count("select count(*) from loan_application_status_transitions "
+                + "where loan_application_id = ?", second.applicationId()));
+        assertEquals(firstPrepared.id(), firstAcknowledged.id());
+    }
+
+    @Test
+    void concurrentRequestIdReuseWithDifferentVersionOrContentIsAConflictForEveryCategory() throws Exception {
+        Fixture preparationFixture = fixture();
+        currentUser.set(staff());
+        prepare.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), preparationFixture.applicationId(), 0, null));
+        UUID preparationRequest = UUID.randomUUID();
+        RaceResults preparation = requestRace(staff(), staff(),
+                () -> contractRepository.acquirePreparationRequestLock(preparationRequest),
+                () -> prepare.prepare(new PrepareLoanContractUseCase.Command(preparationRequest,
+                        preparationFixture.applicationId(), 1, ContractSupersessionReason.DISBURSEMENT_ACCOUNT_REFRESH)),
+                () -> prepare.prepare(new PrepareLoanContractUseCase.Command(preparationRequest,
+                        preparationFixture.applicationId(), 0, null)));
+        assertEquals(2, ((LoanContract) preparation.winner()).contractVersion());
+        assertEquals("IDEMPOTENCY_KEY_REUSED", preparation.peer());
+
+        Fixture acknowledgmentFixture = fixture();
+        currentUser.set(staff());
+        prepare.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), acknowledgmentFixture.applicationId(), 0, null));
+        UUID acknowledgmentRequest = UUID.randomUUID();
+        RaceResults acknowledgment = requestRace(customer(acknowledgmentFixture), customer(acknowledgmentFixture),
+                () -> contractRepository.acquireAcknowledgmentRequestLock(acknowledgmentRequest),
+                () -> acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                        acknowledgmentRequest, acknowledgmentFixture.applicationId(), 1)),
+                () -> acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                        acknowledgmentRequest, acknowledgmentFixture.applicationId(), 2)));
+        assertTrue(acknowledgment.winner() instanceof LoanContract);
+        assertEquals("IDEMPOTENCY_KEY_REUSED", acknowledgment.peer());
+
+        Fixture confirmationFixture = fixture();
+        LoanContract acknowledged = prepareAndAcknowledge(confirmationFixture);
+        UUID confirmationRequest = UUID.randomUUID();
+        RaceResults confirmation = requestRace(staff(), staff(),
+                () -> contractRepository.acquireConfirmationRequestLock(confirmationRequest),
+                () -> confirm.confirm(new ConfirmContractReadinessUseCase.Command(
+                        confirmationRequest, confirmationFixture.applicationId(), acknowledged.id(), 1)),
+                () -> confirm.confirm(new ConfirmContractReadinessUseCase.Command(
+                        confirmationRequest, confirmationFixture.applicationId(), acknowledged.id(), 2)));
+        assertTrue(confirmation.winner() instanceof LoanContract);
+        assertEquals("IDEMPOTENCY_KEY_REUSED", confirmation.peer());
+    }
+
+    @Test
+    void reservationReleaseCompletesBeforeConfirmationAndBlocksIt() throws Exception {
+        Fixture fixture = fixture();
+        LoanContract acknowledged = prepareAndAcknowledge(fixture);
+        UUID limitId = jdbc.queryForObject("select salary_advance_limit_id from salary_advance_verifications "
+                + "where loan_application_id = ?", UUID.class, fixture.applicationId());
+        UUID linkId = jdbc.queryForObject("select customer_partner_employee_link_id from salary_advance_verifications "
+                + "where loan_application_id = ?", UUID.class, fixture.applicationId());
+        CountDownLatch limitLocked = new CountDownLatch(1);
+        CountDownLatch releaseMutation = new CountDownLatch(1);
+        try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
+            Future<Void> mutation = pool.submit(() -> {
+                new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                    String key = "salary-advance-limit:" + fixture.customerId() + ":" + linkId;
+                    jdbc.queryForObject("WITH lock AS (SELECT pg_advisory_xact_lock("
+                            + "hashtextextended(CAST(? AS text), 0))) SELECT 1 FROM lock", Integer.class, key);
+                    jdbc.queryForObject("select id from salary_advance_limits where id = ? for update",
+                            UUID.class, limitId);
+                    jdbc.update("update salary_advance_limits set reserved_amount = 0, available_amount = total_limit "
+                            + "- used_amount where id = ?", limitId);
+                    jdbc.update("insert into salary_advance_limit_movements "
+                                    + "(id,salary_advance_limit_id,loan_application_id,movement_type,amount,occurred_at) "
+                                    + "values (?,?,?,'RESERVATION_RELEASED',1000,current_timestamp)",
+                            UUID.randomUUID(), limitId, fixture.applicationId());
+                    limitLocked.countDown();
+                    await(releaseMutation);
+                });
+                return null;
+            });
+            assertTrue(limitLocked.await(10, TimeUnit.SECONDS));
+            Future<Object> confirmation = submitOutcome(pool, staff(), () -> confirm.confirm(
+                    new ConfirmContractReadinessUseCase.Command(
+                            UUID.randomUUID(), fixture.applicationId(), acknowledged.id(), 1)));
+            assertThrows(TimeoutException.class, () -> confirmation.get(250, TimeUnit.MILLISECONDS));
+            releaseMutation.countDown();
+            mutation.get(30, TimeUnit.SECONDS);
+            assertEquals("SALARY_ADVANCE_RESERVATION_RELEASED", confirmation.get(30, TimeUnit.SECONDS));
+        }
+        assertEquals("ACKNOWLEDGED", scalar("select status from loan_contracts where id = ?", acknowledged.id()));
+        assertEquals(1, count("select count(*) from salary_advance_limit_movements where loan_application_id = ? "
+                + "and movement_type = 'RESERVATION_RELEASED'", fixture.applicationId()));
+        assertRaceEffects(fixture, acknowledged, 1, 0, 0);
     }
 
     @Test
@@ -315,8 +597,98 @@ class LoanContractConcurrencyV25PostgreSqlIntegrationTest {
                 UUID.randomUUID(), fixture.applicationId(), 0, null));
         currentUser.set(customer(fixture));
         return acknowledge.acknowledge(new AcknowledgeLoanContractUseCase.Command(
-                UUID.randomUUID(), fixture.applicationId(), prepared.id(), 1));
+                UUID.randomUUID(), fixture.applicationId(), 1));
     }
+    private Future<Object> workflowLockWinner(
+            ExecutorService pool, Fixture fixture, AuthenticatedUser actor,
+            CountDownLatch locked, CountDownLatch release, Supplier<Object> action
+    ) {
+        return pool.submit(() -> {
+            currentUser.set(actor);
+            try {
+                return new TransactionTemplate(transactionManager).execute(status -> {
+                    acquireWorkflowLock(fixture.applicationId());
+                    locked.countDown();
+                    await(release);
+                    return action.get();
+                });
+            } catch (BusinessStateConflictException exception) {
+                return exception.getErrorCode();
+            } finally {
+                currentUser.clear();
+            }
+        });
+    }
+
+    private RaceResults requestRace(
+            AuthenticatedUser winnerActor, AuthenticatedUser peerActor, Runnable acquireRequestLock,
+            Supplier<Object> winnerAction, Supplier<Object> peerAction
+    ) throws Exception {
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
+            Future<Object> winner = requestLockWinner(
+                    pool, winnerActor, acquireRequestLock, locked, release, winnerAction);
+            assertTrue(locked.await(10, TimeUnit.SECONDS));
+            Future<Object> peer = submitOutcome(pool, peerActor, peerAction);
+            assertThrows(TimeoutException.class, () -> peer.get(250, TimeUnit.MILLISECONDS));
+            release.countDown();
+            return new RaceResults(winner.get(30, TimeUnit.SECONDS), peer.get(30, TimeUnit.SECONDS));
+        }
+    }
+
+    private Future<Object> requestLockWinner(
+            ExecutorService pool, AuthenticatedUser actor, Runnable acquireRequestLock,
+            CountDownLatch locked, CountDownLatch release, Supplier<Object> action
+    ) {
+        return pool.submit(() -> {
+            currentUser.set(actor);
+            try {
+                return new TransactionTemplate(transactionManager).execute(status -> {
+                    acquireRequestLock.run();
+                    locked.countDown();
+                    await(release);
+                    return action.get();
+                });
+            } finally {
+                currentUser.clear();
+            }
+        });
+    }
+
+    private Future<Object> submitOutcome(
+            ExecutorService pool, AuthenticatedUser actor, Supplier<Object> action
+    ) {
+        return pool.submit(() -> {
+            currentUser.set(actor);
+            try {
+                return action.get();
+            } catch (BusinessStateConflictException exception) {
+                return exception.getErrorCode();
+            } finally {
+                currentUser.clear();
+            }
+        });
+    }
+
+    private void acquireWorkflowLock(UUID applicationId) {
+        String key = "loan-application:workflow:" + applicationId;
+        jdbc.queryForObject("WITH lock AS (SELECT pg_advisory_xact_lock("
+                + "hashtextextended(CAST(? AS text), 0))) SELECT 1 FROM lock", Integer.class, key);
+    }
+
+    private void assertRaceEffects(Fixture fixture, LoanContract contract,
+                                   int acknowledgmentAudits, int confirmationAudits, int historyRows) {
+        assertEquals(acknowledgmentAudits, count("select count(*) from audit_events where entity_id = ? "
+                + "and action = 'LOAN_CONTRACT_ACKNOWLEDGED'", contract.id()));
+        assertEquals(confirmationAudits, count("select count(*) from audit_events where entity_id = ? "
+                + "and action = 'LOAN_CONTRACT_READINESS_CONFIRMED'", contract.id()));
+        assertEquals(historyRows, count("select count(*) from loan_application_status_transitions where "
+                + "loan_application_id = ? and action = 'CONFIRM_DISBURSEMENT_READINESS'", fixture.applicationId()));
+        assertEquals(historyRows == 1 ? "DISBURSEMENT_PENDING" : "CONTRACT_PENDING",
+                scalar("select status from loan_applications where id = ?", fixture.applicationId()));
+    }
+
 
     private Fixture fixture() {
         UUID customerId = UUID.randomUUID();
@@ -428,12 +800,15 @@ class LoanContractConcurrencyV25PostgreSqlIntegrationTest {
                            UUID bankAccountId, UUID alternateBankAccountId) {
     }
 
+    private record RaceResults(Object winner, Object peer) {}
+
     @TestConfiguration
     static class TestConfig {
         @Bean
         @Primary
         TestCurrentUserProvider testCurrentUserProvider() {
             return new TestCurrentUserProvider();
+
         }
     }
 

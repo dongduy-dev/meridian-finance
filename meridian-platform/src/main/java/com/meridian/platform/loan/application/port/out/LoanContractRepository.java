@@ -6,6 +6,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface LoanContractRepository {
+    void acquirePreparationRequestLock(UUID requestId);
+    void acquireAcknowledgmentRequestLock(UUID requestId);
+    void acquireConfirmationRequestLock(UUID requestId);
     LoanContract save(LoanContract contract);
     LoanContract saveAndFlush(LoanContract contract);
     Optional<LoanContract> findCurrentByApplicationId(UUID loanApplicationId);

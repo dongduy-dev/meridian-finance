@@ -189,7 +189,9 @@ class LoanContractApiPostgreSqlIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         UUID firstContractId = UUID.fromString(JsonPath.read(firstBody, "$.contractId"));
-        acknowledge(fixture, UUID.randomUUID(), 1).andExpect(status().isOk());
+        UUID acknowledgmentRequestId = UUID.randomUUID();
+        acknowledge(fixture, acknowledgmentRequestId, 1)
+                .andExpect(status().isOk());
 
         UUID alternateBankAccountId = UUID.randomUUID();
         ProtectedSensitiveValue alternate = customerProtector.protectBankAccountNumber("ACB", "9876543210");
@@ -251,6 +253,16 @@ class LoanContractApiPostgreSqlIntegrationTest {
                 repaymentSnapshot(secondContractId)
         );
 
+        acknowledge(fixture, acknowledgmentRequestId, 1)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contractId").value(firstContractId.toString()))
+                .andExpect(jsonPath("$.contractVersion").value(1))
+                .andExpect(jsonPath("$.status").value("SUPERSEDED"));
+        assertEquals("PREPARED", scalar("select status from loan_contracts where id = ?", secondContractId));
+        assertEquals(1, auditCount(firstContractId.toString(), "LOAN_CONTRACT_ACKNOWLEDGED"));
+        assertEquals(0, auditCount(secondContractId.toString(), "LOAN_CONTRACT_ACKNOWLEDGED"));
+        assertEquals(0, count("select count(*) from loan_application_status_transitions where loan_application_id = ?", fixture.applicationId));
+
         acknowledge(fixture, UUID.randomUUID(), 1)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("CONTRACT_VERSION_STALE"));
@@ -263,6 +275,28 @@ class LoanContractApiPostgreSqlIntegrationTest {
         prepare(fixture, UUID.randomUUID(), 2, "DISBURSEMENT_ACCOUNT_REFRESH")
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("INVALID_APPLICATION_STATE"));
+    }
+    @Test
+    void preparationUsesCanonicalApprovedOfferErrors() throws Exception {
+        Fixture missing = fixture();
+        jdbc.update("delete from approved_offer_repayment_items where approved_offer_id = "
+                + "(select id from approved_offers where loan_application_id = ?)", missing.applicationId);
+        jdbc.update("delete from approved_offers where loan_application_id = ?", missing.applicationId);
+
+        prepare(missing, UUID.randomUUID(), 0, null)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.errorCode").value("APPROVED_OFFER_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Approved offer was not found."));
+
+        Fixture notAccepted = fixture();
+        jdbc.update("update approved_offers set status = 'PENDING', accepted_at = null where loan_application_id = ?", notAccepted.applicationId);
+
+        prepare(notAccepted, UUID.randomUUID(), 0, null)
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.errorCode").value("OFFER_NOT_ACCEPTED"))
+                .andExpect(jsonPath("$.message").value("Approved offer has not been accepted."));
     }
 
     @Test

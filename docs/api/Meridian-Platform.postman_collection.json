@@ -3311,7 +3311,7 @@
                  },
                  {
                      "name":  "09 Operational Contract Readiness",
-                     "description":  "Run after an application reaches CONTRACT_PENDING. Regeneration and cross-Customer requests use their separately documented collection variables.",
+                     "description":  "Run after an application reaches CONTRACT_PENDING. Regeneration and cross-Customer requests use their separately documented collection variables. Preparation expects 404 APPROVED_OFFER_NOT_FOUND when no approved offer exists and 422 OFFER_NOT_ACCEPTED when an offer exists but is not accepted.",
                      "item":  [
                                   {
                                       "name":  "Accounting - prepare first operational contract",
@@ -3347,7 +3347,7 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Version 1 requires expectedCurrentContractVersion 0 and no supersession reason.",
+                                                      "description":  "Version 1 requires expectedCurrentContractVersion 0 and no supersession reason. Canonical preparation failures are 404 APPROVED_OFFER_NOT_FOUND for a missing offer and 422 OFFER_NOT_ACCEPTED for a non-accepted offer, both with safe catalog messages.",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "{\n  \"preparationRequestId\": \"{{contractPreparationRequestId}}\",\n  \"expectedCurrentContractVersion\": 0,\n  \"supersessionReasonCode\": null\n}",
@@ -3537,7 +3537,7 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Operational acknowledgment is immutable evidence, not an electronic or digital signature.",
+                                                      "description":  "Operational acknowledgment is immutable evidence, not an electronic or digital signature. An identical retry is keyed by request UUID, application, expected version, and Customer actor, so a version 1 replay still returns version 1 after regeneration and never acknowledges version 2.",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "{\n  \"acknowledgmentRequestId\": \"{{contractAcknowledgmentRequestId}}\",\n  \"expectedContractVersion\": \"{{contractVersion}}\"\n}",

@@ -81,11 +81,9 @@ public class LoanContractController {
             @PathVariable UUID loanApplicationId,
             @Valid @RequestBody AcknowledgeLoanContractRequest request
     ) {
-        LoanContract current = requireCurrent(loanApplicationId);
         return mapper.toDto(acknowledgeContract.acknowledge(new AcknowledgeLoanContractUseCase.Command(
                 request.acknowledgmentRequestId(),
                 loanApplicationId,
-                current.id(),
                 request.expectedContractVersion()
         )));
     }
