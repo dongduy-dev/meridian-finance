@@ -1,5 +1,7 @@
 package com.meridian.platform.loan.domain.model;
 
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -79,6 +81,32 @@ public record SalaryAdvanceLimitMovement(
                 null,
                 SalaryAdvanceLimitMovementType.RESERVATION_RELEASED,
                 Objects.requireNonNull(amount, "amount must not be null"),
+                Objects.requireNonNull(occurredAt, "occurredAt must not be null")
+        );
+    }
+
+    public static SalaryAdvanceLimitMovement disbursedToUsed(
+            UUID id,
+            UUID salaryAdvanceLimitId,
+            UUID loanApplicationId,
+            UUID loanAccountId,
+            BigDecimal amount,
+            LocalDateTime occurredAt
+    ) {
+        Objects.requireNonNull(amount, "amount must not be null");
+        if (amount.signum() <= 0 || amount.remainder(BigDecimal.ONE).signum() != 0) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_PRODUCT_AMOUNT",
+                    "Disbursed-to-used amount must be a positive whole VND amount."
+            );
+        }
+        return new SalaryAdvanceLimitMovement(
+                Objects.requireNonNull(id, "id must not be null"),
+                Objects.requireNonNull(salaryAdvanceLimitId, "salaryAdvanceLimitId must not be null"),
+                Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null"),
+                Objects.requireNonNull(loanAccountId, "loanAccountId must not be null"),
+                SalaryAdvanceLimitMovementType.DISBURSED_TO_USED,
+                amount,
                 Objects.requireNonNull(occurredAt, "occurredAt must not be null")
         );
     }

@@ -169,8 +169,18 @@ class LoanContractApiPostgreSqlIntegrationTest {
                         + "where loan_application_id = ? and movement_type <> 'RESERVED'",
                 fixture.applicationId
         ));
-        assertNull(jdbc.queryForObject("select to_regclass(?)", String.class, SCHEMA + ".loan_accounts"));
-        assertNull(jdbc.queryForObject("select to_regclass(?)", String.class, SCHEMA + ".disbursements"));
+        assertEquals(0, count(
+                "select count(*) from loan_accounts where loan_application_id = ?",
+                fixture.applicationId
+        ));
+        assertEquals(0, count(
+                "select count(*) from manual_disbursements where loan_application_id = ?",
+                fixture.applicationId
+        ));
+        assertEquals(0, count(
+                "select count(*) from repayment_schedules where loan_application_id = ?",
+                fixture.applicationId
+        ));
 
         String auditPayloads = jdbc.queryForObject(
                 "select coalesce(string_agg(payload::text, ''), '') from audit_events where entity_id = ?",
