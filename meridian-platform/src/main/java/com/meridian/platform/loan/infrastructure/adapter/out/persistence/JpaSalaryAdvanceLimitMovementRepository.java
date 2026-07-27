@@ -29,6 +29,7 @@ public interface JpaSalaryAdvanceLimitMovementRepository
             from SalaryAdvanceLimitMovementJpaEntity movement
             where movement.loanApplicationId = :loanApplicationId
               and movement.movementType = :movementType
+            order by movement.occurredAt, movement.id
             """)
     List<SalaryAdvanceLimitMovementJpaEntity> findAllByLoanApplicationIdAndMovementTypeForUpdate(
             @Param("loanApplicationId") UUID loanApplicationId,
@@ -39,13 +40,25 @@ public interface JpaSalaryAdvanceLimitMovementRepository
             select coalesce(sum(
                 case
                     when movement_type = 'RESERVED' then amount
-                    when movement_type = 'RESERVATION_RELEASED' then -amount
+                    when movement_type in ('RESERVATION_RELEASED', 'DISBURSED_TO_USED') then -amount
                     else 0
                 end
             ), 0)
             from salary_advance_limit_movements
             where salary_advance_limit_id = :salaryAdvanceLimitId
-              and movement_type in ('RESERVED', 'RESERVATION_RELEASED')
             """, nativeQuery = true)
     BigDecimal calculateOutstandingReservedAmount(@Param("salaryAdvanceLimitId") UUID salaryAdvanceLimitId);
+
+    @Query(value = """
+            select coalesce(sum(
+                case
+                    when movement_type = 'DISBURSED_TO_USED' then amount
+                    when movement_type = 'REPAID_RELEASED' then -amount
+                    else 0
+                end
+            ), 0)
+            from salary_advance_limit_movements
+            where salary_advance_limit_id = :salaryAdvanceLimitId
+            """, nativeQuery = true)
+    BigDecimal calculateUsedAmount(@Param("salaryAdvanceLimitId") UUID salaryAdvanceLimitId);
 }

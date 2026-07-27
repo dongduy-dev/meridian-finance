@@ -1,32 +1,67 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
+import com.meridian.platform.loan.application.port.out.LoanAccountRepository;
+import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.port.out.LoanContractRepository;
+import com.meridian.platform.loan.application.port.out.ManualDisbursementRepository;
+import com.meridian.platform.loan.application.port.out.ManualDisbursementSaveOutcome;
+import com.meridian.platform.loan.application.port.out.RepaymentScheduleRepository;
+import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
+import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
+import com.meridian.platform.loan.application.service.LoanProductActivationPolicy;
+import com.meridian.platform.loan.application.service.SalaryAdvanceLoanActivationPolicy;
+import com.meridian.platform.loan.domain.model.LoanAccount;
+import com.meridian.platform.loan.domain.model.LoanAccountStatus;
+import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.domain.model.LoanContract;
+import com.meridian.platform.loan.domain.model.ManualDisbursement;
+import com.meridian.platform.loan.domain.model.RepaymentSchedule;
+import com.meridian.platform.loan.domain.model.RepaymentScheduleItem;
+import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.LocalDateTime;
 import javax.sql.DataSource;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@ExtendWith(OutputCaptureExtension.class)
 @SpringBootTest(properties = {
         "meridian.loan.offer-expiry.enabled=false",
         "meridian.document.orphan-reconciliation.enabled=false"
@@ -46,6 +81,30 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
     @Autowired
     PlatformTransactionManager transactionManager;
 
+    @Autowired
+    LoanAccountRepository loanAccounts;
+
+    @Autowired
+    ManualDisbursementRepository manualDisbursements;
+
+    @Autowired
+    RepaymentScheduleRepository repaymentSchedules;
+
+    @Autowired
+    LoanApplicationRepository loanApplications;
+
+    @Autowired
+    LoanContractRepository loanContracts;
+
+    @Autowired
+    SalaryAdvanceVerificationRepository salaryAdvanceVerifications;
+
+    @Autowired
+    SalaryAdvanceLimitMovementRepository salaryAdvanceMovements;
+
+    @Autowired
+    SalaryAdvanceLoanActivationPolicy activationPolicy;
+
     private TransactionTemplate transactions;
 
     @DynamicPropertySource
@@ -59,6 +118,743 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
     @BeforeEach
     void setUp() {
         transactions = new TransactionTemplate(transactionManager);
+    }
+
+    @Test
+    void aggregateAdaptersRoundTripCompleteActivationExactlyAndLoadStatusTransition() {
+        Fixture fixture = createReadyFixture(false);
+        UUID accountId = UUID.randomUUID();
+        UUID disbursementId = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        UUID scheduleId = UUID.randomUUID();
+        LocalDateTime operationTime = LocalDateTime.of(2026, 7, 27, 10, 15);
+        LoanAccount account = new LoanAccount(
+                accountId,
+                fixture.applicationId(),
+                fixture.contractId(),
+                fixture.customerId(),
+                LoanAccount.accountNumberFor(accountId),
+                LoanAccountStatus.ACTIVE,
+                amount("1000"),
+                2,
+                amount("100"),
+                amount("0"),
+                amount("1100"),
+                operationTime
+        );
+        ManualDisbursement disbursement = new ManualDisbursement(
+                disbursementId,
+                fixture.applicationId(),
+                fixture.contractId(),
+                accountId,
+                requestId,
+                1,
+                "TRANSFER-" + fixture.token(),
+                amount("1000"),
+                LocalDate.of(2026, 7, 27),
+                LocalDate.of(2026, 8, 27),
+                ACCOUNTING_USER_ID,
+                operationTime
+        );
+        RepaymentSchedule schedule = scheduleAggregate(fixture, accountId, scheduleId, operationTime);
+
+        transactions.executeWithoutResult(status -> {
+            assertEquals(account, loanAccounts.save(account));
+            ManualDisbursementSaveOutcome.Inserted inserted = assertInstanceOf(
+                    ManualDisbursementSaveOutcome.Inserted.class,
+                    manualDisbursements.save(disbursement)
+            );
+            assertEquals(disbursement, inserted.manualDisbursement());
+            assertEquals(schedule, repaymentSchedules.save(schedule));
+            assertEquals(account, loanAccounts.findByLoanApplicationIdForUpdate(
+                    fixture.applicationId()).orElseThrow());
+        });
+
+        assertEquals(account, loanAccounts.findById(accountId).orElseThrow());
+        assertEquals(account, loanAccounts.findByLoanApplicationId(
+                fixture.applicationId()).orElseThrow());
+        assertEquals(account, loanAccounts.findByLoanContractId(
+                fixture.contractId()).orElseThrow());
+        assertEquals(disbursement, manualDisbursements.findByRequestId(requestId).orElseThrow());
+        assertEquals(disbursement, manualDisbursements.findByLoanApplicationId(
+                fixture.applicationId()).orElseThrow());
+        assertEquals(disbursement, manualDisbursements.findByLoanContractId(
+                fixture.contractId()).orElseThrow());
+        assertEquals(disbursement, manualDisbursements.findByLoanAccountId(
+                accountId).orElseThrow());
+        assertEquals(disbursement, manualDisbursements.findByExternalTransferReference(
+                (" transfer-" + fixture.token() + " ")).orElseThrow());
+
+        RepaymentSchedule byAccount =
+                repaymentSchedules.findByLoanAccountId(accountId).orElseThrow();
+        assertEquals(schedule, byAccount);
+        assertEquals(schedule, repaymentSchedules.findByLoanApplicationId(
+                fixture.applicationId()).orElseThrow());
+        assertEquals(schedule, repaymentSchedules.findByLoanContractId(
+                fixture.contractId()).orElseThrow());
+        assertEquals(List.of(1, 2), byAccount.items().stream()
+                .map(RepaymentScheduleItem::installmentNumber).toList());
+        assertEquals(List.of(fixture.firstContractItemId(), fixture.secondContractItemId()),
+                byAccount.items().stream()
+                        .map(RepaymentScheduleItem::sourceLoanContractRepaymentItemId)
+                        .toList());
+        assertThrows(UnsupportedOperationException.class,
+                () -> byAccount.items().add(byAccount.items().getFirst()));
+
+        jdbc.update(
+                "update loan_accounts set status = 'ACTIVE', updated_at = current_timestamp where id = ?",
+                accountId
+        );
+        for (LoanAccountStatus expected : List.of(
+                LoanAccountStatus.ACTIVE,
+                LoanAccountStatus.OVERDUE,
+                LoanAccountStatus.SETTLED,
+                LoanAccountStatus.CLOSED
+        )) {
+            jdbc.update(
+                    "update loan_accounts set status = ?, updated_at = current_timestamp where id = ?",
+                    expected.name(),
+                    accountId
+            );
+            assertEquals(expected, loanAccounts.findById(accountId).orElseThrow().status());
+        }
+
+        LoanAccount changedPrincipal = new LoanAccount(
+                account.id(), account.loanApplicationId(), account.loanContractId(),
+                account.customerId(), account.accountNumber(), LoanAccountStatus.CLOSED,
+                amount("1001"), account.approvedTermMonths(), amount("99"),
+                account.feeAmount(), account.totalRepaymentAmount(), account.activatedAt()
+        );
+        BusinessStateConflictException mutation = assertThrows(
+                BusinessStateConflictException.class,
+                () -> transactions.execute(status -> loanAccounts.save(changedPrincipal))
+        );
+        assertEquals("SYSTEM_STATE_CONFLICT", mutation.getErrorCode());
+        assertEquals(amount("1000"),
+                loanAccounts.findById(accountId).orElseThrow().approvedPrincipal());
+    }
+
+    @Test
+    void duplicateTransferReferenceReturnsTypedConflictWithoutLeak(
+            CapturedOutput output
+    ) {
+        Fixture first = createReadyFixture(false);
+        Fixture second = createReadyFixture(false);
+        String repeatedReference = "PRIVATE-" + UUID.randomUUID()
+                .toString().replace("-", "").substring(0, 12).toUpperCase();
+
+        Activation firstActivation = persistActivationAggregate(first, repeatedReference);
+        ManualDisbursement attempted = manualDisbursement(
+                second, UUID.randomUUID(), repeatedReference,
+                LocalDateTime.of(2026, 7, 27, 10, 30)
+        );
+
+        ManualDisbursementSaveOutcome.Conflict outcome = assertInstanceOf(
+                ManualDisbursementSaveOutcome.Conflict.class,
+                transactions.execute(status -> manualDisbursements.save(attempted))
+        );
+        assertEquals(
+                ManualDisbursementSaveOutcome.ConflictKind.EXTERNAL_TRANSFER_REFERENCE,
+                outcome.kind()
+        );
+        assertEquals(1, count(
+                "select count(*) from manual_disbursements where request_id = ?",
+                firstActivation.requestId()
+        ));
+        assertEquals(0, count(
+                "select count(*) from manual_disbursements where loan_application_id = ?",
+                second.applicationId()
+        ));
+        assertFalse(outcome.toString().contains(repeatedReference));
+        assertFalse(attempted.toString().contains(repeatedReference));
+        assertFalse(new ManualDisbursementJpaEntity(attempted).toString()
+                .contains(repeatedReference));
+        assertFalse(output.getAll().contains(repeatedReference));
+    }
+
+    @Test
+    void manualDisbursementSequentialSaveOutcomesAreDeterministic() {
+        Fixture first = createReadyFixture(false);
+        Activation activation = persistActivationAggregate(
+                first,
+                "SEQUENTIAL-" + first.token()
+        );
+        ManualDisbursement authoritative =
+                manualDisbursements.findByRequestId(activation.requestId()).orElseThrow();
+        Fixture other = createReadyFixture(false);
+
+        ManualDisbursement sameRequest = evidenceFrom(
+                authoritative, UUID.randomUUID(), first.applicationId(), first.contractId(),
+                activation.loanAccountId(), authoritative.requestId(),
+                authoritative.externalTransferReference()
+        );
+        ManualDisbursementSaveOutcome.ExistingRequest requestOutcome = assertInstanceOf(
+                ManualDisbursementSaveOutcome.ExistingRequest.class,
+                transactions.execute(status -> manualDisbursements.save(sameRequest))
+        );
+        assertRequestEvidence(authoritative, requestOutcome.manualDisbursement());
+
+        assertManualConflict(
+                evidenceFrom(
+                        authoritative, UUID.randomUUID(), first.applicationId(),
+                        other.contractId(), UUID.randomUUID(), UUID.randomUUID(),
+                        "APPLICATION-" + other.token()
+                ),
+                ManualDisbursementSaveOutcome.ConflictKind.LOAN_APPLICATION
+        );
+        assertManualConflict(
+                evidenceFrom(
+                        authoritative, UUID.randomUUID(), other.applicationId(),
+                        first.contractId(), UUID.randomUUID(), UUID.randomUUID(),
+                        "CONTRACT-" + other.token()
+                ),
+                ManualDisbursementSaveOutcome.ConflictKind.LOAN_CONTRACT
+        );
+        assertManualConflict(
+                evidenceFrom(
+                        authoritative, UUID.randomUUID(), other.applicationId(),
+                        other.contractId(), activation.loanAccountId(), UUID.randomUUID(),
+                        "ACCOUNT-" + other.token()
+                ),
+                ManualDisbursementSaveOutcome.ConflictKind.LOAN_ACCOUNT
+        );
+        assertManualConflict(
+                evidenceFrom(
+                        authoritative, UUID.randomUUID(), other.applicationId(),
+                        other.contractId(), UUID.randomUUID(), UUID.randomUUID(),
+                        authoritative.externalTransferReference()
+                ),
+                ManualDisbursementSaveOutcome.ConflictKind.EXTERNAL_TRANSFER_REFERENCE
+        );
+        assertManualConflict(
+                evidenceFrom(
+                        authoritative, authoritative.id(), other.applicationId(),
+                        other.contractId(), UUID.randomUUID(), UUID.randomUUID(),
+                        "IDENTITY-" + other.token()
+                ),
+                ManualDisbursementSaveOutcome.ConflictKind.DISBURSEMENT_ID
+        );
+    }
+
+    @Test
+    void concurrentSameRequestReturnsAuthoritativeExistingRequest() throws Exception {
+        Fixture winnerFixture = createReadyFixture(false);
+        Fixture loserFixture = createReadyFixture(false);
+        UUID sharedRequestId = UUID.randomUUID();
+        ConcurrentManualEvidence winner = concurrentEvidence(
+                winnerFixture, sharedRequestId,
+                "CONCURRENT-REQUEST-" + winnerFixture.token()
+        );
+        ManualDisbursement loser = new ManualDisbursement(
+                UUID.randomUUID(), loserFixture.applicationId(), loserFixture.contractId(),
+                UUID.randomUUID(), sharedRequestId, 1,
+                "CONCURRENT-REQUEST-" + loserFixture.token(), amount("1000"),
+                LocalDate.of(2026, 7, 27), LocalDate.of(2026, 8, 27),
+                ACCOUNTING_USER_ID, LocalDateTime.of(2026, 7, 27, 10, 16)
+        );
+
+        ManualRaceResult result = raceManualSaves(winner, loser);
+
+        assertInstanceOf(ManualDisbursementSaveOutcome.Inserted.class, result.winner());
+        ManualDisbursementSaveOutcome.ExistingRequest existing = assertInstanceOf(
+                ManualDisbursementSaveOutcome.ExistingRequest.class, result.loser());
+        assertRequestEvidence(winner.disbursement(), existing.manualDisbursement());
+        assertEquals(1, count(
+                "select count(*) from manual_disbursements where request_id = ?",
+                sharedRequestId
+        ));
+    }
+
+    @Test
+    void concurrentDifferentRequestsForSameApplicationReturnApplicationConflict()
+            throws Exception {
+        Fixture fixture = createReadyFixture(false);
+        ConcurrentManualEvidence winner = concurrentEvidence(
+                fixture, UUID.randomUUID(),
+                "CONCURRENT-APPLICATION-" + fixture.token()
+        );
+        ManualDisbursement loser = evidenceFrom(
+                winner.disbursement(), UUID.randomUUID(), fixture.applicationId(),
+                fixture.contractId(), winner.account().id(), UUID.randomUUID(),
+                "CONCURRENT-APP-LOSER-" + fixture.token()
+        );
+
+        ManualRaceResult result = raceManualSaves(winner, loser);
+
+        assertInstanceOf(ManualDisbursementSaveOutcome.Inserted.class, result.winner());
+        ManualDisbursementSaveOutcome.Conflict conflict = assertInstanceOf(
+                ManualDisbursementSaveOutcome.Conflict.class, result.loser());
+        assertEquals(ManualDisbursementSaveOutcome.ConflictKind.LOAN_APPLICATION,
+                conflict.kind());
+        assertEquals(1, count(
+                "select count(*) from manual_disbursements where loan_application_id = ?",
+                fixture.applicationId()
+        ));
+    }
+
+    @Test
+    void concurrentSameCanonicalReferenceReturnsTransferReferenceConflictWithoutLeak()
+            throws Exception {
+        Fixture winnerFixture = createReadyFixture(false);
+        Fixture loserFixture = createReadyFixture(false);
+        String reference = "CONCURRENT-PRIVATE-"
+                + winnerFixture.token().substring(0, 8);
+        ConcurrentManualEvidence winner = concurrentEvidence(
+                winnerFixture, UUID.randomUUID(), reference);
+        ManualDisbursement loser = new ManualDisbursement(
+                UUID.randomUUID(), loserFixture.applicationId(), loserFixture.contractId(),
+                UUID.randomUUID(), UUID.randomUUID(), 1, " " + reference.toLowerCase() + " ",
+                amount("1000"), LocalDate.of(2026, 7, 27), LocalDate.of(2026, 8, 27),
+                ACCOUNTING_USER_ID, LocalDateTime.of(2026, 7, 27, 10, 16)
+        );
+
+        ManualRaceResult result = raceManualSaves(winner, loser);
+
+        assertInstanceOf(ManualDisbursementSaveOutcome.Inserted.class, result.winner());
+        ManualDisbursementSaveOutcome.Conflict conflict = assertInstanceOf(
+                ManualDisbursementSaveOutcome.Conflict.class, result.loser());
+        assertEquals(
+                ManualDisbursementSaveOutcome.ConflictKind.EXTERNAL_TRANSFER_REFERENCE,
+                conflict.kind()
+        );
+        assertFalse(conflict.toString().contains(reference));
+        assertEquals(1, count(
+                "select count(*) from manual_disbursements "
+                        + "where external_transfer_reference = ?",
+                reference
+        ));
+    }
+
+    @Test
+    void boundedConcurrencyCleanupReleasesBlockedWorkerAfterPeerFailure() throws Exception {
+        CountDownLatch blockedWorkerStarted = new CountDownLatch(1);
+        CountDownLatch releaseBlockedWorker = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<?> blockedWorker = null;
+        Future<?> failedWorker = null;
+        try {
+            blockedWorker = executor.submit(() -> {
+                blockedWorkerStarted.countDown();
+                await(releaseBlockedWorker);
+                return null;
+            });
+            await(blockedWorkerStarted);
+            failedWorker = executor.submit(() -> {
+                throw new IllegalStateException("Synthetic concurrent worker failure.");
+            });
+
+            Future<?> observedFailedWorker = failedWorker;
+            ExecutionException failure = assertThrows(
+                    ExecutionException.class,
+                    () -> observedFailedWorker.get(5, TimeUnit.SECONDS)
+            );
+            assertInstanceOf(IllegalStateException.class, failure.getCause());
+        } finally {
+            cleanupConcurrentWorkers(
+                    executor,
+                    List.of(blockedWorkerStarted, releaseBlockedWorker),
+                    blockedWorker,
+                    failedWorker
+            );
+        }
+
+        assertTrue(executor.isTerminated());
+        assertTrue(blockedWorker.isDone());
+        assertTrue(failedWorker.isDone());
+    }
+
+    @Test
+    void unresolvedZeroRowConflictIsNeverReportedAsSuccess() {
+        String indexName = "ux_test_manual_disbursement_confirmed_at";
+        LocalDateTime collisionTime = LocalDateTime.of(2040, 1, 2, 3, 4);
+        jdbc.execute(
+                "create unique index " + indexName
+                        + " on manual_disbursements(confirmed_at)"
+                        + " where confirmed_at = timestamp '2040-01-02 03:04:00'"
+        );
+        try {
+            Fixture first = createReadyFixture(false);
+            UUID accountId = UUID.randomUUID();
+            LoanAccount account = loanAccount(first, accountId, collisionTime);
+            ManualDisbursement evidence = manualDisbursement(
+                    first, accountId, "UNRESOLVED-" + first.token(), collisionTime);
+            RepaymentSchedule schedule = scheduleAggregate(
+                    first, accountId, UUID.randomUUID(), collisionTime);
+            transactions.executeWithoutResult(status -> {
+                loanAccounts.save(account);
+                assertInstanceOf(
+                        ManualDisbursementSaveOutcome.Inserted.class,
+                        manualDisbursements.save(evidence)
+                );
+                repaymentSchedules.save(schedule);
+            });
+
+            Fixture second = createReadyFixture(false);
+            ManualDisbursement attempted = manualDisbursement(
+                    second, UUID.randomUUID(), "UNRESOLVED-" + second.token(), collisionTime);
+            ManualDisbursementSaveOutcome outcome =
+                    transactions.execute(status -> manualDisbursements.save(attempted));
+
+            assertInstanceOf(ManualDisbursementSaveOutcome.UnresolvedConflict.class, outcome);
+            assertEquals(1, count(
+                    "select count(*) from manual_disbursements where confirmed_at = ?",
+                    collisionTime
+            ));
+        } finally {
+            jdbc.execute("drop index if exists " + indexName);
+        }
+    }
+
+    @Test
+    void newWriteAndLockEntriesRequireCallerOwnedTransactions() {
+        Fixture fixture = createReadyFixture(false);
+        UUID accountId = UUID.randomUUID();
+        LocalDateTime operationTime = LocalDateTime.of(2026, 7, 27, 10, 15);
+        LoanAccount account = loanAccount(fixture, accountId, operationTime);
+        ManualDisbursement disbursement = manualDisbursement(
+                fixture, accountId, "MANDATORY-" + fixture.token(), operationTime);
+        RepaymentSchedule schedule = scheduleAggregate(
+                fixture, accountId, UUID.randomUUID(), operationTime);
+
+        assertThrows(
+                IllegalTransactionStateException.class,
+                () -> loanAccounts.save(account)
+        );
+        assertThrows(
+                IllegalTransactionStateException.class,
+                () -> manualDisbursements.save(disbursement)
+        );
+        assertThrows(
+                IllegalTransactionStateException.class,
+                () -> repaymentSchedules.save(schedule)
+        );
+        assertThrows(
+                IllegalTransactionStateException.class,
+                () -> loanAccounts.findByLoanApplicationIdForUpdate(fixture.applicationId())
+        );
+        assertThrows(
+                IllegalTransactionStateException.class,
+                () -> manualDisbursements.findByLoanApplicationIdForUpdate(
+                        fixture.applicationId())
+        );
+        assertThrows(
+                IllegalTransactionStateException.class,
+                () -> salaryAdvanceVerifications.findByLoanApplicationIdForUpdate(
+                        fixture.applicationId())
+        );
+        assertThrows(
+                IllegalTransactionStateException.class,
+                () -> salaryAdvanceMovements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                        fixture.applicationId(),
+                        com.meridian.platform.loan.domain.model
+                                .SalaryAdvanceLimitMovementType.RESERVED
+                )
+        );
+
+        PolicyFixture policyFixture = createPolicyFixture();
+        assertThrows(
+                IllegalTransactionStateException.class,
+                () -> activationPolicy.activate(policyFixture.command())
+        );
+
+        assertEquals(0, count("select count(*) from loan_accounts where id = ?", accountId));
+        assertEquals(0, count(
+                "select count(*) from manual_disbursements where id = ?",
+                disbursement.id()
+        ));
+        assertEquals(0, count(
+                "select count(*) from repayment_schedules where id = ?",
+                schedule.id()
+        ));
+    }
+
+    @Test
+    void scheduleAdapterRollsBackHeaderAndItemsWhenSourceEvidenceIsInvalid() {
+        Fixture fixture = createReadyFixture(false);
+        Fixture other = createReadyFixture(false);
+        UUID accountId = UUID.randomUUID();
+        LocalDateTime operationTime = LocalDateTime.of(2026, 7, 27, 10, 15);
+        LoanAccount account = loanAccount(fixture, accountId, operationTime);
+        ManualDisbursement disbursement = manualDisbursement(
+                fixture, accountId, "TRANSFER-" + fixture.token(), operationTime);
+        RepaymentSchedule valid = scheduleAggregate(
+                fixture, accountId, UUID.randomUUID(), operationTime);
+        RepaymentSchedule invalidSource = new RepaymentSchedule(
+                valid.id(),
+                valid.loanApplicationId(),
+                valid.loanContractId(),
+                valid.loanAccountId(),
+                valid.scheduleType(),
+                valid.version(),
+                valid.approvedTermMonths(),
+                valid.approvedPrincipal(),
+                valid.totalInterest(),
+                valid.feeAmount(),
+                valid.totalRepaymentAmount(),
+                valid.firstDueDate(),
+                valid.lastDueDate(),
+                valid.generatedAt(),
+                List.of(
+                        new RepaymentScheduleItem(
+                                valid.items().getFirst().id(),
+                                other.firstContractItemId(),
+                                1,
+                                valid.items().getFirst().dueDate(),
+                                amount("500"), amount("50"), amount("0"), amount("550")
+                        ),
+                        valid.items().get(1)
+                )
+        );
+
+        assertThrows(DataAccessException.class, () -> transactions.executeWithoutResult(status -> {
+            loanAccounts.save(account);
+            manualDisbursements.save(disbursement);
+            repaymentSchedules.save(invalidSource);
+        }));
+
+        assertEquals(0, count("select count(*) from loan_accounts where id = ?", accountId));
+        assertEquals(0, count("select count(*) from repayment_schedules where id = ?", valid.id()));
+        assertEquals(0, count(
+                "select count(*) from repayment_schedule_items where repayment_schedule_id = ?",
+                valid.id()
+        ));
+    }
+
+    @ParameterizedTest
+    @EnumSource(com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus.class)
+    void salaryAdvancePolicyCommitsConversionForEveryLimitStatus(
+            com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus limitStatus
+    ) {
+        PolicyFixture fixture = createPolicyFixture();
+        jdbc.update("update salary_advance_limits set status = ? where id = ?",
+                limitStatus.name(), fixture.limitId());
+
+        LoanProductActivationPolicy.ProductActivationResult result = transactions.execute(
+                status -> activationPolicy.activate(fixture.command())
+        );
+
+        assertNotNull(result);
+        assertEquals(fixture.limitId(), result.productExposureId());
+        assertEquals(fixture.movementId(), result.movementId());
+        assertEquals(0, amount("1000").compareTo(result.convertedAmount()));
+        Map<String, Object> limit = jdbc.queryForMap(
+                "select used_amount,reserved_amount,available_amount,status "
+                        + "from salary_advance_limits where id = ?",
+                fixture.limitId()
+        );
+        assertEquals(0, amount("1000").compareTo((BigDecimal) limit.get("used_amount")));
+        assertEquals(0, amount("0").compareTo((BigDecimal) limit.get("reserved_amount")));
+        assertEquals(0, amount("1000").compareTo((BigDecimal) limit.get("available_amount")));
+        assertEquals(limitStatus.name(), limit.get("status"));
+        Map<String, Object> movement = jdbc.queryForMap(
+                "select salary_advance_limit_id,loan_application_id,loan_account_id,"
+                        + "movement_type,amount from salary_advance_limit_movements where id = ?",
+                fixture.movementId()
+        );
+        assertEquals(fixture.limitId(), movement.get("salary_advance_limit_id"));
+        assertEquals(fixture.applicationId(), movement.get("loan_application_id"));
+        assertEquals(fixture.accountId(), movement.get("loan_account_id"));
+        assertEquals("DISBURSED_TO_USED", movement.get("movement_type"));
+        assertEquals(0, amount("1000").compareTo((BigDecimal) movement.get("amount")));
+    }
+
+    @Test
+    void salaryAdvancePolicyRejectsWrongApplicationAndLoanAccountReferences() {
+        PolicyFixture fixture = createPolicyFixture();
+        LoanAccount wrongApplication = policyAccount(
+                fixture.account(),
+                UUID.randomUUID(),
+                fixture.contract().id(),
+                fixture.account().customerId()
+        );
+        BusinessStateConflictException applicationFailure = assertThrows(
+                BusinessStateConflictException.class,
+                () -> transactions.execute(status -> activationPolicy.activate(
+                        fixture.withAccount(wrongApplication).command()
+                ))
+        );
+        assertEquals("SYSTEM_STATE_CONFLICT", applicationFailure.getErrorCode());
+
+        LoanAccount wrongContract = policyAccount(
+                fixture.account(),
+                fixture.applicationId(),
+                UUID.randomUUID(),
+                fixture.account().customerId()
+        );
+        BusinessStateConflictException accountFailure = assertThrows(
+                BusinessStateConflictException.class,
+                () -> transactions.execute(status -> activationPolicy.activate(
+                        fixture.withAccount(wrongContract).command()
+                ))
+        );
+        assertEquals("SYSTEM_STATE_CONFLICT", accountFailure.getErrorCode());
+    }
+
+    @Test
+    void salaryAdvancePolicyRejectsWrongReservationApplicationAndLimitReferences() {
+        PolicyFixture wrongApplication = createPolicyFixture();
+        Fixture otherApplication = createReadyFixture(false);
+        jdbc.update(
+                "update salary_advance_limit_movements set loan_application_id = ? "
+                        + "where salary_advance_limit_id = ? and movement_type = 'RESERVED'",
+                otherApplication.applicationId(),
+                wrongApplication.limitId()
+        );
+        BusinessStateConflictException applicationFailure = assertThrows(
+                BusinessStateConflictException.class,
+                () -> transactions.execute(status -> activationPolicy.activate(
+                        wrongApplication.command()
+                ))
+        );
+        assertEquals("SALARY_ADVANCE_RESERVATION_INVALID",
+                applicationFailure.getErrorCode());
+
+        PolicyFixture wrongLimit = createPolicyFixture();
+        PolicyFixture anotherLimit = createPolicyFixture();
+        jdbc.update(
+                "update salary_advance_limit_movements set salary_advance_limit_id = ? "
+                        + "where salary_advance_limit_id = ? and movement_type = 'RESERVED'",
+                anotherLimit.limitId(),
+                wrongLimit.limitId()
+        );
+        BusinessStateConflictException limitFailure = assertThrows(
+                BusinessStateConflictException.class,
+                () -> transactions.execute(status -> activationPolicy.activate(
+                        wrongLimit.command()
+                ))
+        );
+        assertEquals("SALARY_ADVANCE_RESERVATION_INVALID", limitFailure.getErrorCode());
+    }
+
+    @Test
+    void salaryAdvancePolicyRejectsReservationAmountAndAggregateMismatch() {
+        PolicyFixture wrongAmount = createPolicyFixture();
+        jdbc.update(
+                "update salary_advance_limit_movements set amount = 999 "
+                        + "where salary_advance_limit_id = ? and movement_type = 'RESERVED'",
+                wrongAmount.limitId()
+        );
+        jdbc.update(
+                "update salary_advance_limits set reserved_amount = 999, "
+                        + "available_amount = 1001 where id = ?",
+                wrongAmount.limitId()
+        );
+        BusinessStateConflictException amountFailure = assertThrows(
+                BusinessStateConflictException.class,
+                () -> transactions.execute(status -> activationPolicy.activate(
+                        wrongAmount.command()
+                ))
+        );
+        assertEquals("SALARY_ADVANCE_RESERVATION_INVALID", amountFailure.getErrorCode());
+
+        PolicyFixture aggregateMismatch = createPolicyFixture();
+        jdbc.update(
+                "update salary_advance_limits set reserved_amount = 999, "
+                        + "available_amount = 1001 where id = ?",
+                aggregateMismatch.limitId()
+        );
+        BusinessStateConflictException aggregateFailure = assertThrows(
+                BusinessStateConflictException.class,
+                () -> transactions.execute(status -> activationPolicy.activate(
+                        aggregateMismatch.command()
+                ))
+        );
+        assertEquals("SALARY_ADVANCE_RESERVATION_INVALID",
+                aggregateFailure.getErrorCode());
+    }
+
+    @Test
+    void salaryAdvancePolicyRejectsDuplicateAndReleasedConversionEvidence() {
+        PolicyFixture converted = createPolicyFixture();
+        transactions.execute(status -> activationPolicy.activate(converted.command()));
+
+        BusinessStateConflictException duplicate = assertThrows(
+                BusinessStateConflictException.class,
+                () -> transactions.execute(status -> activationPolicy.activate(
+                        converted.withMovementId(UUID.randomUUID()).command()
+                ))
+        );
+        assertEquals("SYSTEM_STATE_CONFLICT", duplicate.getErrorCode());
+
+        PolicyFixture released = createPolicyFixture();
+        transactions.executeWithoutResult(status -> {
+            jdbc.update(
+                    "update salary_advance_limits set reserved_amount = 0, "
+                            + "available_amount = 2000 where id = ?",
+                    released.limitId()
+            );
+            jdbc.update(
+                    "insert into salary_advance_limit_movements "
+                            + "(id,salary_advance_limit_id,loan_application_id,movement_type,"
+                            + "amount,occurred_at) values (?,?,?,'RESERVATION_RELEASED',"
+                            + "1000,current_timestamp)",
+                    UUID.randomUUID(),
+                    released.limitId(),
+                    released.applicationId()
+            );
+        });
+        BusinessStateConflictException releaseFailure = assertThrows(
+                BusinessStateConflictException.class,
+                () -> transactions.execute(status -> activationPolicy.activate(
+                        released.command()
+                ))
+        );
+        assertEquals("SALARY_ADVANCE_RESERVATION_RELEASED", releaseFailure.getErrorCode());
+    }
+
+    @Test
+    void salaryAdvancePolicyParticipatesInCallerRollback() {
+        PolicyFixture fixture = createPolicyFixture();
+
+        transactions.executeWithoutResult(status -> {
+            activationPolicy.activate(fixture.command());
+            status.setRollbackOnly();
+        });
+
+        Map<String, Object> limit = jdbc.queryForMap(
+                "select used_amount,reserved_amount,available_amount "
+                        + "from salary_advance_limits where id = ?",
+                fixture.limitId()
+        );
+        assertEquals(0, amount("0").compareTo((BigDecimal) limit.get("used_amount")));
+        assertEquals(0, amount("1000").compareTo((BigDecimal) limit.get("reserved_amount")));
+        assertEquals(0, amount("1000").compareTo((BigDecimal) limit.get("available_amount")));
+        assertEquals(0, count(
+                "select count(*) from salary_advance_limit_movements where id = ?",
+                fixture.movementId()
+        ));
+    }
+
+    @Test
+    void salaryAdvancePolicyRollsBackAfterRealMovementPersistenceFailure() {
+        PolicyFixture fixture = createPolicyFixture();
+        UUID reservedMovementId = jdbc.queryForObject(
+                "select id from salary_advance_limit_movements "
+                        + "where salary_advance_limit_id = ? and movement_type = 'RESERVED'",
+                UUID.class,
+                fixture.limitId()
+        );
+
+        assertThrows(
+                DataAccessException.class,
+                () -> transactions.execute(status -> activationPolicy.activate(
+                        fixture.withMovementId(reservedMovementId).command()
+                ))
+        );
+
+        Map<String, Object> limit = jdbc.queryForMap(
+                "select used_amount,reserved_amount,available_amount "
+                        + "from salary_advance_limits where id = ?",
+                fixture.limitId()
+        );
+        assertEquals(amount("0"), limit.get("used_amount"));
+        assertEquals(amount("1000"), limit.get("reserved_amount"));
+        assertEquals(amount("1000"), limit.get("available_amount"));
+        assertEquals(0, count(
+                "select count(*) from salary_advance_limit_movements "
+                        + "where salary_advance_limit_id = ? and movement_type = 'DISBURSED_TO_USED'",
+                fixture.limitId()
+        ));
     }
 
     @Test
@@ -1258,6 +2054,373 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
         );
     }
 
+    private void assertRequestEvidence(
+            ManualDisbursement expected,
+            ManualDisbursement actual
+    ) {
+        assertEquals(expected.requestId(), actual.requestId());
+        assertEquals(expected.loanApplicationId(), actual.loanApplicationId());
+        assertEquals(expected.loanContractId(), actual.loanContractId());
+        assertEquals(expected.loanAccountId(), actual.loanAccountId());
+        assertEquals(expected.expectedContractVersion(), actual.expectedContractVersion());
+        assertTrue(
+                expected.externalTransferReference().equals(actual.externalTransferReference()),
+                "Canonical external transfer reference did not match."
+        );
+        assertEquals(expected.disbursedAmount(), actual.disbursedAmount());
+        assertEquals(expected.valueDate(), actual.valueDate());
+        assertEquals(expected.firstRepaymentDate(), actual.firstRepaymentDate());
+        assertEquals(expected.confirmedByUserId(), actual.confirmedByUserId());
+    }
+
+    private void assertManualConflict(
+            ManualDisbursement attempted,
+            ManualDisbursementSaveOutcome.ConflictKind expected
+    ) {
+        ManualDisbursementSaveOutcome.Conflict outcome = assertInstanceOf(
+                ManualDisbursementSaveOutcome.Conflict.class,
+                transactions.execute(status -> manualDisbursements.save(attempted))
+        );
+        assertEquals(expected, outcome.kind());
+    }
+
+    private static ManualDisbursement evidenceFrom(
+            ManualDisbursement source,
+            UUID id,
+            UUID applicationId,
+            UUID contractId,
+            UUID accountId,
+            UUID requestId,
+            String reference
+    ) {
+        return new ManualDisbursement(
+                id, applicationId, contractId, accountId, requestId,
+                source.expectedContractVersion(), reference, source.disbursedAmount(),
+                source.valueDate(), source.firstRepaymentDate(), source.confirmedByUserId(),
+                source.confirmedAt()
+        );
+    }
+
+    private ConcurrentManualEvidence concurrentEvidence(
+            Fixture fixture,
+            UUID requestId,
+            String reference
+    ) {
+        UUID accountId = UUID.randomUUID();
+        LocalDateTime operationTime = LocalDateTime.of(2026, 7, 27, 10, 15);
+        return new ConcurrentManualEvidence(
+                loanAccount(fixture, accountId, operationTime),
+                new ManualDisbursement(
+                        UUID.randomUUID(), fixture.applicationId(), fixture.contractId(),
+                        accountId, requestId, 1, reference, amount("1000"),
+                        LocalDate.of(2026, 7, 27), LocalDate.of(2026, 8, 27),
+                        ACCOUNTING_USER_ID, operationTime
+                ),
+                scheduleAggregate(fixture, accountId, UUID.randomUUID(), operationTime)
+        );
+    }
+
+    private ManualRaceResult raceManualSaves(
+            ConcurrentManualEvidence winnerEvidence,
+            ManualDisbursement loserEvidence
+    ) throws Exception {
+        CountDownLatch winnerInserted = new CountDownLatch(1);
+        CountDownLatch releaseWinner = new CountDownLatch(1);
+        CountDownLatch loserStarted = new CountDownLatch(1);
+        AtomicInteger loserBackendPid = new AtomicInteger();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<ManualDisbursementSaveOutcome> winner = null;
+        Future<ManualDisbursementSaveOutcome> loser = null;
+        try {
+            winner = executor.submit(() ->
+                    transactions.execute(status -> {
+                        loanAccounts.save(winnerEvidence.account());
+                        ManualDisbursementSaveOutcome outcome =
+                                manualDisbursements.save(winnerEvidence.disbursement());
+                        winnerInserted.countDown();
+                        await(releaseWinner);
+                        repaymentSchedules.save(winnerEvidence.schedule());
+                        return outcome;
+                    })
+            );
+            await(winnerInserted);
+            loser = executor.submit(() ->
+                    transactions.execute(status -> {
+                        loserBackendPid.set(jdbc.queryForObject(
+                                "select pg_backend_pid()",
+                                Integer.class
+                        ));
+                        loserStarted.countDown();
+                        return manualDisbursements.save(loserEvidence);
+                    })
+            );
+            await(loserStarted);
+            awaitDatabaseLock(loserBackendPid.get());
+            releaseWinner.countDown();
+
+            return new ManualRaceResult(
+                    winner.get(10, TimeUnit.SECONDS),
+                    loser.get(10, TimeUnit.SECONDS)
+            );
+        } finally {
+            cleanupConcurrentWorkers(
+                    executor,
+                    List.of(winnerInserted, releaseWinner, loserStarted),
+                    winner,
+                    loser
+            );
+        }
+    }
+
+    private static void cleanupConcurrentWorkers(
+            ExecutorService executor,
+            List<CountDownLatch> releaseLatches,
+            Future<?>... futures
+    ) {
+        releaseLatches.forEach(CountDownLatch::countDown);
+        for (Future<?> future : futures) {
+            if (future != null && !future.isDone()) {
+                future.cancel(true);
+            }
+        }
+        executor.shutdownNow();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        boolean terminated = executor.isTerminated();
+        InterruptedException interruption = null;
+        while (!terminated) {
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) {
+                break;
+            }
+            try {
+                terminated = executor.awaitTermination(remaining, TimeUnit.NANOSECONDS);
+            } catch (InterruptedException exception) {
+                interruption = exception;
+                executor.shutdownNow();
+            }
+        }
+        if (interruption != null) {
+            Thread.currentThread().interrupt();
+        }
+        if (!terminated) {
+            throw new AssertionError(
+                    "Concurrent test workers did not terminate within bounded cleanup.",
+                    interruption
+            );
+        }
+        if (interruption != null) {
+            throw new AssertionError(
+                    "Interrupted during bounded concurrent test cleanup.",
+                    interruption
+            );
+        }
+    }
+
+    private void awaitDatabaseLock(int backendPid) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            Integer waiting = jdbc.queryForObject(
+                    "select count(*) from pg_stat_activity "
+                            + "where pid = ? and wait_event_type = 'Lock'",
+                    Integer.class,
+                    backendPid
+            );
+            if (waiting != null && waiting == 1) {
+                return;
+            }
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("Interrupted while waiting for PostgreSQL lock.", exception);
+            }
+        }
+        throw new AssertionError("Concurrent disbursement insert did not reach a database lock.");
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                throw new AssertionError("Timed out waiting for concurrent test coordination.");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted during concurrent test coordination.", exception);
+        }
+    }
+
+    private static LoanAccount policyAccount(
+            LoanAccount source,
+            UUID applicationId,
+            UUID contractId,
+            UUID customerId
+    ) {
+        return new LoanAccount(
+                source.id(), applicationId, contractId, customerId, source.accountNumber(),
+                source.status(), source.approvedPrincipal(), source.approvedTermMonths(),
+                source.totalInterest(), source.feeAmount(), source.totalRepaymentAmount(),
+                source.activatedAt()
+        );
+    }
+
+    private Activation persistActivationAggregate(Fixture fixture, String transferReference) {
+        UUID accountId = UUID.randomUUID();
+        UUID scheduleId = UUID.randomUUID();
+        LocalDateTime operationTime = LocalDateTime.of(2026, 7, 27, 10, 15);
+        LoanAccount account = loanAccount(fixture, accountId, operationTime);
+        ManualDisbursement disbursement = manualDisbursement(
+                fixture, accountId, transferReference, operationTime);
+        RepaymentSchedule schedule = scheduleAggregate(
+                fixture, accountId, scheduleId, operationTime);
+
+        transactions.executeWithoutResult(status -> {
+            loanAccounts.save(account);
+            manualDisbursements.save(disbursement);
+            repaymentSchedules.save(schedule);
+        });
+        return new Activation(accountId, scheduleId, disbursement.requestId());
+    }
+
+    private LoanAccount loanAccount(
+            Fixture fixture,
+            UUID accountId,
+            LocalDateTime operationTime
+    ) {
+        return new LoanAccount(
+                accountId,
+                fixture.applicationId(),
+                fixture.contractId(),
+                fixture.customerId(),
+                LoanAccount.accountNumberFor(accountId),
+                LoanAccountStatus.ACTIVE,
+                amount("1000"),
+                2,
+                amount("100"),
+                amount("0"),
+                amount("1100"),
+                operationTime
+        );
+    }
+
+    private ManualDisbursement manualDisbursement(
+            Fixture fixture,
+            UUID accountId,
+            String transferReference,
+            LocalDateTime operationTime
+    ) {
+        return new ManualDisbursement(
+                UUID.randomUUID(),
+                fixture.applicationId(),
+                fixture.contractId(),
+                accountId,
+                UUID.randomUUID(),
+                1,
+                transferReference,
+                amount("1000"),
+                LocalDate.of(2026, 7, 27),
+                LocalDate.of(2026, 8, 27),
+                ACCOUNTING_USER_ID,
+                operationTime
+        );
+    }
+
+    private RepaymentSchedule scheduleAggregate(
+            Fixture fixture,
+            UUID accountId,
+            UUID scheduleId,
+            LocalDateTime operationTime
+    ) {
+        return new RepaymentSchedule(
+                scheduleId,
+                fixture.applicationId(),
+                fixture.contractId(),
+                accountId,
+                RepaymentScheduleType.FINAL,
+                1,
+                2,
+                amount("1000"),
+                amount("100"),
+                amount("0"),
+                amount("1100"),
+                LocalDate.of(2026, 8, 27),
+                LocalDate.of(2026, 9, 27),
+                operationTime,
+                List.of(
+                        new RepaymentScheduleItem(
+                                UUID.randomUUID(),
+                                fixture.firstContractItemId(),
+                                1,
+                                LocalDate.of(2026, 8, 27),
+                                amount("500"),
+                                amount("50"),
+                                amount("0"),
+                                amount("550")
+                        ),
+                        new RepaymentScheduleItem(
+                                UUID.randomUUID(),
+                                fixture.secondContractItemId(),
+                                2,
+                                LocalDate.of(2026, 9, 27),
+                                amount("500"),
+                                amount("50"),
+                                amount("0"),
+                                amount("550")
+                        )
+                )
+        );
+    }
+
+    private PolicyFixture createPolicyFixture() {
+        Fixture fixture = createReadyFixture(true);
+        Activation activation = insertCompleteActivation(
+                fixture,
+                "POLICY-" + fixture.token(),
+                false
+        );
+        transactions.executeWithoutResult(status -> {
+            UUID linkId = jdbc.queryForObject(
+                    "select customer_partner_employee_link_id "
+                            + "from salary_advance_limits where id = ?",
+                    UUID.class,
+                    fixture.limitId()
+            );
+            jdbc.update(
+                    "insert into salary_advance_verifications "
+                            + "(id,loan_application_id,verification_sequence,customer_id,"
+                            + "customer_partner_employee_link_id,salary_advance_limit_id,"
+                            + "partner_company_id,partner_employee_id,source_import_batch_id,"
+                            + "employee_verification_outcome,product_verification_result,"
+                            + "total_limit_snapshot,used_amount_snapshot,reserved_amount_snapshot,"
+                            + "available_limit_snapshot,verified_at) "
+                            + "values (?,?,1,?,?,?,?,?,?,'MATCHED_ACTIVE','VERIFIED',"
+                            + "2000,0,1000,1000,current_timestamp)",
+                    UUID.randomUUID(),
+                    fixture.applicationId(),
+                    fixture.customerId(),
+                    linkId,
+                    fixture.limitId(),
+                    UUID.randomUUID(),
+                    UUID.randomUUID(),
+                    UUID.randomUUID()
+            );
+        });
+
+        LoanApplication application = loanApplications.findById(
+                fixture.applicationId()).orElseThrow();
+        LoanContract contract = loanContracts.findCurrentByApplicationId(
+                fixture.applicationId()).orElseThrow();
+        LoanAccount account = loanAccounts.findById(activation.loanAccountId()).orElseThrow();
+        return new PolicyFixture(
+                fixture.applicationId(),
+                fixture.limitId(),
+                activation.loanAccountId(),
+                UUID.randomUUID(),
+                application,
+                contract,
+                account
+        );
+    }
+
     private Fixture createReadyFixture(boolean withSuspendedReservation) {
         return transactions.execute(status -> {
             UUID customerId = UUID.randomUUID();
@@ -1821,5 +2984,52 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
             UUID scheduleId,
             UUID requestId
     ) {
+    }
+
+    private record ConcurrentManualEvidence(
+            LoanAccount account,
+            ManualDisbursement disbursement,
+            RepaymentSchedule schedule
+    ) {
+    }
+
+    private record ManualRaceResult(
+            ManualDisbursementSaveOutcome winner,
+            ManualDisbursementSaveOutcome loser
+    ) {
+    }
+
+    private record PolicyFixture(
+            UUID applicationId,
+            UUID limitId,
+            UUID accountId,
+            UUID movementId,
+            LoanApplication application,
+            LoanContract contract,
+            LoanAccount account
+    ) {
+        LoanProductActivationPolicy.ProductActivationCommand command() {
+            return new LoanProductActivationPolicy.ProductActivationCommand(
+                    application,
+                    contract,
+                    account,
+                    movementId,
+                    LocalDateTime.of(2026, 7, 27, 11, 0)
+            );
+        }
+
+        PolicyFixture withMovementId(UUID replacementMovementId) {
+            return new PolicyFixture(
+                    applicationId, limitId, accountId, replacementMovementId,
+                    application, contract, account
+            );
+        }
+
+        PolicyFixture withAccount(LoanAccount replacementAccount) {
+            return new PolicyFixture(
+                    applicationId, limitId, replacementAccount.id(), movementId,
+                    application, contract, replacementAccount
+            );
+        }
     }
 }

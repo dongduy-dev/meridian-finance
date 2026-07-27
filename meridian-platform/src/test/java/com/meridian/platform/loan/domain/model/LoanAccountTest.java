@@ -44,7 +44,7 @@ class LoanAccountTest {
     }
 
     @Test
-    void rejectsInvalidIdentityStatusAndFinancialEvidence() {
+    void rejectsInvalidIdentityAndFinancialEvidenceWhileRehydratingDocumentedStatuses() {
         LoanAccount valid = LoanAccount.activate(
                 UUID.fromString("12345678-1234-1234-1234-1234567890ab"),
                 LoanContractTestData.ready(),
@@ -61,7 +61,7 @@ class LoanAccountTest {
                 money(0),
                 money(1_100)
         ));
-        assertThrows(BusinessRuleViolationException.class, () -> copy(
+        LoanAccount overdue = copy(
                 valid,
                 valid.accountNumber(),
                 LoanAccountStatus.OVERDUE,
@@ -70,7 +70,8 @@ class LoanAccountTest {
                 money(100),
                 money(0),
                 money(1_100)
-        ));
+        );
+        assertEquals(LoanAccountStatus.OVERDUE, overdue.status());
         assertThrows(BusinessRuleViolationException.class, () -> copy(
                 valid,
                 valid.accountNumber(),

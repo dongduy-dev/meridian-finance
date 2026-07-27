@@ -45,9 +45,6 @@ public record LoanAccount(
         )).matches() || !accountNumber.equals(accountNumberFor(id))) {
             throw invalid("Loan Account number is invalid.");
         }
-        if (status != LoanAccountStatus.ACTIVE) {
-            throw invalid("A new Loan Account must be active.");
-        }
         requirePositiveWholeVnd(approvedPrincipal, "approvedPrincipal");
         if (approvedTermMonths <= 0) {
             throw invalid("approvedTermMonths must be positive.");

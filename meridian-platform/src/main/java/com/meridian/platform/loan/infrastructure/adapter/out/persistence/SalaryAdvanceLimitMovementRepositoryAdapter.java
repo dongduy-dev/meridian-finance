@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class SalaryAdvanceLimitMovementRepositoryAdapter implements SalaryAdvanceLimitMovementRepository {
@@ -51,6 +53,7 @@ public class SalaryAdvanceLimitMovementRepositoryAdapter implements SalaryAdvanc
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public List<SalaryAdvanceLimitMovement> findByLoanApplicationIdAndMovementTypeForUpdate(
             UUID loanApplicationId,
             SalaryAdvanceLimitMovementType movementType
@@ -66,6 +69,12 @@ public class SalaryAdvanceLimitMovementRepositoryAdapter implements SalaryAdvanc
     public BigDecimal calculateOutstandingReservedAmount(UUID salaryAdvanceLimitId) {
         return jpaSalaryAdvanceLimitMovementRepository.calculateOutstandingReservedAmount(salaryAdvanceLimitId);
     }
+
+    @Override
+    public BigDecimal calculateUsedAmount(UUID salaryAdvanceLimitId) {
+        return jpaSalaryAdvanceLimitMovementRepository.calculateUsedAmount(salaryAdvanceLimitId);
+    }
+
     private SalaryAdvanceLimitMovement toDomain(SalaryAdvanceLimitMovementJpaEntity entity) {
         return new SalaryAdvanceLimitMovement(
                 entity.getId(),

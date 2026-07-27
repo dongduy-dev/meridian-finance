@@ -10,4 +10,6 @@ public interface SalaryAdvanceVerificationRepository {
     SalaryAdvanceVerification save(SalaryAdvanceVerification salaryAdvanceVerification);
 
     Optional<SalaryAdvanceVerification> findByLoanApplicationId(UUID loanApplicationId);
+
+    Optional<SalaryAdvanceVerification> findByLoanApplicationIdForUpdate(UUID loanApplicationId);
 }

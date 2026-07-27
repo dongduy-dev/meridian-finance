@@ -33,4 +33,8 @@ public interface SalaryAdvanceLimitMovementRepository {
     default BigDecimal calculateOutstandingReservedAmount(UUID salaryAdvanceLimitId) {
         throw new UnsupportedOperationException("Outstanding reservation calculation is not implemented.");
     }
+
+    default BigDecimal calculateUsedAmount(UUID salaryAdvanceLimitId) {
+        throw new UnsupportedOperationException("Used exposure calculation is not implemented.");
+    }
 }
