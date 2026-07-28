@@ -32,7 +32,14 @@ public enum BusinessAuditPayloadKey {
     RESUBMISSION_TARGET_STATUS("resubmissionTargetStatus", ValueType.CODE),
     LOAN_CONTRACT_ID("loanContractId", ValueType.UUID),
     LOAN_CONTRACT_STATUS("loanContractStatus", ValueType.CODE),
-    CONTRACT_SUPERSESSION_REASON("contractSupersessionReason", ValueType.CODE);
+    CONTRACT_SUPERSESSION_REASON("contractSupersessionReason", ValueType.CODE),
+    LOAN_ACCOUNT_ID("loanAccountId", ValueType.UUID),
+    MANUAL_DISBURSEMENT_ID("manualDisbursementId", ValueType.UUID),
+    REPAYMENT_SCHEDULE_ID("repaymentScheduleId", ValueType.UUID),
+    PRODUCT_CODE("productCode", ValueType.CODE),
+    PREVIOUS_APPLICATION_STATUS("previousApplicationStatus", ValueType.CODE),
+    FINAL_APPLICATION_STATUS("finalApplicationStatus", ValueType.CODE),
+    LOAN_ACCOUNT_STATUS("loanAccountStatus", ValueType.CODE);
 
     private final String jsonName;
     private final ValueType valueType;

@@ -99,6 +99,32 @@ public record SalaryAdvanceLimit(
         );
     }
 
+    public SalaryAdvanceLimit convertReservedToUsed(BigDecimal amount) {
+        requirePositiveWholeVnd(amount, "amount");
+        requireReconciled();
+
+        if (reservedAmount.compareTo(amount) < 0) {
+            throw new BusinessRuleViolationException(
+                    "SALARY_ADVANCE_RESERVATION_INVALID",
+                    "Cannot convert more than the currently reserved Salary Advance amount."
+            );
+        }
+
+        SalaryAdvanceLimit converted = new SalaryAdvanceLimit(
+                id,
+                customerId,
+                customerPartnerEmployeeLinkId,
+                totalLimit,
+                usedAmount.add(amount),
+                reservedAmount.subtract(amount),
+                availableAmount,
+                status,
+                lastRefreshedAt
+        );
+        converted.requireReconciled();
+        return converted;
+    }
+
     public SalaryAdvanceLimit refreshTotalLimit(BigDecimal effectiveTotalLimit, LocalDateTime lastRefreshedAt) {
         requireNonNegative(effectiveTotalLimit, "effectiveTotalLimit");
         Objects.requireNonNull(lastRefreshedAt, "lastRefreshedAt must not be null");
@@ -134,12 +160,31 @@ public record SalaryAdvanceLimit(
         }
     }
 
+    private static void requirePositiveWholeVnd(BigDecimal value, String fieldName) {
+        requirePositive(value, fieldName);
+        if (value.remainder(BigDecimal.ONE).signum() != 0) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_PRODUCT_AMOUNT",
+                    fieldName + " must be a whole VND amount."
+            );
+        }
+    }
+
     private static void requireNonNegative(BigDecimal value, String fieldName) {
         Objects.requireNonNull(value, fieldName + " must not be null");
         if (value.compareTo(ZERO) < 0) {
             throw new BusinessRuleViolationException(
                     "PRODUCT_POLICY_INVALID",
                     fieldName + " must not be negative."
+            );
+        }
+    }
+
+    private void requireReconciled() {
+        if (totalLimit.compareTo(usedAmount.add(reservedAmount).add(availableAmount)) != 0) {
+            throw new BusinessRuleViolationException(
+                    "SALARY_ADVANCE_LIMIT_STATE_INVALID",
+                    "Salary Advance limit amounts do not reconcile."
             );
         }
     }

@@ -314,6 +314,11 @@ class ApprovedOfferExpiryServiceTest {
                     NOW.minusDays(2)
             ));
         }
+
+        @Override
+        public Optional<SalaryAdvanceVerification> findByLoanApplicationIdForUpdate(UUID loanApplicationId) {
+            return findByLoanApplicationId(loanApplicationId);
+        }
     }
 
     private static class FakeSalaryAdvanceLimitRepository implements SalaryAdvanceLimitRepository {

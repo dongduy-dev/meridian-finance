@@ -423,6 +423,11 @@ class ApplyApprovalDecisionServiceTest {
                     LocalDateTime.now()
             ));
         }
+
+        @Override
+        public Optional<SalaryAdvanceVerification> findByLoanApplicationIdForUpdate(UUID loanApplicationId) {
+            return findByLoanApplicationId(loanApplicationId);
+        }
     }
 
     private class FakeSalaryAdvanceLimitRepository implements SalaryAdvanceLimitRepository {

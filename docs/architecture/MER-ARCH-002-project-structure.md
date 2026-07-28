@@ -440,3 +440,13 @@ Salary Advance remains inside the generic lending architecture. `partner/` owns 
 2. **Application Layer Tests (15%)**: Tests use cases and transaction boundaries using `@ExtendWith(SpringExtension.class)` and `@MockitoBean` to mock application output ports.
 3. **Data/Adapter Integration Tests (10%)**: Tests `JpaRepository` implementations and Flyway migrations against a real PostgreSQL instance using Testcontainers (`@DataJpaTest` + `@AutoConfigureTestDatabase(replace = Replace.NONE)`).
 4. **Module & E2E Tests (5%)**: Tests cross-module interactions using Spring Modulith's `@ApplicationModuleTest` and full REST API testing using `MockMvc` or `TestRestTemplate`.
+
+## Current Loan Activation Slice
+
+The executable Loan module now includes:
+
+- domain aggregates `LoanAccount`, `ManualDisbursement`, `RepaymentSchedule`, and final schedule items;
+- application input ports for confirmation, destination reveal, and LoanAccount query;
+- one transactional confirmation service with a product activation policy resolver and the Salary Advance policy;
+- output ports and JPA adapters for account, disbursement, and schedule persistence; and
+- a secured Loan-owned controller with safe DTO mapping, owner-aware account queries, and narrowly scoped destination reveal.

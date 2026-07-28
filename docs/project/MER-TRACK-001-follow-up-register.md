@@ -216,12 +216,12 @@ Type: Deferred feature
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocks next major feature: No
 
 Problem:
-Application creation, review/recommendation, approval, accepted offers, document/correction readiness, and immutable operational contract readiness now exist. Manual disbursement confirmation and LoanAccount activation remain deferred.
+Application creation, review/recommendation, approval, accepted offers, document/correction readiness, immutable operational contract readiness, and Salary Advance manual-disbursement activation now exist. Confirmation atomically creates the LoanAccount/final schedule, converts reserved exposure to used exposure, transitions to `DISBURSED`, and records audit/history. The secured confirmation, pre-confirmation destination reveal, and owned/staff account query APIs are complete.
 
 Recommendation:
 Continue implementation in vertical slices:
@@ -231,7 +231,7 @@ Continue implementation in vertical slices:
 3. Salary Advance approved offer and customer acceptance. Done.
 4. Document/correction readiness through `MER-FU-012` and `MER-FU-031`. Done in V22-V24.
 5. Contract readiness and `CONTRACT_PENDING → DISBURSEMENT_PENDING`. Done in V25-V26.
-6. Manual disbursement confirmation and LoanAccount activation. Deferred.
+6. Manual disbursement confirmation and LoanAccount activation. Done in V28-V31.
 
 ### MER-FU-011 - Implement repayment tracking
 
@@ -246,10 +246,10 @@ Status: Open
 Blocks next major feature: No
 
 Problem:
-Repayment schedule and repayment tracking are not implemented yet.
+The authoritative final repayment schedule is generated at LoanAccount activation. Payment posting/allocation, paid/outstanding tracking, overdue processing, used-exposure release, settlement, and closure are not implemented.
 
 Recommendation:
-Implement after loan account activation.
+Implement repayment servicing against the immutable final schedule without mixing scheduled obligations with payment transactions or allocations.
 
 ### MER-FU-012 - Implement document checklist and manual document review foundation
 
@@ -758,8 +758,7 @@ snapshots, validation, administrative authorization, and migration/backfill rule
 
 ## Recommended Next Roadmap
 
-1. Review and merge the Document Checklist + Correction/Revision Readiness checkpoint.
-2. Review and merge contract readiness and immutable disbursement preparation.
-3. Implement manual disbursement and LoanAccount activation.
-4. Implement repayment, settlement, and closure.
-5. Complete production document hardening before deployment.
+1. Audit, commit, and merge the Manual Disbursement + LoanAccount Activation checkpoint.
+2. Implement repayment posting/allocation, overdue servicing, settlement, and closure.
+3. Add complete UCL and Collateral activation policies only when their product rules are approved.
+4. Complete production document hardening before deployment.

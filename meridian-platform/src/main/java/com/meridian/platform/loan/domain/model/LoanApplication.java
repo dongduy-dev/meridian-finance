@@ -256,6 +256,19 @@ public record LoanApplication(
         );
     }
 
+    public LoanApplicationTransitionResult confirmManualDisbursement() {
+        if (status != LoanApplicationStatus.DISBURSEMENT_PENDING) {
+            throw new BusinessStateConflictException(
+                    "MANUAL_DISBURSEMENT_CONFIRMATION_NOT_ALLOWED",
+                    "Only a disbursement-pending loan application may be manually disbursed."
+            );
+        }
+        return transitionTo(
+                LoanApplicationStatus.DISBURSED,
+                LoanApplicationTransitionAction.CONFIRM_MANUAL_DISBURSEMENT
+        );
+    }
+
     private LoanApplicationTransitionResult transitionTo(
             LoanApplicationStatus nextStatus,
             LoanApplicationTransitionAction action

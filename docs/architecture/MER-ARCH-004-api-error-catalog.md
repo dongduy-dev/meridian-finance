@@ -125,13 +125,25 @@ This document standardizes the API error codes across all bounded contexts in th
 | 409 | `CUSTOMER_INACTIVE` | Customer is inactive | Restore the Customer to an eligible active state before continuing |
 | 409 | `CAPTURED_ACCOUNT_MISSING` | Captured destination no longer exists | Regenerate from the current primary active destination when permitted |
 | 409 | `CAPTURED_ACCOUNT_INACTIVE` | Captured destination is inactive | Regenerate with `DISBURSEMENT_ACCOUNT_REFRESH` before readiness |
-| 409 | `SALARY_ADVANCE_RESERVATION_INVALID` | Salary Advance reservation is invalid | Restore or reconcile the reservation before readiness |
-| 409 | `SALARY_ADVANCE_RESERVATION_RELEASED` | Salary Advance reservation was released | Do not confirm readiness for a released application |
+| 409 | `SALARY_ADVANCE_RESERVATION_INVALID` | Salary Advance reservation blocks contract readiness | Restore or reconcile the reservation before readiness |
+| 409 | `SALARY_ADVANCE_RESERVATION_RELEASED` | Released reservation blocks contract readiness | Do not confirm readiness for a released application |
 | 409 | `READINESS_ALREADY_CONFIRMED` | Contract readiness was already confirmed | Treat an identical request ID as replay; otherwise refresh state |
 | 422 | `OFFER_NOT_ACCEPTED` | Offer not accepted | Customer must accept approved terms before contract preparation and disbursement |
 | 422 | `CONTRACT_DOCUMENTS_NOT_READY` | Contract documents not ready | Complete required contract or disbursement documents before manual disbursement |
 | 422 | `DISBURSEMENT_NOT_READY` | Disbursement not ready | Confirm approval, customer acceptance, document readiness, and bank account information |
 | 409 | `DISBURSEMENT_ALREADY_COMPLETED` | Disbursement already completed | Cannot confirm manual disbursement more than once |
+| 409 | `DUPLICATE_TRANSFER_REFERENCE` | Transfer evidence already recorded | Reconcile the prior operation without exposing the conflicting reference |
+| 422 | `DISBURSEMENT_VALUE_DATE_INVALID` | Disbursement value date is invalid | Use a date from final readiness through the current UTC date |
+| 422 | `FIRST_REPAYMENT_DATE_INVALID` | First repayment date is invalid | Use a date after value date and no later than one calendar month after it |
+| 422 | `PRODUCT_ACTIVATION_NOT_SUPPORTED` | Product activation is not executable | Only the complete Salary Advance activation policy is currently available |
+| 422 | `SALARY_ADVANCE_RESERVATION_INVALID` | Activation reservation evidence is invalid | Reconcile the Salary Advance reservation before confirming disbursement |
+| 422 | `SALARY_ADVANCE_RESERVATION_RELEASED` | Activation reservation was released | The application can no longer be activated from released exposure |
+| 403 | `DISBURSEMENT_DESTINATION_ACCESS_DENIED` | Destination access denied | Use an authenticated non-Customer principal with `loan:disburse` |
+| 409 | `DISBURSEMENT_DESTINATION_REVEAL_NOT_ALLOWED` | Destination reveal is not allowed | Reveal only the current ready contract while the application is disbursement-pending |
+| 409 | `DISBURSEMENT_DESTINATION_UNAVAILABLE` | Protected destination is unavailable | Reconcile protected contract evidence without exposing cryptographic details |
+| 404 | `LOAN_ACCOUNT_NOT_FOUND` | Loan Account not found | Staff: no activated LoanAccount; Customer: generic concealment for missing, foreign-owned, or not-yet-activated resources |
+| 403 | `LOAN_APPLICATION_ACCESS_DENIED` | Loan Application access denied | Required `loan:read:own` or `loan:read` authority is absent |
+| 409 | `SYSTEM_STATE_CONFLICT` | Activation evidence is inconsistent | Reconcile authoritative persisted evidence before retrying |
 | 409 | `LOAN_ACCOUNT_NOT_ACTIVE` | Loan account not active | Activate the LoanAccount through manual disbursement confirmation before repayment operations |
 | 422 | `REPAYMENT_RECORD_INVALID` | Repayment record invalid | Correct repayment amount, date, status, or outstanding balance information |
 | 404 | `REPAYMENT_SCHEDULE_NOT_FOUND` | Repayment schedule not found | Generate the final repayment schedule during LoanAccount activation |

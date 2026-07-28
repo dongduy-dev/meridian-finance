@@ -807,4 +807,16 @@ V26 adds four idempotent permission seeds:
 - Customer: `loan:contract:acknowledge:own`;
 - Accounting Officer: `loan:contract:prepare`, `loan:contract:read`, and `loan:disbursement:prepare`.
 
-The existing `loan:disburse` permission is unchanged and reserved for the later actual-disbursement checkpoint. No LoanAccount, disbursement, or final repayment-schedule table is introduced by V25-V26.
+The existing `loan:disburse` permission is used by the completed manual-disbursement confirmation and narrow destination reveal. V25-V26 themselves introduce no LoanAccount, disbursement, or final repayment-schedule table.
+
+## 16. Manual disbursement and LoanAccount activation (V28-V31)
+
+V28 adds generic `loan_accounts`, immutable `manual_disbursements`, `repayment_schedules`, and `repayment_schedule_items`. Composite keys and foreign keys reconcile application, contract, Customer, account, disbursement, schedule, and source contract-item ownership. Unique constraints enforce one account, completed disbursement, and final version-1 schedule per application/contract/account, plus unique request UUID, account number, and canonical external transfer reference.
+
+Deferred constraint triggers require every `DISBURSED` application to have exactly one ready contract and complete activation evidence; require schedule totals/items/dates to copy the contract and manual-disbursement dates; and require Salary Advance reserved-to-used balances and movement evidence to reconcile at commit. Account source/financial fields are immutable while the schema permits only future controlled `status` plus `updated_at` mutation. Manual disbursements and final schedules/items are insert-only evidence.
+
+V28 also links `DISBURSED_TO_USED` movements to both Loan Application and LoanAccount, enforces one conversion per application, and prevents either mutation direction involving that movement type. It does not implement repayment posting, allocation, settlement, closure, or used-exposure release.
+
+V29 allowlists `MANUAL_DISBURSEMENT_CONFIRMED` for the atomic activation audit. V30 makes the Loan Application product identity tuple immutable and foreign-keyed to the Loan Product, preventing product drift before policy selection. V31 adds only `LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED` to the audit action whitelist.
+
+The V29 and V31 migrations preflight the exact prior named whitelist predicate before replacing it. They reject missing, extra, weakened, repeated, or incompatible constraint state before any drop. `MER-DB-CURRENT-SCHEMA.sql` reflects the stable V1-V31 physical result; migration preflight machinery is intentionally kept only in executable Flyway history.

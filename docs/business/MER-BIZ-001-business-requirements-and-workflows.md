@@ -407,11 +407,19 @@ Before final readiness, Accounting may regenerate a `PREPARED` or `ACKNOWLEDGED`
 
 Readiness is a calculated, point-in-time advisory result with stable blocker codes. Final confirmation recomputes readiness transactionally and requires the accepted offer, current acknowledged version, active Customer, active captured source account, processing-ready documents, no active correction request, and a valid unreleased Salary Advance reservation. It does not recheck profile completeness, current account primacy, current product pricing, or accepted-offer expiry.
 
-Successful readiness confirmation moves the contract to `READY_FOR_DISBURSEMENT` and the Loan Application from `CONTRACT_PENDING` to `DISBURSEMENT_PENDING` in one transaction with PII-safe audit and status history. It does not execute a transfer, create or activate a LoanAccount, create a final repayment schedule, or convert reserved Salary Advance limit to used limit. Those effects remain part of later manual disbursement.
+Successful readiness confirmation moves the contract to `READY_FOR_DISBURSEMENT` and the Loan Application from `CONTRACT_PENDING` to `DISBURSEMENT_PENDING` in one transaction with PII-safe audit and status history. It does not execute a transfer. The separate manual-disbursement confirmation described below performs activation only after an Accounting Officer has completed the bank transfer outside Meridian.
 
-### 6.8 Repayment, Settlement, and Closure
+### 6.8 Manual Disbursement and LoanAccount Activation
 
-Repayment tracking is manual in the MVP and may include scheduled due date, principal due, interest due, amount paid, payment date, payment method note, manual payment confirmation, and outstanding balance.
+An Accounting Officer with `loan:disburse` may reveal the full immutable contractual destination only while the application is `DISBURSEMENT_PENDING` and its current contract is `READY_FOR_DISBURSEMENT`. Reveal and confirmation are separate operations. Every successful reveal is non-cacheable and records only PII-safe access evidence; it never audits the revealed bank data.
+
+Confirmation accepts a request UUID, expected contract version, canonical external transfer reference, value date, and first repayment date. All money, term, installments, Customer ownership, product, and destination facts come from the locked ready contract. One transaction creates an active LoanAccount, immutable manual-disbursement evidence, and one final dated schedule; converts the Salary Advance reservation to used exposure; transitions the application to `DISBURSED`; and writes history and PII-safe audit. Identical request replay returns the original result without another durable effect. A different request after completion is rejected.
+
+Customers with `loan:read:own` may query only their activated LoanAccount; staff need `loan:read`. The response uses the immutable contract's fixed full destination mask `********` without revealing any stored suffix and excludes transfer references, full destination data, encryption evidence, Salary Advance internals, actor IDs, audit IDs, and history IDs. Repayment posting, allocation, delinquency, settlement, closure, UCL activation, and Collateral activation remain deferred.
+
+### 6.9 Repayment, Settlement, and Closure
+
+The final repayment schedule is authoritative after activation. Repayment posting, allocations, overdue processing, settlement, and closure are not implemented in the current checkpoint.
 
 LoanAccount roll-up rules:
 
