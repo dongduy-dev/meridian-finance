@@ -438,7 +438,11 @@ class ConfirmManualDisbursementServiceTest {
         when(applications.findByIdForUpdate(application.id())).thenReturn(Optional.of(application));
         when(contracts.findCurrentByApplicationIdForUpdate(application.id()))
                 .thenReturn(Optional.empty());
-        assertCode("CURRENT_CONTRACT_MISSING", () -> service.confirm(command()));
+        EntityNotFoundException missingContract = assertThrows(
+                EntityNotFoundException.class,
+                () -> service.confirm(command())
+        );
+        assertEquals("CURRENT_CONTRACT_MISSING", missingContract.getErrorCode());
     }
 
     @Test
@@ -595,7 +599,7 @@ class ConfirmManualDisbursementServiceTest {
                 ProductCode.UNSECURED_CONSUMER_LOAN);
         when(applications.findByIdForUpdate(application.id())).thenReturn(Optional.of(application));
         when(activationPolicies.resolve(ProductCode.UNSECURED_CONSUMER_LOAN)).thenThrow(
-                new BusinessStateConflictException(
+                new BusinessRuleViolationException(
                         "PRODUCT_ACTIVATION_NOT_SUPPORTED",
                         "Loan product activation is not supported."
                 )
@@ -607,7 +611,7 @@ class ConfirmManualDisbursementServiceTest {
         when(applications.findByIdForUpdate(application.id())).thenReturn(Optional.of(application));
         when(activationPolicies.resolve(ProductCode.SALARY_ADVANCE))
                 .thenReturn(activationPolicy);
-        doThrow(new BusinessStateConflictException(
+        doThrow(new BusinessRuleViolationException(
                 "SALARY_ADVANCE_RESERVATION_INVALID",
                 "Reservation evidence is invalid."
         )).when(activationPolicy).activate(any());
@@ -891,11 +895,15 @@ class ConfirmManualDisbursementServiceTest {
     }
 
     private static void assertCode(String expected, Runnable operation) {
-        BusinessStateConflictException failure = assertThrows(
-                BusinessStateConflictException.class,
-                operation::run
-        );
-        assertEquals(expected, failure.getErrorCode());
+        RuntimeException failure;
+        if (expected.equals("PRODUCT_ACTIVATION_NOT_SUPPORTED")
+                || expected.startsWith("SALARY_ADVANCE_RESERVATION_")) {
+            failure = assertThrows(BusinessRuleViolationException.class, operation::run);
+            assertEquals(expected, ((BusinessRuleViolationException) failure).getErrorCode());
+        } else {
+            failure = assertThrows(BusinessStateConflictException.class, operation::run);
+            assertEquals(expected, ((BusinessStateConflictException) failure).getErrorCode());
+        }
         assertFalse(failure.getMessage().contains(REFERENCE));
     }
 

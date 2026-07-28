@@ -44,6 +44,80 @@ Current security posture comes from `SecurityConfig`: health, login, and loan pr
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/acknowledgment` | Bearer + `loan:contract:acknowledge:own` | `LoanContractController` | Customer owner acknowledges the exact current prepared version. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness` | Bearer + `loan:contract:read` | `LoanContractController` | Accounting reads calculated point-in-time blocker codes; this GET does not mutate or lock workflow rows. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness/confirm` | Bearer + `loan:disbursement:prepare` | `LoanContractController` | Accounting recomputes readiness and atomically moves contract/application to ready/`DISBURSEMENT_PENDING`. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/disbursements` | Bearer + `loan:disburse` | `LoanDisbursementController` | Confirm an already-performed transfer and atomically activate the Salary Advance LoanAccount; identical request replay also returns `200`. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/disbursement-destination/reveal` | Bearer + `loan:disburse` | `LoanDisbursementController` | Reveal the full immutable ready-contract destination before confirmation, with PII-safe audit and non-cacheable headers. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/loan-account` | Bearer + owner `loan:read:own` or staff `loan:read` | `LoanDisbursementController` | Return the activated account, masked immutable destination, and ordered final repayment schedule. |
+
+### Manual Disbursement Confirmation
+
+```json
+{
+  "requestId": "00000000-0000-0000-0000-000000000001",
+  "expectedContractVersion": 1,
+  "externalTransferReference": "BANK-REFERENCE",
+  "disbursementValueDate": "2026-07-28",
+  "firstRepaymentDate": "2026-08-28"
+}
+```
+
+The path supplies the Loan Application ID and the authenticated principal supplies the actor. The body cannot supply Customer, contract, product, account, destination, limit, or financial values. The transfer reference is trimmed and uppercased, stored only as immutable evidence, and never returned or logged. A first execution and identical logical replay both return `200`; `idempotentReplay` distinguishes them. Reusing the request UUID with different logical content returns `409 IDEMPOTENCY_KEY_REUSED`, while a different request after activation returns `409 DISBURSEMENT_ALREADY_COMPLETED`.
+
+The safe response includes application/account/disbursement/schedule identifiers, statuses, contract-derived disbursement amount and dates, activation timestamp, final schedule metadata/items, and the replay flag. It excludes the transfer reference, destination, encryption evidence, actor, employee/Partner evidence, Salary Advance internals, audit IDs, and history IDs.
+
+### Contractual Destination Reveal
+
+```json
+{
+  "expectedContractVersion": 1
+}
+```
+
+Reveal is allowed only for a non-Customer principal with `loan:disburse` while the application is `DISBURSEMENT_PENDING` and the exact current non-superseded contract is `READY_FOR_DISBURSEMENT`. The response contains only contract ID/version, bank code/name, account-holder name, and the full account number from the immutable contract snapshot. It never queries the Customer's current bank account.
+
+Every successful response includes:
+
+```text
+Cache-Control: no-store, private
+Pragma: no-cache
+X-Content-Type-Options: nosniff
+```
+
+Reveal and confirmation are intentionally separate. Reveal after activation returns `409 DISBURSEMENT_DESTINATION_REVEAL_NOT_ALLOWED`. Missing or invalid protection evidence returns the generic safe `409 DISBURSEMENT_DESTINATION_UNAVAILABLE`. Each successful reveal writes one transactional `LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED` audit event containing access identifiers only; no destination or crypto data is audited.
+
+### Activated LoanAccount Query
+
+Customers use `loan:read:own` and token-derived ownership. For a Customer, a nonexistent application, another Customer's application, and a missing LoanAccount all return the same generic `404 LOAN_ACCOUNT_NOT_FOUND` response. Staff use `loan:read` and retain accurate not-found distinctions. The response shape is:
+
+```json
+{
+  "loanApplicationId": "UUID",
+  "loanAccountId": "UUID",
+  "accountNumber": "LN-...",
+  "status": "ACTIVE",
+  "activatedAt": "UTC timestamp",
+  "originatedPrincipal": 3000000,
+  "approvedTermMonths": 2,
+  "totalInterest": 120000,
+  "totalFee": 0,
+  "totalRepayment": 3120000,
+  "disbursementDestination": {
+    "bankCode": "BANK",
+    "bankName": "Example Bank",
+    "accountHolderName": "Contract snapshot holder",
+    "maskedAccountNumber": "********"
+  },
+  "finalRepaymentSchedule": {
+    "scheduleId": "UUID",
+    "scheduleType": "FINAL",
+    "version": 1,
+    "firstDueDate": "2026-08-28",
+    "lastDueDate": "2026-09-28",
+    "items": []
+  }
+}
+```
+
+The query uses the fixed full mask `********`; it does not decrypt the destination or expose any stored suffix character. It never returns the transfer reference, full destination, crypto envelope, actor, audit/history IDs, employee/Partner evidence, or Salary Advance limit/movement identifiers.
 
 ## Authentication
 
@@ -453,6 +527,20 @@ Expected high-value checks:
 | Controlled regeneration | Prior version `SUPERSEDED`; new version `PREPARED`, unchanged financial/repayment snapshot, refreshed masked destination, fresh acknowledgment required. |
 | Incomplete readiness | `200` advisory blocker list; confirmation returns `409` with the first deterministic blocker code and rolls back all effects. |
 | Duplicate Salary Advance for same authenticated customer, including concurrent submissions through different verified employee links | `409`, `BLOCKING_APPLICATION_EXISTS`; one complete winner remains. |
+| Destination reveal without `loan:disburse` | `403`; no decryption and no audit. |
+| Destination reveal with stale version | `409`, `CONTRACT_VERSION_STALE`; no plaintext and no audit. |
+| Destination reveal before confirmation | `200` with exact no-store/private/no-cache/nosniff headers; one PII-safe access audit. |
+| Destination reveal after confirmation | `409`, `DISBURSEMENT_DESTINATION_REVEAL_NOT_ALLOWED`. |
+| Salary Advance disbursement confirmation | `200`; exact contract values create one active account, immutable evidence, final schedule, reserved-to-used movement, `DISBURSED` transition/history, and one audit in one transaction. |
+| Identical disbursement replay | `200`, original identifiers and values, `idempotentReplay = true`, and no additional physical rows/audit/history/movement. |
+| Reused disbursement request UUID | `409`, `IDEMPOTENCY_KEY_REUSED`, without identifying the differing field. |
+| Duplicate canonical transfer reference | `409`, `DUPLICATE_TRANSFER_REFERENCE`, without returning the reference. |
+| Invalid disbursement dates | `422`, `DISBURSEMENT_VALUE_DATE_INVALID` or `FIRST_REPAYMENT_DATE_INVALID`. |
+| Unsupported product activation | `422`, `PRODUCT_ACTIVATION_NOT_SUPPORTED`; no UCL/Collateral fallback. |
+| Customer LoanAccount query | Owner with `loan:read:own` receives `200`; missing, foreign-owned, and not-yet-activated resources all receive the same generic `404 LOAN_ACCOUNT_NOT_FOUND`. |
+| Staff LoanAccount query | Staff with `loan:read` receives `200`. |
+| Query before activation | `404`, `LOAN_ACCOUNT_NOT_FOUND`. |
+| Inconsistent persisted activation evidence | `409`, `SYSTEM_STATE_CONFLICT`. |
 
 Notes:
 

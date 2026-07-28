@@ -17,6 +17,7 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import com.meridian.platform.loan.testsupport.LoanContractTestData;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -820,9 +821,19 @@ class SalaryAdvanceLoanActivationPolicyTest {
     }
 
     private static void assertCode(String expected, Runnable operation) {
-        BusinessStateConflictException exception =
-                assertThrows(BusinessStateConflictException.class, operation::run);
-        assertEquals(expected, exception.getErrorCode());
+        if (expected.startsWith("SALARY_ADVANCE_RESERVATION_")) {
+            BusinessRuleViolationException exception = assertThrows(
+                    BusinessRuleViolationException.class,
+                    operation::run
+            );
+            assertEquals(expected, exception.getErrorCode());
+        } else {
+            BusinessStateConflictException exception = assertThrows(
+                    BusinessStateConflictException.class,
+                    operation::run
+            );
+            assertEquals(expected, exception.getErrorCode());
+        }
     }
 
     private static void assertMoney(BigDecimal expected, BigDecimal actual) {

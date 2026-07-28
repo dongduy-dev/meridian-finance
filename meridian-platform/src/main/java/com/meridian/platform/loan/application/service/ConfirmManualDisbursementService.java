@@ -123,7 +123,7 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
                 ));
         LoanContract contract = contracts
                 .findCurrentByApplicationIdForUpdate(application.id())
-                .orElseThrow(() -> conflict(
+                .orElseThrow(() -> new EntityNotFoundException(
                         "CURRENT_CONTRACT_MISSING",
                         "Current Loan contract is missing."
                 ));

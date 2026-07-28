@@ -453,4 +453,28 @@ sequenceDiagram
     L->>L: Contract READY + application DISBURSEMENT_PENDING + audit/history
 ```
 
-The advisory readiness GET uses non-locking reads and never persists a readiness Boolean. Confirmation follows the established workflow lock order and recomputes all blockers. The full destination value never leaves internal ports and no REST endpoint reveals it. Actual disbursement, LoanAccount creation, final schedule generation, and reserved-to-used conversion are outside this flow.
+The advisory readiness GET uses non-locking reads and never persists a readiness Boolean. Confirmation follows the established workflow lock order and recomputes all blockers. Full destination data remains protected except for the dedicated, audited reveal flow below.
+
+## Manual Disbursement, Reveal, and Account Query
+
+```mermaid
+sequenceDiagram
+    participant O as Accounting Operator
+    participant API as LoanDisbursementController
+    participant L as Loan application services
+    participant DB as PostgreSQL
+    O->>API: POST destination reveal (loan:disburse)
+    API->>L: Reveal current ready contract destination
+    L->>DB: Workflow/application/contract locks + audit
+    L-->>API: Plaintext destination in dedicated result only
+    API-->>O: 200 + no-store/private/nosniff headers
+    O->>API: POST manual disbursement confirmation
+    API->>L: ConfirmManualDisbursement command
+    L->>DB: Request/workflow/row locks and one transaction
+    L->>DB: Account + evidence + final schedule + exposure + history + audit
+    DB-->>L: Commit deferred V28 reconciliation
+    L-->>API: Safe activation result or idempotent replay
+```
+
+The confirmation command contains no actor, Customer, contract, product, destination, or financial fields. Contract terms and items are authoritative. Request and workflow advisory-lock categories are distinct; identical request replay performs no writes. Salary Advance activation retains its verification, customer/employee-link, limit, and movement lock order.
+`GET /api/v1/loan-applications/{id}/loan-account` is read-only. Customer ownership is token-derived under `loan:read:own`; staff use `loan:read`. It returns an active account, masked immutable contract destination, and ordered final schedule. It does not expose the transfer reference, full destination, crypto envelope, actor, audit/history IDs, employee evidence, or limit/movement internals.

@@ -30,22 +30,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "meridian.loan.offer-expiry.enabled=false",
         "meridian.document.orphan-reconciliation.enabled=false"
 })
-class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
+class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
-    private static final String SCHEMA = schemaName("installed");
+    private static final String SCHEMA = schemaName("clean31");
     private static final UUID ACCOUNTING_USER_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000304");
     private static final LocalDateTime OCCURRED_AT =
             LocalDateTime.of(2026, 7, 28, 10, 0);
-    private static final Path V29 = Path.of(
-            "src/main/resources/db/migration/V29__add_manual_disbursement_audit_action.sql"
+    private static final Path V31 = Path.of(
+            "src/main/resources/db/migration/"
+                    + "V31__add_disbursement_destination_reveal_audit_action.sql"
     );
 
-    @Autowired
-    JdbcTemplate jdbc;
-
-    @Autowired
-    DataSource dataSource;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired DataSource dataSource;
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
@@ -57,79 +55,66 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
     }
 
     @Test
-    void installedV31RetainsEveryKnownAuditActionAndRejectsUnknownAction() {
+    void cleanV1ThroughV31AcceptsPreviousAndNewActionsAndRejectsUnknownAction() {
         assertEquals("31", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
     @Test
-    void cleanV1ThroughV29AcceptsEveryKnownActionAndRejectsUnknownAction() {
-        String schema = schemaName("clean29");
-        try {
-            migrateTo(schema, "29");
-            assertEquals("29", latestVersion(schema));
-            assertActionsThroughV29Accepted(schema);
-        } finally {
-            dropSchema(schema);
-        }
-    }
-
-    @Test
-    void upgradesV28ToV29WithoutChangingUnrelatedSchemaObjects() {
+    void upgradesV30ToV31WithoutChangingUnrelatedSchemaObjects() {
         String schema = schemaName("upgrade");
         try {
-            migrateTo(schema, "28");
+            migrateTo(schema, "30");
             List<String> columnsBefore = columns(schema);
             List<String> indexesBefore = indexes(schema);
             List<String> constraintsBefore = unrelatedConstraints(schema);
+            assertPreviousActionsAccepted(schema);
+            assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                    schema,
+                    BusinessAuditAction.LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED.name()
+            ));
 
-            migrateTo(schema, "29");
+            migrateTo(schema, "31");
 
-            assertEquals("29", latestVersion(schema));
+            assertEquals("31", latestVersion(schema));
             assertEquals(columnsBefore, columns(schema));
             assertEquals(indexesBefore, indexes(schema));
             assertEquals(constraintsBefore, unrelatedConstraints(schema));
-            assertActionsThroughV29Accepted(schema);
+            assertAllKnownActionsAccepted(schema);
         } finally {
             dropSchema(schema);
         }
     }
 
     @Test
-    void repeatedV29ExecutionFailsBeforeReplacingTheInstalledConstraint() throws Exception {
+    void repeatedV31ExecutionFailsBeforeReplacingTheInstalledConstraint() throws Exception {
         String schema = schemaName("repeat");
         try {
-            migrateTo(schema, "29");
+            migrateTo(schema, "31");
             String before = actionConstraint(schema);
 
-            assertThrows(SQLException.class, () -> executeV29(schema));
+            assertThrows(SQLException.class, () -> executeV31(schema));
 
             assertEquals(before, actionConstraint(schema));
-            assertTrue(before.contains("MANUAL_DISBURSEMENT_CONFIRMED"));
+            assertTrue(before.contains(
+                    "LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED"
+            ));
         } finally {
             dropSchema(schema);
         }
     }
 
     @Test
-    void incompatibleSameNameConstraintFailsWithoutReplacement() throws Exception {
-        String schema = schemaName("incompatible");
+    void missingExpectedConstraintFailsBeforeReplacement() throws Exception {
+        String schema = schemaName("missing");
         try {
-            migrateTo(schema, "28");
-            String expectedDefinition = actionConstraint(schema);
-            String expectedExpression = expectedDefinition.substring(
-                    "CHECK (".length(), expectedDefinition.length() - 1);
+            migrateTo(schema, "30");
             jdbc.execute("alter table " + schema
                     + ".audit_events drop constraint chk_audit_events_action");
-            jdbc.execute("alter table " + schema
-                    + ".audit_events add constraint chk_audit_events_action check (("
-                    + expectedExpression + ") or action is not null)");
-            String before = actionConstraint(schema);
 
-            assertThrows(SQLException.class, () -> executeV29(schema));
+            assertThrows(SQLException.class, () -> executeV31(schema));
 
-            assertEquals(before, actionConstraint(schema));
-            assertTrue(before.contains("CUSTOMER_PROFILE_CREATED"));
+            assertEquals(0, actionConstraintCount(schema));
         } finally {
             dropSchema(schema);
         }
@@ -139,35 +124,36 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
     void extraLiteralActionFailsWithoutReplacingTheConstraint() throws Exception {
         assertPredicateWeakeningRejected(
                 "extra_literal",
-                "action = 'V29_EXTRA_ACTION'"
+                "action = 'V31_EXTRA_ACTION'"
         );
     }
 
     @Test
     void nonLiteralLengthWeakeningFailsWithoutReplacingTheConstraint() throws Exception {
-        assertPredicateWeakeningRejected(
-                "length_weakening",
-                "length(action) = 1"
-        );
+        assertPredicateWeakeningRejected("length", "length(action) = 1");
+    }
+
+    @Test
+    void nonNullWeakeningFailsWithoutReplacingTheConstraint() throws Exception {
+        assertPredicateWeakeningRejected("not_null", "action is not null");
     }
 
     @Test
     void reorderedExpectedWhitelistStillUpgrades() throws Exception {
         String schema = schemaName("reordered");
         try {
-            migrateTo(schema, "28");
-            String expectedDefinition = actionConstraint(schema);
-            String expectedExpression = expectedDefinition.substring(
-                    "CHECK (".length(), expectedDefinition.length() - 1);
-            String reorderedExpression = expectedExpression
-                    .replace("'CUSTOMER_PROFILE_CREATED'", "'__V29_SWAP__'")
+            migrateTo(schema, "30");
+            String expression = actionConstraintExpression(schema)
+                    .replace("'CUSTOMER_PROFILE_CREATED'", "'__V31_SWAP__'")
                     .replace("'CUSTOMER_PROFILE_UPDATED'", "'CUSTOMER_PROFILE_CREATED'")
-                    .replace("'__V29_SWAP__'", "'CUSTOMER_PROFILE_UPDATED'");
-            replaceActionConstraint(schema, reorderedExpression);
+                    .replace("'__V31_SWAP__'", "'CUSTOMER_PROFILE_UPDATED'");
+            replaceActionConstraint(schema, expression);
 
-            executeV29(schema);
+            executeV31(schema);
 
-            assertTrue(actionConstraint(schema).contains("MANUAL_DISBURSEMENT_CONFIRMED"));
+            assertTrue(actionConstraint(schema).contains(
+                    "LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED"
+            ));
         } finally {
             dropSchema(schema);
         }
@@ -179,17 +165,14 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
     ) throws Exception {
         String schema = schemaName(suffix);
         try {
-            migrateTo(schema, "28");
-            String expectedDefinition = actionConstraint(schema);
-            String expectedExpression = expectedDefinition.substring(
-                    "CHECK (".length(), expectedDefinition.length() - 1);
+            migrateTo(schema, "30");
             replaceActionConstraint(
                     schema,
-                    "(" + expectedExpression + ") or " + extraPredicate
+                    "(" + actionConstraintExpression(schema) + ") or " + extraPredicate
             );
             String before = actionConstraint(schema);
 
-            assertThrows(SQLException.class, () -> executeV29(schema));
+            assertThrows(SQLException.class, () -> executeV31(schema));
 
             assertEquals(before, actionConstraint(schema));
         } finally {
@@ -197,35 +180,25 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
         }
     }
 
-    private void replaceActionConstraint(String schema, String constraintExpression) {
+    private void replaceActionConstraint(String schema, String expression) {
         jdbc.execute("alter table " + schema
                 + ".audit_events drop constraint chk_audit_events_action");
         jdbc.execute("alter table " + schema
                 + ".audit_events add constraint chk_audit_events_action check ("
-                + constraintExpression + ")");
+                + expression + ")");
     }
 
-    @Test
-    void missingExpectedConstraintFailsClearly() throws Exception {
-        String schema = schemaName("missing");
-        try {
-            migrateTo(schema, "28");
-            jdbc.execute("alter table " + schema
-                    + ".audit_events drop constraint chk_audit_events_action");
+    private String actionConstraintExpression(String schema) {
+        String definition = actionConstraint(schema);
+        return definition.substring("CHECK (".length(), definition.length() - 1);
+    }
 
-            assertThrows(SQLException.class, () -> executeV29(schema));
-
-            assertEquals(0, jdbc.queryForObject(
-                    "select count(*) from pg_constraint constraint_row "
-                            + "join pg_class relation on relation.oid = constraint_row.conrelid "
-                            + "join pg_namespace namespace on namespace.oid = relation.relnamespace "
-                            + "where namespace.nspname = ? and relation.relname = 'audit_events' "
-                            + "and constraint_row.conname = 'chk_audit_events_action'",
-                    Integer.class,
-                    schema
-            ));
-        } finally {
-            dropSchema(schema);
+    private void assertPreviousActionsAccepted(String schema) {
+        for (BusinessAuditAction action : BusinessAuditAction.values()) {
+            if (action != BusinessAuditAction
+                    .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED) {
+                insertAuditEvent(schema, action.name());
+            }
         }
     }
 
@@ -233,26 +206,12 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
             insertAuditEvent(schema, action.name());
         }
-        assertThrows(DataAccessException.class, () ->
-                insertAuditEvent(schema, "UNKNOWN_AUDIT_ACTION")
-        );
+        assertThrows(DataAccessException.class,
+                () -> insertAuditEvent(schema, "UNKNOWN_AUDIT_ACTION"));
     }
 
-    private void assertActionsThroughV29Accepted(String schema) {
-        for (BusinessAuditAction action : BusinessAuditAction.values()) {
-            if (action == BusinessAuditAction
-                    .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED) {
-                continue;
-            }
-            insertAuditEvent(schema, action.name());
-        }
-        assertThrows(DataAccessException.class, () ->
-                insertAuditEvent(schema, "UNKNOWN_AUDIT_ACTION")
-        );
-    }
-
-    private void executeV29(String schema) throws Exception {
-        String sql = Files.readString(V29);
+    private void executeV31(String schema) throws Exception {
+        String sql = Files.readString(V31);
         try (Connection connection = dataSource.getConnection();
              Statement statement = connection.createStatement()) {
             statement.execute("set search_path to " + schema);
@@ -273,19 +232,26 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
         );
     }
 
+    private int actionConstraintCount(String schema) {
+        return jdbc.queryForObject(
+                "select count(*) from pg_constraint constraint_row "
+                        + "join pg_class relation on relation.oid = constraint_row.conrelid "
+                        + "join pg_namespace namespace on namespace.oid = relation.relnamespace "
+                        + "where namespace.nspname = ? and relation.relname = 'audit_events' "
+                        + "and constraint_row.conname = 'chk_audit_events_action'",
+                Integer.class,
+                schema
+        );
+    }
+
     private void insertAuditEvent(String schema, String action) {
         jdbc.update(
                 "insert into " + schema + ".audit_events "
                         + "(id,operation_id,sequence_number,actor_type,actor_user_id,"
                         + "entity_type,entity_id,action,payload,occurred_at) "
-                        + "values (?,?,1,'USER',?,'LOAN_APPLICATION',?,?,?::jsonb,?)",
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                ACCOUNTING_USER_ID,
-                UUID.randomUUID(),
-                action,
-                "{}",
-                OCCURRED_AT
+                        + "values (?,?,1,'USER',?,'LOAN_CONTRACT',?,?,?::jsonb,?)",
+                UUID.randomUUID(), UUID.randomUUID(), ACCOUNTING_USER_ID,
+                UUID.randomUUID(), action, "{}", OCCURRED_AT
         );
     }
 
@@ -332,21 +298,13 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
 
     private static List<String> rows(List<Map<String, Object>> rows) {
         List<String> normalized = new ArrayList<>();
-        for (Map<String, Object> row : rows) {
-            normalized.add(row.toString());
-        }
+        rows.forEach(row -> normalized.add(row.toString()));
         return List.copyOf(normalized);
     }
 
     private void migrateTo(String schema, String target) {
-        Flyway.configure()
-                .dataSource(dataSource)
-                .schemas(schema)
-                .defaultSchema(schema)
-                .locations("classpath:db/migration")
-                .target(target)
-                .load()
-                .migrate();
+        Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema)
+                .locations("classpath:db/migration").target(target).load().migrate();
     }
 
     private void dropSchema(String schema) {
@@ -354,7 +312,7 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
     }
 
     private static String schemaName(String suffix) {
-        return "md_v29_" + suffix + "_"
+        return "md_v31_" + suffix + "_"
                 + UUID.randomUUID().toString().replace("-", "");
     }
 }

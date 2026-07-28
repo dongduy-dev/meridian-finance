@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.domain.model.ProductCode;
-import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -38,8 +38,8 @@ class LoanProductActivationPolicyResolverTest {
                         policy(ProductCode.SALARY_ADVANCE)
                 ));
 
-        BusinessStateConflictException failure = assertThrows(
-                BusinessStateConflictException.class,
+        BusinessRuleViolationException failure = assertThrows(
+                BusinessRuleViolationException.class,
                 () -> resolver.resolve(ProductCode.UNSECURED_CONSUMER_LOAN)
         );
 

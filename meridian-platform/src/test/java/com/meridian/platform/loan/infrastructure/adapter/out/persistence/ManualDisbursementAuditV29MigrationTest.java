@@ -32,8 +32,14 @@ class ManualDisbursementAuditV29MigrationTest {
         assertTrue(sql.contains("ADD CONSTRAINT chk_audit_events_action CHECK"));
         assertTrue(sql.contains("'MANUAL_DISBURSEMENT_CONFIRMED'"));
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
+            if (action == BusinessAuditAction
+                    .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED) {
+                continue;
+            }
             assertTrue(sql.contains("'" + action.name() + "'"));
         }
+        assertFalse(sql.contains(
+                "'LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED'"));
         assertFalse(sql.contains("CREATE TABLE"));
         assertFalse(sql.contains("CREATE INDEX"));
         assertFalse(sql.contains("audit_events_entity_type"));
@@ -54,14 +60,16 @@ class ManualDisbursementAuditV29MigrationTest {
     }
 
     @Test
-    void currentSchemaSnapshotDeclaresV30AndTheNewAction() throws Exception {
+    void currentSchemaSnapshotDeclaresV31AndBothDisbursementActions() throws Exception {
         String snapshot = Files.readString(Path.of(
                 "../docs/database/MER-DB-CURRENT-SCHEMA.sql"
         ));
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V30"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V31"));
         assertTrue(snapshot.contains("-- V29 manual disbursement audit action"));
         assertTrue(snapshot.contains("'MANUAL_DISBURSEMENT_CONFIRMED'"));
+        assertTrue(snapshot.contains(
+                "'LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED'"));
         assertTrue(snapshot.contains("uq_loan_products_identity_tuple"));
         assertTrue(snapshot.contains("trg_loan_applications_product_identity_immutable"));
     }

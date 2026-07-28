@@ -13,6 +13,7 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimit;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovement;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -81,7 +82,7 @@ public class SalaryAdvanceLoanActivationPolicy implements LoanProductActivationP
                 );
 
         if (!releases.isEmpty()) {
-            throw new BusinessStateConflictException(
+            throw new BusinessRuleViolationException(
                     "SALARY_ADVANCE_RESERVATION_RELEASED",
                     "Salary Advance reservation was already released."
             );
@@ -296,8 +297,8 @@ public class SalaryAdvanceLoanActivationPolicy implements LoanProductActivationP
         }
     }
 
-    private static BusinessStateConflictException invalidReservation() {
-        return new BusinessStateConflictException(
+    private static BusinessRuleViolationException invalidReservation() {
+        return new BusinessRuleViolationException(
                 "SALARY_ADVANCE_RESERVATION_INVALID",
                 "Salary Advance reservation evidence is not valid for activation."
         );

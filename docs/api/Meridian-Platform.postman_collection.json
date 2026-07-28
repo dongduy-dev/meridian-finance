@@ -56,6 +56,10 @@
                          "key":  "customerAccessToken",
                          "value":  "",
                          "type":  "string"
+                     },                     {
+                         "key":  "otherCustomerAccessToken",
+                         "value":  "",
+                         "type":  "string"
                      },
                      {
                          "key":  "loanOfficerAccessToken",
@@ -311,6 +315,27 @@
                      {
                          "key":  "staleContractVersion",
                          "value":  "1",
+                         "type":  "string"
+                     }
+                     ,
+                     {
+                         "key":  "disbursementRequestId",
+                         "value":  "40000000-0000-0000-0000-000000000001",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "externalTransferReference",
+                         "value":  "POSTMAN-BANK-001",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "disbursementValueDate",
+                         "value":  "2026-07-28",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "firstRepaymentDate",
+                         "value":  "2026-08-28",
                          "type":  "string"
                      }
                  ],
@@ -3936,6 +3961,151 @@
                                   }
                               ]
                  },
+                {
+                    "name": "10 Manual Disbursement and LoanAccount Activation",
+                    "item": [
+                        {
+                            "name": "Reject stale destination-reveal contract version",
+                            "request": {
+                                "method": "POST",
+                                "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+                                "body": {"mode": "raw", "raw": "{\n  \"expectedContractVersion\": 999\n}", "options": {"raw": {"language": "json"}}},
+                                "url": {"raw": "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/contracts/current/disbursement-destination/reveal", "host": ["{{baseUrl}}"], "path": ["api", "v1", "loan-applications", "{{loanApplicationId}}", "contracts", "current", "disbursement-destination", "reveal"]},
+                                "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{accountingAccessToken}}", "type": "string"}]},
+                                "description": "Uses a synthetic stale contract version and must not reveal destination data."
+                            },
+                            "response": [],
+                            "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                "pm.test(\"Status is 409\", function () { pm.response.to.have.status(409); });",
+                                "pm.test(\"Version is stale\", function () { pm.expect(pm.response.json().errorCode).to.eql(\"CONTRACT_VERSION_STALE\"); });",
+                                "pm.test(\"No destination is returned\", function () { pm.expect(pm.response.text()).not.to.include(\"accountNumber\"); });"
+                            ]}}]
+                        },                        {
+                            "name": "Reveal immutable destination before confirmation",
+                            "request": {
+                                "method": "POST",
+                                "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+                                "body": {"mode": "raw", "raw": "{\n  \"expectedContractVersion\": {{contractVersion}}\n}", "options": {"raw": {"language": "json"}}},
+                                "url": {"raw": "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/contracts/current/disbursement-destination/reveal", "host": ["{{baseUrl}}"], "path": ["api", "v1", "loan-applications", "{{loanApplicationId}}", "contracts", "current", "disbursement-destination", "reveal"]},
+                                "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{accountingAccessToken}}", "type": "string"}]},
+                                "description": "Run before confirmation. Returns only the immutable contract destination and must never be cached."
+                            },
+                            "response": [],
+                            "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                "pm.test(\"Sensitive response is non-cacheable\", function () { pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store, private\"); pm.expect(pm.response.headers.get(\"Pragma\")).to.eql(\"no-cache\"); pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\"); });",
+                                "pm.test(\"No crypto envelope is exposed\", function () { const json = pm.response.json(); pm.expect(json).not.to.have.any.keys(\"ciphertext\", \"nonce\", \"keyId\", \"aad\", \"fingerprint\"); });"
+                            ]}}]
+                        },
+                        {
+                            "name": "Confirm manual disbursement",
+                            "request": {
+                                "method": "POST",
+                                "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+                                "body": {"mode": "raw", "raw": "{\n  \"requestId\": \"{{disbursementRequestId}}\",\n  \"expectedContractVersion\": {{contractVersion}},\n  \"externalTransferReference\": \"{{externalTransferReference}}\",\n  \"disbursementValueDate\": \"{{disbursementValueDate}}\",\n  \"firstRepaymentDate\": \"{{firstRepaymentDate}}\"\n}", "options": {"raw": {"language": "json"}}},
+                                "url": {"raw": "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/disbursements", "host": ["{{baseUrl}}"], "path": ["api", "v1", "loan-applications", "{{loanApplicationId}}", "disbursements"]},
+                                "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{accountingAccessToken}}", "type": "string"}]},
+                                "description": "Confirms an already-performed bank transfer. Money and destination are contract-derived and cannot be supplied here."
+                            },
+                            "response": [],
+                            "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                "pm.test(\"First execution is not replay\", function () { pm.expect(pm.response.json().idempotentReplay).to.eql(false); });",
+                                "pm.test(\"Reference and destination are absent\", function () { const text = pm.response.text(); pm.expect(text).not.to.include(pm.collectionVariables.get(\"externalTransferReference\")); pm.expect(pm.response.json()).not.to.have.property(\"destination\"); });"
+                            ]}}]
+                        },
+                        {
+                            "name": "Replay identical confirmation",
+                            "request": {
+                                "method": "POST",
+                                "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+                                "body": {"mode": "raw", "raw": "{\n  \"requestId\": \"{{disbursementRequestId}}\",\n  \"expectedContractVersion\": {{contractVersion}},\n  \"externalTransferReference\": \"{{externalTransferReference}}\",\n  \"disbursementValueDate\": \"{{disbursementValueDate}}\",\n  \"firstRepaymentDate\": \"{{firstRepaymentDate}}\"\n}", "options": {"raw": {"language": "json"}}},
+                                "url": {"raw": "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/disbursements", "host": ["{{baseUrl}}"], "path": ["api", "v1", "loan-applications", "{{loanApplicationId}}", "disbursements"]},
+                                "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{accountingAccessToken}}", "type": "string"}]}
+                            },
+                            "response": [],
+                            "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                "pm.test(\"Replay is 200\", function () { pm.response.to.have.status(200); });",
+                                "pm.test(\"Replay indicator is true\", function () { pm.expect(pm.response.json().idempotentReplay).to.eql(true); });"
+                            ]}}]
+                        },
+                        {
+                            "name": "Reject reused disbursement request UUID",
+                            "request": {
+                                "method": "POST",
+                                "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+                                "body": {"mode": "raw", "raw": "{\n  \"requestId\": \"{{disbursementRequestId}}\",\n  \"expectedContractVersion\": {{contractVersion}},\n  \"externalTransferReference\": \"POSTMAN-BANK-REUSED\",\n  \"disbursementValueDate\": \"{{disbursementValueDate}}\",\n  \"firstRepaymentDate\": \"{{firstRepaymentDate}}\"\n}", "options": {"raw": {"language": "json"}}},
+                                "url": {"raw": "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/disbursements", "host": ["{{baseUrl}}"], "path": ["api", "v1", "loan-applications", "{{loanApplicationId}}", "disbursements"]},
+                                "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{accountingAccessToken}}", "type": "string"}]},
+                                "description": "Reuses the successful synthetic request UUID with different logical content."
+                            },
+                            "response": [],
+                            "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                "pm.test(\"Status is 409\", function () { pm.response.to.have.status(409); });",
+                                "pm.test(\"Idempotency key is rejected\", function () { pm.expect(pm.response.json().errorCode).to.eql(\"IDEMPOTENCY_KEY_REUSED\"); });",
+                                "pm.test(\"Reference is not echoed\", function () { pm.expect(pm.response.text()).not.to.include(\"POSTMAN-BANK-REUSED\"); });"
+                            ]}}]
+                        },
+                        {
+                            "name": "Reject a second confirmation after completion",
+                            "request": {
+                                "method": "POST",
+                                "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+                                "body": {"mode": "raw", "raw": "{\n  \"requestId\": \"40000000-0000-0000-0000-000000000002\",\n  \"expectedContractVersion\": {{contractVersion}},\n  \"externalTransferReference\": \"POSTMAN-BANK-COMPLETED\",\n  \"disbursementValueDate\": \"{{disbursementValueDate}}\",\n  \"firstRepaymentDate\": \"{{firstRepaymentDate}}\"\n}", "options": {"raw": {"language": "json"}}},
+                                "url": {"raw": "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/disbursements", "host": ["{{baseUrl}}"], "path": ["api", "v1", "loan-applications", "{{loanApplicationId}}", "disbursements"]},
+                                "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{accountingAccessToken}}", "type": "string"}]},
+                                "description": "Uses a different synthetic command after activation is complete."
+                            },
+                            "response": [],
+                            "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                "pm.test(\"Status is 409\", function () { pm.response.to.have.status(409); });",
+                                "pm.test(\"Completed disbursement is rejected\", function () { pm.expect(pm.response.json().errorCode).to.eql(\"DISBURSEMENT_ALREADY_COMPLETED\"); });",
+                                "pm.test(\"Reference is not echoed\", function () { pm.expect(pm.response.text()).not.to.include(\"POSTMAN-BANK-COMPLETED\"); });"
+                            ]}}]
+                        },                        {
+                            "name": "Customer queries owned LoanAccount",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {"raw": "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/loan-account", "host": ["{{baseUrl}}"], "path": ["api", "v1", "loan-applications", "{{loanApplicationId}}", "loan-account"]},
+                                "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{customerAccessToken}}", "type": "string"}]}
+                            },
+                            "response": [],
+                            "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                "pm.test(\"Owner query is 200\", function () { pm.response.to.have.status(200); });",
+                                "pm.test(\"Destination uses the fixed full mask\", function () { const json = pm.response.json(); pm.expect(json.disbursementDestination.maskedAccountNumber).to.eql(\"********\"); pm.expect(json).not.to.have.property(\"externalTransferReference\"); });"
+                            ]}}]
+                        },
+                        {
+                            "name": "Reject cross-Customer LoanAccount access",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {"raw": "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/loan-account", "host": ["{{baseUrl}}"], "path": ["api", "v1", "loan-applications", "{{loanApplicationId}}", "loan-account"]},
+                                "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{otherCustomerAccessToken}}", "type": "string"}]},
+                                "description": "Set otherCustomerAccessToken to a synthetic test Customer that does not own loanApplicationId."
+                            },
+                            "response": [],
+                            "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                "pm.test(\"Status is 404\", function () { pm.response.to.have.status(404); });",
+                                "pm.test(\"Resource remains undisclosed\", function () { const json = pm.response.json(); pm.expect(json.errorCode).to.eql(\"LOAN_ACCOUNT_NOT_FOUND\"); pm.expect(json.message).to.eql(\"Loan Account was not found.\"); });"
+                            ]}}]
+                        },                        {
+                            "name": "Accounting queries LoanAccount",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {"raw": "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/loan-account", "host": ["{{baseUrl}}"], "path": ["api", "v1", "loan-applications", "{{loanApplicationId}}", "loan-account"]},
+                                "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{accountingAccessToken}}", "type": "string"}]}
+                            },
+                            "response": [],
+                            "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                "pm.test(\"Staff query is 200\", function () { pm.response.to.have.status(200); });",
+                                "pm.test(\"Final schedule is ordered\", function () { const items = pm.response.json().finalRepaymentSchedule.items; for (let i = 0; i < items.length; i++) { pm.expect(items[i].installmentNumber).to.eql(i + 1); } });"
+                            ]}}]
+                        }
+                    ]
+                },
                  {
                      "name":  "90 Negative Auth and Validation Checks",
                      "item":  [

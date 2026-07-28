@@ -474,3 +474,12 @@ log.info("Processing loan", kv("loanId", loanId), kv("customerId", customerId));
 > **Audit receives shared business audit events and records immutable history.** It does not approve, reject, disburse, calculate eligibility, or otherwise control the core workflow.
 
 > **Current user access flows through shared abstractions.** Application services may depend on `CurrentUserProvider`; concrete Spring Security and JWT implementation stays in `identity/infrastructure/security`.
+
+### Manual-disbursement boundary
+
+- Web controllers depend only on the confirmation, reveal, and query input ports and application-owned DTO mapping.
+- `ConfirmManualDisbursementService` owns one Spring transaction; all account, evidence, schedule, Salary Advance conversion, application, history, and audit writes join it.
+- The product activation resolver is application-layer policy selection. It has no infrastructure dependency and no UCL/Collateral fallback.
+- Destination reveal reuses Loan's existing contract-purpose protector; it does not call Customer persistence or the Customer's current bank account.
+- Query ownership comes from `CurrentUserProvider`: Customers require `loan:read:own` and exact ownership; staff require `loan:read`.
+- Only the reveal response contains plaintext destination data. It is a dedicated redacted DTO with no-store headers; ordinary application, contract, account, audit, history, error, and log boundaries remain masked/PII-safe.

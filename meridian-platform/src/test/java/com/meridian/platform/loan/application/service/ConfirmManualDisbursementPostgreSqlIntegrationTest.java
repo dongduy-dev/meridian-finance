@@ -11,6 +11,7 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimit;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -451,7 +452,7 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
     @Test
     void unsupportedProductAndReleasedReservationRollbackEveryGenericWrite() {
         var unsupported = support.createFixture(true, ProductCode.UNSECURED_CONSUMER_LOAN);
-        var unsupportedFailure = assertThrows(BusinessStateConflictException.class, () ->
+        var unsupportedFailure = assertThrows(BusinessRuleViolationException.class, () ->
                 disbursements.confirm(support.command(
                         unsupported, UUID.randomUUID(), "UCL-" + unsupported.token())));
         assertEquals("PRODUCT_ACTIVATION_NOT_SUPPORTED", unsupportedFailure.getErrorCode());
@@ -466,7 +467,7 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
             jdbc.update("update salary_advance_limits set reserved_amount = 0, available_amount = 5000 "
                     + "where id = ?", released.limitId());
         });
-        var releasedFailure = assertThrows(BusinessStateConflictException.class, () ->
+        var releasedFailure = assertThrows(BusinessRuleViolationException.class, () ->
                 disbursements.confirm(support.command(
                         released, UUID.randomUUID(), "RELEASED-" + released.token())));
         assertEquals("SALARY_ADVANCE_RESERVATION_RELEASED", releasedFailure.getErrorCode());

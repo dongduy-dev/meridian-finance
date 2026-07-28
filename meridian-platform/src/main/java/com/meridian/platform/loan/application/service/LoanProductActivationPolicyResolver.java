@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.domain.model.ProductCode;
-import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.springframework.stereotype.Component;
 
 import java.util.EnumMap;
@@ -38,7 +38,7 @@ public class LoanProductActivationPolicyResolver {
                 Objects.requireNonNull(productCode, "productCode must not be null")
         );
         if (policy == null) {
-            throw new BusinessStateConflictException(
+            throw new BusinessRuleViolationException(
                     "PRODUCT_ACTIVATION_NOT_SUPPORTED",
                     "Loan product activation is not supported."
             );

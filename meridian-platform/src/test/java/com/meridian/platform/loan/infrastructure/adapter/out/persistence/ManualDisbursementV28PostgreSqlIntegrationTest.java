@@ -19,6 +19,7 @@ import com.meridian.platform.loan.domain.model.RepaymentSchedule;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleItem;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.BeforeEach;
@@ -702,8 +703,8 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                 otherApplication.applicationId(),
                 wrongApplication.limitId()
         );
-        BusinessStateConflictException applicationFailure = assertThrows(
-                BusinessStateConflictException.class,
+        BusinessRuleViolationException applicationFailure = assertThrows(
+                BusinessRuleViolationException.class,
                 () -> transactions.execute(status -> activationPolicy.activate(
                         wrongApplication.command()
                 ))
@@ -719,8 +720,8 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                 anotherLimit.limitId(),
                 wrongLimit.limitId()
         );
-        BusinessStateConflictException limitFailure = assertThrows(
-                BusinessStateConflictException.class,
+        BusinessRuleViolationException limitFailure = assertThrows(
+                BusinessRuleViolationException.class,
                 () -> transactions.execute(status -> activationPolicy.activate(
                         wrongLimit.command()
                 ))
@@ -741,8 +742,8 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                         + "available_amount = 1001 where id = ?",
                 wrongAmount.limitId()
         );
-        BusinessStateConflictException amountFailure = assertThrows(
-                BusinessStateConflictException.class,
+        BusinessRuleViolationException amountFailure = assertThrows(
+                BusinessRuleViolationException.class,
                 () -> transactions.execute(status -> activationPolicy.activate(
                         wrongAmount.command()
                 ))
@@ -755,8 +756,8 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                         + "available_amount = 1001 where id = ?",
                 aggregateMismatch.limitId()
         );
-        BusinessStateConflictException aggregateFailure = assertThrows(
-                BusinessStateConflictException.class,
+        BusinessRuleViolationException aggregateFailure = assertThrows(
+                BusinessRuleViolationException.class,
                 () -> transactions.execute(status -> activationPolicy.activate(
                         aggregateMismatch.command()
                 ))
@@ -795,8 +796,8 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                     released.applicationId()
             );
         });
-        BusinessStateConflictException releaseFailure = assertThrows(
-                BusinessStateConflictException.class,
+        BusinessRuleViolationException releaseFailure = assertThrows(
+                BusinessRuleViolationException.class,
                 () -> transactions.execute(status -> activationPolicy.activate(
                         released.command()
                 ))
