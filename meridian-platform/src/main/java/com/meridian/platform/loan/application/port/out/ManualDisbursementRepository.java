@@ -7,6 +7,8 @@ import java.util.UUID;
 
 public interface ManualDisbursementRepository {
 
+    void acquireConfirmationRequestLock(UUID requestId);
+
     ManualDisbursementSaveOutcome save(ManualDisbursement manualDisbursement);
 
     Optional<ManualDisbursement> findByRequestId(UUID requestId);

@@ -2,6 +2,8 @@ package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.application.port.out.ManualDisbursementSaveOutcome;
 import com.meridian.platform.loan.domain.model.ManualDisbursement;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,11 +34,32 @@ class ManualDisbursementRepositoryAdapterTest {
     @Mock
     private JpaManualDisbursementRepository jpaRepository;
 
+    @Mock
+    private EntityManager entityManager;
+
+    @Mock
+    private Query lockQuery;
+
     private ManualDisbursementRepositoryAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        adapter = new ManualDisbursementRepositoryAdapter(jpaRepository);
+        adapter = new ManualDisbursementRepositoryAdapter(jpaRepository, entityManager);
+    }
+
+    @Test
+    void acquiresCategoryPrefixedConfirmationRequestLock() {
+        UUID requestId = UUID.randomUUID();
+        when(entityManager.createNativeQuery(anyString())).thenReturn(lockQuery);
+        when(lockQuery.setParameter(anyString(), any())).thenReturn(lockQuery);
+
+        adapter.acquireConfirmationRequestLock(requestId);
+
+        verify(lockQuery).setParameter(
+                "lockKey",
+                "manual-disbursement:confirm-request:" + requestId
+        );
+        verify(lockQuery).getSingleResult();
     }
 
     @Test

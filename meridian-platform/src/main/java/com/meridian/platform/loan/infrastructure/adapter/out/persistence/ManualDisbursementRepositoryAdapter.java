@@ -3,6 +3,7 @@ package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 import com.meridian.platform.loan.application.port.out.ManualDisbursementRepository;
 import com.meridian.platform.loan.application.port.out.ManualDisbursementSaveOutcome;
 import com.meridian.platform.loan.domain.model.ManualDisbursement;
+import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,11 +15,28 @@ import java.util.UUID;
 public class ManualDisbursementRepositoryAdapter implements ManualDisbursementRepository {
 
     private final JpaManualDisbursementRepository manualDisbursements;
+    private final EntityManager entityManager;
 
     public ManualDisbursementRepositoryAdapter(
-            JpaManualDisbursementRepository manualDisbursements
+            JpaManualDisbursementRepository manualDisbursements,
+            EntityManager entityManager
     ) {
         this.manualDisbursements = manualDisbursements;
+        this.entityManager = entityManager;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void acquireConfirmationRequestLock(UUID requestId) {
+        String lockKey = "manual-disbursement:confirm-request:" + requestId;
+        entityManager.createNativeQuery("""
+                        WITH lock AS (
+                            SELECT pg_advisory_xact_lock(hashtextextended(CAST(:lockKey AS text), 0))
+                        )
+                        SELECT 1 FROM lock
+                        """)
+                .setParameter("lockKey", lockKey)
+                .getSingleResult();
     }
 
     @Override
