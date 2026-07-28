@@ -528,6 +528,52 @@ class SalaryAdvanceLoanActivationPolicyTest {
         verify(limits, never()).save(any());
     }
 
+    @ParameterizedTest
+    @EnumSource(SalaryAdvanceLimitStatus.class)
+    void validatesCompleteExposureWithoutRequiringActiveLimit(
+            SalaryAdvanceLimitStatus status
+    ) {
+        Fixture fixture = fixture(status);
+        arrangeCompleted(fixture);
+
+        policy.validateCompletedActivation(fixture.completedCommand());
+
+        verify(limits, never()).save(any());
+        verify(movements, never()).save(any());
+    }
+
+    @Test
+    void rejectsIncompleteOrContradictoryCompletedExposure() {
+        Fixture fixture = fixture(SalaryAdvanceLimitStatus.ACTIVE);
+        arrangeCompleted(fixture);
+
+        when(movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                fixture.application().id(),
+                SalaryAdvanceLimitMovementType.DISBURSED_TO_USED
+        )).thenReturn(List.of());
+        assertCode("SYSTEM_STATE_CONFLICT", () ->
+                policy.validateCompletedActivation(fixture.completedCommand()));
+
+        arrangeCompleted(fixture);
+        when(movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                fixture.application().id(),
+                SalaryAdvanceLimitMovementType.DISBURSED_TO_USED
+        )).thenReturn(List.of(SalaryAdvanceLimitMovement.disbursedToUsed(
+                MOVEMENT_ID,
+                LIMIT_ID,
+                fixture.application().id(),
+                UUID.randomUUID(),
+                PRINCIPAL,
+                OCCURRED_AT
+        )));
+        assertCode("SYSTEM_STATE_CONFLICT", () ->
+                policy.validateCompletedActivation(fixture.completedCommand()));
+
+        arrangeCompleted(fixture);
+        when(movements.calculateUsedAmount(LIMIT_ID)).thenReturn(money(1_499));
+        assertCode("SYSTEM_STATE_CONFLICT", () ->
+                policy.validateCompletedActivation(fixture.completedCommand()));
+    }
     @Test
     void commandAndResultToStringRedactOperationalAndFinancialEvidence() {
         Fixture fixture = fixture(SalaryAdvanceLimitStatus.ACTIVE);
@@ -542,6 +588,43 @@ class SalaryAdvanceLoanActivationPolicyTest {
         assertFalse(result.toString().contains(PRINCIPAL.toPlainString()));
     }
 
+    private void arrangeCompleted(Fixture fixture) {
+        SalaryAdvanceLimit completedLimit = new SalaryAdvanceLimit(
+                LIMIT_ID,
+                fixture.application().customerId(),
+                LINK_ID,
+                money(5_000),
+                money(1_500),
+                BigDecimal.ZERO.setScale(2),
+                AVAILABLE,
+                fixture.limit().status(),
+                fixture.limit().lastRefreshedAt()
+        );
+        lenient().when(verifications.findByLoanApplicationIdForUpdate(fixture.application().id()))
+                .thenReturn(Optional.of(verification(fixture)));
+        lenient().when(limits.findByIdForUpdate(LIMIT_ID))
+                .thenReturn(Optional.of(completedLimit));
+        lenient().when(movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                fixture.application().id(), SalaryAdvanceLimitMovementType.RESERVED))
+                .thenReturn(List.of(fixture.reservation()));
+        lenient().when(movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                fixture.application().id(), SalaryAdvanceLimitMovementType.RESERVATION_RELEASED))
+                .thenReturn(List.of());
+        lenient().when(movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                fixture.application().id(), SalaryAdvanceLimitMovementType.DISBURSED_TO_USED))
+                .thenReturn(List.of(SalaryAdvanceLimitMovement.disbursedToUsed(
+                        MOVEMENT_ID,
+                        LIMIT_ID,
+                        fixture.application().id(),
+                        ACCOUNT_ID,
+                        PRINCIPAL,
+                        OCCURRED_AT
+                )));
+        lenient().when(movements.calculateOutstandingReservedAmount(LIMIT_ID))
+                .thenReturn(BigDecimal.ZERO.setScale(2));
+        lenient().when(movements.calculateUsedAmount(LIMIT_ID))
+                .thenReturn(money(1_500));
+    }
     private void arrangeValid(Fixture fixture) {
         lenient().when(verifications.findByLoanApplicationIdForUpdate(fixture.application().id()))
                 .thenReturn(Optional.of(verification(fixture)));
@@ -764,6 +847,14 @@ class SalaryAdvanceLoanActivationPolicyTest {
                     account,
                     MOVEMENT_ID,
                     OCCURRED_AT
+            );
+        }
+
+        LoanProductActivationPolicy.CompletedActivationValidationCommand completedCommand() {
+            return new LoanProductActivationPolicy.CompletedActivationValidationCommand(
+                    application,
+                    contract,
+                    account
             );
         }
     }

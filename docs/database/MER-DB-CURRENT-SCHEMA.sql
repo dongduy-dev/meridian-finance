@@ -1,7 +1,7 @@
 -- Meridian current physical schema snapshot.
 -- Documentation only. Flyway migrations under meridian-platform/src/main/resources/db/migration
 -- remain the executable database history.
--- Snapshot source: migrations V1 through V29.
+-- Snapshot source: migrations V1 through V30.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -3136,3 +3136,35 @@ ALTER TABLE audit_events
         'LOAN_CONTRACT_ACKNOWLEDGED', 'LOAN_CONTRACT_READINESS_CONFIRMED',
         'MANUAL_DISBURSEMENT_CONFIRMED'
     ));
+
+-- V30 immutable Loan Application product identity
+
+ALTER TABLE loan_products
+    ADD CONSTRAINT uq_loan_products_identity_tuple
+        UNIQUE (id, product_code, product_type);
+
+ALTER TABLE loan_applications
+    ADD CONSTRAINT fk_loan_applications_product_identity
+        FOREIGN KEY (loan_product_id, product_code, product_type)
+        REFERENCES loan_products (id, product_code, product_type)
+        ON UPDATE RESTRICT
+        ON DELETE RESTRICT;
+
+CREATE OR REPLACE FUNCTION reject_loan_application_product_identity_mutation()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.loan_product_id IS DISTINCT FROM OLD.loan_product_id
+            OR NEW.product_code IS DISTINCT FROM OLD.product_code
+            OR NEW.product_type IS DISTINCT FROM OLD.product_type THEN
+        RAISE EXCEPTION 'Loan Application product identity is immutable';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_loan_applications_product_identity_immutable
+BEFORE UPDATE OF loan_product_id, product_code, product_type ON loan_applications
+FOR EACH ROW
+EXECUTE FUNCTION reject_loan_application_product_identity_mutation();

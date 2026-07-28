@@ -26,6 +26,8 @@ class ManualDisbursementAuditV29MigrationTest {
                 "V29__add_manual_disbursement_audit_action.sql"
         ));
 
+        assertTrue(sql.contains("V29 preflight failed"));
+        assertTrue(sql.contains("regexp_matches"));
         assertTrue(sql.contains("DROP CONSTRAINT chk_audit_events_action"));
         assertTrue(sql.contains("ADD CONSTRAINT chk_audit_events_action CHECK"));
         assertTrue(sql.contains("'MANUAL_DISBURSEMENT_CONFIRMED'"));
@@ -52,13 +54,15 @@ class ManualDisbursementAuditV29MigrationTest {
     }
 
     @Test
-    void currentSchemaSnapshotDeclaresV29AndTheNewAction() throws Exception {
+    void currentSchemaSnapshotDeclaresV30AndTheNewAction() throws Exception {
         String snapshot = Files.readString(Path.of(
                 "../docs/database/MER-DB-CURRENT-SCHEMA.sql"
         ));
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V29"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V30"));
         assertTrue(snapshot.contains("-- V29 manual disbursement audit action"));
         assertTrue(snapshot.contains("'MANUAL_DISBURSEMENT_CONFIRMED'"));
+        assertTrue(snapshot.contains("uq_loan_products_identity_tuple"));
+        assertTrue(snapshot.contains("trg_loan_applications_product_identity_immutable"));
     }
 }

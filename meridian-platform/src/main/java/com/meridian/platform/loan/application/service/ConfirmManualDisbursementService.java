@@ -3,6 +3,7 @@ package com.meridian.platform.loan.application.service;
 import com.meridian.platform.loan.application.port.in.ConfirmManualDisbursementUseCase;
 import com.meridian.platform.loan.application.port.out.LoanAccountRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanContractRepository;
 import com.meridian.platform.loan.application.port.out.ManualDisbursementRepository;
 import com.meridian.platform.loan.application.port.out.ManualDisbursementSaveOutcome;
@@ -11,13 +12,16 @@ import com.meridian.platform.loan.domain.model.LoanAccount;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
+import com.meridian.platform.loan.domain.model.LoanApplicationTransitionAction;
 import com.meridian.platform.loan.domain.model.LoanContract;
 import com.meridian.platform.loan.domain.model.LoanContractStatus;
 import com.meridian.platform.loan.domain.model.ManualDisbursement;
 import com.meridian.platform.loan.domain.model.RepaymentSchedule;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleItem;
+import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
 import com.meridian.platform.loan.domain.service.FinalRepaymentScheduleGenerator;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
+import com.meridian.platform.shared.application.audit.BusinessAuditEvidenceReader;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
@@ -51,6 +55,8 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
     private final LoanAccountRepository loanAccounts;
     private final ManualDisbursementRepository manualDisbursements;
     private final RepaymentScheduleRepository repaymentSchedules;
+    private final LoanApplicationStatusTransitionRepository transitionEvidence;
+    private final BusinessAuditEvidenceReader auditEvidence;
     private final LoanProductActivationPolicyResolver activationPolicies;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
     private final BusinessAuditPublisher auditPublisher;
@@ -65,6 +71,8 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
             LoanAccountRepository loanAccounts,
             ManualDisbursementRepository manualDisbursements,
             RepaymentScheduleRepository repaymentSchedules,
+            LoanApplicationStatusTransitionRepository transitionEvidence,
+            BusinessAuditEvidenceReader auditEvidence,
             LoanProductActivationPolicyResolver activationPolicies,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
             BusinessAuditPublisher auditPublisher,
@@ -76,6 +84,8 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
         this.loanAccounts = loanAccounts;
         this.manualDisbursements = manualDisbursements;
         this.repaymentSchedules = repaymentSchedules;
+        this.transitionEvidence = transitionEvidence;
+        this.auditEvidence = auditEvidence;
         this.activationPolicies = activationPolicies;
         this.transitionRecorder = transitionRecorder;
         this.auditPublisher = auditPublisher;
@@ -87,9 +97,7 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
     @Transactional
     public Result confirm(Command command) {
         Objects.requireNonNull(command, "command must not be null");
-        String canonicalReference = ManualDisbursement.canonicalReference(
-                command.externalTransferReference()
-        );
+        String canonicalReference = command.externalTransferReference();
         AuthenticatedUser actor = currentUserProvider.currentUser();
         requireAccounting(actor);
 
@@ -236,17 +244,18 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
             return existing.manualDisbursement();
         }
         if (outcome instanceof ManualDisbursementSaveOutcome.Conflict conflict) {
-            throw switch (conflict.kind()) {
-                case EXTERNAL_TRANSFER_REFERENCE -> conflict(
+            if (conflict.kind()
+                    == ManualDisbursementSaveOutcome.ConflictKind.EXTERNAL_TRANSFER_REFERENCE) {
+                throw conflict(
                         "DUPLICATE_TRANSFER_REFERENCE",
                         "External transfer evidence is already recorded."
                 );
-                case LOAN_APPLICATION, LOAN_CONTRACT, LOAN_ACCOUNT -> conflict(
-                        "DISBURSEMENT_ALREADY_COMPLETED",
-                        "Manual disbursement was already completed."
-                );
-                case DISBURSEMENT_ID -> systemStateConflict();
-            };
+            }
+            if (conflict.kind()
+                    == ManualDisbursementSaveOutcome.ConflictKind.DISBURSEMENT_ID) {
+                throw systemStateConflict();
+            }
+            reconcileCompletionConflict(conflict.kind(), attempted);
         }
         if (outcome instanceof ManualDisbursementSaveOutcome.UnresolvedConflict) {
             throw systemStateConflict();
@@ -254,6 +263,35 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
         throw systemStateConflict();
     }
 
+    private void reconcileCompletionConflict(
+            ManualDisbursementSaveOutcome.ConflictKind kind,
+            ManualDisbursement attempted
+    ) {
+        ManualDisbursement existing = switch (kind) {
+            case LOAN_APPLICATION -> manualDisbursements
+                    .findByLoanApplicationId(attempted.loanApplicationId()).orElse(null);
+            case LOAN_CONTRACT -> manualDisbursements
+                    .findByLoanContractId(attempted.loanContractId()).orElse(null);
+            case LOAN_ACCOUNT -> manualDisbursements
+                    .findByLoanAccountId(attempted.loanAccountId()).orElse(null);
+            case EXTERNAL_TRANSFER_REFERENCE, DISBURSEMENT_ID -> null;
+        };
+        boolean matchingConflict = existing != null && switch (kind) {
+            case LOAN_APPLICATION -> existing.loanApplicationId().equals(
+                    attempted.loanApplicationId());
+            case LOAN_CONTRACT -> existing.loanContractId().equals(attempted.loanContractId());
+            case LOAN_ACCOUNT -> existing.loanAccountId().equals(attempted.loanAccountId());
+            case EXTERNAL_TRANSFER_REFERENCE, DISBURSEMENT_ID -> false;
+        };
+        if (!matchingConflict || existing.requestId().equals(attempted.requestId())) {
+            throw systemStateConflict();
+        }
+        loadCompletedResult(existing, true);
+        throw conflict(
+                "DISBURSEMENT_ALREADY_COMPLETED",
+                "Manual disbursement was already completed."
+        );
+    }
     private Result validateAndLoadReplay(
             ManualDisbursement existing,
             Command command,
@@ -261,6 +299,7 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
             UUID actorUserId
     ) {
         requireSameLogicalRequest(existing, command, canonicalReference, actorUserId);
+        applications.acquireWorkflowLock(existing.loanApplicationId());
         return loadCompletedResult(existing, true);
     }
 
@@ -284,21 +323,55 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
     }
 
     private Result loadCompletedResult(
-            ManualDisbursement disbursement,
+            ManualDisbursement locatedDisbursement,
             boolean replay
     ) {
-        LoanApplication application = applications.findById(disbursement.loanApplicationId())
+        LoanApplication application = applications
+                .findByIdForUpdate(locatedDisbursement.loanApplicationId())
                 .orElseThrow(ConfirmManualDisbursementService::systemStateConflict);
         LoanContract contract = contracts
-                .findCurrentByApplicationId(disbursement.loanApplicationId())
+                .findCurrentByApplicationIdForUpdate(application.id())
                 .orElseThrow(ConfirmManualDisbursementService::systemStateConflict);
-        LoanAccount account = loanAccounts.findById(disbursement.loanAccountId())
+        LoanAccount account = loanAccounts
+                .findByLoanApplicationIdForUpdate(application.id())
+                .orElseThrow(ConfirmManualDisbursementService::systemStateConflict);
+        ManualDisbursement disbursement = manualDisbursements
+                .findByLoanApplicationIdForUpdate(application.id())
                 .orElseThrow(ConfirmManualDisbursementService::systemStateConflict);
         RepaymentSchedule schedule = repaymentSchedules
-                .findByLoanAccountId(account.id())
+                .findByLoanApplicationId(application.id())
                 .orElseThrow(ConfirmManualDisbursementService::systemStateConflict);
+        if (!disbursement.id().equals(locatedDisbursement.id())
+                || !disbursement.requestId().equals(locatedDisbursement.requestId())) {
+            throw systemStateConflict();
+        }
         validateCompletedEvidence(application, contract, account, disbursement, schedule);
+        activationPolicies.resolve(application.productCode()).validateCompletedActivation(
+                new LoanProductActivationPolicy.CompletedActivationValidationCommand(
+                        application,
+                        contract,
+                        account
+                )
+        );
+        validateCompletionRecords(application.id());
         return toResult(application, account, disbursement, schedule, replay);
+    }
+
+    private void validateCompletionRecords(UUID loanApplicationId) {
+        long historyCount = transitionEvidence.countMatching(
+                loanApplicationId,
+                LoanApplicationStatus.DISBURSEMENT_PENDING,
+                LoanApplicationStatus.DISBURSED,
+                LoanApplicationTransitionAction.CONFIRM_MANUAL_DISBURSEMENT
+        );
+        long auditCount = auditEvidence.countMatching(
+                BusinessAuditAction.MANUAL_DISBURSEMENT_CONFIRMED,
+                BusinessAuditEntityType.LOAN_APPLICATION,
+                loanApplicationId
+        );
+        if (historyCount != 1 || auditCount != 1) {
+            throw systemStateConflict();
+        }
     }
 
     private static void validateCompletedEvidence(
@@ -318,42 +391,82 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
                 || !account.loanApplicationId().equals(application.id())
                 || !account.loanContractId().equals(contract.id())
                 || !account.customerId().equals(application.customerId())
+                || account.approvedPrincipal().compareTo(
+                        contract.financialTerms().approvedPrincipal()) != 0
+                || account.approvedTermMonths()
+                        != contract.financialTerms().approvedTermMonths()
+                || account.totalInterest().compareTo(
+                        contract.financialTerms().totalInterest()) != 0
+                || account.feeAmount().compareTo(contract.financialTerms().feeAmount()) != 0
+                || account.totalRepaymentAmount().compareTo(
+                        contract.financialTerms().totalRepaymentAmount()) != 0
                 || !disbursement.loanApplicationId().equals(application.id())
                 || !disbursement.loanContractId().equals(contract.id())
                 || !disbursement.loanAccountId().equals(account.id())
                 || disbursement.expectedContractVersion() != contract.contractVersion()
-                || disbursement.disbursedAmount().compareTo(account.approvedPrincipal()) != 0
+                || disbursement.disbursedAmount().compareTo(
+                        contract.financialTerms().approvedPrincipal()) != 0
                 || !schedule.loanApplicationId().equals(application.id())
                 || !schedule.loanContractId().equals(contract.id())
                 || !schedule.loanAccountId().equals(account.id())
-                || schedule.approvedPrincipal().compareTo(account.approvedPrincipal()) != 0
-                || schedule.totalInterest().compareTo(account.totalInterest()) != 0
-                || schedule.feeAmount().compareTo(account.feeAmount()) != 0
+                || schedule.scheduleType() != RepaymentScheduleType.FINAL
+                || schedule.version() != RepaymentSchedule.INITIAL_FINAL_VERSION
+                || schedule.approvedTermMonths()
+                        != contract.financialTerms().approvedTermMonths()
+                || schedule.approvedPrincipal().compareTo(
+                        contract.financialTerms().approvedPrincipal()) != 0
+                || schedule.totalInterest().compareTo(
+                        contract.financialTerms().totalInterest()) != 0
+                || schedule.feeAmount().compareTo(contract.financialTerms().feeAmount()) != 0
                 || schedule.totalRepaymentAmount().compareTo(
-                        account.totalRepaymentAmount()) != 0
-                || !schedule.firstDueDate().equals(disbursement.firstRepaymentDate())) {
+                        contract.financialTerms().totalRepaymentAmount()) != 0
+                || !schedule.firstDueDate().equals(disbursement.firstRepaymentDate())
+                || !scheduleItemsMatchContract(schedule, contract)) {
             throw systemStateConflict();
         }
     }
 
-    private static void rejectExistingActivation(
+    private static boolean scheduleItemsMatchContract(
+            RepaymentSchedule schedule,
+            LoanContract contract
+    ) {
+        if (schedule.items().size() != contract.repaymentItems().size()) {
+            return false;
+        }
+        for (int index = 0; index < schedule.items().size(); index++) {
+            RepaymentScheduleItem scheduleItem = schedule.items().get(index);
+            var contractItem = contract.repaymentItems().get(index);
+            if (!scheduleItem.sourceLoanContractRepaymentItemId().equals(contractItem.id())
+                    || scheduleItem.installmentNumber() != contractItem.installmentNumber()
+                    || scheduleItem.principalDue().compareTo(contractItem.principalDue()) != 0
+                    || scheduleItem.interestDue().compareTo(contractItem.interestDue()) != 0
+                    || scheduleItem.feeDue().compareTo(contractItem.feeDue()) != 0
+                    || scheduleItem.totalDue().compareTo(contractItem.totalDue()) != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void rejectExistingActivation(
             LoanApplication application,
             LoanAccount account,
             ManualDisbursement disbursement,
             RepaymentSchedule schedule
     ) {
-        if (application.status() == LoanApplicationStatus.DISBURSED
-                || account != null && disbursement != null && schedule != null) {
+        if (disbursement != null) {
+            loadCompletedResult(disbursement, true);
             throw conflict(
                     "DISBURSEMENT_ALREADY_COMPLETED",
                     "Manual disbursement was already completed."
             );
         }
-        if (account != null || disbursement != null || schedule != null) {
+        if (application.status() == LoanApplicationStatus.DISBURSED
+                || account != null
+                || schedule != null) {
             throw systemStateConflict();
         }
     }
-
     private static void validateLifecycle(
             LoanApplication application,
             LoanContract contract,

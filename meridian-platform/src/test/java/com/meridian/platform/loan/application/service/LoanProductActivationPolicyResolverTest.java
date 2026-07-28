@@ -57,6 +57,13 @@ class LoanProductActivationPolicyResolverTest {
             public ProductActivationResult activate(ProductActivationCommand command) {
                 throw new UnsupportedOperationException();
             }
+
+            @Override
+            public void validateCompletedActivation(
+                    CompletedActivationValidationCommand command
+            ) {
+                throw new UnsupportedOperationException();
+            }
         };
     }
 }

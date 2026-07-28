@@ -18,17 +18,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ManualDisbursementTest {
 
     @Test
-    void createsImmutableEvidenceFromContractAndCanonicalizesReference() {
+    void createsImmutableEvidenceFromContractUsingCanonicalReference() {
         LoanContract contract = LoanContractTestData.ready();
         LoanAccount account = LoanAccount.activate(UUID.randomUUID(), contract, LocalDateTime.now());
 
+        String canonicalReference = ManualDisbursement.canonicalReference(
+                "  bank:transfer-001  "
+        );
         ManualDisbursement evidence = ManualDisbursement.confirmed(
                 UUID.randomUUID(),
                 contract,
                 account,
                 UUID.randomUUID(),
                 contract.contractVersion(),
-                "  bank:transfer-001  ",
+                canonicalReference,
                 LocalDate.of(2026, 7, 27),
                 LocalDate.of(2026, 8, 27),
                 UUID.randomUUID(),
@@ -36,6 +39,11 @@ class ManualDisbursementTest {
         );
 
         assertEquals("BANK:TRANSFER-001", evidence.externalTransferReference());
+        assertThrows(BusinessRuleViolationException.class, () -> ManualDisbursement.confirmed(
+                UUID.randomUUID(), contract, account, UUID.randomUUID(), 1,
+                "bank:transfer-001", LocalDate.of(2026, 7, 27),
+                LocalDate.of(2026, 8, 27), UUID.randomUUID(), LocalDateTime.now()
+        ));
         assertEquals(contract.financialTerms().approvedPrincipal(), evidence.disbursedAmount());
         assertEquals(contract.id(), evidence.loanContractId());
         assertEquals(account.id(), evidence.loanAccountId());

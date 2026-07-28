@@ -40,6 +40,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static com.meridian.platform.loan.application.service.ManualDisbursementActivationPostgreSqlTestSupport.ACCOUNTING_USER_ID;
 import static com.meridian.platform.loan.application.service.ManualDisbursementActivationPostgreSqlTestSupport.FIRST_REPAYMENT_DATE;
@@ -245,6 +247,172 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
     }
 
     @Test
+    void replayRejectsCorruptedSalaryAdvanceConversionAndLimitEvidence() {
+        var missing = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var missingCommand = support.command(
+                missing, UUID.randomUUID(), "CORRUPT-MISSING-" + missing.token());
+        disbursements.confirm(missingCommand);
+        corrupt(
+                "delete from salary_advance_limit_movements where loan_application_id = ? "
+                        + "and movement_type = 'DISBURSED_TO_USED'",
+                missing.applicationId()
+        );
+        assertCorruptReplayRejected(missing, missingCommand);
+
+        var amount = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var amountCommand = support.command(
+                amount, UUID.randomUUID(), "CORRUPT-AMOUNT-" + amount.token());
+        disbursements.confirm(amountCommand);
+        corrupt(
+                "update salary_advance_limit_movements set amount = 999 "
+                        + "where loan_application_id = ? and movement_type = 'DISBURSED_TO_USED'",
+                amount.applicationId()
+        );
+        assertCorruptReplayRejected(amount, amountCommand);
+
+        var aggregate = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var aggregateCommand = support.command(
+                aggregate, UUID.randomUUID(), "CORRUPT-LIMIT-" + aggregate.token());
+        disbursements.confirm(aggregateCommand);
+        corrupt(
+                "update salary_advance_limits set used_amount = 1100, available_amount = 3900 "
+                        + "where id = ?",
+                aggregate.limitId()
+        );
+        assertCorruptReplayRejected(aggregate, aggregateCommand);
+
+        var wrongAccount = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var wrongAccountCommand = support.command(
+                wrongAccount, UUID.randomUUID(), "CORRUPT-ACCOUNT-" + wrongAccount.token());
+        disbursements.confirm(wrongAccountCommand);
+        corrupt(
+                "update salary_advance_limit_movements set loan_account_id = ? "
+                        + "where loan_application_id = ? and movement_type = 'DISBURSED_TO_USED'",
+                UUID.randomUUID(),
+                wrongAccount.applicationId()
+        );
+        assertCorruptReplayRejected(wrongAccount, wrongAccountCommand);
+    }
+
+    @Test
+    void replayRejectsMissingOrIncorrectHistoryAndAuditEvidence() {
+        var missingHistory = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var missingHistoryCommand = support.command(
+                missingHistory, UUID.randomUUID(), "NO-HISTORY-" + missingHistory.token());
+        disbursements.confirm(missingHistoryCommand);
+        corrupt(
+                "delete from loan_application_status_transitions "
+                        + "where loan_application_id = ? "
+                        + "and action = 'CONFIRM_MANUAL_DISBURSEMENT'",
+                missingHistory.applicationId()
+        );
+        assertCorruptReplayRejected(missingHistory, missingHistoryCommand);
+
+        var wrongHistory = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var wrongHistoryCommand = support.command(
+                wrongHistory, UUID.randomUUID(), "BAD-HISTORY-" + wrongHistory.token());
+        disbursements.confirm(wrongHistoryCommand);
+        corrupt(
+                "update loan_application_status_transitions "
+                        + "set action = 'CONFIRM_DISBURSEMENT_READINESS' "
+                        + "where loan_application_id = ? "
+                        + "and action = 'CONFIRM_MANUAL_DISBURSEMENT'",
+                wrongHistory.applicationId()
+        );
+        assertCorruptReplayRejected(wrongHistory, wrongHistoryCommand);
+
+        var wrongHistoryTuple = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var wrongHistoryTupleCommand = support.command(
+                wrongHistoryTuple, UUID.randomUUID(),
+                "BAD-HISTORY-TUPLE-" + wrongHistoryTuple.token());
+        disbursements.confirm(wrongHistoryTupleCommand);
+        corrupt(
+                "update loan_application_status_transitions "
+                        + "set from_status = 'CONTRACT_PENDING' "
+                        + "where loan_application_id = ? "
+                        + "and action = 'CONFIRM_MANUAL_DISBURSEMENT'",
+                wrongHistoryTuple.applicationId()
+        );
+        assertCorruptReplayRejected(wrongHistoryTuple, wrongHistoryTupleCommand);
+
+        var missingAudit = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var missingAuditCommand = support.command(
+                missingAudit, UUID.randomUUID(), "NO-AUDIT-" + missingAudit.token());
+        disbursements.confirm(missingAuditCommand);
+        corrupt(
+                "delete from audit_events where entity_id = ? "
+                        + "and action = 'MANUAL_DISBURSEMENT_CONFIRMED'",
+                missingAudit.applicationId()
+        );
+        assertCorruptReplayRejected(missingAudit, missingAuditCommand);
+
+        var wrongAudit = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var wrongAuditCommand = support.command(
+                wrongAudit, UUID.randomUUID(), "BAD-AUDIT-" + wrongAudit.token());
+        disbursements.confirm(wrongAuditCommand);
+        corrupt(
+                "update audit_events set action = 'LOAN_CONTRACT_READINESS_CONFIRMED', "
+                        + "entity_type = 'LOAN_CONTRACT' "
+                        + "where entity_id = ? and action = 'MANUAL_DISBURSEMENT_CONFIRMED'",
+                wrongAudit.applicationId()
+        );
+        assertCorruptReplayRejected(wrongAudit, wrongAuditCommand);
+    }
+
+    @Test
+    void replayRejectsMissingScheduleAndEveryMismatchedOwnershipTuple() {
+        var missingSchedule = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var missingScheduleCommand = support.command(
+                missingSchedule, UUID.randomUUID(), "NO-SCHEDULE-" + missingSchedule.token());
+        var missingScheduleResult = disbursements.confirm(missingScheduleCommand);
+        corrupt("delete from repayment_schedule_items where repayment_schedule_id = ?",
+                missingScheduleResult.repaymentScheduleId());
+        corrupt("delete from repayment_schedules where id = ?",
+                missingScheduleResult.repaymentScheduleId());
+        assertCorruptReplayRejected(missingSchedule, missingScheduleCommand);
+
+        var accountOwnership = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var accountCommand = support.command(
+                accountOwnership, UUID.randomUUID(), "BAD-LOAN-ACCOUNT-" + accountOwnership.token());
+        var accountResult = disbursements.confirm(accountCommand);
+        corrupt("update loan_accounts set loan_contract_id = ? where id = ?",
+                UUID.randomUUID(), accountResult.loanAccountId());
+        assertCorruptReplayRejected(accountOwnership, accountCommand);
+
+        var disbursementOwnership = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var disbursementCommand = support.command(
+                disbursementOwnership, UUID.randomUUID(),
+                "BAD-DISBURSEMENT-" + disbursementOwnership.token());
+        var disbursementResult = disbursements.confirm(disbursementCommand);
+        corrupt("update manual_disbursements set loan_account_id = ? where id = ?",
+                UUID.randomUUID(), disbursementResult.manualDisbursementId());
+        assertCorruptReplayRejected(disbursementOwnership, disbursementCommand);
+
+        var scheduleOwnership = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var scheduleCommand = support.command(
+                scheduleOwnership, UUID.randomUUID(), "BAD-SCHEDULE-" + scheduleOwnership.token());
+        var scheduleResult = disbursements.confirm(scheduleCommand);
+        corrupt("update repayment_schedules set loan_account_id = ? where id = ?",
+                UUID.randomUUID(), scheduleResult.repaymentScheduleId());
+        assertCorruptReplayRejected(scheduleOwnership, scheduleCommand);
+    }
+    @Test
+    void differentRequestRejectsCorruptCompletionInsteadOfReportingCompleted() {
+        var fixture = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var original = support.command(
+                fixture, UUID.randomUUID(), "CORRUPT-CONFLICT-" + fixture.token());
+        disbursements.confirm(original);
+        corrupt(
+                "delete from audit_events where entity_id = ? "
+                        + "and action = 'MANUAL_DISBURSEMENT_CONFIRMED'",
+                fixture.applicationId()
+        );
+
+        assertCorruptReplayRejected(fixture, support.command(
+                fixture, UUID.randomUUID(), "SECOND-CONFLICT-" + fixture.token()));
+    }
+
+    @Test
     void reusedRequestCompletedApplicationDuplicateReferenceAndStaleVersionAreDeterministic() {
         var firstFixture = support.createFixture(true, ProductCode.SALARY_ADVANCE);
         String sharedReference = "SHARED-" + firstFixture.token();
@@ -309,8 +477,14 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
     void immediatePersistenceHistoryAndAuditFailuresRollbackEverything() {
         assertRollbackWithRejectingTrigger("loan_accounts", "before insert",
                 "raise exception 'test account failure'", "ACCOUNT");
+        assertRollbackWithRejectingTrigger("manual_disbursements", "before insert",
+                "raise exception 'test manual disbursement failure'", "DISBURSEMENT");
         assertRollbackWithRejectingTrigger("repayment_schedules", "before insert",
                 "raise exception 'test schedule failure'", "SCHEDULE");
+        assertRollbackWithRejectingTrigger("salary_advance_limit_movements", "before insert",
+                "if new.movement_type = 'DISBURSED_TO_USED' then "
+                        + "raise exception 'test conversion movement failure'; end if",
+                "MOVEMENT");
         assertRollbackWithRejectingTrigger("loan_applications", "before update",
                 "if new.status = 'DISBURSED' then raise exception 'test application failure'; end if",
                 "APPLICATION");
@@ -345,23 +519,28 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
     @Test
     void concurrentSameRequestProducesOneActivationAndOneReplay() throws Exception {
         var fixture = support.createFixture(true, ProductCode.SALARY_ADVANCE);
-        var command = support.command(
-                fixture, UUID.randomUUID(), "RACE-SAME-" + fixture.token());
+        var command = support.command(fixture, UUID.randomUUID(), "RACE-SAME-" + fixture.token());
         CountDownLatch lockHeld = new CountDownLatch(1);
         CountDownLatch releaseLock = new CountDownLatch(1);
+        CountDownLatch workersStarted = new CountDownLatch(2);
+        AtomicInteger firstBackendPid = new AtomicInteger();
+        AtomicInteger secondBackendPid = new AtomicInteger();
         ExecutorService executor = Executors.newFixedThreadPool(3);
         List<Future<?>> futures = new ArrayList<>();
         try {
-            futures.add(executor.submit(() -> holdRequestLock(
-                    command.requestId(), lockHeld, releaseLock)));
+            futures.add(executor.submit(() -> holdRequestLock(command.requestId(), lockHeld, releaseLock)));
             assertTrue(lockHeld.await(5, TimeUnit.SECONDS));
-            Future<ConfirmManualDisbursementUseCase.Result> first =
-                    executor.submit(() -> disbursements.confirm(command));
-            Future<ConfirmManualDisbursementUseCase.Result> second =
-                    executor.submit(() -> disbursements.confirm(command));
+            Future<ConfirmManualDisbursementUseCase.Result> first = executor.submit(() ->
+                    inTrackedTransaction(firstBackendPid, workersStarted,
+                            () -> disbursements.confirm(command)));
+            Future<ConfirmManualDisbursementUseCase.Result> second = executor.submit(() ->
+                    inTrackedTransaction(secondBackendPid, workersStarted,
+                            () -> disbursements.confirm(command)));
             futures.add(first);
             futures.add(second);
-            awaitAdvisoryWaiters(2);
+            assertTrue(workersStarted.await(5, TimeUnit.SECONDS));
+            awaitAdvisoryWaiters(Set.of(firstBackendPid.get(), secondBackendPid.get()),
+                    "manual-disbursement:confirm-request:" + command.requestId(), 2);
             assertFalse(first.isDone());
             assertFalse(second.isDone());
             releaseLock.countDown();
@@ -377,43 +556,40 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
             cleanupExecutor(executor, futures);
         }
     }
-
     @Test
     void concurrentDifferentRequestsProduceOneSuccessAndOneCompletedConflict() throws Exception {
         var fixture = support.createFixture(true, ProductCode.SALARY_ADVANCE);
-        var firstCommand = support.command(
-                fixture, UUID.randomUUID(), "RACE-A-" + fixture.token());
-        var secondCommand = support.command(
-                fixture, UUID.randomUUID(), "RACE-B-" + fixture.token());
+        var firstCommand = support.command(fixture, UUID.randomUUID(), "RACE-A-" + fixture.token());
+        var secondCommand = support.command(fixture, UUID.randomUUID(), "RACE-B-" + fixture.token());
         CountDownLatch lockHeld = new CountDownLatch(1);
         CountDownLatch releaseLock = new CountDownLatch(1);
+        CountDownLatch workersStarted = new CountDownLatch(2);
+        AtomicInteger firstBackendPid = new AtomicInteger();
+        AtomicInteger secondBackendPid = new AtomicInteger();
         ExecutorService executor = Executors.newFixedThreadPool(3);
         List<Future<?>> futures = new ArrayList<>();
         try {
-            futures.add(executor.submit(() -> holdWorkflowLock(
-                    fixture.applicationId(), lockHeld, releaseLock)));
+            futures.add(executor.submit(() -> holdWorkflowLock(fixture.applicationId(), lockHeld, releaseLock)));
             assertTrue(lockHeld.await(5, TimeUnit.SECONDS));
             Future<Object> first = executor.submit(() -> capture(() ->
-                    disbursements.confirm(firstCommand)));
+                    inTrackedTransaction(firstBackendPid, workersStarted,
+                            () -> disbursements.confirm(firstCommand))));
             Future<Object> second = executor.submit(() -> capture(() ->
-                    disbursements.confirm(secondCommand)));
+                    inTrackedTransaction(secondBackendPid, workersStarted,
+                            () -> disbursements.confirm(secondCommand))));
             futures.add(first);
             futures.add(second);
-            awaitAdvisoryWaiters(2);
+            assertTrue(workersStarted.await(5, TimeUnit.SECONDS));
+            awaitAdvisoryWaiters(Set.of(firstBackendPid.get(), secondBackendPid.get()),
+                    "loan-application:workflow:" + fixture.applicationId(), 2);
             releaseLock.countDown();
 
-            List<Object> results = List.of(
-                    first.get(10, TimeUnit.SECONDS),
-                    second.get(10, TimeUnit.SECONDS)
-            );
+            List<Object> results = List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS));
             assertEquals(1, results.stream()
-                    .filter(ConfirmManualDisbursementUseCase.Result.class::isInstance)
-                    .count());
-            var losingFailure = assertInstanceOf(
-                    BusinessStateConflictException.class,
+                    .filter(ConfirmManualDisbursementUseCase.Result.class::isInstance).count());
+            var losingFailure = assertInstanceOf(BusinessStateConflictException.class,
                     results.stream().filter(BusinessStateConflictException.class::isInstance)
-                            .findFirst().orElseThrow()
-            );
+                            .findFirst().orElseThrow());
             assertEquals("DISBURSEMENT_ALREADY_COMPLETED", losingFailure.getErrorCode());
             assertEquals(new ManualDisbursementActivationPostgreSqlTestSupport.Counts(
                     1, 1, 1, 2, 1, 1, 1), support.counts(fixture.applicationId()));
@@ -422,78 +598,81 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
             cleanupExecutor(executor, futures);
         }
     }
-
     @Test
     void readinessConfirmationCommitsBeforeWaitingDisbursement() throws Exception {
         var fixture = support.createFixture(false, ProductCode.SALARY_ADVANCE);
         CountDownLatch lockHeld = new CountDownLatch(1);
         CountDownLatch releaseLock = new CountDownLatch(1);
+        CountDownLatch readinessStarted = new CountDownLatch(1);
+        CountDownLatch disbursementStarted = new CountDownLatch(1);
+        AtomicInteger readinessBackendPid = new AtomicInteger();
+        AtomicInteger disbursementBackendPid = new AtomicInteger();
         ExecutorService executor = Executors.newFixedThreadPool(3);
         List<Future<?>> futures = new ArrayList<>();
         try {
-            futures.add(executor.submit(() -> holdWorkflowLock(
-                    fixture.applicationId(), lockHeld, releaseLock)));
+            futures.add(executor.submit(() -> holdWorkflowLock(fixture.applicationId(), lockHeld, releaseLock)));
             assertTrue(lockHeld.await(5, TimeUnit.SECONDS));
-            Future<?> readinessFuture = executor.submit(() -> readiness.confirm(
-                    new ConfirmContractReadinessUseCase.Command(
-                            UUID.randomUUID(), fixture.applicationId(), fixture.contractId(), 1
-                    )
-            ));
+            Future<?> readinessFuture = executor.submit(() -> inTrackedTransaction(
+                    readinessBackendPid, readinessStarted,
+                    () -> readiness.confirm(new ConfirmContractReadinessUseCase.Command(
+                            UUID.randomUUID(), fixture.applicationId(), fixture.contractId(), 1))));
             futures.add(readinessFuture);
-            awaitAdvisoryWaiters(1);
-            Future<ConfirmManualDisbursementUseCase.Result> disbursementFuture =
-                    executor.submit(() -> disbursements.confirm(support.command(
-                            fixture, UUID.randomUUID(), "READY-RACE-" + fixture.token())));
+            assertTrue(readinessStarted.await(5, TimeUnit.SECONDS));
+            String workflowLock = "loan-application:workflow:" + fixture.applicationId();
+            awaitAdvisoryWaiters(Set.of(readinessBackendPid.get()), workflowLock, 1);
+            Future<ConfirmManualDisbursementUseCase.Result> disbursementFuture = executor.submit(() ->
+                    inTrackedTransaction(disbursementBackendPid, disbursementStarted,
+                            () -> disbursements.confirm(support.command(fixture, UUID.randomUUID(),
+                                    "READY-RACE-" + fixture.token()))));
             futures.add(disbursementFuture);
-            awaitAdvisoryWaiters(2);
+            assertTrue(disbursementStarted.await(5, TimeUnit.SECONDS));
+            awaitAdvisoryWaiters(Set.of(readinessBackendPid.get(), disbursementBackendPid.get()),
+                    workflowLock, 2);
             releaseLock.countDown();
 
             readinessFuture.get(10, TimeUnit.SECONDS);
             var result = disbursementFuture.get(10, TimeUnit.SECONDS);
             assertEquals(LoanApplicationStatus.DISBURSED, result.applicationStatus());
-            assertEquals(1, support.count(
-                    "select count(*) from loan_application_status_transitions "
-                            + "where loan_application_id = ? "
-                            + "and action = 'CONFIRM_DISBURSEMENT_READINESS'",
+            assertEquals(1, support.count("select count(*) from loan_application_status_transitions "
+                    + "where loan_application_id = ? and action = 'CONFIRM_DISBURSEMENT_READINESS'",
                     fixture.applicationId()));
-            assertEquals(1, support.count(
-                    "select count(*) from loan_application_status_transitions "
-                            + "where loan_application_id = ? "
-                            + "and action = 'CONFIRM_MANUAL_DISBURSEMENT'",
+            assertEquals(1, support.count("select count(*) from loan_application_status_transitions "
+                    + "where loan_application_id = ? and action = 'CONFIRM_MANUAL_DISBURSEMENT'",
                     fixture.applicationId()));
         } finally {
             releaseLock.countDown();
             cleanupExecutor(executor, futures);
         }
     }
-
     @Test
     void limitRefreshLockSerializesBeforeExposureConversion() throws Exception {
         var fixture = support.createFixture(true, ProductCode.SALARY_ADVANCE);
         CountDownLatch lockHeld = new CountDownLatch(1);
         CountDownLatch releaseLock = new CountDownLatch(1);
+        CountDownLatch activationStarted = new CountDownLatch(1);
+        AtomicInteger activationBackendPid = new AtomicInteger();
         ExecutorService executor = Executors.newFixedThreadPool(2);
         List<Future<?>> futures = new ArrayList<>();
         try {
             futures.add(executor.submit(() -> transactions.executeWithoutResult(status -> {
-                salaryAdvanceLimits.acquireCustomerLinkLock(
-                        fixture.customerId(), fixture.linkId());
-                SalaryAdvanceLimit locked = salaryAdvanceLimits
-                        .findByIdForUpdate(fixture.limitId()).orElseThrow();
+                salaryAdvanceLimits.acquireCustomerLinkLock(fixture.customerId(), fixture.linkId());
+                SalaryAdvanceLimit locked = salaryAdvanceLimits.findByIdForUpdate(fixture.limitId()).orElseThrow();
                 lockHeld.countDown();
                 awaitLatch(releaseLock);
                 salaryAdvanceLimits.save(new SalaryAdvanceLimit(
                         locked.id(), locked.customerId(), locked.customerPartnerEmployeeLinkId(),
                         moneyValue("6000"), locked.usedAmount(), locked.reservedAmount(),
-                        moneyValue("5000"), SalaryAdvanceLimitStatus.ACTIVE, NOW
-                ));
+                        moneyValue("5000"), SalaryAdvanceLimitStatus.ACTIVE, NOW));
             })));
             assertTrue(lockHeld.await(5, TimeUnit.SECONDS));
-            Future<ConfirmManualDisbursementUseCase.Result> activation = executor.submit(
-                    () -> disbursements.confirm(support.command(
-                            fixture, UUID.randomUUID(), "LIMIT-RACE-" + fixture.token())));
+            Future<ConfirmManualDisbursementUseCase.Result> activation = executor.submit(() ->
+                    inTrackedTransaction(activationBackendPid, activationStarted,
+                            () -> disbursements.confirm(support.command(fixture, UUID.randomUUID(),
+                                    "LIMIT-RACE-" + fixture.token()))));
             futures.add(activation);
-            awaitAdvisoryWaiters(1);
+            assertTrue(activationStarted.await(5, TimeUnit.SECONDS));
+            awaitAdvisoryWaiters(Set.of(activationBackendPid.get()),
+                    "salary-advance-limit:" + fixture.customerId() + ":" + fixture.linkId(), 1);
             assertFalse(activation.isDone());
             releaseLock.countDown();
 
@@ -509,7 +688,39 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
             cleanupExecutor(executor, futures);
         }
     }
+    private void assertCorruptReplayRejected(
+            ManualDisbursementActivationPostgreSqlTestSupport.Fixture fixture,
+            ConfirmManualDisbursementUseCase.Command command
+    ) {
+        var before = support.counts(fixture.applicationId());
+        var usedBefore = support.money(
+                "select used_amount from salary_advance_limits where id = ?", fixture.limitId());
+        var reservedBefore = support.money(
+                "select reserved_amount from salary_advance_limits where id = ?", fixture.limitId());
+        var availableBefore = support.money(
+                "select available_amount from salary_advance_limits where id = ?", fixture.limitId());
 
+        BusinessStateConflictException failure = assertThrows(
+                BusinessStateConflictException.class,
+                () -> disbursements.confirm(command)
+        );
+
+        assertEquals("SYSTEM_STATE_CONFLICT", failure.getErrorCode());
+        assertEquals(before, support.counts(fixture.applicationId()));
+        assertEquals(0, usedBefore.compareTo(support.money(
+                "select used_amount from salary_advance_limits where id = ?", fixture.limitId())));
+        assertEquals(0, reservedBefore.compareTo(support.money(
+                "select reserved_amount from salary_advance_limits where id = ?", fixture.limitId())));
+        assertEquals(0, availableBefore.compareTo(support.money(
+                "select available_amount from salary_advance_limits where id = ?", fixture.limitId())));
+    }
+
+    private void corrupt(String sql, Object... arguments) {
+        transactions.executeWithoutResult(status -> {
+            jdbc.execute("set local session_replication_role = replica");
+            jdbc.update(sql, arguments);
+        });
+    }
     private void assertRollbackWithRejectingTrigger(
             String table,
             String timing,
@@ -550,19 +761,42 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
         });
     }
 
-    private void awaitAdvisoryWaiters(int expected) throws Exception {
+    private <T> T inTrackedTransaction(
+            AtomicInteger backendPid,
+            CountDownLatch started,
+            Supplier<T> operation
+    ) {
+        return transactions.execute(status -> {
+            backendPid.set(jdbc.queryForObject("select pg_backend_pid()", Integer.class));
+            started.countDown();
+            return operation.get();
+        });
+    }
+
+    private void awaitAdvisoryWaiters(
+            Set<Integer> backendPids,
+            String lockKey,
+            int expected
+    ) throws Exception {
+        assertEquals(expected, backendPids.size());
+        assertTrue(backendPids.stream().allMatch(pid -> pid > 0));
+        String pidList = String.join(",", backendPids.stream().map(String::valueOf).toList());
+        String sql = "select count(*) from pg_locks "
+                + "where locktype = 'advisory' and not granted "
+                + "and pid in (" + pidList + ") "
+                + "and classid::bigint = "
+                + "((hashtextextended(cast(? as text), 0) >> 32) & 4294967295) "
+                + "and objid::bigint = "
+                + "(hashtextextended(cast(? as text), 0) & 4294967295)";
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (System.nanoTime() < deadline) {
-            Integer waiters = jdbc.queryForObject(
-                    "select count(*) from pg_locks where locktype = 'advisory' and not granted",
-                    Integer.class
-            );
-            if (waiters != null && waiters >= expected) {
+            Integer waiters = jdbc.queryForObject(sql, Integer.class, lockKey, lockKey);
+            if (waiters != null && waiters == expected) {
                 return;
             }
             Thread.sleep(20);
         }
-        throw new AssertionError("Expected bounded advisory-lock overlap was not observed.");
+        throw new AssertionError("Expected scoped advisory-lock overlap was not observed.");
     }
 
     private static Object capture(ThrowingSupplier operation) {

@@ -403,7 +403,9 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                 winnerFixture, UUID.randomUUID(), reference);
         ManualDisbursement loser = new ManualDisbursement(
                 UUID.randomUUID(), loserFixture.applicationId(), loserFixture.contractId(),
-                UUID.randomUUID(), UUID.randomUUID(), 1, " " + reference.toLowerCase() + " ",
+                UUID.randomUUID(), UUID.randomUUID(), 1, ManualDisbursement.canonicalReference(
+                        " " + reference.toLowerCase() + " "
+                ),
                 amount("1000"), LocalDate.of(2026, 7, 27), LocalDate.of(2026, 8, 27),
                 ACCOUNTING_USER_ID, LocalDateTime.of(2026, 7, 27, 10, 16)
         );

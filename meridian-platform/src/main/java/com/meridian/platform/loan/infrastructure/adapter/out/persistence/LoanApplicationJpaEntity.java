@@ -27,18 +27,18 @@ public class LoanApplicationJpaEntity {
     @Column(name = "customer_id", nullable = false)
     private UUID customerId;
 
-    @Column(name = "loan_product_id", nullable = false)
+    @Column(name = "loan_product_id", nullable = false, updatable = false)
     private UUID loanProductId;
 
     @Column(name = "application_number", nullable = false)
     private String applicationNumber;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "product_code", nullable = false)
+    @Column(name = "product_code", nullable = false, updatable = false)
     private ProductCode productCode;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "product_type", nullable = false)
+    @Column(name = "product_type", nullable = false, updatable = false)
     private ProductType productType;
 
     @Enumerated(EnumType.STRING)
@@ -64,31 +64,34 @@ public class LoanApplicationJpaEntity {
     }
 
     public LoanApplicationJpaEntity(LoanApplication loanApplication) {
+        LoanApplication source = Objects.requireNonNull(
+                loanApplication,
+                "loanApplication must not be null"
+        );
         LocalDateTime now = LocalDateTime.now();
-        this.id = loanApplication.id();
+        this.id = source.id();
         this.createdAt = now;
         this.updatedAt = now;
-        apply(loanApplication);
+        this.loanProductId = source.loanProductId();
+        this.productCode = source.productCode();
+        this.productType = source.productType();
+        applyMutableFields(source);
     }
 
     public void updateFrom(LoanApplication loanApplication) {
         this.updatedAt = LocalDateTime.now();
-        apply(loanApplication);
+        applyMutableFields(loanApplication);
     }
 
-    private void apply(LoanApplication loanApplication) {
+    private void applyMutableFields(LoanApplication loanApplication) {
         Objects.requireNonNull(loanApplication, "loanApplication must not be null");
         this.customerId = loanApplication.customerId();
-        this.loanProductId = loanApplication.loanProductId();
         this.applicationNumber = loanApplication.applicationNumber();
-        this.productCode = loanApplication.productCode();
-        this.productType = loanApplication.productType();
         this.status = loanApplication.status();
         this.requestedAmount = loanApplication.requestedAmount();
         this.requestedTermMonths = loanApplication.requestedTermMonths();
         this.submittedAt = loanApplication.submittedAt();
     }
-
     public UUID getId() {
         return id;
     }

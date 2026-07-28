@@ -16,6 +16,8 @@ public interface LoanProductActivationPolicy {
 
     ProductActivationResult activate(ProductActivationCommand command);
 
+    void validateCompletedActivation(CompletedActivationValidationCommand command);
+
     record ProductActivationCommand(
             LoanApplication loanApplication,
             LoanContract loanContract,
@@ -40,6 +42,26 @@ public interface LoanProductActivationPolicy {
         }
     }
 
+    record CompletedActivationValidationCommand(
+            LoanApplication loanApplication,
+            LoanContract loanContract,
+            LoanAccount loanAccount
+    ) {
+        public CompletedActivationValidationCommand {
+            Objects.requireNonNull(loanApplication, "loanApplication must not be null");
+            Objects.requireNonNull(loanContract, "loanContract must not be null");
+            Objects.requireNonNull(loanAccount, "loanAccount must not be null");
+        }
+
+        @Override
+        public String toString() {
+            return "CompletedActivationValidationCommand[loanApplicationId="
+                    + loanApplication.id()
+                    + ", loanContractId=" + loanContract.id()
+                    + ", loanAccountId=" + loanAccount.id()
+                    + ", productEvidence=redacted]";
+        }
+    }
     record ProductActivationResult(
             ProductCode productCode,
             UUID productExposureId,

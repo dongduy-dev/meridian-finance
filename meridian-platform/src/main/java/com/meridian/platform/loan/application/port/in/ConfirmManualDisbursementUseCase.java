@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.application.port.in;
 
 import com.meridian.platform.loan.domain.model.LoanAccountStatus;
+import com.meridian.platform.loan.domain.model.ManualDisbursement;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
 
@@ -28,6 +29,9 @@ public interface ConfirmManualDisbursementUseCase {
             Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
             Objects.requireNonNull(externalTransferReference,
                     "externalTransferReference must not be null");
+            externalTransferReference = ManualDisbursement.canonicalReference(
+                    externalTransferReference
+            );
             Objects.requireNonNull(disbursementValueDate,
                     "disbursementValueDate must not be null");
             Objects.requireNonNull(firstRepaymentDate,

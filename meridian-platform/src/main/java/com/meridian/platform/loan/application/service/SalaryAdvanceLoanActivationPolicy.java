@@ -129,6 +129,74 @@ public class SalaryAdvanceLoanActivationPolicy implements LoanProductActivationP
         );
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public void validateCompletedActivation(CompletedActivationValidationCommand command) {
+        LoanApplication application = command.loanApplication();
+        LoanContract contract = command.loanContract();
+        LoanAccount account = command.loanAccount();
+        requireMatchingActivation(application, contract, account);
+
+        SalaryAdvanceVerification verification = verifications
+                .findByLoanApplicationIdForUpdate(application.id())
+                .orElseThrow(SalaryAdvanceLoanActivationPolicy::completedStateConflict);
+        requireCompletedVerification(application, verification);
+
+        limits.acquireCustomerLinkLock(
+                verification.customerId(),
+                verification.customerPartnerEmployeeLinkId()
+        );
+        SalaryAdvanceLimit limit = limits.findByIdForUpdate(verification.salaryAdvanceLimitId())
+                .orElseThrow(SalaryAdvanceLoanActivationPolicy::completedStateConflict);
+        requireCompletedLimit(application, verification, limit);
+
+        List<SalaryAdvanceLimitMovement> reservations =
+                movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                        application.id(),
+                        SalaryAdvanceLimitMovementType.RESERVED
+                );
+        List<SalaryAdvanceLimitMovement> releases =
+                movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                        application.id(),
+                        SalaryAdvanceLimitMovementType.RESERVATION_RELEASED
+                );
+        List<SalaryAdvanceLimitMovement> conversions =
+                movements.findByLoanApplicationIdAndMovementTypeForUpdate(
+                        application.id(),
+                        SalaryAdvanceLimitMovementType.DISBURSED_TO_USED
+                );
+
+        BigDecimal principal = contract.financialTerms().approvedPrincipal();
+        if (reservations.size() != 1 || !releases.isEmpty() || conversions.size() != 1) {
+            throw completedStateConflict();
+        }
+        SalaryAdvanceLimitMovement reservation = reservations.getFirst();
+        SalaryAdvanceLimitMovement conversion = conversions.getFirst();
+        if (!limit.id().equals(reservation.salaryAdvanceLimitId())
+                || !application.id().equals(reservation.loanApplicationId())
+                || reservation.loanAccountId() != null
+                || reservation.amount().compareTo(principal) != 0
+                || !limit.id().equals(conversion.salaryAdvanceLimitId())
+                || !application.id().equals(conversion.loanApplicationId())
+                || !account.id().equals(conversion.loanAccountId())
+                || conversion.amount().compareTo(principal) != 0) {
+            throw completedStateConflict();
+        }
+
+        BigDecimal outstandingReserved = movements.calculateOutstandingReservedAmount(limit.id());
+        BigDecimal aggregateUsed = movements.calculateUsedAmount(limit.id());
+        if (outstandingReserved == null
+                || aggregateUsed == null
+                || limit.reservedAmount().compareTo(outstandingReserved) != 0
+                || limit.usedAmount().compareTo(aggregateUsed) != 0
+                || limit.totalLimit().compareTo(
+                        limit.usedAmount()
+                                .add(limit.reservedAmount())
+                                .add(limit.availableAmount())
+                ) != 0) {
+            throw completedStateConflict();
+        }
+    }
     private static void requireMatchingActivation(
             LoanApplication application,
             LoanContract contract,
@@ -187,6 +255,30 @@ public class SalaryAdvanceLoanActivationPolicy implements LoanProductActivationP
         }
     }
 
+    private static void requireCompletedVerification(
+            LoanApplication application,
+            SalaryAdvanceVerification verification
+    ) {
+        if (!application.id().equals(verification.loanApplicationId())
+                || !application.customerId().equals(verification.customerId())
+                || verification.productVerificationResult() != ProductVerificationResult.VERIFIED) {
+            throw completedStateConflict();
+        }
+    }
+
+    private static void requireCompletedLimit(
+            LoanApplication application,
+            SalaryAdvanceVerification verification,
+            SalaryAdvanceLimit limit
+    ) {
+        if (!verification.salaryAdvanceLimitId().equals(limit.id())
+                || !application.customerId().equals(limit.customerId())
+                || !verification.customerPartnerEmployeeLinkId().equals(
+                        limit.customerPartnerEmployeeLinkId()
+                )) {
+            throw completedStateConflict();
+        }
+    }
     private static void requireIntactReservation(
             LoanApplication application,
             SalaryAdvanceLimit limit,
@@ -213,5 +305,9 @@ public class SalaryAdvanceLoanActivationPolicy implements LoanProductActivationP
 
     private static BusinessStateConflictException stateConflict(String message) {
         return new BusinessStateConflictException("SYSTEM_STATE_CONFLICT", message);
+    }
+
+    private static BusinessStateConflictException completedStateConflict() {
+        return stateConflict("Completed Loan activation evidence is inconsistent.");
     }
 }

@@ -41,7 +41,7 @@ public record ManualDisbursement(
         Objects.requireNonNull(confirmedByUserId, "confirmedByUserId must not be null");
         Objects.requireNonNull(confirmedAt, "confirmedAt must not be null");
 
-        externalTransferReference = canonicalReference(externalTransferReference);
+        requireCanonicalReference(externalTransferReference);
         if (expectedContractVersion <= 0) {
             throw invalid("Expected contract version must be positive.");
         }
@@ -103,10 +103,14 @@ public record ManualDisbursement(
             throw invalid("External transfer reference is required.");
         }
         String canonical = reference.trim().toUpperCase(Locale.ROOT);
-        if (!EXTERNAL_REFERENCE_PATTERN.matcher(canonical).matches()) {
+        requireCanonicalReference(canonical);
+        return canonical;
+    }
+
+    private static void requireCanonicalReference(String reference) {
+        if (reference == null || !EXTERNAL_REFERENCE_PATTERN.matcher(reference).matches()) {
             throw invalid("External transfer reference format is invalid.");
         }
-        return canonical;
     }
 
     public static void validateRepaymentDates(LocalDate valueDate, LocalDate firstRepaymentDate) {

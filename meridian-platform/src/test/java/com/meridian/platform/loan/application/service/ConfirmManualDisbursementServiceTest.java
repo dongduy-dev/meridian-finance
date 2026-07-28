@@ -5,6 +5,7 @@ import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.application.port.out.ContractBankAccountPort;
 import com.meridian.platform.loan.application.port.out.LoanAccountRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanContractRepository;
 import com.meridian.platform.loan.application.port.out.ManualDisbursementRepository;
 import com.meridian.platform.loan.application.port.out.ManualDisbursementSaveOutcome;
@@ -20,12 +21,14 @@ import com.meridian.platform.loan.domain.model.RepaymentSchedule;
 import com.meridian.platform.loan.domain.service.FinalRepaymentScheduleGenerator;
 import com.meridian.platform.loan.testsupport.LoanContractTestData;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
+import com.meridian.platform.shared.application.audit.BusinessAuditEvidenceReader;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey;
+import com.meridian.platform.shared.domain.exception.AuthorizationException;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
@@ -88,6 +91,8 @@ class ConfirmManualDisbursementServiceTest {
     @Mock LoanAccountRepository loanAccounts;
     @Mock ManualDisbursementRepository manualDisbursements;
     @Mock RepaymentScheduleRepository repaymentSchedules;
+    @Mock LoanApplicationStatusTransitionRepository transitionEvidence;
+    @Mock BusinessAuditEvidenceReader auditEvidence;
     @Mock LoanProductActivationPolicyResolver activationPolicies;
     @Mock LoanProductActivationPolicy activationPolicy;
     @Mock LoanApplicationStatusTransitionRecorder transitionRecorder;
@@ -103,18 +108,8 @@ class ConfirmManualDisbursementServiceTest {
         contract = LoanContractTestData.ready();
         application = application(LoanApplicationStatus.DISBURSEMENT_PENDING,
                 ProductCode.SALARY_ADVANCE);
-        service = new ConfirmManualDisbursementService(
-                applications,
-                contracts,
-                loanAccounts,
-                manualDisbursements,
-                repaymentSchedules,
-                activationPolicies,
-                transitionRecorder,
-                auditPublisher,
-                currentUserProvider,
-                CLOCK
-        );
+        service = newService(CLOCK);
+
         arrangeSuccessfulFoundation();
     }
 
@@ -263,17 +258,82 @@ class ConfirmManualDisbursementServiceTest {
         assertEquals(replay.account().id(), result.loanAccountId());
         assertEquals(replay.disbursement().id(), result.manualDisbursementId());
         assertEquals(replay.schedule().id(), result.repaymentScheduleId());
-        verify(applications, never()).acquireWorkflowLock(any());
+        verify(applications).acquireWorkflowLock(application.id());
         verify(loanAccounts, never()).save(any());
         verify(manualDisbursements, never()).save(any());
         verify(repaymentSchedules, never()).save(any());
-        verify(activationPolicies, never()).resolve(any());
+        verify(activationPolicies).resolve(ProductCode.SALARY_ADVANCE);
+        verify(activationPolicy).validateCompletedActivation(any());
         verify(activationPolicy, never()).activate(any());
         verify(applications, never()).save(any());
         verify(transitionRecorder, never()).record(any(), any(), any());
         verify(auditPublisher, never()).publish(any());
     }
 
+    @Test
+    void replayRejectsMissingProductHistoryOrAuditEvidence() {
+        arrangeReplay();
+        doThrow(new BusinessStateConflictException(
+                "SYSTEM_STATE_CONFLICT",
+                "Completed evidence is inconsistent."
+        )).when(activationPolicy).validateCompletedActivation(any());
+        assertCode("SYSTEM_STATE_CONFLICT", () -> service.confirm(command()));
+
+        org.mockito.Mockito.reset(activationPolicy);
+        when(transitionEvidence.countMatching(any(), any(), any(), any())).thenReturn(0L);
+        assertCode("SYSTEM_STATE_CONFLICT", () -> service.confirm(command()));
+
+        when(transitionEvidence.countMatching(any(), any(), any(), any())).thenReturn(1L);
+        when(auditEvidence.countMatching(any(), any(), any())).thenReturn(0L);
+        assertCode("SYSTEM_STATE_CONFLICT", () -> service.confirm(command()));
+        verify(loanAccounts, never()).save(any());
+        verify(transitionRecorder, never()).record(any(), any(), any());
+        verify(auditPublisher, never()).publish(any());
+    }
+
+    @Test
+    void replayRejectsMissingOrContradictoryGenericEvidence() {
+        ReplayFixture replay = arrangeReplay();
+        when(repaymentSchedules.findByLoanApplicationId(application.id()))
+                .thenReturn(Optional.empty());
+        assertCode("SYSTEM_STATE_CONFLICT", () -> service.confirm(command()));
+
+        when(repaymentSchedules.findByLoanApplicationId(application.id()))
+                .thenReturn(Optional.of(replay.schedule()));
+        LoanAccount wrongContractAccount = new LoanAccount(
+                replay.account().id(),
+                replay.account().loanApplicationId(),
+                UUID.randomUUID(),
+                replay.account().customerId(),
+                replay.account().accountNumber(),
+                replay.account().status(),
+                replay.account().approvedPrincipal(),
+                replay.account().approvedTermMonths(),
+                replay.account().totalInterest(),
+                replay.account().feeAmount(),
+                replay.account().totalRepaymentAmount(),
+                replay.account().activatedAt()
+        );
+        when(loanAccounts.findByLoanApplicationIdForUpdate(application.id()))
+                .thenReturn(Optional.of(wrongContractAccount));
+        assertCode("SYSTEM_STATE_CONFLICT", () -> service.confirm(command()));
+        verify(loanAccounts, never()).save(any());
+    }
+
+    @Test
+    void commandCanonicalizesOnceBeforeAggregateConstruction() {
+        ConfirmManualDisbursementUseCase.Command canonical = command(
+                "  bank-transfer-001  ",
+                VALUE_DATE,
+                FIRST_REPAYMENT_DATE
+        );
+        assertEquals(REFERENCE, canonical.externalTransferReference());
+        assertThrows(BusinessRuleViolationException.class, () -> command(
+                "invalid reference",
+                VALUE_DATE,
+                FIRST_REPAYMENT_DATE
+        ));
+    }
     @Test
     void requestReuseComparesEveryLogicalFieldAndNoGeneratedField() {
         ReplayFixture replay = arrangeReplay();
@@ -307,14 +367,65 @@ class ConfirmManualDisbursementServiceTest {
 
     @Test
     void differentRequestAfterCompletedActivationIsDeterministic() {
+        ReplayFixture replay = completedReplayFixture();
+        arrangeCompletedEvidence(replay);
+        ConfirmManualDisbursementUseCase.Command differentRequest =
+                new ConfirmManualDisbursementUseCase.Command(
+                        UUID.randomUUID(),
+                        application.id(),
+                        1,
+                        REFERENCE,
+                        VALUE_DATE,
+                        FIRST_REPAYMENT_DATE
+                );
+
+        assertCode("DISBURSEMENT_ALREADY_COMPLETED", () ->
+                service.confirm(differentRequest));
+        verify(loanAccounts, never()).save(any());
+        verify(activationPolicy).validateCompletedActivation(any());
+    }
+
+    @Test
+    void differentRequestRejectsPartialCompletedStateAsSystemConflict() {
         when(applications.findByIdForUpdate(application.id())).thenReturn(Optional.of(
                 application(LoanApplicationStatus.DISBURSED, ProductCode.SALARY_ADVANCE)
         ));
 
-        assertCode("DISBURSEMENT_ALREADY_COMPLETED", () -> service.confirm(command()));
+        assertCode("SYSTEM_STATE_CONFLICT", () -> service.confirm(command()));
         verify(loanAccounts, never()).save(any());
     }
 
+    @Test
+    void permitsOnlyAuthenticatedAccountingActor() {
+        when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(
+                ACTOR_ID,
+                "customer@meridian.test",
+                "CUSTOMER",
+                contract.disbursementBankAccount().customerId(),
+                Set.of("CUSTOMER"),
+                Set.of("loan:read:own")
+        ));
+        AuthorizationException customerFailure = assertThrows(
+                AuthorizationException.class,
+                () -> service.confirm(command())
+        );
+        assertEquals("ACCOUNTING_ROLE_REQUIRED", customerFailure.getErrorCode());
+
+        when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(
+                OTHER_ACTOR_ID,
+                "staff@meridian.test",
+                "STAFF",
+                null,
+                Set.of("LOAN_OFFICER"),
+                Set.of("loan:read")
+        ));
+        AuthorizationException staffFailure = assertThrows(
+                AuthorizationException.class,
+                () -> service.confirm(command())
+        );
+        assertEquals("ACCOUNTING_ROLE_REQUIRED", staffFailure.getErrorCode());
+        verify(manualDisbursements, never()).acquireConfirmationRequestLock(any());
+    }
     @Test
     void rejectsMissingApplicationAndCurrentContract() {
         when(applications.findByIdForUpdate(application.id())).thenReturn(Optional.empty());
@@ -386,6 +497,67 @@ class ConfirmManualDisbursementServiceTest {
     }
 
     @Test
+    void derivesReadinessDateImmediatelyBeforeUtcMidnight() {
+        contract = readyAt(LocalDateTime.of(2026, 7, 27, 23, 59, 59));
+        application = application(LoanApplicationStatus.DISBURSEMENT_PENDING,
+                ProductCode.SALARY_ADVANCE);
+        service = newService(Clock.fixed(
+                Instant.parse("2026-07-28T00:00:00Z"),
+                ZoneOffset.UTC
+        ));
+        when(applications.findByIdForUpdate(application.id()))
+                .thenReturn(Optional.of(application));
+        when(contracts.findCurrentByApplicationIdForUpdate(application.id()))
+                .thenReturn(Optional.of(contract));
+
+        ConfirmManualDisbursementUseCase.Result result = service.confirm(command(
+                REFERENCE,
+                LocalDate.of(2026, 7, 27),
+                LocalDate.of(2026, 8, 27)
+        ));
+        assertEquals(LocalDate.of(2026, 7, 27), result.disbursementValueDate());
+        BusinessRuleViolationException priorDay = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.confirm(command(
+                        REFERENCE,
+                        LocalDate.of(2026, 7, 26),
+                        LocalDate.of(2026, 8, 26)
+                ))
+        );
+        assertEquals("DISBURSEMENT_VALUE_DATE_INVALID", priorDay.getErrorCode());
+    }
+
+    @Test
+    void derivesReadinessAndCurrentDateImmediatelyAfterUtcMidnight() {
+        contract = readyAt(LocalDateTime.of(2026, 7, 28, 0, 0, 1));
+        application = application(LoanApplicationStatus.DISBURSEMENT_PENDING,
+                ProductCode.SALARY_ADVANCE);
+        service = newService(Clock.fixed(
+                Instant.parse("2026-07-28T00:00:01Z"),
+                ZoneOffset.UTC
+        ));
+        when(applications.findByIdForUpdate(application.id()))
+                .thenReturn(Optional.of(application));
+        when(contracts.findCurrentByApplicationIdForUpdate(application.id()))
+                .thenReturn(Optional.of(contract));
+
+        ConfirmManualDisbursementUseCase.Result result = service.confirm(command(
+                REFERENCE,
+                LocalDate.of(2026, 7, 28),
+                LocalDate.of(2026, 8, 28)
+        ));
+        assertEquals(LocalDate.of(2026, 7, 28), result.disbursementValueDate());
+        BusinessRuleViolationException future = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.confirm(command(
+                        REFERENCE,
+                        LocalDate.of(2026, 7, 29),
+                        LocalDate.of(2026, 8, 29)
+                ))
+        );
+        assertEquals("DISBURSEMENT_VALUE_DATE_INVALID", future.getErrorCode());
+    }
+    @Test
     void validatesFirstRepaymentDateBounds() {
         BusinessRuleViolationException equal = assertThrows(
                 BusinessRuleViolationException.class,
@@ -451,7 +623,7 @@ class ConfirmManualDisbursementServiceTest {
         )) {
             doReturn(new ManualDisbursementSaveOutcome.Conflict(kind))
                     .when(manualDisbursements).save(any());
-            assertCode("DISBURSEMENT_ALREADY_COMPLETED", () -> service.confirm(command()));
+            assertCode("SYSTEM_STATE_CONFLICT", () -> service.confirm(command()));
         }
 
         doReturn(new ManualDisbursementSaveOutcome.Conflict(
@@ -469,6 +641,51 @@ class ConfirmManualDisbursementServiceTest {
         assertCode("SYSTEM_STATE_CONFLICT", () -> service.confirm(command()));
     }
 
+    @Test
+    void reportsCompletedOnlyAfterSaveConflictEvidenceReconciles() {
+        ReplayFixture baseReplay = completedReplayFixture();
+        ManualDisbursement conflictingDisbursement = ManualDisbursement.confirmed(
+                baseReplay.disbursement().id(),
+                contract,
+                baseReplay.account(),
+                UUID.randomUUID(),
+                1,
+                REFERENCE,
+                VALUE_DATE,
+                FIRST_REPAYMENT_DATE,
+                ACTOR_ID,
+                OPERATION_TIME
+        );
+        ReplayFixture replay = new ReplayFixture(
+                baseReplay.application(),
+                baseReplay.account(),
+                conflictingDisbursement,
+                baseReplay.schedule()
+        );
+        when(applications.findByIdForUpdate(application.id())).thenReturn(
+                Optional.of(application),
+                Optional.of(replay.application())
+        );
+        when(contracts.findCurrentByApplicationIdForUpdate(application.id()))
+                .thenReturn(Optional.of(contract), Optional.of(contract));
+        when(loanAccounts.findByLoanApplicationIdForUpdate(application.id()))
+                .thenReturn(Optional.empty(), Optional.of(replay.account()));
+        when(manualDisbursements.findByLoanApplicationIdForUpdate(application.id()))
+                .thenReturn(Optional.empty(), Optional.of(replay.disbursement()));
+        when(repaymentSchedules.findByLoanApplicationId(application.id()))
+                .thenReturn(Optional.empty(), Optional.of(replay.schedule()));
+        when(manualDisbursements.findByLoanApplicationId(application.id()))
+                .thenReturn(Optional.of(replay.disbursement()));
+        when(transitionEvidence.countMatching(any(), any(), any(), any())).thenReturn(1L);
+        when(auditEvidence.countMatching(any(), any(), any())).thenReturn(1L);
+        doReturn(new ManualDisbursementSaveOutcome.Conflict(
+                ManualDisbursementSaveOutcome.ConflictKind.LOAN_APPLICATION
+        )).when(manualDisbursements).save(any());
+
+        assertCode("DISBURSEMENT_ALREADY_COMPLETED", () -> service.confirm(command()));
+        verify(activationPolicy).validateCompletedActivation(any());
+        verify(applications, never()).save(any());
+    }
     @Test
     void historyAndAuditFailuresPropagateAndPreventLaterEffects() {
         doThrow(new IllegalStateException("history unavailable"))
@@ -507,6 +724,22 @@ class ConfirmManualDisbursementServiceTest {
         assertEquals(Propagation.REQUIRED, transactional.propagation());
     }
 
+    private ConfirmManualDisbursementService newService(Clock serviceClock) {
+        return new ConfirmManualDisbursementService(
+                applications,
+                contracts,
+                loanAccounts,
+                manualDisbursements,
+                repaymentSchedules,
+                transitionEvidence,
+                auditEvidence,
+                activationPolicies,
+                transitionRecorder,
+                auditPublisher,
+                currentUserProvider,
+                serviceClock
+        );
+    }
     private void arrangeSuccessfulFoundation() {
         lenient().when(currentUserProvider.currentUser()).thenReturn(accounting(ACTOR_ID));
         lenient().when(manualDisbursements.findByRequestId(any()))
@@ -547,6 +780,14 @@ class ConfirmManualDisbursementServiceTest {
     }
 
     private ReplayFixture arrangeReplay() {
+        ReplayFixture replay = completedReplayFixture();
+        when(manualDisbursements.findByRequestId(replay.disbursement().requestId()))
+                .thenReturn(Optional.of(replay.disbursement()));
+        arrangeCompletedEvidence(replay);
+        return replay;
+    }
+
+    private ReplayFixture completedReplayFixture() {
         LoanApplication disbursed = application(
                 LoanApplicationStatus.DISBURSED,
                 ProductCode.SALARY_ADVANCE
@@ -573,18 +814,25 @@ class ConfirmManualDisbursementServiceTest {
                 FIRST_REPAYMENT_DATE,
                 OPERATION_TIME
         );
-        when(manualDisbursements.findByRequestId(disbursement.requestId()))
-                .thenReturn(Optional.of(disbursement));
-        lenient().when(applications.findById(application.id()))
-                .thenReturn(Optional.of(disbursed));
-        lenient().when(contracts.findCurrentByApplicationId(application.id()))
-                .thenReturn(Optional.of(contract));
-        lenient().when(loanAccounts.findById(account.id())).thenReturn(Optional.of(account));
-        lenient().when(repaymentSchedules.findByLoanAccountId(account.id()))
-                .thenReturn(Optional.of(schedule));
-        return new ReplayFixture(account, disbursement, schedule);
+        return new ReplayFixture(disbursed, account, disbursement, schedule);
     }
 
+    private void arrangeCompletedEvidence(ReplayFixture replay) {
+        lenient().when(applications.findByIdForUpdate(application.id()))
+                .thenReturn(Optional.of(replay.application()));
+        lenient().when(contracts.findCurrentByApplicationIdForUpdate(application.id()))
+                .thenReturn(Optional.of(contract));
+        lenient().when(loanAccounts.findByLoanApplicationIdForUpdate(application.id()))
+                .thenReturn(Optional.of(replay.account()));
+        lenient().when(manualDisbursements.findByLoanApplicationIdForUpdate(application.id()))
+                .thenReturn(Optional.of(replay.disbursement()));
+        lenient().when(repaymentSchedules.findByLoanApplicationId(application.id()))
+                .thenReturn(Optional.of(replay.schedule()));
+        lenient().when(transitionEvidence.countMatching(any(), any(), any(), any()))
+                .thenReturn(1L);
+        lenient().when(auditEvidence.countMatching(any(), any(), any()))
+                .thenReturn(1L);
+    }
     private ConfirmManualDisbursementUseCase.Command command() {
         return command(REFERENCE, VALUE_DATE, FIRST_REPAYMENT_DATE);
     }
@@ -624,6 +872,13 @@ class ConfirmManualDisbursementServiceTest {
         );
     }
 
+    private static LoanContract readyAt(LocalDateTime confirmedAt) {
+        return LoanContractTestData.acknowledged().confirmReady(
+                UUID.fromString("67676767-6767-6767-6767-676767676767"),
+                ACTOR_ID,
+                confirmedAt
+        );
+    }
     private static AuthenticatedUser accounting(UUID userId) {
         return new AuthenticatedUser(
                 userId,
@@ -645,6 +900,7 @@ class ConfirmManualDisbursementServiceTest {
     }
 
     private record ReplayFixture(
+            LoanApplication application,
             LoanAccount account,
             ManualDisbursement disbursement,
             RepaymentSchedule schedule
