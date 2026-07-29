@@ -4,6 +4,9 @@ import com.meridian.platform.loan.application.port.in.ConfirmManualDisbursementU
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.application.port.out.ContractBankAccountPort;
 import com.meridian.platform.loan.application.port.out.LoanAccountRepository;
+import com.meridian.platform.loan.application.port.out.LoanAccountStatusTransitionRepository;
+import com.meridian.platform.loan.application.port.out.RepaymentInstallmentProgressRepository;
+import com.meridian.platform.loan.application.port.out.RepaymentInstallmentStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanContractRepository;
@@ -11,12 +14,17 @@ import com.meridian.platform.loan.application.port.out.ManualDisbursementReposit
 import com.meridian.platform.loan.application.port.out.ManualDisbursementSaveOutcome;
 import com.meridian.platform.loan.application.port.out.RepaymentScheduleRepository;
 import com.meridian.platform.loan.domain.model.LoanAccount;
+import com.meridian.platform.loan.domain.model.LoanAccountServicingAction;
+import com.meridian.platform.loan.domain.model.LoanAccountStatusTransition;
+import com.meridian.platform.loan.domain.model.RepaymentInstallmentProgress;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanContract;
 import com.meridian.platform.loan.domain.model.ManualDisbursement;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
+import com.meridian.platform.loan.domain.model.RepaymentInstallmentServicingAction;
+import com.meridian.platform.loan.domain.model.RepaymentInstallmentStatusTransition;
 import com.meridian.platform.loan.domain.model.RepaymentSchedule;
 import com.meridian.platform.loan.domain.service.FinalRepaymentScheduleGenerator;
 import com.meridian.platform.loan.testsupport.LoanContractTestData;
@@ -32,6 +40,7 @@ import com.meridian.platform.shared.domain.exception.AuthorizationException;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
+import com.meridian.platform.shared.domain.model.ActorType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -91,6 +100,9 @@ class ConfirmManualDisbursementServiceTest {
     @Mock LoanAccountRepository loanAccounts;
     @Mock ManualDisbursementRepository manualDisbursements;
     @Mock RepaymentScheduleRepository repaymentSchedules;
+    @Mock RepaymentInstallmentProgressRepository repaymentProgress;
+    @Mock LoanAccountStatusTransitionRepository loanAccountTransitions;
+    @Mock RepaymentInstallmentStatusTransitionRepository installmentTransitions;
     @Mock LoanApplicationStatusTransitionRepository transitionEvidence;
     @Mock BusinessAuditEvidenceReader auditEvidence;
     @Mock LoanProductActivationPolicyResolver activationPolicies;
@@ -682,6 +694,7 @@ class ConfirmManualDisbursementServiceTest {
                 .thenReturn(Optional.of(replay.disbursement()));
         when(transitionEvidence.countMatching(any(), any(), any(), any())).thenReturn(1L);
         when(auditEvidence.countMatching(any(), any(), any())).thenReturn(1L);
+        arrangeServicingEvidence(replay);
         doReturn(new ManualDisbursementSaveOutcome.Conflict(
                 ManualDisbursementSaveOutcome.ConflictKind.LOAN_APPLICATION
         )).when(manualDisbursements).save(any());
@@ -735,6 +748,9 @@ class ConfirmManualDisbursementServiceTest {
                 loanAccounts,
                 manualDisbursements,
                 repaymentSchedules,
+                repaymentProgress,
+                loanAccountTransitions,
+                installmentTransitions,
                 transitionEvidence,
                 auditEvidence,
                 activationPolicies,
@@ -764,6 +780,18 @@ class ConfirmManualDisbursementServiceTest {
                 new ManualDisbursementSaveOutcome.Inserted(invocation.getArgument(0)));
         lenient().when(repaymentSchedules.save(any())).thenAnswer(invocation ->
                 invocation.getArgument(0));
+        lenient().when(loanAccounts.updateServicingState(any())).thenAnswer(
+                invocation -> invocation.getArgument(0)
+        );
+        lenient().when(repaymentProgress.saveAll(any())).thenAnswer(
+                invocation -> invocation.getArgument(0)
+        );
+        lenient().when(loanAccountTransitions.save(any())).thenAnswer(
+                invocation -> invocation.getArgument(0)
+        );
+        lenient().when(installmentTransitions.save(any())).thenAnswer(
+                invocation -> invocation.getArgument(0)
+        );
         lenient().when(activationPolicies.resolve(ProductCode.SALARY_ADVANCE))
                 .thenReturn(activationPolicy);
         lenient().when(activationPolicy.activate(any())).thenAnswer(invocation -> {
@@ -821,6 +849,57 @@ class ConfirmManualDisbursementServiceTest {
         return new ReplayFixture(disbursed, account, disbursement, schedule);
     }
 
+    private void arrangeServicingEvidence(ReplayFixture replay) {
+        List<RepaymentInstallmentProgress> progress = replay.schedule().items().stream()
+                .map(item -> RepaymentInstallmentProgress.initial(
+                        replay.schedule(),
+                        item,
+                        replay.account().activatedAt().toLocalDate(),
+                        replay.account().activatedAt()
+                ))
+                .toList();
+        UUID servicingOperationId = UUID.randomUUID();
+        LoanAccountStatusTransition accountTransition =
+                new LoanAccountStatusTransition(
+                        UUID.randomUUID(),
+                        replay.account().id(),
+                        1,
+                        servicingOperationId,
+                        null,
+                        replay.account().status(),
+                        LoanAccountServicingAction.ACTIVATION_INITIALIZED,
+                        ActorType.USER,
+                        ACTOR_ID,
+                        replay.account().activatedAt().toLocalDate(),
+                        replay.account().activatedAt()
+                );
+        lenient().when(repaymentProgress.findByRepaymentScheduleId(
+                replay.schedule().id())).thenReturn(progress);
+        lenient().when(loanAccountTransitions.findByLoanAccountId(
+                replay.account().id())).thenReturn(List.of(accountTransition));
+        for (RepaymentInstallmentProgress installment : progress) {
+            RepaymentInstallmentStatusTransition installmentTransition =
+                    new RepaymentInstallmentStatusTransition(
+                            UUID.randomUUID(),
+                            installment.repaymentScheduleItemId(),
+                            1,
+                            servicingOperationId,
+                            null,
+                            installment.status(),
+                            RepaymentInstallmentServicingAction
+                                    .ACTIVATION_INITIALIZED,
+                            ActorType.USER,
+                            ACTOR_ID,
+                            installment.servicingEvaluationDate(),
+                            replay.account().activatedAt()
+                    );
+            lenient().when(installmentTransitions
+                    .findByRepaymentScheduleItemId(
+                            installment.repaymentScheduleItemId()
+                    )).thenReturn(List.of(installmentTransition));
+        }
+    }
+
     private void arrangeCompletedEvidence(ReplayFixture replay) {
         lenient().when(applications.findByIdForUpdate(application.id()))
                 .thenReturn(Optional.of(replay.application()));
@@ -832,6 +911,54 @@ class ConfirmManualDisbursementServiceTest {
                 .thenReturn(Optional.of(replay.disbursement()));
         lenient().when(repaymentSchedules.findByLoanApplicationId(application.id()))
                 .thenReturn(Optional.of(replay.schedule()));
+        List<RepaymentInstallmentProgress> progress = replay.schedule().items().stream()
+                .map(item -> RepaymentInstallmentProgress.initial(
+                        replay.schedule(),
+                        item,
+                        replay.account().activatedAt().toLocalDate(),
+                        replay.account().activatedAt()
+                ))
+                .toList();
+        UUID servicingOperationId = UUID.randomUUID();
+        LoanAccountStatusTransition accountTransition =
+                new LoanAccountStatusTransition(
+                        UUID.randomUUID(),
+                        replay.account().id(),
+                        1,
+                        servicingOperationId,
+                        null,
+                        replay.account().status(),
+                        LoanAccountServicingAction.ACTIVATION_INITIALIZED,
+                        ActorType.USER,
+                        ACTOR_ID,
+                        replay.account().activatedAt().toLocalDate(),
+                        replay.account().activatedAt()
+                );
+        lenient().when(repaymentProgress.findByRepaymentScheduleId(
+                replay.schedule().id())).thenReturn(progress);
+        lenient().when(loanAccountTransitions.findByLoanAccountId(
+                replay.account().id())).thenReturn(List.of(accountTransition));
+        for (RepaymentInstallmentProgress installment : progress) {
+            RepaymentInstallmentStatusTransition installmentTransition =
+                    new RepaymentInstallmentStatusTransition(
+                            UUID.randomUUID(),
+                            installment.repaymentScheduleItemId(),
+                            1,
+                            servicingOperationId,
+                            null,
+                            installment.status(),
+                            RepaymentInstallmentServicingAction
+                                    .ACTIVATION_INITIALIZED,
+                            ActorType.USER,
+                            ACTOR_ID,
+                            installment.servicingEvaluationDate(),
+                            replay.account().activatedAt()
+                    );
+            lenient().when(installmentTransitions
+                    .findByRepaymentScheduleItemId(
+                            installment.repaymentScheduleItemId()
+                    )).thenReturn(List.of(installmentTransition));
+        }
         lenient().when(transitionEvidence.countMatching(any(), any(), any(), any()))
                 .thenReturn(1L);
         lenient().when(auditEvidence.countMatching(any(), any(), any()))

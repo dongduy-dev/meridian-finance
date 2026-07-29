@@ -241,6 +241,21 @@ final class ManualDisbursementActivationPostgreSqlTestSupport {
                 "select count(*) from repayment_schedules where loan_application_id = ?",
                 fixture.applicationId()));
         assertEquals(0, count(
+                "select count(*) from repayment_installment_progress progress "
+                        + "join loan_accounts account on account.id = progress.loan_account_id "
+                        + "where account.loan_application_id = ?", fixture.applicationId()));
+        assertEquals(0, count(
+                "select count(*) from loan_account_status_transitions history "
+                        + "join loan_accounts account on account.id = history.loan_account_id "
+                        + "where account.loan_application_id = ?", fixture.applicationId()));
+        assertEquals(0, count(
+                "select count(*) from repayment_installment_status_transitions history "
+                        + "join repayment_schedule_items item "
+                        + "on item.id = history.repayment_schedule_item_id "
+                        + "join repayment_schedules schedule "
+                        + "on schedule.id = item.repayment_schedule_id "
+                        + "where schedule.loan_application_id = ?", fixture.applicationId()));
+        assertEquals(0, count(
                 "select count(*) from salary_advance_limit_movements "
                         + "where loan_application_id = ? and movement_type = 'DISBURSED_TO_USED'",
                 fixture.applicationId()));

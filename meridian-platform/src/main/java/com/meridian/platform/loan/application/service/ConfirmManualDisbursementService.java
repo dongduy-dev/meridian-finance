@@ -2,6 +2,9 @@ package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.port.in.ConfirmManualDisbursementUseCase;
 import com.meridian.platform.loan.application.port.out.LoanAccountRepository;
+import com.meridian.platform.loan.application.port.out.LoanAccountStatusTransitionRepository;
+import com.meridian.platform.loan.application.port.out.RepaymentInstallmentProgressRepository;
+import com.meridian.platform.loan.application.port.out.RepaymentInstallmentStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanContractRepository;
@@ -9,6 +12,9 @@ import com.meridian.platform.loan.application.port.out.ManualDisbursementReposit
 import com.meridian.platform.loan.application.port.out.ManualDisbursementSaveOutcome;
 import com.meridian.platform.loan.application.port.out.RepaymentScheduleRepository;
 import com.meridian.platform.loan.domain.model.LoanAccount;
+import com.meridian.platform.loan.domain.model.LoanAccountServicingAction;
+import com.meridian.platform.loan.domain.model.LoanAccountStatus;
+import com.meridian.platform.loan.domain.model.LoanAccountStatusTransition;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
@@ -16,10 +22,14 @@ import com.meridian.platform.loan.domain.model.LoanApplicationTransitionAction;
 import com.meridian.platform.loan.domain.model.LoanContract;
 import com.meridian.platform.loan.domain.model.LoanContractStatus;
 import com.meridian.platform.loan.domain.model.ManualDisbursement;
+import com.meridian.platform.loan.domain.model.RepaymentInstallmentProgress;
+import com.meridian.platform.loan.domain.model.RepaymentInstallmentServicingAction;
+import com.meridian.platform.loan.domain.model.RepaymentInstallmentStatusTransition;
 import com.meridian.platform.loan.domain.model.RepaymentSchedule;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleItem;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
 import com.meridian.platform.loan.domain.service.FinalRepaymentScheduleGenerator;
+import com.meridian.platform.loan.domain.service.RepaymentStatusCalculator;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvidenceReader;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
@@ -55,6 +65,9 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
     private final LoanAccountRepository loanAccounts;
     private final ManualDisbursementRepository manualDisbursements;
     private final RepaymentScheduleRepository repaymentSchedules;
+    private final RepaymentInstallmentProgressRepository repaymentProgress;
+    private final LoanAccountStatusTransitionRepository loanAccountTransitions;
+    private final RepaymentInstallmentStatusTransitionRepository installmentTransitions;
     private final LoanApplicationStatusTransitionRepository transitionEvidence;
     private final BusinessAuditEvidenceReader auditEvidence;
     private final LoanProductActivationPolicyResolver activationPolicies;
@@ -64,6 +77,8 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
     private final Clock clock;
     private final FinalRepaymentScheduleGenerator scheduleGenerator =
             new FinalRepaymentScheduleGenerator();
+    private final RepaymentStatusCalculator statusCalculator =
+            new RepaymentStatusCalculator();
 
     public ConfirmManualDisbursementService(
             LoanApplicationRepository applications,
@@ -71,6 +86,9 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
             LoanAccountRepository loanAccounts,
             ManualDisbursementRepository manualDisbursements,
             RepaymentScheduleRepository repaymentSchedules,
+            RepaymentInstallmentProgressRepository repaymentProgress,
+            LoanAccountStatusTransitionRepository loanAccountTransitions,
+            RepaymentInstallmentStatusTransitionRepository installmentTransitions,
             LoanApplicationStatusTransitionRepository transitionEvidence,
             BusinessAuditEvidenceReader auditEvidence,
             LoanProductActivationPolicyResolver activationPolicies,
@@ -84,6 +102,9 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
         this.loanAccounts = loanAccounts;
         this.manualDisbursements = manualDisbursements;
         this.repaymentSchedules = repaymentSchedules;
+        this.repaymentProgress = repaymentProgress;
+        this.loanAccountTransitions = loanAccountTransitions;
+        this.installmentTransitions = installmentTransitions;
         this.transitionEvidence = transitionEvidence;
         this.auditEvidence = auditEvidence;
         this.activationPolicies = activationPolicies;
@@ -194,6 +215,12 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
                 command.firstRepaymentDate(),
                 operationTime
         ));
+        BusinessOperationContext operation = BusinessOperationContext.user(
+                UUID.randomUUID(),
+                actor.userId(),
+                operationTime
+        );
+        account = initializeRepaymentServicing(account, schedule, operation);
 
         LoanProductActivationPolicy.ProductActivationResult activationResult =
                 activationPolicies.resolve(application.productCode()).activate(
@@ -209,16 +236,75 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
 
         LoanApplicationTransitionResult transition = application.confirmManualDisbursement();
         LoanApplication disbursedApplication = applications.save(transition.loanApplication());
-        BusinessOperationContext operation = BusinessOperationContext.user(
-                UUID.randomUUID(),
-                actor.userId(),
-                operationTime
-        );
         transitionRecorder.record(operation, transition.facts(), null);
         publishAudit(operation, application, disbursedApplication, contract,
                 account, disbursement, schedule);
 
         return toResult(disbursedApplication, account, disbursement, schedule, false);
+    }
+
+    private LoanAccount initializeRepaymentServicing(
+            LoanAccount account,
+            RepaymentSchedule schedule,
+            BusinessOperationContext operation
+    ) {
+        LocalDate evaluationDate = account.activatedAt().toLocalDate();
+        List<RepaymentInstallmentProgress> progress = repaymentProgress.saveAll(
+                schedule.items().stream()
+                        .map(item -> RepaymentInstallmentProgress.initial(
+                                schedule,
+                                item,
+                                evaluationDate,
+                                operation.occurredAt()
+                        ))
+                        .toList()
+        );
+        LoanAccountStatus servicingStatus = statusCalculator.loanAccountStatus(
+                account.repaymentBalance().totalOutstanding(),
+                progress
+        );
+        LoanAccount initializedAccount = account;
+        if (servicingStatus != account.status()) {
+            initializedAccount = loanAccounts.updateServicingState(
+                    account.withServicingState(
+                            account.repaymentBalance(),
+                            servicingStatus,
+                            operation.occurredAt()
+                    )
+            );
+        }
+        loanAccountTransitions.save(new LoanAccountStatusTransition(
+                UUID.randomUUID(),
+                account.id(),
+                1,
+                operation.operationId(),
+                null,
+                initializedAccount.status(),
+                LoanAccountServicingAction.ACTIVATION_INITIALIZED,
+                operation.actorType(),
+                operation.actorUserId(),
+                evaluationDate,
+                operation.occurredAt()
+        ));
+        for (RepaymentInstallmentProgress installment : progress) {
+            installmentTransitions.save(
+                    new RepaymentInstallmentStatusTransition(
+                            UUID.randomUUID(),
+                            installment.repaymentScheduleItemId(),
+                            1,
+                            operation.operationId(),
+                            null,
+                            installment.status(),
+                            RepaymentInstallmentServicingAction
+                                    .ACTIVATION_INITIALIZED,
+                            operation.actorType(),
+                            operation.actorUserId(),
+                            evaluationDate,
+                            operation.occurredAt()
+                    )
+            );
+        }
+        return initializedAccount;
     }
 
     private ManualDisbursement resolveSaveOutcome(
@@ -346,6 +432,7 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
             throw systemStateConflict();
         }
         validateCompletedEvidence(application, contract, account, disbursement, schedule);
+        validateServicingFoundation(account, schedule);
         activationPolicies.resolve(application.productCode()).validateCompletedActivation(
                 new LoanProductActivationPolicy.CompletedActivationValidationCommand(
                         application,
@@ -370,6 +457,80 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
                 loanApplicationId
         );
         if (historyCount != 1 || auditCount != 1) {
+            throw systemStateConflict();
+        }
+    }
+
+    private void validateServicingFoundation(
+            LoanAccount account,
+            RepaymentSchedule schedule
+    ) {
+        List<RepaymentInstallmentProgress> progress =
+                repaymentProgress.findByRepaymentScheduleId(schedule.id());
+        List<LoanAccountStatusTransition> accountHistory =
+                loanAccountTransitions.findByLoanAccountId(account.id());
+        if (progress.size() != schedule.items().size()
+                || accountHistory.size() != 1) {
+            throw systemStateConflict();
+        }
+        LoanAccountStatusTransition initialAccountHistory = accountHistory.getFirst();
+        if (initialAccountHistory.sequenceNumber() != 1
+                || initialAccountHistory.fromStatus() != null
+                || initialAccountHistory.toStatus() != account.status()
+                || initialAccountHistory.action()
+                    != LoanAccountServicingAction.ACTIVATION_INITIALIZED
+                || !initialAccountHistory.servicingEvaluationDate().equals(
+                        account.activatedAt().toLocalDate()
+                )) {
+            throw systemStateConflict();
+        }
+        for (int index = 0; index < schedule.items().size(); index++) {
+            RepaymentScheduleItem item = schedule.items().get(index);
+            RepaymentInstallmentProgress installment = progress.get(index);
+            installment.validateAgainst(item);
+            List<RepaymentInstallmentStatusTransition> history =
+                    installmentTransitions.findByRepaymentScheduleItemId(item.id());
+            if (installment.totalPaid().signum() != 0
+                    || installment.principalOutstanding().compareTo(
+                            item.principalDue()) != 0
+                    || installment.interestOutstanding().compareTo(
+                            item.interestDue()) != 0
+                    || installment.feeOutstanding().compareTo(item.feeDue()) != 0
+                    || installment.lastPaymentValueDate() != null
+                    || installment.lastPaymentRecordedAt() != null
+                    || !installment.servicingEvaluationDate().equals(
+                            account.activatedAt().toLocalDate()
+                    )
+                    || history.size() != 1
+                    || history.getFirst().sequenceNumber() != 1
+                    || history.getFirst().fromStatus() != null
+                    || history.getFirst().toStatus() != installment.status()
+                    || history.getFirst().action()
+                        != RepaymentInstallmentServicingAction
+                                .ACTIVATION_INITIALIZED
+                    || !history.getFirst().operationId().equals(
+                            initialAccountHistory.operationId()
+                    )) {
+                throw systemStateConflict();
+            }
+        }
+        LoanAccountStatus expectedStatus = statusCalculator.loanAccountStatus(
+                account.repaymentBalance().totalOutstanding(),
+                progress
+        );
+        if (account.repaymentBalance().totalPaid().signum() != 0
+                || account.repaymentBalance().principalOutstanding().compareTo(
+                        account.approvedPrincipal()) != 0
+                || account.repaymentBalance().interestOutstanding().compareTo(
+                        account.totalInterest()) != 0
+                || account.repaymentBalance().feeOutstanding().compareTo(
+                        account.feeAmount()) != 0
+                || account.repaymentBalance().lastPaymentValueDate() != null
+                || account.repaymentBalance().lastPaymentRecordedAt() != null
+                || !account.servicingEvaluationDate().equals(
+                        account.activatedAt().toLocalDate()
+                )
+                || account.status() != expectedStatus) {
             throw systemStateConflict();
         }
     }

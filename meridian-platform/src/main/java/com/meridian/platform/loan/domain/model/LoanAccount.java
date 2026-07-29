@@ -4,6 +4,7 @@ import com.meridian.platform.shared.domain.exception.BusinessRuleViolationExcept
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Objects;
@@ -22,7 +23,9 @@ public record LoanAccount(
         BigDecimal totalInterest,
         BigDecimal feeAmount,
         BigDecimal totalRepaymentAmount,
-        LocalDateTime activatedAt
+        LocalDateTime activatedAt,
+        RepaymentBalance repaymentBalance,
+        LocalDateTime updatedAt
 ) {
 
     private static final Pattern ACCOUNT_NUMBER_PATTERN = Pattern.compile("LA-[0-9A-F]{32}");
@@ -38,6 +41,8 @@ public record LoanAccount(
         Objects.requireNonNull(feeAmount, "feeAmount must not be null");
         Objects.requireNonNull(totalRepaymentAmount, "totalRepaymentAmount must not be null");
         Objects.requireNonNull(activatedAt, "activatedAt must not be null");
+        Objects.requireNonNull(repaymentBalance, "repaymentBalance must not be null");
+        Objects.requireNonNull(updatedAt, "updatedAt must not be null");
 
         if (!ACCOUNT_NUMBER_PATTERN.matcher(Objects.requireNonNull(
                 accountNumber,
@@ -55,6 +60,55 @@ public record LoanAccount(
         if (totalRepaymentAmount.compareTo(approvedPrincipal.add(totalInterest).add(feeAmount)) != 0) {
             throw invalid("Loan Account financial totals do not reconcile.");
         }
+        repaymentBalance.validateAgainst(approvedPrincipal, totalInterest, feeAmount);
+        if (updatedAt.isBefore(activatedAt)) {
+            throw invalid("Loan Account update time cannot precede activation.");
+        }
+        if (status == LoanAccountStatus.SETTLED
+                && repaymentBalance.totalOutstanding().signum() != 0) {
+            throw invalid("Settled Loan Account must have zero outstanding.");
+        }
+        if ((status == LoanAccountStatus.ACTIVE || status == LoanAccountStatus.OVERDUE)
+                && repaymentBalance.totalOutstanding().signum() == 0) {
+            throw invalid("Open Loan Account must have outstanding obligations.");
+        }
+    }
+
+    public LoanAccount(
+            UUID id,
+            UUID loanApplicationId,
+            UUID loanContractId,
+            UUID customerId,
+            String accountNumber,
+            LoanAccountStatus status,
+            BigDecimal approvedPrincipal,
+            int approvedTermMonths,
+            BigDecimal totalInterest,
+            BigDecimal feeAmount,
+            BigDecimal totalRepaymentAmount,
+            LocalDateTime activatedAt
+    ) {
+        this(
+                id,
+                loanApplicationId,
+                loanContractId,
+                customerId,
+                accountNumber,
+                status,
+                approvedPrincipal,
+                approvedTermMonths,
+                totalInterest,
+                feeAmount,
+                totalRepaymentAmount,
+                activatedAt,
+                RepaymentBalance.initial(
+                        approvedPrincipal,
+                        totalInterest,
+                        feeAmount,
+                        activatedAt.toLocalDate()
+                ),
+                activatedAt
+        );
     }
 
     public static LoanAccount activate(UUID id, LoanContract contract, LocalDateTime activatedAt) {
@@ -78,8 +132,51 @@ public record LoanAccount(
                 terms.totalInterest(),
                 terms.feeAmount(),
                 terms.totalRepaymentAmount(),
-                Objects.requireNonNull(activatedAt, "activatedAt must not be null")
+                Objects.requireNonNull(activatedAt, "activatedAt must not be null"),
+                RepaymentBalance.initial(
+                        terms.approvedPrincipal(),
+                        terms.totalInterest(),
+                        terms.feeAmount(),
+                        activatedAt.toLocalDate()
+                ),
+                activatedAt
         );
+    }
+
+    public LoanAccount withServicingState(
+            RepaymentBalance newBalance,
+            LoanAccountStatus newStatus,
+            LocalDateTime changedAt
+    ) {
+        Objects.requireNonNull(newBalance, "newBalance must not be null");
+        Objects.requireNonNull(newStatus, "newStatus must not be null");
+        Objects.requireNonNull(changedAt, "changedAt must not be null");
+        if (newStatus == LoanAccountStatus.CLOSED) {
+            throw new BusinessStateConflictException(
+                    "LOAN_ACCOUNT_CLOSURE_NOT_ALLOWED",
+                    "Administrative closure is outside repayment servicing."
+            );
+        }
+        return new LoanAccount(
+                id,
+                loanApplicationId,
+                loanContractId,
+                customerId,
+                accountNumber,
+                newStatus,
+                approvedPrincipal,
+                approvedTermMonths,
+                totalInterest,
+                feeAmount,
+                totalRepaymentAmount,
+                activatedAt,
+                newBalance,
+                changedAt
+        );
+    }
+
+    public LocalDate servicingEvaluationDate() {
+        return repaymentBalance.servicingEvaluationDate();
     }
 
     public static String accountNumberFor(UUID id) {

@@ -83,7 +83,8 @@ public class SalaryAdvanceLimitMovementRepositoryAdapter implements SalaryAdvanc
                 entity.getLoanAccountId(),
                 entity.getMovementType(),
                 entity.getAmount(),
-                entity.getOccurredAt()
+                entity.getOccurredAt(),
+                entity.getRepaymentTransactionId()
         );
     }
 }

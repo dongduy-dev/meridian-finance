@@ -419,14 +419,42 @@ Customers with `loan:read:own` may query only their activated LoanAccount; staff
 
 ### 6.9 Repayment, Settlement, and Closure
 
-The final repayment schedule is authoritative after activation. Repayment posting, allocations, overdue processing, settlement, and closure are not implemented in the current checkpoint.
+The immutable final version-1 repayment schedule is the authoritative scheduled obligation after activation. Servicing progress, actual payment transactions, and their allocations are separate evidence and must never rewrite original schedule amounts or dates.
+
+The physical servicing foundation represents zero-paid/full-outstanding LoanAccount and installment state, derives servicing statuses, preserves append-only status history, and defines future payment/allocation evidence. Existing accounts are initialized deterministically as of their activation date, never the Flyway execution date, and the migration creates no operational repayment audit event. Newly activated accounts create the same state and initial history atomically with activation.
+
+Approved repayment rules for the later posting increment are:
+
+* allocate within an installment in `FEE -> INTEREST -> PRINCIPAL` order;
+* allocate installments by due date ascending, then installment number ascending;
+* allow early allocation to future installments without interest rebate, repricing, schedule regeneration, or obligation/date mutation;
+* reject the entire payment if it exceeds total outstanding; unapplied cash, suspense, credit, refund, and reversal are outside the MVP boundary;
+* persist `paymentValueDate` separately from `recordedAt`; require the value date to be between the disbursement value date and the current UTC date inclusive; allow backdated and out-of-order value dates; allocate against balances at recording time and never rewrite historical allocations or statuses;
+* calculate `lastPaymentValueDate` as the maximum recorded payment value date and `lastPaymentRecordedAt` as the latest recording timestamp;
+* canonicalize the external payment reference by trimming and uppercasing with `Locale.ROOT`, validate the safe `[A-Z0-9._:/-]` convention, and enforce global uniqueness without exposing the reference in logs, errors, DTOs, audit, history, or `toString`.
 
 LoanAccount roll-up rules:
 
 * if any unpaid repayment is past due, the LoanAccount becomes `OVERDUE`;
-* if all scheduled repayments are paid, or an approved settlement is recorded, the LoanAccount becomes `SETTLED`;
-* if a settled loan is administratively closed, the LoanAccount becomes `CLOSED`;
-* `SETTLED` and `CLOSED` are terminal for normal repayment operations.
+* if total outstanding reaches zero, the LoanAccount becomes `SETTLED`;
+* otherwise the LoanAccount is `ACTIVE`;
+* this foundation never produces `CLOSED`; settlement orchestration and administrative closure remain deferred.
+
+The foundation reserves only the top-level business audit actions `REPAYMENT_RECORDED` and `LOAN_ACCOUNT_STATUS_CHANGED`. It does not publish them yet. Installment changes use dedicated append-only history, and future Salary Advance exposure release remains evidence within the repayment operation rather than a separate top-level audit action.
+
+Future repayment writes require `repayment:update`. Application services must not hard-code an Accounting Officer role when permission authority already expresses responsibility; a staff-backed actor may still be required by the command boundary.
+
+To avoid lock inversion, workflows that mutate an existing application/account use this global order:
+
+1. category-specific command/reference advisory locks;
+2. Loan Application workflow advisory lock;
+3. Loan Application and then LoanAccount/final-schedule/progress row locks in feature-specific order;
+4. Salary Advance customer/employee-link advisory lock;
+5. Salary Advance limit and movement rows.
+
+Repayment and activation must never acquire the Salary Advance customer/employee-link lock before the Loan Application workflow lock. Overdue evaluation follows workflow -> account -> schedule/progress and does not lock the limit. Submission and standalone limit refresh keep their existing customer/product or customer/employee-link -> limit order and never acquire an existing-application workflow/account lock.
+
+Repayment posting/orchestration, used-exposure release execution, overdue scheduling, secured APIs, audit publication, settlement, closure, reversal, payment-gateway integration, and UCL/Collateral repayment policies are not implemented by this foundation.
 
 ---
 

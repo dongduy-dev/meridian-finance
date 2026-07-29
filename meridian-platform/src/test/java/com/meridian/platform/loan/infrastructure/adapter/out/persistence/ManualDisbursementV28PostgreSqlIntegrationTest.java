@@ -167,6 +167,7 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
             );
             assertEquals(disbursement, inserted.manualDisbursement());
             assertEquals(schedule, repaymentSchedules.save(schedule));
+            insertInitialServicing(accountId, scheduleId, operationTime);
             assertEquals(account, loanAccounts.findByLoanApplicationIdForUpdate(
                     fixture.applicationId()).orElseThrow());
         });
@@ -206,23 +207,20 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                 "update loan_accounts set status = 'ACTIVE', updated_at = current_timestamp where id = ?",
                 accountId
         );
-        for (LoanAccountStatus expected : List.of(
-                LoanAccountStatus.ACTIVE,
+        for (LoanAccountStatus rejected : List.of(
                 LoanAccountStatus.OVERDUE,
                 LoanAccountStatus.SETTLED,
                 LoanAccountStatus.CLOSED
         )) {
-            jdbc.update(
-                    "update loan_accounts set status = ?, updated_at = current_timestamp where id = ?",
-                    expected.name(),
-                    accountId
-            );
-            assertEquals(expected, loanAccounts.findById(accountId).orElseThrow().status());
+            assertThrows(DataAccessException.class, () -> jdbc.update(
+                    "update loan_accounts set status = ? where id = ?",
+                    rejected.name(), accountId
+            ));
         }
 
         LoanAccount changedPrincipal = new LoanAccount(
                 account.id(), account.loanApplicationId(), account.loanContractId(),
-                account.customerId(), account.accountNumber(), LoanAccountStatus.CLOSED,
+                account.customerId(), account.accountNumber(), LoanAccountStatus.ACTIVE,
                 amount("1001"), account.approvedTermMonths(), amount("99"),
                 account.feeAmount(), account.totalRepaymentAmount(), account.activatedAt()
         );
@@ -490,6 +488,7 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                         manualDisbursements.save(evidence)
                 );
                 repaymentSchedules.save(schedule);
+                insertInitialServicing(accountId, schedule.id(), collisionTime);
             });
 
             Fixture second = createReadyFixture(false);
@@ -1256,11 +1255,12 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                         "1000.50"
                 ))
         );
-        assertTrue(allMessages(fractionalFailure).contains("chk_loan_accounts_terms"));
+        assertTrue(allMessages(fractionalFailure).contains("chk_loan_accounts_servicing_amounts"),
+                allMessages(fractionalFailure));
     }
 
     @Test
-    void permitsOnlyLoanAccountStatusAndUpdatedAtMutation() {
+    void requiresReconciledServicingEvidenceForStatusMutation() {
         Fixture fixture = createReadyFixture(false);
         Activation activation = insertCompleteActivation(
                 fixture,
@@ -1270,16 +1270,20 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
 
         assertEquals(1, jdbc.update(
                 "update loan_accounts "
-                        + "set status = 'OVERDUE', updated_at = updated_at + interval '1 second' "
+                        + "set status = 'ACTIVE', updated_at = updated_at + interval '1 second' "
                         + "where id = ?",
                 activation.loanAccountId()
         ));
-        assertEquals("OVERDUE", jdbc.queryForObject(
+        assertEquals("ACTIVE", jdbc.queryForObject(
                 "select status from loan_accounts where id = ?",
                 String.class,
                 activation.loanAccountId()
         ));
 
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "update loan_accounts set status = 'OVERDUE' where id = ?",
+                activation.loanAccountId()
+        ));
         assertThrows(DataAccessException.class, () -> jdbc.update(
                 "update loan_accounts set status = 'SETTLED', approved_principal = 999 where id = ?",
                 activation.loanAccountId()
@@ -1450,8 +1454,8 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                 )
         );
         assertTrue(allMessages(convertedHistoryFailure).contains(
-                "must be inserted as new evidence"
-        ));
+                "conversion and repayment-release evidence must be inserted"
+        ), allMessages(convertedHistoryFailure));
     }
 
     private void assertConversionRejected(
@@ -1534,8 +1538,8 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                 )
         );
         assertTrue(allMessages(missingFailure).contains(
-                "Final repayment schedule does not reconcile to its source contract"
-        ));
+                "LoanAccount servicing rollup does not reconcile to installment progress"
+        ), allMessages(missingFailure));
 
         Fixture skippedFixture = createReadyFixture(false);
         ScheduleSpec skippedBase = validSchedule(skippedFixture);
@@ -1674,8 +1678,8 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                 )
         );
         assertTrue(allMessages(itemFailure).contains(
-                "Final repayment schedule does not reconcile to its source contract"
-        ));
+                "LoanAccount servicing rollup does not reconcile to installment progress"
+        ), allMessages(itemFailure));
 
         Fixture boundaryFixture = createReadyFixture(false);
         ScheduleSpec boundaryBase = validSchedule(boundaryFixture);
@@ -2143,6 +2147,11 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                         winnerInserted.countDown();
                         await(releaseWinner);
                         repaymentSchedules.save(winnerEvidence.schedule());
+                        insertInitialServicing(
+                                winnerEvidence.account().id(),
+                                winnerEvidence.schedule().id(),
+                                winnerEvidence.account().activatedAt()
+                        );
                         return outcome;
                     })
             );
@@ -2280,6 +2289,7 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
             loanAccounts.save(account);
             manualDisbursements.save(disbursement);
             repaymentSchedules.save(schedule);
+            insertInitialServicing(accountId, scheduleId, operationTime);
         });
         return new Activation(accountId, scheduleId, disbursement.requestId());
     }
@@ -2631,9 +2641,11 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                 "insert into loan_accounts "
                         + "(id,loan_application_id,loan_contract_id,customer_id,account_number,status,"
                         + "approved_principal,approved_term_months,total_interest,fee_amount,"
-                        + "total_repayment_amount,activated_at) "
+                        + "total_repayment_amount,activated_at,principal_paid,interest_paid,"
+                        + "fee_paid,total_paid,principal_outstanding,interest_outstanding,"
+                        + "fee_outstanding,total_outstanding,servicing_evaluation_date) "
                         + "values (?,?,?,?,'LA-' || upper(replace(?::text,'-','')),'ACTIVE',"
-                        + "1000,2,100,0,1100,current_timestamp)",
+                        + "1000,2,100,0,1100,current_timestamp,0,0,0,0,1000,100,0,1100,current_date)",
                 accountId,
                 applicationId,
                 contractId,
@@ -2651,10 +2663,14 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                 "insert into loan_accounts "
                         + "(id,loan_application_id,loan_contract_id,customer_id,account_number,status,"
                         + "approved_principal,approved_term_months,total_interest,fee_amount,"
-                        + "total_repayment_amount,activated_at) "
+                        + "total_repayment_amount,activated_at,principal_paid,interest_paid,"
+                        + "fee_paid,total_paid,principal_outstanding,interest_outstanding,"
+                        + "fee_outstanding,total_outstanding,servicing_evaluation_date) "
                         + "values (?,?,?,?,'LA-' || upper(replace(?::text,'-','')),'ACTIVE',"
                         + principal + ",2,100,0," + ("1000".equals(principal) ? "1100" : "1100.50")
-                        + ",current_timestamp)",
+                        + ",current_timestamp,0,0,0,0," + principal + ",100,0,"
+                        + ("1000".equals(principal) ? "1100" : "1100.50")
+                        + ",current_date)",
                 accountId,
                 fixture.applicationId(),
                 fixture.contractId(),
@@ -2819,8 +2835,68 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                     item.totalDue()
             );
         }
+        LocalDateTime activatedAt = jdbc.queryForObject(
+                "select activated_at from loan_accounts where id = ?",
+                LocalDateTime.class,
+                accountId
+        );
+        insertInitialServicing(accountId, scheduleId, activatedAt);
     }
 
+    private void insertInitialServicing(
+            UUID accountId,
+            UUID scheduleId,
+            LocalDateTime occurredAt
+    ) {
+        UUID operationId = UUID.randomUUID();
+        jdbc.update(
+                "insert into repayment_installment_progress "
+                        + "(repayment_schedule_item_id,repayment_schedule_id,loan_account_id,"
+                        + "installment_number,principal_paid,interest_paid,fee_paid,total_paid,"
+                        + "principal_outstanding,interest_outstanding,fee_outstanding,"
+                        + "total_outstanding,status,last_payment_value_date,"
+                        + "last_payment_recorded_at,servicing_evaluation_date,created_at,updated_at) "
+                        + "select item.id,schedule.id,?,item.installment_number,0,0,0,0,"
+                        + "item.principal_due,item.interest_due,item.fee_due,item.total_due,"
+                        + "case when item.due_date < ? then 'OVERDUE' "
+                        + "when item.due_date = ? then 'DUE' else 'NOT_DUE' end,"
+                        + "null,null,?,?,? from repayment_schedule_items item "
+                        + "join repayment_schedules schedule on schedule.id = item.repayment_schedule_id "
+                        + "where schedule.id = ?",
+                accountId, occurredAt.toLocalDate(), occurredAt.toLocalDate(),
+                occurredAt.toLocalDate(), occurredAt, occurredAt, scheduleId
+        );
+        jdbc.update(
+                "update loan_accounts set status = 'OVERDUE', updated_at = ? "
+                        + "where id = ? and exists ("
+                        + "select 1 from repayment_installment_progress "
+                        + "where loan_account_id = ? and status = 'OVERDUE')",
+                occurredAt, accountId, accountId
+        );
+        jdbc.update(
+                "insert into loan_account_status_transitions "
+                        + "(id,loan_account_id,sequence_number,operation_id,from_status,"
+                        + "to_status,action,actor_type,actor_user_id,"
+                        + "servicing_evaluation_date,occurred_at) "
+                        + "select ?,?,1,?,null,status,'ACTIVATION_INITIALIZED',"
+                        + "'SYSTEM',null,?,? from loan_accounts where id = ? "
+                        + "and not exists (select 1 from loan_account_status_transitions "
+                        + "where loan_account_id = ?)",
+                UUID.randomUUID(), accountId, operationId, occurredAt.toLocalDate(),
+                occurredAt, accountId, accountId
+        );
+        jdbc.update(
+                "insert into repayment_installment_status_transitions "
+                        + "(id,repayment_schedule_item_id,sequence_number,operation_id,"
+                        + "from_status,to_status,action,actor_type,actor_user_id,"
+                        + "servicing_evaluation_date,occurred_at) "
+                        + "select gen_random_uuid(),progress.repayment_schedule_item_id,1,?,"
+                        + "null,progress.status,'ACTIVATION_INITIALIZED','SYSTEM',null,?,? "
+                        + "from repayment_installment_progress progress "
+                        + "where progress.repayment_schedule_id = ?",
+                operationId, occurredAt.toLocalDate(), occurredAt, scheduleId
+        );
+    }
     private ScheduleSpec validSchedule(Fixture fixture) {
         return new ScheduleSpec(
                 "FINAL",
