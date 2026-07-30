@@ -15,6 +15,13 @@ import java.util.UUID;
 interface JpaRepaymentTransactionRepository
         extends JpaRepository<RepaymentTransactionJpaEntity, UUID> {
 
+    @Query(value = """
+            select pg_advisory_xact_lock(
+                hashtextextended('repayment-recording-request:' || cast(:requestId as text), 0)
+            )
+            """, nativeQuery = true)
+    void acquireRecordingRequestLock(@Param("requestId") UUID requestId);
+
     Optional<RepaymentTransactionJpaEntity> findByRequestId(UUID requestId);
 
     Optional<RepaymentTransactionJpaEntity> findByExternalPaymentReference(

@@ -246,10 +246,13 @@ Status: Open
 Blocks next major feature: No
 
 Problem:
-The authoritative final repayment schedule is generated at LoanAccount activation. Payment posting/allocation, paid/outstanding tracking, overdue processing, used-exposure release, settlement, and closure are not implemented.
+The authoritative final repayment schedule is generated at LoanAccount activation. Increment 2 implements application-layer manual Salary Advance repayment posting, deterministic allocation, paid/outstanding tracking, automatic contractual payoff, exact principal used-exposure release, histories, audit, and durable replay. Repayment REST/query APIs, the overdue scheduler, negotiated settlement, administrative closure, and reversal remain deferred, so this follow-up stays open.
+
+Progress:
+V32-V33 provide audit and physical servicing foundations. V34 adds the minimum immutable safe operation-outcome snapshot and repayment audit entity support required for exact replay after later payments. Salary Advance is the only executable repayment product; no UCL or Collateral placeholders exist.
 
 Recommendation:
-Implement repayment servicing against the immutable final schedule without mixing scheduled obligations with payment transactions or allocations.
+Continue the remaining servicing slices without mixing scheduled obligations with payment transactions or allocations: overdue lifecycle scheduling next, then separately approved APIs/query visibility and closure/reversal capabilities.
 
 ### MER-FU-012 - Implement document checklist and manual document review foundation
 

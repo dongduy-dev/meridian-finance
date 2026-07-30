@@ -8,6 +8,8 @@ import java.util.UUID;
 
 public interface RepaymentTransactionRepository {
 
+    void acquireRecordingRequestLock(UUID requestId);
+
     RepaymentTransactionSaveOutcome save(RepaymentTransaction transaction);
 
     Optional<RepaymentTransaction> findById(UUID transactionId);

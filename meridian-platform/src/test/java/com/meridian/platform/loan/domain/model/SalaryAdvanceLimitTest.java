@@ -66,6 +66,44 @@ class SalaryAdvanceLimitTest {
         );
     }
 
+    @Test
+    void releasesUsedExposureExactlyForEveryLimitStatus() {
+        LocalDateTime refreshedAt = LocalDateTime.of(2026, 7, 1, 8, 0);
+        for (SalaryAdvanceLimitStatus status : SalaryAdvanceLimitStatus.values()) {
+            SalaryAdvanceLimit original = new SalaryAdvanceLimit(
+                    UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                    money(2_000), money(1_200), money(200), money(600),
+                    status, refreshedAt
+            );
+
+            SalaryAdvanceLimit released = original.releaseUsed(money(300));
+
+            assertEquals(money(900), released.usedAmount());
+            assertEquals(money(900), released.availableAmount());
+            assertEquals(money(200), released.reservedAmount());
+            assertEquals(money(2_000), released.totalLimit());
+            assertEquals(refreshedAt, released.lastRefreshedAt());
+            assertEquals(status, released.status());
+        }
+    }
+
+    @Test
+    void rejectsInvalidOrExcessiveUsedExposureRelease() {
+        SalaryAdvanceLimit limit = limit(
+                SalaryAdvanceLimitStatus.DISABLED,
+                money(2_000), money(300), money(200), money(1_500)
+        );
+
+        assertThrows(BusinessRuleViolationException.class,
+                () -> limit.releaseUsed(money(301)));
+        assertThrows(BusinessRuleViolationException.class,
+                () -> limit.releaseUsed(money(0)));
+        assertThrows(BusinessRuleViolationException.class,
+                () -> limit.releaseUsed(money(-1)));
+        assertThrows(BusinessRuleViolationException.class,
+                () -> limit.releaseUsed(new BigDecimal("1.50")));
+    }
+
     private static SalaryAdvanceLimit limit(
             SalaryAdvanceLimitStatus status,
             BigDecimal total,

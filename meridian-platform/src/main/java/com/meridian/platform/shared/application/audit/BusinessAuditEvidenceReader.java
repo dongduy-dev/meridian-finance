@@ -12,4 +12,11 @@ public interface BusinessAuditEvidenceReader {
             BusinessAuditEntityType entityType,
             UUID entityId
     );
+
+    long countMatchingOperation(
+            UUID operationId,
+            BusinessAuditAction action,
+            BusinessAuditEntityType entityType,
+            UUID entityId
+    );
 }

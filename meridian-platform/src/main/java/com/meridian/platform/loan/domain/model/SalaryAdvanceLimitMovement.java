@@ -152,6 +152,36 @@ public record SalaryAdvanceLimitMovement(
         );
     }
 
+    public static SalaryAdvanceLimitMovement repaidReleased(
+            UUID id,
+            UUID salaryAdvanceLimitId,
+            UUID loanApplicationId,
+            UUID loanAccountId,
+            UUID repaymentTransactionId,
+            BigDecimal amount,
+            LocalDateTime occurredAt
+    ) {
+        return new SalaryAdvanceLimitMovement(
+                Objects.requireNonNull(id, "id must not be null"),
+                Objects.requireNonNull(
+                        salaryAdvanceLimitId,
+                        "salaryAdvanceLimitId must not be null"
+                ),
+                Objects.requireNonNull(
+                        loanApplicationId,
+                        "loanApplicationId must not be null"
+                ),
+                Objects.requireNonNull(loanAccountId, "loanAccountId must not be null"),
+                SalaryAdvanceLimitMovementType.REPAID_RELEASED,
+                Objects.requireNonNull(amount, "amount must not be null"),
+                Objects.requireNonNull(occurredAt, "occurredAt must not be null"),
+                Objects.requireNonNull(
+                        repaymentTransactionId,
+                        "repaymentTransactionId must not be null"
+                )
+        );
+    }
+
     private static BusinessRuleViolationException invalidRepaymentRelease() {
         return new BusinessRuleViolationException(
                 "REPAYMENT_RELEASE_EVIDENCE_INVALID",

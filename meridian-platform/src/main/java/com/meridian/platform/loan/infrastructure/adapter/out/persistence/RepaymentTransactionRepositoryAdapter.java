@@ -28,6 +28,12 @@ public class RepaymentTransactionRepositoryAdapter
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public void acquireRecordingRequestLock(UUID requestId) {
+        transactions.acquireRecordingRequestLock(requestId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public RepaymentTransactionSaveOutcome save(RepaymentTransaction transaction) {
         int inserted = transactions.insertIfNoConflict(
                 transaction.id(),
@@ -76,9 +82,8 @@ public class RepaymentTransactionRepositoryAdapter
     public Optional<RepaymentTransaction> findByExternalPaymentReference(
             String reference
     ) {
-        return transactions.findByExternalPaymentReference(
-                RepaymentTransaction.canonicalReference(reference)
-        ).map(this::toDomain);
+        RepaymentTransaction.requireCanonicalReference(reference);
+        return transactions.findByExternalPaymentReference(reference).map(this::toDomain);
     }
 
     @Override

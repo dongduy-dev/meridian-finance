@@ -55,4 +55,18 @@ public class RepaymentInstallmentStatusTransitionRepositoryAdapter
                 .map(RepaymentInstallmentStatusTransitionJpaEntity::toDomain)
                 .toList();
     }
+
+    @Override
+    @Transactional(
+            propagation = Propagation.MANDATORY,
+            readOnly = true
+    )
+    public List<RepaymentInstallmentStatusTransition> findByOperationId(
+            UUID operationId
+    ) {
+        return transitions.findByOperationIdOrderByRepaymentScheduleItemIdAsc(operationId)
+                .stream()
+                .map(RepaymentInstallmentStatusTransitionJpaEntity::toDomain)
+                .toList();
+    }
 }

@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RepaymentTransactionTest {
 
     @Test
-    void canonicalizesReferenceAndOwnsImmutableOrderedAllocations() {
+    void acceptsCanonicalReferenceAndOwnsImmutableOrderedAllocations() {
         UUID transactionId = UUID.randomUUID();
         RepaymentAllocation allocation = allocation(
                 transactionId,
@@ -34,7 +34,7 @@ class RepaymentTransactionTest {
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                "  bank.ref/1  ",
+                "BANK.REF/1",
                 money("100"),
                 LocalDate.of(2026, 7, 26),
                 LocalDate.of(2026, 7, 20),
@@ -45,15 +45,35 @@ class RepaymentTransactionTest {
         );
         source.clear();
 
-        assertTrue(transaction.externalPaymentReference().equals(
-                RepaymentTransaction.canonicalReference(" bank.ref/1 ")
-        ));
+        assertTrue(transaction.externalPaymentReference().equals("BANK.REF/1"));
         assertEquals(1, transaction.allocations().size());
         assertThrows(UnsupportedOperationException.class,
                 () -> transaction.allocations().clear());
         assertFalse(transaction.toString().contains(
                 transaction.externalPaymentReference()
         ));
+    }
+
+    @Test
+    void rejectsNoncanonicalReferenceWithoutRenderingIt() {
+        String noncanonical = " private-reference ";
+        UUID transactionId = UUID.randomUUID();
+        BusinessRuleViolationException rejected = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> transaction(
+                        transactionId,
+                        money("100"),
+                        List.of(allocation(
+                                transactionId,
+                                1,
+                                RepaymentAllocationComponent.PRINCIPAL,
+                                "100"
+                        )),
+                        noncanonical
+                )
+        );
+
+        assertFalse(rejected.getMessage().contains(noncanonical.trim()));
     }
 
     @Test
@@ -120,13 +140,22 @@ class RepaymentTransactionTest {
             BigDecimal received,
             List<RepaymentAllocation> allocations
     ) {
+        return transaction(transactionId, received, allocations, "SAFE-REFERENCE");
+    }
+
+    private static RepaymentTransaction transaction(
+            UUID transactionId,
+            BigDecimal received,
+            List<RepaymentAllocation> allocations,
+            String externalPaymentReference
+    ) {
         return new RepaymentTransaction(
                 transactionId,
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 UUID.randomUUID(),
-                "SAFE-REFERENCE",
+                externalPaymentReference,
                 received,
                 LocalDate.of(2026, 7, 27),
                 UUID.randomUUID(),

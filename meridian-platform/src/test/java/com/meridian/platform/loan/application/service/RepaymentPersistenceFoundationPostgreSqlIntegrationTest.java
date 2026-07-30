@@ -5,6 +5,8 @@ import com.meridian.platform.loan.application.port.out.LoanAccountRepository;
 import com.meridian.platform.loan.application.port.out.LoanAccountStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.RepaymentInstallmentProgressRepository;
 import com.meridian.platform.loan.application.port.out.RepaymentInstallmentStatusTransitionRepository;
+import com.meridian.platform.loan.application.port.out.RepaymentOperationOutcome;
+import com.meridian.platform.loan.application.port.out.RepaymentOperationOutcomeRepository;
 import com.meridian.platform.loan.application.port.out.RepaymentScheduleRepository;
 import com.meridian.platform.loan.application.port.out.RepaymentTransactionRepository;
 import com.meridian.platform.loan.application.port.out.RepaymentTransactionSaveOutcome;
@@ -19,9 +21,16 @@ import com.meridian.platform.loan.domain.model.RepaymentInstallmentStatus;
 import com.meridian.platform.loan.domain.model.RepaymentInstallmentStatusTransition;
 import com.meridian.platform.loan.domain.model.RepaymentSchedule;
 import com.meridian.platform.loan.domain.model.RepaymentTransaction;
+import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
+import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
+import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
+import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
+import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
 import com.meridian.platform.shared.domain.model.ActorType;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -71,11 +80,14 @@ class RepaymentPersistenceFoundationPostgreSqlIntegrationTest {
 
     @Autowired ConfirmManualDisbursementUseCase disbursements;
     @Autowired RepaymentTransactionRepository repaymentTransactions;
+    @Autowired RepaymentOperationOutcomeRepository repaymentOutcomes;
     @Autowired RepaymentInstallmentProgressRepository progressRepository;
     @Autowired LoanAccountStatusTransitionRepository accountHistoryRepository;
     @Autowired RepaymentInstallmentStatusTransitionRepository installmentHistoryRepository;
     @Autowired LoanAccountRepository loanAccounts;
     @Autowired RepaymentScheduleRepository schedules;
+    @Autowired BusinessAuditPublisher auditPublisher;
+    @Autowired EntityManager entityManager;
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager transactionManager;
     @MockitoBean CurrentUserProvider currentUserProvider;
@@ -210,11 +222,24 @@ class RepaymentPersistenceFoundationPostgreSqlIntegrationTest {
                     recordedAt,
                     account.servicingEvaluationDate()
             );
-            loanAccounts.updateServicingState(account.withServicingState(
+            LoanAccount updatedAccount = account.withServicingState(
                     updatedBalance,
                     account.status(),
                     recordedAt
-            ));
+            );
+            loanAccounts.updateServicingState(updatedAccount);
+            completeRepaymentEvidence(
+                    transactionId,
+                    fixture.applicationId(),
+                    updatedAccount,
+                    schedule.id(),
+                    money("50"),
+                    recordedAt,
+                    money("0"),
+                    progress,
+                    List.of(updatedFirst, progress.get(1)),
+                    List.of(first.repaymentScheduleItemId())
+            );
         });
 
         transactions.executeWithoutResult(ignored -> {
@@ -222,9 +247,7 @@ class RepaymentPersistenceFoundationPostgreSqlIntegrationTest {
                     .findById(transactionId)
                     .orElseThrow();
             assertTrue(reloaded.externalPaymentReference().equals(
-                    RepaymentTransaction.canonicalReference(
-                            " payment-" + fixture.token().toLowerCase() + " "
-                    )
+                    "PAYMENT-" + fixture.token()
             ));
             assertEquals(1, reloaded.allocations().size());
             assertFalse(reloaded.toString().contains(
@@ -703,6 +726,10 @@ class RepaymentPersistenceFoundationPostgreSqlIntegrationTest {
         UUID secondItemId = activation.scheduleItems().get(1).id();
         LocalDate evaluationDate = VALUE_DATE.plusDays(10);
         LocalDateTime recordedAt = NOW.plusDays(10);
+        List<RepaymentInstallmentProgress> previousProgress =
+                progressRepository.findByRepaymentScheduleId(
+                        activation.repaymentScheduleId()
+                );
 
         jdbc.update(
                 "insert into repayment_transactions "
@@ -791,6 +818,68 @@ class RepaymentPersistenceFoundationPostgreSqlIntegrationTest {
                 recordedAt,
                 releaseLimitId
         );
+        entityManager.clear();
+        LoanAccount updatedAccount = loanAccounts
+                .findById(activation.loanAccountId())
+                .orElseThrow();
+        List<RepaymentInstallmentProgress> updatedProgress =
+                progressRepository.findByRepaymentScheduleId(
+                        activation.repaymentScheduleId()
+                );
+        completeRepaymentEvidence(
+                transactionId,
+                fixture.applicationId(),
+                updatedAccount,
+                activation.repaymentScheduleId(),
+                money("150"),
+                recordedAt,
+                money("100"),
+                previousProgress,
+                updatedProgress,
+                List.of(firstItemId)
+        );
+    }
+
+    private void completeRepaymentEvidence(
+            UUID transactionId,
+            UUID applicationId,
+            LoanAccount updatedAccount,
+            UUID scheduleId,
+            BigDecimal receivedAmount,
+            LocalDateTime recordedAt,
+            BigDecimal principalReleased,
+            List<RepaymentInstallmentProgress> previousProgress,
+            List<RepaymentInstallmentProgress> updatedProgress,
+            List<UUID> changedInstallmentIds
+    ) {
+        repaymentOutcomes.save(RepaymentOperationOutcome.captured(
+                transactionId,
+                applicationId,
+                updatedAccount.id(),
+                scheduleId,
+                receivedAmount,
+                VALUE_DATE,
+                recordedAt,
+                updatedAccount.repaymentBalance(),
+                updatedAccount.status(),
+                false,
+                principalReleased,
+                previousProgress,
+                updatedProgress,
+                changedInstallmentIds
+        ));
+        auditPublisher.publish(BusinessAuditEvent.single(
+                BusinessOperationContext.user(
+                        transactionId,
+                        ACCOUNTING_USER_ID,
+                        recordedAt
+                ),
+                BusinessAuditEntry.of(
+                        BusinessAuditAction.REPAYMENT_RECORDED,
+                        BusinessAuditEntityType.REPAYMENT_TRANSACTION,
+                        transactionId
+                )
+        ));
     }
 
     private void assertRepaymentOperationRolledBack(

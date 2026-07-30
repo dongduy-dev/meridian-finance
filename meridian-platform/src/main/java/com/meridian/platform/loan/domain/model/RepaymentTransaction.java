@@ -36,7 +36,7 @@ public record RepaymentTransaction(
         Objects.requireNonNull(repaymentScheduleId,
                 "repaymentScheduleId must not be null");
         Objects.requireNonNull(requestId, "requestId must not be null");
-        externalPaymentReference = canonicalReference(externalPaymentReference);
+        requireCanonicalReference(externalPaymentReference);
         Objects.requireNonNull(receivedAmount, "receivedAmount must not be null");
         Objects.requireNonNull(paymentValueDate, "paymentValueDate must not be null");
         Objects.requireNonNull(recordedByUserId, "recordedByUserId must not be null");
@@ -84,15 +84,21 @@ public record RepaymentTransaction(
         );
     }
 
-    public static String canonicalReference(String reference) {
+    public static String canonicalizeReference(String reference) {
         if (reference == null) {
             throw invalid("External payment reference is required.");
         }
         String canonical = reference.trim().toUpperCase(Locale.ROOT);
-        if (!EXTERNAL_REFERENCE_PATTERN.matcher(canonical).matches()) {
-            throw invalid("External payment reference format is invalid.");
-        }
+        requireCanonicalReference(canonical);
         return canonical;
+    }
+
+    public static void requireCanonicalReference(String reference) {
+        if (reference == null
+                || !reference.equals(reference.trim().toUpperCase(Locale.ROOT))
+                || !EXTERNAL_REFERENCE_PATTERN.matcher(reference).matches()) {
+            throw invalid("External payment reference must already be canonical.");
+        }
     }
 
     public static void validateValueDate(

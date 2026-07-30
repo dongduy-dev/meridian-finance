@@ -11,6 +11,8 @@ public interface RepaymentScheduleRepository {
 
     Optional<RepaymentSchedule> findByLoanAccountId(UUID loanAccountId);
 
+    Optional<RepaymentSchedule> findByLoanAccountIdForUpdate(UUID loanAccountId);
+
     Optional<RepaymentSchedule> findByLoanApplicationId(UUID loanApplicationId);
 
     Optional<RepaymentSchedule> findByLoanContractId(UUID loanContractId);

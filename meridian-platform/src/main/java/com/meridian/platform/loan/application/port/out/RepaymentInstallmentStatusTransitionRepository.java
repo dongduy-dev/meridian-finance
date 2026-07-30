@@ -16,4 +16,6 @@ public interface RepaymentInstallmentStatusTransitionRepository {
     List<RepaymentInstallmentStatusTransition> findByRepaymentScheduleItemId(
             UUID repaymentScheduleItemId
     );
+
+    List<RepaymentInstallmentStatusTransition> findByOperationId(UUID operationId);
 }

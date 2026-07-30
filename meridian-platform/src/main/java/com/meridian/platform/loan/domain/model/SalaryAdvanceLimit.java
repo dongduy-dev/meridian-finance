@@ -125,6 +125,30 @@ public record SalaryAdvanceLimit(
         return converted;
     }
 
+    public SalaryAdvanceLimit releaseUsed(BigDecimal amount) {
+        requirePositiveWholeVnd(amount, "amount");
+        requireReconciled();
+        if (usedAmount.compareTo(amount) < 0) {
+            throw new BusinessRuleViolationException(
+                    "REPAYMENT_RELEASE_NOT_ALLOWED",
+                    "Cannot release more than the currently used Salary Advance amount."
+            );
+        }
+        SalaryAdvanceLimit released = new SalaryAdvanceLimit(
+                id,
+                customerId,
+                customerPartnerEmployeeLinkId,
+                totalLimit,
+                usedAmount.subtract(amount),
+                reservedAmount,
+                availableAmount.add(amount),
+                status,
+                lastRefreshedAt
+        );
+        released.requireReconciled();
+        return released;
+    }
+
     public SalaryAdvanceLimit refreshTotalLimit(BigDecimal effectiveTotalLimit, LocalDateTime lastRefreshedAt) {
         requireNonNegative(effectiveTotalLimit, "effectiveTotalLimit");
         Objects.requireNonNull(lastRefreshedAt, "lastRefreshedAt must not be null");

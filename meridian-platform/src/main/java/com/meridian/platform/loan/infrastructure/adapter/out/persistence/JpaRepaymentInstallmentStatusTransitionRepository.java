@@ -23,4 +23,7 @@ interface JpaRepaymentInstallmentStatusTransitionRepository
     findByRepaymentScheduleItemIdOrderBySequenceNumberAsc(
             UUID repaymentScheduleItemId
     );
+
+    List<RepaymentInstallmentStatusTransitionJpaEntity>
+    findByOperationIdOrderByRepaymentScheduleItemIdAsc(UUID operationId);
 }

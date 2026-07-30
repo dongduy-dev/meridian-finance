@@ -23,4 +23,11 @@ public interface JpaAuditEventRepository extends JpaRepository<AuditEventJpaEnti
             BusinessAuditEntityType entityType,
             UUID entityId
     );
+
+    long countByOperationIdAndActionAndEntityTypeAndEntityId(
+            UUID operationId,
+            BusinessAuditAction action,
+            BusinessAuditEntityType entityType,
+            UUID entityId
+    );
 }
