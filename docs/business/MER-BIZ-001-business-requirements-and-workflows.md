@@ -1139,3 +1139,13 @@ immutable verification snapshot. Requested amount and term remain immutable, so
 V24 neither increases nor decreases the reservation.
 
 Routing is `SUBMITTED` while manual document review is pending and `UNDER_REVIEW`
+
+## Executable Salary Advance repayment servicing boundary
+
+The authoritative final `RepaymentSchedule` is immutable contractual obligation evidence. An actual repayment is recorded separately as an immutable payment transaction and component allocations, with mutable paid/outstanding installment progress and LoanAccount roll-up maintained atomically. The current executable product is Salary Advance only.
+
+Repayments allocate deterministically to the oldest installment first and, within an installment, to fee, interest, and principal. Partial and early payments are accepted. Overpayment and future-dated value dates are rejected. Canonical external payment reference and request UUID provide duplicate prevention and exact replay; a replay returns the immutable original V34 outcome without overwriting later servicing state.
+
+Only principal actually allocated releases Salary Advance used exposure, exactly once and by the exact principal amount. Interest and fee payments release no exposure. A partial repayment leaves contractual outstanding debt and continues to block a new Salary Advance submission even if available exposure has increased. Full contractual payoff atomically produces `SETTLED`, releases the final principal exposure, and removes the outstanding-account submission guard subject to all other submission rules.
+
+UTC date-driven servicing advances persisted installment status through `NOT_DUE`, `DUE`, `PARTIALLY_PAID`, `OVERDUE`, and `PAID`, and rolls the account between `ACTIVE` and `OVERDUE`. Submission blocking depends on authoritative outstanding debt, not scheduler freshness. Customers may view only their own account and immutable repayment history; authorised staff may record repayments and use staff reads. Settlement negotiation/administration, closure, reversal, refund, waiver, write-off, payment integration, bank reconciliation, ledger, notification, UCL, and Collateral repayment remain deferred.

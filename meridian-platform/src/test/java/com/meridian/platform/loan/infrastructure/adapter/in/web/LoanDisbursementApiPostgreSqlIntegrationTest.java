@@ -2,9 +2,13 @@ package com.meridian.platform.loan.infrastructure.adapter.in.web;
 
 import com.jayway.jsonpath.JsonPath;
 import com.meridian.platform.MeridianPlatformApplication;
+import com.meridian.platform.loan.application.port.in.EvaluateLoanAccountOverdueUseCase;
+import com.meridian.platform.loan.application.port.in.QueryLoanAccountUseCase;
+import com.meridian.platform.loan.application.port.in.QueryRepaymentsUseCase;
 import com.meridian.platform.loan.application.port.out.DisbursementBankAccountProtectionContext;
 import com.meridian.platform.loan.application.port.out.DisbursementBankAccountProtector;
 import com.meridian.platform.loan.application.port.out.ProtectedBankAccountEnvelope;
+import com.meridian.platform.loan.application.port.out.RepaymentOperationOutcomeRepository;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +25,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -30,17 +36,29 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.reset;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -76,6 +94,11 @@ class LoanDisbursementApiPostgreSqlIntegrationTest {
     @Autowired DisbursementBankAccountProtector accountProtector;
     @Autowired TestCurrentUserProvider currentUser;
     @Autowired PlatformTransactionManager transactionManager;
+    @Autowired EvaluateLoanAccountOverdueUseCase overdueEvaluator;
+    @Autowired QueryLoanAccountUseCase loanAccountQueryService;
+    @Autowired QueryRepaymentsUseCase repaymentQueryService;
+    @Autowired MutableTestClock testClock;
+    @MockitoSpyBean RepaymentOperationOutcomeRepository operationOutcomes;
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
@@ -89,6 +112,8 @@ class LoanDisbursementApiPostgreSqlIntegrationTest {
     @BeforeEach
     void resetActor() {
         currentUser.clear();
+        testClock.set(NOW);
+        reset(target(operationOutcomes));
     }
 
     @Test
@@ -275,6 +300,475 @@ class LoanDisbursementApiPostgreSqlIntegrationTest {
                 .andExpect(jsonPath("$.message").value("Current Loan contract is missing."));
     }
 
+    @Test
+    void securedRepaymentApiPostsReplaysAndReadsImmutableServicingEvidence()
+            throws Exception {
+        Fixture fixture = fixture();
+        useAccounting();
+        String activation = confirm(fixture.applicationId(), UUID.randomUUID(),
+                "REPAYMENT-API-DISBURSEMENT")
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        UUID accountId = UUID.fromString(JsonPath.read(activation, "$.loanAccountId"));
+        UUID requestId = UUID.randomUUID();
+        String reference = "REPAYMENT-API-REFERENCE-" + UUID.randomUUID();
+
+        String first = repayment(fixture.applicationId(), requestId, reference, "100")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.loanAccountId").value(accountId.toString()))
+                .andExpect(jsonPath("$.receivedAmount").value(100))
+                .andExpect(jsonPath("$.principalAllocated").value(50))
+                .andExpect(jsonPath("$.principalReleased").value(50))
+                .andExpect(jsonPath("$.allocations[0].component").value("INTEREST"))
+                .andExpect(jsonPath("$.allocations[1].component").value("PRINCIPAL"))
+                .andExpect(jsonPath("$.affectedInstallments[0].resultingStatus")
+                        .value("PARTIALLY_PAID"))
+                .andExpect(jsonPath("$.idempotentReplay").value(false))
+                .andExpect(jsonPath("$.externalPaymentReference").doesNotExist())
+                .andExpect(jsonPath("$.requestId").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        UUID transactionId = UUID.fromString(JsonPath.read(first, "$.repaymentTransactionId"));
+
+        repayment(fixture.applicationId(), requestId, reference, "100")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.repaymentTransactionId")
+                        .value(transactionId.toString()))
+                .andExpect(jsonPath("$.idempotentReplay").value(true));
+        assertEquals(1, count("select count(*) from repayment_transactions where id = ?",
+                transactionId));
+        assertEquals(2, count("select count(*) from repayment_allocations "
+                + "where repayment_transaction_id = ?", transactionId));
+        assertEquals(1, count("select count(*) from repayment_operation_outcomes "
+                + "where repayment_transaction_id = ?", transactionId));
+        assertMoney("950", money("select used_amount from salary_advance_limits where id = ?",
+                fixture.limitId()));
+        assertMoney("4050", money("select available_amount from salary_advance_limits where id = ?",
+                fixture.limitId()));
+
+        useCustomer(fixture.customerId());
+        int auditsBeforeRead = count("select count(*) from audit_events where entity_id = ?",
+                transactionId);
+        history(fixture.applicationId(), "loan:read:own")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.items[0].repaymentTransactionId")
+                        .value(transactionId.toString()))
+                .andExpect(jsonPath("$.items[0].principalReleased").value(50))
+                .andExpect(jsonPath("$.items[0].affectedInstallments[0].resultingStatus")
+                        .value("PARTIALLY_PAID"))
+                .andExpect(jsonPath("$.items[0].externalPaymentReference").doesNotExist())
+                .andExpect(jsonPath("$.items[0].idempotentReplay").doesNotExist());
+        query(fixture.applicationId(), "loan:read:own")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.servicing.totalPaid").value(100))
+                .andExpect(jsonPath("$.servicing.totalOutstanding").value(1000))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].totalDue").value(550))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].servicing.totalPaid")
+                        .value(100))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].servicing.status")
+                        .value("PARTIALLY_PAID"));
+        assertEquals(auditsBeforeRead, count(
+                "select count(*) from audit_events where entity_id = ?", transactionId));
+
+        useCustomer(UUID.randomUUID());
+        history(fixture.applicationId(), "loan:read:own")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("LOAN_ACCOUNT_NOT_FOUND"));
+
+        useAccounting();
+        repayment(fixture.applicationId(), requestId, reference, "101")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("IDEMPOTENCY_KEY_REUSED"));
+    }
+    @Test
+    void repaymentHttpConflictsRollBackAllLosingSideEvidence() throws Exception {
+        Activated activated = activateFixture("HTTP-CONFLICT");
+        String reference = "HTTP-CONFLICT-" + UUID.randomUUID();
+        useAccounting();
+        repayment(activated.fixture().applicationId(), UUID.randomUUID(), reference, "100")
+                .andExpect(status().isOk());
+        ServicingState committed = servicingState(activated);
+
+        String duplicate = repayment(
+                activated.fixture().applicationId(), UUID.randomUUID(),
+                "  " + reference.toLowerCase() + "  ", "25")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("DUPLICATE_PAYMENT_REFERENCE"))
+                .andReturn().getResponse().getContentAsString();
+        assertFalse(duplicate.contains(reference));
+        assertFalse(duplicate.contains(reference.toLowerCase()));
+        assertEquals(committed, servicingState(activated));
+
+        repayment(activated.fixture().applicationId(), UUID.randomUUID(),
+                        "HTTP-OVERPAY-" + UUID.randomUUID(), "1001")
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errorCode").value("REPAYMENT_EXCEEDS_OUTSTANDING"));
+        assertEquals(committed, servicingState(activated));
+
+        repayment(activated.fixture().applicationId(), UUID.randomUUID(),
+                        "HTTP-FUTURE-" + UUID.randomUUID(), "25", "2026-07-29")
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errorCode").value("REPAYMENT_VALUE_DATE_INVALID"));
+        assertEquals(committed, servicingState(activated));
+    }
+
+    @Test
+    void repaymentHistoryHttpEnforcesOwnershipAndDeterministicPagination() throws Exception {
+        Activated activated = activateFixture("HTTP-PAGE");
+        UUID applicationId = activated.fixture().applicationId();
+
+        useCustomer(activated.fixture().customerId());
+        history(applicationId, "loan:read:own")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0))
+                .andExpect(jsonPath("$.items.length()").value(0));
+
+        useAccounting();
+        for (int sequence = 0; sequence < 25; sequence++) {
+            repayment(applicationId, UUID.randomUUID(),
+                            "HTTP-PAGE-" + sequence + "-" + UUID.randomUUID(), "1")
+                    .andExpect(status().isOk());
+        }
+        assertEquals(1, count("select count(distinct recorded_at) from repayment_transactions "
+                + "where loan_account_id = ?", activated.accountId()));
+        List<String> expected = jdbc.queryForList(
+                "select id::text from repayment_transactions where loan_account_id = ? "
+                        + "order by recorded_at desc, id desc",
+                String.class, activated.accountId());
+
+        useStaff();
+        String defaultPage = history(applicationId, "loan:read")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(25))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.items.length()").value(20))
+                .andReturn().getResponse().getContentAsString();
+        assertEquals(expected.subList(0, 20), transactionIds(defaultPage));
+        assertFalse(defaultPage.contains("HTTP-PAGE-"));
+
+        String first = history(applicationId, "loan:read", 0, 10)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(10))
+                .andExpect(jsonPath("$.totalElements").value(25))
+                .andExpect(jsonPath("$.totalPages").value(3))
+                .andReturn().getResponse().getContentAsString();
+        String middle = history(applicationId, "loan:read", 1, 10)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(10))
+                .andReturn().getResponse().getContentAsString();
+        String last = history(applicationId, "loan:read", 2, 10)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(5))
+                .andReturn().getResponse().getContentAsString();
+        assertEquals(expected.subList(0, 10), transactionIds(first));
+        assertEquals(expected.subList(10, 20), transactionIds(middle));
+        assertEquals(expected.subList(20, 25), transactionIds(last));
+        history(applicationId, "loan:read", 3, 10)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(0))
+                .andExpect(jsonPath("$.totalElements").value(25));
+        history(applicationId, "loan:read", 0, 100)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(25))
+                .andExpect(jsonPath("$.totalPages").value(1));
+        assertValidation(history(applicationId, "loan:read", 0, 0), applicationId);
+        assertValidation(history(applicationId, "loan:read", 0, 101), applicationId);
+
+        useCustomer(UUID.randomUUID());
+        String concealed = history(applicationId, "loan:read:own")
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("LOAN_ACCOUNT_NOT_FOUND"))
+                .andReturn().getResponse().getContentAsString();
+
+        assertFalse(concealed.contains(activated.accountId().toString()));
+    }
+
+    @Test
+    void repaymentHistoryRemainsImmutableWhileLoanAccountAdvancesToSettlement() throws Exception {
+        Activated activated = activateFixture("HTTP-STATE");
+        UUID applicationId = activated.fixture().applicationId();
+        useAccounting();
+        String first = repayment(applicationId, UUID.randomUUID(),
+                        "HTTP-STATE-A-" + UUID.randomUUID(), "100")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountBalance.totalPaid").value(100))
+                .andExpect(jsonPath("$.accountBalance.totalOutstanding").value(1000))
+                .andReturn().getResponse().getContentAsString();
+        String firstId = JsonPath.read(first, "$.repaymentTransactionId");
+
+        useCustomer(activated.fixture().customerId());
+        assertPartialAccount(query(applicationId, "loan:read:own"));
+        Map<String, Object> original = historyItem(applicationId, firstId);
+
+        useAccounting();
+        repayment(applicationId, UUID.randomUUID(),
+                        "HTTP-STATE-B-" + UUID.randomUUID(), "100")
+                .andExpect(status().isOk());
+        assertEquals(original, historyItem(applicationId, firstId));
+
+        overdueEvaluator.evaluate(new EvaluateLoanAccountOverdueUseCase.Command(
+                applicationId, activated.accountId(), LocalDate.of(2026, 8, 29),
+                LocalDateTime.of(2026, 8, 29, 0, 5)));
+        assertEquals(original, historyItem(applicationId, firstId));
+        useCustomer(activated.fixture().customerId());
+        String overdue = query(applicationId, "loan:read:own")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("OVERDUE"))
+                .andExpect(jsonPath("$.servicing.totalPaid").value(200))
+                .andExpect(jsonPath("$.servicing.totalOutstanding").value(900))
+                .andExpect(jsonPath("$.servicing.servicingEvaluationDate")
+                        .value("2026-08-29"))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].totalDue").value(550))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].servicing.status")
+                        .value("OVERDUE"))
+                .andReturn().getResponse().getContentAsString();
+        assertSafeLoanAccount(overdue);
+
+        testClock.set(Instant.parse("2026-08-29T10:00:00Z"));
+        useAccounting();
+        repayment(applicationId, UUID.randomUUID(),
+                        "HTTP-STATE-CURE-" + UUID.randomUUID(), "350", "2026-08-29")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultingLoanAccountStatus").value("ACTIVE"));
+        useCustomer(activated.fixture().customerId());
+        query(applicationId, "loan:read:own")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.servicing.totalPaid").value(550))
+                .andExpect(jsonPath("$.servicing.totalOutstanding").value(550))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].servicing.status")
+                        .value("PAID"))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[1].servicing.status")
+                        .value("NOT_DUE"));
+
+        useAccounting();
+        repayment(applicationId, UUID.randomUUID(),
+                        "HTTP-STATE-PAYOFF-" + UUID.randomUUID(), "550", "2026-08-29")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultingLoanAccountStatus").value("SETTLED"));
+        useCustomer(activated.fixture().customerId());
+        String settled = query(applicationId, "loan:read:own")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SETTLED"))
+                .andExpect(jsonPath("$.servicing.totalPaid").value(1100))
+                .andExpect(jsonPath("$.servicing.totalOutstanding").value(0))
+                .andExpect(jsonPath("$.servicing.principalOutstanding").value(0))
+                .andExpect(jsonPath("$.servicing.interestOutstanding").value(0))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].principalDue").value(500))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[1].dueDate")
+                        .value("2026-09-28"))
+                .andReturn().getResponse().getContentAsString();
+        assertSafeLoanAccount(settled);
+        assertEquals(original, historyItem(applicationId, firstId));
+    }
+
+    @Test
+    void httpReadsSeeOnlyCommittedRepaymentStateAndNeverMutateEvidence() throws Exception {
+        Activated activated = activateFixture("HTTP-CONSISTENCY");
+        UUID applicationId = activated.fixture().applicationId();
+        CountDownLatch outcomePersisted = new CountDownLatch(1);
+        CountDownLatch allowCommit = new CountDownLatch(1);
+        AtomicBoolean armed = new AtomicBoolean(true);
+        doAnswer(invocation -> {
+            Object saved = invocation.callRealMethod();
+            if (armed.compareAndSet(true, false)) {
+                outcomePersisted.countDown();
+                if (!allowCommit.await(10, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out at repayment commit barrier.");
+                }
+            }
+            return saved;
+        }).when(target(operationOutcomes)).save(any());
+
+        useAccounting();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Future<String> posting = null;
+        try {
+            posting = executor.submit(() -> repayment(applicationId, UUID.randomUUID(),
+                            "HTTP-CONSISTENCY-" + UUID.randomUUID(), "100")
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString());
+            assertTrue(outcomePersisted.await(10, TimeUnit.SECONDS));
+
+            ServicingState beforeReads = servicingState(activated);
+            String priorAccount = query(applicationId, "loan:read")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.servicing.totalPaid").value(0))
+                    .andExpect(jsonPath("$.servicing.totalOutstanding").value(1100))
+                    .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].servicing.totalPaid")
+                            .value(0))
+                    .andReturn().getResponse().getContentAsString();
+            String priorHistory = history(applicationId, "loan:read")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalElements").value(0))
+                    .andReturn().getResponse().getContentAsString();
+            assertSafeLoanAccount(priorAccount);
+            assertFalse(priorHistory.contains("repaymentTransactionId"));
+            assertEquals(beforeReads, servicingState(activated));
+
+            allowCommit.countDown();
+            posting.get(15, TimeUnit.SECONDS);
+
+            String committedAccount = query(applicationId, "loan:read")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.servicing.totalPaid").value(100))
+                    .andExpect(jsonPath("$.servicing.totalOutstanding").value(1000))
+                    .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].servicing.totalPaid")
+                            .value(100))
+                    .andReturn().getResponse().getContentAsString();
+            history(applicationId, "loan:read")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalElements").value(1))
+                    .andExpect(jsonPath("$.items[0].allocations.length()").value(2))
+                    .andExpect(jsonPath("$.items[0].affectedInstallments.length()").value(2));
+            assertSafeLoanAccount(committedAccount);
+            ServicingState afterCommit = servicingState(activated);
+            query(applicationId, "loan:read").andExpect(status().isOk());
+            history(applicationId, "loan:read").andExpect(status().isOk());
+            assertEquals(afterCommit, servicingState(activated));
+            assertTrue(org.springframework.aop.support.AopUtils.isAopProxy(loanAccountQueryService));
+            assertTrue(org.springframework.aop.support.AopUtils.isAopProxy(repaymentQueryService));
+        } finally {
+            allowCommit.countDown();
+            if (posting != null && !posting.isDone()) {
+                posting.cancel(true);
+            }
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
+        }
+    }
+    private Activated activateFixture(String referencePrefix) throws Exception {
+        Fixture fixture = fixture();
+        useAccounting();
+        String activation = confirm(fixture.applicationId(), UUID.randomUUID(),
+                        referencePrefix + "-" + UUID.randomUUID())
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return new Activated(fixture,
+                UUID.fromString(JsonPath.read(activation, "$.loanAccountId")));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> historyItem(UUID applicationId, String transactionId)
+            throws Exception {
+        String response = history(applicationId,
+                        currentUser.currentUser().permissions().contains("loan:read")
+                                ? "loan:read" : "loan:read:own")
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        List<Map<String, Object>> items = JsonPath.read(response, "$.items");
+        return items.stream()
+                .filter(item -> transactionId.equals(item.get("repaymentTransactionId")))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static List<String> transactionIds(String response) {
+        return JsonPath.read(response, "$.items[*].repaymentTransactionId");
+    }
+
+    private void assertPartialAccount(ResultActions response) throws Exception {
+        String body = response
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.originatedPrincipal").value(1000))
+                .andExpect(jsonPath("$.servicing.totalPaid").value(100))
+                .andExpect(jsonPath("$.servicing.totalOutstanding").value(1000))
+                .andExpect(jsonPath("$.servicing.lastPaymentValueDate").value("2026-07-28"))
+                .andExpect(jsonPath("$.servicing.lastPaymentRecordedAt")
+                        .value("2026-07-28T10:00:00"))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].dueDate")
+                        .value("2026-08-28"))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].principalDue").value(500))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].interestDue").value(50))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].servicing.totalPaid")
+                        .value(100))
+                .andExpect(jsonPath("$.finalRepaymentSchedule.items[0].servicing.status")
+                        .value("PARTIALLY_PAID"))
+                .andReturn().getResponse().getContentAsString();
+        assertSafeLoanAccount(body);
+    }
+
+    private static void assertSafeLoanAccount(String body) {
+        assertFalse(body.contains(FULL_ACCOUNT_NUMBER));
+        assertFalse(body.contains("externalPaymentReference"));
+        assertFalse(body.contains("requestId"));
+        assertFalse(body.contains("actorId"));
+        assertFalse(body.contains("limitId"));
+        assertFalse(body.contains("movement"));
+        assertFalse(body.contains("audit"));
+        assertFalse(body.contains("history"));
+        assertFalse(body.contains("ciphertext"));
+        assertFalse(body.contains("nonce"));
+        assertTrue(body.contains("********"));
+    }
+
+    private static void assertValidation(ResultActions result, UUID applicationId)
+            throws Exception {
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.message").value("Input validation failed."))
+                .andExpect(jsonPath("$.path").value(
+                        "/api/v1/loan-applications/" + applicationId + "/repayments"));
+    }
+
+    private ServicingState servicingState(Activated activated) {
+        UUID accountId = activated.accountId();
+        UUID applicationId = activated.fixture().applicationId();
+        return new ServicingState(
+                jdbc.queryForMap("select status,principal_paid,interest_paid,fee_paid,total_paid,"
+                        + "principal_outstanding,interest_outstanding,fee_outstanding,"
+                        + "total_outstanding,servicing_evaluation_date,last_payment_value_date,"
+                        + "last_payment_recorded_at,updated_at from loan_accounts where id=?",
+                        accountId),
+                jdbc.queryForList("select installment_number,principal_paid,interest_paid,"
+                        + "fee_paid,total_paid,principal_outstanding,interest_outstanding,"
+                        + "fee_outstanding,total_outstanding,status,servicing_evaluation_date,"
+                        + "last_payment_value_date,last_payment_recorded_at from "
+                        + "repayment_installment_progress where loan_account_id=? "
+                        + "order by installment_number", accountId),
+                jdbc.queryForList("select item.installment_number,item.due_date,item.principal_due,"
+                        + "item.interest_due,item.fee_due,item.total_due from repayment_schedule_items item "
+                        + "join repayment_schedules schedule on schedule.id=item.repayment_schedule_id "
+                        + "where schedule.loan_account_id=? order by item.installment_number", accountId),
+                jdbc.queryForMap("select status,updated_at from loan_applications where id=?",
+                        applicationId),
+                jdbc.queryForMap("select total_limit,used_amount,reserved_amount,available_amount,"
+                        + "status,last_refreshed_at from salary_advance_limits where id=?",
+                        activated.fixture().limitId()),
+                jdbc.queryForList("select movement_type,amount,occurred_at from "
+                        + "salary_advance_limit_movements where loan_application_id=? "
+                        + "order by occurred_at,id", applicationId),
+                count("select count(*) from repayment_transactions where loan_account_id=?", accountId),
+                count("select count(*) from repayment_allocations allocation join "
+                        + "repayment_transactions transaction on transaction.id="
+                        + "allocation.repayment_transaction_id where transaction.loan_account_id=?",
+                        accountId),
+                count("select count(*) from repayment_operation_outcomes where loan_account_id=?",
+                        accountId),
+                count("select count(*) from repayment_installment_status_transitions transition "
+                        + "join repayment_schedule_items item on item.id="
+                        + "transition.repayment_schedule_item_id "
+                        + "join repayment_schedules schedule on schedule.id="
+                        + "item.repayment_schedule_id where schedule.loan_account_id=?", accountId),
+                count("select count(*) from loan_account_status_transitions where loan_account_id=?",
+                        accountId),
+                count("select count(*) from audit_events where entity_id in (?,?) or entity_id in "
+                        + "(select id from repayment_transactions where loan_account_id=?)",
+                        applicationId, accountId, accountId)
+        );
+    }
+
+    private static <T> T target(T proxiedSpy) {
+        return AopTestUtils.getUltimateTargetObject(proxiedSpy);
+    }
     private ResultActions reveal(UUID applicationId, int version) throws Exception {
         return mockMvc.perform(post("/api/v1/loan-applications/{id}/contracts/current/"
                         + "disbursement-destination/reveal", applicationId)
@@ -299,6 +793,51 @@ class LoanDisbursementApiPostgreSqlIntegrationTest {
                         """.formatted(requestId, reference)));
     }
 
+    private ResultActions repayment(
+            UUID applicationId,
+            UUID requestId,
+            String reference,
+            String amount
+    ) throws Exception {
+        return repayment(applicationId, requestId, reference, amount, "2026-07-28");
+    }
+
+    private ResultActions repayment(
+            UUID applicationId,
+            UUID requestId,
+            String reference,
+            String amount,
+            String paymentValueDate
+    ) throws Exception {
+        return mockMvc.perform(post("/api/v1/loan-applications/{id}/repayments", applicationId)
+                .with(authority("repayment:update"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "requestId":"%s",
+                          "externalPaymentReference":"%s",
+                          "amount":%s,
+                          "paymentValueDate":"%s"
+                        }
+                        """.formatted(requestId, reference, amount, paymentValueDate)));
+    }
+
+    private ResultActions history(UUID applicationId, String permission) throws Exception {
+        return mockMvc.perform(get("/api/v1/loan-applications/{id}/repayments", applicationId)
+                .with(authority(permission)));
+    }
+
+    private ResultActions history(
+            UUID applicationId,
+            String permission,
+            int page,
+            int size
+    ) throws Exception {
+        return mockMvc.perform(get("/api/v1/loan-applications/{id}/repayments", applicationId)
+                .queryParam("page", Integer.toString(page))
+                .queryParam("size", Integer.toString(size))
+                .with(authority(permission)));
+    }
     private ResultActions query(UUID applicationId, String permission) throws Exception {
         return mockMvc.perform(get("/api/v1/loan-applications/{id}/loan-account", applicationId)
                 .with(authority(permission)));
@@ -452,7 +991,7 @@ class LoanDisbursementApiPostgreSqlIntegrationTest {
     private void useAccounting() {
         currentUser.set(new AuthenticatedUser(
                 ACCOUNTING_USER_ID, "accounting@meridian.test", "STAFF", null,
-                Set.of("ACCOUNTING_OFFICER"), Set.of("loan:disburse", "loan:read")));
+                Set.of("ACCOUNTING_OFFICER"), Set.of("loan:disburse", "loan:read", "repayment:update")));
     }
 
     private void useStaff() {
@@ -472,8 +1011,8 @@ class LoanDisbursementApiPostgreSqlIntegrationTest {
         return user("actor").authorities(new SimpleGrantedAuthority(value));
     }
 
-    private int count(String sql, Object argument) {
-        return jdbc.queryForObject(sql, Integer.class, argument);
+    private int count(String sql, Object... arguments) {
+        return jdbc.queryForObject(sql, Integer.class, arguments);
     }
 
     private String text(String sql, Object argument) {
@@ -492,6 +1031,25 @@ class LoanDisbursementApiPostgreSqlIntegrationTest {
         assertEquals(0, new BigDecimal(expected).compareTo(actual));
     }
 
+    record Activated(Fixture fixture, UUID accountId) {
+    }
+
+    record ServicingState(
+            Map<String, Object> account,
+            List<Map<String, Object>> progress,
+            List<Map<String, Object>> obligations,
+            Map<String, Object> application,
+            Map<String, Object> limit,
+            List<Map<String, Object>> movements,
+            int transactions,
+            int allocations,
+            int outcomes,
+            int installmentHistories,
+            int accountHistories,
+            int audits
+    ) {
+    }
+
     record Fixture(UUID customerId, UUID applicationId, UUID contractId, UUID limitId) {
     }
 
@@ -505,13 +1063,43 @@ class LoanDisbursementApiPostgreSqlIntegrationTest {
 
         @Bean
         @Primary
-        Clock incrementFourClock() {
-            return Clock.fixed(NOW, ZoneOffset.UTC);
+        MutableTestClock incrementFourClock() {
+            return new MutableTestClock(NOW);
+        }
+    }
+
+    static final class MutableTestClock extends Clock {
+        private volatile Instant instant;
+
+        MutableTestClock(Instant instant) {
+            this.instant = instant;
+        }
+
+        void set(Instant instant) {
+            this.instant = instant;
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            if (!ZoneOffset.UTC.equals(zone)) {
+                throw new IllegalArgumentException("Increment 4 test clock is UTC only.");
+            }
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return instant;
         }
     }
 
     static final class TestCurrentUserProvider implements CurrentUserProvider {
-        private AuthenticatedUser current;
+        private volatile AuthenticatedUser current;
 
         @Override
         public AuthenticatedUser currentUser() {

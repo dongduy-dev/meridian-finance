@@ -198,3 +198,7 @@ Document remains the authority for `processingReady`. Ordinary contract/account 
 - Storage references, local paths, hashes, restricted notes, and document content never cross broad JSON contracts.
 - Audit and Loan history use safe IDs, states, actor types, reason codes, and timestamps.
 - The local-filesystem storage adapter is an MVP infrastructure choice behind a port; it does not leak into Document domain or application contracts.
+
+### Repayment servicing ownership
+
+Repayment servicing remains inside the Loan bounded context. Loan owns generic repayment transactions, allocations, installment progress, LoanAccount servicing state, histories, overdue evaluation, and application ports. The Salary Advance policy is the only complete executable product policy and owns exact principal exposure release. The final schedule remains immutable obligation evidence; payment and allocation evidence are distinct. No UCL or Collateral placeholders are introduced.

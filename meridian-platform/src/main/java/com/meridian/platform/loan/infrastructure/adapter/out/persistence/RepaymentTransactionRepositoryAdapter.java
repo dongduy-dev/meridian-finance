@@ -3,6 +3,7 @@ package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 import com.meridian.platform.loan.application.port.out.RepaymentTransactionRepository;
 import com.meridian.platform.loan.application.port.out.RepaymentTransactionSaveOutcome;
 import com.meridian.platform.loan.domain.model.RepaymentTransaction;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -96,6 +97,26 @@ public class RepaymentTransactionRepositoryAdapter
                 .stream()
                 .map(this::toDomain)
                 .toList();
+    }
+
+    @Override
+    @Transactional(
+            propagation = Propagation.MANDATORY,
+            readOnly = true
+    )
+    public Page findPageByLoanAccountId(UUID loanAccountId, int page, int size) {
+        org.springframework.data.domain.Page<RepaymentTransactionJpaEntity> selected =
+                transactions.findByLoanAccountIdOrderByRecordedAtDescIdDesc(
+                        loanAccountId,
+                        PageRequest.of(page, size)
+                );
+        return new Page(
+                selected.getNumber(),
+                selected.getSize(),
+                selected.getTotalElements(),
+                selected.getTotalPages(),
+                selected.getContent().stream().map(this::toDomain).toList()
+        );
     }
 
     private RepaymentTransactionSaveOutcome resolveConflict(

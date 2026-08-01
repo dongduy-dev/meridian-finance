@@ -6,6 +6,7 @@ import com.meridian.platform.loan.application.port.in.QueryLoanAccountUseCase;
 import com.meridian.platform.loan.application.port.in.RevealDisbursementDestinationUseCase;
 import com.meridian.platform.loan.domain.model.LoanAccountStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.RepaymentInstallmentStatus;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
@@ -236,6 +237,11 @@ class LoanDisbursementControllerTest {
                 LocalDateTime.of(2026, 7, 28, 10, 0), new BigDecimal("3000000"),
                 1, new BigDecimal("120000"), BigDecimal.ZERO,
                 new BigDecimal("3120000"),
+                new QueryLoanAccountUseCase.ServicingSummary(
+                        BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                        new BigDecimal("3000000"), new BigDecimal("120000"),
+                        BigDecimal.ZERO, new BigDecimal("3120000"),
+                        LocalDate.of(2026, 7, 28), null, null),
                 new QueryLoanAccountUseCase.DestinationSummary(
                         "VCB", "Example Bank", "MERIDIAN CUSTOMER", "********"),
                 UUID.fromString("50000000-0000-0000-0000-000000000001"),
@@ -244,7 +250,13 @@ class LoanDisbursementControllerTest {
                 List.of(new QueryLoanAccountUseCase.ScheduleItem(
                         1, LocalDate.of(2026, 8, 28), new BigDecimal("3000000"),
                         new BigDecimal("120000"), BigDecimal.ZERO,
-                        new BigDecimal("3120000")))
+                        new BigDecimal("3120000"),
+                        new QueryLoanAccountUseCase.InstallmentServicing(
+                                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                                new BigDecimal("3000000"), new BigDecimal("120000"),
+                                BigDecimal.ZERO, new BigDecimal("3120000"),
+                                RepaymentInstallmentStatus.NOT_DUE, LocalDate.of(2026, 7, 28),
+                                null, null)))
         );
     }
 }

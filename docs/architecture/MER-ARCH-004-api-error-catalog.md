@@ -143,8 +143,14 @@ This document standardizes the API error codes across all bounded contexts in th
 | 409 | `DISBURSEMENT_DESTINATION_UNAVAILABLE` | Protected destination is unavailable | Reconcile protected contract evidence without exposing cryptographic details |
 | 404 | `LOAN_ACCOUNT_NOT_FOUND` | Loan Account not found | Staff: no activated LoanAccount; Customer: generic concealment for missing, foreign-owned, or not-yet-activated resources |
 | 403 | `LOAN_APPLICATION_ACCESS_DENIED` | Loan Application access denied | Required `loan:read:own` or `loan:read` authority is absent |
-| 409 | `SYSTEM_STATE_CONFLICT` | Activation evidence is inconsistent | Reconcile authoritative persisted evidence before retrying |
+| 409 | `SYSTEM_STATE_CONFLICT` | Authoritative servicing evidence is inconsistent | Reconcile the persisted account, schedule, progress, outcome, or exposure evidence before retrying |
 | 409 | `LOAN_ACCOUNT_NOT_ACTIVE` | Loan account not active | Activate the LoanAccount through manual disbursement confirmation before repayment operations |
+| 422 | `REPAYMENT_VALUE_DATE_INVALID` | Repayment value date is invalid | Use a date from disbursement value date through the current injected UTC business date |
+| 422 | `REPAYMENT_EXCEEDS_OUTSTANDING` | Repayment exceeds contractual outstanding | Submit an amount no greater than the current total outstanding |
+| 422 | `PRODUCT_REPAYMENT_NOT_SUPPORTED` | Product repayment is not executable | Only the complete Salary Advance repayment policy is currently available |
+| 409 | `DUPLICATE_PAYMENT_REFERENCE` | Payment evidence already recorded | Reconcile the existing canonical reference without exposing conflicting evidence |
+| 422 | `REPAYMENT_AMOUNT_INVALID` | Repayment amount is invalid | Submit a positive whole-VND repayment amount |
+| 409 | `REPAYMENT_NOT_ALLOWED` | Repayment is not allowed | Record repayments only against an ACTIVE or OVERDUE account with positive contractual outstanding debt |
 | 422 | `REPAYMENT_RECORD_INVALID` | Repayment record invalid | Correct repayment amount, date, status, or outstanding balance information |
 | 404 | `REPAYMENT_SCHEDULE_NOT_FOUND` | Repayment schedule not found | Generate the final repayment schedule during LoanAccount activation |
 | **AUDIT & COMPLIANCE CONTROLS Domain** | | | |

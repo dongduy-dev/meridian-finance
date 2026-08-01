@@ -68,6 +68,19 @@ public class LoanDisbursementApiMapper {
                 result.totalInterest(),
                 result.totalFee(),
                 result.totalRepayment(),
+                new LoanAccountDto.ServicingSummaryDto(
+                        result.servicing().principalPaid(),
+                        result.servicing().interestPaid(),
+                        result.servicing().feePaid(),
+                        result.servicing().totalPaid(),
+                        result.servicing().principalOutstanding(),
+                        result.servicing().interestOutstanding(),
+                        result.servicing().feeOutstanding(),
+                        result.servicing().totalOutstanding(),
+                        result.servicing().servicingEvaluationDate(),
+                        result.servicing().lastPaymentValueDate(),
+                        result.servicing().lastPaymentRecordedAt()
+                ),
                 new LoanAccountDto.DestinationSummaryDto(
                         destination.bankCode(),
                         destination.bankName(),
@@ -87,7 +100,21 @@ public class LoanDisbursementApiMapper {
                                         item.principalDue(),
                                         item.interestDue(),
                                         item.feeDue(),
-                                        item.totalDue()
+                                        item.totalDue(),
+                                        new LoanAccountDto.InstallmentServicingDto(
+                                                item.servicing().principalPaid(),
+                                                item.servicing().interestPaid(),
+                                                item.servicing().feePaid(),
+                                                item.servicing().totalPaid(),
+                                                item.servicing().principalOutstanding(),
+                                                item.servicing().interestOutstanding(),
+                                                item.servicing().feeOutstanding(),
+                                                item.servicing().totalOutstanding(),
+                                                item.servicing().status().name(),
+                                                item.servicing().statusEvaluationDate(),
+                                                item.servicing().lastPaymentValueDate(),
+                                                item.servicing().lastPaymentRecordedAt()
+                                        )
                                 ))
                                 .toList()
                 )

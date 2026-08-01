@@ -25,6 +25,7 @@ import com.meridian.platform.loan.domain.model.RepaymentInstallmentProgress;
 import com.meridian.platform.loan.domain.model.RepaymentInstallmentServicingAction;
 import com.meridian.platform.loan.domain.model.RepaymentInstallmentStatusTransition;
 import com.meridian.platform.loan.domain.model.RepaymentSchedule;
+import com.meridian.platform.loan.domain.model.RepaymentScheduleItem;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
 import com.meridian.platform.loan.domain.model.RepaymentTransaction;
 import com.meridian.platform.loan.domain.service.DeterministicRepaymentAllocator;
@@ -57,6 +58,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class RecordRepaymentService implements RecordRepaymentUseCase {
@@ -221,7 +223,7 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
         );
         outcomes.save(outcome);
         publishAudit(transactionId, account.id(), accountStatusChanged, actor.userId(), recordedAt);
-        return toResult(transaction, outcome, false);
+        return toResult(transaction, outcome, schedule, false);
     }
 
     private Result replay(
@@ -235,6 +237,9 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
         LoanAccount account = accounts
                 .findByLoanApplicationIdForUpdate(application.id())
                 .orElseThrow(RecordRepaymentService::stateConflict);
+        RepaymentSchedule schedule = schedules.findByLoanAccountIdForUpdate(account.id())
+                .orElseThrow(RecordRepaymentService::stateConflict);
+        validateSchedule(application, account, schedule);
         RepaymentOperationOutcome outcome = outcomes.findByRepaymentTransactionId(transaction.id())
                 .orElseThrow(RecordRepaymentService::stateConflict);
         validateOutcome(transaction, outcome);
@@ -244,7 +249,7 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
                 )
         );
         validateReplayEvidence(transaction, outcome);
-        return toResult(transaction, outcome, true);
+        return toResult(transaction, outcome, schedule, true);
     }
 
     private Result resolveSaveConflict(
@@ -450,16 +455,24 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
     private static Result toResult(
             RepaymentTransaction transaction,
             RepaymentOperationOutcome outcome,
+            RepaymentSchedule schedule,
             boolean replay
     ) {
+        Map<UUID, RepaymentScheduleItem> scheduleItems = schedule.items().stream()
+                .collect(Collectors.toMap(RepaymentScheduleItem::id, item -> item));
         List<Allocation> allocations = transaction.allocations().stream()
-                .map(item -> new Allocation(
-                        item.allocationSequence(), item.repaymentScheduleItemId(),
-                        item.component(), item.amount()
-                )).toList();
+                .map(item -> {
+                    RepaymentScheduleItem scheduleItem = scheduleItems.get(
+                            item.repaymentScheduleItemId()
+                    );
+                    if (scheduleItem == null) {
+                        throw stateConflict();
+                    }
+                    return new Allocation(item.allocationSequence(), scheduleItem.id(),
+                            scheduleItem.installmentNumber(), item.component(), item.amount());
+                }).toList();
         List<InstallmentProgress> progress = outcome.installments().stream()
-                .map(RepaymentOperationOutcome.InstallmentOutcome::progress)
-                .map(RecordRepaymentService::toProgress).toList();
+                .map(item -> toProgress(item, scheduleItems)).toList();
         RepaymentBalance balance = outcome.accountBalance();
         AccountBalance accountBalance = new AccountBalance(
                 balance.principalPaid(), balance.interestPaid(), balance.feePaid(),
@@ -477,14 +490,26 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
         );
     }
 
-    private static InstallmentProgress toProgress(RepaymentInstallmentProgress item) {
+    private static InstallmentProgress toProgress(
+            RepaymentOperationOutcome.InstallmentOutcome outcome,
+            Map<UUID, RepaymentScheduleItem> scheduleItems
+    ) {
+        RepaymentInstallmentProgress item = outcome.progress();
+        RepaymentScheduleItem scheduleItem = scheduleItems.get(
+                item.repaymentScheduleItemId()
+        );
+        if (scheduleItem == null) {
+            throw stateConflict();
+        }
         return new InstallmentProgress(
                 item.repaymentScheduleItemId(), item.installmentNumber(),
+                scheduleItem.dueDate(),
                 item.principalPaid(), item.interestPaid(), item.feePaid(), item.totalPaid(),
                 item.principalOutstanding(), item.interestOutstanding(),
-                item.feeOutstanding(), item.totalOutstanding(), item.status(),
+                item.feeOutstanding(), item.totalOutstanding(), outcome.previousStatus(),
+                item.status(),
                 item.lastPaymentValueDate(), item.lastPaymentRecordedAt(),
-                item.servicingEvaluationDate()
+                item.servicingEvaluationDate(), outcome.statusChanged()
         );
     }
 

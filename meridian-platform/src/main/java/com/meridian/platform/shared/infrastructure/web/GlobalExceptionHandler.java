@@ -7,8 +7,11 @@ import com.meridian.platform.shared.domain.exception.BusinessStateConflictExcept
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import com.meridian.platform.shared.domain.exception.ServiceUnavailableException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -142,6 +145,52 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(response);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleConstraintViolationException(
+            ConstraintViolationException exception,
+            HttpServletRequest request
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                Instant.now(),
+                HttpStatus.BAD_REQUEST.value(),
+                "VALIDATION_FAILED",
+                "Input validation failed.",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(response);
+    }
+
+    @ExceptionHandler({
+            MethodArgumentTypeMismatchException.class,
+            HttpMessageNotReadableException.class
+    })
+    public ResponseEntity<ApiErrorResponse> handleMalformedTransport(
+            Exception exception,
+            HttpServletRequest request
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                Instant.now(),
+                HttpStatus.BAD_REQUEST.value(),
+                "VALIDATION_FAILED",
+                "Input validation failed.",
+                safeValidationPath(request)
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(response);
+    }
+
+    private static String safeValidationPath(HttpServletRequest request) {
+        return request.getRequestURI().replaceFirst(
+                "(/api/v1/loan-applications/)[^/]+",
+                "$1{loanApplicationId}"
+        );
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

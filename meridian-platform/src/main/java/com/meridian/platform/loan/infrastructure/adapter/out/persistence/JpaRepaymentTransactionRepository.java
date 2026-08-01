@@ -1,5 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -30,6 +32,11 @@ interface JpaRepaymentTransactionRepository
 
     List<RepaymentTransactionJpaEntity> findByLoanAccountIdOrderByRecordedAtAscIdAsc(
             UUID loanAccountId
+    );
+
+    Page<RepaymentTransactionJpaEntity> findByLoanAccountIdOrderByRecordedAtDescIdDesc(
+            UUID loanAccountId,
+            Pageable pageable
     );
 
     @Modifying

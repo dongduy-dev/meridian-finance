@@ -241,18 +241,18 @@ Type: Deferred feature
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocks next major feature: No
 
-Problem:
-The authoritative final repayment schedule is generated at LoanAccount activation. Increments 2-3 implement application-layer manual Salary Advance repayment posting, deterministic allocation, paid/outstanding tracking, automatic contractual payoff, exact principal used-exposure release, date-driven overdue evaluation, ACTIVE/OVERDUE history and audit, and outstanding-account submission blocking. Repayment REST/query APIs, negotiated settlement, administrative closure, and reversal remain deferred, so this follow-up stays open.
+Completion:
+The authoritative final repayment schedule is immutable obligation evidence. Increments 1-4 implement generic repayment foundations and the complete executable Salary Advance slice: manual repayment posting, deterministic allocation, paid/outstanding tracking, exact principal used-exposure release, contractual payoff to `SETTLED`, date-driven overdue evaluation, ACTIVE/OVERDUE history and audit, outstanding-account submission blocking, the secured staff command API, immutable Customer/staff repayment history, and coherent LoanAccount servicing reads.
 
-Progress:
-V32-V33 provide audit and physical servicing foundations. V34 adds the minimum immutable safe operation-outcome snapshot and repayment audit entity support required for exact replay after later payments. V35 adds only the bounded overdue-candidate index after exact V34 preflight; overdue operation/history support already existed in V33. Salary Advance is the only executable repayment product; no UCL or Collateral placeholders exist.
+Evidence:
+V32-V33 provide audit and physical servicing foundations. V34 provides immutable operation outcomes for exact replay after later servicing changes. V35 adds only the preflight-protected overdue-candidate index. The APIs preserve scheduled obligations separately from payment/allocation evidence, enforce ownership and permission boundaries, and add no schema migration. Salary Advance is the only executable repayment product; no UCL or Collateral placeholders exist.
 
-Recommendation:
-Continue with the separately approved secured API/query visibility slice without mixing scheduled obligations with payment transactions or allocations. Settlement administration, closure, and reversal remain separate later capabilities.
+Deferred boundary:
+Negotiated or administrative settlement, closure, reversal, refund, waiver, write-off, payment/bank integration, ledger, notifications, and UCL/Collateral repayment remain separate future capabilities. Completing this repayment-tracking follow-up does not mark those capabilities complete.
 
 ### MER-FU-012 - Implement document checklist and manual document review foundation
 

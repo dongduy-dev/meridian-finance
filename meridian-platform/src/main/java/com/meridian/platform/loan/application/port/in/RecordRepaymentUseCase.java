@@ -105,6 +105,7 @@ public interface RecordRepaymentUseCase {
     record Allocation(
             int sequence,
             UUID repaymentScheduleItemId,
+            int installmentNumber,
             RepaymentAllocationComponent component,
             BigDecimal amount
     ) {
@@ -113,6 +114,7 @@ public interface RecordRepaymentUseCase {
     record InstallmentProgress(
             UUID repaymentScheduleItemId,
             int installmentNumber,
+            LocalDate dueDate,
             BigDecimal principalPaid,
             BigDecimal interestPaid,
             BigDecimal feePaid,
@@ -121,11 +123,16 @@ public interface RecordRepaymentUseCase {
             BigDecimal interestOutstanding,
             BigDecimal feeOutstanding,
             BigDecimal totalOutstanding,
+            RepaymentInstallmentStatus previousStatus,
             RepaymentInstallmentStatus status,
             LocalDate lastPaymentValueDate,
             LocalDateTime lastPaymentRecordedAt,
-            LocalDate servicingEvaluationDate
+            LocalDate servicingEvaluationDate,
+            boolean statusChanged
     ) {
+        public InstallmentProgress {
+            Objects.requireNonNull(dueDate, "dueDate must not be null");
+        }
     }
 
     record AccountBalance(

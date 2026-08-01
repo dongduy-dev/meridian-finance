@@ -6,6 +6,7 @@ import com.meridian.platform.loan.application.port.in.QueryLoanAccountUseCase;
 import com.meridian.platform.loan.application.port.in.RevealDisbursementDestinationUseCase;
 import com.meridian.platform.loan.domain.model.LoanAccountStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.RepaymentInstallmentStatus;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanDisbursementController;
 import org.junit.jupiter.api.BeforeEach;
@@ -177,13 +178,22 @@ class LoanDisbursementSecurityTest {
                 APPLICATION_ID, UUID.randomUUID(), "LA-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                 LoanAccountStatus.ACTIVE, LocalDateTime.of(2026, 7, 28, 10, 0),
                 money(1_000), 1, money(100), money(0), money(1_100),
+                new QueryLoanAccountUseCase.ServicingSummary(
+                        money(0), money(0), money(0), money(0), money(1_000),
+                        money(100), money(0), money(1_100),
+                        LocalDate.of(2026, 7, 28), null, null),
                 new QueryLoanAccountUseCase.DestinationSummary(
                         "VCB", "Meridian Test Bank", "MERIDIAN CUSTOMER", "********"),
                 UUID.randomUUID(), RepaymentScheduleType.FINAL, 1,
                 LocalDate.of(2026, 8, 28), LocalDate.of(2026, 8, 28),
                 List.of(new QueryLoanAccountUseCase.ScheduleItem(
                         1, LocalDate.of(2026, 8, 28), money(1_000), money(100),
-                        money(0), money(1_100)))
+                        money(0), money(1_100),
+                        new QueryLoanAccountUseCase.InstallmentServicing(
+                                money(0), money(0), money(0), money(0),
+                                money(1_000), money(100), money(0), money(1_100),
+                                RepaymentInstallmentStatus.NOT_DUE,
+                                LocalDate.of(2026, 7, 28), null, null)))
         );
     }
 

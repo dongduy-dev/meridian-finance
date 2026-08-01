@@ -19,4 +19,18 @@ public interface RepaymentTransactionRepository {
     Optional<RepaymentTransaction> findByExternalPaymentReference(String reference);
 
     List<RepaymentTransaction> findByLoanAccountId(UUID loanAccountId);
+
+    Page findPageByLoanAccountId(UUID loanAccountId, int page, int size);
+
+    record Page(
+            int page,
+            int size,
+            long totalElements,
+            int totalPages,
+            List<RepaymentTransaction> transactions
+    ) {
+        public Page {
+            transactions = List.copyOf(transactions);
+        }
+    }
 }
