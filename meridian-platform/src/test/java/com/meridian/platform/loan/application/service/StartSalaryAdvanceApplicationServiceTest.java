@@ -9,6 +9,7 @@ import com.meridian.platform.loan.application.port.out.LoanApplicationRepository
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanProductRepository;
+import com.meridian.platform.loan.application.port.out.OutstandingLoanAccountQuery;
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityPort;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
@@ -68,6 +69,7 @@ class StartSalaryAdvanceApplicationServiceTest {
     private FakeLoanProductRepository loanProductRepository;
     private FakeLoanApplicationRepository loanApplicationRepository;
     private FakeLoanDocumentChecklistPort documentChecklistPort;
+    private FakeOutstandingLoanAccountQuery outstandingLoanAccountQuery;
     private FakeSalaryAdvanceLimitRepository salaryAdvanceLimitRepository;
     private FakeSalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository;
     private FakeSalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository;
@@ -82,6 +84,7 @@ class StartSalaryAdvanceApplicationServiceTest {
         loanProductRepository = new FakeLoanProductRepository();
         loanApplicationRepository = new FakeLoanApplicationRepository();
         documentChecklistPort = new FakeLoanDocumentChecklistPort();
+        outstandingLoanAccountQuery = new FakeOutstandingLoanAccountQuery();
         salaryAdvanceLimitRepository = new FakeSalaryAdvanceLimitRepository();
         salaryAdvanceLimitMovementRepository = new FakeSalaryAdvanceLimitMovementRepository();
         salaryAdvanceVerificationRepository = new FakeSalaryAdvanceVerificationRepository();
@@ -93,6 +96,7 @@ class StartSalaryAdvanceApplicationServiceTest {
                 loanProductRepository,
                 loanApplicationRepository,
                 documentChecklistPort,
+                outstandingLoanAccountQuery,
                 salaryAdvanceLimitRepository,
                 salaryAdvanceLimitMovementRepository,
                 salaryAdvanceVerificationRepository,
@@ -385,6 +389,43 @@ class StartSalaryAdvanceApplicationServiceTest {
         assertEquals(2, loanApplicationRepository.existsChecks);
     }
 
+    @Test
+    void outstandingLoanAccountBlocksWithoutLeakingFinancialOrEntityEvidence() {
+        outstandingLoanAccountQuery.results.add(OutstandingLoanAccountQuery.GuardResult.OUTSTANDING_EXISTS);
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.startSalaryAdvanceApplication(request(limit(3_000_000), 1))
+        );
+        assertEquals("OUTSTANDING_LOAN_ACCOUNT_EXISTS", exception.getErrorCode());
+        assertFalse(exception.getMessage().contains(customerId.toString()));
+        assertFalse(exception.getMessage().contains("3000000"));
+        assertFalse(exception.getMessage().toLowerCase().contains("limit"));
+        assertTrue(loanApplicationRepository.savedApplications.isEmpty());
+    }
+
+    @Test
+    void inconsistentLoanAccountTupleFailsClosed() {
+        outstandingLoanAccountQuery.results.add(OutstandingLoanAccountQuery.GuardResult.INCONSISTENT);
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.startSalaryAdvanceApplication(request(limit(3_000_000), 1))
+        );
+        assertEquals("SYSTEM_STATE_CONFLICT", exception.getErrorCode());
+        assertTrue(loanApplicationRepository.savedApplications.isEmpty());
+    }
+
+    @Test
+    void outstandingAccountAtSerializedCustomerLinkCheckBlocksBeforeReservation() {
+        outstandingLoanAccountQuery.results.add(OutstandingLoanAccountQuery.GuardResult.OUTSTANDING_EXISTS);
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.startSalaryAdvanceApplication(request(limit(3_000_000), 1))
+        );
+        assertEquals("OUTSTANDING_LOAN_ACCOUNT_EXISTS", exception.getErrorCode());
+        assertEquals(1, outstandingLoanAccountQuery.inspections);
+        assertTrue(salaryAdvanceLimitRepository.lockAcquired);
+        assertTrue(salaryAdvanceLimitMovementRepository.savedMovements.isEmpty());
+    }
     @Test
     void returnedForRevisionBlocksDuplicates() {
         assertTrue(LoanApplicationStatus.blockingStatuses().contains(LoanApplicationStatus.RETURNED_FOR_REVISION));
@@ -688,6 +729,17 @@ class StartSalaryAdvanceApplicationServiceTest {
         }
     }
 
+    private static class FakeOutstandingLoanAccountQuery implements OutstandingLoanAccountQuery {
+
+        private final Deque<GuardResult> results = new ArrayDeque<>();
+        private int inspections;
+
+        @Override
+        public GuardResult inspect(UUID customerId, ProductCode productCode) {
+            inspections++;
+            return results.isEmpty() ? GuardResult.CLEAR : results.removeFirst();
+        }
+    }
     private static class FakeCustomerReadinessPort implements CustomerReadinessPort {
 
         private Optional<CustomerReadinessSnapshot> snapshot;

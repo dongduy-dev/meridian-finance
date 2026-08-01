@@ -246,13 +246,13 @@ Status: Open
 Blocks next major feature: No
 
 Problem:
-The authoritative final repayment schedule is generated at LoanAccount activation. Increment 2 implements application-layer manual Salary Advance repayment posting, deterministic allocation, paid/outstanding tracking, automatic contractual payoff, exact principal used-exposure release, histories, audit, and durable replay. Repayment REST/query APIs, the overdue scheduler, negotiated settlement, administrative closure, and reversal remain deferred, so this follow-up stays open.
+The authoritative final repayment schedule is generated at LoanAccount activation. Increments 2-3 implement application-layer manual Salary Advance repayment posting, deterministic allocation, paid/outstanding tracking, automatic contractual payoff, exact principal used-exposure release, date-driven overdue evaluation, ACTIVE/OVERDUE history and audit, and outstanding-account submission blocking. Repayment REST/query APIs, negotiated settlement, administrative closure, and reversal remain deferred, so this follow-up stays open.
 
 Progress:
-V32-V33 provide audit and physical servicing foundations. V34 adds the minimum immutable safe operation-outcome snapshot and repayment audit entity support required for exact replay after later payments. Salary Advance is the only executable repayment product; no UCL or Collateral placeholders exist.
+V32-V33 provide audit and physical servicing foundations. V34 adds the minimum immutable safe operation-outcome snapshot and repayment audit entity support required for exact replay after later payments. V35 adds only the bounded overdue-candidate index after exact V34 preflight; overdue operation/history support already existed in V33. Salary Advance is the only executable repayment product; no UCL or Collateral placeholders exist.
 
 Recommendation:
-Continue the remaining servicing slices without mixing scheduled obligations with payment transactions or allocations: overdue lifecycle scheduling next, then separately approved APIs/query visibility and closure/reversal capabilities.
+Continue with the separately approved secured API/query visibility slice without mixing scheduled obligations with payment transactions or allocations. Settlement administration, closure, and reversal remain separate later capabilities.
 
 ### MER-FU-012 - Implement document checklist and manual document review foundation
 
