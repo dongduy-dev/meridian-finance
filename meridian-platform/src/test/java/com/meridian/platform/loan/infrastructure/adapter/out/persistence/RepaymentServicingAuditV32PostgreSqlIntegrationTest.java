@@ -1,0 +1,340 @@
+package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
+
+import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import javax.sql.DataSource;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@SpringBootTest(properties = {
+        "meridian.loan.offer-expiry.enabled=false",
+        "meridian.document.orphan-reconciliation.enabled=false",
+        "spring.flyway.enabled=false",
+        "spring.jpa.hibernate.ddl-auto=none"
+})
+class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
+
+    private static final UUID ACTOR_ID =
+            UUID.fromString("00000000-0000-0000-0000-000000000304");
+    private static final LocalDateTime OCCURRED_AT =
+            LocalDateTime.of(2026, 7, 28, 10, 0);
+    private static final Path V32 = Path.of(
+            "src/main/resources/db/migration/"
+                    + "V32__add_repayment_servicing_audit_actions.sql"
+    );
+
+    @Autowired JdbcTemplate jdbc;
+    @Autowired DataSource dataSource;
+
+    @Test
+    void upgradesV31ToV32WithoutChangingUnrelatedSchemaObjects() {
+        String schema = schemaName("upgrade");
+        try {
+            migrateTo(schema, "31");
+            List<String> columnsBefore = columns(schema);
+            List<String> indexesBefore = indexes(schema);
+            List<String> constraintsBefore = unrelatedConstraints(schema);
+            assertThroughV31ActionsAccepted(schema);
+            assertV32ActionsRejected(schema);
+
+            migrateTo(schema, "32");
+
+            assertEquals("32", latestVersion(schema));
+            assertEquals(columnsBefore, columns(schema));
+            assertEquals(indexesBefore, indexes(schema));
+            assertEquals(constraintsBefore, unrelatedConstraints(schema));
+            assertAllKnownActionsAccepted(schema);
+        } finally {
+            dropSchema(schema);
+        }
+    }
+
+    @Test
+    void repeatedV32ExecutionFailsBeforeReplacingInstalledConstraint()
+            throws Exception {
+        String schema = schemaName("repeat");
+        try {
+            migrateTo(schema, "32");
+            String before = actionConstraint(schema);
+
+            assertThrows(SQLException.class, () -> executeV32(schema));
+
+            assertEquals(before, actionConstraint(schema));
+            assertTrue(before.contains("REPAYMENT_RECORDED"));
+            assertTrue(before.contains("LOAN_ACCOUNT_STATUS_CHANGED"));
+        } finally {
+            dropSchema(schema);
+        }
+    }
+
+    @Test
+    void missingExpectedConstraintFailsBeforeReplacement() throws Exception {
+        String schema = schemaName("missing");
+        try {
+            migrateTo(schema, "31");
+            jdbc.execute("alter table " + schema
+                    + ".audit_events drop constraint chk_audit_events_action");
+
+            assertThrows(SQLException.class, () -> executeV32(schema));
+
+            assertEquals(0, actionConstraintCount(schema));
+        } finally {
+            dropSchema(schema);
+        }
+    }
+
+    @Test
+    void extraLiteralActionFailsWithoutReplacingConstraint() throws Exception {
+        assertPredicateWeakeningRejected(
+                "extra_literal",
+                "action = 'V32_EXTRA_ACTION'"
+        );
+    }
+
+    @Test
+    void nonLiteralLengthWeakeningFailsWithoutReplacingConstraint()
+            throws Exception {
+        assertPredicateWeakeningRejected("length", "length(action) = 1");
+    }
+
+    @Test
+    void nonNullWeakeningFailsWithoutReplacingConstraint() throws Exception {
+        assertPredicateWeakeningRejected("not_null", "action is not null");
+    }
+
+    @Test
+    void reorderedExpectedWhitelistStillUpgrades() throws Exception {
+        String schema = schemaName("reordered");
+        try {
+            migrateTo(schema, "31");
+            String expression = actionConstraintExpression(schema)
+                    .replace("'CUSTOMER_PROFILE_CREATED'", "'__V32_SWAP__'")
+                    .replace(
+                            "'CUSTOMER_PROFILE_UPDATED'",
+                            "'CUSTOMER_PROFILE_CREATED'"
+                    )
+                    .replace(
+                            "'__V32_SWAP__'",
+                            "'CUSTOMER_PROFILE_UPDATED'"
+                    );
+            replaceActionConstraint(schema, expression);
+
+            executeV32(schema);
+
+            assertTrue(actionConstraint(schema).contains("REPAYMENT_RECORDED"));
+            assertTrue(actionConstraint(schema)
+                    .contains("LOAN_ACCOUNT_STATUS_CHANGED"));
+        } finally {
+            dropSchema(schema);
+        }
+    }
+
+    private void assertPredicateWeakeningRejected(
+            String suffix,
+            String extraPredicate
+    ) throws Exception {
+        String schema = schemaName(suffix);
+        try {
+            migrateTo(schema, "31");
+            replaceActionConstraint(
+                    schema,
+                    "(" + actionConstraintExpression(schema) + ") or "
+                            + extraPredicate
+            );
+            String before = actionConstraint(schema);
+
+            assertThrows(SQLException.class, () -> executeV32(schema));
+
+            assertEquals(before, actionConstraint(schema));
+        } finally {
+            dropSchema(schema);
+        }
+    }
+
+    private void replaceActionConstraint(String schema, String expression) {
+        jdbc.execute("alter table " + schema
+                + ".audit_events drop constraint chk_audit_events_action");
+        jdbc.execute("alter table " + schema
+                + ".audit_events add constraint chk_audit_events_action check ("
+                + expression + ")");
+    }
+
+    private String actionConstraintExpression(String schema) {
+        String definition = actionConstraint(schema);
+        return definition.substring("CHECK (".length(), definition.length() - 1);
+    }
+
+    private void assertThroughV31ActionsAccepted(String schema) {
+        for (BusinessAuditAction action : BusinessAuditAction.values()) {
+            if (action != BusinessAuditAction.REPAYMENT_RECORDED
+                    && action != BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED) {
+                insertAuditEvent(schema, action.name());
+            }
+        }
+    }
+
+    private void assertV32ActionsRejected(String schema) {
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema,
+                BusinessAuditAction.REPAYMENT_RECORDED.name()
+        ));
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema,
+                BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED.name()
+        ));
+    }
+
+    private void assertAllKnownActionsAccepted(String schema) {
+        for (BusinessAuditAction action : BusinessAuditAction.values()) {
+            insertAuditEvent(schema, action.name());
+        }
+        assertThrows(DataAccessException.class,
+                () -> insertAuditEvent(schema, "UNKNOWN_AUDIT_ACTION"));
+    }
+
+    private void executeV32(String schema) throws Exception {
+        String sql = Files.readString(V32);
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("set search_path to " + schema);
+            statement.execute(sql);
+        }
+    }
+
+    private String actionConstraint(String schema) {
+        return jdbc.queryForObject(
+                "select pg_get_constraintdef(constraint_row.oid) "
+                        + "from pg_constraint constraint_row "
+                        + "join pg_class relation "
+                        + "on relation.oid = constraint_row.conrelid "
+                        + "join pg_namespace namespace "
+                        + "on namespace.oid = relation.relnamespace "
+                        + "where namespace.nspname = ? "
+                        + "and relation.relname = 'audit_events' "
+                        + "and constraint_row.conname = "
+                        + "'chk_audit_events_action'",
+                String.class,
+                schema
+        );
+    }
+
+    private int actionConstraintCount(String schema) {
+        return jdbc.queryForObject(
+                "select count(*) from pg_constraint constraint_row "
+                        + "join pg_class relation "
+                        + "on relation.oid = constraint_row.conrelid "
+                        + "join pg_namespace namespace "
+                        + "on namespace.oid = relation.relnamespace "
+                        + "where namespace.nspname = ? "
+                        + "and relation.relname = 'audit_events' "
+                        + "and constraint_row.conname = "
+                        + "'chk_audit_events_action'",
+                Integer.class,
+                schema
+        );
+    }
+
+    private void insertAuditEvent(String schema, String action) {
+        jdbc.update(
+                "insert into " + schema + ".audit_events "
+                        + "(id,operation_id,sequence_number,actor_type,"
+                        + "actor_user_id,entity_type,entity_id,action,payload,"
+                        + "occurred_at) values "
+                        + "(?,?,1,'USER',?,'LOAN_CONTRACT',?,?,?::jsonb,?)",
+                UUID.randomUUID(), UUID.randomUUID(), ACTOR_ID,
+                UUID.randomUUID(), action, "{}", OCCURRED_AT
+        );
+    }
+
+    private String latestVersion(String schema) {
+        return jdbc.queryForObject(
+                "select version from " + schema
+                        + ".flyway_schema_history where success "
+                        + "order by installed_rank desc limit 1",
+                String.class
+        );
+    }
+
+    private List<String> columns(String schema) {
+        return rows(jdbc.queryForList(
+                "select table_name,column_name,data_type,is_nullable,"
+                        + "coalesce(column_default,'') as column_default "
+                        + "from information_schema.columns "
+                        + "where table_schema = ? "
+                        + "order by table_name,ordinal_position",
+                schema
+        ));
+    }
+
+    private List<String> indexes(String schema) {
+        return rows(jdbc.queryForList(
+                "select tablename,indexname,indexdef from pg_indexes "
+                        + "where schemaname = ? "
+                        + "order by tablename,indexname",
+                schema
+        ));
+    }
+
+    private List<String> unrelatedConstraints(String schema) {
+        return rows(jdbc.queryForList(
+                "select relation.relname as table_name,"
+                        + "constraint_row.conname,"
+                        + "pg_get_constraintdef(constraint_row.oid) "
+                        + "as definition "
+                        + "from pg_constraint constraint_row "
+                        + "join pg_class relation "
+                        + "on relation.oid = constraint_row.conrelid "
+                        + "join pg_namespace namespace "
+                        + "on namespace.oid = relation.relnamespace "
+                        + "where namespace.nspname = ? "
+                        + "and constraint_row.conname "
+                        + "<> 'chk_audit_events_action' "
+                        + "order by relation.relname,constraint_row.conname",
+                schema
+        ));
+    }
+
+    private static List<String> rows(List<Map<String, Object>> rows) {
+        List<String> normalized = new ArrayList<>();
+        rows.forEach(row -> normalized.add(row.toString()));
+        return List.copyOf(normalized);
+    }
+
+    private void migrateTo(String schema, String target) {
+        Flyway.configure()
+                .dataSource(dataSource)
+                .schemas(schema)
+                .defaultSchema(schema)
+                .locations("classpath:db/migration")
+                .target(target)
+                .load()
+                .migrate();
+    }
+
+    private void dropSchema(String schema) {
+        jdbc.execute("drop schema if exists " + schema + " cascade");
+    }
+
+    private static String schemaName(String suffix) {
+        return "md_v32_" + suffix + "_"
+                + UUID.randomUUID().toString().replace("-", "");
+    }
+}

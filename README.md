@@ -201,7 +201,8 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - [x] Approved-offer generation, expiry, customer acceptance, and decline
 - [x] Contract readiness and immutable disbursement preparation
 - [x] Manual disbursement confirmation, LoanAccount activation, and final repayment schedule generation for Salary Advance
-- [ ] Repayment posting/tracking, overdue transitions, settlement, and closure
+- [x] Salary Advance repayment posting/tracking, exact principal exposure release, overdue transitions, and secured servicing reads
+- [ ] Settlement administration, closure, reversal/refund, payment integrations, and UCL/Collateral repayment
 - [ ] Streamlined Unsecured Consumer Loan workflow
 - [ ] Streamlined Collateral Loan workflow
 - [x] JWT authentication and permission-based RBAC

@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.application.port.in;
 
 import com.meridian.platform.loan.domain.model.LoanAccountStatus;
+import com.meridian.platform.loan.domain.model.RepaymentInstallmentStatus;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
 
 import java.math.BigDecimal;
@@ -25,6 +26,7 @@ public interface QueryLoanAccountUseCase {
             BigDecimal totalInterest,
             BigDecimal totalFee,
             BigDecimal totalRepayment,
+            ServicingSummary servicing,
             DestinationSummary destination,
             UUID repaymentScheduleId,
             RepaymentScheduleType scheduleType,
@@ -43,6 +45,7 @@ public interface QueryLoanAccountUseCase {
             Objects.requireNonNull(totalInterest, "totalInterest must not be null");
             Objects.requireNonNull(totalFee, "totalFee must not be null");
             Objects.requireNonNull(totalRepayment, "totalRepayment must not be null");
+            Objects.requireNonNull(servicing, "servicing must not be null");
             Objects.requireNonNull(destination, "destination must not be null");
             Objects.requireNonNull(repaymentScheduleId, "repaymentScheduleId must not be null");
             Objects.requireNonNull(scheduleType, "scheduleType must not be null");
@@ -89,7 +92,8 @@ public interface QueryLoanAccountUseCase {
             BigDecimal principalDue,
             BigDecimal interestDue,
             BigDecimal feeDue,
-            BigDecimal totalDue
+            BigDecimal totalDue,
+            InstallmentServicing servicing
     ) {
         public ScheduleItem {
             if (installmentNumber <= 0) {
@@ -100,7 +104,39 @@ public interface QueryLoanAccountUseCase {
             Objects.requireNonNull(interestDue, "interestDue must not be null");
             Objects.requireNonNull(feeDue, "feeDue must not be null");
             Objects.requireNonNull(totalDue, "totalDue must not be null");
+            Objects.requireNonNull(servicing, "servicing must not be null");
         }
+    }
+
+    record ServicingSummary(
+            BigDecimal principalPaid,
+            BigDecimal interestPaid,
+            BigDecimal feePaid,
+            BigDecimal totalPaid,
+            BigDecimal principalOutstanding,
+            BigDecimal interestOutstanding,
+            BigDecimal feeOutstanding,
+            BigDecimal totalOutstanding,
+            LocalDate servicingEvaluationDate,
+            LocalDate lastPaymentValueDate,
+            LocalDateTime lastPaymentRecordedAt
+    ) {
+    }
+
+    record InstallmentServicing(
+            BigDecimal principalPaid,
+            BigDecimal interestPaid,
+            BigDecimal feePaid,
+            BigDecimal totalPaid,
+            BigDecimal principalOutstanding,
+            BigDecimal interestOutstanding,
+            BigDecimal feeOutstanding,
+            BigDecimal totalOutstanding,
+            RepaymentInstallmentStatus status,
+            LocalDate statusEvaluationDate,
+            LocalDate lastPaymentValueDate,
+            LocalDateTime lastPaymentRecordedAt
+    ) {
     }
 
     private static String requireText(String value, String fieldName) {

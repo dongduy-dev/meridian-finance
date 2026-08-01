@@ -9,6 +9,8 @@ public interface LoanAccountRepository {
 
     LoanAccount save(LoanAccount loanAccount);
 
+    LoanAccount updateServicingState(LoanAccount loanAccount);
+
     Optional<LoanAccount> findById(UUID loanAccountId);
 
     Optional<LoanAccount> findByLoanApplicationId(UUID loanApplicationId);

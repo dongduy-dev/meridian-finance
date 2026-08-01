@@ -415,18 +415,51 @@ An Accounting Officer with `loan:disburse` may reveal the full immutable contrac
 
 Confirmation accepts a request UUID, expected contract version, canonical external transfer reference, value date, and first repayment date. All money, term, installments, Customer ownership, product, and destination facts come from the locked ready contract. One transaction creates an active LoanAccount, immutable manual-disbursement evidence, and one final dated schedule; converts the Salary Advance reservation to used exposure; transitions the application to `DISBURSED`; and writes history and PII-safe audit. Identical request replay returns the original result without another durable effect. A different request after completion is rejected.
 
-Customers with `loan:read:own` may query only their activated LoanAccount; staff need `loan:read`. The response uses the immutable contract's fixed full destination mask `********` without revealing any stored suffix and excludes transfer references, full destination data, encryption evidence, Salary Advance internals, actor IDs, audit IDs, and history IDs. Repayment posting, allocation, delinquency, settlement, closure, UCL activation, and Collateral activation remain deferred.
+Customers with `loan:read:own` may query only their activated LoanAccount; staff need `loan:read`. The response uses the immutable contract's fixed full destination mask `********` without revealing any stored suffix and excludes transfer references, full destination data, encryption evidence, Salary Advance internals, actor IDs, audit IDs, and history IDs. Repayment REST and query APIs, administrative closure, UCL activation, and Collateral activation remain deferred.
 
 ### 6.9 Repayment, Settlement, and Closure
 
-The final repayment schedule is authoritative after activation. Repayment posting, allocations, overdue processing, settlement, and closure are not implemented in the current checkpoint.
+The immutable final version-1 repayment schedule is the authoritative scheduled obligation after activation. Servicing progress, actual payment transactions, and their allocations are separate evidence and must never rewrite original schedule amounts or dates.
+
+The physical servicing foundation represents zero-paid/full-outstanding LoanAccount and installment state, derives servicing statuses, preserves append-only status history, and stores immutable payment/allocation evidence. Existing accounts are initialized deterministically as of their activation date, never the Flyway execution date. Newly activated accounts create the same state and initial history atomically with activation. The application-layer posting operation now records real manual Salary Advance repayments atomically and stores a safe immutable outcome snapshot so exact replay remains stable after later repayments.
+
+Executable manual-repayment rules are:
+
+* allocate within an installment in `FEE -> INTEREST -> PRINCIPAL` order;
+* allocate installments by due date ascending, then installment number ascending;
+* allow early allocation to future installments without interest rebate, repricing, schedule regeneration, or obligation/date mutation;
+* reject the entire payment if it exceeds total outstanding; unapplied cash, suspense, credit, refund, and reversal are outside the MVP boundary;
+* persist `paymentValueDate` separately from `recordedAt`; require the value date to be between the disbursement value date and the current UTC date inclusive; allow backdated and out-of-order value dates; allocate against balances at recording time and never rewrite historical allocations or statuses;
+* calculate `lastPaymentValueDate` as the maximum recorded payment value date and `lastPaymentRecordedAt` as the latest recording timestamp;
+* canonicalize the external payment reference by trimming and uppercasing with `Locale.ROOT`, validate the safe `[A-Z0-9._:/-]` convention, and enforce global uniqueness without exposing the reference in logs, errors, DTOs, audit, history, or `toString`.
 
 LoanAccount roll-up rules:
 
 * if any unpaid repayment is past due, the LoanAccount becomes `OVERDUE`;
-* if all scheduled repayments are paid, or an approved settlement is recorded, the LoanAccount becomes `SETTLED`;
-* if a settled loan is administratively closed, the LoanAccount becomes `CLOSED`;
-* `SETTLED` and `CLOSED` are terminal for normal repayment operations.
+* if total outstanding reaches zero, the LoanAccount becomes `SETTLED`;
+* otherwise the LoanAccount is `ACTIVE`;
+* repayment posting never produces `CLOSED`; automatic full contractual payoff is `SETTLED`, while negotiated settlement and administrative closure remain deferred.
+Date-driven servicing samples the injected `Clock` once per batch and derives one `LocalDate` from that UTC instant. For each installment, status priority is: zero outstanding -> `PAID`; positive outstanding after its due date -> `OVERDUE`; any paid amount on or before its due date -> `PARTIALLY_PAID`; unpaid on its due date -> `DUE`; otherwise -> `NOT_DUE`. Thus an unpaid installment becomes overdue only on the next UTC date. Evaluation dates are monotonic: an earlier date is a state conflict, the same date is a no-op, and a later date advances only evaluation dates and derived statuses. The evaluator never changes financial balances, payment evidence, schedule obligations, Salary Advance exposure, Loan Application state, or creates `SETTLED`/`CLOSED`. An open zero-outstanding account is a system-state conflict.
+
+Each candidate is processed in its own transaction. Only stale `ACTIVE`/`OVERDUE`, positive-outstanding accounts are selected in evaluation-date/LoanAccount-ID order within one configured batch. Real installment changes share one internal `OVERDUE_EVALUATED` operation UUID; real LoanAccount `ACTIVE <-> OVERDUE` changes add account history and exactly one `LOAN_ACCOUNT_STATUS_CHANGED` system audit. Date-only or installment-only advancement emits no top-level audit. The scheduler is disabled by default for local/test safety and uses `meridian.loan.overdue-evaluation.enabled`, `.cron` (explicit UTC zone), and positive `.batch-size`; production must explicitly enable it.
+
+Salary Advance submission acquires its existing customer/product lock, resolves the verified Partner boundary, then acquires the customer/employee-link lock before checking committed LoanAccount evidence and reserving exposure. A matching `ACTIVE` or `OVERDUE` account with positive contractual outstanding blocks with `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, even when scheduler status is stale or principal repayments have restored available exposure. Only full payoff and the resulting `SETTLED` zero-outstanding state remove this guard. The submission query never locks an existing LoanAccount, preserving repayment's workflow -> account -> customer/link order. If submission obtains the customer/link lock before a final repayment, it may conservatively reject once; if repayment holds that lock, submission waits and observes settlement after commit.
+
+The posting operation publishes `REPAYMENT_RECORDED` exactly once and publishes `LOAN_ACCOUNT_STATUS_CHANGED` only when the account status changes. Installment changes use dedicated append-only history. Salary Advance exposure release is immutable movement evidence within the repayment operation rather than a separate top-level audit action.
+
+Future repayment web authorization requires `repayment:update`. The application service does not hard-code an Accounting Officer role and requires a valid staff-backed authenticated actor.
+
+To avoid lock inversion, workflows that mutate an existing application/account use this global order:
+
+1. category-specific command/reference advisory locks;
+2. Loan Application workflow advisory lock;
+3. Loan Application and then LoanAccount/final-schedule/progress row locks in feature-specific order;
+4. Salary Advance customer/employee-link advisory lock;
+5. Salary Advance limit and movement rows.
+
+Repayment and activation must never acquire the Salary Advance customer/employee-link lock before the Loan Application workflow lock. Overdue evaluation follows workflow -> account -> schedule/progress and does not lock the limit. Submission and standalone limit refresh keep their existing customer/product or customer/employee-link -> limit order and never acquire an existing-application workflow/account lock.
+
+Manual Salary Advance repayment posting, deterministic allocation, installment/account servicing state, automatic contractual payoff, exact principal used-exposure release, date-driven overdue evaluation, submission blocking, history, audit, and durable replay are executable through internal application ports. Secured repayment APIs, repayment queries, negotiated settlement, administrative closure, reversal, payment integration, and UCL/Collateral repayment policies remain deferred.
 
 ---
 
@@ -1106,3 +1139,13 @@ immutable verification snapshot. Requested amount and term remain immutable, so
 V24 neither increases nor decreases the reservation.
 
 Routing is `SUBMITTED` while manual document review is pending and `UNDER_REVIEW`
+
+## Executable Salary Advance repayment servicing boundary
+
+The authoritative final `RepaymentSchedule` is immutable contractual obligation evidence. An actual repayment is recorded separately as an immutable payment transaction and component allocations, with mutable paid/outstanding installment progress and LoanAccount roll-up maintained atomically. The current executable product is Salary Advance only.
+
+Repayments allocate deterministically to the oldest installment first and, within an installment, to fee, interest, and principal. Partial and early payments are accepted. Overpayment and future-dated value dates are rejected. Canonical external payment reference and request UUID provide duplicate prevention and exact replay; a replay returns the immutable original V34 outcome without overwriting later servicing state.
+
+Only principal actually allocated releases Salary Advance used exposure, exactly once and by the exact principal amount. Interest and fee payments release no exposure. A partial repayment leaves contractual outstanding debt and continues to block a new Salary Advance submission even if available exposure has increased. Full contractual payoff atomically produces `SETTLED`, releases the final principal exposure, and removes the outstanding-account submission guard subject to all other submission rules.
+
+UTC date-driven servicing advances persisted installment status through `NOT_DUE`, `DUE`, `PARTIALLY_PAID`, `OVERDUE`, and `PAID`, and rolls the account between `ACTIVE` and `OVERDUE`. Submission blocking depends on authoritative outstanding debt, not scheduler freshness. Customers may view only their own account and immutable repayment history; authorised staff may record repayments and use staff reads. Settlement negotiation/administration, closure, reversal, refund, waiver, write-off, payment integration, bank reconciliation, ledger, notification, UCL, and Collateral repayment remain deferred.

@@ -53,6 +53,13 @@ public class RepaymentScheduleRepositoryAdapter implements RepaymentScheduleRepo
     public Optional<RepaymentSchedule> findByLoanAccountId(UUID loanAccountId) {
         return repaymentSchedules.findByLoanAccountId(loanAccountId).map(this::toDomain);
     }
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public Optional<RepaymentSchedule> findByLoanAccountIdForUpdate(UUID loanAccountId) {
+        return repaymentSchedules.findForUpdateByLoanAccountId(loanAccountId)
+                .map(this::toDomain);
+    }
+
 
     @Override
     public Optional<RepaymentSchedule> findByLoanApplicationId(UUID loanApplicationId) {

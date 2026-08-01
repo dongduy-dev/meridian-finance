@@ -55,8 +55,8 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
     }
 
     @Test
-    void cleanV1ThroughV31AcceptsPreviousAndNewActionsAndRejectsUnknownAction() {
-        assertEquals("31", latestVersion(SCHEMA));
+    void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
+        assertEquals("35", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -80,7 +80,8 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
             assertEquals(columnsBefore, columns(schema));
             assertEquals(indexesBefore, indexes(schema));
             assertEquals(constraintsBefore, unrelatedConstraints(schema));
-            assertAllKnownActionsAccepted(schema);
+            assertThroughV31ActionsAccepted(schema);
+            assertV32ActionsRejected(schema);
         } finally {
             dropSchema(schema);
         }
@@ -196,10 +197,32 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
     private void assertPreviousActionsAccepted(String schema) {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
             if (action != BusinessAuditAction
-                    .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED) {
+                    .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED
+                    && action != BusinessAuditAction.REPAYMENT_RECORDED
+                    && action != BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED) {
                 insertAuditEvent(schema, action.name());
             }
         }
+    }
+
+    private void assertThroughV31ActionsAccepted(String schema) {
+        for (BusinessAuditAction action : BusinessAuditAction.values()) {
+            if (action != BusinessAuditAction.REPAYMENT_RECORDED
+                    && action != BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED) {
+                insertAuditEvent(schema, action.name());
+            }
+        }
+    }
+
+    private void assertV32ActionsRejected(String schema) {
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema,
+                BusinessAuditAction.REPAYMENT_RECORDED.name()
+        ));
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema,
+                BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED.name()
+        ));
     }
 
     private void assertAllKnownActionsAccepted(String schema) {

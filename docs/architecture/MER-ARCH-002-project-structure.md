@@ -450,3 +450,7 @@ The executable Loan module now includes:
 - one transactional confirmation service with a product activation policy resolver and the Salary Advance policy;
 - output ports and JPA adapters for account, disbursement, and schedule persistence; and
 - a secured Loan-owned controller with safe DTO mapping, owner-aware account queries, and narrowly scoped destination reveal.
+
+## Current Repayment Servicing Slice
+
+The Loan module now contains input ports and application services for repayment posting, immutable paged history, coherent LoanAccount servicing reads, overdue account evaluation, and bounded batch coordination. Web adapters expose only the secured repayment command/history and augmented existing LoanAccount query. Persistence adapters page immutable payment evidence and load stored progress; API mappers perform shape conversion only. Product-specific used-exposure release remains behind the existing Loan product-policy boundary, with Salary Advance as the sole executable repayment product.

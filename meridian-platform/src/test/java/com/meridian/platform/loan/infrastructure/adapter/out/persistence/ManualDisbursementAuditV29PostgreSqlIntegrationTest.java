@@ -57,8 +57,8 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
     }
 
     @Test
-    void installedV31RetainsEveryKnownAuditActionAndRejectsUnknownAction() {
-        assertEquals("31", latestVersion(SCHEMA));
+    void installedLatestRetainsEveryKnownAuditActionAndRejectsUnknownAction() {
+        assertEquals("35", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -241,7 +241,9 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
     private void assertActionsThroughV29Accepted(String schema) {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
             if (action == BusinessAuditAction
-                    .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED) {
+                    .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED
+                    || action == BusinessAuditAction.REPAYMENT_RECORDED
+                    || action == BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED) {
                 continue;
             }
             insertAuditEvent(schema, action.name());

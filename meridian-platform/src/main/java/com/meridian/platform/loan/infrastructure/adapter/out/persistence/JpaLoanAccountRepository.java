@@ -19,6 +19,16 @@ interface JpaLoanAccountRepository extends JpaRepository<LoanAccountJpaEntity, U
     @Query("""
             select account
             from LoanAccountJpaEntity account
+            where account.id = :loanAccountId
+            """)
+    Optional<LoanAccountJpaEntity> findByIdForUpdate(
+            @Param("loanAccountId") UUID loanAccountId
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select account
+            from LoanAccountJpaEntity account
             where account.loanApplicationId = :loanApplicationId
             """)
     Optional<LoanAccountJpaEntity> findByLoanApplicationIdForUpdate(

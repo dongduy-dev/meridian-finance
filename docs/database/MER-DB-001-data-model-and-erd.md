@@ -820,3 +820,9 @@ V28 also links `DISBURSED_TO_USED` movements to both Loan Application and LoanAc
 V29 allowlists `MANUAL_DISBURSEMENT_CONFIRMED` for the atomic activation audit. V30 makes the Loan Application product identity tuple immutable and foreign-keyed to the Loan Product, preventing product drift before policy selection. V31 adds only `LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED` to the audit action whitelist.
 
 The V29 and V31 migrations preflight the exact prior named whitelist predicate before replacing it. They reject missing, extra, weakened, repeated, or incompatible constraint state before any drop. `MER-DB-CURRENT-SCHEMA.sql` reflects the stable V1-V31 physical result; migration preflight machinery is intentionally kept only in executable Flyway history.
+
+## 17. Repayment servicing physical model and read boundary (V32-V35)
+
+V32-V33 add immutable repayment transactions and allocations, component-level installment progress, LoanAccount servicing balances/dates, exact Salary Advance principal-release movements, append-only installment/account histories, and deferred reconciliation. V34 adds the immutable repayment operation outcome required for exact replay after later servicing mutations. V35 adds only the preflight-protected bounded overdue-candidate index; it performs no business backfill.
+
+The secured history query pages by LoanAccount with deterministic `recorded_at DESC, id DESC` order, then reconciles every transaction against its immutable allocations and V34 outcome. The LoanAccount query reads the immutable final schedule and stored progress in one repeatable-read snapshot. These are application/API additions only: Increment 4 adds no table, column, constraint, trigger, index, seed, or Flyway migration, and V35 remains the latest schema.

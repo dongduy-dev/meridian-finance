@@ -30,6 +30,9 @@ public class SalaryAdvanceLimitMovementJpaEntity {
     @Column(name = "loan_account_id")
     private UUID loanAccountId;
 
+    @Column(name = "repayment_transaction_id")
+    private UUID repaymentTransactionId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "movement_type", nullable = false)
     private SalaryAdvanceLimitMovementType movementType;
@@ -51,6 +54,7 @@ public class SalaryAdvanceLimitMovementJpaEntity {
         this.salaryAdvanceLimitId = movement.salaryAdvanceLimitId();
         this.loanApplicationId = movement.loanApplicationId();
         this.loanAccountId = movement.loanAccountId();
+        this.repaymentTransactionId = movement.repaymentTransactionId();
         this.movementType = movement.movementType();
         this.amount = movement.amount();
         this.occurredAt = movement.occurredAt();
@@ -79,6 +83,10 @@ public class SalaryAdvanceLimitMovementJpaEntity {
 
     public BigDecimal getAmount() {
         return amount;
+    }
+
+    public UUID getRepaymentTransactionId() {
+        return repaymentTransactionId;
     }
 
     public LocalDateTime getOccurredAt() {

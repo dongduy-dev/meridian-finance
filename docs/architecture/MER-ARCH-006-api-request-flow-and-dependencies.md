@@ -478,3 +478,25 @@ sequenceDiagram
 
 The confirmation command contains no actor, Customer, contract, product, destination, or financial fields. Contract terms and items are authoritative. Request and workflow advisory-lock categories are distinct; identical request replay performs no writes. Salary Advance activation retains its verification, customer/employee-link, limit, and movement lock order.
 `GET /api/v1/loan-applications/{id}/loan-account` is read-only. Customer ownership is token-derived under `loan:read:own`; staff use `loan:read`. It returns an active account, masked immutable contract destination, and ordered final schedule. It does not expose the transfer reference, full destination, crypto envelope, actor, audit/history IDs, employee evidence, or limit/movement internals.
+
+## Secured repayment and servicing read flow
+
+```text
+POST /loan-applications/{id}/repayments
+  -> LoanRepaymentController [repayment:update]
+  -> RecordRepaymentUseCase
+  -> workflow lock + authoritative aggregate locks
+  -> payment/allocation/progress/account/exposure/history/audit/outcome commit
+
+GET /loan-applications/{id}/repayments
+  -> LoanRepaymentController [loan:read:own | loan:read]
+  -> QueryRepaymentsUseCase [repeatable-read]
+  -> immutable transaction/allocation/V34 outcome evidence
+
+GET /loan-applications/{id}/loan-account
+  -> existing controller [loan:read:own | loan:read]
+  -> QueryLoanAccountUseCase [repeatable-read]
+  -> immutable final schedule + persisted servicing progress
+```
+
+Customer ownership concealment occurs in the application service. Reads do not lock workflow rows, evaluate overdue state, recompute financial results, or publish business evidence. The POST controller forwards the raw external reference; canonicalization and idempotency remain inside the existing application workflow.

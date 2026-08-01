@@ -6,6 +6,7 @@ import com.meridian.platform.loan.application.port.out.DisbursementBankAccountPr
 import com.meridian.platform.loan.application.port.out.LoanAccountRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanContractRepository;
+import com.meridian.platform.loan.application.port.out.RepaymentInstallmentProgressRepository;
 import com.meridian.platform.loan.application.port.out.RepaymentScheduleRepository;
 import com.meridian.platform.loan.domain.model.LoanAccount;
 import com.meridian.platform.loan.domain.model.LoanApplication;
@@ -14,6 +15,7 @@ import com.meridian.platform.loan.domain.model.LoanContract;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.loan.domain.model.ProtectedDisbursementBankAccount;
+import com.meridian.platform.loan.domain.model.RepaymentInstallmentProgress;
 import com.meridian.platform.loan.domain.model.RepaymentSchedule;
 import com.meridian.platform.loan.domain.service.FinalRepaymentScheduleGenerator;
 import com.meridian.platform.loan.testsupport.LoanContractTestData;
@@ -76,6 +78,7 @@ class LoanAccountAccessServiceTest {
     @Mock LoanContractRepository contracts;
     @Mock LoanAccountRepository loanAccounts;
     @Mock RepaymentScheduleRepository repaymentSchedules;
+    @Mock RepaymentInstallmentProgressRepository installmentProgress;
     @Mock DisbursementBankAccountProtector protector;
     @Mock BusinessAuditPublisher auditPublisher;
     @Mock CurrentUserProvider currentUserProvider;
@@ -109,7 +112,7 @@ class LoanAccountAccessServiceTest {
         );
         queryService = new QueryLoanAccountService(
                 applications, contracts, loanAccounts, repaymentSchedules,
-                currentUserProvider
+                installmentProgress, currentUserProvider
         );
     }
 
@@ -285,6 +288,8 @@ class LoanAccountAccessServiceTest {
                 .thenReturn(Optional.of(contract));
         when(repaymentSchedules.findByLoanAccountId(account.id()))
                 .thenReturn(Optional.of(finalSchedule));
+        when(installmentProgress.findByRepaymentScheduleId(finalSchedule.id()))
+                .thenReturn(initialProgress(finalSchedule, account));
 
         String masked = queryService.query(disbursedApplication.id())
                 .destination().maskedAccountNumber();
@@ -339,9 +344,19 @@ class LoanAccountAccessServiceTest {
                 .thenReturn(Optional.of(LoanContractTestData.ready()));
         when(repaymentSchedules.findByLoanAccountId(loanAccount.id()))
                 .thenReturn(Optional.of(schedule));
+        when(installmentProgress.findByRepaymentScheduleId(schedule.id()))
+                .thenReturn(initialProgress(schedule, loanAccount));
     }
 
-
+    private static List<RepaymentInstallmentProgress> initialProgress(
+            RepaymentSchedule finalSchedule,
+            LoanAccount account
+    ) {
+        return finalSchedule.items().stream()
+                .map(item -> RepaymentInstallmentProgress.initial(finalSchedule, item,
+                        account.servicingEvaluationDate(), account.activatedAt()))
+                .toList();
+    }
     private static LoanContract contractWithSuffix(String suffix) {
         LoanContract source = LoanContractTestData.ready();
         var destination = source.disbursementBankAccount();

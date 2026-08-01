@@ -337,6 +337,86 @@
                          "key":  "firstRepaymentDate",
                          "value":  "2026-08-28",
                          "type":  "string"
+                     },
+                     {
+                         "key":  "repaymentRequestId",
+                         "value":  "8ca0b35e-e2e8-4b91-90d9-499ab9b0a879",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "duplicateRepaymentRequestId",
+                         "value":  "cc1b8940-c0ad-47cd-a4cd-6371be23157b",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "overpaymentRequestId",
+                         "value":  "7c2edc92-e92f-4a92-9e03-e4ae32f9a0bf",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "futureRepaymentRequestId",
+                         "value":  "10af2e55-b33e-455f-a73e-1ca92ae608ea",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "overdueCureRequestId",
+                         "value":  "7b6e3d66-0052-4a79-8d21-657849163e09",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "payoffRepaymentRequestId",
+                         "value":  "18350573-3b28-4db7-a743-c4072a949cd8",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "repaymentExternalReference",
+                         "value":  "MERIDIAN-PAY-000042",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "repaymentReusedExternalReference",
+                         "value":  "MERIDIAN-PAY-REUSED",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "overpaymentExternalReference",
+                         "value":  "MERIDIAN-PAY-OVERPAY",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "futureRepaymentExternalReference",
+                         "value":  "MERIDIAN-PAY-FUTURE",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "overdueCureExternalReference",
+                         "value":  "MERIDIAN-PAY-CURE",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "payoffRepaymentExternalReference",
+                         "value":  "MERIDIAN-PAY-PAYOFF",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "repaymentAmount",
+                         "value":  100000,
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "repaymentPayoffAmount",
+                         "value":  0,
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "overdueCureAmount",
+                         "value":  0,
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "repaymentValueDate",
+                         "value":  "2026-08-01",
+                         "type":  "default"
                      }
                  ],
     "item":  [
@@ -4555,6 +4635,685 @@
                                                 ]
                                   }
                               ]
+                 },
+                 {
+                     "name":  "11 Salary Advance Repayment Servicing",
+                     "item":  [
+                                  {
+                                      "name":  "Record valid partial repayment",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/repayments",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Authorised staff records an actual partial Salary Advance repayment. The raw external reference is canonicalized only by the application service.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestId\": \"{{repaymentRequestId}}\",\n  \"externalPaymentReference\": \" {{repaymentExternalReference}} \",\n  \"amount\": {{repaymentAmount}},\n  \"paymentValueDate\": \"{{repaymentValueDate}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const fresh = () =\u003e pm.variables.replaceIn(\"{{$guid}}\");",
+                                                                                    "const runId = fresh().replace(/-/g, \"\").toUpperCase();",
+                                                                                    "const baseReference = `MER-I4-${runId}`;",
+                                                                                    "pm.collectionVariables.set(\"repaymentRequestId\", fresh());",
+                                                                                    "pm.collectionVariables.set(\"duplicateRepaymentRequestId\", fresh());",
+                                                                                    "pm.collectionVariables.set(\"overpaymentRequestId\", fresh());",
+                                                                                    "pm.collectionVariables.set(\"futureRepaymentRequestId\", fresh());",
+                                                                                    "pm.collectionVariables.set(\"overdueCureRequestId\", fresh());",
+                                                                                    "pm.collectionVariables.set(\"payoffRepaymentRequestId\", fresh());",
+                                                                                    "pm.collectionVariables.set(\"repaymentExternalReference\", baseReference);",
+                                                                                    "pm.collectionVariables.set(\"repaymentReusedExternalReference\", `${baseReference}-REUSED`);",
+                                                                                    "pm.collectionVariables.set(\"duplicateRepaymentExternalReference\", baseReference.toLowerCase());",
+                                                                                    "pm.collectionVariables.set(\"overpaymentExternalReference\", `${baseReference}-OVERPAY`);",
+                                                                                    "pm.collectionVariables.set(\"futureRepaymentExternalReference\", `${baseReference}-FUTURE`);",
+                                                                                    "pm.collectionVariables.set(\"overdueCureExternalReference\", `${baseReference}-CURE`);",
+                                                                                    "pm.collectionVariables.set(\"payoffRepaymentExternalReference\", `${baseReference}-PAYOFF`);",
+                                                                                    "pm.collectionVariables.set(\"overdueCureAmount\", 0);",
+                                                                                    "pm.collectionVariables.set(\"repaymentPayoffAmount\", 0);"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"First execution is not replay\", () =\u003e pm.expect(json.idempotentReplay).to.eql(false));",
+                                                                                    "pm.test(\"Allocations and installment outcomes are present\", () =\u003e { pm.expect(json.allocations).to.be.an(\"array\").that.is.not.empty; pm.expect(json.affectedInstallments).to.be.an(\"array\").that.is.not.empty; });",
+                                                                                    "pm.test(\"Principal release is exact\", () =\u003e pm.expect(json.principalReleased).to.eql(json.principalAllocated));",
+                                                                                    "pm.collectionVariables.set(\"repaymentPayoffAmount\", json.accountBalance.totalOutstanding);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Replay identical repayment exactly",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/repayments",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Exact request replay returns the immutable original V34 outcome with no new financial or audit evidence.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestId\": \"{{repaymentRequestId}}\",\n  \"externalPaymentReference\": \" {{repaymentExternalReference}} \",\n  \"amount\": {{repaymentAmount}},\n  \"paymentValueDate\": \"{{repaymentValueDate}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "pm.test(\"Replay is explicit\", () =\u003e pm.expect(pm.response.json().idempotentReplay).to.eql(true));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Reject idempotency key reuse",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/repayments",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "The same request UUID with different logical content is rejected.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestId\": \"{{repaymentRequestId}}\",\n  \"externalPaymentReference\": \" {{repaymentReusedExternalReference}} \",\n  \"amount\": {{repaymentAmount}},\n  \"paymentValueDate\": \"{{repaymentValueDate}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 409\", () =\u003e pm.response.to.have.status(409));",
+                                                                                    "pm.test(\"Stable code\", () =\u003e pm.expect(pm.response.json().errorCode).to.eql(\"IDEMPOTENCY_KEY_REUSED\"));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Reject duplicate canonical payment reference",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/repayments",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "A fresh request UUID using a case/whitespace variant of scenario 1 reference is rejected as the same canonical payment evidence.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestId\": \"{{duplicateRepaymentRequestId}}\",\n  \"externalPaymentReference\": \" {{duplicateRepaymentExternalReference}} \",\n  \"amount\": {{repaymentAmount}},\n  \"paymentValueDate\": \"{{repaymentValueDate}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 409\", () =\u003e pm.response.to.have.status(409));",
+                                                                                    "pm.test(\"Stable code\", () =\u003e pm.expect(pm.response.json().errorCode).to.eql(\"DUPLICATE_PAYMENT_REFERENCE\"));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Reject overpayment",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/repayments",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Amount exceeding current contractual outstanding debt is rejected without writes.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestId\": \"{{overpaymentRequestId}}\",\n  \"externalPaymentReference\": \" {{overpaymentExternalReference}} \",\n  \"amount\": 999999999999,\n  \"paymentValueDate\": \"{{repaymentValueDate}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 422\", () =\u003e pm.response.to.have.status(422));",
+                                                                                    "pm.test(\"Stable code\", () =\u003e pm.expect(pm.response.json().errorCode).to.eql(\"REPAYMENT_EXCEEDS_OUTSTANDING\"));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Reject future-dated payment",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/repayments",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Payment value date after the injected UTC business date is invalid.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestId\": \"{{futureRepaymentRequestId}}\",\n  \"externalPaymentReference\": \" {{futureRepaymentExternalReference}} \",\n  \"amount\": {{repaymentAmount}},\n  \"paymentValueDate\": \"2999-12-31\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 422\", () =\u003e pm.response.to.have.status(422));",
+                                                                                    "pm.test(\"Stable code\", () =\u003e pm.expect(pm.response.json().errorCode).to.eql(\"REPAYMENT_VALUE_DATE_INVALID\"));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Customer reads owned repayment history",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/repayments?page=0\u0026size=20",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Owner history is immutable evidence ordered newest recorded timestamp then transaction UUID."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Page metadata is bounded\", () =\u003e { pm.expect(json.page).to.eql(0); pm.expect(json.size).to.eql(20); });",
+                                                                                    "pm.test(\"History has no replay flag\", () =\u003e pm.expect(JSON.stringify(json)).not.to.include(\"idempotentReplay\"));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Staff reads repayment history",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/repayments?page=0\u0026size=10",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Authorised staff reads the same safe immutable history shape."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Conceal cross-Customer repayment history",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/repayments?page=0\u0026size=20",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{otherCustomerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Foreign ownership is concealed exactly like a missing LoanAccount."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 404\", () =\u003e pm.response.to.have.status(404));",
+                                                                                    "pm.test(\"Generic code\", () =\u003e pm.expect(pm.response.json().errorCode).to.eql(\"LOAN_ACCOUNT_NOT_FOUND\"));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Read LoanAccount persisted servicing progress",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/loan-account",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Existing LoanAccount response includes persisted component balances, evaluation/payment dates, and per-installment servicing progress while preserving immutable schedule obligations."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Servicing summary exists\", () =\u003e pm.expect(json.servicing).to.be.an(\"object\"));",
+                                                                                    "pm.test(\"Schedule items carry servicing progress\", () =\u003e pm.expect(json.finalRepaymentSchedule.items[0].servicing).to.be.an(\"object\"));",
+                                                                                    "const overdueCure = json.finalRepaymentSchedule.items.filter(item =\u003e item.servicing.status === \"OVERDUE\").reduce((sum, item) =\u003e sum + Number(item.servicing.totalOutstanding), 0);",
+                                                                                    "pm.collectionVariables.set(\"overdueCureAmount\", overdueCure);",
+                                                                                    "pm.collectionVariables.set(\"repaymentPayoffAmount\", json.servicing.totalOutstanding);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Record overdue-curing repayment",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/repayments",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Requires an explicitly established OVERDUE fixture. Advance the UTC overdue evaluator beyond the due date, then run the preceding LoanAccount read to capture a positive overdueCureAmount. The pre-request script skips this scenario when the amount is absent, nonnumeric, or zero; it never posts a zero repayment.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestId\": \"{{overdueCureRequestId}}\",\n  \"externalPaymentReference\": \" {{overdueCureExternalReference}} \",\n  \"amount\": {{overdueCureAmount}},\n  \"paymentValueDate\": \"{{repaymentValueDate}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const overdueCureAmount = Number(pm.collectionVariables.get(\"overdueCureAmount\"));",
+                                                                                    "if (!Number.isFinite(overdueCureAmount) || overdueCureAmount \u003c= 0) {",
+                                                                                    "    pm.execution.skipRequest();",
+                                                                                    "}"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "pm.test(\"Result exposes controlled account status\", () =\u003e pm.expect([\"ACTIVE\",\"OVERDUE\",\"SETTLED\"]).to.include(pm.response.json().resultingLoanAccountStatus));",
+                                                                                    "pm.collectionVariables.set(\"repaymentPayoffAmount\", pm.response.json().accountBalance.totalOutstanding);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Record exact contractual payoff",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/repayments",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Set repaymentPayoffAmount to the current total outstanding. Exact payoff settles the account and releases only final principal.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestId\": \"{{payoffRepaymentRequestId}}\",\n  \"externalPaymentReference\": \" {{payoffRepaymentExternalReference}} \",\n  \"amount\": {{repaymentPayoffAmount}},\n  \"paymentValueDate\": \"{{repaymentValueDate}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Account is settled\", () =\u003e pm.expect(json.resultingLoanAccountStatus).to.eql(\"SETTLED\"));",
+                                                                                    "pm.test(\"Outstanding is zero\", () =\u003e pm.expect(json.accountBalance.totalOutstanding).to.eql(0));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Read settled LoanAccount",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/loan-account",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "After exact payoff, the persisted servicing view is SETTLED with zero component outstanding; immutable obligations remain unchanged."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Settled and zero outstanding\", () =\u003e { pm.expect(json.status).to.eql(\"SETTLED\"); pm.expect(json.servicing.totalOutstanding).to.eql(0); });"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Submit new Salary Advance after payoff guard clears",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/salary-advance",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "After settlement commits, the outstanding-account guard no longer blocks. All other existing eligibility, blocking-application, and limit rules still apply.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestedAmount\": {{requestedAmount}},\n  \"requestedTermMonths\": {{requestedTermMonths}},\n  \"customerPartnerEmployeeLinkId\": \"{{customerPartnerEmployeeLinkId}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 201\", () =\u003e pm.response.to.have.status(201));",
+                                                                                    "pm.test(\"Outstanding-account guard is cleared\", () =\u003e { pm.expect(pm.response.code).not.to.eql(409); if (pm.response.code === 409) { pm.expect(pm.response.json().errorCode).not.to.eql(\"OUTSTANDING_LOAN_ACCOUNT_EXISTS\"); } });"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ],
+                     "description":  "Run this folder in order after Auth and after a Salary Advance has reached DISBURSED with an ACTIVE LoanAccount. Scenarios 2-4 depend on scenario 1: exact replay reuses its request UUID and logical content; request-key reuse keeps that UUID but changes the reference; duplicate-reference uses a fresh request UUID with a canonically equivalent reference. Scenario 1 initializes fresh fictional request UUIDs and payment references for the entire run, so rerunning the folder against the same database creates a new initial repayment rather than an accidental replay. Scenarios 7-10 read the committed result using Customer/staff ownership rules. Scenario 11 requires a deliberately established OVERDUE fixture: run the UTC overdue evaluator after an installment due date, then run scenario 10 to capture a positive overdueCureAmount. If no overdue amount is present, scenario 11 is skipped and never sends zero. Scenarios 12-14 depend on the current outstanding amount captured by scenarios 1, 10, and optionally 11. Tokens, loanApplicationId, and normal Salary Advance submission prerequisites must already be present; scripts capture only non-sensitive run identities and derived amounts and never print them."
                  }
              ]
 }

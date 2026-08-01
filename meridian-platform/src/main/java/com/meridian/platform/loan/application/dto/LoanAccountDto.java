@@ -17,6 +17,7 @@ public record LoanAccountDto(
         BigDecimal totalInterest,
         BigDecimal totalFee,
         BigDecimal totalRepayment,
+        ServicingSummaryDto servicing,
         DestinationSummaryDto disbursementDestination,
         FinalScheduleDto finalRepaymentSchedule
 ) {
@@ -59,7 +60,39 @@ public record LoanAccountDto(
             BigDecimal principalDue,
             BigDecimal interestDue,
             BigDecimal feeDue,
-            BigDecimal totalDue
+            BigDecimal totalDue,
+            InstallmentServicingDto servicing
+    ) {
+    }
+
+    public record ServicingSummaryDto(
+            BigDecimal principalPaid,
+            BigDecimal interestPaid,
+            BigDecimal feePaid,
+            BigDecimal totalPaid,
+            BigDecimal principalOutstanding,
+            BigDecimal interestOutstanding,
+            BigDecimal feeOutstanding,
+            BigDecimal totalOutstanding,
+            LocalDate servicingEvaluationDate,
+            LocalDate lastPaymentValueDate,
+            LocalDateTime lastPaymentRecordedAt
+    ) {
+    }
+
+    public record InstallmentServicingDto(
+            BigDecimal principalPaid,
+            BigDecimal interestPaid,
+            BigDecimal feePaid,
+            BigDecimal totalPaid,
+            BigDecimal principalOutstanding,
+            BigDecimal interestOutstanding,
+            BigDecimal feeOutstanding,
+            BigDecimal totalOutstanding,
+            String status,
+            LocalDate statusEvaluationDate,
+            LocalDate lastPaymentValueDate,
+            LocalDateTime lastPaymentRecordedAt
     ) {
     }
 }

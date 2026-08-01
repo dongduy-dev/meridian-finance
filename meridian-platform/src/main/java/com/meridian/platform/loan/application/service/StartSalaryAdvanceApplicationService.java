@@ -9,6 +9,7 @@ import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanProductRepository;
+import com.meridian.platform.loan.application.port.out.OutstandingLoanAccountQuery;
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityPort;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
@@ -58,6 +59,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
     private final LoanProductRepository loanProductRepository;
     private final LoanApplicationRepository loanApplicationRepository;
     private final LoanDocumentChecklistPort documentChecklistPort;
+    private final OutstandingLoanAccountQuery outstandingLoanAccounts;
     private final SalaryAdvanceLimitRepository salaryAdvanceLimitRepository;
     private final SalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository;
     private final SalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository;
@@ -74,6 +76,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
             LoanProductRepository loanProductRepository,
             LoanApplicationRepository loanApplicationRepository,
             LoanDocumentChecklistPort documentChecklistPort,
+            OutstandingLoanAccountQuery outstandingLoanAccounts,
             SalaryAdvanceLimitRepository salaryAdvanceLimitRepository,
             SalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository,
             SalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository,
@@ -88,6 +91,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         this.loanProductRepository = loanProductRepository;
         this.loanApplicationRepository = loanApplicationRepository;
         this.documentChecklistPort = documentChecklistPort;
+        this.outstandingLoanAccounts = outstandingLoanAccounts;
         this.salaryAdvanceLimitRepository = salaryAdvanceLimitRepository;
         this.salaryAdvanceLimitMovementRepository = salaryAdvanceLimitMovementRepository;
         this.salaryAdvanceVerificationRepository = salaryAdvanceVerificationRepository;
@@ -149,6 +153,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
                 request.customerPartnerEmployeeLinkId()
         );
         assertNoBlockingApplicationExists(customerId);
+        assertNoOutstandingLoanAccountExists(customerId);
 
         LimitPreparationResult preparedLimit = findOrCreateLimit(
                 customerId,
@@ -249,6 +254,25 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
             throw new BusinessStateConflictException(
                     "BLOCKING_APPLICATION_EXISTS",
                     "A blocking Salary Advance application already exists for this customer."
+            );
+        }
+    }
+
+    private void assertNoOutstandingLoanAccountExists(UUID customerId) {
+        OutstandingLoanAccountQuery.GuardResult result = outstandingLoanAccounts.inspect(
+                customerId,
+                ProductCode.SALARY_ADVANCE
+        );
+        if (result == OutstandingLoanAccountQuery.GuardResult.INCONSISTENT) {
+            throw new BusinessStateConflictException(
+                    "SYSTEM_STATE_CONFLICT",
+                    "Salary Advance LoanAccount evidence is inconsistent."
+            );
+        }
+        if (result == OutstandingLoanAccountQuery.GuardResult.OUTSTANDING_EXISTS) {
+            throw new BusinessStateConflictException(
+                    "OUTSTANDING_LOAN_ACCOUNT_EXISTS",
+                    "A prior Salary Advance must be fully repaid before another application."
             );
         }
     }

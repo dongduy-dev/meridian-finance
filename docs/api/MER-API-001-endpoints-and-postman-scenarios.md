@@ -547,3 +547,32 @@ Notes:
 - Customer-owned endpoints now derive customer identity from the authenticated token.
 - Refresh tokens, logout invalidation, and broader customer ownership hardening remain deferred IAM follow-ups.
 - The optional Postman persisted-expiry check skips unless `persistedExpiredLoanApplicationId` is set to a customer-owned application already expired by scheduled processing.
+
+## Salary Advance repayment servicing APIs
+
+The executable repayment surface is limited to an active or overdue Salary Advance `LoanAccount`. Scheduled obligations remain the immutable final `RepaymentSchedule`; actual payment transactions, deterministic allocations, installment progress, account balances, exposure-release evidence, histories, audit, and the immutable V34 operation outcome are separate transactional evidence.
+
+### Record or replay a repayment
+
+`POST /api/v1/loan-applications/{loanApplicationId}/repayments` requires `repayment:update` and accepts:
+
+```json
+{
+  "requestId": "8ca0b35e-e2e8-4b91-90d9-499ab9b0a879",
+  "externalPaymentReference": " payroll-aug-000042 ",
+  "amount": 100000,
+  "paymentValueDate": "2026-08-01"
+}
+```
+
+The service is the single canonicalization boundary for `externalPaymentReference`. A successful first request and an exact replay both return `200`; replay sets `idempotentReplay` to `true` and returns the exact immutable original outcome even if current servicing status later advances. The response contains safe IDs, amount/value date/recorded timestamp, ordered component allocations with installment numbers, principal allocated and released, installment outcomes with due dates, resulting account status/balances, and the replay flag. It excludes the external payment reference and contains no request UUID, actor, Customer, employee-link, limit, bank, audit/history, or internal operation evidence.
+
+Stable conflicts include idempotency-key reuse, duplicate canonical payment reference, overpayment, future-dated value date, non-serviceable account state, and system-state inconsistency. Validation failures are `400`; business rule failures are `422`; state/idempotency conflicts are `409`. Principal allocation releases used Salary Advance exposure by exactly the same amount; fee or interest allocation releases none. Allocation is oldest installment first and fee, then interest, then principal within each installment. Partial and early repayment are supported. Exact contractual payoff produces `SETTLED`; closure remains deferred.
+
+### Query immutable repayment history
+
+`GET /api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` requires `loan:read:own` for the owning Customer or `loan:read` for staff. `page` is zero-based, `size` is 1–100, and records are ordered by `recordedAt DESC, repaymentTransactionId DESC`. Each record is reconstructed from immutable transaction/allocation/V34 outcome evidence; the endpoint never recalculates historical outcomes from current mutable progress and exposes no replay flag. Customer nonexistent, foreign, and unavailable resources use the same generic `404 LOAN_ACCOUNT_NOT_FOUND`; staff retain accurate system-state conflicts.
+
+### LoanAccount servicing view
+
+The existing `GET /api/v1/loan-applications/{loanApplicationId}/loan-account` preserves originated account and final-schedule fields and adds persisted servicing data: account paid/outstanding component totals, servicing evaluation date and payment timestamps, and per-installment paid/outstanding components, derived status, and evaluation date. The read is a coherent repeatable-read snapshot and performs no overdue evaluation, balance calculation, mutation, audit, or history write. The immutable final schedule continues to represent original obligations; servicing fields represent current progress.

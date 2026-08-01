@@ -137,6 +137,24 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
                 "select total_repayment_amount from loan_accounts where id = ?", result.loanAccountId()));
         assertEquals(NOW, support.dateTime(
                 "select activated_at from loan_accounts where id = ?", result.loanAccountId()));
+        assertMoney("0", support.money(
+                "select principal_paid from loan_accounts where id = ?", result.loanAccountId()));
+        assertMoney("0", support.money(
+                "select interest_paid from loan_accounts where id = ?", result.loanAccountId()));
+        assertMoney("0", support.money(
+                "select fee_paid from loan_accounts where id = ?", result.loanAccountId()));
+        assertMoney("1000", support.money(
+                "select principal_outstanding from loan_accounts where id = ?", result.loanAccountId()));
+        assertMoney("100", support.money(
+                "select interest_outstanding from loan_accounts where id = ?", result.loanAccountId()));
+        assertMoney("0", support.money(
+                "select fee_outstanding from loan_accounts where id = ?", result.loanAccountId()));
+        assertMoney("1100", support.money(
+                "select total_outstanding from loan_accounts where id = ?", result.loanAccountId()));
+        assertEquals(NOW.toLocalDate(), support.date(
+                "select servicing_evaluation_date from loan_accounts where id = ?", result.loanAccountId()));
+        assertEquals(NOW, support.dateTime(
+                "select updated_at from loan_accounts where id = ?", result.loanAccountId()));
 
         assertEquals(command.requestId(), support.uuid(
                 "select request_id from manual_disbursements where id = ?", result.manualDisbursementId()));
@@ -179,6 +197,37 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
             assertEquals(item.dueDate(), support.date(
                     "select due_date from repayment_schedule_items where id = ?", item.id()));
         }
+        assertEquals(2, support.count(
+                "select count(*) from repayment_installment_progress "
+                        + "where repayment_schedule_id = ?", result.repaymentScheduleId()));
+        assertEquals(2, support.count(
+                "select count(*) from repayment_installment_progress "
+                        + "where repayment_schedule_id = ? and status = 'NOT_DUE' "
+                        + "and principal_paid = 0 and interest_paid = 0 and fee_paid = 0 "
+                        + "and last_payment_value_date is null and last_payment_recorded_at is null "
+                        + "and servicing_evaluation_date = ?",
+                result.repaymentScheduleId(), NOW.toLocalDate()));
+        assertMoney("1000", support.money(
+                "select sum(principal_outstanding) from repayment_installment_progress "
+                        + "where repayment_schedule_id = ?", result.repaymentScheduleId()));
+        assertMoney("100", support.money(
+                "select sum(interest_outstanding) from repayment_installment_progress "
+                        + "where repayment_schedule_id = ?", result.repaymentScheduleId()));
+        assertMoney("0", support.money(
+                "select sum(fee_outstanding) from repayment_installment_progress "
+                        + "where repayment_schedule_id = ?", result.repaymentScheduleId()));
+        assertEquals(1, support.count(
+                "select count(*) from loan_account_status_transitions "
+                        + "where loan_account_id = ? and sequence_number = 1 "
+                        + "and from_status is null and to_status = 'ACTIVE' and action = 'ACTIVATION_INITIALIZED'",
+                result.loanAccountId()));
+        assertEquals(2, support.count(
+                "select count(*) from repayment_installment_status_transitions history "
+                        + "join repayment_schedule_items item "
+                        + "on item.id = history.repayment_schedule_item_id "
+                        + "where item.repayment_schedule_id = ? and history.sequence_number = 1 "
+                        + "and history.from_status is null and history.to_status = 'NOT_DUE' "
+                        + "and history.action = 'ACTIVATION_INITIALIZED'", result.repaymentScheduleId()));
 
         assertEquals("DISBURSED", support.value(
                 "select status from loan_applications where id = ?", fixture.applicationId()));
@@ -245,6 +294,14 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
         assertEquals(first.repaymentScheduleId(), replay.repaymentScheduleId());
         assertEquals(first.scheduleItems(), replay.scheduleItems());
         assertEquals(before, support.counts(fixture.applicationId()));
+        assertEquals(1, support.count(
+                "select count(*) from loan_account_status_transitions where loan_account_id = ?",
+                first.loanAccountId()));
+        assertEquals(2, support.count(
+                "select count(*) from repayment_installment_status_transitions history "
+                        + "join repayment_schedule_items item "
+                        + "on item.id = history.repayment_schedule_item_id "
+                        + "where item.repayment_schedule_id = ?", first.repaymentScheduleId()));
     }
 
     @Test

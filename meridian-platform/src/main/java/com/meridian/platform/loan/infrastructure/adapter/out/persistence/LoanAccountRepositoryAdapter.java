@@ -34,6 +34,22 @@ public class LoanAccountRepositoryAdapter implements LoanAccountRepository {
     }
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public LoanAccount updateServicingState(LoanAccount loanAccount) {
+        LoanAccountJpaEntity entity = loanAccounts.findByIdForUpdate(loanAccount.id())
+                .orElseThrow(LoanAccountRepositoryAdapter::conflict);
+        if (!entity.toDomain().id().equals(loanAccount.id())) {
+            throw conflict();
+        }
+        entity.applyServicingState(loanAccount);
+        try {
+            return loanAccounts.saveAndFlush(entity).toDomain();
+        } catch (DataIntegrityViolationException exception) {
+            throw conflict();
+        }
+    }
+
+    @Override
     public Optional<LoanAccount> findById(UUID loanAccountId) {
         return loanAccounts.findById(loanAccountId).map(LoanAccountJpaEntity::toDomain);
     }
