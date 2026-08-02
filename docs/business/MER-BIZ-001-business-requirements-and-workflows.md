@@ -418,6 +418,7 @@ The MVP excludes unapplied cash or suspense processing, repayment reversal/refun
 ---
 
 ## 7. Product Workflows
+All product workflows inherit the common lifecycle and controls in Section 6. The following subsections describe product-specific preparation, eligibility, verification and servicing behavior.
 
 ### 7.1 Salary Advance
 
@@ -525,33 +526,37 @@ End-to-end workflow:
 
 1. Back-Office Admin creates and configures a Partner Company.
 2. Back-Office Admin imports monthly Partner Employee data.
-3. System records, validates, and stores Partner Employee import data.
-4. Customer completes profile information.
+3. System validates the import batch, stores valid employee records, and prevents invalid or unresolved duplicate records from being used for normal eligibility.
+4. Customer completes the required profile information and maintains one primary active bank account.
 5. Customer opens the Salary Advance product page.
-6. System checks whether the customer already has a verified active customer employee link.
-7. If no verified link exists, customer submits employee verification information before creating a loan application.
-8. System matches the customer against Partner Employee records or routes unresolved cases to authorized manual review.
+6. System checks whether the Customer already has a verified active customer employee link.
+7. If no valid employee link exists, Customer submits employee-verification information before starting a Salary Advance application.
+8. System matches the Customer against Partner Employee records or routes eligible unresolved cases to authorized manual review. Inactive Partner Companies and Partner Employees remain hard stops.
 9. System creates or refreshes the reusable customer employee link after successful verification or approved manual review.
-10. System calculates or refreshes the customer's Salary Advance limit.
-11. Customer views employee verification status plus total, used, reserved, and available Salary Advance limit.
-12. Customer starts a draft Salary Advance application. Draft creation does not reserve limit.
-13. Customer enters requested amount, term, and required application information.
-14. Customer uploads required Salary Advance documents, or the system marks non-required checklist items `NOT_REQUIRED`.
-15. Customer submits the Salary Advance request.
-16. System validates the active employee link, active limit, product rules, requested amount, term, stale data, authoritative outstanding debt, blocking application rules, available amount, and document checklist completeness.
-17. If validation passes, the system reserves the requested amount and records the application-level Salary Advance verification snapshot.
-18. Loan Officer reviews verification snapshot, current warnings if any, documents, requested amount, requested term, and application details.
-19. Loan Officer recommends approval, recommends rejection, or returns for revision.
-20. Approver approves, rejects, returns to Loan Officer review, or requests customer/staff correction.
-21. If the Approver approves, the system applies exact-request approval, generates one immutable approved financial-terms snapshot, and moves the application to `CUSTOMER_ACCEPTANCE_PENDING` only if offer generation succeeds.
-22. Customer views the approved offer without causing financial state changes.
-23. Customer accepts a valid unexpired offer, declines the offer, or the system expires the offer after its validity period.
-24. Accepted offers move to `CONTRACT_PENDING`; declined or expired offers are terminal pre-disbursement outcomes and release the reserved Salary Advance amount exactly once.
-25. Contract and disbursement documents are prepared or uploaded after customer acceptance.
-26. Accounting Officer marks disbursement as completed.
-27. System marks the application `DISBURSED`, creates the LoanAccount, generates the final repayment schedule, activates the LoanAccount, and converts reserved limit to used limit.
-28. Repayment and overdue servicing track the LoanAccount through `ACTIVE` and `OVERDUE`; full repayment or approved settlement produces `SETTLED`, and an eligible settled account may later be administratively `CLOSED`. Only allocated principal releases used limit unless an approved settlement policy specifies otherwise.
-
+10. System calculates or refreshes the Customer’s Salary Advance limit.
+11. Customer views employee-verification status plus total, used, reserved, and available Salary Advance limit.
+12. Customer starts a Salary Advance application and may save it as a draft. Draft creation does not reserve limit.
+13. Customer enters the requested amount, requested term, and required application information, and provides any documents required at submission by product policy.
+14. Customer requests submission of the Salary Advance application.
+15. System validates Customer readiness, active product status, employee eligibility, requested amount and term, current Partner Employee data, blocking applications, outstanding Salary Advance debt, and sufficient active available limit. System also evaluates the submission-level document requirements defined by product policy.
+16. If validation passes, System creates or submits the application, reserves the requested amount, creates the submission checklist, and records the application-level Salary Advance verification snapshot with a `VERIFIED` product-verification result.
+17. System routes the application to `DOCUMENTS_PENDING` when required uploads remain or to `SUBMITTED` when the submission checklist is upload-complete.
+18. System applies the common document-review and correction controls defined in Section 6. When the application and documents are processing-ready, the Loan Officer starts review.
+19. Loan Officer reviews the verification evidence, documents, requested amount, requested term, and application details.
+20. Loan Officer recommends approval, recommends rejection, returns the application for Customer revision, or requests Staff correction.
+21. Approver approves, rejects, returns the application to Loan Officer review, or requests Customer or Staff correction.
+22. If the Approver approves, System applies exact-request approval, generates one immutable approved financial-terms snapshot, and moves the application to `CUSTOMER_ACCEPTANCE_PENDING` only if offer generation succeeds.
+23. Customer views the approved offer without causing financial state changes.
+24. Customer accepts a valid unexpired offer, declines the offer, or System expires the offer after its validity period.
+25. Acceptance moves the application to `CONTRACT_PENDING`. Rejection, permitted cancellation, Customer decline, or offer expiry before disbursement releases the reserved Salary Advance amount exactly once.
+26. Accounting prepares the operational contract from the accepted offer and captures the eligible disbursement destination.
+27. Customer acknowledges the exact current contract version. If Accounting refreshes the disbursement destination before readiness, the prior version becomes `SUPERSEDED` and the new version requires fresh Customer acknowledgment.
+28. Accounting confirms contract and document readiness. If all readiness conditions pass, the contract becomes `READY_FOR_DISBURSEMENT` and the application moves to `DISBURSEMENT_PENDING` without transferring funds, creating the LoanAccount, or converting reserved limit to used limit.
+29. Accounting Officer performs the transfer outside Meridian using the immutable contractual destination.
+30. After the transfer is completed, Accounting Officer confirms manual disbursement against the ready contract.
+31. As one controlled business outcome, System moves the application to `DISBURSED`, creates and activates the `LoanAccount`, creates the authoritative final repayment schedule, records disbursement evidence, converts reserved limit to used limit, and records the required audit and status history.
+32. Repayment and overdue servicing track the LoanAccount through `ACTIVE` and `OVERDUE`. Only principal allocated by repayment releases used Salary Advance limit.
+33. Full contractual repayment moves the LoanAccount to `SETTLED`. An approved settlement may also produce `SETTLED` according to its approved policy, and an eligible settled account may later be administratively moved to `CLOSED`.
 
 Salary Advance MVP does not include real payroll integration, real employer API integration, automatic payroll deduction, real bank transfer, employer-facing production portal, counteroffers, approver-modified amount or term, or real-time HR system sync.
 
