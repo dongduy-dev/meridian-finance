@@ -162,15 +162,15 @@ Type: Documentation mismatch
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocks next major feature: No
 
 Problem:
-Database docs mention verification_status while current migration/JPA uses verification_outcome. Docs also mention loan_applications.product_details while V11 does not create that column.
+The logical ERD used conceptual names and target fields that could be mistaken for the current physical schema.
 
-Recommendation:
-Update ERD/database docs to match current physical schema or intentionally record product_details as future/deferred.
+Resolution:
+`MER-DB-001` now labels Sections 1-13 as a logical/current-plus-target model, maps conceptual disbursement and repayment names to the V35 physical structures, and identifies deferred `product_details`, refresh-token, Collateral, and OCR structures. Flyway history and `MER-DB-CURRENT-SCHEMA.sql` remain the physical authorities.
 
 ### MER-FU-008 - Replace hardcoded Salary Advance salary cap/policy terms with policy config
 
@@ -190,7 +190,7 @@ Salary Advance policy currently uses hardcoded salary cap and term values instea
 Recommendation:
 Keep acceptable for current foundation if documented, then later move product-specific configurable rules into loan product policy config.
 
-### MER-FU-009 - Implement manual review workflow
+### MER-FU-009 - Implement Partner eligibility manual review workflow
 
 Area: Loan / Partner / Review
 
@@ -203,10 +203,10 @@ Status: Open
 Blocks next major feature: No
 
 Problem:
-Manual review outcomes exist conceptually, but a dedicated manual review queue/outcome workflow is not implemented. Approval decision now exists for applications that have completed Loan Officer recommendation.
+Document review queues, immutable version decisions, waivers/replacements, and Customer/Staff/mixed correction workflows are implemented. A dedicated Partner eligibility manual-review queue and authoritative outcome workflow for ambiguous employee matching are not implemented.
 
 Recommendation:
-Implement after the common approval lifecycle is stable and before complex document flows.
+Keep this follow-up scoped to Partner eligibility. Define assignment, evidence, maker-checker, outcome, expiry/revalidation, audit, and concurrency rules before implementation; do not duplicate the implemented Document review/correction workflow.
 
 ### MER-FU-010 - Implement review/approval/customer acceptance/disbursement lifecycle
 
@@ -292,7 +292,7 @@ No full audit trail or Loan Application lifecycle history tables existed for the
 
 Resolution:
 
-V17 adds append-only `audit_events` for important cross-cutting business actions and Loan-owned `loan_application_status_transitions` for ordered Loan Application status changes. The current implementation records the implemented Salary Advance submission, review, recommendation, decision, approved-offer, customer response, expiry, and reservation-release actions synchronously in the originating transaction. Future modules and future workflow slices should extend this foundation rather than create duplicate approval-history or generic status-history tables.
+V17 adds append-only `audit_events` for important cross-cutting business actions and Loan-owned `loan_application_status_transitions` for ordered Loan Application status changes. Later increments extend transactional audit/history through document correction, contract readiness, manual disbursement, repayment servicing, overdue evaluation, and exact payoff, including LoanAccount and installment histories. Current listeners are synchronous in the originating transaction. Future slices should extend this foundation rather than create duplicate generic histories.
 
 ### MER-FU-014 - Create current physical schema snapshot
 
@@ -310,7 +310,7 @@ Problem:
 Flyway migrations are growing and current schema is harder to inspect from migrations alone.
 
 Recommendation:
-`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V17. This file is documentation only and must not be placed in the Flyway migration folder.
+`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V35. This file is documentation only and must not be placed in the Flyway migration folder.
 
 ### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
 
@@ -471,7 +471,7 @@ Status: Open
 Blocks next major feature: No
 
 Recommendation:
-Broaden ownership enforcement as additional customer-facing profile, document, offer, and repayment endpoints are implemented.
+Current profile, bank-account, document/content, correction, offer/contract, LoanAccount, and repayment-history endpoints enforce token-derived ownership and approved concealment rules. Keep this item open only for future customer-facing surfaces and cross-endpoint consistency reviews; do not treat already-secured endpoints as unfinished.
 
 Suggested future branch name:
 `feature/customer-ownership-hardening`
@@ -507,7 +507,7 @@ Status: Open
 Blocks next major feature: No
 
 Recommendation:
-Record important authentication events when Audit foundation is implemented.
+Extend the existing Audit foundation with a deliberately bounded authentication-event catalog (for example login success/failure and future logout/token invalidation) only after privacy, retention, rate/noise, actor, and failure-transaction semantics are approved.
 
 Suggested future branch name:
 `feature/iam-auth-audit-events`
@@ -525,7 +525,7 @@ Status: Done
 Blocks next major feature: No
 
 Resolution:
-`docs/api/Meridian-Platform.postman_collection.json` now calls login, stores role-specific Bearer token variables, uses JWT auth for protected endpoints, removes request-provided customerId payload fields, and covers the current endpoint inventory including Loan Officer review/recommendation.
+`docs/api/Meridian-Platform.postman_collection.json` calls login, stores role-specific Bearer token variables, uses JWT auth for protected endpoints, removes request-provided customerId payload fields, and covers the executable Salary Advance path through manual repayment, immutable history, servicing reads, overdue evaluation scenarios, exact payoff, and post-payoff submission behavior.
 
 Suggested future branch name:
 `docs/update-postman-jwt-flow`
@@ -761,7 +761,7 @@ snapshots, validation, administrative authorization, and migration/backfill rule
 
 ## Recommended Next Roadmap
 
-1. Audit, commit, and merge the Manual Disbursement + LoanAccount Activation checkpoint.
-2. Implement repayment posting/allocation, overdue servicing, settlement, and closure.
-3. Add complete UCL and Collateral activation policies only when their product rules are approved.
-4. Complete production document hardening before deployment.
+1. Review and merge the documentation-alignment checkpoint after repository-scope and rendered-document verification.
+2. Define administrative settlement, closure, reversal/refund, suspense, waiver/write-off, reconciliation, and ledger rules before selecting any servicing continuation.
+3. Add complete UCL and Collateral origination, activation, and repayment policies only when their product rules are approved.
+4. Complete production document storage, malware-scanning, retention, and operational hardening before deployment.

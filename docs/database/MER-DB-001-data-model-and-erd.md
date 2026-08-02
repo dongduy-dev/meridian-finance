@@ -11,7 +11,7 @@ The model supports the MVP lending workflow for:
 - Customer and back-office identity, authentication, and role-based access.
 - Customer profile, employment, bank account, and verification data.
 - Partner Company and Partner Employee data for Salary Advance eligibility, including reusable customer employee links.
-- One generic lending core for `SALARY_ADVANCE`, `UNSECURED_CONSUMER_LOAN`, and `COLLATERAL_LOAN`.
+- One generic lending core whose logical target accommodates `SALARY_ADVANCE`, `UNSECURED_CONSUMER_LOAN`, and `COLLATERAL_LOAN`; only the Salary Advance critical path is currently executable.
 - Salary Advance limit tracking, loan application submission, product verification, offers, disbursement confirmation, loan account activation, and repayment tracking.
 - Loan Officer review, Approver decision, and maker-checker controls.
 - Document upload, checklist completeness, manual review, waiver, replacement, and readiness checks.
@@ -19,6 +19,8 @@ The model supports the MVP lending workflow for:
 - Planned Phase 2 OCR-assisted document processing under Document Management.
 
 The MVP uses one PostgreSQL database. Tables are logically owned by modules, but Meridian does not use a database-per-service design.
+
+> **Model authority and state:** Sections 1-13 are a high-level logical/current-plus-target model; names in the ERD are not an exact physical-schema inventory. Executable Flyway migrations are authoritative for deployed structure, and `MER-DB-CURRENT-SCHEMA.sql` is the current human-readable V1-V35 snapshot. The current physical model has no `refresh_tokens`, `collaterals`, or OCR tables. It uses `manual_disbursements` rather than the conceptual `disbursement_records`, and repayment servicing uses `repayment_schedule_items`, `repayment_transactions`, `repayment_allocations`, `repayment_installment_progress`, `repayment_operation_outcomes`, LoanAccount/installment status-transition tables, and Salary Advance movement/release evidence rather than a single `repayment_records` table. Sections 14-17 record implemented physical increments explicitly.
 
 ## 3. Database Design Principles
 
@@ -502,9 +504,9 @@ Logical tables:
 - `permissions` - action-level permissions used by RBAC.
 - `role_assignments` - user-to-role assignment history/current assignments.
 - `role_permissions` - role-to-permission mapping.
-- `refresh_tokens` - refresh token records with hashed token values, expiry, and revocation metadata.
+- `refresh_tokens` - target refresh-token records with hashed values, expiry, and revocation metadata; this table is not present in the current V35 schema.
 
-The data model supports JWT authentication and refresh-token rotation while keeping permission enforcement tied to role/action policy.
+Current Identity persists users, roles, permissions, and assignments and issues/parses JWT access tokens. Refresh-token rotation and its persistence model remain deferred targets; permission enforcement is tied to role/action policy.
 
 ### 5.2 Customer Management
 
@@ -516,7 +518,7 @@ Logical tables:
 
 Customer profile completeness and bank-account readiness are separate facts. Normal Salary Advance submission requires an active Customer, complete profile, and one primary active bank account. Customer verification status remains separate and is not required until real Customer verification/KYC is implemented.
 
-Loan-status-sensitive profile and bank-account mutation restrictions are deferred until immutable application/disbursement snapshots exist. Customer does not depend on Loan to decide mutation policy.
+Purpose-specific immutable contract and disbursement destination snapshots now exist. Broader Loan-status-sensitive profile and bank-account mutation restrictions remain deferred until a non-circular snapshot or policy design is approved; Customer does not depend on Loan to decide mutation policy.
 
 ### 5.3 Partner Management
 
@@ -545,10 +547,10 @@ Logical tables:
 - `loan_contracts` - immutable versioned operational contract snapshot, purpose-protected destination, command identities, and controlled lifecycle evidence.
 - `loan_contract_repayment_items` - immutable exact copies of the accepted offer's provisional repayment items, reconciled to the contract totals.
 - `loan_accounts` - active loan record created only after manual disbursement confirmation.
-- `disbursement_records` - manual disbursement confirmation details.
+- `disbursement_records` - conceptual disbursement evidence; the current physical table is immutable `manual_disbursements`.
 - `repayment_schedules` - provisional or final repayment schedule headers.
-- `repayment_records` - installment-level repayment tracking.
-- `collaterals` - collateral detail records for `COLLATERAL_LOAN`.
+- `repayment_records` - conceptual repayment tracking; the current physical model separates immutable `repayment_transactions`/`repayment_allocations`, component progress, durable operation outcomes, and account/installment histories.
+- `collaterals` - target collateral detail records for a future approved `COLLATERAL_LOAN` slice; no current physical table or executable collateral repayment flow exists.
 
 `salary_advance_limits` answers: "How much Salary Advance limit does this customer currently have available?" It tracks total, used, reserved, and available amounts as ongoing lending state. It is recalculated when partner employee data changes and adjusted when applications reserve/release limit, disbursements convert reserved amount to used amount, and repayments release used amount.
 
@@ -609,10 +611,10 @@ OCR belongs under Document Management. It is planned for Phase 2 and remains ass
 - One `loan_applications` record selects one product and uses one common lifecycle across all products.
 - One Salary Advance `loan_applications` record may have one `salary_advance_verifications` snapshot that records the employee link, employee source reference, and limit values used for that application.
 - One `salary_advance_limits` record may have many `salary_advance_limit_movements` explaining reservation, release, disbursement, repayment, refresh, suspension, or disablement changes. Movement references to `loan_applications` and `loan_accounts` are optional logical references based on movement type.
-- One `loan_applications` record may have one or more `collaterals` when product code is `COLLATERAL_LOAN`.
+- In the target Collateral model, one `loan_applications` record may have one or more `collaterals`; that product slice and table are not currently executable.
 - One approved `loan_applications` record may produce one `approved_offers` record, and each approved offer contains one `approved_offer_repayment_items` row per approved term month.
 - One manually disbursed `loan_applications` record creates one `loan_accounts` record.
-- One `loan_accounts` record has a final `repayment_schedules` record and many `repayment_records`.
+- One current `loan_accounts` record has one authoritative final `repayment_schedules` version with items, many immutable repayment transactions/allocations and outcomes, one row of progress per installment, and ordered account/installment status histories.
 - One `loan_applications` record has one `document_checklists` header and many checklist items.
 - A `document_checklist_items` record may be satisfied by a current `documents` record, waived by `document_waivers`, or marked not required by policy.
 - One `documents` record may have many `document_reviews`, replacement requests, and Phase 2 OCR jobs.
@@ -674,10 +676,10 @@ Salary Advance employee verification maps to `ProductVerificationResult` as foll
 - Draft Salary Advance application creation does not reserve limit.
 - Submitted or approved Salary Advance applications reserve limit until they are rejected, cancelled, declined, expired, disbursed, or otherwise released by workflow rules.
 - Manual disbursement converts the reserved amount into used amount as part of the same controlled transaction that creates the `loan_accounts` record.
-- Repayment, settlement, or administrative correction releases used limit according to the configured Salary Advance policy.
+- Current Salary Advance repayment releases used exposure only for newly allocated principal, by exactly that amount; fee and interest release none. Administrative correction, negotiated settlement, waiver/write-off, reversal/refund, and manual exposure adjustment workflows remain deferred.
 - `salary_advance_limit_movements.loan_application_id` and `loan_account_id` are nullable logical references. A movement should include the relevant reference when it is caused by an application or account event, but initialization, refresh, suspension, disablement, and some manual adjustments may not have either reference.
 - Salary Advance verification snapshot records must preserve employee outcome, product verification result, employee/link references, and total/used/reserved/available limit values needed to explain the application decision.
-- Repayment roll-up must move a loan account to `OVERDUE` when any unpaid repayment is past due, to `SETTLED` when fully paid or settled, and to `CLOSED` only after administrative closure.
+- Current UTC date-driven evaluation moves a LoanAccount between `ACTIVE` and `OVERDUE`, and exact contractual payoff moves it to `SETTLED`. `CLOSED` remains a reserved schema status with no current command; administrative settlement and closure are deferred.
 
 ## 9. Audit and Traceability Rules
 
@@ -691,7 +693,7 @@ Salary Advance employee verification maps to `ProductVerificationResult` as foll
 - Customer employee link verification, link suspension/disablement, Salary Advance limit refresh, reservation, release, disbursement usage, repayment release, suspension, and disablement must be auditable.
 - `salary_advance_limit_movements` explain limit changes for operations and customer support; they do not replace `audit_events` for actor, reason, related business entity, and workflow traceability.
 - Audit records should reference entity IDs and avoid storing unnecessary sensitive payloads.
-- Audit event consumers must be idempotent because Spring Modulith event replay can deliver the same event more than once under failure recovery.
+- Current business audit listeners are synchronous and participate in the originating transaction; there is no asynchronous replay/retry consumer contract. Any future asynchronous or after-commit consumer must add explicit idempotency, durable processing state, failure tracking, retry behavior, and tests.
 - Trace IDs should be stored where useful for request, document upload, and planned OCR processing correlation.
 
 ## 10. Privacy and Sensitive Data Notes
@@ -718,7 +720,7 @@ Detailed index definitions are out of scope for this document. At implementation
 - Salary Advance limit movement lookup by limit ID, movement type, occurred timestamp, and optional loan application or loan account references where present.
 - Document checklist and review queues by loan application ID, review status, and document type.
 - Approval work queues by application ID, approver/reviewer ID, status, and created timestamp.
-- Repayment operations by loan account ID, due date, and repayment status.
+- Current repayment transactions/history by LoanAccount and recording order, allocations by transaction/installment/component, installment progress by due date/number/status, and bounded overdue candidates by account status/evaluation date.
 - Audit event queries by entity type, entity ID, actor, action, and occurred timestamp; Loan Application status transition queries by loan application ID, sequence number, actor, action, and occurred timestamp.
 - Phase 2 OCR job polling by job status, lease/attempt metadata, and queued timestamp.
 
@@ -738,10 +740,10 @@ Detailed index definitions are out of scope for this document. At implementation
 ## 13. Open Questions
 
 - Which product-specific fields should remain in `loan_applications.product_details` and which should become dedicated tables after MVP usage stabilizes?
-- What exact encryption and key-management approach will be used for bank account, identity, and OCR-extracted sensitive fields?
-- What retention, archival, and deletion policy should apply to uploaded documents, OCR results, refresh tokens, and audit events?
-- Should document versioning be expanded beyond `documents.version` if replacement workflows become more complex?
-- Should an implementation physically rename the previous `employee_verifications` table to `salary_advance_verifications`, or keep the old name while exposing the clearer domain language in code and documentation?
+- What production key-management, rotation, retention, and operational recovery controls will govern the current purpose-specific encrypted bank/identity evidence and any future OCR-extracted sensitive fields?
+- What retention, archival, and deletion policy should apply to current uploaded documents and audit events, and to future OCR results and refresh tokens if those targets are implemented?
+- What production storage, malware-scanning, retention, and object-storage controls should replace or harden the current local document-storage adapter?
+- Which dedicated physical structures should replace `product_details` JSONB when future UCL or Collateral slices receive approved lifecycle and reporting rules?
 - What exact retention policy should apply to inactive customer employee links and lightweight Salary Advance limit movements?
 - What is the final Phase 2 OCR retry lease, worker ownership, and job locking strategy?
 
@@ -819,7 +821,7 @@ V28 also links `DISBURSED_TO_USED` movements to both Loan Application and LoanAc
 
 V29 allowlists `MANUAL_DISBURSEMENT_CONFIRMED` for the atomic activation audit. V30 makes the Loan Application product identity tuple immutable and foreign-keyed to the Loan Product, preventing product drift before policy selection. V31 adds only `LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED` to the audit action whitelist.
 
-The V29 and V31 migrations preflight the exact prior named whitelist predicate before replacing it. They reject missing, extra, weakened, repeated, or incompatible constraint state before any drop. `MER-DB-CURRENT-SCHEMA.sql` reflects the stable V1-V31 physical result; migration preflight machinery is intentionally kept only in executable Flyway history.
+The V29 and V31 migrations preflight the exact prior named whitelist predicate before replacing it. They reject missing, extra, weakened, repeated, or incompatible constraint state before any drop. `MER-DB-CURRENT-SCHEMA.sql` reflects the stable V1-V35 physical result, including the repayment-servicing structures summarized in Section 17; migration preflight machinery is intentionally kept only in executable Flyway history.
 
 ## 17. Repayment servicing physical model and read boundary (V32-V35)
 

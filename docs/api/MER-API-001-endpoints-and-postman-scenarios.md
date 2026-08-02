@@ -46,7 +46,9 @@ Current security posture comes from `SecurityConfig`: health, login, and loan pr
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness/confirm` | Bearer + `loan:disbursement:prepare` | `LoanContractController` | Accounting recomputes readiness and atomically moves contract/application to ready/`DISBURSEMENT_PENDING`. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/disbursements` | Bearer + `loan:disburse` | `LoanDisbursementController` | Confirm an already-performed transfer and atomically activate the Salary Advance LoanAccount; identical request replay also returns `200`. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/disbursement-destination/reveal` | Bearer + `loan:disburse` | `LoanDisbursementController` | Reveal the full immutable ready-contract destination before confirmation, with PII-safe audit and non-cacheable headers. |
-| GET | `/api/v1/loan-applications/{loanApplicationId}/loan-account` | Bearer + owner `loan:read:own` or staff `loan:read` | `LoanDisbursementController` | Return the activated account, masked immutable destination, and ordered final repayment schedule. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/loan-account` | Bearer + owner `loan:read:own` or staff `loan:read` | `LoanDisbursementController` | Return originated account data, masked immutable destination, ordered final schedule, persisted balances, evaluation dates, payment timestamps, and installment servicing progress. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/repayments` | Bearer + `repayment:update` | `LoanRepaymentController` | Record or exactly replay a manual Salary Advance repayment and return its durable safe operation outcome. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | Bearer + owner `loan:read:own` or staff `loan:read` | `LoanRepaymentController` | Return paged immutable repayment history reconstructed from transaction, allocation, and durable outcome evidence. |
 
 ### Manual Disbursement Confirmation
 
@@ -527,6 +529,7 @@ Expected high-value checks:
 | Controlled regeneration | Prior version `SUPERSEDED`; new version `PREPARED`, unchanged financial/repayment snapshot, refreshed masked destination, fresh acknowledgment required. |
 | Incomplete readiness | `200` advisory blocker list; confirmation returns `409` with the first deterministic blocker code and rolls back all effects. |
 | Duplicate Salary Advance for same authenticated customer, including concurrent submissions through different verified employee links | `409`, `BLOCKING_APPLICATION_EXISTS`; one complete winner remains. |
+| Matching active or overdue Salary Advance with positive contractual outstanding | `409`, `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, independent of available exposure or overdue-scheduler freshness. |
 | Destination reveal without `loan:disburse` | `403`; no decryption and no audit. |
 | Destination reveal with stale version | `409`, `CONTRACT_VERSION_STALE`; no plaintext and no audit. |
 | Destination reveal before confirmation | `200` with exact no-store/private/no-cache/nosniff headers; one PII-safe access audit. |
@@ -541,6 +544,10 @@ Expected high-value checks:
 | Staff LoanAccount query | Staff with `loan:read` receives `200`. |
 | Query before activation | `404`, `LOAN_ACCOUNT_NOT_FOUND`. |
 | Inconsistent persisted activation evidence | `409`, `SYSTEM_STATE_CONFLICT`. |
+| Partial or early Salary Advance repayment | `200`; deterministic oldest-installment and fee/interest/principal allocation, with used exposure released only for newly allocated principal. |
+| Exact repayment replay after later servicing changes | `200`; the immutable original V34 outcome is returned with `idempotentReplay = true` and no duplicate financial, audit, history, or exposure effects. |
+| Exact contractual payoff | `200`; account becomes `SETTLED`, contractual outstanding reaches zero, and the outstanding-account submission guard clears subject to every other submission rule. |
+| Repayment history query | Owner with `loan:read:own` or staff with `loan:read` receives immutable paged records; `repayment:update` alone does not grant read access. |
 
 Notes:
 

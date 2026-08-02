@@ -1,6 +1,6 @@
 # API Error Code Catalog
 
-This document standardizes the API error codes across all bounded contexts in the Meridian Lending Platform.
+This document standardizes current and reserved/target API error codes across bounded contexts. Checked-in exception construction, global error mapping, controllers, and executable tests are authoritative for current behavior; a row in this catalog alone does not prove that its workflow is implemented. Explicitly planned sections and unimplemented capabilities such as refresh-token/session management remain target entries until repository evidence activates them.
 
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
@@ -58,7 +58,7 @@ This document standardizes the API error codes across all bounded contexts in th
 | 422 | `INSUFFICIENT_AVAILABLE_LIMIT` | Insufficient available Salary Advance limit | Reduce requested amount to the available Salary Advance limit |
 | 409 | `SALARY_ADVANCE_LIMIT_SUSPENDED` | Salary Advance limit suspended | Resolve stale data, manual review, or operational hold before applying |
 | 409 | `SALARY_ADVANCE_LIMIT_DISABLED` | Salary Advance limit disabled | Customer is not currently eligible for normal Salary Advance applications |
-| 409 | `BLOCKING_OVERDUE_EXPOSURE_EXISTS` | Blocking overdue exposure exists | Resolve overdue Salary Advance exposure before submitting a new request |
+| 409 | `OUTSTANDING_LOAN_ACCOUNT_EXISTS` | A prior Salary Advance must be fully repaid before another application. | Fully repay the matching active or overdue Salary Advance LoanAccount; zero-outstanding `SETTLED` clears this guard, then retry subject to all other submission rules |
 | **APPROVAL Domain** | | | |
 | 404 | `APPROVAL_REQUEST_NOT_FOUND` | Approval request not found | Verify the requested approval ID |
 | 422 | `APPROVAL_REQUIRED` | Approval required | Complete Approver decision before moving to the next workflow step |

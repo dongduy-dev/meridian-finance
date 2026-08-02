@@ -1,456 +1,343 @@
-# Java Package Structure
+# Meridian Backend Project Structure — Java Package Blueprint
 
-## Root Package Structure
+## Purpose and Scope
 
+This document defines the intended source and package structure of the Meridian Java backend modular monolith.
+
+It is a durable structural blueprint. Representative types illustrate important placement decisions; the Java source tree remains authoritative for exact implementation names.
+
+This document covers `meridian-platform` only. Frontend and external OCR-service source structures are defined separately. Implementation status belongs in the project roadmap and follow-up register, not here.
+
+---
+
+## 1. Backend Project Root
+
+```text
+meridian-platform/
+├── pom.xml
+├── src/
+│   ├── main/
+│   │   ├── java/com/meridian/platform/
+│   │   │   └── MeridianPlatformApplication.java
+│   │   └── resources/
+│   │       ├── application.properties
+│   │       └── db/migration/
+│   └── test/
+│       ├── java/com/meridian/platform/
+│       └── resources/
+│           └── application.properties
+└── target/                         # Generated build output
 ```
+
+`MeridianPlatformApplication` is the Spring Boot entry point and root component-scan boundary. Flyway migrations remain under `src/main/resources/db/migration`.
+
+---
+
+## 2. Top-Level Java Packages
+
+```text
 com.meridian.platform/
 ├── MeridianPlatformApplication.java
-│
-├── shared/                          # Shared kernel — common abstractions, base types, cross-cutting support
-│   ├── domain/
-│   │   ├── model/
-│   │   │   ├── DomainModel.java          # Pure Java: UUID id, timestamps (optional base)
-│   │   │   ├── Money.java               # Value object for monetary amounts
-│   │   │   ├── NationalId.java          # Value object (CCCD/CMND)
-│   │   │   ├── EmailAddress.java        # Value object
-│   │   │   ├── PhoneNumber.java         # Value object
-│   │   │   ├── UserId.java              # Value object
-│   │   │   └── DomainEvent.java         # Marker interface
-│   │   └── exception/
-│   │       ├── DomainException.java
-│   │       └── EntityNotFoundException.java
-│   ├── application/
-│   │   ├── IdempotencyService.java      # Cross-cutting idempotency
-│   │   └── security/
-│   │       ├── AuthenticatedUser.java    # Shared current actor representation
-│   │       └── CurrentUserProvider.java  # Application-level abstraction
-│   └── infrastructure/
-│       ├── config/
-│       │   ├── JacksonConfig.java
-│       │   └── FlywayConfig.java
-│       ├── persistence/
-│       │   ├── BaseJpaEntity.java        # @MappedSuperclass: id, createdAt, updatedAt
-│       │   └── IdempotencyRepository.java
-│       └── web/
-│           ├── HealthController.java
-│           ├── GlobalExceptionHandler.java
-│           └── ApiErrorResponse.java
-│
-├── identity/                        # ── IAM Module ──
-│   ├── domain/
-│   │   ├── model/
-│   │   │   ├── User.java
-│   │   │   ├── Role.java
-│   │   │   ├── Permission.java
-│   │   │   ├── RefreshToken.java
-│   │   │   └── UserStatus.java
-│   │   ├── service/
-│   │   │   └── RolePermissionPolicy.java
-│   │   ├── event/
-│   │   │   ├── UserRegisteredEvent.java
-│   │   │   └── UserSuspendedEvent.java
-│   │   └── exception/
-│   │       └── AuthenticationException.java
-│   ├── application/
-│   │   ├── port/
-│   │   │   ├── in/
-│   │   │   │   ├── AuthenticationUseCase.java
-│   │   │   │   └── UserManagementUseCase.java
-│   │   │   └── out/
-│   │   │       ├── UserRepository.java
-│   │   │       ├── RefreshTokenRepository.java
-│   │   │       └── TokenIssuerPort.java
-│   │   ├── service/
-│   │   │   ├── AuthenticationService.java
-│   │   │   └── UserManagementService.java
-│   │   ├── dto/
-│   │   │   ├── LoginRequest.java
-│   │   │   ├── RegisterRequest.java
-│   │   │   └── AuthResponse.java
-│   │   └── mapper/
-│   │       └── UserMapper.java
-│   └── infrastructure/
-│       ├── adapter/
-│       │   ├── in/
-│       │   │   └── web/
-│       │   │       └── AuthController.java
-│       │   └── out/
-│       │       └── persistence/
-│       │           ├── JpaUserRepository.java
-│       │           ├── UserJpaEntity.java    # JPA entity (infra concern)
-│       │           ├── JpaRefreshTokenRepository.java
-│       │           └── RefreshTokenJpaEntity.java
-│       ├── security/
-│       │   ├── JwtAuthenticationFilter.java
-│       │   ├── JwtTokenService.java
-│       │   ├── SpringSecurityCurrentUserProvider.java  # Implements shared CurrentUserProvider
-│       │   ├── RolePermissionRegistry.java
-│       │   └── SecurityConfig.java       # Wires Spring Security, JWT, and identity auth
-│       └── config/
-│           └── IdentityModuleConfig.java
-│
-├── customer/                        # ── Customer Module ──
-│   ├── domain/
-│   │   ├── model/
-│   │   │   ├── Customer.java
-│   │   │   ├── CustomerProfile.java
-│   │   │   ├── CustomerBankAccount.java
-│   │   │   ├── CustomerStatus.java
-│   │   │   ├── ProfileCompletionStatus.java
-│   │   │   └── VerificationStatus.java
-│   │   ├── service/
-│   │   │   └── CustomerVerificationPolicy.java
-│   │   ├── event/
-│   │   │   ├── CustomerVerifiedEvent.java
-│   │   │   └── CustomerProfileUpdatedEvent.java
-│   │   └── exception/
-│   │       └── CustomerDomainException.java
-│   ├── application/
-│   │   ├── port/
-│   │   │   ├── in/
-│   │   │   │   ├── ManageCustomerProfileUseCase.java
-│   │   │   │   └── QueryCustomerUseCase.java
-│   │   │   └── out/
-│   │   │       └── CustomerRepository.java
-│   │   ├── service/ ...             # Profile completeness, bank-account lifecycle, sensitive data handling
-│   │   ├── dto/
-│   │   └── mapper/
-│   └── infrastructure/ ...
-│
-├── partner/                         # ── Partner Module ──
-│   ├── domain/
-│   │   ├── model/
-│   │   │   ├── PartnerCompany.java
-│   │   │   ├── PartnerEmployee.java
-│   │   │   ├── PartnerEmployeeImportBatch.java
-│   │   │   ├── CustomerPartnerEmployeeLink.java
-│   │   │   ├── CustomerPartnerEmployeeLinkStatus.java
-│   │   │   └── EmployeeEligibilityData.java
-│   │   ├── service/
-│   │   │   └── EmployeeEligibilityPolicy.java
-│   │   ├── event/
-│   │   │   ├── PartnerCompanyActivatedEvent.java
-│   │   │   ├── PartnerEmployeeImportCompletedEvent.java
-│   │   │   └── CustomerPartnerEmployeeLinkedEvent.java
-│   │   └── exception/
-│   │       └── PartnerDomainException.java
-│   ├── application/
-│   │   ├── port/
-│   │   │   ├── in/
-│   │   │   │   ├── ManagePartnerCompanyUseCase.java
-│   │   │   │   ├── ImportPartnerEmployeesUseCase.java
-│   │   │   │   ├── ManageCustomerEmployeeLinkUseCase.java
-│   │   │   │   └── VerifyPartnerEmployeeUseCase.java
-│   │   │   └── out/
-│   │   │       ├── PartnerCompanyRepository.java
-│   │   │       ├── PartnerEmployeeRepository.java
-│   │   │       └── CustomerPartnerEmployeeLinkRepository.java
-│   │   ├── service/ ...             # Partner Companies, Partner Employees, import batches, reusable Salary Advance employee links
-│   │   ├── dto/
-│   │   └── mapper/
-│   └── infrastructure/ ...
-│
-├── loan/                            # ── Loan Module (FULL HEXAGONAL) ──
-│   ├── domain/
-│   │   ├── model/
-│   │   │   ├── LoanApplication.java     # Aggregate root (common workflow)
-│   │   │   ├── LoanProduct.java
-│   │   │   ├── LoanProductPolicy.java
-│   │   │   ├── SalaryAdvanceLimit.java
-│   │   │   ├── SalaryAdvanceLimitMovement.java
-│   │   │   ├── SalaryAdvanceVerification.java
-│   │   │   ├── LoanApplicationStatusTransition.java
-│   │   │   ├── LoanAccount.java
-│   │   │   ├── LoanStatus.java
-│   │   │   ├── OfferTerms.java
-│   │   │   ├── DisbursementRecord.java
-│   │   │   └── RepaymentSchedule.java
-│   │   ├── product/                    # Product policies/strategies; no top-level product modules
-│   │   │   ├── LoanProductStrategy.java
-│   │   │   ├── SalaryAdvancePolicy.java
-│   │   │   ├── SalaryAdvanceLimitPolicy.java
-│   │   │   ├── UnsecuredConsumerLoanPolicy.java
-│   │   │   └── CollateralLoanPolicy.java
-│   │   ├── service/
-│   │   │   ├── LoanEligibilityService.java       # Domain service (PURE JAVA — no @Service)
-│   │   │   ├── LoanProductPolicyService.java     # Selects product policy/strategy
-│   │   │   ├── SalaryAdvanceLimitService.java    # Reserves, releases, refreshes, suspends, disables limits
-│   │   │   └── RepaymentScheduleService.java     # Domain service (PURE JAVA — no @Service)
-│   │   ├── event/
-│   │   │   ├── LoanSubmittedEvent.java       # Carries: loanId, customerId, productId, amount
-│   │   │   ├── LoanReviewStartedEvent.java
-│   │   │   ├── LoanSentForApprovalEvent.java
-│   │   │   ├── LoanApprovedEvent.java
-│   │   │   ├── LoanRejectedEvent.java
-│   │   │   ├── LoanCancelledEvent.java
-│   │   │   ├── LoanDisbursedEvent.java
-│   │   │   └── LoanCompletedEvent.java
-│   │   └── exception/
-│   │       └── LoanDomainException.java
-│   ├── application/
-│   │   ├── port/
-│   │   │   ├── in/
-│   │   │   │   ├── SubmitLoanUseCase.java
-│   │   │   │   ├── ReviewLoanUseCase.java
-│   │   │   │   ├── AcceptOfferUseCase.java
-│   │   │   │   ├── ConfirmDisbursementUseCase.java
-│   │   │   │   ├── QueryLoanUseCase.java
-│   │   │   │   ├── QuerySalaryAdvanceLimitUseCase.java
-│   │   │   │   ├── StartSalaryAdvanceApplicationUseCase.java
-│   │   │   │   ├── ManageLoanProductUseCase.java  # CRUD for loan products
-│   │   │   │   ├── QueryLoanProductUseCase.java   # Read-only loan product queries
-│   │   │   │   └── command/
-│   │   │   │       ├── SubmitLoanCommand.java      # Use-case command record
-│   │   │   │       ├── ReviewLoanCommand.java
-│   │   │   │       ├── CreateLoanProductCommand.java
-│   │   │   │       └── UpdateLoanProductCommand.java
-│   │   │   └── out/
-│   │   │       ├── LoanRepository.java             # Returns domain objects, not DTOs
-│   │   │       ├── SalaryAdvanceLimitRepository.java
-│   │   │       ├── LoanProductRepository.java      # CRUD for loan products
-│   │   │       ├── CustomerQueryPort.java          # To call Customer module
-│   │   │       ├── PartnerEligibilityPort.java     # To call Partner module for employee links and eligibility checks
-│   │   │       ├── DocumentReadinessPort.java      # To call Document module for checklist/readiness
-│   │   │       └── LoanEventPublisher.java
-│   │   ├── service/
-│   │   │   ├── SubmitLoanService.java       # Implements SubmitLoanUseCase
-│   │   │   ├── ReviewLoanService.java
-│   │   │   ├── AcceptOfferService.java
-│   │   │   ├── ConfirmDisbursementService.java
-│   │   │   ├── QuerySalaryAdvanceLimitService.java
-│   │   │   ├── StartSalaryAdvanceApplicationService.java
-│   │   │   └── QueryLoanService.java
-│   │   ├── dto/
-│   │   │   ├── CreateLoanRequest.java        # Inbound REST request (raw primitives)
-│   │   │   ├── LoanApplicationDto.java       # Outbound response DTO
-│   │   │   ├── SalaryAdvanceDashboardDto.java
-│   │   │   └── LoanSummaryDto.java
-│   │   └── mapper/
-│   │       └── LoanMapper.java               # Domain ↔ DTO mapping (lives here, NOT in domain)
-│   └── infrastructure/
-│       ├── adapter/
-│       │   ├── in/
-│       │   │   └── web/
-│       │   │       ├── LoanController.java
-│       │   │       ├── SalaryAdvanceLimitController.java
-│       │   │       └── LoanProductController.java
-│       │   └── out/
-│       │       ├── persistence/
-│       │       │   ├── JpaLoanRepository.java
-│       │       │   ├── JpaLoanProductRepository.java
-│       │       │   ├── JpaSalaryAdvanceLimitRepository.java
-│       │       │   ├── LoanJpaEntity.java
-│       │       │   ├── LoanProductJpaEntity.java
-│       │       │   ├── SalaryAdvanceLimitJpaEntity.java
-│       │       │   ├── SalaryAdvanceLimitMovementJpaEntity.java
-│       │       │   └── SalaryAdvanceVerificationJpaEntity.java
-│       │       ├── client/
-│       │       │   ├── CustomerModuleAdapter.java
-│       │       │   ├── PartnerModuleAdapter.java
-│       │       │   └── DocumentModuleAdapter.java
-│       │       └── event/
-│       │           └── SpringLoanEventPublisher.java
-│       └── config/
-│           └── LoanModuleConfig.java
-│
-├── approval/                        # ── Approval Module (FULL HEXAGONAL) ──
-│   ├── domain/
-│   │   ├── model/
-│   │   │   ├── ReviewRecommendation.java
-│   │   │   ├── ApprovalDecision.java
-│   │   │   ├── MakerCheckerControl.java
-│   │   │   └── ApprovalStatus.java
-│   │   ├── service/
-│   │   │   └── MakerCheckerPolicyService.java
-│   │   ├── event/
-│   │   │   ├── LoanReviewRecommendedEvent.java
-│   │   │   └── ApprovalDecisionRecordedEvent.java
-│   │   └── exception/
-│   │       └── ApprovalDomainException.java
-│   ├── application/
-│   │   ├── port/
-│   │   │   ├── in/
-│   │   │   │   ├── CreateApprovalUseCase.java
-│   │   │   │   ├── SubmitReviewRecommendationUseCase.java
-│   │   │   │   ├── SubmitDecisionUseCase.java
-│   │   │   │   └── QueryApprovalUseCase.java
-│   │   │   └── out/
-│   │   │       ├── ApprovalRepository.java
-│   │   │       └── ApprovalEventPublisher.java
-│   │   ├── service/
-│   │   │   ├── CreateApprovalService.java
-│   │   │   ├── SubmitReviewRecommendationService.java
-│   │   │   ├── SubmitDecisionService.java
-│   │   │   └── QueryApprovalService.java
-│   │   ├── dto/
-│   │   │   ├── ReviewRecommendationDto.java
-│   │   │   ├── ApprovalDecisionDto.java
-│   │   │   └── SubmitDecisionRequest.java
-│   │   └── mapper/
-│   │       └── ApprovalMapper.java
-│   └── infrastructure/
-│       ├── adapter/
-│       │   ├── in/
-│       │   │   └── web/
-│       │   │       └── ApprovalController.java
-│       │   └── out/
-│       │       ├── persistence/
-│       │       │   ├── JpaApprovalRepository.java
-│       │       │   └── ApprovalJpaEntity.java
-│       │       └── event/
-│       │           └── SpringApprovalEventPublisher.java
-│       ├── listener/
-│       │   └── LoanEventListener.java    # Inbound event adapter; synchronous @EventListener when rollback semantics are required
-│       └── config/
-│           └── ApprovalModuleConfig.java
-│
-├── document/                        # ── Document Module (MODERATE HEXAGONAL) ──
-│   ├── domain/
-│   │   ├── model/
-│   │   │   ├── Document.java             # Aggregate root
-│   │   │   ├── DocumentChecklist.java
-│   │   │   ├── DocumentChecklistItem.java
-│   │   │   ├── DocumentReview.java
-│   │   │   ├── DocumentReplacementRequest.java
-│   │   │   ├── DocumentWaiver.java
-│   │   │   ├── DocumentReadiness.java
-│   │   │   ├── OcrJob.java
-│   │   │   ├── OcrResult.java
-│   │   │   ├── StorageReference.java     # Value object
-│   │   │   └── DocumentType.java         # Enum
-│   │   ├── service/
-│   │   │   └── DocumentReadinessPolicy.java
-│   │   ├── event/
-│   │   │   ├── DocumentUploadedEvent.java
-│   │   │   ├── DocumentReviewedEvent.java
-│   │   │   └── DocumentChecklistReadyEvent.java
-│   │   └── exception/
-│   │       └── DocumentDomainException.java
-│   ├── application/
-│   │   ├── port/
-│   │   │   ├── in/
-│   │   │   │   ├── UploadDocumentUseCase.java
-│   │   │   │   ├── ReviewDocumentUseCase.java
-│   │   │   │   ├── ManageDocumentChecklistUseCase.java
-│   │   │   │   ├── QueryDocumentUseCase.java
-│   │   │   │   └── DownloadDocumentUseCase.java
-│   │   │   └── out/
-│   │   │       ├── DocumentRepository.java
-│   │   │       ├── FileStoragePort.java   # Abstraction for local/S3
-│   │   │       └── OcrProcessingPort.java # Thin REST client to Python service
-│   │   ├── service/
-│   │   │   ├── UploadDocumentService.java
-│   │   │   ├── ReviewDocumentService.java
-│   │   │   ├── ManageDocumentChecklistService.java
-│   │   │   ├── QueryDocumentService.java
-│   │   │   └── DownloadDocumentService.java
-│   │   ├── dto/
-│   │   │   ├── DocumentDto.java
-│   │   │   └── UploadDocumentRequest.java
-│   │   └── mapper/
-│   │       └── DocumentMapper.java
-│   └── infrastructure/
-│       ├── adapter/
-│       │   ├── in/
-│       │   │   └── web/
-│       │   │       └── DocumentController.java
-│       │   └── out/
-│       │       ├── persistence/
-│       │       │   ├── JpaDocumentRepository.java
-│       │       │   └── DocumentJpaEntity.java
-│       │       ├── storage/
-│       │       │   └── LocalFileStorageAdapter.java  # Implements FileStoragePort
-│       │       └── client/
-│       │           └── OcrRestClientAdapter.java     # Implements OcrProcessingPort
-│       └── config/
-│           └── DocumentModuleConfig.java
-│
-├── audit/                           # ── Audit Module (SIMPLIFIED) ──
-│   ├── domain/
-│   │   ├── model/
-│   │   │   └── AuditEvent.java
-│   │   └── exception/
-│   │       └── AuditDomainException.java
-│   ├── application/
-│   │   ├── port/
-│   │   │   ├── in/
-│   │   │   │   └── RecordAuditEventsUseCase.java # Synchronous append-only recording
-│   │   │   └── out/
-│   │   │       └── AuditEventRepository.java
-│   │   ├── service/
-│   │   │   └── RecordAuditEventsService.java # Records events; does not control workflow decisions
-│   │   ├── dto/
-│   │   └── mapper/
-│   └── infrastructure/
-│       └── adapter/
-│           ├── in/
-│           │   ├── event/
-│           │   │   └── BusinessAuditEventListener.java # Terminal synchronous @EventListener consumer
-│           │   └── web/
-│           └── out/
-│               └── persistence/
-│                   └── JpaAuditEventRepository.java
-│
-└── notification/                    # ── Notification Module (OPTIONAL LATER) ──
-    ├── domain/
-    │   ├── model/
-    │   │   ├── Notification.java
-    │   │   └── NotificationTemplate.java
-    │   ├── event/
-    │   └── exception/
-    ├── application/
-    │   ├── port/
-    │   │   ├── in/
-    │   │   │   └── QueryNotificationUseCase.java
-    │   │   └── out/
-    │   │       └── NotificationSenderPort.java
-    │   ├── service/
-    │   ├── dto/
-    │   └── mapper/
-    └── infrastructure/
-        └── adapter/
-            ├── in/
-            │   └── event/
-            └── out/
-                └── client/
+├── shared/
+├── identity/
+├── customer/
+├── partner/
+├── loan/
+├── approval/
+├── document/
+├── audit/
+└── notification/
 ```
 
-Salary Advance remains inside the generic lending architecture. `partner/` owns Partner Companies, Partner Employees, import batches, and reusable customer employee links. `loan/` owns Salary Advance limit state, limit movements, application reservation/release behavior, and application-level Salary Advance verification snapshots. Do not create top-level modules named `salaryadvance`, `unsecuredloan`, or `collateralloan`.
+| Package | Responsibility |
+|---|---|
+| `shared` | Minimal technical shared kernel; not a bounded context |
+| `identity` | Users, authentication, authorization, roles, permissions, sessions, and security implementation |
+| `customer` | Customer aggregate, profile, verification state, bank accounts, and sensitive Customer data |
+| `partner` | Partner Companies, Partner Employees, imports, employment verification, and reusable employee links |
+| `loan` | Products, applications, limits, review cycles, offers, contracts, activation, servicing, repayment, settlement, and closure |
+| `approval` | Loan Officer recommendations, Approver decisions, maker-checker controls, and decision records |
+| `document` | Checklists, document versions, review decisions, storage, readiness, and backend OCR integration |
+| `audit` | Append-only cross-cutting business audit records |
+| `notification` | Templates, delivery requests, channels, attempts, and delivery status |
+
+Salary Advance, Unsecured Consumer Loan, and Collateral Loan remain product behaviors inside `loan`. Do not create top-level product packages such as `salaryadvance`, `unsecuredloan`, or `collateralloan`.
 
 ---
 
-## When to Apply Full vs. Simplified Hexagonal
+## 3. Canonical Feature-Module Shape
 
-| Module | Pattern | Why |
+```text
+<context>/
+├── domain/
+│   ├── model/
+│   ├── service/
+│   ├── event/
+│   └── exception/
+├── application/
+│   ├── port/
+│   │   ├── in/
+│   │   └── out/
+│   ├── service/
+│   ├── dto/
+│   └── mapper/
+└── infrastructure/
+    ├── adapter/
+    │   ├── in/
+    │   │   ├── web/
+    │   │   └── event/
+    │   └── out/
+    │       ├── persistence/
+    │       ├── event/
+    │       ├── storage/
+    │       └── <collaborating-context-or-provider>/
+    ├── security/
+    └── config/
+```
+
+A module uses only the packages it needs; empty placeholders are unnecessary.
+
+| Package | Placement rule |
+|---|---|
+| `domain.model` | Aggregates, entities, value objects, enums, and state transitions |
+| `domain.service` | Pure business policies or calculations not owned by one aggregate |
+| `domain.event` | Context-owned domain event vocabulary |
+| `application.port.in` | Public command and query use-case contracts |
+| `application.port.out` | Persistence, publication, storage, provider, and cross-context dependency contracts |
+| `application.service` | Transactional use-case orchestration and policy selection |
+| `application.dto` | Application and API boundary shapes |
+| `application.mapper` | Domain-to-boundary mapping |
+| `infrastructure.adapter.in.web` | REST controllers and HTTP-specific concerns |
+| `infrastructure.adapter.in.event` | Event listeners entering through application contracts |
+| `infrastructure.adapter.out.persistence` | JPA/JDBC entities, repositories, adapters, and persistence mapping |
+| `infrastructure.adapter.out.<boundary>` | Event, storage, provider, or collaborating-context adapters |
+| `infrastructure.security` | Concrete Spring Security and JWT implementation owned by Identity |
+| `infrastructure.config` | Module-specific technical wiring |
+
+Domain code remains pure Java. Application code must not depend on infrastructure. Controllers and persistence adapters must not implement lending rules. Exact dependency enforcement is defined in `MER-ARCH-003-dependency-rules.md`.
+
+---
+
+## 4. Structural Profiles
+
+“Full,” “Moderate,” and “Simplified” describe package ceremony, not different quality standards. Every module preserves inward dependency direction.
+
+| Module | Profile | Emphasis |
 |---|---|---|
-| **Loan Core / Origination** | Full Hexagonal | Core domain. Generic lending core, product policies/strategies, and complex state machine. |
-| **Approval Workflow** | Full Hexagonal | Core domain. Loan Officer review, Approver decision, maker-checker controls. |
-| **Identity & Access** | Full Hexagonal | Security-critical. Owns users, roles, JWT, refresh tokens, and RBAC. |
-| **Customer** | Moderate | Supporting domain. Owns profile, verification status, bank-account information, and sensitive data handling. Identity still owns the users.customer_id login mapping. |
-| **Partner** | Moderate | Supporting domain. Owns Partner Companies, Partner Employees, import batches, and reusable Salary Advance employee links. |
-| **Document** | Moderate | Checklist, manual review, replacement, waiver, readiness, storage, and OCR-assisted processing justify ports. |
-| **Audit** | Simplified | Cross-cutting concern. Append-only writes for approved workflow actions. No read API or workflow-control logic in the current checkpoint. |
-| **Notification** | Simplified | Optional later. Template-based, minimal logic. |
+| Loan Core / Lending Lifecycle | Full | Complex lifecycle, product policies, many use cases, cross-context ports, persistence, events, and secured APIs |
+| Approval Workflow | Full | Recommendation and decision records, maker-checker enforcement, and Loan coordination |
+| Identity & Access | Full | Authentication, authorization, token/session boundaries, persistence, and security adapters |
+| Customer | Moderate | Aggregate behavior, profile and bank-account services, sensitive-data boundaries, and narrow public contracts |
+| Partner | Moderate | Company and employee data, imports, verification, reusable links, and Customer/Loan collaboration |
+| Document | Moderate | Checklists, versions, review, storage, readiness, and OCR integration |
+| Audit | Simplified | Event intake, append-only persistence, and authorized queries |
+| Notification | Simplified | Event intake, templates, provider ports, delivery attempts, and status |
+
+A simplified module may omit domain services, mappers, publishers, or other packages when unnecessary. It must not collapse web, persistence, and business orchestration into one layer.
 
 ---
 
-## Testing Pyramid Strategy
+## 5. Representative Architectural Types
 
-1. **Domain Unit Tests (70%)**: Pure Java, zero Spring dependencies. Fast. Tests core state machines, value objects, and domain services.
-2. **Application Layer Tests (15%)**: Tests use cases and transaction boundaries using `@ExtendWith(SpringExtension.class)` and `@MockitoBean` to mock application output ports.
-3. **Data/Adapter Integration Tests (10%)**: Tests `JpaRepository` implementations and Flyway migrations against a real PostgreSQL instance using Testcontainers (`@DataJpaTest` + `@AutoConfigureTestDatabase(replace = Replace.NONE)`).
-4. **Module & E2E Tests (5%)**: Tests cross-module interactions using Spring Modulith's `@ApplicationModuleTest` and full REST API testing using `MockMvc` or `TestRestTemplate`.
+The following names are selective placement examples, not a complete file inventory.
 
-## Current Loan Activation Slice
+| Module | Representative types |
+|---|---|
+| Shared | `AuthenticatedUser`, `CurrentUserProvider`, `BusinessAuditEvent`, `BusinessOperationContext` |
+| Identity | `User`, `JwtAuthenticationFilter`, `JwtTokenService`, `SpringSecurityCurrentUserProvider`, `SecurityConfig` |
+| Customer | `Customer`, `CustomerProfile`, `CustomerBankAccount`, `ContractBankAccountUseCase` |
+| Partner | `PartnerCompany`, `PartnerEmployee`, `PartnerEmployeeImportBatch`, `CustomerPartnerEmployeeLink`, `VerifyPartnerEmployeeService` |
+| Loan | `LoanApplication`, `SalaryAdvanceLimit`, `SalaryAdvanceVerification`, `ApprovedOffer`, `LoanContract`, `LoanAccount`, `ManualDisbursement`, `RepaymentSchedule` |
+| Approval | `ReviewRecommendation`, `ApprovalDecision`, `SubmitApprovalDecisionService` |
+| Document | `DocumentChecklist`, `DocumentChecklistItem`, logical document/version models, review decisions, `DocumentChecklistService` |
+| Audit | `AuditEvent`, `RecordAuditEventsUseCase`, `RecordAuditEventsService`, `BusinessAuditEventListener` |
+| Notification | `Notification`, `NotificationTemplate`, delivery request/status types, sender ports |
 
-The executable Loan module now includes:
+Important representative application services in Loan include `StartSalaryAdvanceApplicationService`, `ApplyApprovalDecisionService`, `LoanContractReadinessService`, `ConfirmManualDisbursementService`, and `RecordRepaymentService`.
 
-- domain aggregates `LoanAccount`, `ManualDisbursement`, `RepaymentSchedule`, and final schedule items;
-- application input ports for confirmation, destination reveal, and LoanAccount query;
-- one transactional confirmation service with a product activation policy resolver and the Salary Advance policy;
-- output ports and JPA adapters for account, disbursement, and schedule persistence; and
-- a secured Loan-owned controller with safe DTO mapping, owner-aware account queries, and narrowly scoped destination reveal.
+---
 
-## Current Repayment Servicing Slice
+## 6. Module-Specific Placement Rules
 
-The Loan module now contains input ports and application services for repayment posting, immutable paged history, coherent LoanAccount servicing reads, overdue account evaluation, and bounded batch coordination. Web adapters expose only the secured repayment command/history and augmented existing LoanAccount query. Persistence adapters page immutable payment evidence and load stored progress; API mappers perform shape conversion only. Product-specific used-exposure release remains behind the existing Loan product-policy boundary, with Salary Advance as the sole executable repayment product.
+### Shared
+
+`shared` contains only stable technical abstractions genuinely required by multiple modules. It must not own feature behavior or depend on a feature module.
+
+### Identity
+
+Concrete Spring Security, JWT, principal, and authenticated-user resolution code belongs under:
+
+```text
+identity/infrastructure/security/
+```
+
+Other modules use `CurrentUserProvider` and `AuthenticatedUser`; they do not import Identity’s security implementation.
+
+### Customer and Partner
+
+Customer owns source profile, identity, and bank-account data. Partner owns employment source data and reusable Customer–Partner Employee links.
+
+Cross-context access occurs through narrow application contracts and infrastructure adapters, never through foreign repositories or JPA entities.
+
+### Loan
+
+Loan origination, review cycles, corrections, offers, contracts, activation, LoanAccount servicing, repayment, overdue evaluation, settlement, and closure remain inside `loan`.
+
+Loan infrastructure may use boundary-specific adapter packages:
+
+```text
+loan/infrastructure/adapter/
+├── in/
+│   ├── web/
+│   └── event/
+└── out/
+    ├── persistence/
+    ├── event/
+    ├── customer/
+    ├── partner/
+    └── document/
+```
+
+Internal subpackages may be introduced for cohesion as Loan grows, but lifecycle capabilities and individual products must not become separate top-level modules.
+
+### Approval
+
+Approval owns recommendation and decision records. Loan owns LoanApplication transitions. Approval publishes structured outcomes; Loan consumes them through an inbound event adapter or another explicit application contract.
+
+### Document
+
+Document storage implementations belong under `document.infrastructure.adapter.out.storage`.
+
+Backend OCR clients belong under an OCR-specific output-adapter package and implement a Document-owned output port. The external OCR service’s own source tree remains outside this document.
+
+### Audit and Notification
+
+Business-audit and notification event listeners belong under `infrastructure.adapter.in.event`. Persistence and delivery-provider implementations belong under the corresponding output-adapter packages.
+
+Neither Audit nor Notification may control the workflow that produced an event.
+
+---
+
+## 7. Loan Product and Lifecycle Placement
+
+Product-specific behavior stays inside Loan-owned models, services, policies, and use cases.
+
+| Concern | Package area |
+|---|---|
+| Product invariant or calculation | `loan.domain.model` or `loan.domain.service` |
+| Policy selection and transactional orchestration | `loan.application.service` |
+| Command or query contract | `loan.application.port.in` |
+| Repository or external dependency contract | `loan.application.port.out` |
+| REST exposure | `loan.infrastructure.adapter.in.web` |
+| Event intake | `loan.infrastructure.adapter.in.event` |
+| Persistence implementation | `loan.infrastructure.adapter.out.persistence` |
+
+Product policies may specialize:
+
+- eligibility and evidence;
+- amount and term validation;
+- pricing and repayment construction;
+- exposure reservation and release;
+- activation;
+- collateral controls;
+- repayment effects;
+- settlement and closure.
+
+Activation and repayment are durable Loan lifecycle capabilities, not tracking sections or separate architectural slices.
+
+---
+
+## 8. Cross-Context Adapter Placement
+
+The consuming module owns the output port describing what it needs. Infrastructure implements that port by calling the publishing context’s public application contract.
+
+```text
+loan/
+├── application/port/out/
+│   └── ContractBankAccountPort.java
+└── infrastructure/adapter/out/customer/
+    └── CustomerContractBankAccountAdapter.java
+
+customer/
+└── application/port/in/
+    └── ContractBankAccountUseCase.java
+```
+
+The same pattern applies when:
+
+- Loan consumes Partner eligibility;
+- Loan consumes Document readiness;
+- Partner consumes Customer identity evidence;
+- Approval queries Loan-owned review-cycle facts;
+- Notification consumes published business events.
+
+Adapters may translate identifiers and immutable contract records. They must not expose another context’s repositories, JPA entities, internal services, or aggregate object graphs.
+
+---
+
+## 9. Resources and Database Migrations
+
+```text
+src/main/resources/
+├── application.properties
+└── db/migration/
+    ├── V1__...sql
+    ├── V2__...sql
+    └── ...
+```
+
+- Flyway migrations are append-only after release.
+- Schema changes use ordered migration files.
+- Secrets and real credentials are never committed.
+- The schema snapshot is documentation; Flyway remains the executable database history.
+
+---
+
+## 10. Test Source Structure
+
+```text
+src/test/java/com/meridian/platform/
+├── ArchitectureRulesTest.java
+├── shared/
+├── identity/
+├── customer/
+├── partner/
+├── loan/
+├── approval/
+├── document/
+├── audit/
+├── notification/
+└── support/
+```
+
+Tests mirror production ownership where practical:
+
+| Test type | Preferred location |
+|---|---|
+| Domain unit test | Corresponding context and domain package |
+| Application-service test | Corresponding `application.service` test package |
+| Persistence/adapter integration test | Corresponding infrastructure adapter test package |
+| Controller/security test | Web-adapter or Identity security test package |
+| Migration test | Context-owning persistence test package |
+| Cross-context workflow test | Orchestrating or consuming context |
+| Shared reusable fixture/support | `com.meridian.platform.support` |
+| Architecture enforcement | Root `com.meridian.platform` package |
+
+Domain tests remain framework-free. Infrastructure tests verify persistence, migrations, security, storage, events, and external boundaries. Testing percentages and checkpoint-specific suite counts do not belong in this blueprint.
+
+---
+
+## 11. Naming and Evolution Rules
+
+1. Package names use lowercase context or capability names.
+2. Use-case interfaces normally end with `UseCase`.
+3. Application implementations normally end with `Service`.
+4. Persistence output ports use domain-oriented `Repository` names.
+5. Infrastructure adapters identify their technology or collaborating boundary.
+6. JPA entities remain under infrastructure persistence and remain distinct from domain models.
+7. REST DTOs and application commands must not become domain models.
+8. Product-specific classes remain under `loan`.
+9. Types enter `shared` only when stable, minimal, and truly cross-cutting.
+10. Add packages for cohesion and ownership, not because a checkpoint added several files.
+11. Do not create empty placeholder packages.
+12. Exact Java files may evolve without mirroring every change here, provided these placement rules remain intact.
