@@ -1,17 +1,26 @@
 # Bounded Context Design — DDD Context Map
 
+## Purpose and Interpretation
+
+This document defines Meridian’s intended bounded-context responsibilities, ownership boundaries, published capabilities, and collaboration rules.
+
+Public-capability descriptions refer to application-level contracts exposed by a context. They do not prescribe exact Java interface names, method signatures, HTTP endpoints, or package structures.
+
+Entity and event names are representative architecture vocabulary unless another authoritative specification defines an exact contract. Implementation and delivery status are maintained separately in the project roadmap and follow-up register.
+
+`shared` is a technical shared kernel, not a bounded context. It may contain only minimal, stable cross-cutting abstractions such as common exceptions, actor representations, audit contracts, time configuration, and generic value types. It must not own lending behavior or depend on a feature context.
+
+---
+
 ## Context Map Overview
-
-> Public Interface entries refer to application/public ports exposed by a module. They are not domain-owned ports.
-
-> Status boundary: responsibilities described as current correspond to checked-in behavior at V35. Interface, entity, and event names in the context tables are representative architecture vocabulary unless explicitly identified as current; they do not prove that a same-named class or port exists. Target and future entries are labeled and must not be read as executable.
 
 ```mermaid
 graph TB
     subgraph Core["Core Domain"]
-        LOAN["Loan Core / Origination"]
+        LOAN["Loan Core / Lending Lifecycle"]
         APPROVAL["Approval Workflow"]
     end
+
     subgraph Supporting["Supporting Domains"]
         IAM["Identity & Access"]
         CUSTOMER["Customer Management"]
@@ -19,30 +28,56 @@ graph TB
         DOC["Document Management"]
         AUDIT["Audit & Compliance Controls"]
     end
+
     subgraph Generic["Generic Subdomains"]
         NOTIF["Notification"]
     end
-    IAM -->|AuthContext| LOAN
-    CUSTOMER -->|Customer readiness and bank-account facts| LOAN
-    PARTNER -->|Employee link and eligibility data| LOAN
-    LOAN -->|LoanEvents| APPROVAL
-    APPROVAL -->|Decision| LOAN
-    DOC -->|DocumentChecklist/DocumentRef/OcrResult Phase 2| LOAN
-    LOAN -->|DomainEvents| AUDIT
-    LOAN -->|DomainEvents for future notifications| NOTIF
+
+    CUSTOMER -->|Customer identity identifier for account association| IAM
+
+    IAM -->|Authenticated actor and authorization facts| LOAN
+    IAM -->|Authenticated actor and authorization facts| APPROVAL
+    IAM -->|Authenticated actor and authorization facts| CUSTOMER
+    IAM -->|Authenticated actor and authorization facts| PARTNER
+    IAM -->|Authenticated actor and authorization facts| DOC
+
+    CUSTOMER -->|Customer readiness and purpose-limited bank-account facts| LOAN
+    CUSTOMER -->|Identity evidence for employment verification| PARTNER
+    PARTNER -->|Verified employee links and eligibility facts| LOAN
+    DOC -->|Checklist state and processing-readiness facts| LOAN
+
+    LOAN -->|Application and active review-cycle context| APPROVAL
+    APPROVAL -->|Recommendation and decision outcomes| LOAN
 ```
+
+All business contexts may publish PII-safe auditable facts to Audit & Compliance Controls.
+
+Business contexts may publish notification-triggering events to Notification without transferring workflow ownership.
 
 ---
 
-## 1. Identity & Access (IAM) — Supporting Domain
+## Strategic Classification
+
+| Classification | Contexts | Rationale |
+|---|---|---|
+| **Core Domain** | Loan Core / Lending Lifecycle, Approval Workflow | Contains Meridian’s differentiating lending rules, controlled decision workflow, product behavior, financial state, and servicing lifecycle. |
+| **Supporting Domain** | Identity & Access, Customer Management, Partner Management, Document Management, Audit & Compliance Controls | Enables the lending workflow while preserving clear ownership of identity, Customer, employment, evidence, and compliance capabilities. |
+| **Generic Subdomain** | Notification | Provides reusable communication capabilities without owning lending decisions or workflow state. |
+
+---
+
+## 1. Identity & Access — Supporting Domain
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Current: access-token login, JWT validation, authorization (RBAC), users, roles, permissions, and role assignments. Target: registration lifecycle plus refresh-token/session management. |
-| **Entities** | Current identity concepts: `User`, role and permission records, role assignments, `RolePermissionRegistry`, and authenticated-user identifiers. Target only: `RefreshToken` and durable session records. |
-| **Public Interface** | `AuthenticationPort.authenticate(token)`, `UserQueryPort.findById(id)` |
-| **Events Published** | `UserRegisteredEvent`, `UserSuspendedEvent` |
-| **Microservice Candidacy** | First to extract. Minimal domain coupling, well-defined API. |
+| **Responsibilities** | User registration, authentication, access-token issuance and validation, refresh-token and session lifecycle, logout and revocation, account status and security controls, roles, permissions, role assignments, and authorization facts. |
+| **Owns** | User accounts, credentials and credential metadata, role and permission definitions, role assignments, session records, refresh-token records, account-security state, and the association between a user account and an optional Customer identity. |
+| **Public Capabilities** | Authenticate a principal; issue, refresh, validate, and revoke sessions or tokens; resolve the authenticated actor; query authorization facts; manage users, roles, permissions, and account status. |
+| **Publishes** | Representative events include user registration, authentication success or failure, role assignment, session revocation, account suspension, and account reactivation. |
+| **Consumes** | A Customer identity identifier when associating a user account with a Customer; administrative inputs used to create or manage Staff accounts and role assignments. |
+| **Must Not Own** | Customer profile data, Partner employee data, Loan applications, approval decisions, documents, or lending permissions embedded as domain logic outside the authorization model. |
+
+Identity owns the login-to-Customer association. Customer owns the Customer aggregate and its business data. The two contexts must not maintain competing bidirectional ownership relationships.
 
 ---
 
@@ -50,15 +85,16 @@ graph TB
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Customer profile, verification status, bank account information, sensitive customer data protection |
-| **Entities** | `Customer` (aggregate root), value-oriented `CustomerProfile` child, `CustomerBankAccount` child, `VerificationStatus`, `ProfileCompletionStatus`, `CustomerStatus` |
-| **Public Interface** | Customer readiness query for lending, primary bank-account readiness query, internal identity-evidence query for Partner verification, own-profile/customer APIs through application input ports |
-| **Events Published** | `CustomerVerifiedEvent`, `CustomerProfileUpdatedEvent` |
-| **Microservice Candidacy** | Future extraction candidate. Keep customer data protection and ownership boundaries explicit. |
+| **Responsibilities** | Customer lifecycle, profile management, profile completeness, identity and verification status, bank-account management, Customer ownership checks, and protection of sensitive Customer data. |
+| **Owns** | `Customer`, Customer profile information, verification state, Customer status, bank accounts, primary-account designation, and source identity or bank-account evidence. |
+| **Public Capabilities** | Manage a Customer’s own profile and bank accounts; query Customer readiness for lending; resolve purpose-limited identity evidence for employment verification; provide eligible bank-account facts for contract preparation and disbursement. |
+| **Publishes** | Representative events include Customer created, profile updated, verification status changed, bank account added or deactivated, primary bank account changed, and Customer suspended or reactivated. |
+| **Consumes** | Authenticated Customer identity and authorization facts from Identity & Access. |
+| **Must Not Own** | User credentials, Partner employee relationships, LoanApplication state, lending exposure, operational contracts, approval decisions, or repayment servicing. |
 
-Identity owns the login-to-customer mapping through `users.customer_id`. Customer owns the Customer aggregate, profile, and bank-account data. Do not add a second `customers.user_id` ownership link.
+Customer owns source identity and bank-account information and protects sensitive values at rest. Other contexts receive only purpose-limited facts, masked representations, or explicitly protected values through narrow application contracts.
 
-Customer identity references and bank-account numbers are encrypted at rest. Public REST responses must not expose plaintext, ciphertext, fingerprints, or unrestricted evidence. Generic Audit records may contain only closed, PII-safe IDs and status codes.
+Generic audit records may contain only closed, PII-safe identifiers, statuses, reason codes, and timestamps. They must not become a secondary store of unrestricted Customer evidence.
 
 ---
 
@@ -66,38 +102,84 @@ Customer identity references and bank-account numbers are encrypted at rest. Pub
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Partner Companies, Partner Employees, monthly employee imports, import batches, reusable customer employee links for Salary Advance eligibility |
-| **Entities** | `PartnerCompany` (aggregate root), `PartnerEmployee`, `PartnerEmployeeImportBatch`, `CustomerPartnerEmployeeLink`, `EmployeeEligibilityData` |
-| **Public Interface** | `PartnerQueryPort.findCompany(id)`, `PartnerEmployeePort.verifyEmployee(...)`, `CustomerPartnerEmployeeLinkPort.getActiveLink(customerId, partnerCompanyId)`, `PartnerImportPort.importMonthlyEmployees(...)` |
-| **Events Published** | `PartnerCompanyActivatedEvent`, `PartnerEmployeeImportCompletedEvent`, `CustomerPartnerEmployeeLinkedEvent`, `CustomerPartnerEmployeeLinkSuspendedEvent` |
-| **Microservice Candidacy** | Future extraction candidate. In MVP it supports the Loan Core for Salary Advance policy checks. |
+| **Responsibilities** | Partner Company lifecycle, Partner Employee source data, monthly employee imports, import validation, employment matching, authorized manual-review outcomes, and reusable Customer–Partner Employee relationships used for Salary Advance eligibility. |
+| **Owns** | `PartnerCompany`, `PartnerEmployee`, employee import batches and row outcomes, reusable `CustomerPartnerEmployeeLink`, employment-verification evidence, and Partner-owned eligibility facts. |
+| **Public Capabilities** | Manage Partner Companies; import and validate employee data; verify Customer employment; query or refresh an active verified employee link; provide purpose-limited eligibility facts to Loan. |
+| **Publishes** | Representative events include Partner Company activated or suspended, employee import completed, Customer employee link verified, refreshed, suspended, rejected, or expired. |
+| **Consumes** | Purpose-limited Customer identity evidence and authenticated actor information. |
+| **Must Not Own** | Salary Advance limit state, LoanApplication verification snapshots, lending exposure, LoanAccount state, approved offers, or repayment servicing. |
 
-Partner Management owns Partner Company and Partner Employee source data. It also owns the reusable customer-to-partner-employee eligibility link because that link answers whether a customer is verified as an employee of a partner company. Loan Core may reference the link by ID and consume eligibility data through application/public ports, but it must not own Partner Employee records.
+Partner Management owns the reusable Customer-to-Partner Employee relationship because it answers whether a Customer is verified as an employee of a Partner Company.
+
+Loan may reference that relationship by identifier and consume eligibility facts through application-level contracts. Loan must not own or duplicate Partner Employee source records.
 
 ---
 
-## 4. Loan Core / Origination — CORE DOMAIN
+## 4. Loan Core / Lending Lifecycle — Core Domain
 
-> Loan Core / Origination is the generic lending core of the platform and is responsible for enforcing lending business rules. To maintain domain integrity, loan lifecycle transitions, eligibility policies, repayment calculations, and interest computations are owned by the Loan domain and must not be implemented in controllers, persistence adapters, or external services.
+Loan Core is Meridian’s generic lending core. It owns the complete business lifecycle from product eligibility and application submission through disbursement, servicing, settlement, and closure.
 
-> Salary Advance, Unsecured Consumer Loan, and Collateral Loan are product behaviors inside this context, not separate top-level bounded contexts. Product-specific behavior is handled by loan product policies and strategies. Salary Advance uses Partner Management data for employee eligibility, owns the Salary Advance limit state and usage workflow, and records an application-level verification snapshot. Unsecured Consumer Loan and Collateral Loan use the same shared loan lifecycle with streamlined product-specific review rules.
+Salary Advance, Unsecured Consumer Loan, and Collateral Loan are product behaviors inside Loan Core rather than separate top-level bounded contexts. Product-specific policies specialize eligibility, verification, pricing, activation, exposure, repayment, settlement, and collateral behavior while sharing the common lending lifecycle.
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Generic LoanApplication lifecycle, product definition, product-specific activation and repayment policy selection, Salary Advance exposure, approved offers, operational Loan Contracts/readiness, immutable manual-disbursement evidence, LoanAccount activation, final schedules, repayment transactions/allocations/outcomes, servicing progress/history, overdue evaluation, and outstanding-debt submission blocking |
-| **Entities** | Current concepts include `LoanApplication`, `LoanProduct`, `SalaryAdvanceLimit` and movements/verifications, `ApprovedOffer`, `LoanContract`, protected destination evidence, `LoanAccount`, `ManualDisbursement`, final `RepaymentSchedule`, repayment transactions/allocations/outcomes, installment progress, and LoanApplication/LoanAccount/installment histories. |
-| **State Machines** | `LoanApplication` currently ends executable processing at `DISBURSED` (with revision/review and pre-disbursement terminal branches). The separate `LoanAccount` moves `ACTIVE <-> OVERDUE` and exact payoff produces `SETTLED`. `CLOSED` is a conceptual enum state only; no current command produces it. |
-| **Public Interface** | `LoanApplicationPort.submit()`, `.getApplication()`, `.listApplications()`, `SalaryAdvanceLimitPort.getCurrentLimit()`, `.startApplicationUsingLimit()` |
-| **Events Published** | `LoanSubmittedEvent` (carries: loanId, customerId, productId, requestedAmount, submittedAt), `SalaryAdvanceLimitReservedEvent`, `SalaryAdvanceLimitReleasedEvent`, `LoanReviewStartedEvent`, `LoanSentForApprovalEvent`, `LoanApprovedEvent`, `LoanRejectedEvent`, `LoanCancelledEvent`, `LoanDisbursedEvent`, `LoanCompletedEvent` |
-| **Microservice Candidacy** | LAST to extract |
+| **Responsibilities** | Loan product definitions and policy configuration; LoanApplication lifecycle; product-specific application data, eligibility, and verification snapshots; Salary Advance limit and exposure; review-cycle and correction workflow state; approved offers; operational contracts and readiness; disbursement evidence; LoanAccount activation; final repayment schedules; repayment transactions and allocations; overdue servicing; settlement; administrative closure; and application, account, and installment histories. |
+| **Owns** | `LoanProduct`, product-policy configuration, `LoanApplication`, product-specific application details, product verification snapshots, `SalaryAdvanceLimit` and limit movements, review cycles, correction requests and tasks, approved offers, operational loan contracts, immutable contract-bound destinations, disbursement evidence, `LoanAccount`, final repayment schedules, repayment transactions, allocations, servicing progress, settlement and closure evidence, and lifecycle histories. Product-specific application details include income and employment facts for Unsecured Consumer Loan and structured collateral, ownership, and valuation facts for Collateral Loan. |
+| **Public Capabilities** | Query products and eligibility; create or save drafts; submit applications; query application state and Salary Advance limits; start Loan Officer review; manage correction workflows and resubmit completed corrections; apply recommendation and approval outcomes; view and respond to offers; prepare and acknowledge contracts; confirm contract readiness; record manual disbursement; query LoanAccounts and schedules; record and query repayments; evaluate overdue state; settle and close eligible accounts. |
+| **Publishes** | Representative events include application submitted, verification recorded, limit reserved or released, review started, correction requested, recommendation applied, application approved or rejected, offer generated or resolved, contract prepared or acknowledged, readiness confirmed, loan disbursed, repayment recorded, account status changed, account settled, and account closed. |
+| **Consumes** | Customer readiness and eligible bank-account facts; Partner employee-link and eligibility facts; Document checklist and processing-readiness facts; Approval recommendation and decision outcomes; authenticated actor and authorization facts. |
+| **Must Not Own** | User credentials, Customer source profile or bank-account aggregates, Partner Employee source records, document binaries or document-review decisions, or Approval’s immutable recommendation and decision records. |
 
-Loan Core owns the current Salary Advance limit because it is lending state: total, used, reserved, available, status, reservation, disbursement usage, repayment release, suspension, and disablement. The application-level `SalaryAdvanceVerification` snapshot belongs to the Salary Advance loan application workflow. It stores the employee link and limit values used for one application, but it is not the reusable employee relationship and not the current limit account.
+### LoanApplication and LoanAccount State Ownership
 
-Loan owns the operational contract, immutable accepted-term and repayment snapshots, contract version lifecycle, readiness blockers, and `CONTRACT_PENDING → DISBURSEMENT_PENDING`. Customer continues to own source bank-account data and Customer encryption. A narrow Customer application contract performs mutable-buffer reveal inside Customer; Loan immediately re-protects the value with a versioned Loan-purpose AES-GCM envelope bound to stable identifiers. Customer ciphertext and fingerprint do not cross into Loan.
+`LoanApplication` governs origination from draft or submission through verification, document readiness, controlled review, approval, Customer acceptance, contract readiness, disbursement, and pre-disbursement terminal outcomes.
 
+After disbursement, `LoanAccount` becomes the authoritative servicing aggregate. It moves among `ACTIVE`, `OVERDUE`, `SETTLED`, and `CLOSED` according to repayment, settlement, overdue, and administrative-closure policies.
 
-Loan also owns the atomic `DISBURSEMENT_PENDING -> DISBURSED` operation. Generic account, disbursement, and schedule aggregates copy the ready contract exactly; the selected `LoanProductActivationPolicy` owns product-specific activation effects. Only the Salary Advance policy is executable and converts reserved exposure to used exposure under its established locks.
-Document remains the authority for `processingReady`. Ordinary contract/account APIs expose only safe masked DTOs. A dedicated `loan:disburse` reveal command is the sole REST exception for the full immutable contract destination, only before activation, with no-store headers and PII-safe transactional audit. Ciphertext, nonce, authentication tag, key ID, AAD, fingerprint, and crypto configuration never cross REST.
+LoanApplication status must not be reused as the source of truth for post-disbursement balances or servicing state.
+
+### Product-Specific Application Data
+
+Loan owns the structured lending facts needed to evaluate and service a product.
+
+Document Management owns uploaded supporting files, document versions, and document-review decisions. A supporting document may evidence a Loan-owned fact, but storing the file does not transfer ownership of the underlying income, employment, collateral, ownership, valuation, or other lending concept to Document Management.
+
+### Salary Advance Ownership
+
+Partner owns Partner Companies, Partner Employees, employee imports, and the reusable Customer employee link.
+
+Loan owns Salary Advance lending state:
+
+- total, used, reserved, and available limit;
+- limit status and movements;
+- reservation and release;
+- disbursement conversion from reserved to used exposure;
+- repayment-driven principal exposure release;
+- application-level verification snapshots.
+
+The application verification snapshot records the Partner relationship and limit evidence used for one LoanApplication. It does not replace the reusable Partner-owned employee relationship or the current Loan-owned limit account.
+
+### Contract and Disbursement Destination Ownership
+
+Customer owns mutable source bank-account data.
+
+Loan owns the immutable, contract-bound disbursement destination used after Customer acceptance. Loan obtains eligible destination facts through a narrow, purpose-limited Customer contract and must not access Customer persistence or reuse Customer’s encryption ownership.
+
+A new contract version is required when a material contract-bound destination changes before readiness. Supersession must not silently alter accepted financial terms, repayment items, or Customer acknowledgment evidence.
+
+### Product Policy Ownership
+
+The shared lifecycle remains generic. Product policies own only the behavior that legitimately varies by product, including:
+
+- eligibility and required evidence;
+- amount and term constraints;
+- pricing and repayment construction;
+- activation effects;
+- exposure reservation and release;
+- collateral-specific controls;
+- settlement and closure effects.
+
+A product policy must not bypass common lifecycle, security, audit, document-readiness, or maker-checker controls.
 
 ---
 
@@ -105,12 +187,18 @@ Document remains the authority for `processingReady`. Ordinary contract/account 
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Loan Officer review, Approver decision, controlled review and approval, maker-checker controls, approval decision trail |
-| **Entities** | `ReviewRecommendation`, `ApprovalDecision`, `ApprovalRequest` (aggregate root), `ApprovalStep`, `UserId` (VO), `RejectionReason` (VO) |
-| **Public Interface** | `ApprovalPort.createReview()`, `.submitRecommendation()`, `.submitDecision()`, `.getDecisionTrail()` |
-| **Listens To** | `LoanSentForApprovalEvent` → creates approval decision work item after Loan Officer review |
-| **Events Published** | `LoanReviewRecommendedEvent`, `ApprovalDecisionRecordedEvent` → Loan module updates status |
-| **Microservice Candidacy** | Future extraction candidate. Keep with the modular monolith for MVP controlled review and approval. |
+| **Responsibilities** | Authoritative Loan Officer recommendation records, Approver decision records, decision authority, maker-checker controls, structured correction intent, and immutable recommendation and decision history. |
+| **Owns** | `ReviewRecommendation`, `ApprovalDecision`, controlled reason codes, decision metadata, decision authority evidence, and the immutable trail linking a recommendation to its resulting decision. |
+| **Public Capabilities** | Record a Loan Officer recommendation; record an Approver decision; validate maker-checker separation; query recommendation and decision history; publish structured outcomes for Loan to apply. |
+| **Publishes** | Representative events include recommendation recorded, approval decision recorded, correction requested, returned to Loan Officer review, approved, and rejected. |
+| **Consumes** | LoanApplication identity, the Loan-owned active review-cycle identifier, application context required for the decision, and authenticated Staff identity and authorization facts. |
+| **Must Not Own** | LoanApplication status, review-cycle lifecycle, correction tasks, resubmission, product revalidation, approved offers, contracts, disbursement, or LoanAccount servicing. |
+
+Loan owns the active review cycle and every LoanApplication transition.
+
+Approval owns the immutable recommendation and decision records. It references the Loan-owned application and active review cycle by identifier and publishes structured outcomes for Loan to apply to the LoanApplication lifecycle.
+
+A recommendation or decision must not directly mutate Loan-owned persistence.
 
 ---
 
@@ -118,89 +206,140 @@ Document remains the authority for `processingReady`. Ordinary contract/account 
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Document upload, storage, metadata, checklist management, manual document review, replacement, waiver, readiness, and planned OCR-assisted processing |
-| **Entities** | Current: application checklists/items, logical documents, immutable document versions, review decisions, and storage references. Planned Phase 2: `OcrJob` and `OcrResult`. |
-| **Public Interface** | `DocumentPort.upload()`, `.getMetadata()`, `.download()`, `.findByLoan()` |
-| **Events Published** | `DocumentUploadedEvent`, `DocumentReviewedEvent`, `DocumentChecklistReadyEvent` |
-| **Microservice Candidacy** | Future extraction candidate. Keep checklist, review, and readiness controls in the modular monolith for MVP. |
-
----
+| **Responsibilities** | Application checklists, checklist items, document upload and storage, logical documents, immutable document versions, current-version selection, metadata, authorized content access, manual review, replacement, waiver, expiration, and processing readiness. |
+| **Owns** | Application document checklists, checklist items, logical documents, immutable versions, storage references, review decisions, review status, replacement and waiver evidence, and document-processing results. |
+| **Public Capabilities** | Create and query checklists; upload and retrieve authorized document content; review a document version; accept, reject, waive, or request replacement; query upload completeness and processing readiness; provide narrow readiness facts to Loan. |
+| **Publishes** | Representative events include document uploaded, version superseded, document reviewed, replacement requested, checklist upload-complete, and checklist processing-ready. |
+| **Consumes** | LoanApplication ownership and workflow facts, correction-task proof, and authenticated Customer or Staff authorization facts. |
+| **Must Not Own** | LoanApplication status, review cycles, correction requests or tasks, product eligibility, approval decisions, contract readiness, lending exposure, or the structured lending facts merely evidenced by uploaded documents. |
 
 ### OCR-Assisted Processing Boundary
 
-> OCR-assisted document processing is a planned Phase 2 capability within Document Management, not a separate top-level bounded context. The core MVP remains manual-review based, and manual document review remains authoritative for checklist readiness, replacement, waiver, and acceptance decisions.
+OCR-assisted processing belongs inside Document Management as an advisory document-processing capability rather than a separate top-level bounded context.
 
-| Aspect | Detail |
-|---|---|
-| **Responsibilities** | OCR-assisted document processing, Vietnamese TrOCR inference, document text extraction, field parsing |
-| **Application/Output Port** | `OcrProcessingPort.submitForProcessing(docId)`, `.getResult(jobId)` |
-| **Python Service** | FastAPI + TrOCR model and async workers when the OCR service is enabled |
-| **Core MVP Boundary** | Manual upload, checklist handling, manual review, replacement, waiver, and readiness checks work without OCR. |
-| **Phase 2 Boundary** | OCR is assistive only; checklist readiness, replacement, waiver, and acceptance remain controlled by Document Management and manual review. |
+Document Management may own OCR jobs, extracted text, parsed fields, confidence scores, and processing history. OCR results remain Document-owned evidence.
 
----
+OCR must not independently:
 
-## 7. Audit & Compliance Controls — Supporting (Cross-Cutting)
+- approve or reject a LoanApplication;
+- mark a checklist item accepted;
+- waive required evidence;
+- decide processing readiness;
+- mutate LoanApplication state.
 
-| Aspect | Detail |
-|---|---|
-| **Responsibilities** | Immutable audit events, cross-cutting business action history, compliance-oriented audit trail; observational only and not a workflow source of truth |
-| **Entities** | `AuditEvent` (append-only, NEVER updated) with JSONB payload for state snapshots |
-| **Integration** | Records explicit shared business audit events synchronously through Spring `@EventListener` for the current MVP checkpoint. Audit is a terminal consumer, never commands other modules, and audit failures propagate so the originating business transaction rolls back. The generic `event_publication` table remains a Spring Modulith infrastructure table but is not used as an async audit/outbox design in this checkpoint. |
-| **Microservice Candidacy** | Remain within the monolith by default. Extraction is possible for large-scale compliance, archival, or regulatory workloads but is not expected within the current platform scope. |
+Authorized review remains the source of checklist acceptance, replacement, waiver, and readiness decisions. Loan consumes checklist and readiness facts rather than raw OCR ownership.
 
 ---
 
-## 8. Notification — Generic Subdomain (Optional Later)
+## 7. Audit & Compliance Controls — Supporting Cross-Cutting Domain
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Future email, SMS, in-app notifications, template management |
-| **Entities** | `Notification`, `NotificationTemplate` |
-| **Consumes** | `LoanApprovedEvent`, `LoanDisbursedEvent`, `ApprovalPendingEvent` |
-| **MVP Boundary** | Optional later; not required for the MVP core workflow. |
-| **Microservice Candidacy** | Future extraction candidate if notification volume or channel complexity requires it. |
+| **Responsibilities** | Immutable records of important business actions, actor and time evidence, compliance-oriented state-change history, and secure audit querying. Audit is observational and never becomes a workflow source of truth. |
+| **Owns** | Append-only audit events, PII-safe audit payloads, audit correlation identifiers, retention and archival policy, and compliance-oriented query models. |
+| **Public Capabilities** | Record an auditable business action; query authorized audit history; correlate actions belonging to one business operation; support retention, archival, and compliance review. |
+| **Consumes** | Explicit, PII-safe auditable facts published by business contexts. |
+| **Must Not Own** | LoanApplication state, balances, approval authority, document readiness, Customer evidence, Partner eligibility, or commands that change another context. |
+
+Audit reliability must preserve consistency with the originating business outcome. The selected coordination mechanism must define failure and recovery semantics appropriate to the audited action.
+
+Audit payloads must remain closed and purpose-limited. Audit is not a secondary document store, Customer evidence store, or financial ledger.
 
 ---
 
-## Communication Rules Summary
+## 8. Notification — Generic Subdomain
+
+| Aspect | Detail |
+|---|---|
+| **Responsibilities** | Message templates, notification requests, channel selection, delivery attempts, delivery status, retry policy, and Customer or Staff communication preferences. |
+| **Owns** | `Notification`, `NotificationTemplate`, delivery attempts, channel-specific delivery metadata, and notification status. |
+| **Public Capabilities** | Request a notification; render a template; select an eligible channel; deliver or retry a message; query delivery status. |
+| **Consumes** | Notification-triggering business events from Identity, Customer, Partner, Document, Approval, and Loan. |
+| **Must Not Own** | Lending workflow state, approval decisions, eligibility, repayment balances, or the business rule that determines whether an event occurred. |
+
+Notification failures must not silently rewrite or reverse the business outcome that triggered the message. Business contexts remain authoritative for their own state.
+
+---
+
+## Context Ownership Matrix
+
+| Capability or Information | Authoritative Context |
+|---|---|
+| User accounts, credentials, roles, permissions, sessions | Identity & Access |
+| Login-to-Customer association | Identity & Access |
+| Customer profile, verification state, source bank accounts | Customer Management |
+| Partner Companies and Partner Employees | Partner Management |
+| Employee import batches and employment matching | Partner Management |
+| Reusable Customer–Partner Employee link | Partner Management |
+| Loan products and product policies | Loan Core |
+| LoanApplication lifecycle and status | Loan Core |
+| Product-specific structured application and lending facts | Loan Core |
+| Salary Advance limit and exposure movements | Loan Core |
+| Application-level eligibility and verification snapshots | Loan Core |
+| Review cycles, correction requests, tasks, and resubmission | Loan Core |
+| Loan Officer recommendation and Approver decision records | Approval Workflow |
+| Approved offers and Customer response state | Loan Core |
+| Operational contracts and contract-bound destinations | Loan Core |
+| Contract readiness and disbursement evidence | Loan Core |
+| LoanAccounts, schedules, repayments, overdue state, settlement, closure | Loan Core |
+| Checklists, document versions, review decisions, readiness | Document Management |
+| OCR jobs and extracted document evidence | Document Management |
+| Immutable cross-cutting audit evidence | Audit & Compliance Controls |
+| Templates and message-delivery state | Notification |
+
+---
+
+## Communication and Dependency Rules
 
 | Type | Allowed | Forbidden |
 |---|---|---|
-| **Sync** | IAM→Any (auth), Loan→Customer (profile/bank account checks), Loan→Partner (Salary Advance eligibility data), Loan/Approval→Document (checklist readiness) | Direct entity imports across modules |
-| **Async** | Future after-commit or replayable domain events where explicitly designed | Direct JPA repo access across modules |
-| **Data** | Each module owns its tables exclusively | Shared tables, cross-module JOINs |
-| **Reliability** | Current Approval-to-Loan and Audit recording are synchronous and transaction-participating; future async delivery requires explicit retry/idempotency design | Rolling your own outbox table; relying on in-memory delivery alone |
+| **Synchronous contracts** | Immediate authentication, authorization, ownership, readiness, eligibility, and purpose-limited fact queries through published application contracts | Cross-context aggregate mutation, repository access, or invocation of another context’s non-public application or domain services |
+| **Business events** | State-change notifications and decoupled reactions using explicit schemas and idempotent handling | Treating a consumer projection as the publishing context’s source of truth |
+| **References** | Stable identifiers and purpose-limited immutable facts | Direct entity imports or cross-context object graphs |
+| **Persistence** | Each context owns its aggregates, repositories, and tables | Shared aggregate ownership, cross-context JPA relationships, direct cross-context joins, or foreign repository access |
+| **Reliability** | Synchronous transaction-participating coordination or durable asynchronous coordination with explicit atomicity, retry, idempotency, ordering, reconciliation, and replay rules appropriate to the business outcome | Fire-and-forget handling or business-critical delivery without explicit failure, consistency, and recovery semantics |
+| **Security and privacy** | Minimal disclosure, masked or protected sensitive values, ownership checks, and least-privilege application contracts | Broad evidence sharing, unrestricted PII propagation, or leaking infrastructure secrets into public contracts |
+| **Evolution** | Stable application contracts and versioned event schemas | Depending on another context’s internal classes, tables, storage keys, or implementation framework |
 
-> **Approval ↔ Loan coordination is event-driven for state changes.** Loan sends sufficient application context and Loan Officer recommendation when an approval decision is needed. Approval publishes the recorded decision so Loan can update the application lifecycle. No direct entity imports are allowed between these modules.
+### Identity Coordination
 
-> **Salary Advance eligibility and limit coordination uses clear ownership.** Partner owns Partner Company, Partner Employee, and the reusable customer employee link. Loan owns Salary Advance limit state, limit movements, and application verification snapshots. Cross-context references use IDs and application/public ports, not shared JPA entity ownership.
+Identity supplies authenticated actor and authorization facts to protected contexts.
 
-> **Current workflow coordination is synchronous for this checkpoint.**
-> Approval-to-Loan listeners and Audit recording use Spring `@EventListener` and participate in the originating transaction. The `event_publication` table remains a Spring Modulith infrastructure table, but this checkpoint does not introduce async audit, after-commit listeners, outbox processing, or retry infrastructure.
+Business contexts remain responsible for their own ownership and business-rule checks. A permission authorizes an attempted capability; it does not prove that the requested Customer, application, document, contract, or account belongs to the actor.
 
-### Document and correction ownership
+### Document and Correction Coordination
 
-- Document owns application checklists, checklist items, logical documents, immutable
-  versions, the current-version pointer, review decisions, staging, and local storage.
-- Loan owns `RETURNED_FOR_REVISION`, review cycles, correction requests/tasks,
-  correction actor authorization, resubmission, Salary Advance revalidation, and
-  every Loan Application status transition.
-- Approval owns immutable recommendation/decision source records and the exact
-  structured correction-plan request contract. A recommendation references the
-  Loan-owned active review cycle by ID; a decision derives its cycle through its
-  recommendation.
-- Document calls narrow Loan application ports for workflow locking, ownership, and
-  correction-task proof. Loan calls a narrow Document readiness/checklist port.
-- Customer document and correction APIs derive Customer identity from
-  `CurrentUserProvider`. Storage keys, hashes, paths, content, restricted notes, and
-  staff instructions never cross the public contracts.
-- Staff APIs require narrow correction, upload, review, or waiver permissions. Staff upload additionally requires an open Staff task, while task completion enforces maker-checker against the correction-request creator.
-- Document content is streamed only through ownership-checked Customer or review-authorized Staff endpoints with attachment, no-store, private-cache, and nosniff response controls.
-- Storage references, local paths, hashes, restricted notes, and document content never cross broad JSON contracts.
-- Audit and Loan history use safe IDs, states, actor types, reason codes, and timestamps.
-- The local-filesystem storage adapter is an MVP infrastructure choice behind a port; it does not leak into Document domain or application contracts.
+Document owns checklist and document evidence, versions, review decisions, and processing readiness.
 
-### Repayment servicing ownership
+Loan owns LoanApplication state, review cycles, correction requests and tasks, resubmission, and product revalidation. Approval owns immutable recommendation and decision records and may produce structured correction intent.
 
-Repayment servicing remains inside the Loan bounded context. Loan owns generic repayment transactions, allocations, installment progress, LoanAccount servicing state, histories, overdue evaluation, and application ports. The Salary Advance policy is the only complete executable product policy and owns exact principal exposure release. The final schedule remains immutable obligation evidence; payment and allocation evidence are distinct. No UCL or Collateral placeholders are introduced.
+The contexts collaborate through identifiers and published application contracts. Document does not change LoanApplication status, and Loan does not decide document acceptance by modifying Document-owned evidence.
+
+---
+
+## Extraction Principles
+
+Bounded contexts are logical ownership boundaries inside the modular monolith. They are not a commitment to deploy each context as an independent service.
+
+A context should be considered for extraction only when:
+
+- its application contracts are stable;
+- data ownership is already independent;
+- cross-context consistency requirements are understood;
+- operational scale or organizational ownership justifies the cost;
+- retry, idempotency, observability, and failure-handling requirements are designed.
+
+Recommended strategic suitability:
+
+| Context | Extraction Suitability |
+|---|---|
+| Identity & Access | High |
+| Notification | High |
+| Customer Management | Medium to high |
+| Partner Management | Medium to high |
+| Document Management | Medium to high |
+| Audit & Compliance Controls | Medium |
+| Approval Workflow | Medium |
+| Loan Core / Lending Lifecycle | Low; consider last |
+
+The modular monolith remains the preferred deployment model while Meridian benefits from strong transactional consistency, simple operations, and close collaboration among the core lending contexts.
