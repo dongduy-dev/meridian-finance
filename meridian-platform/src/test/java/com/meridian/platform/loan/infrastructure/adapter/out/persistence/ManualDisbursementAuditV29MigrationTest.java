@@ -62,12 +62,12 @@ class ManualDisbursementAuditV29MigrationTest {
     }
 
     @Test
-    void currentSchemaSnapshotDeclaresV33AndServicingFoundation() throws Exception {
+    void currentSchemaSnapshotDeclaresV35AndServicingFoundation() throws Exception {
         String snapshot = Files.readString(Path.of(
                 "../docs/database/MER-DB-CURRENT-SCHEMA.sql"
         ));
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V33"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V35"));
         assertTrue(snapshot.contains("-- V29 manual disbursement audit action"));
         assertTrue(snapshot.contains("'MANUAL_DISBURSEMENT_CONFIRMED'"));
         assertTrue(snapshot.contains("'REPAYMENT_RECORDED'"));
