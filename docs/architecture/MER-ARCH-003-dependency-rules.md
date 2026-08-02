@@ -1,491 +1,277 @@
-# Dependency Rules & Architecture Enforcement
+# Dependency Rules and Architecture Enforcement
 
-> The MVP remains one backend and one database. Modules are bounded contexts inside the modular monolith, not separate services by default.
-> Architecture Standard v2 follows the Practical Meridian Architecture Standard: MVP limits feature scope, not architecture consistency.
->
-> **Current enforcement boundary:** `ArchitectureRulesTest` currently enforces five rule groups: Domain independence from Spring; Domain independence from JPA, Application, and Infrastructure; Domain/Application independence from Spring Security, JWT libraries, and Identity security implementation; Application independence from Infrastructure; and Shared independence from feature modules. Spring Modulith dependencies are present, but there are no module `package-info.java` declarations or executable `ApplicationModules.verify()` test. Examples below that go beyond those five groups are target guardrails, not claims of current automated enforcement.
+## Purpose and Document Authority
 
-## Layer Dependency Rules (Within Each Module)
+This document defines Meridian’s normative source-dependency rules for the Java backend modular monolith and the strategy used to enforce them.
+
+| Document | Authority |
+|---|---|
+| `MER-ARCH-001-bounded-contexts.md` | Business ownership, source-of-truth boundaries, published capabilities, and context collaboration |
+| `MER-ARCH-002-project-structure.md` | Backend source layout and package placement |
+| `MER-ARCH-003-dependency-rules.md` | Legal compile-time dependencies, public module surfaces, adapters, and architecture enforcement |
+| `MER-ARCH-006-api-request-flow-and-dependencies.md` | Concrete request flows, transactions, retries, locks, and runtime security behavior |
+
+This document translates the ownership in `MER-ARCH-001` into source-code constraints. It does not redefine which context owns business data or workflow state.
+
+Implementation progress and temporary conformance gaps belong in the project roadmap and follow-up register. Executable tests remain authoritative for what is automatically enforced.
+
+---
+
+## 1. Core Dependency Principle
+
+> **Dependencies point inward.**
 
 ```mermaid
-graph TB
-    WEB["Adapter: Web (Controllers)"] --> IN["application/port/in"]
-    WEB --> DTO["application/dto"]
-    APP["Application Services"] -.->|"implements"| IN
-    APP --> OUT["application/port/out"]
-    APP --> DOMAIN["Domain (Models, Services, Events, Exceptions)"]
-    PERSIST["Adapter: Persistence (JPA)"] -.->|"implements"| OUT
+graph LR
+    WEB["Inbound adapters<br/>web / event"] --> IN["Application input ports"]
+    IN --> APP["Application services"]
+    APP --> DOMAIN["Domain"]
+    APP --> OUT["Application output ports"]
+    PERSIST["Persistence adapter"] --> OUT
     PERSIST --> DOMAIN
-    CLIENT["Adapter: Client (REST/gRPC)"] -.->|"implements"| OUT
-    EVENT["Adapter: Event Publisher"] -.->|"implements"| OUT
-    
-    WEB -.->|FORBIDDEN| PERSIST
-    
-    style DOMAIN fill:#e74c3c,color:#fff
-    style APP fill:#f39c12,color:#fff
-    style IN fill:#f39c12,color:#fff
-    style OUT fill:#f39c12,color:#fff
-    style WEB fill:#3498db,color:#fff
-    style PERSIST fill:#2ecc71,color:#fff
+    BOUNDARY["Boundary adapter"] --> OUT
+
+    DOMAIN -.->|"must not depend on"| APP
+    APP -.->|"must not depend on"| PERSIST
+    WEB -.->|"must not depend on"| PERSIST
 ```
 
-> Controllers MAY depend on `application/port/in/` interfaces and `application/dto/` types. Controllers MUST NOT depend on `domain/model/`, `domain/service/`, `application/port/out/`, JPA repositories, or JPA entities.
+The domain contains business state and policy. The application layer orchestrates use cases and owns its ports. Infrastructure implements technical concerns and boundary translation.
 
-| Rule | From | To | Allowed? |
-|---|---|---|---|
-| 1 | Feature domain | Shared domain model/exception types | YES |
-| 2 | Domain | Application, infrastructure, DTOs, Spring, JPA, web | NO |
-| 3 | Application services | Domain models, domain services, domain exceptions, domain events | YES |
-| 4 | Application services | `application/port/in` and `application/port/out` | YES - implement input ports and call output ports |
-| 5 | Application | Infrastructure | NO |
-| 6 | Infrastructure adapters | `application/port/out` | YES - implements output ports |
-| 7 | Infrastructure persistence adapters | Domain | YES - maps JPA entities to domain objects |
-| 8 | Controllers | `application/port/in` and `application/dto` | YES |
-| 9 | Controllers | JPA repositories, JPA entities, domain services, output ports | NO |
-| 10 | Application services | `CurrentUserProvider` | YES - shared application abstraction |
-| 11 | Domain/Application | Spring Security or JWT classes | NO - use shared abstractions instead |
-
-### The Rule
-> **Dependencies point inward.** Domain knows nothing about the outside world. Application owns use-case orchestration and its input/output ports. Infrastructure knows application ports and domain models only to implement adapters and perform mapping.
-
-`AuthenticatedUser` is a shared representation of the current actor. `CurrentUserProvider` is a shared application-level abstraction used by modules that need the current user.
+Framework convenience must not reverse this direction.
 
 ---
 
-## Module Communication Rules
+## 2. Layer Dependency Rules
 
-- Modules should not directly access each other's internals.
-- Cross-module interaction should happen through application/public ports, published interfaces, or Spring Modulith events where appropriate.
-- Loan workflows should not directly own Partner Company or Partner Employee data. Salary Advance loan workflows may reference partner/customer employee link IDs and eligibility result records only.
-- Salary Advance limit state belongs to Loan; Partner employee source data and reusable customer employee links belong to Partner/Customer eligibility boundaries.
-- Shared concepts should live in `shared`; product-specific policies must not leak into the top-level package structure.
-- `shared` must not depend on any feature module.
-- `identity` may depend on `shared`; customer, partner, loan, approval, document, audit, and notification may depend on `shared`.
-- `shared/application/security` contains abstractions only. `identity/infrastructure/security` contains concrete Spring Security/JWT implementation.
-- `JwtAuthenticationFilter`, `JwtTokenService`, and Spring Security adapters belong to identity infrastructure.
-- Identity owns the user-to-customer login mapping through `users.customer_id`. Customer owns Customer profile and bank-account data and must not add a redundant `customers.user_id` foreign key.
-- Loan and Partner may consume Customer facts only through narrow application/public contracts. They must not import Customer domain models, JPA entities, persistence repositories, or web DTOs.
-- Customer owns source bank-account decryption. Contract capture crosses the Customer-to-Loan boundary only through a narrow non-serializable sensitive value whose `toString()` is redacted; Loan encrypts immediately into its purpose-specific envelope and clears temporary mutable buffers.
-- Loan must never copy Customer ciphertext or fingerprint into a contract. The Loan envelope uses its own versioned key configuration and AAD bound to stable contract, application, Customer, and source-account identifiers.
-- Contract REST adapters return explicit safe DTOs and must never expose the full account number, any encryption envelope field, key identifier, AAD, fingerprint, or persistence entity.
-- Partner employee verification must derive identity evidence from Customer through an internal Customer contract, not from an unrestricted customer request field.
-- Customer must not call Loan to decide profile or bank-account mutation rules. Loan-status-sensitive Customer mutation restrictions require immutable snapshots or an explicit non-circular policy design before implementation.
-- OCR integration should be treated as an external or infrastructure-facing capability behind a document/OCR port.
-- Audit should record synchronous business audit events without controlling the core workflow.
-- Modules must not share JPA entity ownership across bounded contexts. Cross-context relationships are stored as IDs and resolved through application/public ports or events.
-- Repository ports return domain objects, not DTOs. Other output ports return domain objects or application contract records, not REST DTOs.
+| From | May depend on | Must not depend on |
+|---|---|---|
+| **Domain** | Java, its own domain types, minimal shared-domain abstractions | Spring, JPA, application, infrastructure, DTOs, foreign feature modules |
+| **Application** | Its own domain, ports, DTOs, shared application abstractions, explicitly published foreign contracts | Infrastructure, JPA entities, web adapters, concrete security/JWT implementation, foreign internal application types |
+| **Inbound web adapter** | Input ports, application DTOs, HTTP and authorization annotations, shared web abstractions | Repositories, output ports, JPA entities, domain services, foreign internals |
+| **Inbound event adapter** | Published event contracts, input ports, event framework types | Foreign repositories, direct aggregate mutation, foreign infrastructure |
+| **Persistence adapter** | Its module’s output ports, domain models, JPA/JDBC, persistence mapping | Controllers, foreign repositories or entities, workflow orchestration |
+| **Boundary adapter** | Consumer-owned output port and provider’s published application contract | Provider domain, repositories, JPA entities, or internal services |
+| **Shared kernel** | Java and stable cross-cutting abstractions | Every feature module |
 
-### Allowed Patterns
+### Domain
 
-```java
-// PATTERN 1: Sync — Call public port interface
-// Loan module calling Customer module through a port
-// loan/application/port/out/CustomerQueryPort.java
-public interface CustomerQueryPort {
-    Optional<CustomerProfileSnapshot> findById(CustomerId id);
-}
+Domain code remains pure Java. It must not perform HTTP, database, storage, messaging, authentication-context, or framework operations.
 
-// customer/infrastructure/.../CustomerModuleAdapter.java
-@Component
-public class CustomerModuleAdapter implements CustomerQueryPort {
-    private final CustomerQueryService customerQueryService; // Customer's own service
-    // ...
-}
-```
+### Application
 
-```java
-// PATTERN 2: Current synchronous Spring ApplicationEvents
-// loan/application/service/ReviewLoanService.java
-eventPublisher.publishEvent(new LoanSentForApprovalEvent(loanId, customerId, productCode, recommendation));
+Application services own orchestration, transactions, idempotency coordination, and policy selection. They may use `CurrentUserProvider`, but not Spring Security principals, JWT claims, or Identity infrastructure types.
 
-// approval/infrastructure/listener/LoanEventListener.java
-@Component
-public class LoanEventListener {
-    // Intentional synchronous listener: downstream failures roll back the publishing transaction.
-    @EventListener
-    public void onLoanSentForApproval(LoanSentForApprovalEvent event) {
-        approvalService.createApprovalDecisionWorkItem(event.loanId(), event.recommendation());
-    }
-}
-```
+### Adapters
 
-```java
-// PATTERN 3: Sync — Product-supporting data through clear ports
-// loan/application/port/out/PartnerEligibilityPort.java
-public interface PartnerEligibilityPort {
-    CustomerEmployeeLinkData verifyOrGetEmployeeLink(EmployeeLinkQuery query);
-    SalaryAdvanceEligibilityData getEligibilityData(CustomerEmployeeLinkId linkId);
-}
-
-// loan/application/port/out/DocumentReadinessPort.java
-public interface DocumentReadinessPort {
-    DocumentReadinessResult checkReadiness(LoanApplicationId loanApplicationId);
-}
-```
-
-> Product-specific behavior belongs under the `loan` module through product policies and strategies. Partner data remains in `partner`; reusable customer employee links are exposed to Loan through IDs and eligibility records; document and OCR behavior remains in `document` or behind document/OCR ports.
-
-```java
-// PATTERN 4: Current actor access through shared abstraction
-// loan/application/service/SubmitLoanService.java
-public class SubmitLoanService {
-    private final CurrentUserProvider currentUserProvider;
-
-    public void submit(...) {
-        AuthenticatedUser actor = currentUserProvider.currentUser();
-        // use actor.id() and role/permission data without depending on Spring Security
-    }
-}
-```
-
-> `SpringSecurityCurrentUserProvider` is an identity infrastructure adapter that implements `CurrentUserProvider` using Spring Security. `JwtAuthenticationFilter` and `JwtTokenService` belong to identity because identity owns current access-token authentication, JWT parsing/issuing, users, roles, permissions, and RBAC. Refresh-token rotation is deferred.
-
-### Forbidden Anti-Patterns
-
-```java
-// ANTI-PATTERN 1: Direct entity import across modules
-// loan/application/service/LoanService.java
-import com.meridian.platform.customer.domain.model.Customer; // FORBIDDEN!
-
-// ANTI-PATTERN 2: Direct JPA repo access across modules
-// loan/application/service/LoanService.java
-@Autowired CustomerJpaRepository customerRepo; // FORBIDDEN!
-
-// ANTI-PATTERN 3: Shared JPA entities
-// Loan entity with @ManyToOne to Customer entity // FORBIDDEN!
-
-// ANTI-PATTERN 4: Controller calling repository directly
-// loan/infrastructure/adapter/in/web/LoanController.java
-@Autowired JpaLoanRepository loanRepo; // FORBIDDEN! Must go through application input port
-
-// ANTI-PATTERN 5: Domain depending on Spring
-// loan/domain/model/LoanApplication.java
-@Entity @Table // FORBIDDEN in domain layer — JPA annotations go on infra JPA entities
-
-// ANTI-PATTERN 6: Circular module dependency
-// Loan → Customer AND Customer → Loan // FORBIDDEN! Use events to break cycles
-
-// ANTI-PATTERN 7: Uncontrolled cross-module transaction/persistence coupling
-@Transactional
-public void crossModuleOperation() {
-    loanRepository.save(...);
-    customerJpaRepository.save(...); // FORBIDDEN! Direct foreign persistence ownership
-}
-// A deliberately synchronous narrow-port or application-event coordination may share the
-// originating transaction when rollback coupling, ordering, and tests are explicit.
-
-// ANTI-PATTERN 8: Top-level modules for individual loan products
-// com.meridian.platform.salaryadvance        // FORBIDDEN!
-// com.meridian.platform.unsecuredloan        // FORBIDDEN!
-// com.meridian.platform.collateralloan       // FORBIDDEN!
-
-// ANTI-PATTERN 9: Product-specific behavior leaking outside Loan Core
-// partner/application/service/SalaryAdvanceApprovalService.java // FORBIDDEN!
-// Product policies and strategies belong under loan/domain/product or loan/application policy orchestration.
-
-// ANTI-PATTERN 9B: Loan owning partner employee source data
-// loan/domain/model/PartnerEmployee.java // FORBIDDEN!
-// loan/application/service/SalaryAdvanceService.java imports PartnerEmployeeJpaEntity // FORBIDDEN!
-// Loan stores customerEmployeeLinkId/partnerEmployeeId snapshots and calls Partner ports for eligibility data.
-
-// ANTI-PATTERN 10: OCR integration called directly from Loan
-// loan/infrastructure/client/OcrRestClientAdapter.java // FORBIDDEN!
-// OCR integration is an external/infrastructure-facing capability behind a document/OCR port.
-
-// ANTI-PATTERN 11: Audit controlling business workflow
-// audit/application/service/AuditEventService.java calls loan.approve(...) // FORBIDDEN!
-// Audit records events and history; it does not own business decision logic.
-
-// ANTI-PATTERN 12: Shared importing feature module classes
-// shared/infrastructure/config/SecurityConfig.java imports com.meridian.platform.identity.infrastructure.security.JwtAuthenticationFilter // FORBIDDEN!
-// shared must not depend on identity or any other feature module.
-
-// ANTI-PATTERN 13: Spring Security/JWT classes in domain or application services
-// loan/application/service/SubmitLoanService.java imports org.springframework.security.core.Authentication // FORBIDDEN!
-// loan/domain/service/LoanEligibilityService.java imports io.jsonwebtoken.Claims // FORBIDDEN!
-// Application code should use CurrentUserProvider; domain code should stay pure.
-
-// ANTI-PATTERN 14: JWT implementation in shared
-// shared/infrastructure/security/JwtTokenService.java // FORBIDDEN!
-// shared/application/security contains abstractions only.
-```
+Controllers and event listeners enter through application input ports. Persistence and boundary adapters implement output ports. Adapters translate protocols and records; they do not decide business state transitions.
 
 ---
 
-## Enforcement Strategies
+## 3. Module Public Surfaces
 
-### 1. Spring Modulith Verification (Target Guardrail)
+Every feature module exposes an intentionally small application surface.
 
-```java
-@Test
-void verifiesModularStructure() {
-    ApplicationModules.of(MeridianPlatformApplication.class).verify();
-    // Automatically detects: cycle dependencies, illegal cross-module access
-}
-```
+Published surfaces may include:
 
-### 2. ArchUnit Rules (Current Core and Target Extensions)
+- application input ports;
+- purpose-limited application contract records;
+- business-event schemas;
+- identifiers and closed value representations intended for collaboration.
 
-```java
-@AnalyzeClasses(packages = "com.meridian.platform")
-class ArchitectureRulesTest {
+Internal by default:
 
-    // Rule: Domain layer must not depend on Spring
-    @ArchTest
-    static final ArchRule domainMustNotDependOnSpring =
-        noClasses().that().resideInAPackage("..domain..")
-            .should().dependOnClassesThat()
-            .resideInAnyPackage("org.springframework..");
+- domain models and services;
+- repositories and output ports;
+- application service implementations;
+- persistence entities and adapters;
+- controllers and web DTOs;
+- configuration and concrete security implementation;
+- storage keys, encryption envelopes, and provider-specific types.
 
-    // Rule: Domain and application code must not depend on Spring Security or JWT implementation classes
-    @ArchTest
-    static final ArchRule domainAndApplicationMustNotDependOnSecurityImplementations =
-        noClasses().that().resideInAnyPackage("..domain..", "..application..")
-            .should().dependOnClassesThat()
-            .resideInAnyPackage(
-                "org.springframework.security..",
-                "io.jsonwebtoken..",
-                "com.auth0.jwt.."
-            )
-            .because("Use shared CurrentUserProvider/AuthenticatedUser abstractions outside identity infrastructure");
+Java `public` visibility alone does not make a type a cross-module contract. Public contracts must be deliberate, stable, and placed in a package intended for collaboration.
 
-    // Rule: Domain must not depend on JPA
-    @ArchTest
-    static final ArchRule domainMustNotUseJpa =
-        noClasses().that().resideInAPackage("..domain..")
-            .should().dependOnClassesThat()
-            .resideInAnyPackage("jakarta.persistence..")
-            .because("Domain must not depend on JPA — use JPA entities in infrastructure persistence");
-
-    // Rule: Domain services must not use Spring annotations
-    @ArchTest
-    static final ArchRule domainServicesMustBePureJava =
-        noClasses().that().resideInAPackage("..domain.service..")
-            .should().beAnnotatedWith("org.springframework.stereotype.Service")
-            .orShould().beAnnotatedWith("org.springframework.transaction.annotation.Transactional")
-            .because("Domain services must be pure Java — Spring annotations belong in application layer");
-
-    // Rule: Domain must not depend on application or infrastructure
-    @ArchTest
-    static final ArchRule domainMustNotDependOnApplicationOrInfra =
-        noClasses().that().resideInAPackage("..domain..")
-            .should().dependOnClassesThat()
-            .resideInAnyPackage("..application..", "..infrastructure..");
-
-    // Rule: Domain must not depend on DTO packages
-    @ArchTest
-    static final ArchRule domainMustNotDependOnDtos =
-        noClasses().that().resideInAPackage("..domain..")
-            .should().dependOnClassesThat()
-            .resideInAnyPackage("..dto..", "..application.dto..")
-            .because("DTOs belong to application/API boundaries, not domain logic");
-
-    // Rule: Application must not depend on infrastructure
-    @ArchTest
-    static final ArchRule applicationMustNotDependOnInfra =
-        noClasses().that().resideInAPackage("..application..")
-            .should().dependOnClassesThat()
-            .resideInAPackage("..infrastructure..");
-
-    // Rule: Shared module must not depend on feature modules
-    @ArchTest
-    static final ArchRule sharedMustNotDependOnFeatureModules =
-        noClasses().that().resideInAPackage("com.meridian.platform.shared..")
-            .should().dependOnClassesThat()
-            .resideInAnyPackage(
-                "com.meridian.platform.identity..",
-                "com.meridian.platform.customer..",
-                "com.meridian.platform.partner..",
-                "com.meridian.platform.loan..",
-                "com.meridian.platform.approval..",
-                "com.meridian.platform.document..",
-                "com.meridian.platform.audit..",
-                "com.meridian.platform.notification.."
-            );
-
-    // Rule: Controllers must only access application input ports and DTO-facing concerns
-    @ArchTest
-    static final ArchRule controllersMustUsePortsOnly =
-        classes().that().resideInAPackage("..adapter.in.web..")
-            .should().onlyDependOnClassesThat()
-            .resideInAnyPackage(
-                "..application.dto..", "..application.port.in..",
-                "..shared..", "java..", "jakarta..",
-                "org.springframework.web..", "org.springframework.http..",
-                "org.springframework.security.access.prepost..",  // @PreAuthorize
-                "org.springframework.security.core..",             // Authentication
-                "io.swagger.v3.oas.annotations.."                  // OpenAPI docs
-            );
-
-    // Rule: Controllers must not call repositories or use JPA entities directly
-    @ArchTest
-    static final ArchRule controllersMustNotUseRepositoriesOrJpaEntities =
-        noClasses().that().resideInAPackage("..adapter.in.web..")
-            .should().dependOnClassesThat()
-            .resideInAnyPackage(
-                "..infrastructure.adapter.out.persistence..",
-                "..infrastructure.persistence..",
-                "org.springframework.data.repository..",
-                "org.springframework.data.jpa.repository..",
-                "jakarta.persistence.."
-            );
-
-    // Rule: No circular dependencies between modules
-    @ArchTest
-    static final ArchRule noCyclicDependencies =
-        slices().matching("com.meridian.platform.(*)..")
-            .should().beFreeOfCycles();
-
-    // Rule: Product-specific policies must stay inside the Loan module
-    @ArchTest
-    static final ArchRule noTopLevelProductModules =
-        noClasses().should().resideInAnyPackage(
-            "com.meridian.platform.salaryadvance..",
-            "com.meridian.platform.unsecuredloan..",
-            "com.meridian.platform.collateralloan.."
-        );
-
-    // Rule: Prevent SQL injection via string concatenation in persistence layer
-    @ArchTest
-    static final ArchRule noNativeQueryStringConcat =
-        noClasses().that().resideInAPackage("..persistence..")
-            .should().callMethod(String.class, "concat", String.class)
-            .orShould().callMethod(StringBuilder.class, "append", String.class)
-            .because("Repository classes must not build queries via string concatenation");
-
-    // Rule: Enforce Spring Boot 4 @MockitoBean over deprecated @MockBean
-    @ArchTest
-    static final ArchRule enforceModernMockitoBean =
-        noClasses().should().beAnnotatedWith("org.springframework.boot.test.mock.mockito.MockBean")
-            .because("Use @MockitoBean from org.springframework.test.context.bean.override.mockito in Spring Boot 4.0");
-
-    // Rule: Enforce JUnit 5 over JUnit 4
-    @ArchTest
-    static final ArchRule enforceJUnit5 =
-        noMethods().should().beAnnotatedWith("org.junit.Test")
-            .because("Use org.junit.jupiter.api.Test (JUnit 5) instead of JUnit 4");
-}
-```
-
-### 3. Current CI Pipeline Enforcement
-
-```yaml
-# .github/workflows/backend-ci.yml
-- name: Build and test
-  run: ./mvnw -B verify
-  # ArchitectureRulesTest runs in the normal Maven verification suite.
-```
-
-### 4. Package Visibility (Target Java-Module Guardrail)
-
-The following is a target design. The current repository has no Spring Modulith module `package-info.java` declarations or named public interfaces. If adopted, add executable structure verification and dependency tests in the same change.
-
-Use `package-info.java` with Spring Modulith `@ApplicationModule` to control what each module exposes:
-
-Named public interfaces should expose application/public ports or event packages, not `domain/port` packages.
-
-```java
-// shared/package-info.java — shared kernel and cross-cutting abstractions only
-@org.springframework.modulith.ApplicationModule(
-    allowedDependencies = {}
-)
-package com.meridian.platform.shared;
-
-// loan/package-info.java
-@org.springframework.modulith.ApplicationModule(
-    allowedDependencies = {"customer::public", "partner::public", "document::public", "shared"}
-)
-package com.meridian.platform.loan;
-
-// approval/package-info.java — receives Loan workflow events and publishes decisions
-@org.springframework.modulith.ApplicationModule(
-    allowedDependencies = {"loan::events", "shared"}
-)
-package com.meridian.platform.approval;
-
-// identity/package-info.java
-@org.springframework.modulith.ApplicationModule(
-    allowedDependencies = {"shared"}
-)
-package com.meridian.platform.identity;
-
-// customer/package-info.java
-@org.springframework.modulith.ApplicationModule(
-    allowedDependencies = {"shared"}
-)
-package com.meridian.platform.customer;
-
-// partner/package-info.java
-@org.springframework.modulith.ApplicationModule(
-    allowedDependencies = {"shared"}
-)
-package com.meridian.platform.partner;
-
-// document/package-info.java
-@org.springframework.modulith.ApplicationModule(
-    allowedDependencies = {"shared"}
-)
-package com.meridian.platform.document;
-
-// audit/package-info.java - terminal audit module; receives shared audit events synchronously
-@org.springframework.modulith.ApplicationModule(
-    allowedDependencies = {"shared"}
-)
-package com.meridian.platform.audit;
-
-// notification/package-info.java — optional later
-@org.springframework.modulith.ApplicationModule(
-    allowedDependencies = {"shared"}
-)
-package com.meridian.platform.notification;
-```
-
-> The current `audit` module records explicit shared business audit events through a synchronous Spring `@EventListener`. Audit depends on shared contracts only, does not command other modules, and participates in the originating transaction for the MVP checkpoint.
+Spring Modulith named interfaces, package visibility, or equivalent ArchUnit rules may enforce these surfaces. Exact declarations belong in executable source rather than duplicated here.
 
 ---
 
-### Logging Rule: No PII in Log Statements
+## 4. Cross-Module Contracts and Adapters
 
-```java
-// FORBIDDEN — PII in logs
-log.info("Customer registered: {}", customer.getNationalId());
-log.info("Processing loan for {}", customer.getFullName());
+These directions are different:
 
-// CORRECT — Use IDs only, never PII
-log.info("Customer registered", kv("customerId", customer.getId()));
-log.info("Processing loan", kv("loanId", loanId), kv("customerId", customerId));
+| Direction | Meaning |
+|---|---|
+| **Business collaboration** | Which context needs a capability or fact; defined in `MER-ARCH-001` |
+| **Runtime invocation** | Which component calls a contract during execution |
+| **Compile-time dependency** | Which package imports another package |
+| **Persistence ownership** | Which context owns and mutates the data |
+
+A runtime call never grants permission to import the provider’s domain or persistence model.
+
+### Preferred Synchronous Pattern
+
+```text
+Consumer application
+    → consumer-owned output port
+    → consumer infrastructure adapter
+    → provider published application contract
+    → provider application
 ```
+
+A boundary adapter may translate identifiers, immutable records, errors, redaction, and bounded sensitive values.
+
+It must not expose provider aggregates, call provider repositories, retain unrestricted evidence, bypass provider checks, or perform foreign persistence writes.
+
+### Cross-Module Rules
+
+1. Domain and application packages must not depend on another feature’s domain, infrastructure, persistence, or web packages.
+2. Foreign application types are allowed only when explicitly designated as published contracts or events.
+3. Cross-context references use identifiers and purpose-limited immutable facts, not aggregate object graphs.
+4. Each module owns its repositories, JPA entities, mappings, and tables.
+5. Bidirectional collaboration uses separate explicit contracts or events; direct module cycles are forbidden.
+6. Repository ports return domain objects or explicit application records, never REST DTOs.
 
 ---
 
-## Summary Matrix
+## 5. Business Events and Reliability
 
-| Source Module | Can Call (Sync) | Event consumption | Cannot Access |
-|---|---|---|---|
-| **Shared** | — | — | All feature modules, including Identity |
-| **Loan** | Customer, Partner, Document | — | Approval internals, IAM internals, top-level product modules |
-| **Approval** | — (no sync calls) | Current synchronous Loan workflow events | Customer, Partner, Document, Loan internals |
-| **Customer** | — | — | Loan internals, Partner internals |
-| **Partner** | — | — | Loan internals, Customer internals |
-| **Document** | — | — | Loan internals, Customer, Partner |
-| **Audit** | - | Current synchronous shared business audit events | All module internals, business decision logic |
-| **Notification** | — | Future notification events | All module internals; optional later |
-| **IAM** | Shared | — | All business modules |
+Business events are published contracts representing facts that occurred or outcomes another context must apply.
 
+Events should contain stable identifiers, closed action or reason values, timestamps, correlation data, and purpose-limited immutable facts.
 
-> **Approval receives all needed data from Loan workflow events** (loan amount, product, customer, Loan Officer recommendation). It never calls Loan synchronously, eliminating bidirectional coupling.
+They must not contain JPA entities, aggregate graphs, unrestricted evidence, secrets, encryption internals, or mutable shared collections.
 
-> **Salary Advance uses Partner through application/public eligibility ports only.** Loan may store customer employee link IDs, partner employee IDs, and application snapshots, but Partner remains the owner of Partner Employee source rows and reusable customer employee links.
+An event listener is an inbound adapter. It translates the event into an application command and invokes an input port; it does not write repositories directly.
 
-> **Audit receives shared business audit events and records immutable history.** It does not approve, reject, disburse, calculate eligibility, or otherwise control the core workflow.
+Two reliability models are valid when explicit:
 
-> **Current user access flows through shared abstractions.** Application services may depend on `CurrentUserProvider`; concrete Spring Security and JWT implementation stays in `identity/infrastructure/security`.
+- **Synchronous transaction participation** when downstream failure must roll back the originating outcome.
+- **Durable asynchronous delivery** with defined retry, idempotency, ordering, reconciliation, and replay.
 
-### Manual-disbursement boundary
+Fire-and-forget handling is forbidden for business-critical outcomes.
 
-- Web controllers depend only on the confirmation, reveal, and query input ports and application-owned DTO mapping.
-- `ConfirmManualDisbursementService` owns one Spring transaction; all account, evidence, schedule, Salary Advance conversion, application, history, and audit writes join it.
-- The product activation resolver is application-layer policy selection. It has no infrastructure dependency and no UCL/Collateral fallback.
-- Destination reveal reuses Loan's existing contract-purpose protector; it does not call Customer persistence or the Customer's current bank account.
-- Query ownership comes from `CurrentUserProvider`: Customers require `loan:read:own` and exact ownership; staff require `loan:read`.
-- Only the reveal response contains plaintext destination data. It is a dedicated redacted DTO with no-store headers; ordinary application, contract, account, audit, history, error, and log boundaries remain masked/PII-safe.
+Audit and Notification consume events without becoming authorities over the workflow that produced them.
+
+---
+
+## 6. Persistence, Shared, Security, and Product Boundaries
+
+### Persistence Isolation
+
+Permitted cross-context references use stable identifiers, immutable snapshots, purpose-limited records, and published events.
+
+Forbidden:
+
+- importing a foreign JPA entity;
+- calling a foreign repository or persistence adapter;
+- sharing one entity between modules;
+- using cross-context aggregate graphs;
+- treating direct cross-context joins as application integration;
+- writing another context’s tables.
+
+A database foreign key may protect integrity without transferring aggregate ownership.
+
+### Shared Kernel
+
+`shared` contains only minimal stable abstractions such as common exceptions, actor representations, operation context, audit contracts, and generic time or identifier support.
+
+It must not contain feature behavior or depend on `identity`, `customer`, `partner`, `loan`, `approval`, `document`, `audit`, or `notification`.
+
+### Security Isolation
+
+Concrete Spring Security and JWT code belongs to Identity infrastructure.
+
+Feature domain and application code may use `AuthenticatedUser`, `CurrentUserProvider`, or explicit actor facts. They must not depend on security-context access, JWT libraries, Identity principals, filters, token services, or security configuration.
+
+Authorization permits attempting a capability; the owning context still enforces resource ownership and business invariants.
+
+### Product and Supporting Capabilities
+
+Product-specific lending behavior remains inside `loan`. Top-level modules for Salary Advance, Unsecured Consumer Loan, or Collateral Loan are forbidden.
+
+External OCR integration remains behind a Document-owned output port and Document infrastructure adapter. Loan consumes Document readiness rather than calling an OCR provider.
+
+Audit and Notification observe published facts and never command a feature workflow.
+
+Authoritative business ownership remains in `MER-ARCH-001`.
+
+---
+
+## 7. Security and Privacy at Boundaries
+
+Contracts, events, errors, audit payloads, and logs follow least disclosure.
+
+They may carry identifiers, masked values, closed statuses, reason codes, and authorized purpose-limited facts.
+
+They must not expose unrestricted national identifiers or bank-account numbers; passwords, tokens, secrets, or keys; persistence entities; encryption or storage internals; or document evidence outside an authorized Document boundary.
+
+Sensitive temporary values must be bounded to the operation that requires them and cleared when mutable memory handling is available.
+
+Detailed HTTP disclosure and request-specific security rules belong in API and request-flow documentation.
+
+---
+
+## 8. Forbidden Dependency Patterns
+
+| Forbidden pattern | Reason |
+|---|---|
+| Domain imports Spring, JPA, application, or infrastructure | Breaks domain independence |
+| Application imports infrastructure | Reverses the dependency direction |
+| Controller calls a repository or domain service | Bypasses the application use case |
+| Event listener writes a repository directly | Bypasses consumer validation and orchestration |
+| Module imports a foreign entity, repository, or internal service | Violates ownership and public surfaces |
+| Shared imports a feature module | Reverses the shared-kernel dependency |
+| Feature application imports Identity security implementation | Couples business code to authentication technology |
+| Cross-context aggregate object graph | Creates shared ownership and hidden mutation |
+| Top-level package for one loan product | Fragments the common lending lifecycle |
+| Loan calls an OCR provider directly | Bypasses Document ownership |
+| Audit or Notification commands a business workflow | Lets an observer become an authority |
+| Business-critical fire-and-forget event | Leaves consistency and recovery undefined |
+| Contract, event, error, or log exposes unrestricted PII or secrets | Violates privacy and least disclosure |
+
+---
+
+## 9. Architecture Rule Catalogue
+
+| Rule ID | Normative rule | Preferred enforcement |
+|---|---|---|
+| `LAYER-DOMAIN-001` | Domain must not depend on Spring, JPA, application, or infrastructure | ArchUnit |
+| `LAYER-APPLICATION-001` | Application must not depend on infrastructure | ArchUnit |
+| `SECURITY-ISOLATION-001` | Domain and application must not depend on concrete security, JWT, or Identity security implementation | ArchUnit |
+| `SHARED-001` | Shared must not depend on feature modules | ArchUnit |
+| `WEB-BOUNDARY-001` | Web adapters must not depend on repositories, entities, domain services, or output ports | ArchUnit |
+| `EVENT-BOUNDARY-001` | Event listeners enter through input ports and avoid direct persistence | ArchUnit plus review |
+| `MODULE-PERSISTENCE-001` | Modules must not import or mutate foreign persistence models | ArchUnit plus review |
+| `MODULE-PUBLIC-001` | Cross-module imports use explicit published contracts or events | Spring Modulith or ArchUnit |
+| `MODULE-CYCLE-001` | Direct feature-module dependency cycles are forbidden | Spring Modulith or ArchUnit slices |
+| `PRODUCT-BOUNDARY-001` | Product-specific lending behavior remains under Loan | ArchUnit package rules |
+| `EVENT-RELIABILITY-001` | Critical event coordination defines failure and recovery semantics | Integration tests |
+| `PRIVACY-BOUNDARY-001` | Public boundaries do not disclose unrestricted PII or secrets | Serialization, security, and logging tests |
+
+---
+
+## 10. Enforcement and Evolution
+
+Mechanically checkable rules belong in `ArchitectureRulesTest` or focused architecture-test classes and run in the normal Maven verification lifecycle.
+
+| Mechanism | Responsibility |
+|---|---|
+| Compiler and package visibility | Block accidental access to non-public types |
+| ArchUnit | Layer imports, shared independence, security isolation, web boundaries, products, and cycles |
+| Spring Modulith or equivalent rules | Module public surfaces and legal module dependencies |
+| Unit and integration tests | Transactions, event failure behavior, adapter translation, persistence isolation, and privacy |
+| Code review | Semantic ownership and purpose limitation |
+| CI | Run architecture and verification tests on protected changes |
+
+A rule must not be described as automatically enforced unless an executable test exists. Narrow negative rules are preferred over brittle framework allowlists or unreliable heuristics.
+
+When architecture evolves:
+
+1. update `MER-ARCH-001` when business ownership changes;
+2. update `MER-ARCH-002` when package placement changes;
+3. update this document when the legal dependency model changes;
+4. add or revise executable architecture tests where practical;
+5. record temporary source conformance gaps separately rather than weakening the durable rule;
+6. version externally consumed contracts when compatibility requires it.
+
+The modular monolith remains one deployable backend while its contexts preserve explicit ownership, controlled public surfaces, inward dependency direction, and enforceable boundaries.
