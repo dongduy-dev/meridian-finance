@@ -66,7 +66,7 @@ Business contexts may publish notification-triggering events to Notification wit
 
 ---
 
-## 1. Identity & Access — Supporting Domain
+## 1. Identity & Access (IAM) — Supporting Domain
 
 | Aspect | Detail |
 |---|---|
