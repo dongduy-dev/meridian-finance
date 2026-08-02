@@ -20,6 +20,8 @@ This document is the single business requirements and workflow specification for
 
 This document focuses on what the system must do from a business and functional perspective. Detailed database design, API design, deployment design, and implementation-level technical design are outside this document unless needed to clarify business behavior.
 
+Unless a section is explicitly marked as current executable behavior, this document describes the intended MVP business target. The current repository implements the Salary Advance path through repayment servicing and exact contractual payoff to `LoanAccount SETTLED`. Administrative settlement, LoanAccount closure, UCL/Collateral activation and repayment, production frontends, and external financial integrations remain deferred.
+
 ---
 
 ## 3. Product and Application Scope
@@ -46,6 +48,8 @@ Meridian uses one generic lending core with product-specific policy behavior.
 | Mobile App | Future enhancement only; not part of the MVP. |
 
 The MVP uses one backend and one database. Customer-facing and back-office applications communicate with the same backend.
+
+Current repository boundary: the Spring Boot backend is implemented; the Customer and Back-Office Web Portals in this table are intended MVP applications and are not present in the repository.
 
 ### 3.3 Architecture Scope
 
@@ -252,7 +256,7 @@ Current Customer foundation rules:
 * Bank-account numbers are encrypted at rest and exposed only as masked values.
 * Bank-account identity is not edited in place. Replacements are modeled by adding a new account and deactivating the old account.
 * Contact details, residential address, employment summary, and configured consent confirmations may be updated by the customer and must be audited without storing PII in generic Audit payloads.
-* Loan-status-sensitive Customer profile and bank-account mutation restrictions are deferred until immutable application/disbursement snapshot behavior exists, so Customer does not depend on Loan.
+* Loan owns immutable contract/disbursement destination snapshots, but broader Loan-status-sensitive Customer profile and bank-account mutation restrictions remain a separate deferred policy decision so Customer does not depend on Loan.
 
 The Customer Web Portal displays active products with name, description, amount range, available terms, interest rate, repayment method, required documents, eligibility notes, and product-specific pre-submission requirements.
 
@@ -270,7 +274,7 @@ Concurrency rule for MVP:
 
 * A customer may keep multiple drafts.
 * A customer may not submit a new application for the same product while another application for that product is in `SUBMITTED`, `VERIFICATION_PENDING`, `DOCUMENTS_PENDING`, `UNDER_REVIEW`, `RETURNED_TO_REVIEW`, `APPROVAL_PENDING`, `APPROVED`, `CUSTOMER_ACCEPTANCE_PENDING`, `CONTRACT_PENDING`, or `DISBURSEMENT_PENDING`.
-* Salary Advance also requires a verified active customer employee link, an active available limit, and overdue/used/reserved exposure checks.
+* Salary Advance also requires a verified active customer employee link, an active available limit, and an authoritative check that no matching `ACTIVE` or `OVERDUE` LoanAccount has positive contractual outstanding debt.
 
 ### 6.2 Draft and Submission
 
@@ -415,13 +419,13 @@ An Accounting Officer with `loan:disburse` may reveal the full immutable contrac
 
 Confirmation accepts a request UUID, expected contract version, canonical external transfer reference, value date, and first repayment date. All money, term, installments, Customer ownership, product, and destination facts come from the locked ready contract. One transaction creates an active LoanAccount, immutable manual-disbursement evidence, and one final dated schedule; converts the Salary Advance reservation to used exposure; transitions the application to `DISBURSED`; and writes history and PII-safe audit. Identical request replay returns the original result without another durable effect. A different request after completion is rejected.
 
-Customers with `loan:read:own` may query only their activated LoanAccount; staff need `loan:read`. The response uses the immutable contract's fixed full destination mask `********` without revealing any stored suffix and excludes transfer references, full destination data, encryption evidence, Salary Advance internals, actor IDs, audit IDs, and history IDs. Repayment REST and query APIs, administrative closure, UCL activation, and Collateral activation remain deferred.
+Customers with `loan:read:own` may query only their activated LoanAccount; staff need `loan:read`. The response uses the immutable contract's fixed full destination mask `********` without revealing any stored suffix and excludes transfer references, full destination data, encryption evidence, Salary Advance internals, actor IDs, audit IDs, and history IDs. The same query now includes persisted servicing progress. Secured Salary Advance repayment posting and immutable repayment-history queries are executable; administrative closure, UCL activation, and Collateral activation remain deferred.
 
 ### 6.9 Repayment, Settlement, and Closure
 
 The immutable final version-1 repayment schedule is the authoritative scheduled obligation after activation. Servicing progress, actual payment transactions, and their allocations are separate evidence and must never rewrite original schedule amounts or dates.
 
-The physical servicing foundation represents zero-paid/full-outstanding LoanAccount and installment state, derives servicing statuses, preserves append-only status history, and stores immutable payment/allocation evidence. Existing accounts are initialized deterministically as of their activation date, never the Flyway execution date. Newly activated accounts create the same state and initial history atomically with activation. The application-layer posting operation now records real manual Salary Advance repayments atomically and stores a safe immutable outcome snapshot so exact replay remains stable after later repayments.
+Servicing starts with zero paid and the full contractual amount outstanding. Newly activated accounts establish the same initial installment and LoanAccount state atomically with activation. Each manual Salary Advance repayment records immutable payment and allocation evidence plus an immutable operation outcome so an exact replay remains stable after later servicing changes.
 
 Executable manual-repayment rules are:
 
@@ -431,7 +435,7 @@ Executable manual-repayment rules are:
 * reject the entire payment if it exceeds total outstanding; unapplied cash, suspense, credit, refund, and reversal are outside the MVP boundary;
 * persist `paymentValueDate` separately from `recordedAt`; require the value date to be between the disbursement value date and the current UTC date inclusive; allow backdated and out-of-order value dates; allocate against balances at recording time and never rewrite historical allocations or statuses;
 * calculate `lastPaymentValueDate` as the maximum recorded payment value date and `lastPaymentRecordedAt` as the latest recording timestamp;
-* canonicalize the external payment reference by trimming and uppercasing with `Locale.ROOT`, validate the safe `[A-Z0-9._:/-]` convention, and enforce global uniqueness without exposing the reference in logs, errors, DTOs, audit, history, or `toString`.
+* treat the normalized external payment reference as globally unique internal evidence without exposing it in responses, logs, errors, audit, or history.
 
 LoanAccount roll-up rules:
 
@@ -439,27 +443,19 @@ LoanAccount roll-up rules:
 * if total outstanding reaches zero, the LoanAccount becomes `SETTLED`;
 * otherwise the LoanAccount is `ACTIVE`;
 * repayment posting never produces `CLOSED`; automatic full contractual payoff is `SETTLED`, while negotiated settlement and administrative closure remain deferred.
-Date-driven servicing samples the injected `Clock` once per batch and derives one `LocalDate` from that UTC instant. For each installment, status priority is: zero outstanding -> `PAID`; positive outstanding after its due date -> `OVERDUE`; any paid amount on or before its due date -> `PARTIALLY_PAID`; unpaid on its due date -> `DUE`; otherwise -> `NOT_DUE`. Thus an unpaid installment becomes overdue only on the next UTC date. Evaluation dates are monotonic: an earlier date is a state conflict, the same date is a no-op, and a later date advances only evaluation dates and derived statuses. The evaluator never changes financial balances, payment evidence, schedule obligations, Salary Advance exposure, Loan Application state, or creates `SETTLED`/`CLOSED`. An open zero-outstanding account is a system-state conflict.
+Date-driven servicing uses the current UTC business date. For each installment, status priority is: zero outstanding -> `PAID`; positive outstanding after its due date -> `OVERDUE`; any paid amount on or before its due date -> `PARTIALLY_PAID`; unpaid on its due date -> `DUE`; otherwise -> `NOT_DUE`. Thus an unpaid installment becomes overdue only on the next UTC date. Evaluation dates are monotonic and evaluation changes only derived statuses and dates; it never changes financial balances, payment evidence, scheduled obligations, Salary Advance exposure, Loan Application state, or creates `SETTLED`/`CLOSED`.
 
-Each candidate is processed in its own transaction. Only stale `ACTIVE`/`OVERDUE`, positive-outstanding accounts are selected in evaluation-date/LoanAccount-ID order within one configured batch. Real installment changes share one internal `OVERDUE_EVALUATED` operation UUID; real LoanAccount `ACTIVE <-> OVERDUE` changes add account history and exactly one `LOAN_ACCOUNT_STATUS_CHANGED` system audit. Date-only or installment-only advancement emits no top-level audit. The scheduler is disabled by default for local/test safety and uses `meridian.loan.overdue-evaluation.enabled`, `.cron` (explicit UTC zone), and positive `.batch-size`; production must explicitly enable it.
+Bounded candidate selection, per-account transaction scope, status-history/audit emission, and scheduler configuration are architecture and operations concerns preserved in `MER-ARCH-006`.
 
-Salary Advance submission acquires its existing customer/product lock, resolves the verified Partner boundary, then acquires the customer/employee-link lock before checking committed LoanAccount evidence and reserving exposure. A matching `ACTIVE` or `OVERDUE` account with positive contractual outstanding blocks with `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, even when scheduler status is stale or principal repayments have restored available exposure. Only full payoff and the resulting `SETTLED` zero-outstanding state remove this guard. The submission query never locks an existing LoanAccount, preserving repayment's workflow -> account -> customer/link order. If submission obtains the customer/link lock before a final repayment, it may conservatively reject once; if repayment holds that lock, submission waits and observes settlement after commit.
+A matching `ACTIVE` or `OVERDUE` Salary Advance LoanAccount with positive contractual outstanding debt blocks a new submission with `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, even when overdue evaluation is stale or principal repayments have restored some available exposure. Only full contractual payoff and the resulting zero-outstanding `SETTLED` state remove this specific guard; all other submission rules continue to apply.
 
 The posting operation publishes `REPAYMENT_RECORDED` exactly once and publishes `LOAN_ACCOUNT_STATUS_CHANGED` only when the account status changes. Installment changes use dedicated append-only history. Salary Advance exposure release is immutable movement evidence within the repayment operation rather than a separate top-level audit action.
 
-Future repayment web authorization requires `repayment:update`. The application service does not hard-code an Accounting Officer role and requires a valid staff-backed authenticated actor.
+Current repayment web authorization requires `repayment:update`. The application service does not hard-code an Accounting Officer role and requires a valid staff-backed authenticated actor. Customer owners read repayment history and LoanAccount servicing with `loan:read:own`; authorised staff use `loan:read`.
 
-To avoid lock inversion, workflows that mutate an existing application/account use this global order:
+Technical lock order, bounded overdue-candidate processing, scheduler configuration, and audit-emission mechanics are specified in `MER-ARCH-006`; exact HTTP contracts and reference normalization are specified in `MER-API-001`.
 
-1. category-specific command/reference advisory locks;
-2. Loan Application workflow advisory lock;
-3. Loan Application and then LoanAccount/final-schedule/progress row locks in feature-specific order;
-4. Salary Advance customer/employee-link advisory lock;
-5. Salary Advance limit and movement rows.
-
-Repayment and activation must never acquire the Salary Advance customer/employee-link lock before the Loan Application workflow lock. Overdue evaluation follows workflow -> account -> schedule/progress and does not lock the limit. Submission and standalone limit refresh keep their existing customer/product or customer/employee-link -> limit order and never acquire an existing-application workflow/account lock.
-
-Manual Salary Advance repayment posting, deterministic allocation, installment/account servicing state, automatic contractual payoff, exact principal used-exposure release, date-driven overdue evaluation, submission blocking, history, audit, and durable replay are executable through internal application ports. Secured repayment APIs, repayment queries, negotiated settlement, administrative closure, reversal, payment integration, and UCL/Collateral repayment policies remain deferred.
+Manual Salary Advance repayment posting, deterministic allocation, installment/account servicing state, automatic contractual payoff, exact principal used-exposure release, date-driven overdue evaluation, outstanding-debt submission blocking, history, audit, durable replay, secured repayment APIs, repayment-history queries, and enhanced LoanAccount servicing queries are executable. Negotiated or administrative settlement, administrative closure, reversal/refund, suspense or unapplied cash, waiver/write-off, payment integration, bank reconciliation, ledger, and UCL/Collateral repayment policies remain deferred.
 
 ---
 
@@ -556,8 +552,8 @@ Limit state behavior:
 * Rejected, cancelled, customer-declined, expired, or otherwise released applications free the reserved amount.
 * Customer decline and offer expiry release the reserved amount exactly once, in the same controlled business operation as the terminal application transition.
 * Manual disbursement converts the reserved amount into used amount when the LoanAccount is created.
-* Repayment, settlement, or approved correction releases used amount according to the configured Salary Advance policy.
-* Blocking overdue Salary Advance exposure prevents new Salary Advance submission even when a calculated available amount remains.
+* Only principal actually allocated by repayment releases used amount in the current executable Salary Advance policy; administrative settlement and correction-based release remain deferred.
+* A matching `ACTIVE` or `OVERDUE` Salary Advance LoanAccount with positive contractual outstanding debt prevents new submission even when calculated available amount remains.
 
 Limit refresh, suspension, and disablement:
 
@@ -596,7 +592,7 @@ End-to-end workflow:
 25. Contract and disbursement documents are prepared or uploaded after customer acceptance.
 26. Accounting Officer marks disbursement as completed.
 27. System marks the application `DISBURSED`, creates the LoanAccount, generates the final repayment schedule, activates the LoanAccount, and converts reserved limit to used limit.
-28. Repayment, settlement, and closure status are tracked; repayment releases used limit according to policy.
+28. Manual repayment and overdue servicing track the LoanAccount through `ACTIVE`, `OVERDUE`, and exact contractual payoff to `SETTLED`; only allocated principal releases used limit. Administrative settlement and closure remain deferred.
 
 
 Salary Advance MVP does not include real payroll integration, real employer API integration, automatic payroll deduction, real bank transfer, employer-facing production portal, counteroffers, approver-modified amount or term, or real-time HR system sync.
@@ -803,7 +799,7 @@ EXPIRED
 | FR-CON-002 | The system shall allow only `DISBURSEMENT_ACCOUNT_REFRESH` regeneration before readiness and shall transactionally confirm an acknowledged ready contract into `DISBURSEMENT_PENDING` without performing disbursement. |
 | FR-DIS-001 | The system shall allow only Accounting Officers to confirm manual disbursement after approval, customer acceptance, document readiness, and bank account confirmation. |
 | FR-DIS-002 | The system shall move the application to `DISBURSED`, create the LoanAccount, generate the final repayment schedule, activate the LoanAccount, and audit all actions in one controlled post-disbursement transaction. |
-| FR-REP-001 | The system shall generate and track repayment schedules, due amounts, paid amounts, outstanding balance, repayment status, overdue status, settlement, and administrative closure. |
+| FR-REP-001 | The system shall preserve final repayment schedules and track due, paid, and outstanding amounts plus repayment and overdue status. Current Salary Advance servicing reaches automatic contractual payoff to `SETTLED`; negotiated settlement and administrative closure are deferred target behavior. |
 | FR-PORTAL-001 | The Customer Web Portal shall support registration, login, profile completion, active product browsing, application submission, document upload, viewing the customer's own approved offer, customer-owned offer acceptance/decline, and status tracking. |
 | FR-PORTAL-002 | The Back-Office Web Portal shall support product, partner, import, user, queue, review, approval, disbursement, repayment, and audit operations according to role permissions. |
 | FR-AUD-001 | The system shall record audit trail entries for important business actions and status transitions, including actor, action, timestamp, affected entity, previous status, new status, and reason where applicable. |
@@ -826,14 +822,14 @@ EXPIRED
 | BR-009 | Salary Advance requested amount must be less than or equal to the active available Salary Advance limit. |
 | BR-010 | Inactive Partner Companies cannot be manually overridden for normal Salary Advance eligibility. |
 | BR-011 | Inactive Partner Employee records cannot be used for normal Salary Advance eligibility. |
-| BR-012 | Blocking overdue Salary Advance exposure prevents new Salary Advance submission. |
+| BR-012 | A matching `ACTIVE` or `OVERDUE` Salary Advance LoanAccount with positive contractual outstanding debt prevents new Salary Advance submission, independent of overdue-evaluation freshness. |
 | BR-013 | Existing active Salary Advance loans reduce used limit, and submitted non-terminal Salary Advance applications reduce reserved limit. |
 | BR-014 | Salary Advance limit calculation and refresh must use the latest valid Partner Employee record within the configured freshness window. |
 | BR-015 | Suspended, disabled, stale, unavailable, or insufficient Salary Advance limits block normal application creation and submission. |
 | BR-016 | Each Salary Advance application must record a verification snapshot even when the customer's reusable employee link was verified earlier. |
 | BR-017 | Salary Advance reserved limit must be released exactly once when an application is rejected, cancelled, customer-declined, expired, or otherwise released before disbursement, and the release must be part of the same controlled business operation as the terminal transition. |
 | BR-018 | Salary Advance reserved limit must become used limit when manual disbursement creates the LoanAccount. |
-| BR-019 | Salary Advance used limit must be released through repayment, settlement, or approved correction according to product policy. |
+| BR-019 | Current Salary Advance repayment releases used limit only for newly allocated principal and by exactly that amount; interest and fee release none. Settlement- or correction-based administrative release requires a separately approved future policy. |
 | BR-020 | Unsecured Consumer Loan requires income and employment document review but does not require collateral information. |
 | BR-021 | Collateral Loan requires collateral information and collateral ownership or supporting documents. |
 | BR-022 | Collateral estimated value is informational in MVP and does not trigger automated loan-to-value blocking. |
@@ -851,11 +847,11 @@ EXPIRED
 | BR-034 | A LoanAccount is created only after manual disbursement confirmation. |
 | BR-035 | LoanApplication `DISBURSED`, LoanAccount creation, final repayment schedule generation, and LoanAccount `ACTIVE` status are completed as one controlled post-disbursement transaction. |
 | BR-036 | Post-submission customer bank account changes are restricted by application status and must be audited. |
-| BR-036A | Until immutable application/disbursement snapshots exist, Customer profile and bank-account changes remain Customer-owned, audited, and not Loan-status-aware to avoid a Customer-to-Loan dependency cycle. |
+| BR-036A | Loan owns immutable contract/disbursement destination snapshots. Broader Loan-status-sensitive Customer profile and bank-account mutation rules remain deferred and must preserve Customer ownership without creating a Customer-to-Loan dependency cycle. |
 | BR-037 | Repayment updates are manually entered or confirmed in the MVP. |
 | BR-038 | Any unpaid repayment past due sets the LoanAccount to `OVERDUE`. |
-| BR-039 | Full repayment or approved settlement sets the LoanAccount to `SETTLED`. |
-| BR-040 | Administrative closure may move a settled LoanAccount to `CLOSED`. |
+| BR-039 | Exact contractual payoff through repayment sets the LoanAccount to `SETTLED`; negotiated or administrative settlement remains deferred. |
+| BR-040 | Administrative closure may move a settled LoanAccount to `CLOSED` in a future workflow; no current command produces `CLOSED`. |
 | BR-041 | Every important status transition must create an audit trail record. |
 | BR-042 | For the current MVP, Approver approval approves the exact submitted amount and exact submitted term; any change to amount or term must return through review or correction rather than becoming a counteroffer. |
 | BR-043 | Each Loan Application may have one approved offer for the current MVP; once presented, its approved financial terms snapshot is immutable, while offer lifecycle state and response metadata may change only through defined transitions. |
@@ -904,7 +900,7 @@ The Salary Advance interest-rate column is the approved flat monthly interest ra
 | Employee configured limit      | Imported from monthly Partner Employee data                                                                           |
 | Used limit rule                | Active disbursed Salary Advance exposure reduces used limit until repayment, settlement, or approved release          |
 | Reserved limit rule            | Submitted non-terminal Salary Advance applications reserve limit until disbursement or release; drafts do not reserve limit |
-| Blocking exposure rule         | Blocking overdue Salary Advance exposure prevents new Salary Advance application creation or submission               |
+| Blocking exposure rule         | Matching `ACTIVE` or `OVERDUE` Salary Advance debt with positive contractual outstanding prevents new submission       |
 | Import freshness rule          | Latest valid active Partner Employee record for the configured effective month must be used                           |
 | Limit status rule              | Suspended, disabled, stale, unavailable, or insufficient limit blocks normal application creation                     |
 | Manual override rule           | `NOT_FOUND` and `MULTIPLE_MATCHES` may be reviewed manually; inactive Partner Companies cannot be manually overridden |
@@ -1007,6 +1003,8 @@ If the customer does not accept a Salary Advance approved offer before it expire
 
 Initial conceptual entities identified from the functional requirements:
 
+These are business concepts, not a claim that same-named physical tables or classes exist. `MER-DB-001` owns logical-to-physical mapping, and `MER-DB-CURRENT-SCHEMA.sql` is the current physical snapshot.
+
 * User;
 * Customer;
 * BackOfficeUser;
@@ -1054,6 +1052,8 @@ Initial conceptual entities identified from the functional requirements:
 ## 13. MVP Priority and Boundaries
 
 ### 13.1 Must Have
+
+This is the intended MVP product target, not a current implementation checklist. Section 2 and the workflow-specific current/deferred statements identify the executable boundary.
 
 One backend and one database; Customer Web Portal; Back-Office Web Portal; customer and back-office authentication; role-based access control; customer profile completion; loan product catalog; product activation/deactivation; common loan application workflow; transition matrix enforcement; Salary Advance workflow; Partner Company management; monthly Partner Employee import; import validation and freshness handling; reusable employee verification; Salary Advance limit dashboard, calculation, reservation, refresh, suspension, disablement, and release; Unsecured Consumer Loan workflow; Collateral Loan workflow; document checklist configuration; checklist completeness validation; manual document review; Loan Officer review; Approver decision; maker-checker same-user prevention; customer acceptance; provisional repayment schedule; offer expiry; manual disbursement confirmation; LoanAccount creation and activation; final repayment schedule; repayment tracking; settlement and closure tracking; audit trail.
 

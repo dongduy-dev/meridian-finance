@@ -2,6 +2,8 @@
 
 > The MVP remains one backend and one database. Modules are bounded contexts inside the modular monolith, not separate services by default.
 > Architecture Standard v2 follows the Practical Meridian Architecture Standard: MVP limits feature scope, not architecture consistency.
+>
+> **Current enforcement boundary:** `ArchitectureRulesTest` currently enforces five rule groups: Domain independence from Spring; Domain independence from JPA, Application, and Infrastructure; Domain/Application independence from Spring Security, JWT libraries, and Identity security implementation; Application independence from Infrastructure; and Shared independence from feature modules. Spring Modulith dependencies are present, but there are no module `package-info.java` declarations or executable `ApplicationModules.verify()` test. Examples below that go beyond those five groups are target guardrails, not claims of current automated enforcement.
 
 ## Layer Dependency Rules (Within Each Module)
 
@@ -92,7 +94,7 @@ public class CustomerModuleAdapter implements CustomerQueryPort {
 ```
 
 ```java
-// PATTERN 2: Async — Spring ApplicationEvents
+// PATTERN 2: Current synchronous Spring ApplicationEvents
 // loan/application/service/ReviewLoanService.java
 eventPublisher.publishEvent(new LoanSentForApprovalEvent(loanId, customerId, productCode, recommendation));
 
@@ -136,7 +138,7 @@ public class SubmitLoanService {
 }
 ```
 
-> `SpringSecurityCurrentUserProvider` is an identity infrastructure adapter that implements `CurrentUserProvider` using Spring Security. `JwtAuthenticationFilter` and `JwtTokenService` belong to identity because identity owns authentication, JWT, users, roles, refresh tokens, and RBAC.
+> `SpringSecurityCurrentUserProvider` is an identity infrastructure adapter that implements `CurrentUserProvider` using Spring Security. `JwtAuthenticationFilter` and `JwtTokenService` belong to identity because identity owns current access-token authentication, JWT parsing/issuing, users, roles, permissions, and RBAC. Refresh-token rotation is deferred.
 
 ### Forbidden Anti-Patterns
 
@@ -163,12 +165,14 @@ import com.meridian.platform.customer.domain.model.Customer; // FORBIDDEN!
 // ANTI-PATTERN 6: Circular module dependency
 // Loan → Customer AND Customer → Loan // FORBIDDEN! Use events to break cycles
 
-// ANTI-PATTERN 7: Transaction spanning modules
+// ANTI-PATTERN 7: Uncontrolled cross-module transaction/persistence coupling
 @Transactional
 public void crossModuleOperation() {
-    loanService.approve(...);
-    customerService.updateStatus(...); // FORBIDDEN! Different bounded context
+    loanRepository.save(...);
+    customerJpaRepository.save(...); // FORBIDDEN! Direct foreign persistence ownership
 }
+// A deliberately synchronous narrow-port or application-event coordination may share the
+// originating transaction when rollback coupling, ordering, and tests are explicit.
 
 // ANTI-PATTERN 8: Top-level modules for individual loan products
 // com.meridian.platform.salaryadvance        // FORBIDDEN!
@@ -210,7 +214,7 @@ public void crossModuleOperation() {
 
 ## Enforcement Strategies
 
-### 1. Spring Modulith Verification (Primary)
+### 1. Spring Modulith Verification (Target Guardrail)
 
 ```java
 @Test
@@ -220,7 +224,7 @@ void verifiesModularStructure() {
 }
 ```
 
-### 2. ArchUnit Rules (Supplementary)
+### 2. ArchUnit Rules (Current Core and Target Extensions)
 
 ```java
 @AnalyzeClasses(packages = "com.meridian.platform")
@@ -363,16 +367,18 @@ class ArchitectureRulesTest {
 }
 ```
 
-### 3. CI Pipeline Enforcement
+### 3. Current CI Pipeline Enforcement
 
 ```yaml
-# .github/workflows/ci.yml
-- name: Architecture Tests
-  run: mvn test -Dtest="ArchitectureRulesTest,ModulithStructureTest"
-  # Fail the build if any architectural rule is violated
+# .github/workflows/backend-ci.yml
+- name: Build and test
+  run: ./mvnw -B verify
+  # ArchitectureRulesTest runs in the normal Maven verification suite.
 ```
 
-### 4. Package Visibility (Java Modules)
+### 4. Package Visibility (Target Java-Module Guardrail)
+
+The following is a target design. The current repository has no Spring Modulith module `package-info.java` declarations or named public interfaces. If adopted, add executable structure verification and dependency tests in the same change.
 
 Use `package-info.java` with Spring Modulith `@ApplicationModule` to control what each module exposes:
 
@@ -454,15 +460,15 @@ log.info("Processing loan", kv("loanId", loanId), kv("customerId", customerId));
 
 ## Summary Matrix
 
-| Source Module | Can Call (Sync) | Can Listen (Async) | Cannot Access |
+| Source Module | Can Call (Sync) | Event consumption | Cannot Access |
 |---|---|---|---|
 | **Shared** | — | — | All feature modules, including Identity |
 | **Loan** | Customer, Partner, Document | — | Approval internals, IAM internals, top-level product modules |
-| **Approval** | — (no sync calls) | LoanSentForApprovalEvent | Customer, Partner, Document, Loan internals |
+| **Approval** | — (no sync calls) | Current synchronous Loan workflow events | Customer, Partner, Document, Loan internals |
 | **Customer** | — | — | Loan internals, Partner internals |
 | **Partner** | — | — | Loan internals, Customer internals |
 | **Document** | — | — | Loan internals, Customer, Partner |
-| **Audit** | - | Shared business audit events | All module internals, business decision logic |
+| **Audit** | - | Current synchronous shared business audit events | All module internals, business decision logic |
 | **Notification** | — | Future notification events | All module internals; optional later |
 | **IAM** | Shared | — | All business modules |
 

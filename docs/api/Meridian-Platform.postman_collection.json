@@ -2212,11 +2212,13 @@
                                       "name":  "POST request staff correction with structured plan",
                                       "request":  {
                                                       "method":  "POST",
-                                                      "header":  {
+                                                      "header":  [
+                                                                     {
                                                                      "key":  "Content-Type",
                                                                      "value":  "application/json",
                                                                      "type":  "text"
-                                                                 },
+                                                                     }
+                                                                 ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/review-recommendations",
                                                                   "host":  [
@@ -2280,11 +2282,13 @@
                                       "name":  "POST request mixed customer and staff correction",
                                       "request":  {
                                                       "method":  "POST",
-                                                      "header":  {
+                                                      "header":  [
+                                                                     {
                                                                      "key":  "Content-Type",
                                                                      "value":  "application/json",
                                                                      "type":  "text"
-                                                                 },
+                                                                     }
+                                                                 ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/approval-decisions",
                                                                   "host":  [
@@ -2863,12 +2867,14 @@
                                   {
                                       "name":  "GET own immutable document content",
                                       "request":  {
-                                                      "method":  "POST",
-                                                      "header":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
                                                                      "key":  "Content-Type",
                                                                      "value":  "application/json",
                                                                      "type":  "text"
-                                                                 },
+                                                                     }
+                                                                 ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/documents/{{checklistItemId}}/versions/{{documentVersionId}}/content",
                                                                   "host":  [
@@ -2926,12 +2932,14 @@
                                   {
                                       "name":  "GET document review queue",
                                       "request":  {
-                                                      "method":  "POST",
-                                                      "header":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
                                                                      "key":  "Content-Type",
                                                                      "value":  "application/json",
                                                                      "type":  "text"
-                                                                 },
+                                                                     }
+                                                                 ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/document-review-items?status=AWAITING_REVIEW\u0026page=0\u0026size=20",
                                                                   "host":  [
@@ -2984,11 +2992,13 @@
                                       "name":  "POST accept current document version",
                                       "request":  {
                                                       "method":  "POST",
-                                                      "header":  {
+                                                      "header":  [
+                                                                     {
                                                                      "key":  "Content-Type",
                                                                      "value":  "application/json",
                                                                      "type":  "text"
-                                                                 },
+                                                                     }
+                                                                 ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/document-review-items/{{checklistItemId}}/reviews",
                                                                   "host":  [
@@ -3058,12 +3068,14 @@
                                   {
                                       "name":  "GET open Staff correction tasks",
                                       "request":  {
-                                                      "method":  "POST",
-                                                      "header":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
                                                                      "key":  "Content-Type",
                                                                      "value":  "application/json",
                                                                      "type":  "text"
-                                                                 },
+                                                                     }
+                                                                 ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/staff-corrections/tasks?status=OPEN\u0026page=0\u0026size=20",
                                                                   "host":  [
@@ -3202,12 +3214,14 @@
                                   {
                                       "name":  "GET Staff-authorized immutable document content",
                                       "request":  {
-                                                      "method":  "POST",
-                                                      "header":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
                                                                      "key":  "Content-Type",
                                                                      "value":  "application/json",
                                                                      "type":  "text"
-                                                                 },
+                                                                     }
+                                                                 ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/documents/{{checklistItemId}}/versions/{{documentVersionId}}/content",
                                                                   "host":  [
@@ -3267,11 +3281,13 @@
                                       "name":  "POST complete Staff correction task",
                                       "request":  {
                                                       "method":  "POST",
-                                                      "header":  {
+                                                      "header":  [
+                                                                     {
                                                                      "key":  "Content-Type",
                                                                      "value":  "application/json",
                                                                      "type":  "text"
-                                                                 },
+                                                                     }
+                                                                 ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/staff-corrections/tasks/{{staffCorrectionTaskId}}/complete",
                                                                   "host":  [
@@ -3336,11 +3352,13 @@
                                       "name":  "POST resubmit Staff or mixed correction",
                                       "request":  {
                                                       "method":  "POST",
-                                                      "header":  {
+                                                      "header":  [
+                                                                     {
                                                                      "key":  "Content-Type",
                                                                      "value":  "application/json",
                                                                      "type":  "text"
-                                                                 },
+                                                                     }
+                                                                 ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/staff-corrections/loan-applications/{{loanApplicationId}}/resubmit",
                                                                   "host":  [
@@ -4455,11 +4473,13 @@
                                       "name":  "POST Staff correction without structured plan - 422",
                                       "request":  {
                                                       "method":  "POST",
-                                                      "header":  {
+                                                      "header":  [
+                                                                     {
                                                                      "key":  "Content-Type",
                                                                      "value":  "application/json",
                                                                      "type":  "text"
-                                                                 },
+                                                                     }
+                                                                 ],
                                                       "url":  {
                                                                   "raw":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}/review-recommendations",
                                                                   "host":  [

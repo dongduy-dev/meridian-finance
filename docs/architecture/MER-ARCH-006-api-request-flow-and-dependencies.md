@@ -308,6 +308,8 @@ Concurrency and conflict contract:
 
 The V11 `uq_loan_applications_customer_product_active` partial unique index remains the database authority. Only SQLSTATE `23505` naming that exact index is translated to `409 BLOCKING_APPLICATION_EXISTS`; unrelated integrity violations are rethrown.
 
+After the customer/employee-link lock, submission also reads committed LoanAccount evidence without locking an existing account. A matching `ACTIVE` or `OVERDUE` Salary Advance account with positive contractual outstanding returns `409 OUTSTANDING_LOAN_ACCOUNT_EXISTS`. Scheduler freshness and restored available exposure do not bypass this guard. Full payoff to zero-outstanding `SETTLED` clears only this guard. If submission obtains the customer/link lock first it may conservatively reject once; if final repayment holds that lock, submission waits and observes settlement after commit.
+
 ```mermaid
 flowchart LR
     Client["Authenticated client"]
@@ -500,3 +502,21 @@ GET /loan-applications/{id}/loan-account
 ```
 
 Customer ownership concealment occurs in the application service. Reads do not lock workflow rows, evaluate overdue state, recompute financial results, or publish business evidence. The POST controller forwards the raw external reference; canonicalization and idempotency remain inside the existing application workflow.
+
+### Repayment lock order and overdue-evaluation mechanics
+
+Existing-application/account mutations use this global order to avoid lock inversion:
+
+1. category-specific command/reference advisory locks;
+2. Loan Application workflow advisory lock;
+3. Loan Application and then LoanAccount/final-schedule/progress row locks in feature-specific order;
+4. Salary Advance customer/employee-link advisory lock;
+5. Salary Advance limit and movement rows.
+
+Repayment and activation never acquire the Salary Advance customer/employee-link lock before the Loan Application workflow lock. Overdue evaluation follows workflow -> account -> schedule/progress and does not lock the limit. Submission and standalone limit refresh retain their customer/product or customer/employee-link -> limit order and never acquire an existing-application workflow/account lock.
+
+The overdue batch samples the injected `Clock` once and derives one UTC `LocalDate`. It selects only stale `ACTIVE`/`OVERDUE`, positive-outstanding accounts in evaluation-date/LoanAccount-ID order within the configured positive batch size, then processes each candidate in its own transaction. An earlier evaluation date is a state conflict, the same date is a no-op, and a later date advances only evaluation dates and derived statuses. An open zero-outstanding account is a system-state conflict.
+
+Real installment changes share one internal `OVERDUE_EVALUATED` operation UUID. A real LoanAccount `ACTIVE <-> OVERDUE` change appends account history and exactly one `LOAN_ACCOUNT_STATUS_CHANGED` system audit. Date-only or installment-only advancement emits no top-level audit. The scheduler is disabled by default for local/test safety; `meridian.loan.overdue-evaluation.enabled` enables it, `.cron` runs in an explicit UTC zone, and `.batch-size` must be positive. Production must opt in explicitly.
+
+The repayment service canonicalizes external payment references, serializes command/reference identity, and returns the immutable original V34 outcome for exact replay. `MER-API-001` owns the exact request, response, pagination, normalization, authorization, concealment, and exposure contract.

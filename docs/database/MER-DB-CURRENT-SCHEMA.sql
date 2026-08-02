@@ -1,7 +1,7 @@
 -- Meridian current physical schema snapshot.
 -- Documentation only. Flyway migrations under meridian-platform/src/main/resources/db/migration
 -- remain the executable database history.
--- Snapshot source: migrations V1 through V33.
+-- Snapshot source: migrations V1 through V35.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 

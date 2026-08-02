@@ -1,6 +1,12 @@
-# Java Package Structure
+# Java Package Reference Blueprint
 
-## Root Package Structure
+## Current physical boundary and notation
+
+This document is a representative package-shape blueprint, not a literal inventory of every checked-in class. The current physical roots are `shared`, `identity`, `customer`, `partner`, `loan`, `approval`, `document`, and `audit`; `notification` remains a deferred placeholder. The Java source tree is authoritative for exact names.
+
+Names without an explicit current-slice statement are examples of intended placement. In particular, `IdempotencyService`/`IdempotencyRepository`, `RefreshToken` persistence, OCR ports/jobs/results/clients, generic product-policy class names, and several generic use cases in the tree are target examples and are not evidence of implemented runtime behavior. Ellipses denote intentionally omitted current detail.
+
+## Representative Root Package Structure
 
 ```
 com.meridian.platform/
@@ -425,16 +431,18 @@ Salary Advance remains inside the generic lending architecture. `partner/` owns 
 |---|---|---|
 | **Loan Core / Origination** | Full Hexagonal | Core domain. Generic lending core, product policies/strategies, and complex state machine. |
 | **Approval Workflow** | Full Hexagonal | Core domain. Loan Officer review, Approver decision, maker-checker controls. |
-| **Identity & Access** | Full Hexagonal | Security-critical. Owns users, roles, JWT, refresh tokens, and RBAC. |
+| **Identity & Access** | Full Hexagonal | Security-critical. Currently owns users, roles, permissions, access-token JWT, and RBAC; refresh-token/session persistence is target behavior. |
 | **Customer** | Moderate | Supporting domain. Owns profile, verification status, bank-account information, and sensitive data handling. Identity still owns the users.customer_id login mapping. |
 | **Partner** | Moderate | Supporting domain. Owns Partner Companies, Partner Employees, import batches, and reusable Salary Advance employee links. |
-| **Document** | Moderate | Checklist, manual review, replacement, waiver, readiness, storage, and OCR-assisted processing justify ports. |
+| **Document** | Moderate | Current checklist, manual review, replacement, waiver, readiness, and storage justify ports; OCR-assisted processing is a planned extension. |
 | **Audit** | Simplified | Cross-cutting concern. Append-only writes for approved workflow actions. No read API or workflow-control logic in the current checkpoint. |
 | **Notification** | Simplified | Optional later. Template-based, minimal logic. |
 
 ---
 
-## Testing Pyramid Strategy
+## Target Testing Pyramid Strategy
+
+This is the desired testing mix, not a claim that every named Spring Modulith test annotation or percentage is present today. Current executable coverage is defined by the checked-in tests and `ArchitectureRulesTest`.
 
 1. **Domain Unit Tests (70%)**: Pure Java, zero Spring dependencies. Fast. Tests core state machines, value objects, and domain services.
 2. **Application Layer Tests (15%)**: Tests use cases and transaction boundaries using `@ExtendWith(SpringExtension.class)` and `@MockitoBean` to mock application output ports.

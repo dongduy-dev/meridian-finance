@@ -4,6 +4,8 @@
 
 > Public Interface entries refer to application/public ports exposed by a module. They are not domain-owned ports.
 
+> Status boundary: responsibilities described as current correspond to checked-in behavior at V35. Interface, entity, and event names in the context tables are representative architecture vocabulary unless explicitly identified as current; they do not prove that a same-named class or port exists. Target and future entries are labeled and must not be read as executable.
+
 ```mermaid
 graph TB
     subgraph Core["Core Domain"]
@@ -36,8 +38,8 @@ graph TB
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | User registration, authentication (JWT), authorization (RBAC), users, roles, refresh token/session management |
-| **Entities** | `User`, `Role` (enum: `CUSTOMER`, `LOAN_OFFICER`, `APPROVER`, `ACCOUNTING_OFFICER`, `BACK_OFFICE_ADMIN`), `Permission` (constants class), `RolePermissionRegistry` (role→permission mapping), `RefreshToken`, `UserId` (VO), `EmailAddress` (VO) |
+| **Responsibilities** | Current: access-token login, JWT validation, authorization (RBAC), users, roles, permissions, and role assignments. Target: registration lifecycle plus refresh-token/session management. |
+| **Entities** | Current identity concepts: `User`, role and permission records, role assignments, `RolePermissionRegistry`, and authenticated-user identifiers. Target only: `RefreshToken` and durable session records. |
 | **Public Interface** | `AuthenticationPort.authenticate(token)`, `UserQueryPort.findById(id)` |
 | **Events Published** | `UserRegisteredEvent`, `UserSuspendedEvent` |
 | **Microservice Candidacy** | First to extract. Minimal domain coupling, well-defined API. |
@@ -82,9 +84,9 @@ Partner Management owns Partner Company and Partner Employee source data. It als
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Generic loan application lifecycle, product definition, product-specific activation policy selection, Salary Advance exposure, approved offers, operational Loan Contracts/readiness, immutable manual-disbursement evidence, LoanAccount activation, final repayment schedules, state machine, and lifecycle history |
-| **Entities** | `LoanApplication` (aggregate root), `LoanProduct`, `SalaryAdvanceLimit`, `SalaryAdvanceLimitMovement`, `SalaryAdvanceVerification`, `ApprovedOffer`, `LoanContract`, `ProtectedDisbursementBankAccount`, `LoanAccount`, `ManualDisbursement`, final `RepaymentSchedule`, and `LoanApplicationStatusTransition` |
-| **State Machine** | `DRAFT → SUBMITTED → VERIFICATION_PENDING/DOCUMENTS_PENDING → UNDER_REVIEW → APPROVAL_PENDING → APPROVED → CUSTOMER_ACCEPTANCE_PENDING → CONTRACT_PENDING → DISBURSEMENT_PENDING → DISBURSED → SETTLED/CLOSED` (also `→ RETURNED_FOR_REVISION`, `→ RETURNED_TO_REVIEW`, `→ REJECTED`, `→ CANCELLED`, `→ EXPIRED`) |
+| **Responsibilities** | Generic LoanApplication lifecycle, product definition, product-specific activation and repayment policy selection, Salary Advance exposure, approved offers, operational Loan Contracts/readiness, immutable manual-disbursement evidence, LoanAccount activation, final schedules, repayment transactions/allocations/outcomes, servicing progress/history, overdue evaluation, and outstanding-debt submission blocking |
+| **Entities** | Current concepts include `LoanApplication`, `LoanProduct`, `SalaryAdvanceLimit` and movements/verifications, `ApprovedOffer`, `LoanContract`, protected destination evidence, `LoanAccount`, `ManualDisbursement`, final `RepaymentSchedule`, repayment transactions/allocations/outcomes, installment progress, and LoanApplication/LoanAccount/installment histories. |
+| **State Machines** | `LoanApplication` currently ends executable processing at `DISBURSED` (with revision/review and pre-disbursement terminal branches). The separate `LoanAccount` moves `ACTIVE <-> OVERDUE` and exact payoff produces `SETTLED`. `CLOSED` is a conceptual enum state only; no current command produces it. |
 | **Public Interface** | `LoanApplicationPort.submit()`, `.getApplication()`, `.listApplications()`, `SalaryAdvanceLimitPort.getCurrentLimit()`, `.startApplicationUsingLimit()` |
 | **Events Published** | `LoanSubmittedEvent` (carries: loanId, customerId, productId, requestedAmount, submittedAt), `SalaryAdvanceLimitReservedEvent`, `SalaryAdvanceLimitReleasedEvent`, `LoanReviewStartedEvent`, `LoanSentForApprovalEvent`, `LoanApprovedEvent`, `LoanRejectedEvent`, `LoanCancelledEvent`, `LoanDisbursedEvent`, `LoanCompletedEvent` |
 | **Microservice Candidacy** | LAST to extract |
@@ -117,7 +119,7 @@ Document remains the authority for `processingReady`. Ordinary contract/account 
 | Aspect | Detail |
 |---|---|
 | **Responsibilities** | Document upload, storage, metadata, checklist management, manual document review, replacement, waiver, readiness, and planned OCR-assisted processing |
-| **Entities** | `Document` (aggregate root), `DocumentChecklist`, `DocumentChecklistItem`, `OcrJob`, `OcrResult`, `StorageReference` (VO), `DocumentType` enum |
+| **Entities** | Current: application checklists/items, logical documents, immutable document versions, review decisions, and storage references. Planned Phase 2: `OcrJob` and `OcrResult`. |
 | **Public Interface** | `DocumentPort.upload()`, `.getMetadata()`, `.download()`, `.findByLoan()` |
 | **Events Published** | `DocumentUploadedEvent`, `DocumentReviewedEvent`, `DocumentChecklistReadyEvent` |
 | **Microservice Candidacy** | Future extraction candidate. Keep checklist, review, and readiness controls in the modular monolith for MVP. |
