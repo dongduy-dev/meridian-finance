@@ -20,7 +20,7 @@ This document is the single business requirements and workflow specification for
 
 This document focuses on what the system must do from a business and functional perspective. Detailed database design, API design, deployment design, and implementation-level technical design are outside this document unless needed to clarify business behavior.
 
-Unless a section is explicitly marked as current executable behavior, this document describes the intended MVP business target. The current repository implements the Salary Advance path through repayment servicing and exact contractual payoff to `LoanAccount SETTLED`. Administrative settlement, LoanAccount closure, UCL/Collateral activation and repayment, production frontends, and external financial integrations remain deferred.
+This document describes the intended business behavior of the completed Meridian MVP. Delivery progress and deliberately deferred implementation work are tracked in the README roadmap and `docs/project/MER-TRACK-001-follow-up-register.md`, not in this business specification.
 
 ---
 
@@ -48,8 +48,6 @@ Meridian uses one generic lending core with product-specific policy behavior.
 | Mobile App | Future enhancement only; not part of the MVP. |
 
 The MVP uses one backend and one database. Customer-facing and back-office applications communicate with the same backend.
-
-Current repository boundary: the Spring Boot backend is implemented; the Customer and Back-Office Web Portals in this table are intended MVP applications and are not present in the repository.
 
 ### 3.3 Architecture Scope
 
@@ -246,17 +244,9 @@ All loan products share the same core lifecycle, with product-specific pre-submi
 
 Before submission, the customer must complete a basic profile including identity reference, contact details, residential address, employment information, bank account information for disbursement, and consent confirmations as configured.
 
-Current Customer foundation rules:
+Customer profile completeness and bank-account readiness are separate business facts. Salary Advance requires an active Customer, a complete profile, and one primary active bank account, but does not require a separate generic Customer verification status. Employee eligibility remains a distinct Salary Advance control.
 
-* Customer profile completeness and bank-account readiness are separate facts.
-* Normal Salary Advance submission requires an active Customer, a complete Customer profile, and one primary active bank account.
-* Customer `VerificationStatus.VERIFIED` is not required for Salary Advance submission in the current MVP because real Customer KYC/provider verification is deferred.
-* The Customer identity reference is captured in the Customer profile, encrypted at rest, and becomes immutable after the profile first becomes complete.
-* Partner employee verification derives identity evidence from the authenticated Customer profile; customer-facing requests must not provide unrestricted `identityReference`.
-* Bank-account numbers are encrypted at rest and exposed only as masked values.
-* Bank-account identity is not edited in place. Replacements are modeled by adding a new account and deactivating the old account.
-* Contact details, residential address, employment summary, and configured consent confirmations may be updated by the customer and must be audited without storing PII in generic Audit payloads.
-* Loan owns immutable contract/disbursement destination snapshots, but broader Loan-status-sensitive Customer profile and bank-account mutation restrictions remain a separate deferred policy decision so Customer does not depend on Loan.
+Sensitive identity and bank-account information must be protected. Identity evidence becomes immutable after the profile first becomes complete; bank-account identity is replaced rather than edited in place; and permitted profile or bank-account changes are audited. Contract and disbursement use an immutable destination snapshot so later Customer changes do not rewrite historical lending facts.
 
 The Customer Web Portal displays active products with name, description, amount range, available terms, interest rate, repayment method, required documents, eligibility notes, and product-specific pre-submission requirements.
 
@@ -270,17 +260,13 @@ Common eligibility pre-checks:
 * required product-specific information is provided;
 * required pre-submission verification passed or is approved for manual override.
 
-Concurrency rule for MVP:
-
-* A customer may keep multiple drafts.
-* A customer may not submit a new application for the same product while another application for that product is in `SUBMITTED`, `VERIFICATION_PENDING`, `DOCUMENTS_PENDING`, `UNDER_REVIEW`, `RETURNED_TO_REVIEW`, `APPROVAL_PENDING`, `APPROVED`, `CUSTOMER_ACCEPTANCE_PENDING`, `CONTRACT_PENDING`, or `DISBURSEMENT_PENDING`.
-* Salary Advance also requires a verified active customer employee link, an active available limit, and an authoritative check that no matching `ACTIVE` or `OVERDUE` LoanAccount has positive contractual outstanding debt.
+A customer may keep multiple drafts, but may have only one active non-terminal application for the same product. Salary Advance additionally requires a verified active customer employee link, an active sufficient limit, and no matching `ACTIVE` or `OVERDUE` LoanAccount with positive contractual outstanding debt.
 
 ### 6.2 Draft and Submission
 
-After passing required pre-submission validation, the customer submits the application. If the application was saved as a draft, the system updates the existing `LoanApplication` from `DRAFT` to `SUBMITTED`. If draft saving is not used, the system creates a new `LoanApplication` directly in `SUBMITTED`.
+The customer may save an application as a draft before submission. Submission occurs only after required profile, product, eligibility, amount, term, product-specific, document, and concurrency checks pass. A saved draft moves from `DRAFT` to `SUBMITTED`; where draft saving is not used, the application may begin directly in `SUBMITTED`.
 
-The system records unique application number, customer reference, product reference, product code, product type, requested amount, requested term, application status, submission timestamp, product-specific details, and audit trail entry.
+The submitted application receives a stable business reference and records the customer, selected product, requested amount and term, product-specific facts, submission time, status, and audit evidence needed to explain the request.
 
 ### 6.3 Product Verification or Review
 
@@ -292,36 +278,30 @@ After submission, Meridian records the formal product verification result for th
 | `UNSECURED_CONSUMER_LOAN` | Reviews income/employment documents for consistency and basic repayment capacity. |
 | `COLLATERAL_LOAN` | Reviews collateral information, ownership/supporting documents, and manual collateral assessment notes. |
 
-`REQUIRES_MORE_INFORMATION` is a product verification result, not an approval outcome. When it requires customer or staff action, the LoanApplication moves to `RETURNED_FOR_REVISION`.
+`VERIFIED` permits the common workflow to continue, `FAILED` records an unsuccessful product check, and `PENDING_MANUAL_REVIEW` waits for an authorized decision. `REQUIRES_MORE_INFORMATION` is a product verification result, not an approval outcome; when it requires Customer or Staff action, the application moves to `RETURNED_FOR_REVISION`.
 
-### 6.4 Document Checklist and Review Rules
+### 6.4 Document Checklist, Review, and Correction
 
-Document checklist completeness requires each required item to be one of:
+Document checklist completeness and manual document review are separate controls. Upload completeness means each required item is uploaded, not required, or waived as policy allows. Processing readiness additionally requires each required document to be accepted, not required, or waived by an authorized reviewer.
 
-```text
-UPLOADED
-ACCEPTED
-NOT_REQUIRED
-WAIVED
-```
-
-Manual document review outcomes:
-
-```text
-ACCEPT_DOCUMENT
-REJECT_DOCUMENT
-WAIVE_DOCUMENT
-REQUEST_REPLACEMENT
-```
+Manual review may accept, reject, waive, or request replacement of a document. Waiver requires a specifically authorized Loan Officer. A replacement supersedes the prior version and invalidates its earlier acceptance for readiness.
 
 If required documents are missing, rejected, expired, or need replacement, the application moves to:
 
 | Next Status | Usage |
 | ----------- | ----- |
 | `DOCUMENTS_PENDING` | Customer must upload or replace documents. |
-| `RETURNED_FOR_REVISION` | Customer or staff must correct information, replace documents, or provide clarification. |
+| `RETURNED_FOR_REVISION` | Customer or Staff must correct information, replace documents, or provide clarification. |
 
 Required documents must be `ACCEPTED`, `NOT_REQUIRED`, or `WAIVED` before the application can move to `DISBURSEMENT_PENDING`.
+
+Product policy may introduce a document requirement during correction even when no upload was required at initial submission. For Salary Advance, a recent payslip may be requested for clarification without replacing Customer readiness, Partner eligibility, or employee-link requirements.
+
+Every correction task has one responsible party: Customer or Staff. Mixed corrections use separate single-owner tasks, and all required Customer and Staff work must be complete before resubmission. Customer-visible instructions must not expose restricted internal notes. A Staff member who requested a correction must not complete that correction's Staff tasks.
+
+Task completion requires the requested evidence. Customer-only corrections are resubmitted by the Customer owner; Staff-only and mixed corrections are resubmitted by authorized Staff. Resubmission revalidates the business conditions affected by the correction. For Salary Advance, requested amount and term remain immutable and the existing reservation is preserved.
+
+Resubmission routes the application to the earliest stage still requiring work. It remains `SUBMITTED` while manual document review is pending and returns to `UNDER_REVIEW` when prior review exists and the checklist is processing-ready.
 
 ### 6.5 Loan Officer Review
 
@@ -336,25 +316,19 @@ Loan Officer actions:
 | `RETURN_TO_CUSTOMER_REVISION` | `RETURNED_FOR_REVISION` |
 | `REQUEST_STAFF_CORRECTION` | `RETURNED_FOR_REVISION` |
 
-All four actions are executable. Revision-producing recommendations require the
-expected active review-cycle ID, a controlled correction reason, and a structured
-correction plan. `RETURN_TO_CUSTOMER_REVISION` creates Customer-owned document
-replacement tasks. `REQUEST_STAFF_CORRECTION` creates Staff-owned upload or
-document-review tasks. Recommendation persistence, Loan transition, correction
-request/task creation, audit, and status history are one transaction; failure of
-the synchronous Loan continuation rolls back the recommendation.
+Approval or rejection recommendations move the application to Approver decision. Revision actions must include a controlled reason and assign each correction task to the Customer or Staff according to Section 6.4. The recommendation, resulting workflow outcome, and audit trail must remain consistent as one business result.
 
 ### 6.6 Approval Decision
 
 The Approver reviews the application and Loan Officer recommendation. Approval must be separate from Loan Officer review, and the same back-office user cannot record both the Loan Officer recommendation and final Approver decision for the same application.
 
-For the current MVP, approval is exact-request approval:
+For the MVP, approval is exact-request approval:
 
 * approved amount equals the submitted requested amount;
 * approved term equals the submitted requested term;
 * the Approver does not create a counteroffer and does not modify amount or term during approval.
 
-If the requested amount or term must change, the application must be returned through an existing review or correction path. Counteroffers and approver-adjusted financial terms are outside the current MVP.
+If the requested amount or term must change, the application must be returned through an existing review or correction path. Counteroffers and approver-adjusted financial terms are outside the MVP.
 
 Approver actions:
 
@@ -365,97 +339,81 @@ Approver actions:
 | `RETURN_TO_LOAN_OFFICER_REVIEW` | `RETURNED_TO_REVIEW` |
 | `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` | `RETURNED_FOR_REVISION` |
 
-All four actions are executable. The mixed correction action requires the
-expected active review-cycle ID, a controlled reason, and a structured plan with
-separate Customer- or Staff-owned tasks. One correction task never has multiple
-responsible actor types. Decision persistence, Loan transition, correction
-request/task creation, review-cycle linkage, audit, and status history are one
-transaction; failure of the synchronous Loan continuation rolls back the
-decision.
+Correction decisions must include a controlled reason and separate Customer- and Staff-owned tasks where both parties must act. Rejection and return outcomes must preserve the Approver's reason. The decision, resulting workflow outcome, approved terms where applicable, and audit trail must remain consistent as one business result.
 
 `APPROVED` is a decision status. It should not remain the customer-facing waiting status once approved terms are generated; the customer-facing status becomes `CUSTOMER_ACCEPTANCE_PENDING`.
 
-When approved-offer generation is part of the workflow, approval and offer generation must complete as one controlled business operation. If the approved offer cannot be generated, the approval must not leave the application permanently in `APPROVED` without customer-facing approved terms.
+Approval and offer generation must complete as one controlled business operation. If the approved offer cannot be generated, approval must not leave the application permanently in `APPROVED` without customer-facing approved terms.
 
-### 6.7 Offer, Contract, Disbursement, and Activation
+### 6.7 Approved Offer and Customer Response
 
 An approved offer is the customer-facing historical snapshot of the terms presented after approval and before contract preparation.
 
-For the current MVP, each Loan Application may have one approved offer. Once the offer is presented, the approved financial terms snapshot is immutable: approved principal, approved term, interest and pricing terms, total interest, fees, total repayment amount, repayment method, provisional repayment items, generated time, and expiry time must not change. Later product or policy changes must not silently change terms already presented. Offer lifecycle state and response metadata may change only through defined transitions, including offer status, accepted time, declined time, and expired time.
+Each Loan Application may have one approved offer for the MVP. Once presented, its approved principal, term, pricing, interest, fees, total repayment, repayment method, provisional repayment items, generation time, and expiry time are immutable. Later product or policy changes must not alter terms already presented. Salary Advance pricing and provisional-item rules are defined in Section 11.2.
 
-For Salary Advance, the approved offer uses exact-request terms and approved product pricing:
+The Customer owner may view the offer without changing its status, application status, or Salary Advance reservation. The Customer must accept valid approved terms before contract preparation and disbursement.
 
-* approved principal amount is the submitted requested amount;
-* approved term is the submitted requested term, limited to 1, 2, or 3 months;
-* interest is 1.2% flat interest per month, applied to the original approved principal for each approved term month;
-* fee amount is 0 VND;
-* total repayment amount is approved principal plus total interest;
-* repayment method is `ON_SALARY_DATE`, used as a repayment timing category only;
-* provisional repayment items are generated using the Salary Advance rules in Section 11.2;
-* generated time and expiry time are captured when the offer is generated;
-* offer status tracks whether the offer is pending, accepted, declined, or expired.
+If the Customer accepts a valid unexpired offer, the application moves from `CUSTOMER_ACCEPTANCE_PENDING` to `CONTRACT_PENDING`. If the Customer declines a pending Salary Advance offer, the application moves to `CUSTOMER_DECLINED` and the reserved Salary Advance amount is released exactly once as part of the same business outcome. If the offer expires before acceptance, the application moves to `EXPIRED` and the reservation is released exactly once as part of the expiry outcome.
 
-The customer-visible Salary Advance offer shows product, approved principal amount, approved term, flat monthly interest rate, total interest amount, fee amount, total repayment amount, repayment method, provisional repayment items, generated time, expiry time, and offer lifecycle state. Provisional repayment items show item number, principal due, interest due, fee due, total due, and salary-cycle timing. Exact calendar due dates are not shown in the approved offer and are determined later by the final repayment schedule process.
+Repeating the same Customer response must not create another terminal transition or financial effect. Contradictory acceptance and decline actions are rejected. An expired offer cannot be accepted, and expiry must produce its terminal outcome and reservation release exactly once.
 
-The customer must accept approved terms before contract preparation and disbursement. Viewing an offer is read-only and must not change application status, expire the offer, or release a Salary Advance reservation. Responding to an offer requires authenticated customer ownership of the Loan Application. Viewing the customer's own offer may use `loan:read:own`; accepting or declining the offer requires `loan:offer:respond:own`.
+### 6.8 Contract Preparation and Readiness
 
-If the customer accepts a valid unexpired offer, the application moves from `CUSTOMER_ACCEPTANCE_PENDING` to `CONTRACT_PENDING`. If the customer declines a pending Salary Advance offer, the application moves to `CUSTOMER_DECLINED` and the reserved Salary Advance amount is released exactly once in the same controlled business operation. If the offer expires before acceptance, the application moves to `EXPIRED` and the reserved Salary Advance amount is released exactly once in the same controlled business operation.
+After Customer acceptance, an Accounting Officer prepares an operational Loan Contract. It is an immutable versioned record of accepted financial terms, provisional repayment items, and the destination bank account captured for disbursement. It is not a PDF, uploaded signed agreement, electronic signature, digital signature, or legal execution of an agreement.
 
-Same-action retries are idempotent for customer offer responses: accepting an already accepted offer returns the current accepted result, and declining an already declined offer returns the current declined result without releasing reservation again. Contradictory accepted/declined actions return `OFFER_ACTION_CONFLICT`. Accept or decline against an expired offer consistently returns `OFFER_EXPIRED`: a customer action that first discovers expiry commits expiry and exact-once release, while an already persisted expiry returns the same conflict without additional history, audit, movement, or release effects.
+The Customer owner retrieves and acknowledges the exact current contract version. Acknowledgment is immutable operational evidence, cannot be withdrawn, and does not represent electronic or legal signing.
 
-After customer acceptance, an Accounting Officer prepares an operational Loan Contract. This is an immutable versioned record of the accepted approved-offer financial terms, provisional repayment items, and the destination bank account captured for later disbursement. It is not a PDF, uploaded signed agreement, electronic signature, digital signature, or legal execution of an agreement.
+Before final readiness, Accounting may refresh the disbursement destination on a `PREPARED` or `ACKNOWLEDGED` contract. The prior version becomes `SUPERSEDED`; accepted financial terms and repayment items remain unchanged; the current eligible destination is recaptured; and the new version requires fresh Customer acknowledgment.
 
-The Customer retrieves the current contract using authenticated ownership and acknowledges the exact current version. Acknowledgment is immutable operational evidence and cannot be withdrawn. It does not represent electronic signing or legal acceptance of a generated agreement.
+Readiness is a calculated point-in-time result. Final confirmation requires the accepted offer, the acknowledged current contract, an active Customer and captured destination, processing-ready documents, no active correction, and valid product-specific pre-disbursement conditions such as an unreleased Salary Advance reservation. Readiness must not reprice or alter accepted terms.
 
-Before final readiness, Accounting may regenerate a `PREPARED` or `ACKNOWLEDGED` contract only with `DISBURSEMENT_ACCOUNT_REFRESH`. The prior version becomes `SUPERSEDED`; accepted financial terms and repayment items remain identical; the current primary active destination is recaptured; and the new version requires a fresh Customer acknowledgment.
+Successful readiness confirmation makes the contract `READY_FOR_DISBURSEMENT` and moves the application from `CONTRACT_PENDING` to `DISBURSEMENT_PENDING` as one business outcome. It does not transfer funds, create the LoanAccount or final schedule, or convert reserved Salary Advance exposure to used exposure.
 
-Readiness is a calculated, point-in-time advisory result with stable blocker codes. Final confirmation recomputes readiness transactionally and requires the accepted offer, current acknowledged version, active Customer, active captured source account, processing-ready documents, no active correction request, and a valid unreleased Salary Advance reservation. It does not recheck profile completeness, current account primacy, current product pricing, or accepted-offer expiry.
+### 6.9 Manual Disbursement and LoanAccount Activation
 
-Successful readiness confirmation moves the contract to `READY_FOR_DISBURSEMENT` and the Loan Application from `CONTRACT_PENDING` to `DISBURSEMENT_PENDING` in one transaction with PII-safe audit and status history. It does not execute a transfer. The separate manual-disbursement confirmation described below performs activation only after an Accounting Officer has completed the bank transfer outside Meridian.
+An Accounting Officer performs the transfer outside Meridian using the immutable contractual destination. Access to the full destination is limited to the authorized disbursement purpose and must not expose it through ordinary Customer, account, audit, history, or error views.
 
-### 6.8 Manual Disbursement and LoanAccount Activation
+After the transfer is completed, the Accounting Officer confirms manual disbursement against the ready contract. The system must use the contract as authority for financial terms, repayment items, Customer ownership, product, and destination.
 
-An Accounting Officer with `loan:disburse` may reveal the full immutable contractual destination only while the application is `DISBURSEMENT_PENDING` and its current contract is `READY_FOR_DISBURSEMENT`. Reveal and confirmation are separate operations. Every successful reveal is non-cacheable and records only PII-safe access evidence; it never audits the revealed bank data.
+Confirmation produces one atomic business outcome:
 
-Confirmation accepts a request UUID, expected contract version, canonical external transfer reference, value date, and first repayment date. All money, term, installments, Customer ownership, product, and destination facts come from the locked ready contract. One transaction creates an active LoanAccount, immutable manual-disbursement evidence, and one final dated schedule; converts the Salary Advance reservation to used exposure; transitions the application to `DISBURSED`; and writes history and PII-safe audit. Identical request replay returns the original result without another durable effect. A different request after completion is rejected.
+1. create the LoanAccount and set it to `ACTIVE`;
+2. record immutable manual-disbursement evidence;
+3. create one authoritative final dated repayment schedule;
+4. convert the Salary Advance reservation to used exposure where applicable;
+5. move the Loan Application to `DISBURSED`;
+6. record the required audit and status history.
 
-Customers with `loan:read:own` may query only their activated LoanAccount; staff need `loan:read`. The response uses the immutable contract's fixed full destination mask `********` without revealing any stored suffix and excludes transfer references, full destination data, encryption evidence, Salary Advance internals, actor IDs, audit IDs, and history IDs. The same query now includes persisted servicing progress. Secured Salary Advance repayment posting and immutable repayment-history queries are executable; administrative closure, UCL activation, and Collateral activation remain deferred.
+Repeating the same confirmation returns the original business result without duplicating the account, disbursement, schedule, exposure movement, or audit/history effects. Customers may view only their own activated LoanAccount; Staff access requires an authorized operational role. Ordinary views expose only the protected destination representation appropriate to that actor.
 
-### 6.9 Repayment, Settlement, and Closure
+### 6.10 Repayment, Settlement, and Closure
 
-The immutable final version-1 repayment schedule is the authoritative scheduled obligation after activation. Servicing progress, actual payment transactions, and their allocations are separate evidence and must never rewrite original schedule amounts or dates.
+The final repayment schedule is the authoritative contractual obligation after activation. Payment transactions, allocations, and servicing progress are separate evidence and must never rewrite original schedule amounts or dates.
 
-Servicing starts with zero paid and the full contractual amount outstanding. Newly activated accounts establish the same initial installment and LoanAccount state atomically with activation. Each manual Salary Advance repayment records immutable payment and allocation evidence plus an immutable operation outcome so an exact replay remains stable after later servicing changes.
-
-Executable manual-repayment rules are:
+Repayment rules are:
 
 * allocate within an installment in `FEE -> INTEREST -> PRINCIPAL` order;
 * allocate installments by due date ascending, then installment number ascending;
-* allow early allocation to future installments without interest rebate, repricing, schedule regeneration, or obligation/date mutation;
-* reject the entire payment if it exceeds total outstanding; unapplied cash, suspense, credit, refund, and reversal are outside the MVP boundary;
-* persist `paymentValueDate` separately from `recordedAt`; require the value date to be between the disbursement value date and the current UTC date inclusive; allow backdated and out-of-order value dates; allocate against balances at recording time and never rewrite historical allocations or statuses;
-* calculate `lastPaymentValueDate` as the maximum recorded payment value date and `lastPaymentRecordedAt` as the latest recording timestamp;
-* treat the normalized external payment reference as globally unique internal evidence without exposing it in responses, logs, errors, audit, or history.
+* allow partial and early allocation without interest rebate, repricing, schedule regeneration, or obligation/date mutation;
+* reject the entire payment if it exceeds total outstanding;
+* accept backdated payments where permitted, but reject payment value dates before disbursement or after the current business date;
+* allocate against the balances that exist when the payment is recorded and never rewrite earlier allocations or servicing history;
+* prevent duplicate payment evidence from producing duplicate allocations, exposure release, audit, or history effects.
 
-LoanAccount roll-up rules:
+Only principal allocated by a Salary Advance repayment releases used exposure, exactly and by the same principal amount. Interest and fee payments release none.
 
-* if any unpaid repayment is past due, the LoanAccount becomes `OVERDUE`;
-* if total outstanding reaches zero, the LoanAccount becomes `SETTLED`;
-* otherwise the LoanAccount is `ACTIVE`;
-* repayment posting never produces `CLOSED`; automatic full contractual payoff is `SETTLED`, while negotiated settlement and administrative closure remain deferred.
-Date-driven servicing uses the current UTC business date. For each installment, status priority is: zero outstanding -> `PAID`; positive outstanding after its due date -> `OVERDUE`; any paid amount on or before its due date -> `PARTIALLY_PAID`; unpaid on its due date -> `DUE`; otherwise -> `NOT_DUE`. Thus an unpaid installment becomes overdue only on the next UTC date. Evaluation dates are monotonic and evaluation changes only derived statuses and dates; it never changes financial balances, payment evidence, scheduled obligations, Salary Advance exposure, Loan Application state, or creates `SETTLED`/`CLOSED`.
+Installments are `NOT_DUE`, `DUE`, `PARTIALLY_PAID`, `OVERDUE`, or `PAID` according to their due date, paid amount, and outstanding amount. An unpaid obligation becomes overdue only after its due date. The LoanAccount is:
 
-Bounded candidate selection, per-account transaction scope, status-history/audit emission, and scheduler configuration are architecture and operations concerns preserved in `MER-ARCH-006`.
+* `ACTIVE` while contractual outstanding remains and no unpaid obligation is past due;
+* `OVERDUE` while any unpaid obligation is past due;
+* `SETTLED` after full contractual repayment or an approved settlement;
+* `CLOSED` only after an eligible settled account completes administrative closure.
 
-A matching `ACTIVE` or `OVERDUE` Salary Advance LoanAccount with positive contractual outstanding debt blocks a new submission with `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, even when overdue evaluation is stale or principal repayments have restored some available exposure. Only full contractual payoff and the resulting zero-outstanding `SETTLED` state remove this specific guard; all other submission rules continue to apply.
+Full contractual payoff must atomically produce `SETTLED` and release the remaining Salary Advance principal exposure. An approved settlement also produces `SETTLED` according to its approved policy; administrative closure is a separate subsequent action.
 
-The posting operation publishes `REPAYMENT_RECORDED` exactly once and publishes `LOAN_ACCOUNT_STATUS_CHANGED` only when the account status changes. Installment changes use dedicated append-only history. Salary Advance exposure release is immutable movement evidence within the repayment operation rather than a separate top-level audit action.
+A matching `ACTIVE` or `OVERDUE` Salary Advance LoanAccount with positive contractual outstanding debt blocks a new Salary Advance submission even if available exposure has increased or overdue evaluation has not yet run. The guard clears only when contractual outstanding reaches zero and the account is `SETTLED`; all other eligibility and submission rules still apply.
 
-Current repayment web authorization requires `repayment:update`. The application service does not hard-code an Accounting Officer role and requires a valid staff-backed authenticated actor. Customer owners read repayment history and LoanAccount servicing with `loan:read:own`; authorised staff use `loan:read`.
-
-Technical lock order, bounded overdue-candidate processing, scheduler configuration, and audit-emission mechanics are specified in `MER-ARCH-006`; exact HTTP contracts and reference normalization are specified in `MER-API-001`.
-
-Manual Salary Advance repayment posting, deterministic allocation, installment/account servicing state, automatic contractual payoff, exact principal used-exposure release, date-driven overdue evaluation, outstanding-debt submission blocking, history, audit, durable replay, secured repayment APIs, repayment-history queries, and enhanced LoanAccount servicing queries are executable. Negotiated or administrative settlement, administrative closure, reversal/refund, suspense or unapplied cash, waiver/write-off, payment integration, bank reconciliation, ledger, and UCL/Collateral repayment policies remain deferred.
+The MVP excludes unapplied cash or suspense processing, repayment reversal/refund, waiver/write-off, payment-provider or bank integration, bank reconciliation, and a financial ledger. These boundaries do not remove settlement tracking, administrative closure, or the intended streamlined repayment behavior of supported products from the MVP business vision.
 
 ---
 
@@ -552,7 +510,7 @@ Limit state behavior:
 * Rejected, cancelled, customer-declined, expired, or otherwise released applications free the reserved amount.
 * Customer decline and offer expiry release the reserved amount exactly once, in the same controlled business operation as the terminal application transition.
 * Manual disbursement converts the reserved amount into used amount when the LoanAccount is created.
-* Only principal actually allocated by repayment releases used amount in the current executable Salary Advance policy; administrative settlement and correction-based release remain deferred.
+* Only principal actually allocated by repayment releases used amount; interest and fee release none. Any settlement- or correction-based exposure release must follow an explicitly approved product policy.
 * A matching `ACTIVE` or `OVERDUE` Salary Advance LoanAccount with positive contractual outstanding debt prevents new submission even when calculated available amount remains.
 
 Limit refresh, suspension, and disablement:
@@ -580,7 +538,7 @@ End-to-end workflow:
 13. Customer enters requested amount, term, and required application information.
 14. Customer uploads required Salary Advance documents, or the system marks non-required checklist items `NOT_REQUIRED`.
 15. Customer submits the Salary Advance request.
-16. System validates the active employee link, active limit, product rules, requested amount, term, stale data, overdue exposure, blocking application rules, available amount, and document checklist completeness.
+16. System validates the active employee link, active limit, product rules, requested amount, term, stale data, authoritative outstanding debt, blocking application rules, available amount, and document checklist completeness.
 17. If validation passes, the system reserves the requested amount and records the application-level Salary Advance verification snapshot.
 18. Loan Officer reviews verification snapshot, current warnings if any, documents, requested amount, requested term, and application details.
 19. Loan Officer recommends approval, recommends rejection, or returns for revision.
@@ -592,7 +550,7 @@ End-to-end workflow:
 25. Contract and disbursement documents are prepared or uploaded after customer acceptance.
 26. Accounting Officer marks disbursement as completed.
 27. System marks the application `DISBURSED`, creates the LoanAccount, generates the final repayment schedule, activates the LoanAccount, and converts reserved limit to used limit.
-28. Manual repayment and overdue servicing track the LoanAccount through `ACTIVE`, `OVERDUE`, and exact contractual payoff to `SETTLED`; only allocated principal releases used limit. Administrative settlement and closure remain deferred.
+28. Repayment and overdue servicing track the LoanAccount through `ACTIVE` and `OVERDUE`; full repayment or approved settlement produces `SETTLED`, and an eligible settled account may later be administratively `CLOSED`. Only allocated principal releases used limit unless an approved settlement policy specifies otherwise.
 
 
 Salary Advance MVP does not include real payroll integration, real employer API integration, automatic payroll deduction, real bank transfer, employer-facing production portal, counteroffers, approver-modified amount or term, or real-time HR system sync.
@@ -781,8 +739,8 @@ EXPIRED
 | FR-SA-002 | The system shall validate Partner Employee import rows, track import batches, enforce freshness rules, and prevent invalid, stale, inactive, or duplicate unresolved employee data from normal eligibility use. |
 | FR-SA-003 | The system shall allow customers to verify Salary Advance employee status before creating a loan application and shall maintain a reusable customer employee link after successful verification or approved manual review. |
 | FR-SA-004 | The system shall show Salary Advance employee verification status and current total, used, reserved, and available limit on the customer Salary Advance product page or dashboard. |
-| FR-SA-005 | The system shall calculate and maintain Salary Advance limit state using product, partner, employee, salary cap, used exposure, reserved exposure, overdue exposure, employee status, and import freshness rules. |
-| FR-SA-006 | The system shall block Salary Advance application creation or submission when the customer is not employee-verified, the limit is unavailable, stale, suspended, disabled, insufficient, or blocked by overdue exposure. |
+| FR-SA-005 | The system shall calculate and maintain Salary Advance limit state using product, partner, employee, salary cap, used exposure, reserved exposure, employee status, and import freshness rules. |
+| FR-SA-006 | The system shall block Salary Advance application creation or submission when the customer is not employee-verified; the limit is unavailable, stale, suspended, disabled, or insufficient; or a matching Salary Advance account has positive contractual outstanding debt. |
 | FR-SA-007 | The system shall reserve Salary Advance limit for submitted non-terminal applications, release reserved limit exactly once when applications terminate before disbursement including rejection, cancellation, customer decline, and offer expiry, convert reserved limit to used limit at disbursement, and release used limit through repayment or settlement policy. |
 | FR-SA-008 | The system shall refresh customer employee links and Salary Advance limits when valid Partner Employee data changes. |
 | FR-SA-009 | The system shall record a Salary Advance verification snapshot for each Salary Advance application, including the employee verification result and limit values used for that application. |
@@ -799,7 +757,7 @@ EXPIRED
 | FR-CON-002 | The system shall allow only `DISBURSEMENT_ACCOUNT_REFRESH` regeneration before readiness and shall transactionally confirm an acknowledged ready contract into `DISBURSEMENT_PENDING` without performing disbursement. |
 | FR-DIS-001 | The system shall allow only Accounting Officers to confirm manual disbursement after approval, customer acceptance, document readiness, and bank account confirmation. |
 | FR-DIS-002 | The system shall move the application to `DISBURSED`, create the LoanAccount, generate the final repayment schedule, activate the LoanAccount, and audit all actions in one controlled post-disbursement transaction. |
-| FR-REP-001 | The system shall preserve final repayment schedules and track due, paid, and outstanding amounts plus repayment and overdue status. Current Salary Advance servicing reaches automatic contractual payoff to `SETTLED`; negotiated settlement and administrative closure are deferred target behavior. |
+| FR-REP-001 | The system shall preserve final repayment schedules; record and allocate repayments; track due, paid, outstanding, and overdue state; move full repayment or approved settlement to `SETTLED`; and support administrative closure of eligible settled accounts to `CLOSED`. |
 | FR-PORTAL-001 | The Customer Web Portal shall support registration, login, profile completion, active product browsing, application submission, document upload, viewing the customer's own approved offer, customer-owned offer acceptance/decline, and status tracking. |
 | FR-PORTAL-002 | The Back-Office Web Portal shall support product, partner, import, user, queue, review, approval, disbursement, repayment, and audit operations according to role permissions. |
 | FR-AUD-001 | The system shall record audit trail entries for important business actions and status transitions, including actor, action, timestamp, affected entity, previous status, new status, and reason where applicable. |
@@ -829,7 +787,7 @@ EXPIRED
 | BR-016 | Each Salary Advance application must record a verification snapshot even when the customer's reusable employee link was verified earlier. |
 | BR-017 | Salary Advance reserved limit must be released exactly once when an application is rejected, cancelled, customer-declined, expired, or otherwise released before disbursement, and the release must be part of the same controlled business operation as the terminal transition. |
 | BR-018 | Salary Advance reserved limit must become used limit when manual disbursement creates the LoanAccount. |
-| BR-019 | Current Salary Advance repayment releases used limit only for newly allocated principal and by exactly that amount; interest and fee release none. Settlement- or correction-based administrative release requires a separately approved future policy. |
+| BR-019 | Salary Advance repayment releases used limit only for allocated principal and by exactly that amount; interest and fee release none. Any settlement- or correction-based release requires an explicitly approved policy. |
 | BR-020 | Unsecured Consumer Loan requires income and employment document review but does not require collateral information. |
 | BR-021 | Collateral Loan requires collateral information and collateral ownership or supporting documents. |
 | BR-022 | Collateral estimated value is informational in MVP and does not trigger automated loan-to-value blocking. |
@@ -847,14 +805,14 @@ EXPIRED
 | BR-034 | A LoanAccount is created only after manual disbursement confirmation. |
 | BR-035 | LoanApplication `DISBURSED`, LoanAccount creation, final repayment schedule generation, and LoanAccount `ACTIVE` status are completed as one controlled post-disbursement transaction. |
 | BR-036 | Post-submission customer bank account changes are restricted by application status and must be audited. |
-| BR-036A | Loan owns immutable contract/disbursement destination snapshots. Broader Loan-status-sensitive Customer profile and bank-account mutation rules remain deferred and must preserve Customer ownership without creating a Customer-to-Loan dependency cycle. |
+| BR-036A | Loan must preserve immutable contract and disbursement destination snapshots, and broader profile or bank-account mutation policies must preserve Customer ownership without creating a Customer-to-Loan dependency cycle. |
 | BR-037 | Repayment updates are manually entered or confirmed in the MVP. |
 | BR-038 | Any unpaid repayment past due sets the LoanAccount to `OVERDUE`. |
-| BR-039 | Exact contractual payoff through repayment sets the LoanAccount to `SETTLED`; negotiated or administrative settlement remains deferred. |
-| BR-040 | Administrative closure may move a settled LoanAccount to `CLOSED` in a future workflow; no current command produces `CLOSED`. |
+| BR-039 | Full contractual repayment or approved settlement sets the LoanAccount to `SETTLED`. |
+| BR-040 | Administrative closure may move an eligible settled LoanAccount to `CLOSED`. |
 | BR-041 | Every important status transition must create an audit trail record. |
-| BR-042 | For the current MVP, Approver approval approves the exact submitted amount and exact submitted term; any change to amount or term must return through review or correction rather than becoming a counteroffer. |
-| BR-043 | Each Loan Application may have one approved offer for the current MVP; once presented, its approved financial terms snapshot is immutable, while offer lifecycle state and response metadata may change only through defined transitions. |
+| BR-042 | For the MVP, Approver approval approves the exact submitted amount and exact submitted term; any change to amount or term must return through review or correction rather than becoming a counteroffer. |
+| BR-043 | Each Loan Application may have one approved offer for the MVP; once presented, its approved financial terms snapshot is immutable, while offer lifecycle state and response metadata may change only through defined transitions. |
 | BR-044 | Customer offer viewing and response actions must derive customer identity from authentication and verify ownership through the Loan Application. |
 | BR-045 | Viewing an offer is read-only; offer expiry state changes are performed by system expiry processing or by guarded state-changing customer actions. |
 | BR-046 | Same-action offer response retries are idempotent, while contradictory terminal offer actions must be rejected as conflicts. |
@@ -1053,7 +1011,7 @@ These are business concepts, not a claim that same-named physical tables or clas
 
 ### 13.1 Must Have
 
-This is the intended MVP product target, not a current implementation checklist. Section 2 and the workflow-specific current/deferred statements identify the executable boundary.
+This is the intended MVP product target, not an implementation checklist.
 
 One backend and one database; Customer Web Portal; Back-Office Web Portal; customer and back-office authentication; role-based access control; customer profile completion; loan product catalog; product activation/deactivation; common loan application workflow; transition matrix enforcement; Salary Advance workflow; Partner Company management; monthly Partner Employee import; import validation and freshness handling; reusable employee verification; Salary Advance limit dashboard, calculation, reservation, refresh, suspension, disablement, and release; Unsecured Consumer Loan workflow; Collateral Loan workflow; document checklist configuration; checklist completeness validation; manual document review; Loan Officer review; Approver decision; maker-checker same-user prevention; customer acceptance; provisional repayment schedule; offer expiry; manual disbursement confirmation; LoanAccount creation and activation; final repayment schedule; repayment tracking; settlement and closure tracking; audit trail.
 
@@ -1100,52 +1058,3 @@ Future releases may revisit:
 8. Separate approval and disbursement responsibilities.
 9. Keep customer-facing steps clear and simple.
 10. Make the workflow realistic without becoming a production banking core.
-
-## Executable document and correction workflow
-
-Salary Advance submission creates one empty `SUBMISSION` checklist, so normal
-applications remain `SUBMITTED`. `RECENT_PAYSLIP` is created only when a controlled
-correction plan requests clarification; it never replaces Customer readiness,
-Partner eligibility, or the verified employee-link rules.
-
-`RETURN_TO_CUSTOMER_REVISION`, `REQUEST_STAFF_CORRECTION`, and
-`REQUEST_CUSTOMER_OR_STAFF_CORRECTION` are executable with an expected active
-review-cycle ID, a controlled reason code, and one to ten exact document tasks.
-Customer tasks use customer-visible instructions; internal Approval notes are
-never copied into tasks, audit, or Loan history. A mixed request contains separate
-single-owner tasks rather than a task with ambiguous Customer-or-Staff ownership.
-
-The authenticated owner uploads immutable versions, completes tasks only after the
-required upload or replacement proof exists, and resubmits with an idempotency
-request ID. Staff work is exposed through a permission-protected task queue.
-Staff upload is permitted only for an open Staff upload task. A document-review
-task requires review of the specific current `RECENT_PAYSLIP` version and rejects
-a stale-version decision. The same staff user who created the correction request
-cannot complete its task.
-
-Manual review outcomes are `ACCEPT`, `WAIVE`, and `REQUEST_REPLACEMENT`. Waiver is
-restricted to Loan Officers. Upload completeness means a required item has a
-current version; processing readiness additionally requires the current version
-to be accepted or the item to be waived. Replacing a document supersedes the prior
-version and invalidates its accepted outcome.
-
-Only a Customer may resubmit a Customer-only correction, and only authorized
-staff may resubmit a Staff-only or mixed correction. A mixed request cannot become
-ready after only its Customer portion is complete. Resubmission locks the Loan
-workflow, consumes the request exactly once, revalidates Customer readiness,
-Partner eligibility, product policy, blocking-application, document readiness,
-effective limit, and unchanged Salary Advance reservation, and inserts a new
-immutable verification snapshot. Requested amount and term remain immutable, so
-V24 neither increases nor decreases the reservation.
-
-Routing is `SUBMITTED` while manual document review is pending and `UNDER_REVIEW`
-
-## Executable Salary Advance repayment servicing boundary
-
-The authoritative final `RepaymentSchedule` is immutable contractual obligation evidence. An actual repayment is recorded separately as an immutable payment transaction and component allocations, with mutable paid/outstanding installment progress and LoanAccount roll-up maintained atomically. The current executable product is Salary Advance only.
-
-Repayments allocate deterministically to the oldest installment first and, within an installment, to fee, interest, and principal. Partial and early payments are accepted. Overpayment and future-dated value dates are rejected. Canonical external payment reference and request UUID provide duplicate prevention and exact replay; a replay returns the immutable original V34 outcome without overwriting later servicing state.
-
-Only principal actually allocated releases Salary Advance used exposure, exactly once and by the exact principal amount. Interest and fee payments release no exposure. A partial repayment leaves contractual outstanding debt and continues to block a new Salary Advance submission even if available exposure has increased. Full contractual payoff atomically produces `SETTLED`, releases the final principal exposure, and removes the outstanding-account submission guard subject to all other submission rules.
-
-UTC date-driven servicing advances persisted installment status through `NOT_DUE`, `DUE`, `PARTIALLY_PAID`, `OVERDUE`, and `PAID`, and rolls the account between `ACTIVE` and `OVERDUE`. Submission blocking depends on authoritative outstanding debt, not scheduler freshness. Customers may view only their own account and immutable repayment history; authorised staff may record repayments and use staff reads. Settlement negotiation/administration, closure, reversal, refund, waiver, write-off, payment integration, bank reconciliation, ledger, notification, UCL, and Collateral repayment remain deferred.
