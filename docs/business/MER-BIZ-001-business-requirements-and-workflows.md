@@ -730,7 +730,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | FR-APP-003 | The system shall prevent a new submitted application for a product while the Customer has another blocking non-terminal application for that product. |
 | FR-SA-001 | The system shall let Back-Office Admins manage Partner Companies and monthly Partner Employee imports for Salary Advance. |
 | FR-SA-002 | The system shall validate import rows, track batches, enforce freshness, and prevent invalid, stale, inactive, or unresolved duplicate employee evidence from normal eligibility. |
-| FR-SA-003 | The system shall verify Salary Advance employment before normal application creation and maintain a reusable Customer–Partner Employee link after successful verification or authorized approval. |
+| FR-SA-003 | The system shall verify Salary Advance employment before normal application creation and maintain a reusable Customer–Partner Employee link after successful verification or authorized manual-review approval. |
 | FR-SA-004 | The system shall show employee-verification status and total, used, reserved, and available Salary Advance limit to the Customer. |
 | FR-SA-005 | The system shall calculate and maintain Salary Advance limit using product, Partner, employee, salary-cap, used-exposure, reserved-exposure, status, and freshness rules. |
 | FR-SA-006 | The system shall block normal Salary Advance creation or submission when employee eligibility is absent, the limit is not usable or sufficient, or matching Salary Advance debt has positive contractual outstanding. |
@@ -746,7 +746,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | FR-APR-001 | The system shall let Approvers approve, reject, return to Loan Officer review, or request structured Customer or Staff correction. |
 | FR-APR-002 | The system shall enforce maker-checker separation between the Loan Officer recommendation and final Approver decision. |
 | FR-OFFER-001 | The system shall generate one immutable approved offer after approval, present it to the authenticated Customer owner, support idempotent acceptance or decline, and expire pending offers after the configured validity period. |
-| FR-CON-001 | The system shall let Accounting prepare an immutable operational contract from the accepted offer and a protected destination snapshot and let the Customer owner acknowledge the exact current version. |
+| FR-CON-001 | The system shall let Accounting prepare an immutable operational contract from the accepted offer and a protected destination snapshot, let the Customer owner acknowledge the exact current version, and expose a structured readiness result containing readiness status and blocker codes. |
 | FR-CON-002 | The system shall permit contract regeneration before readiness only for a controlled destination refresh and shall confirm readiness without performing disbursement. |
 | FR-DIS-001 | The system shall expose the full destination only through a dedicated authorized and audited disbursement operation and shall let Accounting confirm an external transfer only against a ready contract. |
 | FR-DIS-002 | The system shall create the LoanAccount, final schedule, disbursement evidence, exposure effects, application transition, history, and audit as one atomic activation outcome. |
@@ -814,7 +814,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-048 | Salary Advance total interest is `approvedPrincipal × 0.012 × approvedTermMonths`, rounded to whole VND using `HALF_UP`. |
 | BR-049 | Salary Advance fees are zero and total repayment equals approved principal plus total interest. |
 | BR-050 | Salary Advance generates one provisional repayment item per approved term month using `ON_SALARY_DATE` timing without exact calendar due dates. |
-| BR-051 | Salary Advance provisional principal and interest are allocated in whole VND, remainders go to the final item, and item sums reconcile exactly to offer totals. |
+| BR-051 | Salary Advance provisional principal and interest are allocated in whole VND, remainders go to the final item, fee due is zero for every item, each item's total due equals its principal due plus interest due plus fee due, and all item sums reconcile exactly to the approved offer totals. |
 | BR-052 | Salary Advance requested principal must be mathematically whole VND; scale-only trailing zeros are valid and non-zero fractional VND is rejected before financial persistence. |
 | BR-053 | An operational contract copies accepted offer terms and provisional items exactly and does not treat mutable Customer data as historical financial authority. |
 | BR-054 | Contract acknowledgment is immutable evidence for the exact current version and is not an electronic signature, digital signature, or legal execution. |
@@ -887,7 +887,8 @@ Provisional repayment items:
 - no exact calendar due date at offer time;
 - whole-VND principal and interest allocation;
 - remainder assigned to the final item;
-- zero fee for every item.
+- zero fee for every item;
+- each item's total due equals its principal due plus interest due plus fee due.
 
 Reconciliation:
 
