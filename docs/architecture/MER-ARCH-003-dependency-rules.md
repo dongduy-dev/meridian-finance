@@ -1,42 +1,43 @@
-# Dependency Rules and Architecture Enforcement
+# Meridian Dependency Rules and Architecture Enforcement
 
 ## Purpose and Document Authority
 
-This document defines Meridian’s normative source-dependency rules for the Java backend modular monolith and the strategy used to enforce them.
+This document defines the legal Java source dependencies for the `meridian-platform` modular monolith and how Meridian enforces them.
 
 | Document | Authority |
 |---|---|
-| `MER-ARCH-001-bounded-contexts.md` | Business ownership, source-of-truth boundaries, published capabilities, and context collaboration |
-| `MER-ARCH-002-project-structure.md` | Backend source layout and package placement |
+| `MER-ARCH-001-bounded-contexts.md` | Business ownership, source-of-truth boundaries, public capabilities, and context collaboration |
+| `MER-ARCH-002-project-structure.md` | Source layout, feature-module structure, and package placement |
 | `MER-ARCH-003-dependency-rules.md` | Legal compile-time dependencies, public module surfaces, adapters, and architecture enforcement |
 | `MER-ARCH-006-api-request-flow-and-dependencies.md` | Concrete request flows, transactions, retries, locks, and runtime security behavior |
 
-This document translates the ownership in `MER-ARCH-001` into source-code constraints. It does not redefine which context owns business data or workflow state.
+Each bounded context is represented by a feature module as defined in `MER-ARCH-002`. `shared` is a technical package, not a feature module or bounded context.
 
-Implementation progress and temporary conformance gaps belong in the project roadmap and follow-up register. Executable tests remain authoritative for what is automatically enforced.
+This document translates the ownership rules in `MER-ARCH-001` into source-code constraints. It does not redefine business ownership or workflow state.
+
+Implementation progress and temporary conformance gaps belong in the project roadmap and follow-up register. Executable architecture tests remain authoritative for rules described as automatically enforced.
 
 ---
 
-## 1. Core Dependency Principle
+## 1. Dependency Direction
 
 > **Dependencies point inward.**
 
+The arrows below show allowed source dependencies.
+
 ```mermaid
 graph LR
-    WEB["Inbound adapters<br/>web / event"] --> IN["Application input ports"]
-    IN --> APP["Application services"]
+    WEB["Inbound web adapter"] --> IN["Application input ports"]
+    EVENT["Inbound event adapter"] --> IN
+    APP["Application services"] --> IN
     APP --> DOMAIN["Domain"]
     APP --> OUT["Application output ports"]
     PERSIST["Persistence adapter"] --> OUT
     PERSIST --> DOMAIN
     BOUNDARY["Boundary adapter"] --> OUT
-
-    DOMAIN -.->|"must not depend on"| APP
-    APP -.->|"must not depend on"| PERSIST
-    WEB -.->|"must not depend on"| PERSIST
 ```
 
-The domain contains business state and policy. The application layer orchestrates use cases and owns its ports. Infrastructure implements technical concerns and boundary translation.
+The domain owns business state and policy. The application layer implements use cases, coordinates transactions, and owns its input and output ports. Infrastructure handles protocols, persistence, providers, and cross-module translation.
 
 Framework convenience must not reverse this direction.
 
@@ -46,13 +47,13 @@ Framework convenience must not reverse this direction.
 
 | From | May depend on | Must not depend on |
 |---|---|---|
-| **Domain** | Java, its own domain types, minimal shared-domain abstractions | Spring, JPA, application, infrastructure, DTOs, foreign feature modules |
-| **Application** | Its own domain, ports, DTOs, shared application abstractions, explicitly published foreign contracts | Infrastructure, JPA entities, web adapters, concrete security/JWT implementation, foreign internal application types |
-| **Inbound web adapter** | Input ports, application DTOs, HTTP and authorization annotations, shared web abstractions | Repositories, output ports, JPA entities, domain services, foreign internals |
-| **Inbound event adapter** | Published event contracts, input ports, event framework types | Foreign repositories, direct aggregate mutation, foreign infrastructure |
-| **Persistence adapter** | Its module’s output ports, domain models, JPA/JDBC, persistence mapping | Controllers, foreign repositories or entities, workflow orchestration |
-| **Boundary adapter** | Consumer-owned output port and provider’s published application contract | Provider domain, repositories, JPA entities, or internal services |
-| **Shared kernel** | Java and stable cross-cutting abstractions | Every feature module |
+| **Domain** | Java, its own domain types, and stable shared abstractions | Spring, JPA, application, infrastructure, boundary DTOs, or foreign feature modules |
+| **Application** | Its own domain, input and output ports, application DTOs, stable shared application abstractions, and explicitly published foreign contracts when the dependency is intentional | Infrastructure, JPA entities, web adapters, concrete security or JWT implementation, or foreign internal application types |
+| **Inbound web adapter** | Application input ports and DTOs, HTTP and authorization annotations, and shared web abstractions | Repositories, output ports, JPA entities, domain services, or foreign internals |
+| **Inbound event adapter** | Published event schemas, application input ports, and event-framework types | Repositories, direct aggregate mutation, or foreign infrastructure |
+| **Persistence adapter** | Its module's output ports and domain models, JPA or JDBC, and persistence mapping | Controllers, foreign repositories or entities, or workflow orchestration |
+| **Boundary adapter** | A consumer-owned output port and the provider's published application contract | Provider domain models, repositories, JPA entities, or internal services |
+| **Shared kernel** | Java and stable cross-cutting technical abstractions | Any feature module |
 
 ### Domain
 
@@ -60,26 +61,26 @@ Domain code remains pure Java. It must not perform HTTP, database, storage, mess
 
 ### Application
 
-Application services own orchestration, transactions, idempotency coordination, and policy selection. They may use `CurrentUserProvider`, but not Spring Security principals, JWT claims, or Identity infrastructure types.
+Application services implement input ports and own use-case orchestration, transaction boundaries, idempotency coordination, and policy selection. They may use `CurrentUserProvider` or explicit actor facts, but not Spring Security principals, JWT claims, or Identity infrastructure types.
 
 ### Adapters
 
-Controllers and event listeners enter through application input ports. Persistence and boundary adapters implement output ports. Adapters translate protocols and records; they do not decide business state transitions.
+Controllers and event listeners invoke application input ports. Persistence and boundary adapters implement output ports. Adapters translate protocols and records; they must not decide business state transitions.
 
 ---
 
 ## 3. Module Public Surfaces
 
-Every feature module exposes an intentionally small application surface.
+A feature module publishes only the contracts required for collaboration.
 
 Published surfaces may include:
 
-- application input ports;
+- application input ports intended for another module;
 - purpose-limited application contract records;
 - business-event schemas;
 - identifiers and closed value representations intended for collaboration.
 
-Internal by default:
+The following remain internal unless an owning architecture decision explicitly publishes them:
 
 - domain models and services;
 - repositories and output ports;
@@ -89,93 +90,89 @@ Internal by default:
 - configuration and concrete security implementation;
 - storage keys, encryption envelopes, and provider-specific types.
 
-Java `public` visibility alone does not make a type a cross-module contract. Public contracts must be deliberate, stable, and placed in a package intended for collaboration.
+Java `public` visibility alone does not make a type a cross-module contract. A published contract must be deliberate, stable, and placed in a package intended for collaboration.
 
-Spring Modulith named interfaces, package visibility, or equivalent ArchUnit rules may enforce these surfaces. Exact declarations belong in executable source rather than duplicated here.
+Spring Modulith named interfaces, package visibility, or ArchUnit rules may enforce module surfaces. Exact declarations remain in executable source rather than being duplicated here.
 
 ---
 
 ## 4. Cross-Module Contracts and Adapters
 
-These directions are different:
+Business collaboration, runtime calls, source dependencies, and persistence ownership describe different relationships.
 
-| Direction | Meaning |
+| Relationship | Meaning |
 |---|---|
 | **Business collaboration** | Which context needs a capability or fact; defined in `MER-ARCH-001` |
 | **Runtime invocation** | Which component calls a contract during execution |
 | **Compile-time dependency** | Which package imports another package |
 | **Persistence ownership** | Which context owns and mutates the data |
 
-A runtime call never grants permission to import the provider’s domain or persistence model.
+A runtime call does not grant permission to import the provider's domain or persistence model.
 
-### Preferred Synchronous Pattern
+### Synchronous Collaboration
+
+The preferred synchronous boundary is:
 
 ```text
-Consumer application
+consumer application
     → consumer-owned output port
-    → consumer infrastructure adapter
-    → provider published application contract
+    → consumer boundary adapter
+    → provider public application contract
     → provider application
 ```
 
-A boundary adapter may translate identifiers, immutable records, errors, redaction, and bounded sensitive values.
+A boundary adapter may translate identifiers, immutable records, errors, redaction, and bounded sensitive values. It must not expose provider aggregates, call provider repositories, retain unrestricted evidence, bypass provider checks, or write provider-owned persistence.
 
-It must not expose provider aggregates, call provider repositories, retain unrestricted evidence, bypass provider checks, or perform foreign persistence writes.
+### Cross-Module Source Rules
 
-### Cross-Module Rules
-
-1. Domain and application packages must not depend on another feature’s domain, infrastructure, persistence, or web packages.
-2. Foreign application types are allowed only when explicitly designated as published contracts or events.
-3. Cross-context references use identifiers and purpose-limited immutable facts, not aggregate object graphs.
-4. Each module owns its repositories, JPA entities, mappings, and tables.
-5. Bidirectional collaboration uses separate explicit contracts or events; direct module cycles are forbidden.
+1. Domain and application packages must not depend on another feature's domain, infrastructure, persistence, or web packages.
+2. Foreign application types are legal only when they are explicitly published contracts or event schemas.
+3. Cross-context references use stable identifiers and purpose-limited immutable facts, not aggregate object graphs.
+4. Each module owns its repositories, JPA entities, persistence mappings, and tables.
+5. Bidirectional collaboration uses separate explicit contracts or events. Direct feature-module dependency cycles are forbidden.
 6. Repository ports return domain objects or explicit application records, never REST DTOs.
 
 ---
 
 ## 5. Business Events and Reliability
 
-Business events are published contracts representing facts that occurred or outcomes another context must apply.
+Business events are published schemas representing facts that occurred or outcomes another context must apply.
 
-Events should contain stable identifiers, closed action or reason values, timestamps, correlation data, and purpose-limited immutable facts.
+Event schemas should contain stable identifiers, closed action or reason values, timestamps, correlation data, and purpose-limited immutable facts. They must not contain JPA entities, aggregate graphs, unrestricted evidence, secrets, encryption internals, or mutable shared collections.
 
-They must not contain JPA entities, aggregate graphs, unrestricted evidence, secrets, encryption internals, or mutable shared collections.
+An event listener is an inbound adapter. It translates the event into an application command and invokes an input port; it must not write repositories directly.
 
-An event listener is an inbound adapter. It translates the event into an application command and invokes an input port; it does not write repositories directly.
-
-Two reliability models are valid when explicit:
+Meridian uses one of two explicit reliability models:
 
 - **Synchronous transaction participation** when downstream failure must roll back the originating outcome.
-- **Durable asynchronous delivery** with defined retry, idempotency, ordering, reconciliation, and replay.
+- **Durable asynchronous delivery** when processing is decoupled and retry, idempotency, ordering, reconciliation, and replay are defined.
 
-Fire-and-forget handling is forbidden for business-critical outcomes.
+Business-critical coordination must not rely on fire-and-forget delivery.
 
-Audit and Notification consume events without becoming authorities over the workflow that produced them.
+Audit and Notification consume published facts without becoming authorities over the workflow that produced them.
 
 ---
 
-## 6. Persistence, Shared, Security, and Product Boundaries
+## 6. Code-Level Boundary Rules
 
 ### Persistence Isolation
 
-Permitted cross-context references use stable identifiers, immutable snapshots, purpose-limited records, and published events.
+Cross-context references may use stable identifiers, immutable snapshots, purpose-limited records, and published events.
 
-Forbidden:
+A module must not:
 
-- importing a foreign JPA entity;
-- calling a foreign repository or persistence adapter;
-- sharing one entity between modules;
-- using cross-context aggregate graphs;
-- treating direct cross-context joins as application integration;
-- writing another context’s tables.
+- import a foreign JPA entity;
+- call a foreign repository or persistence adapter;
+- share one persistence entity with another module;
+- use a cross-context aggregate object graph;
+- treat a direct cross-context join as application integration;
+- write another context's tables.
 
 A database foreign key may protect integrity without transferring aggregate ownership.
 
 ### Shared Kernel
 
-`shared` contains only minimal stable abstractions such as common exceptions, actor representations, operation context, audit contracts, and generic time or identifier support.
-
-It must not contain feature behavior or depend on `identity`, `customer`, `partner`, `loan`, `approval`, `document`, `audit`, or `notification`.
+`shared` must not contain feature behavior or depend on `identity`, `customer`, `partner`, `loan`, `approval`, `document`, `audit`, or `notification`. `MER-ARCH-001` and `MER-ARCH-002` define its permitted responsibility and placement.
 
 ### Security Isolation
 
@@ -183,55 +180,39 @@ Concrete Spring Security and JWT code belongs to Identity infrastructure.
 
 Feature domain and application code may use `AuthenticatedUser`, `CurrentUserProvider`, or explicit actor facts. They must not depend on security-context access, JWT libraries, Identity principals, filters, token services, or security configuration.
 
-Authorization permits attempting a capability; the owning context still enforces resource ownership and business invariants.
+Authorization permits an actor to attempt a capability. The owning context still enforces resource ownership and business invariants.
 
 ### Product and Supporting Capabilities
 
-Product-specific lending behavior remains inside `loan`. Top-level modules for Salary Advance, Unsecured Consumer Loan, or Collateral Loan are forbidden.
+Product-specific lending code remains inside `loan`. Top-level feature modules for Salary Advance, Unsecured Consumer Loan, or Collateral Loan are forbidden.
 
-External OCR integration remains behind a Document-owned output port and Document infrastructure adapter. Loan consumes Document readiness rather than calling an OCR provider.
+External OCR integration remains behind a Document-owned output port and Document infrastructure adapter. Loan may consume Document's published readiness contract but must not import or call an OCR provider directly.
 
-Audit and Notification observe published facts and never command a feature workflow.
+Audit and Notification consume published event schemas through their own inbound adapters. They must not import producer internals or command the workflow that produced an event.
 
-Authoritative business ownership remains in `MER-ARCH-001`.
+`MER-ARCH-001` remains authoritative for the underlying business ownership.
 
 ---
 
 ## 7. Security and Privacy at Boundaries
 
-Contracts, events, errors, audit payloads, and logs follow least disclosure.
+Public contracts, event schemas, errors, audit payloads, and logs follow least disclosure.
 
 They may carry identifiers, masked values, closed statuses, reason codes, and authorized purpose-limited facts.
 
-They must not expose unrestricted national identifiers or bank-account numbers; passwords, tokens, secrets, or keys; persistence entities; encryption or storage internals; or document evidence outside an authorized Document boundary.
+They must not expose:
 
-Sensitive temporary values must be bounded to the operation that requires them and cleared when mutable memory handling is available.
+- unrestricted national identifiers or bank-account numbers;
+- passwords, tokens, secrets, or keys;
+- persistence entities;
+- encryption or storage internals;
+- document evidence outside an authorized Document boundary.
 
-Detailed HTTP disclosure and request-specific security rules belong in API and request-flow documentation.
-
----
-
-## 8. Forbidden Dependency Patterns
-
-| Forbidden pattern | Reason |
-|---|---|
-| Domain imports Spring, JPA, application, or infrastructure | Breaks domain independence |
-| Application imports infrastructure | Reverses the dependency direction |
-| Controller calls a repository or domain service | Bypasses the application use case |
-| Event listener writes a repository directly | Bypasses consumer validation and orchestration |
-| Module imports a foreign entity, repository, or internal service | Violates ownership and public surfaces |
-| Shared imports a feature module | Reverses the shared-kernel dependency |
-| Feature application imports Identity security implementation | Couples business code to authentication technology |
-| Cross-context aggregate object graph | Creates shared ownership and hidden mutation |
-| Top-level package for one loan product | Fragments the common lending lifecycle |
-| Loan calls an OCR provider directly | Bypasses Document ownership |
-| Audit or Notification commands a business workflow | Lets an observer become an authority |
-| Business-critical fire-and-forget event | Leaves consistency and recovery undefined |
-| Contract, event, error, or log exposes unrestricted PII or secrets | Violates privacy and least disclosure |
+Detailed HTTP disclosure, sensitive-value handling, and request-specific security rules belong in API, security, and request-flow documentation.
 
 ---
 
-## 9. Architecture Rule Catalogue
+## 8. Architecture Rule Catalogue
 
 | Rule ID | Normative rule | Preferred enforcement |
 |---|---|---|
@@ -250,28 +231,26 @@ Detailed HTTP disclosure and request-specific security rules belong in API and r
 
 ---
 
-## 10. Enforcement and Evolution
+## 9. Enforcement and Evolution
 
 Mechanically checkable rules belong in `ArchitectureRulesTest` or focused architecture-test classes and run in the normal Maven verification lifecycle.
 
 | Mechanism | Responsibility |
 |---|---|
 | Compiler and package visibility | Block accidental access to non-public types |
-| ArchUnit | Layer imports, shared independence, security isolation, web boundaries, products, and cycles |
+| ArchUnit | Layer imports, shared independence, security isolation, web boundaries, product placement, and cycles |
 | Spring Modulith or equivalent rules | Module public surfaces and legal module dependencies |
 | Unit and integration tests | Transactions, event failure behavior, adapter translation, persistence isolation, and privacy |
-| Code review | Semantic ownership and purpose limitation |
+| Code review | Semantic ownership, purpose limitation, and rules that cannot be checked mechanically |
 | CI | Run architecture and verification tests on protected changes |
 
 A rule must not be described as automatically enforced unless an executable test exists. Narrow negative rules are preferred over brittle framework allowlists or unreliable heuristics.
 
-When architecture evolves:
+When the architecture evolves:
 
 1. update `MER-ARCH-001` when business ownership changes;
 2. update `MER-ARCH-002` when package placement changes;
 3. update this document when the legal dependency model changes;
-4. add or revise executable architecture tests where practical;
+4. add or revise executable tests for every mechanically checkable rule, and identify code review when enforcement is semantic;
 5. record temporary source conformance gaps separately rather than weakening the durable rule;
-6. version externally consumed contracts when compatibility requires it.
-
-The modular monolith remains one deployable backend while its contexts preserve explicit ownership, controlled public surfaces, inward dependency direction, and enforceable boundaries.
+6. version published contracts when compatibility requires it.
