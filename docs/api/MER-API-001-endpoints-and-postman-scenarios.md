@@ -1,157 +1,185 @@
-# MER-API-001 - Endpoint Inventory and Postman Scenario
+# MER-API-001 — Meridian HTTP API v1 Contract
 
-## Current Endpoint Inventory
+## Purpose and Authority
 
-Current security posture comes from `SecurityConfig`: health, login, and loan product catalog endpoints are public; all other implemented business endpoints require JWT Bearer authentication plus role/permission checks. HTTP Basic is no longer the intended development gate.
+This document defines Meridian’s client-facing HTTP contract under `/api/v1`: methods, paths, authentication, permissions, request parameters, externally visible responses, pagination, idempotency, ownership concealment, sensitive-data disclosure, and operation-specific errors.
 
-| Method | Path | Auth | Controller | Purpose |
-| --- | --- | --- | --- | --- |
-| GET | `/api/v1/health` | Public | `HealthController` | Versioned health check. |
-| POST | `/api/v1/auth/login` | Public | `AuthController` | Authenticate a seeded demo user and return a Bearer access token. |
-| GET | `/api/v1/loan-products` | Public | `LoanProductController` | List active loan products. |
-| GET | `/api/v1/partner-companies` | Bearer + `partner:read` | `PartnerCompanyController` | List Partner Companies. |
-| GET | `/api/v1/partner-companies/{partnerCompanyId}` | Bearer + `partner:read` | `PartnerCompanyController` | Get one Partner Company. |
-| GET | `/api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=false` | Bearer + `partner:read` | `PartnerEmployeeController` | List Partner Employees for a company. `activeOnly` is optional and defaults to `false`. |
-| GET | `/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | Bearer + `partner:read` | `PartnerEmployeeImportBatchController` | List Partner Employee import batches. |
-| GET | `/api/v1/customers/me` | Bearer + `customer:profile:read:own` | `CustomerProfileController` | Read the authenticated Customer profile readiness snapshot without exposing identity evidence. |
-| PUT | `/api/v1/customers/me/profile` | Bearer + `customer:profile:write:own` | `CustomerProfileController` | Create or update the authenticated Customer profile. |
-| GET | `/api/v1/customers/me/bank-accounts` | Bearer + `customer:bank-account:read:own` | `CustomerBankAccountController` | List masked bank accounts owned by the authenticated Customer. |
-| POST | `/api/v1/customers/me/bank-accounts` | Bearer + `customer:bank-account:write:own` | `CustomerBankAccountController` | Add an encrypted bank account; the first active account becomes primary. |
-| POST | `/api/v1/customers/me/bank-accounts/{customerBankAccountId}/make-primary` | Bearer + `customer:bank-account:write:own` | `CustomerBankAccountController` | Make one active bank account primary. |
-| POST | `/api/v1/customers/me/bank-accounts/{customerBankAccountId}/deactivate` | Bearer + `customer:bank-account:write:own` | `CustomerBankAccountController` | Deactivate a bank account; a primary account cannot be deactivated while another active account exists. |
-| POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-verifications` | Bearer + `partner:employee:verify:own` | `PartnerEmployeeVerificationController` | Verify the authenticated customer's Partner Employee evidence and create/reuse a verified link. |
-| POST | `/api/v1/loan-applications/salary-advance` | Bearer + `loan:submit` | `SalaryAdvanceLoanApplicationController` | Create a submitted Salary Advance application for the authenticated customer and reserve limit. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/review/start` | Bearer + `loan:review` | `LoanApplicationReviewController` | Start Loan Officer review and transition a submitted application to `UNDER_REVIEW`. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/review-recommendations` | Bearer + `approval:recommend` | `ReviewRecommendationController` | Record the authenticated Loan Officer recommendation and trigger Loan-owned status transition. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/approval-decisions` | Bearer + `approval:decide` | `ApprovalDecisionController` | Record the authenticated Approver decision and trigger Loan-owned final/return status transition. |
-| GET | `/api/v1/loan-applications/{loanApplicationId}/corrections/tasks` | Bearer + `loan:correction:own` | `CustomerCorrectionController` | List the authenticated owner's correction tasks. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/corrections/tasks/{taskId}/complete` | Bearer + `loan:correction:own` | `CustomerCorrectionController` | Complete an owned task after its document proof exists. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/corrections/resubmit` | Bearer + `loan:correction:own` | `CustomerCorrectionController` | Guarded resubmission of a Customer-only correction. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions` | Bearer + `document:upload:own` | `CustomerDocumentController` | Upload or replace an owned correction document version. |
-| GET | `/api/v1/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | Bearer + `document:read:own` | `DocumentContentController` | Stream an owned immutable version as a private attachment. |
-| GET | `/api/v1/document-review-items?status=AWAITING_REVIEW` | Bearer + `document:review` | `DocumentReviewQueueController` | List current versions awaiting manual review. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/document-review-items/{checklistItemId}/reviews` | Bearer + `document:review` | `DocumentReviewController` | Review the exact current immutable version. |
-| GET | `/api/v1/staff-corrections/tasks?status=OPEN&page=0&size=20` | Bearer + `loan:correction:staff` | `StaffCorrectionController` | List bounded Staff-owned correction tasks. |
-| POST | `/api/v1/staff-corrections/tasks/{taskId}/complete` | Bearer + `loan:correction:staff` | `StaffCorrectionController` | Complete a Staff task with maker-checker and evidence proof. |
-| POST | `/api/v1/staff-corrections/loan-applications/{loanApplicationId}/resubmit` | Bearer + `loan:correction:staff` | `StaffCorrectionController` | Guarded Staff or mixed correction resubmission. |
-| POST | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions` | Bearer + `document:upload:staff` | `StaffDocumentController` | Upload only for an open Staff upload task. |
-| GET | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | Bearer + `document:review` | `DocumentContentController` | Stream a review-authorized immutable version as a private attachment. |
-| GET | `/api/v1/loan-applications/{loanApplicationId}/approved-offer` | Bearer + `loan:read:own` | `ApprovedOfferController` | View the authenticated customer's approved offer without mutating expiry, status, or financial movements. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept` | Bearer + `loan:offer:respond:own` | `ApprovedOfferController` | Accept the authenticated customer's pending approved offer and move the application to `CONTRACT_PENDING`; any expired offer returns `409 OFFER_EXPIRED`, with effects only when the action first discovers expiry. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/decline` | Bearer + `loan:offer:respond:own` | `ApprovedOfferController` | Decline the authenticated customer's pending approved offer and release reservation exactly once; any expired offer returns `409 OFFER_EXPIRED`, with no duplicate effect for persisted expiry. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/contracts` | Bearer + `loan:contract:prepare` | `LoanContractController` | Accounting prepares version 1 or regenerates with `DISBURSEMENT_ACCOUNT_REFRESH`. |
-| GET | `/api/v1/loan-applications/{loanApplicationId}/contracts/current` | Bearer + owner `loan:read:own` or staff `loan:contract:read` | `LoanContractController` | Return the current safe masked operational contract to its Customer owner or Accounting. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/acknowledgment` | Bearer + `loan:contract:acknowledge:own` | `LoanContractController` | Customer owner acknowledges the exact current prepared version. |
-| GET | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness` | Bearer + `loan:contract:read` | `LoanContractController` | Accounting reads calculated point-in-time blocker codes; this GET does not mutate or lock workflow rows. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness/confirm` | Bearer + `loan:disbursement:prepare` | `LoanContractController` | Accounting recomputes readiness and atomically moves contract/application to ready/`DISBURSEMENT_PENDING`. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/disbursements` | Bearer + `loan:disburse` | `LoanDisbursementController` | Confirm an already-performed transfer and atomically activate the Salary Advance LoanAccount; identical request replay also returns `200`. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/disbursement-destination/reveal` | Bearer + `loan:disburse` | `LoanDisbursementController` | Reveal the full immutable ready-contract destination before confirmation, with PII-safe audit and non-cacheable headers. |
-| GET | `/api/v1/loan-applications/{loanApplicationId}/loan-account` | Bearer + owner `loan:read:own` or staff `loan:read` | `LoanDisbursementController` | Return originated account data, masked immutable destination, ordered final schedule, persisted balances, evaluation dates, payment timestamps, and installment servicing progress. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/repayments` | Bearer + `repayment:update` | `LoanRepaymentController` | Record or exactly replay a manual Salary Advance repayment and return its durable safe operation outcome. |
-| GET | `/api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | Bearer + owner `loan:read:own` or staff `loan:read` | `LoanRepaymentController` | Return paged immutable repayment history reconstructed from transaction, allocation, and durable outcome evidence. |
+It does not define bounded-context ownership, Java controller structure, persistence rows, transaction lock order, migration history, or delivery progress. A capability not listed in the endpoint catalogue is not part of the v1 HTTP surface.
 
-### Manual Disbursement Confirmation
+---
 
-```json
-{
-  "requestId": "00000000-0000-0000-0000-000000000001",
-  "expectedContractVersion": 1,
-  "externalTransferReference": "BANK-REFERENCE",
-  "disbursementValueDate": "2026-07-28",
-  "firstRepaymentDate": "2026-08-28"
-}
-```
+## 1. Common Conventions
 
-The path supplies the Loan Application ID and the authenticated principal supplies the actor. The body cannot supply Customer, contract, product, account, destination, limit, or financial values. The transfer reference is trimmed and uppercased, stored only as immutable evidence, and never returned or logged. A first execution and identical logical replay both return `200`; `idempotentReplay` distinguishes them. Reusing the request UUID with different logical content returns `409 IDEMPOTENCY_KEY_REUSED`, while a different request after activation returns `409 DISBURSEMENT_ALREADY_COMPLETED`.
+### 1.1 Transport
 
-The safe response includes application/account/disbursement/schedule identifiers, statuses, contract-derived disbursement amount and dates, activation timestamp, final schedule metadata/items, and the replay flag. It excludes the transfer reference, destination, encryption evidence, actor, employee/Partner evidence, Salary Advance internals, audit IDs, and history IDs.
+- Standard media type: `application/json`
+- Document upload: `multipart/form-data`
+- Document content: streamed attachment
+- UUIDs use canonical UUID text.
+- Dates use `YYYY-MM-DD`; timestamps use ISO-8601 UTC representations.
+- Salary Advance monetary inputs must represent whole VND. `3000000`, `3000000.0`, and `3000000.00` are valid; fractional VND is rejected.
 
-### Contractual Destination Reveal
+### 1.2 Authentication and authorization
 
-```json
-{
-  "expectedContractVersion": 1
-}
-```
+Public endpoints:
 
-Reveal is allowed only for a non-Customer principal with `loan:disburse` while the application is `DISBURSEMENT_PENDING` and the exact current non-superseded contract is `READY_FOR_DISBURSEMENT`. The response contains only contract ID/version, bank code/name, account-holder name, and the full account number from the immutable contract snapshot. It never queries the Customer's current bank account.
+- `GET /api/v1/health`
+- `POST /api/v1/auth/login`
+- `GET /api/v1/loan-products`
 
-Every successful response includes:
-
-```text
-Cache-Control: no-store, private
-Pragma: no-cache
-X-Content-Type-Options: nosniff
-```
-
-Reveal and confirmation are intentionally separate. Reveal after activation returns `409 DISBURSEMENT_DESTINATION_REVEAL_NOT_ALLOWED`. Missing or invalid protection evidence returns the generic safe `409 DISBURSEMENT_DESTINATION_UNAVAILABLE`. Each successful reveal writes one transactional `LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED` audit event containing access identifiers only; no destination or crypto data is audited.
-
-### Activated LoanAccount Query
-
-Customers use `loan:read:own` and token-derived ownership. For a Customer, a nonexistent application, another Customer's application, and a missing LoanAccount all return the same generic `404 LOAN_ACCOUNT_NOT_FOUND` response. Staff use `loan:read` and retain accurate not-found distinctions. The response shape is:
-
-```json
-{
-  "loanApplicationId": "UUID",
-  "loanAccountId": "UUID",
-  "accountNumber": "LN-...",
-  "status": "ACTIVE",
-  "activatedAt": "UTC timestamp",
-  "originatedPrincipal": 3000000,
-  "approvedTermMonths": 2,
-  "totalInterest": 120000,
-  "totalFee": 0,
-  "totalRepayment": 3120000,
-  "disbursementDestination": {
-    "bankCode": "BANK",
-    "bankName": "Example Bank",
-    "accountHolderName": "Contract snapshot holder",
-    "maskedAccountNumber": "********"
-  },
-  "finalRepaymentSchedule": {
-    "scheduleId": "UUID",
-    "scheduleType": "FINAL",
-    "version": 1,
-    "firstDueDate": "2026-08-28",
-    "lastDueDate": "2026-09-28",
-    "items": []
-  }
-}
-```
-
-The query uses the fixed full mask `********`; it does not decrypt the destination or expose any stored suffix character. It never returns the transfer reference, full destination, crypto envelope, actor, audit/history IDs, employee/Partner evidence, or Salary Advance limit/movement identifiers.
-
-## Authentication
-
-### Login
-
-```json
-{
-  "email": "customer.demo@meridian.local",
-  "password": "<local-demo-password>"
-}
-```
-
-Use the returned `accessToken` as:
+All other endpoints require:
 
 ```text
 Authorization: Bearer <accessToken>
 ```
 
-Seeded demo user emails:
+Meridian uses stateless Bearer authentication. HTTP Basic, form login, server sessions, refresh-token endpoints, and logout endpoints are not part of v1.
 
-| Role | Email |
-| --- | --- |
-| Customer | `customer.demo@meridian.local` |
-| Loan Officer | `loan.officer@meridian.local` |
-| Approver | `approver@meridian.local` |
-| Accounting Officer | `accounting.officer@meridian.local` |
-| Back-Office Admin | `backoffice.admin@meridian.local` |
+| Failure | Response |
+|---|---|
+| Missing or invalid authentication | `401 AUTHENTICATION_REQUIRED` |
+| Authenticated actor lacks permission | `403 ACCESS_DENIED` |
 
-## Request Payloads
-### Customer Profile
+Customer-facing operations derive `customerId` from the authenticated principal. Staff actor IDs are likewise token-derived and are not accepted in recommendation, decision, review, disbursement, or repayment request bodies.
 
-`customerId` is derived from the authenticated customer token. `identityReference` is accepted only on profile update, stored encrypted, and is not returned by Customer profile responses. Duplicate normalized identity references owned by another Customer return `409 IDENTITY_REFERENCE_ALREADY_IN_USE` without returning the sensitive value.
+### 1.3 Error envelope
+
+```json
+{
+  "timestamp": "2026-08-04T12:00:00Z",
+  "status": 409,
+  "errorCode": "IDEMPOTENCY_KEY_REUSED",
+  "message": "Safe client-facing message.",
+  "path": "/api/v1/..."
+}
+```
+
+| Status | Meaning |
+|---|---|
+| `400` | Malformed input or validation failure |
+| `401` | Authentication failure |
+| `403` | Permission, ownership, or maker-checker denial |
+| `404` | Missing or intentionally concealed resource |
+| `409` | State, duplicate, concurrency, or idempotency conflict |
+| `422` | Business-rule violation |
+| `503` | Required protected capability unavailable |
+
+`MER-ARCH-004-api-error-catalog.md` owns the complete error-code catalogue and safe messages.
+
+### 1.4 Ownership concealment
+
+Customer-owned read APIs may return the same generic `404` for a nonexistent resource, another Customer’s resource, or a resource unavailable in the requested lifecycle state. Authorized Staff reads may retain more accurate operational distinctions.
+
+### 1.5 Idempotency
+
+| Operation | Request UUID |
+|---|---|
+| Correction task completion | `completionRequestId` |
+| Correction resubmission | `resubmissionRequestId` |
+| Contract preparation/regeneration | `preparationRequestId` |
+| Contract acknowledgment | `acknowledgmentRequestId` |
+| Readiness confirmation | `confirmationRequestId` |
+| Disbursement confirmation | `requestId` |
+| Repayment posting | `requestId` |
+
+An identical logical replay returns the original result without another business effect. Reuse with different logical content returns `409 IDEMPOTENCY_KEY_REUSED` without identifying the protected field that differed.
+
+### 1.6 Sensitive-data boundary
+
+Ordinary JSON responses must not expose passwords, tokens, unrestricted identity evidence, full bank-account numbers, cryptographic envelope fields, document storage metadata, restricted Staff notes, external transfer/payment references, or internal audit/history identifiers.
+
+The contractual destination-reveal operation is the sole v1 JSON endpoint permitted to return the full immutable disbursement account number.
+
+---
+
+## 2. Endpoint Catalogue
+
+### 2.1 Public, Customer, and Partner
+
+| Method | Path | Authorization | Summary |
+|---|---|---|---|
+| GET | `/api/v1/health` | Public | Return versioned health status. |
+| POST | `/api/v1/auth/login` | Public | Authenticate and return Bearer-token actor facts. |
+| GET | `/api/v1/loan-products` | Public | List active loan products. |
+| GET | `/api/v1/customers/me` | `customer:profile:read:own` | Return the authenticated Customer’s safe profile-readiness view. |
+| PUT | `/api/v1/customers/me/profile` | `customer:profile:write:own` | Create or update the authenticated Customer profile. |
+| GET | `/api/v1/customers/me/bank-accounts` | `customer:bank-account:read:own` | List masked owned bank accounts. |
+| POST | `/api/v1/customers/me/bank-accounts` | `customer:bank-account:write:own` | Add a bank account; the first active account becomes primary. |
+| POST | `/api/v1/customers/me/bank-accounts/{customerBankAccountId}/make-primary` | `customer:bank-account:write:own` | Make an active owned account primary. |
+| POST | `/api/v1/customers/me/bank-accounts/{customerBankAccountId}/deactivate` | `customer:bank-account:write:own` | Deactivate an owned account subject to primary-account rules. |
+| GET | `/api/v1/partner-companies` | `partner:read` | List Partner Companies. |
+| GET | `/api/v1/partner-companies/{partnerCompanyId}` | `partner:read` | Return one Partner Company. |
+| GET | `/api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=false` | `partner:read` | List Partner Employees; `activeOnly` defaults to `false`. |
+| GET | `/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | `partner:read` | List employee import batches. |
+| POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-verifications` | `partner:employee:verify:own` | Verify the authenticated Customer and create/reuse an eligible employee link. |
+
+### 2.2 Origination, review, approval, corrections, and documents
+
+| Method | Path | Authorization | Summary |
+|---|---|---|---|
+| POST | `/api/v1/loan-applications/salary-advance` | `loan:submit` | Submit a Salary Advance application and reserve eligible limit. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/review/start` | `loan:review` | Start Loan Officer review. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/review-recommendations` | `approval:recommend` | Record a Loan Officer recommendation. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/approval-decisions` | `approval:decide` | Record an Approver decision. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/corrections/tasks` | `loan:correction:own` | List owned Customer correction tasks. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/corrections/tasks/{taskId}/complete` | `loan:correction:own` | Complete an owned task after evidence exists. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/corrections/resubmit` | `loan:correction:own` | Resubmit an eligible Customer-only correction. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions` | `document:upload:own` | Upload or replace an owned document version. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | `document:read:own` | Stream an owned immutable version. |
+| GET | `/api/v1/document-review-items?status=AWAITING_REVIEW` | `document:review` | List current versions awaiting review. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/document-review-items/{checklistItemId}/reviews` | `document:review` | Review the exact current version. |
+| GET | `/api/v1/staff-corrections/tasks?status=OPEN&page=0&size=20` | `loan:correction:staff` | List Staff-owned correction tasks. |
+| POST | `/api/v1/staff-corrections/tasks/{taskId}/complete` | `loan:correction:staff` | Complete a Staff task with proof and maker-checker enforcement. |
+| POST | `/api/v1/staff-corrections/loan-applications/{loanApplicationId}/resubmit` | `loan:correction:staff` | Resubmit an eligible Staff-only or mixed correction. |
+| POST | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions` | `document:upload:staff` | Upload for an open Staff upload task. |
+| GET | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | `document:review` | Stream a review-authorized immutable version. |
+
+### 2.3 Offers, contracts, disbursement, account, and repayment
+
+| Method | Path | Authorization | Summary |
+|---|---|---|---|
+| GET | `/api/v1/loan-applications/{loanApplicationId}/approved-offer` | `loan:read:own` | Return the Customer’s approved offer without mutating state. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept` | `loan:offer:respond:own` | Accept a valid pending offer. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/decline` | `loan:offer:respond:own` | Decline a valid pending offer and release reservation once. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/contracts` | `loan:contract:prepare` | Prepare version 1 or regenerate the current contract. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/contracts/current` | `loan:read:own` or `loan:contract:read` | Return the safe masked current contract. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/acknowledgment` | `loan:contract:acknowledge:own` | Acknowledge the exact current version. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness` | `loan:contract:read` | Calculate point-in-time readiness; optional `expectedContractVersion`. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness/confirm` | `loan:disbursement:prepare` | Recompute and confirm readiness. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/disbursement-destination/reveal` | `loan:disburse` | Reveal the full immutable ready-contract destination. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/disbursements` | `loan:disburse` | Confirm an external transfer and activate the LoanAccount. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/loan-account` | `loan:read:own` or `loan:read` | Return originated terms, final schedule, and servicing state. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/repayments` | `repayment:update` | Record or replay a manual Salary Advance repayment. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read:own` or `loan:read` | Return immutable paged repayment history. |
+
+---
+
+## 3. Authentication, Customer, and Partner Requests
+
+### 3.1 Login
+
+```json
+{
+  "email": "customer.demo@meridian.local",
+  "password": "<password>"
+}
+```
+
+Successful response fields:
+
+- `tokenType`
+- `accessToken`
+- `expiresAt`
+- `userId`
+- `email`
+- `userType`
+- `customerId`
+- `roles`
+- `permissions`
+
+`customerId` may be `null` for Staff principals.
+
+### 3.2 Customer profile
 
 ```json
 {
@@ -166,9 +194,9 @@ Seeded demo user emails:
 }
 ```
 
-### Customer Bank Accounts
+`identityReference` is accepted only on profile update and is never returned. Duplicate normalized evidence owned by another Customer returns `409 IDENTITY_REFERENCE_ALREADY_IN_USE`.
 
-Bank-account numbers are accepted only on add, normalized by removing spaces and hyphens, must contain at least 6 normalized characters, encrypted at rest, and returned only as masked values plus last four digits.
+### 3.3 Add bank account
 
 ```json
 {
@@ -178,9 +206,10 @@ Bank-account numbers are accepted only on add, normalized by removing spaces and
   "accountNumber": "1234567890"
 }
 ```
-### Employee Verification
 
-`customerId` is derived from the authenticated customer token and is no longer accepted in the request body. `identityReference` is also not accepted; Partner verification uses identity evidence from the authenticated Customer profile.
+The account number is normalized by removing spaces and hyphens, must contain at least six normalized characters, and is returned only as a masked value plus last-four representation.
+
+### 3.4 Employee verification
 
 ```json
 {
@@ -188,32 +217,62 @@ Bank-account numbers are accepted only on add, normalized by removing spaces and
 }
 ```
 
-Safe response fields: `customerId`, `partnerCompanyId`, `partnerEmployeeId`, `customerPartnerEmployeeLinkId`, `outcome`, `linkStatus`, `manualReviewRequired`.
+The body does not accept `customerId` or `identityReference`.
 
-The response intentionally does not expose salary, salary advance limit, identity reference, employee code, or raw matching evidence.
+Safe response fields: `customerId`, `partnerCompanyId`, `partnerEmployeeId`, `customerPartnerEmployeeLinkId`, `outcome`, `linkStatus`, and `manualReviewRequired`.
 
-### Salary Advance Application
+Responses exclude salary, limit values, employee code, identity evidence, and raw matching evidence.
 
-`customerId` is derived from the authenticated customer token and is no longer accepted in the request body. Salary Advance submission requires an active Customer, complete Customer profile, and one primary active bank account.
+---
+
+## 4. Salary Advance Origination
+
+### 4.1 Submit application
 
 ```json
 {
-  "customerPartnerEmployeeLinkId": "<capture from employee verification response>",
+  "customerPartnerEmployeeLinkId": "UUID",
   "requestedAmount": 3000000.00,
   "requestedTermMonths": 1
 }
 ```
-### Start Loan Officer Review
 
-The reviewer actor is derived from the Bearer token. No request body is required.
+Success returns `201 Created`.
+
+The authenticated Customer must satisfy Customer readiness, Partner eligibility, product, amount, term, document, blocking-application, outstanding-debt, and available-limit requirements.
+
+Important errors:
+
+| Status | Code |
+|---|---|
+| `409` | `BLOCKING_APPLICATION_EXISTS` |
+| `409` | `OUTSTANDING_LOAN_ACCOUNT_EXISTS` |
+| `422` | `EMPLOYEE_NOT_VERIFIED` |
+| `422` | `INVALID_PRODUCT_AMOUNT` |
+| `422` | Applicable Salary Advance eligibility or limit code from the error catalogue |
+
+### 4.2 Start review
 
 ```text
 POST /api/v1/loan-applications/{loanApplicationId}/review/start
 ```
 
-### Review Recommendation
+No body is required. The reviewer is derived from the Bearer token.
 
-`loanOfficerUserId` is derived from the authenticated Loan Officer token and is not accepted in the request body.
+---
+
+## 5. Recommendation, Approval, Corrections, and Documents
+
+### 5.1 Review recommendation
+
+Supported actions:
+
+- `RECOMMEND_APPROVAL`
+- `RECOMMEND_REJECTION`
+- `RETURN_TO_CUSTOMER_REVISION`
+- `REQUEST_STAFF_CORRECTION`
+
+Normal recommendation:
 
 ```json
 {
@@ -223,19 +282,16 @@ POST /api/v1/loan-applications/{loanApplicationId}/review/start
 }
 ```
 
-All actions are executable: `RECOMMEND_APPROVAL`, `RECOMMEND_REJECTION`,
-`RETURN_TO_CUSTOMER_REVISION`, and `REQUEST_STAFF_CORRECTION`. Rejection uses a
-nonblank `reason`; revision actions instead require `expectedReviewCycleId`, a
-controlled `reasonCode`, and one to ten structured tasks.
+Rejection requires a nonblank `reason`. Revision actions require `expectedReviewCycleId`, a controlled `reasonCode`, and one to ten tasks.
 
-Customer revision example:
+Representative Customer task:
 
 ```json
 {
   "action": "RETURN_TO_CUSTOMER_REVISION",
   "reason": null,
-  "internalNotes": "Optional restricted Approval note.",
-  "expectedReviewCycleId": "{{reviewCycleId}}",
+  "internalNotes": "Optional restricted note.",
+  "expectedReviewCycleId": "UUID",
   "reasonCode": "RECENT_PAYSLIP_REQUIRED",
   "correctionPlan": {
     "tasks": [
@@ -254,183 +310,149 @@ Customer revision example:
 }
 ```
 
-Staff correction uses the same envelope with action `REQUEST_STAFF_CORRECTION`.
-Its tasks must be Staff-owned `SUPPORTING_DOCUMENT_UPLOAD` or `DOCUMENT_REVIEW`
-tasks. Upload creates an on-demand `RECENT_PAYSLIP` item; review references an
-existing checklist item and immutable baseline version. Staff instructions are
-restricted to the Staff queue and never returned to a Customer.
+Staff tasks use `responsibleParty = STAFF` with `SUPPORTING_DOCUMENT_UPLOAD` or `DOCUMENT_REVIEW`.
 
+### 5.2 Approval decision
 
-### Approval Decision
+Supported actions:
 
-`approverUserId` is derived from the authenticated Approver token and is not accepted in the request body. The Approver must be different from the Loan Officer who submitted the latest recommendation.
+- `APPROVE`
+- `REJECT`
+- `RETURN_TO_LOAN_OFFICER_REVIEW`
+- `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`
 
 ```json
 {
   "action": "APPROVE",
-  "reason": "Optional for approval; required for executable reject/return decisions.",
+  "reason": "Optional for approval; required for reject or return.",
   "internalNotes": "Optional staff-only note."
 }
 ```
 
-All actions are executable: `APPROVE`, `REJECT`,
-`RETURN_TO_LOAN_OFFICER_REVIEW`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`.
-A nonblank `reason` is required except for `APPROVE`; the mixed correction action
-uses controlled correction fields instead. For Salary Advance, `APPROVE` atomically
-generates the customer approved offer and moves the application to
-`CUSTOMER_ACCEPTANCE_PENDING`; `REJECT` moves to `REJECTED` and releases the
-reservation.
+The Approver must differ from the Loan Officer who submitted the applicable recommendation. Mixed corrections use separate Customer and Staff tasks.
 
-Mixed correction example for an existing payslip:
+Important errors include `MAKER_CHECKER_VIOLATION`, `STALE_REVIEW_CYCLE`, and controlled reason/plan validation errors.
+
+### 5.3 Task completion and resubmission
+
+Completion:
 
 ```json
-{
-  "action": "REQUEST_CUSTOMER_OR_STAFF_CORRECTION",
-  "reason": null,
-  "internalNotes": "Optional restricted Approval note.",
-  "expectedReviewCycleId": "{{reviewCycleId}}",
-  "reasonCode": "DOCUMENT_REPLACEMENT_REQUIRED",
-  "correctionPlan": {
-    "tasks": [
-      {
-        "scope": "DOCUMENT_REPLACEMENT",
-        "responsibleParty": "CUSTOMER",
-        "documentType": "RECENT_PAYSLIP",
-        "createChecklistItem": false,
-        "checklistItemId": "{{checklistItemId}}",
-        "baselineDocumentVersionId": "{{documentVersionId}}",
-        "customerInstruction": "Replace the payslip with a readable current copy.",
-        "staffInstruction": null
-      },
-      {
-        "scope": "DOCUMENT_REVIEW",
-        "responsibleParty": "STAFF",
-        "documentType": "RECENT_PAYSLIP",
-        "createChecklistItem": false,
-        "checklistItemId": "{{checklistItemId}}",
-        "baselineDocumentVersionId": "{{documentVersionId}}",
-        "customerInstruction": null,
-        "staffInstruction": "Review the customer's replacement version."
-      }
-    ]
-  }
-}
+{ "completionRequestId": "UUID" }
 ```
 
-### Document Review and Customer/Staff Correction
-
-Customer identity is derived from the authenticated token. Staff endpoints require
-their narrow permissions. The executable endpoints are listed in the inventory
-above; no request accepts a Customer ownership ID.
-
-Task completion and resubmission bodies are:
+Resubmission:
 
 ```json
-{ "completionRequestId": "{{$guid}}" }
+{ "resubmissionRequestId": "UUID" }
 ```
 
-```json
-{ "resubmissionRequestId": "{{$guid}}" }
-```
+Client-visible rules:
 
-Document upload is multipart with `uploadRequestId`, optional
-`expectedCurrentVersionId`, and `file`. Only PDF, JPEG, and PNG are accepted, with
-a 10 MiB limit and signature-to-declared-MIME matching. Concurrent replacement
-uses the expected version as optimistic proof; a stale client receives
-`409 STALE_DOCUMENT_VERSION`.
+- a task cannot complete before its required upload or review proof exists;
+- the Staff member who created the correction request cannot complete its Staff tasks;
+- a mixed request cannot be resubmitted after only Customer work is complete;
+- identical requests replay safely;
+- a different request after completion or resubmission conflicts.
 
-Manual review targets `documentVersionId` and supports `ACCEPT_DOCUMENT`,
-`WAIVE_DOCUMENT`, or `REQUEST_REPLACEMENT`. Waiver additionally requires
-`document:waive` and an allowed `waiverReasonCode`. Replacement requires
-`DOCUMENT_REPLACEMENT_REQUIRED` plus a Customer-visible instruction. A decision
-against a version that is no longer current conflicts. Replacing a version
-supersedes the old version and invalidates its acceptance for readiness.
+Important codes: `STAFF_CORRECTION_MAKER_CHECKER_VIOLATION`, `CORRECTION_TASK_PROOF_MISSING`, `CORRECTION_TASKS_INCOMPLETE`, `CORRECTION_RESUBMISSION_DENIED`, and `CORRECTION_ALREADY_RESUBMITTED`.
 
-Customer responses expose safe IDs, status, `RECENT_PAYSLIP`, controlled reason
-code, Customer instruction, and timestamps. Staff queue responses expose the Staff
-instruction but not document content or sensitive Customer evidence. JSON never
-exposes storage keys, hashes, paths, restricted Approval notes, salary, employee
-codes, identity evidence, bank information, or OCR text. Content endpoints stream
-only the authorized immutable version with attachment, no-store/private caching,
-and `X-Content-Type-Options: nosniff`.
+### 5.4 Document upload and review
 
-A Staff upload requires an open Staff SUPPORTING_DOCUMENT_UPLOAD task. A Staff
-DOCUMENT_REVIEW task proves that a review outcome was persisted for the exact
-current version. For a paired mixed request it reviews the Customer replacement
-produced after the task baseline. The staff user who created the correction request
-cannot complete its Staff tasks. Accepted/waived remains the separate processing-
-readiness rule; a replacement request keeps the correction incomplete until its
-new Customer upload task is completed.
+Upload is multipart with:
 
-Only the authenticated Customer may resubmit a Customer-only request. Only Staff
-with `loan:correction:staff` may resubmit Staff-only or mixed requests. A mixed
-request cannot be resubmitted after only its Customer work is complete.
-Resubmission requires every task and its evidence proof, locks and consumes the
-request exactly once, and revalidates Customer readiness, product policy,
-whole-VND amount, allowed term, blocking applications, Partner eligibility, the
-verified employee link, current effective limit, unchanged reservation, and
-Document readiness. It inserts one immutable verification snapshot and no limit
-movement. Requested amount and term are immutable in this checkpoint.
+- `uploadRequestId`
+- optional `expectedCurrentVersionId`
+- `file`
 
-The target is `SUBMITTED` while manual document review remains pending, or
-`UNDER_REVIEW` with a new active review cycle when prior review exists and the
-checklist is processing-ready. Prior recommendations and decisions remain
-immutable and are historically superseded by their review-cycle linkage.
+Accepted types are PDF, JPEG, and PNG, up to 10 MiB, with signature-to-media-type matching. A stale replacement baseline returns `409 STALE_DOCUMENT_VERSION`.
 
-### Approved Offer
+Review targets the exact `documentVersionId` and supports:
 
-`customerId` is derived from the authenticated customer token and is not accepted in the path or request body. Offer response actions do not require a request body.
+- `ACCEPT_DOCUMENT`
+- `WAIVE_DOCUMENT`
+- `REQUEST_REPLACEMENT`
+
+Waiver requires `document:waive` and an allowed waiver code. Replacement requires `DOCUMENT_REPLACEMENT_REQUIRED` plus a Customer-visible instruction. Reviewing a non-current version returns `409 STALE_DOCUMENT_VERSION`.
+
+Content responses stream only the authorized immutable version and include attachment, `Cache-Control: no-store, private`, and `X-Content-Type-Options: nosniff`.
+
+---
+
+## 6. Approved Offer and Contract
+
+### 6.1 Approved offer
 
 ```text
-GET /api/v1/loan-applications/{loanApplicationId}/approved-offer
+GET  /api/v1/loan-applications/{loanApplicationId}/approved-offer
 POST /api/v1/loan-applications/{loanApplicationId}/approved-offer/accept
 POST /api/v1/loan-applications/{loanApplicationId}/approved-offer/decline
 ```
 
-Safe response fields include approved principal, approved term, interest calculation method, flat monthly interest rate, total interest, fee amount, total repayment amount, repayment method, generated and expiry timestamps, effective customer-facing status, available actions, and provisional repayment items. Provisional items expose installment number, principal due, interest due, fee due, total due, and the controlled `ON_SALARY_DATE` repayment timing code. Exact calendar due dates are not part of the approved offer.
+Response actions require no body.
 
-GET is read-only. If a persisted pending offer is already expired, GET returns `status = EXPIRED` and `availableActions = []` without changing the application, offer, reservation, or financial movements.
+Safe offer data includes approved principal and term, pricing method, flat monthly rate, interest, fee, total repayment, repayment method, generated/expiry times, effective status, available actions, and provisional repayment items. Provisional items do not contain final calendar due dates.
 
-### Operational Contract Readiness
+`GET` is read-only. Acceptance moves the application to `CONTRACT_PENDING`. Decline or first discovery of pending expiry applies the terminal outcome and reservation release exactly once.
 
-Preparation uses a command UUID, `expectedCurrentContractVersion = 0` and no reason for version 1. Regeneration uses the exact current version and the only supported reason:
+Important conflicts: `OFFER_EXPIRED` and `OFFER_ACTION_CONFLICT`.
 
-Preparation returns the established `404 APPROVED_OFFER_NOT_FOUND` contract when no approved offer exists and `422 OFFER_NOT_ACCEPTED` when an offer exists but has not been accepted. Both responses use the safe catalog messages and expose no offer or contract details.
+### 6.2 Prepare or regenerate contract
+
+Version 1:
 
 ```json
 {
-  "preparationRequestId": "10000000-0000-0000-0000-000000000001",
+  "preparationRequestId": "UUID",
+  "expectedCurrentContractVersion": 0,
+  "supersessionReasonCode": null
+}
+```
+
+Regeneration:
+
+```json
+{
+  "preparationRequestId": "UUID",
   "expectedCurrentContractVersion": 1,
   "supersessionReasonCode": "DISBURSEMENT_ACCOUNT_REFRESH"
 }
 ```
 
-Customer acknowledgment uses no request Customer ID; ownership comes from the token:
+Regeneration preserves accepted terms and repayment items, supersedes the prior version, refreshes the eligible destination, and requires fresh Customer acknowledgment.
+
+Important errors: `APPROVED_OFFER_NOT_FOUND`, `OFFER_NOT_ACCEPTED`, `CONTRACT_VERSION_STALE`, `CONTRACT_REGENERATION_NOT_ALLOWED`, and `IDEMPOTENCY_KEY_REUSED`.
+
+### 6.3 Read and acknowledge contract
+
+The current-contract response may expose identifiers, reference/version/status, accepted terms, repayment items, safe bank name/code, account-holder name, masked account number, timestamps, and available action. It never exposes the full destination or cryptographic evidence.
+
+Acknowledgment:
 
 ```json
 {
-  "acknowledgmentRequestId": "20000000-0000-0000-0000-000000000001",
+  "acknowledgmentRequestId": "UUID",
   "expectedContractVersion": 1
 }
 ```
 
-An acknowledgment replay is identified by request UUID, Loan Application ID, expected contract version, and authenticated Customer actor. A successful version 1 request therefore remains replayable after version 2 becomes current: the replay returns the persisted version 1 result, creates no additional audit/history, and never acknowledges version 2.
+An identical acknowledgment of an earlier version remains replayable after a later version becomes current; it returns the original result and does not acknowledge the newer version.
 
-Readiness confirmation:
+### 6.4 Readiness
 
-```json
-{
-  "confirmationRequestId": "30000000-0000-0000-0000-000000000001",
-  "expectedContractVersion": 1
-}
+Advisory query:
+
+```text
+GET /api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness
+GET /api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness?expectedContractVersion=1
 ```
 
-The advisory readiness response identifies calculated point-in-time semantics and stable blockers:
+Representative response:
 
 ```json
 {
-  "loanApplicationId": "40000000-0000-0000-0000-000000000001",
-  "contractId": "50000000-0000-0000-0000-000000000001",
+  "loanApplicationId": "UUID",
+  "contractId": "UUID",
   "contractVersion": 1,
   "ready": false,
   "blockerCodes": ["ACKNOWLEDGMENT_MISSING"],
@@ -439,129 +461,95 @@ The advisory readiness response identifies calculated point-in-time semantics an
 }
 ```
 
-Contract responses may contain IDs, reference/version/status, immutable accepted terms and repayment items, safe bank name/code, account-holder name, `maskedAccountNumber`, timestamps, and available action. They never contain the full account number, protected account number, ciphertext, nonce/IV, authentication tag, key ID, AAD/version, fingerprint, Customer envelope, hashes, or JPA/internal state. Customer acknowledgment is operational evidence, not electronic or digital signing.
+Confirmation:
 
-Stable conflicts include `CONTRACT_VERSION_STALE`, `CONTRACT_REGENERATION_NOT_ALLOWED`, `CONTRACT_ACKNOWLEDGMENT_NOT_ALLOWED`, `DOCUMENTS_NOT_PROCESSING_READY`, `ACTIVE_CORRECTION_REQUEST`, `CUSTOMER_INACTIVE`, `CAPTURED_ACCOUNT_MISSING`, `CAPTURED_ACCOUNT_INACTIVE`, `SALARY_ADVANCE_RESERVATION_INVALID`, `SALARY_ADVANCE_RESERVATION_RELEASED`, `READINESS_ALREADY_CONFIRMED`, and `IDEMPOTENCY_KEY_REUSED`.
+```json
+{
+  "confirmationRequestId": "UUID",
+  "expectedContractVersion": 1
+}
+```
 
-Preparation, acknowledgment, and confirmation serialize each command category by request UUID before taking the Loan Application workflow lock. Identical logical requests replay their persisted result; reuse with a different application, version/content, or actor returns `409 IDEMPOTENCY_KEY_REUSED` without translating unrelated database integrity failures.
+Success moves the contract to `READY_FOR_DISBURSEMENT` and the application to `DISBURSEMENT_PENDING`; it does not perform a transfer or activate a LoanAccount.
 
-## Seed Data Useful For API Verification
+Stable blockers include `DOCUMENTS_NOT_PROCESSING_READY`, `ACTIVE_CORRECTION_REQUEST`, `CUSTOMER_INACTIVE`, `CAPTURED_ACCOUNT_MISSING`, `CAPTURED_ACCOUNT_INACTIVE`, `SALARY_ADVANCE_RESERVATION_INVALID`, `SALARY_ADVANCE_RESERVATION_RELEASED`, `READINESS_ALREADY_CONFIRMED`, and `CONTRACT_VERSION_STALE`.
 
-| Purpose | Value |
-| --- | --- |
-| Active Partner Company | `11111111-1111-1111-1111-111111111111` |
-| Active employee code | `MER-EMP-001` |
-| Active identity reference | `IDREF-MER-001` |
-| Inactive employee code | `MER-EMP-003` |
-| Inactive identity reference | `IDREF-MER-003` |
-| Suggested Salary Advance amount | `3000000.00` |
-| Suggested term | `1` |
+---
 
-## Postman Collection
+## 7. Destination Reveal, Disbursement, and LoanAccount
 
-Import this file into Postman:
+### 7.1 Reveal destination
 
-`docs/api/Meridian-Platform.postman_collection.json`
+```json
+{
+  "expectedContractVersion": 1
+}
+```
 
-The collection uses role-specific Bearer tokens and includes Customer, Staff, mixed
-correction, document content, queue, upload, review, completion, resubmission, and
-negative-security requests. Staff and mixed flows require prepared applications;
-set `staffCorrectionScenarioEnabled` or `mixedCorrectionScenarioEnabled` to `true`
-only after supplying the documented review-cycle/checklist/version variables.
+Reveal requires a non-Customer actor with `loan:disburse`, an application in `DISBURSEMENT_PENDING`, and the exact current contract in `READY_FOR_DISBURSEMENT`.
 
-Expected high-value checks:
+The response contains only contract ID/version, bank code/name, account-holder name, and the full immutable contract account number. It never queries the Customer’s mutable bank account.
 
-| Scenario | Expected result |
-| --- | --- |
-| Public health | `200`, `status = UP`. |
-| Public loan products | `200`, includes `SALARY_ADVANCE`. |
-| Login with seeded demo user | `200`, `tokenType = Bearer`, returns `accessToken`. |
-| Protected endpoint without token | `401`, `AUTHENTICATION_REQUIRED`. |
-| Authenticated user without permission | `403`, `ACCESS_DENIED`. |
-| Back-Office Admin reads Partner Employee list | `200`, detailed internal DTO visible only behind `partner:read`. |
-| Customer active employee verification | `200`, `MATCHED_ACTIVE`, captures `customerPartnerEmployeeLinkId`, no PII fields in response. |
-| Customer inactive employee verification | `200`, `MATCHED_INACTIVE`, no link created. |
-| Customer missing employee evidence | `200`, `PENDING_MANUAL_REVIEW`. |
-| Salary Advance with missing link | `422`, `EMPLOYEE_NOT_VERIFIED`. |
-| Salary Advance below minimum amount | `422`, `INVALID_PRODUCT_AMOUNT`. |
-| Salary Advance fractional VND amount | `422`, `INVALID_PRODUCT_AMOUNT`; mathematically whole values such as `3000000`, `3000000.0`, and `3000000.00` remain valid. |
-| Salary Advance happy path | `201`, `SUBMITTED`, limit reserved. |
-| Start Loan Officer review | `200`, `UNDER_REVIEW`. |
-| Recommendation without `approval:recommend` | `403`, `ACCESS_DENIED`. |
-| Recommendation missing required reason | `422`, `RECOMMENDATION_REASON_REQUIRED`. |
-| Recommendation happy path | `201`, recommendation recorded, Loan status moves to `APPROVAL_PENDING`. |
-| Customer revision recommendation | `201`, Customer task persisted, Loan status `RETURNED_FOR_REVISION`. |
-| Staff correction recommendation | `201`, Staff task persisted transactionally, Loan status `RETURNED_FOR_REVISION`. |
-| Mixed approval correction action | `201`, separate Customer and Staff tasks persisted, Loan status `RETURNED_FOR_REVISION`. |
-| Stale review-cycle correction action | `409`, `STALE_REVIEW_CYCLE`, with no source Approval or continuation effects. |
-| Staff queue without permission | `403`, `ACCESS_DENIED`. |
-| Customer attempts Staff task | `403`, ownership/permission denial. |
-| Staff correction maker-checker violation | `403`, `STAFF_CORRECTION_MAKER_CHECKER_VIOLATION`. |
-| Staff upload without open upload task | `403`, `DOCUMENT_UPLOAD_DENIED`. |
-| Concurrent document replacement | One immutable version wins; stale expected version receives `409 STALE_DOCUMENT_VERSION`. |
-| Concurrent review and replacement | Review succeeds only for the still-current version; otherwise `409 STALE_DOCUMENT_VERSION`. |
-| Manual accept / waive / replacement | Current version becomes accepted, item becomes waived, or a controlled Customer replacement task is created. |
-| Mixed Customer-only completion | Request remains incomplete; Customer resubmission receives `403 CORRECTION_RESUBMISSION_DENIED`. |
-| Staff task evidence missing | `409`, `CORRECTION_TASK_PROOF_MISSING`. |
-| Duplicate task completion | Same completion request is idempotent; a different request conflicts. |
-| Incomplete resubmission | `409`, `CORRECTION_TASKS_INCOMPLETE`. |
-| Concurrent Staff resubmission | One winner; duplicate request is idempotent and a different request receives `409 CORRECTION_ALREADY_RESUBMITTED`. |
-| Resubmission revalidation failure | Transaction rolls back status, request consumption, cycle, verification, audit/history, and reservation-related work. |
-| Successful correction return to review | New verification and active review cycle, `UNDER_REVIEW`, prior cycle records historically superseded. |
-| Approval decision without `approval:decide` | `403`, `ACCESS_DENIED`. |
-| Approval decision maker-checker violation | `409`, `MAKER_CHECKER_VIOLATION`. |
-| Approval decision reject path | `201`, decision recorded, Loan status `REJECTED`, reservation released. |
-| Approval decision approve path | `201`, offer generated, Loan status `CUSTOMER_ACCEPTANCE_PENDING`. |
-| Customer approved-offer view | `200`, customer-facing offer includes immutable terms, provisional repayment items, and available actions while pending. |
-| Customer approved-offer accept | `200`, offer status `ACCEPTED`, application moves to `CONTRACT_PENDING`. |
-| Customer approved-offer decline | `200`, offer status `DECLINED`, application moves to `CUSTOMER_DECLINED`, reservation released exactly once. |
-| Expired offer accept/decline | `409`, `OFFER_EXPIRED`; discovery of pending expiry commits expiry and exact-once release before the response, while an already persisted expiry produces no additional writes or release. |
-| Accounting prepares contract | `200`, version 1 `PREPARED`, exact accepted terms/items and safe masked destination. |
-| Contract preparation without an approved offer | `404`, `APPROVED_OFFER_NOT_FOUND`, safe catalog message. |
-| Contract preparation with a non-accepted offer | `422`, `OFFER_NOT_ACCEPTED`, safe catalog message. |
-| Customer current-contract read | `200` for the owner in `CONTRACT_PENDING` or `DISBURSEMENT_PENDING`; cross-Customer access is `403`. |
-| Customer acknowledgment | `200`, current version `ACKNOWLEDGED`; identical request replay creates no duplicate audit and remains replayable after a later version becomes current. |
-| Readiness before acknowledgment | `200`, `ready = false`, blocker includes `ACKNOWLEDGMENT_MISSING`. |
-| Accounting readiness read | `200`, stable point-in-time blocker codes and no durable mutation. |
-| Accounting confirms readiness | `200`, contract `READY_FOR_DISBURSEMENT`, application `DISBURSEMENT_PENDING`; no actual disbursement or reserved-to-used conversion. |
-| Stale contract version | `409`, `CONTRACT_VERSION_STALE`. |
-| Wrong role or missing permission | `403`, `ACCESS_DENIED`. |
-| Controlled regeneration | Prior version `SUPERSEDED`; new version `PREPARED`, unchanged financial/repayment snapshot, refreshed masked destination, fresh acknowledgment required. |
-| Incomplete readiness | `200` advisory blocker list; confirmation returns `409` with the first deterministic blocker code and rolls back all effects. |
-| Duplicate Salary Advance for same authenticated customer, including concurrent submissions through different verified employee links | `409`, `BLOCKING_APPLICATION_EXISTS`; one complete winner remains. |
-| Matching active or overdue Salary Advance with positive contractual outstanding | `409`, `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, independent of available exposure or overdue-scheduler freshness. |
-| Destination reveal without `loan:disburse` | `403`; no decryption and no audit. |
-| Destination reveal with stale version | `409`, `CONTRACT_VERSION_STALE`; no plaintext and no audit. |
-| Destination reveal before confirmation | `200` with exact no-store/private/no-cache/nosniff headers; one PII-safe access audit. |
-| Destination reveal after confirmation | `409`, `DISBURSEMENT_DESTINATION_REVEAL_NOT_ALLOWED`. |
-| Salary Advance disbursement confirmation | `200`; exact contract values create one active account, immutable evidence, final schedule, reserved-to-used movement, `DISBURSED` transition/history, and one audit in one transaction. |
-| Identical disbursement replay | `200`, original identifiers and values, `idempotentReplay = true`, and no additional physical rows/audit/history/movement. |
-| Reused disbursement request UUID | `409`, `IDEMPOTENCY_KEY_REUSED`, without identifying the differing field. |
-| Duplicate canonical transfer reference | `409`, `DUPLICATE_TRANSFER_REFERENCE`, without returning the reference. |
-| Invalid disbursement dates | `422`, `DISBURSEMENT_VALUE_DATE_INVALID` or `FIRST_REPAYMENT_DATE_INVALID`. |
-| Unsupported product activation | `422`, `PRODUCT_ACTIVATION_NOT_SUPPORTED`; no UCL/Collateral fallback. |
-| Customer LoanAccount query | Owner with `loan:read:own` receives `200`; missing, foreign-owned, and not-yet-activated resources all receive the same generic `404 LOAN_ACCOUNT_NOT_FOUND`. |
-| Staff LoanAccount query | Staff with `loan:read` receives `200`. |
-| Query before activation | `404`, `LOAN_ACCOUNT_NOT_FOUND`. |
-| Inconsistent persisted activation evidence | `409`, `SYSTEM_STATE_CONFLICT`. |
-| Partial or early Salary Advance repayment | `200`; deterministic oldest-installment and fee/interest/principal allocation, with used exposure released only for newly allocated principal. |
-| Exact repayment replay after later servicing changes | `200`; the immutable original V34 outcome is returned with `idempotentReplay = true` and no duplicate financial, audit, history, or exposure effects. |
-| Exact contractual payoff | `200`; account becomes `SETTLED`, contractual outstanding reaches zero, and the outstanding-account submission guard clears subject to every other submission rule. |
-| Repayment history query | Owner with `loan:read:own` or staff with `loan:read` receives immutable paged records; `repayment:update` alone does not grant read access. |
+Successful headers:
 
-Notes:
+```text
+Cache-Control: no-store, private
+Pragma: no-cache
+X-Content-Type-Options: nosniff
+```
 
-- Customer-owned endpoints now derive customer identity from the authenticated token.
-- Refresh tokens, logout invalidation, and broader customer ownership hardening remain deferred IAM follow-ups.
-- The optional Postman persisted-expiry check skips unless `persistedExpiredLoanApplicationId` is set to a customer-owned application already expired by scheduled processing.
+Important conflicts: `CONTRACT_VERSION_STALE`, `DISBURSEMENT_DESTINATION_REVEAL_NOT_ALLOWED`, and `DISBURSEMENT_DESTINATION_UNAVAILABLE`.
 
-## Salary Advance repayment servicing APIs
+### 7.2 Confirm manual disbursement
 
-The executable repayment surface is limited to an active or overdue Salary Advance `LoanAccount`. Scheduled obligations remain the immutable final `RepaymentSchedule`; actual payment transactions, deterministic allocations, installment progress, account balances, exposure-release evidence, histories, audit, and the immutable V34 operation outcome are separate transactional evidence.
+```json
+{
+  "requestId": "UUID",
+  "expectedContractVersion": 1,
+  "externalTransferReference": "BANK-REFERENCE",
+  "disbursementValueDate": "2026-07-28",
+  "firstRepaymentDate": "2026-08-28"
+}
+```
 
-### Record or replay a repayment
+The body cannot supply Customer, product, destination, amount, pricing, term, limit, account, or schedule facts. Those values come from the ready contract.
 
-`POST /api/v1/loan-applications/{loanApplicationId}/repayments` requires `repayment:update` and accepts:
+The external reference is normalized, retained as protected evidence, and never returned. Success returns safe application/account/disbursement/schedule identifiers, amount and dates, activation time, final schedule, and `idempotentReplay`.
+
+Important errors:
+
+- `IDEMPOTENCY_KEY_REUSED`
+- `DISBURSEMENT_ALREADY_COMPLETED`
+- `DUPLICATE_TRANSFER_REFERENCE`
+- `SYSTEM_STATE_CONFLICT`
+- `DISBURSEMENT_VALUE_DATE_INVALID`
+- `FIRST_REPAYMENT_DATE_INVALID`
+- `PRODUCT_ACTIVATION_NOT_SUPPORTED`
+
+### 7.3 Query LoanAccount
+
+The response contains:
+
+| Group | Fields |
+|---|---|
+| Account | application/account IDs, account number, status, activation time |
+| Origination | principal, approved term, total interest, fee, total repayment |
+| Servicing summary | paid/outstanding component totals, total paid/outstanding, evaluation date, last payment dates |
+| Destination | bank code/name, account-holder name, fixed mask `********` |
+| Final schedule | schedule ID/type/version, first/last due dates, immutable items |
+| Installment servicing | paid/outstanding components, derived status, evaluation date, last payment dates |
+
+The read does not decrypt the destination or perform allocation, overdue evaluation, mutation, audit, or history writes.
+
+For Customers, missing, foreign-owned, and unavailable accounts all return `404 LOAN_ACCOUNT_NOT_FOUND`.
+
+---
+
+## 8. Repayment
+
+Repayment APIs support serviceable Salary Advance LoanAccounts.
+
+### 8.1 Record or replay repayment
 
 ```json
 {
@@ -572,14 +560,47 @@ The executable repayment surface is limited to an active or overdue Salary Advan
 }
 ```
 
-The service is the single canonicalization boundary for `externalPaymentReference`. A successful first request and an exact replay both return `200`; replay sets `idempotentReplay` to `true` and returns the exact immutable original outcome even if current servicing status later advances. The response contains safe IDs, amount/value date/recorded timestamp, ordered component allocations with installment numbers, principal allocated and released, installment outcomes with due dates, resulting account status/balances, and the replay flag. It excludes the external payment reference and contains no request UUID, actor, Customer, employee-link, limit, bank, audit/history, or internal operation evidence.
+Rules visible to clients:
 
-Stable conflicts include idempotency-key reuse, duplicate canonical payment reference, overpayment, future-dated value date, non-serviceable account state, and system-state inconsistency. Validation failures are `400`; business rule failures are `422`; state/idempotency conflicts are `409`. Principal allocation releases used Salary Advance exposure by exactly the same amount; fee or interest allocation releases none. Allocation is oldest installment first and fee, then interest, then principal within each installment. Partial and early repayment are supported. Exact contractual payoff produces `SETTLED`; closure remains deferred.
+- partial and early payments are supported;
+- allocation uses oldest installment first;
+- component order is fee, interest, then principal;
+- payment cannot exceed total outstanding;
+- value date cannot precede disbursement or exceed the current business date;
+- only principal allocation releases Salary Advance used exposure;
+- exact contractual payoff produces `SETTLED`.
 
-### Query immutable repayment history
+The response includes safe transaction/account IDs, amount/value date, recording time, ordered allocations, principal released, installment outcomes, resulting account status/balances, and `idempotentReplay`. It excludes the external reference, request UUID, actor, Customer, employee-link, limit, bank, audit, history, and internal operation evidence.
 
-`GET /api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` requires `loan:read:own` for the owning Customer or `loan:read` for staff. `page` is zero-based, `size` is 1–100, and records are ordered by `recordedAt DESC, repaymentTransactionId DESC`. Each record is reconstructed from immutable transaction/allocation/V34 outcome evidence; the endpoint never recalculates historical outcomes from current mutable progress and exposes no replay flag. Customer nonexistent, foreign, and unavailable resources use the same generic `404 LOAN_ACCOUNT_NOT_FOUND`; staff retain accurate system-state conflicts.
+An identical replay returns the original result even if later servicing state differs.
 
-### LoanAccount servicing view
+Validation failures use `400`, business-rule failures `422`, and state/idempotency conflicts `409`. Important conflicts include idempotency reuse, duplicate normalized reference, overpayment, invalid value date, non-serviceable state, and `SYSTEM_STATE_CONFLICT`.
 
-The existing `GET /api/v1/loan-applications/{loanApplicationId}/loan-account` preserves originated account and final-schedule fields and adds persisted servicing data: account paid/outstanding component totals, servicing evaluation date and payment timestamps, and per-installment paid/outstanding components, derived status, and evaluation date. The read is a coherent repeatable-read snapshot and performs no overdue evaluation, balance calculation, mutation, audit, or history write. The immutable final schedule continues to represent original obligations; servicing fields represent current progress.
+### 8.2 Repayment history
+
+```text
+GET /api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20
+```
+
+- `page` defaults to `0`.
+- `size` defaults to `20` and must be `1–100`.
+- Ordering is `recordedAt DESC`, then repayment transaction ID descending.
+- Historical outcomes are reconstructed from immutable transaction/allocation outcome evidence rather than recalculated from later account state.
+- The response excludes replay flags and external payment references.
+- Customers require ownership plus `loan:read:own`; Staff use `loan:read`. `repayment:update` alone does not grant read access.
+
+---
+
+## 9. Postman Collection
+
+Collection:
+
+```text
+docs/api/Meridian-Platform.postman_collection.json
+```
+
+It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, and negative-security flows.
+
+Complex correction scenarios require prepared application, review-cycle, checklist, and version variables. Seed fixtures and scenario-specific IDs belong to the collection or its environment, not this API contract.
+
+---
