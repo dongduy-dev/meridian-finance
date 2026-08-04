@@ -1,74 +1,82 @@
-# MER-ARCH-005 — OCR Architecture
+# MER-ARCH-005 — OCR-Assisted Document Processing
 
-## 1. Purpose
+## Purpose and Authority
 
-This document defines the planned OCR-assisted document processing architecture for Meridian.
+This document defines Meridian's intended OCR-assisted document-processing architecture.
 
-## 2. Scope
+OCR belongs to Document Management. This document owns the OCR service topology, job lifecycle, result handling, failure model, security boundary, and observability requirements. `MER-ARCH-001-bounded-contexts.md` remains authoritative for bounded-context ownership, while API documents define any external HTTP contracts.
 
-### In Scope
-
-- OCR job creation for uploaded documents
-- Asynchronous OCR processing
-- Python OCR service for model execution
-- OCR result persistence
-- OCR confidence tracking
-- Manual review of OCR-assisted results
-- Trace correlation between Spring Boot and OCR workers
-
-### Out of Scope
-
-- Fully automated document approval
-- Fully automated loan approval
-- Dataset management platform
-- Complex MLOps workflow
-- Kafka/RabbitMQ-based orchestration
-- Real external verification providers
+OCR is a planned capability. Implementation status belongs in the project roadmap and follow-up register.
 
 ---
 
-## 3. Architectural Position
+## 1. Scope
 
-OCR belongs under the **Document Management** bounded context.
+### In Scope
 
-It is not a separate top-level bounded context.
+- OCR job creation for uploaded document versions
+- asynchronous OCR processing
+- a Python service for model execution
+- OCR result and confidence persistence
+- authorized review of OCR-assisted results
+- retry and worker-recovery behavior
+- trace correlation between Spring Boot and OCR workers
+
+### Out of Scope
+
+- automatic document acceptance or waiver
+- automatic LoanApplication approval or rejection
+- model training and dataset management
+- a full MLOps platform
+- Kafka or RabbitMQ orchestration
+- OCR ownership outside Document Management
+
+---
+
+## 2. Architectural Position
+
+OCR-assisted processing is a Document Management capability, not a separate bounded context.
 
 ```text
 Document Management
-├── Document upload
-├── Document checklist
+├── Document upload and storage
+├── Application checklists
 ├── Manual document review
 ├── Document readiness
 └── OCR-assisted processing
 ```
 
-The Java backend remains the public entry point and system of record. The Python OCR service is an external processing component behind a document/OCR port.
+The Spring Boot backend remains Meridian's public entry point and system of record. The Python OCR service performs model execution as an external processing component within the Document boundary.
 
 ```text
-Spring Boot Document Module
-→ OcrProcessingPort
-→ Python OCR Service
+Document application
+    → Document-owned OCR job port
+    → PostgreSQL-backed OCR queue
+    ← Python OCR worker
 ```
 
-Manual document review remains authoritative for checklist readiness, replacement, waiver, and acceptance decisions.
+The worker may process Document-owned OCR jobs and results. It must not access another context's tables, repositories, or business state.
+
+OCR output is advisory evidence. Authorized Document review remains authoritative for document acceptance, replacement, waiver, checklist state, and processing readiness.
 
 ---
 
-## 4. Main Decisions
+## 3. Architecture Decisions
 
-| Decision | Phase 2 Direction | Rationale |
+| Decision | Direction | Reason |
 |---|---|---|
-| OCR ownership | Document Management | OCR supports document processing and should not become a separate business bounded context. |
-| Runtime | Separate Python service | OCR libraries, model loading, and CPU/GPU tuning fit better in Python. |
-| API style | REST | REST is simpler to debug and operate with Spring Boot and FastAPI. |
-| Execution model | Asynchronous | Document upload should not wait for OCR processing. |
-| Job queue | PostgreSQL-backed queue | Sufficient for moderate Phase 2 workload and avoids extra infrastructure. |
-| Low-confidence handling | Manual review | OCR assists reviewers but does not make final readiness decisions. |
-| Observability | Shared trace ID | Spring Boot and OCR worker logs should be correlated. |
+| Business ownership | Document Management | OCR processes document evidence and does not own lending decisions |
+| Model runtime | Separate Python service | Python provides the required OCR libraries, model loading, and CPU/GPU execution support |
+| Processing model | Asynchronous | Document upload must not wait for OCR completion |
+| Job coordination | PostgreSQL-backed queue | The expected workload does not require a separate message broker |
+| Worker access | Purpose-limited OCR tables and document objects | The worker needs only the job, source file, and result boundary |
+| Operational API | REST for health, model readiness, and controlled administration | Operational calls remain simple to inspect and secure; job execution stays queue-driven |
+| Low-confidence handling | Authorized manual review | OCR does not decide document acceptance or checklist readiness |
+| Traceability | Shared trace and model-version metadata | A result must be traceable to its upload, worker execution, and model version |
 
 ---
 
-## 5. Service Topology
+## 4. Service Topology
 
 ```mermaid
 flowchart LR
@@ -77,41 +85,49 @@ flowchart LR
     Document[Document Management]
     DB[(PostgreSQL)]
     Storage[(Document storage)]
-    OCR[Python OCR service]
-    Review[Manual review]
+    OCR[Python OCR worker]
+    Review[Authorized document review]
 
     Client -->|Upload document| API
     API --> Document
     Document -->|Store metadata and OCR job| DB
     Document -->|Store original file| Storage
-    OCR -->|Claim pending job| DB
-    OCR -->|Read document| Storage
-    OCR -->|Write OCR result| DB
-    Document -->|Show result for review| Review
+    OCR -->|Claim pending OCR job| DB
+    OCR -->|Read assigned document| Storage
+    OCR -->|Write OCR result and status| DB
+    Document -->|Present OCR evidence| Review
 ```
+
+The client communicates only with the Spring Boot API. The OCR worker has no public lending or document-management API responsibility.
+
+Direct worker access is limited to the Document-owned OCR queue, OCR result records, and assigned storage objects. Document Management remains authoritative for the resulting document workflow.
 
 ---
 
-## 6. OCR Job Lifecycle
+## 5. OCR Job Lifecycle
 
 | State | Meaning |
 |---|---|
-| `PENDING` | OCR job is queued and waiting for a worker. |
-| `PROCESSING` | A worker has claimed the job. |
-| `COMPLETED` | OCR finished and a result is available. |
-| `FAILED` | OCR failed after retry handling or encountered a non-retryable error. |
+| `PENDING` | The job is queued and waiting for a worker |
+| `PROCESSING` | A worker holds the active processing lease |
+| `COMPLETED` | OCR completed and a result is available |
+| `FAILED` | Processing exhausted its retry policy or encountered a non-retryable error |
 
-OCR result review is tracked separately:
+A processing lease prevents an abandoned `PROCESSING` job from remaining locked indefinitely. Another worker may reclaim the job after the lease expires.
 
-| Review State | Meaning |
+OCR-result disposition is separate from job execution:
+
+| Disposition | Meaning |
 |---|---|
-| `AUTO_APPROVED` | Confidence is high enough for normal assisted use. |
-| `PENDING_REVIEW` | Confidence is low and a reviewer should check the result. |
-| `REVIEWED` | A reviewer accepted or corrected the OCR result. |
+| `HIGH_CONFIDENCE` | The result is available for normal authorized review; it is not automatically accepted |
+| `PENDING_REVIEW` | Confidence or extraction quality requires explicit reviewer attention |
+| `REVIEWED` | An authorized reviewer accepted or corrected the OCR-assisted result |
+
+These dispositions describe OCR evidence handling. They do not replace document-review decisions or checklist-item states.
 
 ---
 
-## 7. Upload-to-Result Flow
+## 6. Upload-to-Result Flow
 
 ```mermaid
 sequenceDiagram
@@ -121,79 +137,134 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant Storage as Document storage
     participant OCR as Python OCR worker
-    participant Review as Manual review
+    participant Review as Authorized review
 
     Client->>API: Upload document
-    API->>Document: Create document record
+    API->>Document: Create document version
     Document->>Storage: Store original file
-    Document->>DB: Save document metadata and OCR job
+    Document->>DB: Store metadata and pending OCR job
     API-->>Client: Document accepted for processing
 
-    OCR->>DB: Claim pending OCR job
-    OCR->>Storage: Read document
+    OCR->>DB: Claim pending job with processing lease
+    OCR->>Storage: Read assigned document
     OCR->>OCR: Run OCR and extraction
-    OCR->>DB: Store OCR result and status
+    OCR->>DB: Store result, confidence, model version, and final status
 
-    alt Low confidence
-        Document->>Review: Queue result for manual review
+    alt Review required
+        Document->>Review: Queue OCR evidence for explicit review
     else High confidence
-        Document->>Review: Result available for normal review
+        Document->>Review: Make OCR evidence available for normal review
     end
 ```
 
-The upload request does not wait for OCR completion.
+The upload request returns after the document version and OCR job are stored. It does not wait for OCR completion.
 
 ---
 
-## 8. Failure Handling
+## 7. Result Ownership and Review
 
-| Scenario | Handling |
+Document Management owns:
+
+- OCR jobs and processing status
+- extracted text and structured fields
+- confidence scores
+- model and version metadata
+- reviewer corrections to OCR output
+- OCR processing and review history
+
+OCR results remain evidence attached to a document version. They must not directly:
+
+- accept or reject a document
+- waive required evidence
+- mark a checklist item complete
+- decide document-processing readiness
+- approve, reject, or transition a LoanApplication
+
+An authorized reviewer may use OCR output to inspect a document faster, correct extracted fields, and support a Document-owned review decision.
+
+---
+
+## 8. Failure and Retry Handling
+
+| Scenario | Required handling |
 |---|---|
-| OCR worker is unavailable | Jobs remain pending until workers recover. |
-| Worker crashes mid-job | The job can be retried after the processing lease expires. |
-| Transient OCR error | Retry according to configured attempt limits. |
-| Unsupported or corrupt file | Mark the job as failed and route document review manually. |
-| Low-confidence result | Store the result and require manual review. |
-| Duplicate job request | Use idempotency around document/job creation where needed. |
+| OCR worker unavailable | Jobs remain `PENDING` until a worker becomes available |
+| Worker crashes during processing | The job becomes claimable after its processing lease expires |
+| Retryable OCR failure | Record the attempt and retry under the configured limit and backoff policy |
+| Non-retryable or corrupt input | Mark the job `FAILED` and preserve the original document for authorized manual review |
+| Low-confidence result | Store the result and set its disposition to `PENDING_REVIEW` |
+| Repeated creation for the same document version | Return or reuse the existing active or completed job instead of creating competing jobs |
 
-OCR failure should not block the entire loan workflow if manual document review can still proceed.
-
----
-
-## 9. Data Model Direction
-
-At a conceptual level, OCR needs records for:
-
-- OCR job
-- OCR result
-- processing status
-- confidence score
-- review status
-- model/version metadata
-- trace ID
-- retry metadata
+OCR failure does not block document processing when the original document remains available and Document rules allow manual review. Failure must remain visible to reviewers and operational monitoring.
 
 ---
 
-## 10. Security and Privacy Notes
+## 9. Conceptual Data Model
 
-- OCR workers should access only the documents required for assigned jobs.
-- OCR result data may contain sensitive customer information.
-- OCR result access must follow document and back-office authorization rules.
-- Logs must not expose raw personal or financial data.
-- Trace IDs should be used for correlation without leaking sensitive payloads.
+The OCR capability requires conceptual records for:
+
+### OCR Job
+
+- job identifier
+- document and document-version identifiers
+- processing state
+- processing lease owner and expiry
+- attempt count and retry timing
+- failure category
+- trace identifier
+- creation and update timestamps
+
+### OCR Result
+
+- result identifier
+- job identifier
+- extracted text
+- structured extracted fields
+- confidence measures
+- result disposition
+- model and model-version metadata
+- processing duration
+- creation timestamp
+
+### OCR Review
+
+- result identifier
+- reviewer identity
+- reviewed or corrected values
+- controlled review outcome
+- review timestamp
+
+Exact tables, columns, constraints, and indexes belong in database design and migrations.
 
 ---
 
-## 11. Observability Notes
+## 10. Security and Privacy
 
-Spring Boot creates or propagates a trace ID when a document is uploaded. The OCR job stores that trace ID so Python worker logs can be correlated with the original request.
+- OCR workers may access only assigned document objects and Document-owned OCR records.
+- Worker credentials must not grant access to Loan, Customer, Partner, Approval, or Identity persistence.
+- OCR results and extracted fields inherit Document authorization rules.
+- Logs must not contain raw identity, financial, account, or document content.
+- Errors must not expose storage keys, model internals, credentials, or unrestricted extracted evidence.
+- Trace identifiers correlate processing without carrying sensitive payloads.
+- Temporary files must be deleted after processing or retained only under an explicit secure-retention rule.
 
-Useful operational signals include:
+The OCR service does not expose document content directly to clients. Authorized access remains through the Spring Boot Document boundary.
 
-- pending OCR job count
-- failed job count
-- average processing time
+---
+
+## 11. Observability
+
+Spring Boot creates or propagates a trace identifier when accepting a document upload. The OCR job retains that identifier so API, database, storage, and worker activity can be correlated.
+
+Operational monitoring includes:
+
+- pending-job count and oldest pending-job age
+- active processing leases
+- completed and failed job counts
+- processing duration
+- retry count and exhausted retries
 - low-confidence result count
-- worker health
-- retry count
+- worker health and model readiness
+- results by model version
+
+Alerts should distinguish worker unavailability, queue growth, repeated model failure, storage failure, and database coordination failure.

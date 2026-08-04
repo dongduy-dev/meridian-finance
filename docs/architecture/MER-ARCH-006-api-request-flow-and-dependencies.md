@@ -1,522 +1,450 @@
-# MER-ARCH-006 — API Request Flow and Dependency Diagrams
+# MER-ARCH-006 — API Request Flows and Runtime Dependencies
 
-## 1. One-Minute Mental Model
+## Purpose and Document Authority
 
-`Client -> Controller -> Input Port -> Application Service -> Output Port -> Persistence Adapter -> JPA -> PostgreSQL -> Domain -> DTO -> JSON`
+This document defines representative API request flows, runtime collaboration, transaction boundaries, lock ordering, and request-specific security behavior for `meridian-platform`.
 
-Infrastructure receives and adapts.
-Application orchestrates.
-Domain holds business truth.
-Database and JPA stay outside.
+| Document | Authority |
+|---|---|
+| `MER-ARCH-001-bounded-contexts.md` | Business ownership and context collaboration |
+| `MER-ARCH-002-project-structure.md` | Source and package placement |
+| `MER-ARCH-003-dependency-rules.md` | Legal Java source dependencies and architecture enforcement |
+| `MER-ARCH-004-api-error-catalog.md` | Canonical API error identifiers, statuses, and default messages |
+| `MER-API-001-endpoints-and-postman-scenarios.md` | Exact endpoint contracts, request and response fields, authorization, pagination, and scenarios |
+| `MER-ARCH-006-api-request-flow-and-dependencies.md` | Runtime calls, transactions, locks, retries, and request-specific security behavior |
 
-## 2. High-Level Hexagonal Flow
+The type and endpoint names below are representative of the intended runtime design. Source code remains authoritative for exact implementation names. Implementation status belongs in the roadmap and follow-up register.
+
+---
+
+## 1. Core Mental Model
+
+A request enters through an inbound adapter, invokes an application input port, and reaches an application service. The service applies domain rules and uses output ports for persistence or cross-context collaboration.
+
+```text
+request:
+Client
+  → security boundary
+  → controller
+  → input port
+  → application service
+  → domain and output ports
+  → outbound adapters
+
+response:
+outbound adapter
+  → domain model or application record
+  → mapper
+  → response DTO
+  → controller
+  → JSON
+```
+
+Infrastructure receives, translates, and persists. Application services orchestrate use cases and transactions. Domain models own business state and policy.
+
+Runtime calls and source dependencies are different:
+
+- runtime flow describes which component calls another during one operation;
+- source dependency describes which package may import another package.
+
+The runtime diagrams in this document show calls. `MER-ARCH-003-dependency-rules.md` defines the corresponding source-dependency direction.
+
+---
+
+## 2. General Hexagonal Request Flow
 
 ```mermaid
 flowchart LR
     Client["Client"]
-    Controller["Controller<br/>inbound adapter"]
-    InPort["Input Port"]
-    Service["Application Service"]
-    OutPort["Output Port"]
-    Adapter["Persistence Adapter<br/>outbound adapter"]
-    Jpa["Spring Data JPA"]
-    Db["PostgreSQL"]
-    Entity["JPA Entity"]
-    Domain["Domain Model"]
+    Security["Authentication and authorization"]
+    Controller["Controller<br/>inbound web adapter"]
+    InPort["Application input port"]
+    Service["Application service"]
+    Domain["Domain model and policy"]
+    OutPort["Application output port"]
+    Adapter["Persistence or boundary adapter"]
+    Store["PostgreSQL or external boundary"]
+    Mapper["Response mapper"]
+    DTO["Response DTO"]
+
+    Client -->|"HTTP request"| Security
+    Security -->|"authorized request"| Controller
+    Controller -->|"invokes"| InPort
+    InPort -->|"runtime dispatch"| Service
+    Service -->|"applies"| Domain
+    Service -->|"calls"| OutPort
+    OutPort -->|"runtime dispatch"| Adapter
+    Adapter --> Store
+    Store --> Adapter
+    Adapter --> Service
+    Service --> Mapper
+    Mapper --> DTO
+    DTO --> Controller
+    Controller -->|"HTTP response"| Client
+```
+
+The application service owns the transaction and business decision. A controller must not call a repository, JPA entity, or persistence adapter directly. An adapter must not decide a LoanApplication or LoanAccount transition.
+
+---
+
+## 3. Authentication, Authorization, and Ownership
+
+Spring Security authenticates the Bearer token before a protected controller invokes its input port.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Security filter chain
+    participant W as Controller
+    participant U as Application use case
+    participant P as CurrentUserProvider
+    participant O as Owning context
+
+    C->>S: HTTP request + Bearer token
+    S->>S: Verify token and required permission
+    S->>W: Authenticated request
+    W->>U: Command or query without trusted actor fields
+    U->>P: Resolve authenticated actor
+    P-->>U: Actor ID, Customer link, roles, permissions
+    U->>O: Enforce resource ownership and business rules
+    O-->>U: Result
+    U-->>W: Safe response DTO
+    W-->>C: HTTP response
+```
+
+A permission authorizes an actor to attempt an operation. The owning context still verifies that the Customer, application, document, contract, or account belongs to that actor and is in a valid state.
+
+Customer-owned endpoints derive `customerId` from `CurrentUserProvider`. They must not trust a Customer identifier supplied in the request when ownership is implied by the endpoint.
+
+---
+
+## 4. Representative Query Flows
+
+Simple queries share one runtime pattern:
+
+```mermaid
+flowchart LR
+    Client["Client"]
+    Controller["Controller"]
+    InPort["Query input port"]
+    Service["Query service"]
+    RepoPort["Repository output port"]
+    Adapter["Repository adapter"]
+    Jpa["Spring Data repository"]
+    Table["PostgreSQL table"]
+    Domain["Domain model"]
     Mapper["Mapper"]
-    Dto["DTO"]
-    Json["JSON"]
+    DTO["Response DTO"]
 
-    Client --> Controller --> InPort --> Service --> OutPort --> Adapter --> Jpa --> Db
-    Db --> Entity --> Adapter --> Domain --> Mapper --> Dto --> Controller --> Json --> Client
+    Client --> Controller --> InPort --> Service --> RepoPort --> Adapter --> Jpa --> Table
+    Table --> Jpa --> Adapter --> Domain --> Service --> Mapper --> DTO --> Controller --> Client
 ```
 
-Notes:
+Representative variations:
 
-- Controllers adapt HTTP into use-case calls.
-- Services orchestrate through ports.
-- Adapters translate infrastructure data into domain models.
-- DTOs are the API response shape.
+| Request | Runtime rule |
+|---|---|
+| `GET /api/v1/loan-products` | The query service loads active products through the Loan-owned repository port and maps `LoanProduct` values to response DTOs. |
+| `GET /api/v1/partner-companies/{partnerCompanyId}` | An empty repository result becomes `PARTNER_COMPANY_NOT_FOUND` through the global error boundary. |
+| `GET /api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=true` | The protected query requires `partner:read`. The `activeOnly` condition is pushed into the persistence query rather than filtering a complete result in the controller. |
+| `GET /api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | The service verifies the Partner Company before loading its import batches, so a missing parent returns a Partner Company error rather than an empty child collection. |
 
-## 3. Runtime Flow vs Source Dependency
+Detailed Partner Employee evidence and salary or limit fields remain restricted to authorized Staff responses. Customer-facing endpoints use purpose-limited DTOs and must not reuse the back-office representation.
 
-Runtime calls move outward to the database and then return.
+---
+
+## 5. Partner Employee Verification
+
+`POST /api/v1/partner-companies/{partnerCompanyId}/employee-verifications` requires Bearer authentication and `partner:employee:verify:own`.
+
+The flow derives `customerId` from the authenticated Customer. The request supplies matching input such as `employeeCode`; it does not supply the trusted Customer identity. Partner obtains the required identity reference through a narrow Customer contract.
 
 ```mermaid
 flowchart LR
-    Client --> Controller --> Service --> Adapter --> Db["PostgreSQL"]
-    Db --> Adapter --> Service --> Controller --> Client
-```
-
-Source dependencies point inward toward business rules.
-
-```mermaid
-flowchart LR
-    Infra["Infrastructure<br/>web + persistence"] --> App["Application<br/>ports + services + DTOs"]
-    App --> Domain["Domain<br/>models + rules"]
-    Domain --> Nobody["No outward dependency"]
-```
-
-Runtime flow and source dependency direction are related, but not identical.
-Runtime is "who calls whom right now."
-Source dependency is "what code is allowed to import what."
-Meridian keeps source dependencies pointing inward.
-
-## 4. Loan Product Endpoint Flow
-
-`GET /api/v1/loan-products`
-
-```mermaid
-flowchart LR
-    Client["Client"]
-    Controller["LoanProductController"]
-    InPort["QueryLoanProductUseCase"]
-    Service["QueryLoanProductService"]
-    OutPort["LoanProductRepository"]
-    Adapter["LoanProductRepositoryAdapter"]
-    Jpa["JpaLoanProductRepository"]
-    Table["loan_products"]
-    Entity["LoanProductJpaEntity"]
-    Domain["LoanProduct"]
-    Mapper["LoanMapper"]
-    Dto["LoanProductDto"]
-    Json["JSON"]
-
-    Client --> Controller --> InPort --> Service --> OutPort --> Adapter --> Jpa --> Table
-    Table --> Entity --> Adapter --> Domain --> Mapper --> Dto --> Json --> Client
-```
-
-Read this as: controller calls the query use case, the service reads active products through the repository port, persistence maps rows to `LoanProduct`, and the mapper returns `LoanProductDto` JSON.
-
-## 5. Partner Company Endpoint Flow
-
-`GET /api/v1/partner-companies/{partnerCompanyId}`
-
-```mermaid
-flowchart LR
-    Client["Client"]
-    Controller["PartnerCompanyController"]
-    InPort["QueryPartnerCompanyUseCase"]
-    Service["QueryPartnerCompanyService"]
-    OutPort["PartnerCompanyRepository"]
-    Adapter["PartnerCompanyRepositoryAdapter"]
-    Jpa["JpaPartnerCompanyRepository"]
-    Table["partner_companies"]
-    Entity["PartnerCompanyJpaEntity"]
-    Domain["PartnerCompany"]
-    Mapper["PartnerCompanyMapper"]
-    Dto["PartnerCompanyDto"]
-    Json["JSON"]
-
-    Client --> Controller --> InPort --> Service --> OutPort --> Adapter --> Jpa --> Table
-    Table --> Entity --> Adapter --> Domain --> Mapper --> Dto --> Json --> Client
-```
-
-Error flow:
-
-```mermaid
-flowchart LR
-    Empty["Optional.empty()"]
-    Exception["EntityNotFoundException<br/>PARTNER_COMPANY_NOT_FOUND"]
-    Handler["GlobalExceptionHandler"]
-    Error["ApiErrorResponse"]
-    Json["HTTP 404 JSON"]
-
-    Empty --> Exception --> Handler --> Error --> Json
-```
-
-## 6. Protected Partner Employee Endpoint Flow
-
-`GET /api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=true`
-
-Security posture:
-
-- Requires JWT Bearer authentication plus `partner:read`.
-- Intended as an internal/back-office endpoint.
-- Returns detailed `PartnerEmployeeDto`, including employee evidence and salary/limit fields, only behind this protected endpoint.
-- Do not reuse this DTO for public/customer-facing responses.
-
-```mermaid
-flowchart LR
-    Client["Client"]
-    Controller["PartnerEmployeeController"]
-    InPort["QueryPartnerEmployeeUseCase"]
-    Service["QueryPartnerEmployeeService"]
-    Decision{"activeOnly?"}
-
-    PortAll["PartnerEmployeeRepository<br/>findByPartnerCompanyId"]
-    AdapterAll["PartnerEmployeeRepositoryAdapter"]
-    JpaAll["JpaPartnerEmployeeRepository<br/>findByPartnerCompanyIdOrderByEmployeeCodeAsc"]
-
-    PortActive["PartnerEmployeeRepository<br/>findActiveByPartnerCompanyId"]
-    AdapterActive["PartnerEmployeeRepositoryAdapter"]
-    JpaActive["JpaPartnerEmployeeRepository<br/>findByPartnerCompanyIdAndActiveTrueOrderByEmployeeCodeAsc"]
-
-    Table["partner_employees"]
-    Entity["PartnerEmployeeJpaEntity"]
-    AdapterMap["PartnerEmployeeRepositoryAdapter<br/>toDomain"]
-    Domain["PartnerEmployee"]
-    Mapper["PartnerEmployeeMapper"]
-    Dto["PartnerEmployeeDto"]
-    Json["JSON"]
-
-    Client --> Controller --> InPort --> Service --> Decision
-    Decision -->|"false / omitted"| PortAll --> AdapterAll --> JpaAll --> Table
-    Decision -->|"true"| PortActive --> AdapterActive --> JpaActive --> Table
-    Table --> Entity --> AdapterMap --> Domain --> Mapper --> Dto --> Json --> Client
-```
-
-`activeOnly=true` is pushed down to the Spring Data query.
-
-## 7. Import Batch Endpoint Flow
-
-`GET /api/v1/partner-companies/{partnerCompanyId}/employee-import-batches`
-
-```mermaid
-flowchart LR
-    Client["Client"]
-    Controller["PartnerEmployeeImportBatchController"]
-    InPort["QueryPartnerEmployeeImportBatchUseCase"]
-    Service["QueryPartnerEmployeeImportBatchService"]
-
-    CompanyPort["PartnerCompanyRepository<br/>findById"]
-    CompanyAdapter["PartnerCompanyRepositoryAdapter"]
-    CompanyJpa["JpaPartnerCompanyRepository"]
-    CompanyTable["partner_companies"]
-    Exists{"company exists?"}
-
-    Missing["EntityNotFoundException"]
-    Handler["GlobalExceptionHandler"]
-    NotFound["HTTP 404 JSON"]
-
-    BatchPort["PartnerEmployeeImportBatchRepository<br/>findByPartnerCompanyId"]
-    BatchAdapter["PartnerEmployeeImportBatchRepositoryAdapter"]
-    BatchJpa["JpaPartnerEmployeeImportBatchRepository<br/>findByPartnerCompanyIdOrderByEffectiveMonthDesc"]
-    BatchTable["partner_employee_import_batches"]
-    Entity["PartnerEmployeeImportBatchJpaEntity"]
-    AdapterMap["PartnerEmployeeImportBatchRepositoryAdapter<br/>toDomain"]
-    Domain["PartnerEmployeeImportBatch"]
-    Mapper["PartnerEmployeeImportBatchMapper"]
-    Dto["PartnerEmployeeImportBatchDto"]
-    Json["JSON"]
-
-    Client --> Controller --> InPort --> Service --> CompanyPort --> CompanyAdapter --> CompanyJpa --> CompanyTable --> Exists
-    Exists -->|"no"| Missing --> Handler --> NotFound --> Client
-    Exists -->|"yes"| BatchPort --> BatchAdapter --> BatchJpa --> BatchTable --> Entity --> AdapterMap --> Domain --> Mapper --> Dto --> Json --> Client
-```
-
-The service checks the partner company first, then loads import batches.
-
-## 8. Employee Verification Endpoint Flow
-
-`POST /api/v1/partner-companies/{partnerCompanyId}/employee-verifications`
-
-Security posture:
-
-- Requires JWT Bearer authentication plus `partner:employee:verify:own`.
-- This endpoint can support the customer employee-verification journey, but it is not public/anonymous.
-- `customerId` is derived from the authenticated customer token through `CurrentUserProvider`; it is not accepted in the request body.
-- The response is PII-safe and does not echo raw identity evidence, `employeeCode`, salary, salary advance limit, or raw matching evidence.
-
-Request fields:
-
-| Field | Notes |
-| --- | --- |
-| `employeeCode` | Used for matching only; not returned in the response. |
-
-The identity reference used for matching is loaded from the authenticated Customer profile through a narrow internal Customer contract. It is not accepted in the request body.
-
-Response fields:
-
-| Field | Notes |
-| --- | --- |
-| `customerId` | Authenticated customer reference derived from the Bearer token. |
-| `partnerCompanyId` | Partner Company reference. |
-| `partnerEmployeeId` | Present only when a single employee record was matched. |
-| `customerPartnerEmployeeLinkId` | Present when a reusable verified link exists or is created. |
-| `outcome` | Employee verification outcome such as `MATCHED_ACTIVE`, `MATCHED_INACTIVE`, or `PENDING_MANUAL_REVIEW`. |
-| `linkStatus` | Link status when a link is involved. |
-| `manualReviewRequired` | Whether the result must go to authorized manual review. |
-
-Business-rule notes:
-
-- Partner Company existence is checked first.
-- Non-active Partner Companies are rejected with `PARTNER_COMPANY_INACTIVE` before import-batch lookup, employee matching, link creation, or manual-review routing.
-- Active Partner Company plus one active employee match creates or refreshes the reusable customer-partner-employee link.
-- Missing or ambiguous employee evidence may route to manual review according to the Partner verification policy, but inactive Partner Companies are hard stops.
-
-```mermaid
-flowchart LR
-    Client["Authenticated client"]
+    Client["Authenticated Customer"]
     Controller["PartnerEmployeeVerificationController"]
     InPort["VerifyPartnerEmployeeUseCase"]
     Service["VerifyPartnerEmployeeService"]
-    UserProvider["CurrentUserProvider<br/>authenticated customerId"]
-    CompanyPort["PartnerCompanyRepository"]
-    Policy["PartnerEmployeeVerificationPolicy"]
-    BatchPort["PartnerEmployeeImportBatchRepository"]
-    EmployeePort["PartnerEmployeeRepository"]
-    LinkPort["CustomerPartnerEmployeeLinkRepository"]
-    Mapper["PartnerEmployeeVerificationMapper"]
-    Dto["Safe PartnerEmployeeVerificationDto"]
-    Json["JSON"]
+    Actor["CurrentUserProvider"]
+    CustomerPort["Customer identity-evidence port"]
+    CompanyRepo["PartnerCompanyRepository"]
+    BatchRepo["PartnerEmployeeImportBatchRepository"]
+    EmployeeRepo["PartnerEmployeeRepository"]
+    Policy["Partner employee verification policy"]
+    LinkRepo["CustomerPartnerEmployeeLinkRepository"]
+    Mapper["PII-safe response mapper"]
+    DTO["PartnerEmployeeVerificationDto"]
 
-    Client --> Controller --> InPort --> Service --> UserProvider --> CompanyPort --> Policy
-    Policy --> BatchPort --> EmployeePort --> LinkPort --> Mapper --> Dto --> Json
+    Client --> Controller --> InPort --> Service
+    Service --> Actor
+    Service --> CustomerPort
+    Service --> CompanyRepo
+    Service --> BatchRepo
+    Service --> EmployeeRepo
+    Service --> Policy
+    Policy --> LinkRepo
+    Service --> Mapper --> DTO --> Controller --> Client
 ```
 
-## 9. Salary Advance Application Endpoint Flow
+Runtime rules:
 
-`POST /api/v1/loan-applications/salary-advance`
+1. Partner Company existence and active status are checked before import-batch lookup, employee matching, link creation, or manual-review routing.
+2. One active match may create or refresh the reusable Customer–Partner Employee link.
+3. Missing or ambiguous evidence follows the authorized manual-review policy.
+4. An inactive Partner Company is a hard stop.
+5. The response may expose identifiers, outcome, link status, and whether manual review is required. It must not expose raw identity evidence, employee code, salary, Salary Advance limit, or matching evidence.
 
-Security posture:
+---
 
-- Requires JWT Bearer authentication plus `loan:submit`.
-- `customerId` is derived from the authenticated customer token through `CurrentUserProvider`; it is not accepted in the request body.
-- Salary Advance submission requires an active Customer, complete Customer profile, and primary active bank account. Customer verification status is not required until real Customer verification/KYC is implemented.
+## 6. Salary Advance Submission
 
-Request fields:
-
-| Field | Notes |
-| --- | --- |
-| `customerPartnerEmployeeLinkId` | Reusable verified employee-link reference. |
-| `requestedAmount` | Requested Salary Advance amount; must be mathematically whole VND, while scale-only trailing zeros remain valid. |
-| `requestedTermMonths` | Requested term, currently validated by Salary Advance policy. |
-
-Response fields:
-
-| Field group | Notes |
-| --- | --- |
-| Application IDs/status | `loanApplicationId`, `applicationNumber`, `customerId`, product code/type, status, and submitted timestamp. |
-| Request summary | Requested amount and term. |
-| Salary Advance references | Customer employee link, Salary Advance limit, and verification snapshot IDs. |
-| Verification/limit snapshot | Product verification result plus total, used, reserved, and available limit snapshots. |
-
-PII behavior:
-
-- The response does not expose Partner Employee salary, identity reference, employee code, bank account data, or raw evidence.
-- Limit snapshots are retained because they explain the lending decision and reservation state for the application.
-
-Concurrency and conflict contract:
-
-1. Acquire the transaction-scoped customer/product advisory lock.
-2. Perform the authoritative blocking-application check.
-3. Load and calculate Partner eligibility.
-4. Acquire the existing customer/employee-link advisory lock.
-5. Repeat the blocking check defensively.
-6. Lock or initialize the Salary Advance limit and perform reservation/application writes.
-
-The V11 `uq_loan_applications_customer_product_active` partial unique index remains the database authority. Only SQLSTATE `23505` naming that exact index is translated to `409 BLOCKING_APPLICATION_EXISTS`; unrelated integrity violations are rethrown.
-
-After the customer/employee-link lock, submission also reads committed LoanAccount evidence without locking an existing account. A matching `ACTIVE` or `OVERDUE` Salary Advance account with positive contractual outstanding returns `409 OUTSTANDING_LOAN_ACCOUNT_EXISTS`. Scheduler freshness and restored available exposure do not bypass this guard. Full payoff to zero-outstanding `SETTLED` clears only this guard. If submission obtains the customer/link lock first it may conservatively reject once; if final repayment holds that lock, submission waits and observes settlement after commit.
+`POST /api/v1/loan-applications/salary-advance` requires Bearer authentication and `loan:submit`. The application service derives the Customer from the authenticated actor and obtains Customer and Partner facts through their public contracts.
 
 ```mermaid
 flowchart LR
-    Client["Authenticated client"]
+    Client["Authenticated Customer"]
     Controller["SalaryAdvanceLoanApplicationController"]
     InPort["StartSalaryAdvanceApplicationUseCase"]
     Service["StartSalaryAdvanceApplicationService"]
-    ProductPort["LoanProductRepository"]
-    PartnerPort["PartnerEligibilityPort"]
-    LimitPort["SalaryAdvanceLimitRepository"]
-    LoanPort["LoanApplicationRepository"]
-    VerificationPort["SalaryAdvanceVerificationRepository"]
-    Mapper["LoanMapper"]
-    Dto["SalaryAdvanceApplicationDto"]
-    Json["JSON"]
+    ProductRepo["LoanProductRepository"]
+    CustomerPort["Customer readiness port"]
+    PartnerPort["Partner eligibility port"]
+    AccountRepo["LoanAccountRepository"]
+    LimitRepo["SalaryAdvanceLimitRepository"]
+    ApplicationRepo["LoanApplicationRepository"]
+    VerificationRepo["SalaryAdvanceVerificationRepository"]
+    Mapper["Loan mapper"]
+    DTO["SalaryAdvanceApplicationDto"]
 
-    Client --> Controller --> InPort --> Service --> ProductPort
-    Service --> PartnerPort --> LimitPort --> LoanPort --> VerificationPort --> Mapper --> Dto --> Json
+    Client --> Controller --> InPort --> Service
+    Service --> ProductRepo
+    Service --> CustomerPort
+    Service --> PartnerPort
+    Service --> AccountRepo
+    Service --> LimitRepo
+    Service --> ApplicationRepo
+    Service --> VerificationRepo
+    Service --> Mapper --> DTO --> Controller --> Client
 ```
 
-## 10. Database / Flyway Flow
+The response contains the application identity, requested terms, product-verification outcome, and limit snapshots needed to explain the reservation. It must not expose Partner Employee salary, identity evidence, employee code, bank-account data, or raw matching evidence.
+
+### Submission Serialization and Database Guard
+
+The transaction follows this order:
+
+1. acquire the Customer-and-product advisory lock;
+2. perform the authoritative blocking-application check;
+3. resolve Customer and Partner eligibility;
+4. acquire the Customer-and-employee-link advisory lock;
+5. repeat the blocking check;
+6. inspect blocking LoanAccount evidence;
+7. lock or initialize the Salary Advance limit;
+8. reserve exposure and persist the application and verification snapshot.
+
+The partial unique constraint for one blocking application per Customer and product is the final database guard. Only a violation of that exact constraint maps to `BLOCKING_APPLICATION_EXISTS`; unrelated integrity failures remain system errors.
+
+A matching `ACTIVE` or `OVERDUE` Salary Advance LoanAccount with positive contractual outstanding returns `OUTSTANDING_LOAN_ACCOUNT_EXISTS`. A zero-outstanding `SETTLED` account clears only this guard; the submission must still satisfy every other rule.
+
+Submission does not lock an existing LoanAccount. When repayment and submission compete, the established advisory-lock order makes submission either observe the committed settlement or conservatively reject once and succeed after refresh.
+
+---
+
+## 7. Approval, Review, and Correction Coordination
+
+Approval owns the immutable recommendation or decision record. Loan owns the active review cycle, correction workflow, and LoanApplication transition.
+
+Revision-producing actions use synchronous transaction participation because a failure to apply the structured outcome must roll back the source Approval record and the resulting Loan, Document, Audit, and history changes.
 
 ```mermaid
 flowchart LR
-    Sql["Migration SQL files<br/>db/migration"]
-    Flyway["Flyway startup"]
-    Tables["PostgreSQL tables"]
-    History["flyway_schema_history"]
-    Jpa["JPA repository"]
-    Entity["JPA entity"]
-    Domain["Domain model"]
-    Dto["DTO"]
-
-    Sql --> Flyway
-    Flyway --> Tables
-    Flyway --> History
-    Tables --> Jpa --> Entity --> Domain --> Dto
-```
-
-Notes:
-
-- Flyway applies schema changes before normal API usage.
-- PostgreSQL stores both application tables and Flyway history.
-- JPA repositories query tables and hydrate JPA entities.
-- Adapters convert JPA entities to domain models before DTO mapping.
-
-## 11. Rules To Remember
-
-- Controller calls input port, never JPA.
-- Service calls output port, never adapter implementation.
-- Output port returns domain model, not DTO.
-- Adapter maps JPA entity to domain model.
-- Mapper maps domain model to DTO.
-- Domain imports no Spring, no JPA, no DTO, no web.
-- Flyway owns database schema changes.
-
-## 12. Document and Correction Continuation
-
-Revision-producing recommendation and decision actions remain synchronously
-coordinated with Loan. Approval records the immutable source action and publishes
-the structured plan; the Loan listener locks the workflow, transitions the
-application, creates the correction aggregate and checklist evidence, and records
-audit/history in the originating transaction.
-
-```mermaid
-flowchart LR
-    StaffClient["Loan Officer or Approver"]
-    ApprovalController["Approval controller"]
+    Staff["Loan Officer or Approver"]
+    Controller["Approval controller"]
+    InPort["Approval input port"]
     ApprovalService["Approval application service"]
     ApprovalStore["Immutable recommendation or decision"]
-    SyncEvent["Synchronous application event"]
+    Event["Synchronous structured outcome"]
+    LoanListener["Loan inbound event adapter"]
     LoanService["Loan correction workflow service"]
-    LoanStore["Review cycle + correction request/tasks"]
+    LoanStore["Review cycle and correction records"]
     DocumentPort["Document correction port"]
-    DocumentStore["Checklist item + version baseline"]
-    AuditStore["Audit + Loan status history"]
+    DocumentStore["Checklist and version baseline"]
+    Audit["Audit and Loan history"]
 
-    StaffClient --> ApprovalController --> ApprovalService --> ApprovalStore --> SyncEvent
-    SyncEvent --> LoanService --> LoanStore
+    Staff --> Controller --> InPort --> ApprovalService --> ApprovalStore --> Event
+    Event --> LoanListener --> LoanService --> LoanStore
     LoanService --> DocumentPort --> DocumentStore
-    LoanService --> AuditStore
+    LoanService --> Audit
 ```
 
-Customer APIs derive the exact owner from `CurrentUserProvider`. Staff queue,
-completion, upload, content-read, review, waiver, and resubmission endpoints each
-require their narrow authority; task ownership and maker-checker are enforced again
-inside the application service.
+Customer correction endpoints derive the exact owner from `CurrentUserProvider`. Staff queue, task completion, upload, content-read, review, waiver, and resubmission endpoints require their narrow permissions. Application services recheck task ownership and maker-checker constraints.
+
+### Correction Locking and Idempotency
+
+1. Document replacement locks the Loan workflow, then the checklist item and logical document. It appends a version only when the expected current-version identifier still matches.
+2. Manual review targets one immutable document version and rejects a stale review target.
+3. Task completion locks the task and correction request. An identical completion is replay; different content after completion is a conflict.
+4. Resubmission locks the Loan workflow first, followed by correction rows, Document readiness, Customer-and-product scope, and the Salary Advance limit.
+5. One resubmission request is consumed exactly once.
+6. Failure in synchronous Approval-to-Loan coordination rolls back the entire transaction.
+
+---
+
+## 8. Contract Preparation and Readiness
+
+```mermaid
+sequenceDiagram
+    participant A as Authorized Staff
+    participant L as Loan
+    participant D as Document
+    participant C as Customer boundary
+    participant S as Salary Advance state
+    participant U as Customer
+
+    A->>L: Prepare current contract
+    L->>D: Query document processing readiness
+    L->>C: Resolve primary active destination
+    C-->>L: Purpose-limited sensitive value
+    L->>L: Protect contract-bound snapshot
+    L-->>A: Masked contract DTO
+    U->>L: Read and acknowledge exact current version
+    A->>L: Query advisory readiness blockers
+    A->>L: Confirm readiness
+    L->>D: Recheck processing readiness in transaction
+    L->>C: Lock and inspect captured source account
+    L->>S: Lock and validate unreleased reservation
+    L->>L: Mark contract READY and application DISBURSEMENT_PENDING
+```
+
+The advisory readiness query uses non-locking reads and does not persist a readiness Boolean. Confirmation acquires the workflow locks and recomputes every blocker before changing state.
+
+Loan stores a protected contract-bound destination snapshot. Normal contract responses expose only the masked destination. Full destination data is available only through the dedicated audited reveal flow.
+
+---
+
+## 9. Destination Reveal and Manual Disbursement
+
+```mermaid
+sequenceDiagram
+    participant O as Accounting Staff
+    participant API as Loan disbursement controller
+    participant L as Loan application services
+    participant DB as PostgreSQL
+
+    O->>API: Reveal current destination [loan:disburse]
+    API->>L: Reveal ready contract destination
+    L->>DB: Lock workflow, application, contract, and audit record
+    L-->>API: Dedicated plaintext result
+    API-->>O: Response with no-store security headers
+
+    O->>API: Confirm external transfer
+    API->>L: ConfirmManualDisbursement command
+    L->>DB: Acquire request, workflow, and row locks
+    L->>DB: Persist evidence, LoanAccount, final schedule, exposure, history, and audit
+    DB-->>L: Commit transaction
+    L-->>API: Activation result or identical replay
+```
+
+The reveal endpoint is separate from ordinary reads and requires `loan:disburse`. Its response must use private, no-store, and content-sniffing protection and must not be retained in general DTOs or logs.
+
+The disbursement command carries caller-supplied request identity and external transfer evidence. It does not accept authoritative actor, Customer, contract, product, destination, or contractual financial terms from the request. Loan resolves those facts from protected state.
+
+Request and workflow advisory locks use separate categories. Identical request replay returns the original outcome without new writes. Reusing the request identity with different content returns an idempotency conflict.
+
+---
+
+## 10. LoanAccount and Repayment Flows
+
+| Request | Authorization | Runtime behavior |
+|---|---|---|
+| `GET /api/v1/loan-applications/{id}/loan-account` | `loan:read:own` or `loan:read` | Returns the activated account, masked contract destination, final schedule, and persisted servicing progress. |
+| `POST /api/v1/loan-applications/{id}/repayments` | `repayment:update` | Serializes request and payment-reference identity, locks authoritative aggregates, applies allocation and exposure effects, and records history and audit in one transaction. |
+| `GET /api/v1/loan-applications/{id}/repayments` | `loan:read:own` or `loan:read` | Reads immutable repayment and allocation evidence under a consistent read transaction. |
+
+Customer ownership concealment belongs in the application service. A Customer receives the same not-found behavior for a missing, foreign-owned, or not-yet-activated account.
+
+Read operations must not:
+
+- lock workflow rows;
+- evaluate overdue state;
+- recompute financial outcomes;
+- publish business evidence;
+- expose transfer references, full destinations, encryption envelopes, audit identifiers, employee evidence, or limit-movement internals.
+
+The repayment controller forwards the external payment reference without canonicalizing it. The application service owns normalization, idempotency, and duplicate-reference handling.
+
+### Mutation Lock Order
+
+Existing application and account mutations use this global order:
+
+1. category-specific command or external-reference advisory locks;
+2. LoanApplication workflow advisory lock;
+3. LoanApplication, LoanAccount, final-schedule, and servicing-progress row locks in operation-specific order;
+4. Salary Advance Customer-and-employee-link advisory lock;
+5. Salary Advance limit and movement rows.
+
+Activation and repayment must not acquire the Customer-and-employee-link lock before the LoanApplication workflow lock. Submission and standalone limit refresh retain their Customer/product or Customer/employee-link to limit order and do not acquire an existing application workflow or account lock.
+
+---
+
+## 11. Overdue Evaluation
+
+The overdue batch samples the injected clock once and derives one UTC business date. It selects stale `ACTIVE` or `OVERDUE` accounts with positive outstanding balances in deterministic evaluation-date and LoanAccount-ID order.
+
+Each candidate runs in its own transaction and follows:
+
+```text
+LoanApplication workflow lock
+  → LoanAccount lock
+  → final schedule and servicing-progress locks
+  → overdue calculation
+  → persisted installment and account status changes
+```
+
+A previous evaluation date is a state conflict. Repeating the same date is a no-op. A later date advances only the persisted evaluation and derived status. An open account with zero outstanding balance is a system-state conflict.
+
+One overdue-evaluation operation identifier groups installment changes produced by the same evaluation. A real `ACTIVE` to `OVERDUE` or `OVERDUE` to `ACTIVE` account transition records account history and one `LOAN_ACCOUNT_STATUS_CHANGED` audit event. Date-only or installment-only advancement does not create a top-level account-status audit.
+
+The scheduler uses an explicit UTC zone, a positive batch size, and explicit operational enablement.
+
+---
+
+## 12. Persistence and Flyway
 
 ```mermaid
 flowchart LR
-    Actor["Authenticated Customer or Staff"]
-    Controller["Correction or Document controller"]
-    UseCase["Input port"]
-    Service["Transactional application service"]
-    WorkflowLock["Loan Application workflow lock"]
-    CorrectionLock["Correction request/task locks"]
-    DocumentLock["Checklist item/document locks"]
-    Revalidate["Customer + Partner + product + document + reservation revalidation"]
-    Persist["New verification + status/cycle + audit/history"]
+    Sql["Ordered migration files"]
+    Flyway["Flyway"]
+    Schema["PostgreSQL schema"]
+    History["flyway_schema_history"]
+    Jpa["Spring Data repository"]
+    Entity["JPA entity"]
+    Adapter["Persistence adapter"]
+    Domain["Domain model"]
 
-    Actor --> Controller --> UseCase --> Service --> WorkflowLock --> CorrectionLock
-    CorrectionLock --> DocumentLock --> Revalidate --> Persist
+    Sql --> Flyway
+    Flyway --> Schema
+    Flyway --> History
+    Schema --> Jpa --> Entity --> Adapter --> Domain
 ```
 
-Concurrency rules:
+Flyway owns schema evolution. JPA repositories access the resulting tables and hydrate persistence entities. Persistence adapters translate those entities into domain models before application mapping.
 
-1. Replacement locks the Loan workflow, then the checklist item and logical
-   document, and appends a version only when the expected current-version ID still
-   matches.
-2. Manual review targets a specific immutable version and rejects the decision if
-   that version is no longer current.
-3. Task completion locks the task and request; the same completion request is
-   idempotent, while a different request conflicts after completion.
-4. Resubmission locks the Loan workflow first, then correction rows, Document
-   readiness, customer/product advisory scope, and Salary Advance limit in the
-   existing order. It consumes one request exactly once.
-5. Synchronous Approval-to-Loan failure rolls back the source Approval row and all
-   Loan, Document, Audit, event-publication, and history effects.
+Released migrations are append-only. Runtime code must not depend on Hibernate schema generation as the database authority.
 
+---
 
-## 13. Contract Readiness Flow
+## 13. Runtime Rules Summary
 
-```mermaid
-sequenceDiagram
-    participant A as Accounting Officer
-    participant L as Loan
-    participant C as Customer boundary
-    participant D as Document
-    participant S as Salary Advance state
-    participant U as Customer owner
-
-    A->>L: Prepare current contract
-    L->>D: Check processingReady
-    L->>C: Capture primary active destination
-    C-->>L: Mutable sensitive boundary value
-    L->>L: Encrypt Loan-purpose snapshot and clear buffers
-    L-->>A: Safe masked contract DTO
-    U->>L: Read and acknowledge exact current version
-    A->>L: Read advisory blocker codes
-    A->>L: Confirm readiness
-    L->>D: Recheck processingReady under transaction
-    L->>C: Lock and inspect captured source account
-    L->>S: Lock and validate unreleased reservation
-    L->>L: Contract READY + application DISBURSEMENT_PENDING + audit/history
-```
-
-The advisory readiness GET uses non-locking reads and never persists a readiness Boolean. Confirmation follows the established workflow lock order and recomputes all blockers. Full destination data remains protected except for the dedicated, audited reveal flow below.
-
-## Manual Disbursement, Reveal, and Account Query
-
-```mermaid
-sequenceDiagram
-    participant O as Accounting Operator
-    participant API as LoanDisbursementController
-    participant L as Loan application services
-    participant DB as PostgreSQL
-    O->>API: POST destination reveal (loan:disburse)
-    API->>L: Reveal current ready contract destination
-    L->>DB: Workflow/application/contract locks + audit
-    L-->>API: Plaintext destination in dedicated result only
-    API-->>O: 200 + no-store/private/nosniff headers
-    O->>API: POST manual disbursement confirmation
-    API->>L: ConfirmManualDisbursement command
-    L->>DB: Request/workflow/row locks and one transaction
-    L->>DB: Account + evidence + final schedule + exposure + history + audit
-    DB-->>L: Commit deferred V28 reconciliation
-    L-->>API: Safe activation result or idempotent replay
-```
-
-The confirmation command contains no actor, Customer, contract, product, destination, or financial fields. Contract terms and items are authoritative. Request and workflow advisory-lock categories are distinct; identical request replay performs no writes. Salary Advance activation retains its verification, customer/employee-link, limit, and movement lock order.
-`GET /api/v1/loan-applications/{id}/loan-account` is read-only. Customer ownership is token-derived under `loan:read:own`; staff use `loan:read`. It returns an active account, masked immutable contract destination, and ordered final schedule. It does not expose the transfer reference, full destination, crypto envelope, actor, audit/history IDs, employee evidence, or limit/movement internals.
-
-## Secured repayment and servicing read flow
-
-```text
-POST /loan-applications/{id}/repayments
-  -> LoanRepaymentController [repayment:update]
-  -> RecordRepaymentUseCase
-  -> workflow lock + authoritative aggregate locks
-  -> payment/allocation/progress/account/exposure/history/audit/outcome commit
-
-GET /loan-applications/{id}/repayments
-  -> LoanRepaymentController [loan:read:own | loan:read]
-  -> QueryRepaymentsUseCase [repeatable-read]
-  -> immutable transaction/allocation/V34 outcome evidence
-
-GET /loan-applications/{id}/loan-account
-  -> existing controller [loan:read:own | loan:read]
-  -> QueryLoanAccountUseCase [repeatable-read]
-  -> immutable final schedule + persisted servicing progress
-```
-
-Customer ownership concealment occurs in the application service. Reads do not lock workflow rows, evaluate overdue state, recompute financial results, or publish business evidence. The POST controller forwards the raw external reference; canonicalization and idempotency remain inside the existing application workflow.
-
-### Repayment lock order and overdue-evaluation mechanics
-
-Existing-application/account mutations use this global order to avoid lock inversion:
-
-1. category-specific command/reference advisory locks;
-2. Loan Application workflow advisory lock;
-3. Loan Application and then LoanAccount/final-schedule/progress row locks in feature-specific order;
-4. Salary Advance customer/employee-link advisory lock;
-5. Salary Advance limit and movement rows.
-
-Repayment and activation never acquire the Salary Advance customer/employee-link lock before the Loan Application workflow lock. Overdue evaluation follows workflow -> account -> schedule/progress and does not lock the limit. Submission and standalone limit refresh retain their customer/product or customer/employee-link -> limit order and never acquire an existing-application workflow/account lock.
-
-The overdue batch samples the injected `Clock` once and derives one UTC `LocalDate`. It selects only stale `ACTIVE`/`OVERDUE`, positive-outstanding accounts in evaluation-date/LoanAccount-ID order within the configured positive batch size, then processes each candidate in its own transaction. An earlier evaluation date is a state conflict, the same date is a no-op, and a later date advances only evaluation dates and derived statuses. An open zero-outstanding account is a system-state conflict.
-
-Real installment changes share one internal `OVERDUE_EVALUATED` operation UUID. A real LoanAccount `ACTIVE <-> OVERDUE` change appends account history and exactly one `LOAN_ACCOUNT_STATUS_CHANGED` system audit. Date-only or installment-only advancement emits no top-level audit. The scheduler is disabled by default for local/test safety; `meridian.loan.overdue-evaluation.enabled` enables it, `.cron` runs in an explicit UTC zone, and `.batch-size` must be positive. Production must opt in explicitly.
-
-The repayment service canonicalizes external payment references, serializes command/reference identity, and returns the immutable original V34 outcome for exact replay. `MER-API-001` owns the exact request, response, pagination, normalization, authorization, concealment, and exposure contract.
+- Security authenticates the request before the controller.
+- Controllers invoke input ports and translate HTTP concerns.
+- Application services resolve the authenticated actor, enforce ownership and business rules, and own transaction boundaries.
+- Application services call output ports, not adapter implementations.
+- Persistence adapters implement repository ports and map persistence entities to domain models.
+- Boundary adapters implement consumer-owned ports and call provider public contracts.
+- Mappers produce DTOs after the application result is complete.
+- Customer-owned identity comes from authentication, not from trusted request fields.
+- Reads remain side-effect-free unless the endpoint explicitly defines a command.
+- Commands define lock order, idempotency, failure mapping, and audit behavior.
+- Flyway owns database schema changes.
+- Exact request and response contracts remain in `MER-API-001`; canonical error definitions remain in `MER-ARCH-004`.

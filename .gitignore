@@ -40,3 +40,5 @@ build/
 ### ai-assisted ###
 .agents
 AGENTS.md
+MERIDIAN-DOCUMENTATION-STYLE.md
+MERIDIAN-STYLE-EXAMPLES.md

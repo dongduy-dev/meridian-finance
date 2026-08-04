@@ -4,9 +4,9 @@
 
 This document defines the intended source and package structure of the Meridian Java backend modular monolith.
 
-It is a durable structural blueprint. Representative types illustrate important placement decisions; the Java source tree remains authoritative for exact implementation names.
+It is a durable structural blueprint. Representative types and contracts show important placement decisions; the Java source tree remains authoritative for exact implementation names.
 
-This document covers `meridian-platform` only. Frontend and external OCR-service source structures are defined separately. Implementation status belongs in the project roadmap and follow-up register, not here.
+This document covers `meridian-platform` only. Frontend and external OCR-service source structures are defined separately. Implementation status belongs in the project roadmap and follow-up register.
 
 ---
 
@@ -29,11 +29,13 @@ meridian-platform/
 └── target/                         # Generated build output
 ```
 
-`MeridianPlatformApplication` is the Spring Boot entry point and root component-scan boundary. Flyway migrations remain under `src/main/resources/db/migration`.
+`MeridianPlatformApplication` is the Spring Boot entry point and root component-scan boundary.
 
 ---
 
 ## 2. Top-Level Java Packages
+
+Each bounded context is represented by a top-level feature module under `com.meridian.platform`. The module's Java package follows the structure defined in this document. `shared` is a technical package, not a bounded context.
 
 ```text
 com.meridian.platform/
@@ -61,7 +63,7 @@ com.meridian.platform/
 | `audit` | Append-only cross-cutting business audit records |
 | `notification` | Templates, delivery requests, channels, attempts, and delivery status |
 
-Salary Advance, Unsecured Consumer Loan, and Collateral Loan remain product behaviors inside `loan`. Do not create top-level product packages such as `salaryadvance`, `unsecuredloan`, or `collateralloan`.
+Salary Advance, Unsecured Consumer Loan, and Collateral Loan remain product behaviors inside `loan`. They do not become top-level product packages such as `salaryadvance`, `unsecuredloan`, or `collateralloan`.
 
 ---
 
@@ -95,7 +97,7 @@ Salary Advance, Unsecured Consumer Loan, and Collateral Loan remain product beha
     └── config/
 ```
 
-A module uses only the packages it needs; empty placeholders are unnecessary.
+A module contains only the packages it uses.
 
 | Package | Placement rule |
 |---|---|
@@ -114,13 +116,13 @@ A module uses only the packages it needs; empty placeholders are unnecessary.
 | `infrastructure.security` | Concrete Spring Security and JWT implementation owned by Identity |
 | `infrastructure.config` | Module-specific technical wiring |
 
-Domain code remains pure Java. Application code must not depend on infrastructure. Controllers and persistence adapters must not implement lending rules. Exact dependency enforcement is defined in `MER-ARCH-003-dependency-rules.md`.
+Domain code remains pure Java. Application code must not depend on infrastructure. Controllers and persistence adapters must not implement lending rules. `MER-ARCH-003-dependency-rules.md` defines the enforceable dependency rules.
 
 ---
 
 ## 4. Structural Profiles
 
-“Full,” “Moderate,” and “Simplified” describe package ceremony, not different quality standards. Every module preserves inward dependency direction.
+`Full`, `Moderate`, and `Simplified` describe the amount of package structure a module needs, not different quality standards. Every profile preserves inward dependency direction.
 
 | Module | Profile | Emphasis |
 |---|---|---|
@@ -133,15 +135,15 @@ Domain code remains pure Java. Application code must not depend on infrastructur
 | Audit | Simplified | Event intake, append-only persistence, and authorized queries |
 | Notification | Simplified | Event intake, templates, provider ports, delivery attempts, and status |
 
-A simplified module may omit domain services, mappers, publishers, or other packages when unnecessary. It must not collapse web, persistence, and business orchestration into one layer.
+A simplified module may omit domain services, mappers, publishers, or other packages when unnecessary. It must not collapse web or event intake, business orchestration, and persistence into one layer.
 
 ---
 
-## 5. Representative Architectural Types
+## 5. Representative Architectural Elements
 
-The following names are selective placement examples, not a complete file inventory.
+These examples show placement, not a required file inventory. The Java source tree remains authoritative for exact names.
 
-| Module | Representative types |
+| Module | Representative elements |
 |---|---|
 | Shared | `AuthenticatedUser`, `CurrentUserProvider`, `BusinessAuditEvent`, `BusinessOperationContext` |
 | Identity | `User`, `JwtAuthenticationFilter`, `JwtTokenService`, `SpringSecurityCurrentUserProvider`, `SecurityConfig` |
@@ -153,7 +155,7 @@ The following names are selective placement examples, not a complete file invent
 | Audit | `AuditEvent`, `RecordAuditEventsUseCase`, `RecordAuditEventsService`, `BusinessAuditEventListener` |
 | Notification | `Notification`, `NotificationTemplate`, delivery request/status types, sender ports |
 
-Important representative application services in Loan include `StartSalaryAdvanceApplicationService`, `ApplyApprovalDecisionService`, `LoanContractReadinessService`, `ConfirmManualDisbursementService`, and `RecordRepaymentService`.
+Representative Loan application services include `StartSalaryAdvanceApplicationService`, `ApplyApprovalDecisionService`, `LoanContractReadinessService`, `ConfirmManualDisbursementService`, and `RecordRepaymentService`.
 
 ---
 
@@ -165,23 +167,19 @@ Important representative application services in Loan include `StartSalaryAdvanc
 
 ### Identity
 
-Concrete Spring Security, JWT, principal, and authenticated-user resolution code belongs under:
+Spring Security, JWT, principal, and authenticated-user resolution code belongs under `identity/infrastructure/security`.
 
-```text
-identity/infrastructure/security/
-```
-
-Other modules use `CurrentUserProvider` and `AuthenticatedUser`; they do not import Identity’s security implementation.
+Other modules use `CurrentUserProvider` and `AuthenticatedUser`; they do not import Identity's security implementation.
 
 ### Customer and Partner
 
 Customer owns source profile, identity, and bank-account data. Partner owns employment source data and reusable Customer–Partner Employee links.
 
-Cross-context access occurs through narrow application contracts and infrastructure adapters, never through foreign repositories or JPA entities.
+Cross-context access uses narrow application contracts and infrastructure adapters. A module must not use another context's repositories or JPA entities.
 
 ### Loan
 
-Loan origination, review cycles, corrections, offers, contracts, activation, LoanAccount servicing, repayment, overdue evaluation, settlement, and closure remain inside `loan`.
+Loan owns origination, review cycles, corrections, offers, contracts, activation, LoanAccount servicing, repayment, overdue evaluation, settlement, and closure.
 
 Loan infrastructure may use boundary-specific adapter packages:
 
@@ -198,17 +196,17 @@ loan/infrastructure/adapter/
     └── document/
 ```
 
-Internal subpackages may be introduced for cohesion as Loan grows, but lifecycle capabilities and individual products must not become separate top-level modules.
+Internal subpackages may group types for one lifecycle capability or policy family as Loan grows.
 
 ### Approval
 
-Approval owns recommendation and decision records. Loan owns LoanApplication transitions. Approval publishes structured outcomes; Loan consumes them through an inbound event adapter or another explicit application contract.
+Approval owns recommendation and decision records. Loan owns `LoanApplication` transitions. Approval publishes structured outcomes; Loan consumes them through an inbound event adapter or another explicit application contract.
 
 ### Document
 
 Document storage implementations belong under `document.infrastructure.adapter.out.storage`.
 
-Backend OCR clients belong under an OCR-specific output-adapter package and implement a Document-owned output port. The external OCR service’s own source tree remains outside this document.
+Backend OCR clients belong under an OCR-specific output-adapter package and implement a Document-owned output port. The external OCR service's source tree remains outside this document.
 
 ### Audit and Notification
 
@@ -243,13 +241,15 @@ Product policies may specialize:
 - repayment effects;
 - settlement and closure.
 
-Activation and repayment are durable Loan lifecycle capabilities, not tracking sections or separate architectural slices.
+Activation, repayment, settlement, and closure remain Loan lifecycle capabilities within `loan`.
 
 ---
 
-## 8. Cross-Context Adapter Placement
+## 8. Cross-Context Collaboration Placement
 
-The consuming module owns the output port describing what it needs. Infrastructure implements that port by calling the publishing context’s public application contract.
+### 8.1 Synchronous Application Contracts
+
+The consuming module owns an output port that describes the facts or action it needs. A boundary adapter implements that port by calling the providing context's public application contract.
 
 ```text
 loan/
@@ -263,15 +263,20 @@ customer/
     └── ContractBankAccountUseCase.java
 ```
 
-The same pattern applies when:
+This pattern applies when:
 
 - Loan consumes Partner eligibility;
 - Loan consumes Document readiness;
 - Partner consumes Customer identity evidence;
-- Approval queries Loan-owned review-cycle facts;
-- Notification consumes published business events.
+- Approval queries Loan-owned review-cycle facts.
 
-Adapters may translate identifiers and immutable contract records. They must not expose another context’s repositories, JPA entities, internal services, or aggregate object graphs.
+A boundary adapter may translate identifiers and immutable contract records. It must not expose another context's repositories, JPA entities, internal services, or aggregate object graphs.
+
+### 8.2 Asynchronous Events
+
+A module that consumes a published business event handles it through `infrastructure.adapter.in.event` and enters its own application layer through an explicit contract.
+
+Audit and Notification consume business events through inbound event adapters. They do not use the synchronous output-port pattern for event delivery.
 
 ---
 
@@ -286,10 +291,10 @@ src/main/resources/
     └── ...
 ```
 
-- Flyway migrations are append-only after release.
+- Released Flyway migrations are append-only.
 - Schema changes use ordered migration files.
-- Secrets and real credentials are never committed.
-- The schema snapshot is documentation; Flyway remains the executable database history.
+- Secrets and real credentials must not be committed.
+- Schema snapshots document the resulting structure; Flyway remains the executable database history.
 
 ---
 
@@ -310,7 +315,7 @@ src/test/java/com/meridian/platform/
 └── support/
 ```
 
-Tests mirror production ownership where practical:
+Tests follow production ownership. Shared reusable fixtures and test support remain under `com.meridian.platform.support`.
 
 | Test type | Preferred location |
 |---|---|
@@ -334,10 +339,7 @@ Domain tests remain framework-free. Infrastructure tests verify persistence, mig
 3. Application implementations normally end with `Service`.
 4. Persistence output ports use domain-oriented `Repository` names.
 5. Infrastructure adapters identify their technology or collaborating boundary.
-6. JPA entities remain under infrastructure persistence and remain distinct from domain models.
+6. JPA entities remain under infrastructure persistence and distinct from domain models.
 7. REST DTOs and application commands must not become domain models.
-8. Product-specific classes remain under `loan`.
-9. Types enter `shared` only when stable, minimal, and truly cross-cutting.
-10. Add packages for cohesion and ownership, not because a checkpoint added several files.
-11. Do not create empty placeholder packages.
-12. Exact Java files may evolve without mirroring every change here, provided these placement rules remain intact.
+8. Add a package only when it groups types under one cohesive responsibility or owner.
+9. Update this document when a placement rule or module boundary changes. The Java source tree remains authoritative for routine file additions, removals, and renames.
