@@ -333,7 +333,7 @@ sequenceDiagram
 
     O->>API: Reveal current destination [loan:disburse]
     API->>L: Reveal ready contract destination
-    L->>DB: Lock workflow, application, and contract; record audit
+    L->>DB: Lock workflow, application, contract, and audit record
     L-->>API: Dedicated plaintext result
     API-->>O: Response with no-store security headers
 
