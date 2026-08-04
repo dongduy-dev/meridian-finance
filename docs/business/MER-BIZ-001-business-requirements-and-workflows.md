@@ -34,7 +34,7 @@ Meridian uses one lending lifecycle with product-specific policy behavior.
 
 | Product Code | Product Name | Product Type | MVP Depth | Verification Model |
 |---|---|---|---|---|
-| `SALARY_ADVANCE` | Salary Advance | `SALARY_BASED` | Primary | Reusable employee verification and limit-based eligibility |
+| `SALARY_ADVANCE` | Salary Advance | `SALARY_BASED` | Flagship | Reusable employee verification and limit-based eligibility |
 | `UNSECURED_CONSUMER_LOAN` | Unsecured Consumer Loan | `UNSECURED` | Streamlined | Document-based income and employment review |
 | `COLLATERAL_LOAN` | Collateral Loan | `SECURED` | Streamlined | Collateral information and document review |
 
@@ -113,7 +113,7 @@ Authentication and permission are necessary but not sufficient. The owning busin
 
 ### 5.1 Loan Product
 
-A `LoanProduct` defines the customer-visible offer and the policy used to validate and service one lending product.
+A `LoanProduct` defines customer-visible product information and the policy used to validate, price, activate, and service one lending product.
 
 Each active product defines:
 
@@ -197,13 +197,14 @@ A manual disbursement record is immutable evidence that an authorized Accounting
 
 ### 5.7 Verification, Checklist, Document Review, and Correction
 
-Meridian separates four controls:
+Meridian separates five controls:
 
 | Control | Purpose | Business Owner or Actor | Output |
 |---|---|---|---|
-| Product verification | Determines whether product-specific facts support progression | System or authorized reviewer | `ProductVerificationResult` |
-| Upload completeness | Determines whether every required checklist item has acceptable upload-level evidence | Document capability | Upload-complete result |
-| Document processing readiness | Determines whether required evidence is accepted, not required, or waived | Authorized Document reviewer | Processing-ready result |
+| Product verification | Determines whether product-specific facts support progression | Loan; evaluated by System or an authorized reviewer | `ProductVerificationResult` |
+| Upload completeness | Determines whether every required checklist item has acceptable upload-level evidence | Document | Upload-complete result |
+| Manual document review | Decides whether the current document version is accepted, waived, or requires replacement | Authorized Document reviewer | `DocumentReviewOutcome` |
+| Document processing readiness | Determines whether every required item is accepted or validly waived | Document | Processing-ready result |
 | Correction workflow | Assigns and tracks Customer- or Staff-owned remediation before resubmission | Loan, using Document evidence where required | Correction request and tasks |
 
 Upload completeness does not imply acceptance. OCR output, when introduced, remains advisory evidence and does not replace authorized review.
@@ -352,13 +353,17 @@ MVP approval is exact-request approval:
 | `RETURN_TO_LOAN_OFFICER_REVIEW` | `RETURNED_TO_REVIEW` |
 | `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` | `RETURNED_FOR_REVISION` |
 
+Correction decisions require a controlled reason. When both Customer and Staff must act, the correction plan uses separate single-owner tasks. Rejection and return outcomes preserve the Approver's reason. The decision, resulting LoanApplication transition, correction plan or approved terms where applicable, and audit evidence form one business outcome.
+
 Approval and approved-offer generation must complete as one controlled operation. The application must not remain permanently `APPROVED` without Customer-visible approved terms.
 
 ### 6.7 Approved Offer and Customer Response
 
+After approval, Meridian generates the immutable Customer-facing approved offer defined in Section 5.6.
+
 Each LoanApplication has at most one approved offer in the MVP.
 
-Once generated, the offer's principal, term, pricing, fees, total repayment, repayment method, provisional items, generation time, and expiry time are immutable. Viewing the offer is read-only.
+Once generated, the offer's principal, term, pricing, fees, total repayment, repayment method, provisional items, generation time, and expiry time are immutable. Later product or policy changes must not alter an offer already generated. Viewing the offer is read-only.
 
 The authenticated Customer owner may:
 
@@ -395,7 +400,7 @@ Accounting performs the transfer outside Meridian using the contract-bound desti
 
 Full destination data is available only through a dedicated, authorized, audited reveal operation for the disbursement purpose. Ordinary Customer, LoanAccount, audit, history, log, and error views expose only masked or purpose-limited data.
 
-After the external transfer, Accounting confirms disbursement against the ready contract. Loan uses the contract and accepted offer as authority for Customer, product, destination, principal, term, pricing, and provisional repayment items.
+After the external transfer, Accounting confirms disbursement against the ready contract. Loan uses the current ready contract as authority for Customer, product, destination, principal, term, pricing, and repayment items. The contract must preserve the accepted offer terms exactly.
 
 Confirmation creates one atomic outcome:
 
@@ -453,7 +458,7 @@ All product workflows inherit Section 6. This section adds only the product-spec
 
 ### 7.1 Salary Advance
 
-Salary Advance is Meridian's primary MVP product. It is a limit-based product in which reusable employment verification and current exposure capacity exist before application submission.
+Salary Advance is Meridian's flagship MVP product. It is a limit-based product in which reusable employment verification and current exposure capacity exist before application submission.
 
 #### Partner Setup and Employee Imports
 
@@ -474,7 +479,7 @@ The Salary Advance product page shows:
 - last refresh time;
 - the business reason normal application creation is blocked.
 
-A Customer without a valid employee link completes employee verification before starting a Salary Advance application. A valid active link is reusable until Partner evidence makes it stale, suspended, rejected, or inactive.
+A Customer without a valid employee link completes employee verification before starting a Salary Advance application. A link remains reusable while its status is `VERIFIED` and current Partner evidence remains eligible.
 
 Employee-verification outcomes:
 
@@ -488,7 +493,7 @@ Employee-verification outcomes:
 | `MANUAL_REVIEW_APPROVED` | `VERIFIED` | Create or refresh the link and audit the reason and reviewer |
 | `MANUAL_REVIEW_REJECTED` | `FAILED` | Customer cannot proceed until source information is corrected |
 
-Manual review cannot override an inactive Partner Company.
+Manual review requires a controlled reason and identifies the supporting evidence. It cannot override an inactive Partner Company or inactive Partner Employee.
 
 #### Limit Calculation and Exposure
 
@@ -564,7 +569,7 @@ Each submitted application records the employee-link, limit identity, limit valu
 32. Repayment and overdue evaluation move the LoanAccount between `ACTIVE` and `OVERDUE`; allocated principal releases used exposure.
 33. Full payoff or approved settlement moves the account to `SETTLED`; an eligible settled account may later move to `CLOSED`.
 
-Salary Advance excludes real payroll deduction, employer APIs, bank transfer, payroll integration, employer-facing production portals, counteroffers, and real-time HR synchronization.
+Salary Advance excludes automated payroll deduction and real employer, payroll, bank-transfer, and HR integrations, as well as an employer-facing production portal, counteroffers, and Approver-modified terms.
 
 ### 7.2 Unsecured Consumer Loan
 
@@ -714,43 +719,43 @@ A transition and its financial, correction, document, offer, contract, exposure,
 
 | ID | Requirement |
 |---|---|
-| FR-CUST-001 | Meridian shall let Customers register, authenticate, maintain their own profile, manage their own bank accounts, and provide the identity, contact, residential, employment, consent, and destination facts required by supported products. |
-| FR-CUST-002 | Meridian shall restrict and audit identity, profile, and bank-account changes according to business state and historical-data rules. |
-| FR-IAM-001 | Meridian shall authenticate Customer and Staff actors before protected portal access. |
-| FR-IAM-002 | Meridian shall enforce role and action permissions and preserve the authenticated actor for Staff business actions. |
-| FR-PROD-001 | Meridian shall store and display active products with amount limits, terms, pricing, repayment method, required documents, and eligibility notes. |
-| FR-PROD-002 | Meridian shall let Back-Office Admins manage product configuration, activation, and deactivation. |
-| FR-APP-001 | Meridian shall support draft creation, submission, cancellation, status tracking, and transition control through one common LoanApplication lifecycle. |
-| FR-APP-002 | Meridian shall validate Customer readiness, active product, amount, term, product-specific facts, checklist requirements, exposure, and concurrency rules before submission. |
-| FR-APP-003 | Meridian shall prevent a new submitted application for a product while the Customer has another blocking non-terminal application for that product. |
-| FR-SA-001 | Meridian shall let Back-Office Admins manage Partner Companies and monthly Partner Employee imports for Salary Advance. |
-| FR-SA-002 | Meridian shall validate import rows, track batches, enforce freshness, and prevent invalid, stale, inactive, or unresolved duplicate employee evidence from normal eligibility. |
-| FR-SA-003 | Meridian shall verify Salary Advance employment before normal application creation and maintain a reusable Customer–Partner Employee link after successful verification or authorized approval. |
-| FR-SA-004 | Meridian shall show employee-verification status and total, used, reserved, and available Salary Advance limit to the Customer. |
-| FR-SA-005 | Meridian shall calculate and maintain Salary Advance limit using product, Partner, employee, salary-cap, used-exposure, reserved-exposure, status, and freshness rules. |
-| FR-SA-006 | Meridian shall block normal Salary Advance creation or submission when employee eligibility is absent, the limit is not usable or sufficient, or matching Salary Advance debt has positive contractual outstanding. |
-| FR-SA-007 | Meridian shall reserve limit at successful submission, release it exactly once on defined pre-disbursement outcomes, convert it to used exposure at disbursement, and release used exposure through allocated principal or another approved policy. |
-| FR-SA-008 | Meridian shall refresh employee links and Salary Advance limit when eligible Partner Employee data changes. |
-| FR-SA-009 | Meridian shall record one Salary Advance verification snapshot for each submitted Salary Advance application. |
-| FR-UCL-001 | Meridian shall support Unsecured Consumer Loan submission, income and employment evidence, manual repayment-capacity review, approval, offer response, contract readiness, disbursement, activation, repayment, settlement, and closure. |
-| FR-CL-001 | Meridian shall support Collateral Loan submission, structured collateral facts, ownership evidence, manual assessment, approval, offer response, contract readiness, disbursement, activation, repayment, settlement, and closure. |
-| FR-DOC-001 | Meridian shall let Customers and authorized Staff upload and retrieve purpose-authorized documents associated with Customer, application, collateral, contract, or disbursement requirements. |
-| FR-DOC-002 | Meridian shall calculate upload completeness separately from processing readiness and document-review outcomes. |
-| FR-DOC-003 | Meridian shall support immutable document versions, acceptance, waiver, replacement, controlled reasons, and readiness queries. |
-| FR-REV-001 | Meridian shall let Loan Officers recommend approval or rejection and request Customer or Staff correction. |
-| FR-APR-001 | Meridian shall let Approvers approve, reject, return to Loan Officer review, or request structured Customer or Staff correction. |
-| FR-APR-002 | Meridian shall enforce maker-checker separation between the Loan Officer recommendation and final Approver decision. |
-| FR-OFFER-001 | Meridian shall generate one immutable approved offer after approval, present it to the authenticated Customer owner, support idempotent acceptance or decline, and expire pending offers after the configured validity period. |
-| FR-CON-001 | Meridian shall let Accounting prepare an immutable operational contract from the accepted offer and a protected destination snapshot and let the Customer owner acknowledge the exact current version. |
-| FR-CON-002 | Meridian shall permit contract regeneration before readiness only for a controlled destination refresh and shall confirm readiness without performing disbursement. |
-| FR-DIS-001 | Meridian shall expose the full destination only through a dedicated authorized and audited disbursement operation and shall let Accounting confirm an external transfer only against a ready contract. |
-| FR-DIS-002 | Meridian shall create the LoanAccount, final schedule, disbursement evidence, exposure effects, application transition, history, and audit as one atomic activation outcome. |
-| FR-REP-001 | Meridian shall preserve the final schedule, record payments and allocations, track installment and account servicing state, settle eligible accounts, and support administrative closure. |
-| FR-REP-002 | Meridian shall make repayment idempotent by logical request and payment reference and shall prevent duplicate evidence from creating duplicate allocation, exposure, history, or audit effects. |
-| FR-PORTAL-001 | The Customer Web Portal shall support registration, authentication, profile and bank-account maintenance, product browsing, eligibility, application submission, document upload, offer response, contract acknowledgment, and status viewing. |
-| FR-PORTAL-002 | The Back-Office Web Portal shall support product, Partner, import, review, approval, correction, contract, disbursement, repayment, and audit operations according to permission. |
-| FR-AUD-001 | Meridian shall record auditable business actions and transitions with actor, action, time, affected business reference, status change, reason, and operation correlation where applicable. |
-| FR-AUD-002 | Audit evidence shall be append-only for normal users, PII-safe, and sufficient for maker-checker and business-operation traceability. |
+| FR-CUST-001 | The system shall let Customers register, authenticate, maintain their own profile, manage their own bank accounts, and provide the identity, contact, residential, employment, consent, and destination facts required by supported products. |
+| FR-CUST-002 | The system shall restrict and audit identity, profile, and bank-account changes according to business state and historical-data rules. |
+| FR-IAM-001 | The system shall authenticate Customer and Staff actors before protected portal access. |
+| FR-IAM-002 | The system shall enforce role and action permissions and preserve the authenticated actor for Staff business actions. |
+| FR-PROD-001 | The system shall store and display active products with amount limits, terms, pricing, repayment method, required documents, and eligibility notes. |
+| FR-PROD-002 | The system shall let Back-Office Admins manage product configuration, activation, and deactivation. |
+| FR-APP-001 | The system shall support draft creation, submission, cancellation, status tracking, and transition control through one common LoanApplication lifecycle. |
+| FR-APP-002 | The system shall validate Customer readiness, active product, amount, term, product-specific facts, checklist requirements, exposure, and concurrency rules before submission. |
+| FR-APP-003 | The system shall prevent a new submitted application for a product while the Customer has another blocking non-terminal application for that product. |
+| FR-SA-001 | The system shall let Back-Office Admins manage Partner Companies and monthly Partner Employee imports for Salary Advance. |
+| FR-SA-002 | The system shall validate import rows, track batches, enforce freshness, and prevent invalid, stale, inactive, or unresolved duplicate employee evidence from normal eligibility. |
+| FR-SA-003 | The system shall verify Salary Advance employment before normal application creation and maintain a reusable Customer–Partner Employee link after successful verification or authorized approval. |
+| FR-SA-004 | The system shall show employee-verification status and total, used, reserved, and available Salary Advance limit to the Customer. |
+| FR-SA-005 | The system shall calculate and maintain Salary Advance limit using product, Partner, employee, salary-cap, used-exposure, reserved-exposure, status, and freshness rules. |
+| FR-SA-006 | The system shall block normal Salary Advance creation or submission when employee eligibility is absent, the limit is not usable or sufficient, or matching Salary Advance debt has positive contractual outstanding. |
+| FR-SA-007 | The system shall reserve limit at successful submission, release it exactly once on defined pre-disbursement outcomes, convert it to used exposure at disbursement, and release used exposure through allocated principal or another approved policy. |
+| FR-SA-008 | The system shall refresh employee links and Salary Advance limit when eligible Partner Employee data changes. |
+| FR-SA-009 | The system shall record one Salary Advance verification snapshot for each submitted Salary Advance application. |
+| FR-UCL-001 | The system shall support Unsecured Consumer Loan submission, income and employment evidence, manual repayment-capacity review, approval, offer response, contract readiness, disbursement, activation, repayment, settlement, and closure. |
+| FR-CL-001 | The system shall support Collateral Loan submission, structured collateral facts, ownership evidence, manual assessment, approval, offer response, contract readiness, disbursement, activation, repayment, settlement, and closure. |
+| FR-DOC-001 | The system shall let Customers and authorized Staff upload and retrieve purpose-authorized documents associated with Customer, application, collateral, contract, or disbursement requirements. |
+| FR-DOC-002 | The system shall calculate upload completeness separately from processing readiness and document-review outcomes. |
+| FR-DOC-003 | The system shall support immutable document versions, acceptance, waiver, replacement, controlled reasons, and readiness queries. |
+| FR-REV-001 | The system shall let Loan Officers recommend approval or rejection and request Customer or Staff correction. |
+| FR-APR-001 | The system shall let Approvers approve, reject, return to Loan Officer review, or request structured Customer or Staff correction. |
+| FR-APR-002 | The system shall enforce maker-checker separation between the Loan Officer recommendation and final Approver decision. |
+| FR-OFFER-001 | The system shall generate one immutable approved offer after approval, present it to the authenticated Customer owner, support idempotent acceptance or decline, and expire pending offers after the configured validity period. |
+| FR-CON-001 | The system shall let Accounting prepare an immutable operational contract from the accepted offer and a protected destination snapshot and let the Customer owner acknowledge the exact current version. |
+| FR-CON-002 | The system shall permit contract regeneration before readiness only for a controlled destination refresh and shall confirm readiness without performing disbursement. |
+| FR-DIS-001 | The system shall expose the full destination only through a dedicated authorized and audited disbursement operation and shall let Accounting confirm an external transfer only against a ready contract. |
+| FR-DIS-002 | The system shall create the LoanAccount, final schedule, disbursement evidence, exposure effects, application transition, history, and audit as one atomic activation outcome. |
+| FR-REP-001 | The system shall preserve the final schedule, record payments and allocations, track installment and account servicing state, settle eligible accounts, and support administrative closure. |
+| FR-REP-002 | The system shall make repayment idempotent by logical request and payment reference and shall prevent duplicate evidence from creating duplicate allocation, exposure, history, or audit effects. |
+| FR-PORTAL-001 | The system shall provide the Customer Web Portal capabilities for registration, authentication, profile and bank-account maintenance, product browsing, eligibility, application submission, document upload, offer response, contract acknowledgment, and status viewing. |
+| FR-PORTAL-002 | The system shall provide the Back-Office Web Portal capabilities for product, Partner, import, review, approval, correction, contract, disbursement, repayment, and audit operations according to permission. |
+| FR-AUD-001 | The system shall record auditable business actions and transitions with actor, action, time, affected business reference, status change, reason, and operation correlation where applicable. |
+| FR-AUD-002 | The system shall keep audit evidence append-only for normal users, PII-safe, and sufficient for maker-checker and business-operation traceability. |
 
 ---
 
@@ -758,7 +763,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 
 | ID | Rule |
 |---|---|
-| BR-001 | A Customer can submit only an active loan product. |
+| BR-001 | A Customer can submit an application only for an active `LoanProduct`. |
 | BR-002 | The Customer profile must satisfy the selected product's completeness rule before submission. |
 | BR-003 | A LoanApplication must pass every required submission validation before becoming submitted. |
 | BR-004 | A Customer may keep multiple drafts but cannot submit the same product while another blocking non-terminal application for that product exists. |
@@ -989,7 +994,7 @@ OCR remains advisory to Document review. Notification remains observational and 
 
 ### 13.3 Excluded from the MVP
 
-- real bank transfer, payment gateway, payroll, employer API, HR synchronization, or bank reconciliation;
+- real bank-transfer, payment-gateway, payroll, employer-API, HR-synchronization, or bank-reconciliation integrations;
 - real SMS OTP, biometric authentication, or production identity verification;
 - credit-bureau integration, automated credit scoring, or fully automated approval;
 - full collateral valuation, custody, registration, notarization, repossession, liquidation, or legal enforcement;
@@ -1002,7 +1007,7 @@ OCR remains advisory to Document review. Notification remains observational and 
 
 ### 13.4 Business Decisions Required Before UCL and Collateral Offer Execution
 
-The workflow and seed configuration for UCL and Collateral Loan are defined, but this version does not invent unsupported pricing details.
+The workflow and seed configuration for UCL and Collateral Loan are defined, but this version does not invent unsupported pricing details. These are MVP-completion dependencies, not post-MVP enhancements.
 
 Before either product generates an approved offer, its policy must define:
 
@@ -1027,10 +1032,10 @@ Post-MVP product work may introduce multi-level approval, automated repayment si
 
 1. Use one common lending lifecycle for every supported product.
 2. Keep product variation explicit in product policies.
-3. Treat Salary Advance as the deepest MVP product.
+3. Treat Salary Advance as the flagship and deepest MVP product.
 4. Keep UCL and Collateral Loan streamlined but complete at the common-lifecycle level.
 5. Preserve clear ownership among Customer, Partner, Loan, Approval, Document, Audit, and Notification.
-6. Separate upload completeness, document readiness, product verification, review recommendation, and approval decision.
+6. Separate upload completeness, manual document review, processing readiness, product verification, review recommendation, and approval decision.
 7. Separate approval, Customer acceptance, contract readiness, and disbursement.
 8. Preserve immutable historical financial terms, contract versions, schedules, payments, allocations, and audit evidence.
 9. Prefer manual review and operational confirmation over unsupported automation.
