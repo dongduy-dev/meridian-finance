@@ -2,7 +2,7 @@
 
 ## Meridian Lending Platform
 
-Meridian is a multi-product digital lending platform centered on Salary Advance, with streamlined workflows for Unsecured Consumer Loan and Collateral Loan. It supports the lending lifecycle — application submission, document upload, OCR-assisted document processing, checklist handling, manual document review, controlled review and approval, customer acceptance, manual disbursement confirmation, repayment tracking, and audit tracking — while helping lending teams operate with clearer and more consistent processes.
+Meridian is a multi-product digital lending platform centered on its flagship Salary Advance workflow, with streamlined workflows for Unsecured Consumer Loan and Collateral Loan. It supports the lending lifecycle — application submission, document upload, OCR-assisted document processing, checklist handling, manual document review, controlled review and approval, customer acceptance, manual disbursement confirmation, repayment tracking, and audit tracking — while helping lending teams operate with clearer and more consistent processes.
 
 At its core, Meridian uses one generic lending core shared across all loan products, with product-specific behavior handled through loan product policies and strategies. The platform is built around practical financial software concerns such as auditability, security, data integrity, controlled status transitions, approval controls, document traceability, and clear operational workflows.
 
@@ -19,8 +19,8 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 | **Domain Modeling** | Domain-Driven Design (Bounded Contexts) |
 | **Dependency Direction** | Inward-only — Infrastructure adapters → Application ports/services → Domain |
 | **Boundary Enforcement** | Spring Modulith + ArchUnit fitness functions |
-| **Module Communication** | Sync via application/public ports, async via Spring Modulith `ApplicationEvents` + Transactional Outbox |
-| **Future Evolution** | Each module is designed to be independently extractable into a microservice with minimal impact on core business logic |
+| **Module Communication** | Synchronous application/public contracts and transactional event coordination where atomic consistency is required; durable asynchronous events use Spring Modulith with the Transactional Outbox pattern |
+| **Future Evolution** | Bounded contexts and published contracts preserve selective extraction options; services are extracted only when stable boundaries, scale, or operational ownership justify it |
 
 ### Architecture Diagram
 
@@ -35,11 +35,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 │                         API EDGE / SECURITY LAYER                            │
 │                    (Spring Security Filter Chain — embedded)                 │
 │                                                                              │
-│   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌────────────┐    │
-│   │  JWT Auth    │   │  Caffeine    │   │ Idempotency  │   │    CORS    │    │
-│   │  Filter      │   │ Rate Limiter │   │   Filter     │   │   Filter   │    │
-│   │  (RS256)     │   │ (in-memory)  │   │ (DB-backed)  │   │            │    │
-│   └──────────────┘   └──────────────┘   └──────────────┘   └────────────┘    │
+│       JWT Authentication (RS256)  ·  RBAC / Method Security  ·  CORS         │
 │                                                                              │
 │   ┌──────────────────────────────────────────────────────────────────────┐   │
 │   │ Springdoc OpenAPI (auto-generated, /swagger-ui)                      │   │
@@ -55,29 +51,29 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 │  │ • User/Role      │  │ • Profiles       │  │ • Partner companies       │  │
 │  │ • JWT issuance   │  │ • Verification   │  │ • Partner employees       │  │
 │  │ • RBAC actions   │  │   status         │  │ • Monthly employee import │  │
-│  │ • Refresh tokens │  │ • Bank info      │  │ • Import batches          │  │
+│  │ • Refresh tokens │  │ • Bank info      │  │ • Reusable employee links │  │
 │  │                  │  │ • AES-256-GCM    │  │                           │  │
 │  │                  │  │   PII encryption │  │                           │  │
 │  └──────────────────┘  └──────────────────┘  └───────────────────────────┘  │
 │                                                                             │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌───────────────────────────┐  │
 │  │ Loan Core /      │  │ Approval         │  │ Document Management       │  │
-│  │ Origination      │  │ Workflow         │  │                           │  │
-│  │ • Applications   │  │ • Review         │  │ • Upload                  │  │
-│  │ • Products       │  │ • Approval       │  │ • Checklist               │  │
-│  │ • Product policy │  │ • Maker-checker  │  │ • OCR trigger             │  │
-│  │ • State machine  │  │ • Decision trail │  │ • Review/readiness        │  │
+│  │ Lending Lifecycle│  │ Workflow         │  │                           │  │
+│  │ • Applications   │  │ • Recommendations│  │ • Upload                  │  │
+│  │ • Products/policy│  │ • Decisions      │  │ • Checklist               │  │
+│  │ • Review/correct.│  │ • Maker-checker  │  │ • OCR trigger             │  │
+│  │ • Offers/contracts│ │ • Decision trail │  │ • Review/readiness        │  │
 │  │ • Loan accounts  │  │                  │  │                           │  │
 │  │ • Repayments     │  │                  │  │                           │  │
 │  └──────────────────┘  └──────────────────┘  └───────────────────────────┘  │
 │                                                                             │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
 │  │ Audit & Compliance Controls                                          │   │
-│  │ • Immutable event log  • JSONB snapshots  • Compliance audit trail   │   │
+│  │ • Immutable event log  • Controlled JSONB payloads  • Audit trail    │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  ══════════════ Spring Modulith ApplicationEvents ════════════════════════  │
-│  ══════════════ Transactional Outbox (spring-modulith-events-jdbc) ═══════  │
+│  ══════════════ Synchronous contracts / transactional coordination ═══════  │
+│  ══════════════ Transactional Outbox · Spring Modulith + PostgreSQL ══════  │
 │  ══════════════ Cross-cutting: MDC Logging · Metrics · ArchUnit ══════════  │
 └──────────────────────────────────────┬──────────────────────────────────────┘
                                        │
@@ -86,11 +82,12 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
       ┌──────────────────┐   ┌────────────────┐   ┌──────────────────────┐
       │ PostgreSQL       │   │ File Storage   │   │ OCR Service          │
       │                  │   │                │   │                      │
-      │ • Module schemas │   │ • Document     │   │ • Python + FastAPI   │
-      │ • Outbox table   │   │   uploads      │   │ • Vietnamese TrOCR   │
-      │ • Audit log      │   │ • OCR input    │   │ • Async job workers  │
-      │ • Idempotency    │   │   artifacts    │   │ • Result persistence │
-      │ • Job queue      │   │                │   │ • Shared secret auth │
+      │ • Module-owned   │   │ • Document     │   │ • Python + FastAPI   │
+      │   tables         │   │   uploads      │   │ • Vietnamese TrOCR   │
+      │ • Event publish. │   │ • OCR input    │   │ • Async job workers  │
+      │ • Audit evidence │   │   artifacts    │   │ • Result persistence │
+      │ • Op. outcomes   │   │                │   │ • Shared secret auth │
+      │ • Job queue      │   │                │   │                      │
       └──────────────────┘   └────────────────┘   └──────────────────────┘
 ```
 
@@ -98,41 +95,41 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 
 | Context | Role | Key Entities |
 |---|---|---|
-| **Identity & Access** | Authentication, authorization, RBAC | `User`, `Role`, `RefreshToken` |
+| **Identity & Access** | Authentication, authorization, RBAC, and session-token lifecycle | `User`, `Role`, `RefreshToken` |
 | **Customer Management** | Customer profile, verification status, bank account information | `Customer`, `CustomerProfile`, `CustomerBankAccount` |
-| **Partner Management** | Partner company and employee data for Salary Advance eligibility | `PartnerCompany`, `PartnerEmployee`, `PartnerEmployeeImportBatch` |
-| **Loan Core / Origination** | Generic lending core — state machine, product policies, offers, disbursement, repayment | `LoanApplication`, `LoanProduct`, `LoanProductPolicy`, `LoanAccount`, `RepaymentSchedule` |
-| **Approval Workflow** | Controlled review and approval workflow, maker-checker controls | `ReviewRecommendation`, `ApprovalDecision` |
-| **Document Management** | Upload, checklist management, manual document review, planned OCR-assisted processing | `Document`, `DocumentChecklist`, `DocumentChecklistItem`, `OcrJob`, `OcrResult` |
-| **Audit & Compliance Controls** | Immutable event log, cross-cutting business action history, compliance-oriented audit trail | `AuditEvent` |
+| **Partner Management** | Partner company and employee data, imports, and reusable Salary Advance employment links | `PartnerCompany`, `PartnerEmployee`, `PartnerEmployeeImportBatch`, `CustomerPartnerEmployeeLink` |
+| **Loan Core / Lending Lifecycle** | Products, applications, review cycles, corrections, offers, contracts, activation, servicing, repayment, settlement, and closure | `LoanApplication`, `LoanProduct`, `ApprovedOffer`, `LoanContract`, `LoanAccount`, `RepaymentSchedule` |
+| **Approval Workflow** | Immutable Loan Officer recommendations and Approver decisions with maker-checker controls | `ReviewRecommendation`, `ApprovalDecision` |
+| **Document Management** | Upload, checklist management, immutable versions, manual document review, processing readiness, and OCR-assisted processing | `Document`, `DocumentChecklist`, `DocumentChecklistItem`, `OcrJob`, `OcrResult` |
+| **Audit & Compliance Controls** | Append-only business action history with controlled structured evidence | `AuditEvent` |
 
 ---
 
 ## Key Features
 
 ### Core Platform
-- **Loan Application Lifecycle** — State machine–driven origination with a shared lending core
+- **Loan Application Lifecycle** — State machine–driven origination through disbursement, followed by LoanAccount servicing after activation
 - **Salary Advance Workflow** — Employer-linked salary advance with Partner Company, Partner Employee, and eligibility verification support
 - **Streamlined Product Workflows** — Unsecured Consumer Loan and Collateral Loan support through shared lifecycle capabilities
-- **Controlled Review & Approval Workflow** — Loan Officer review, Approver decision, customer acceptance, and maker-checker controls
+- **Controlled Review & Approval Workflow** — Loan-owned review and correction lifecycle with immutable Loan Officer recommendations, independent Approver decisions, customer acceptance, and maker-checker controls
 - **Operational Contract Readiness** — Immutable accepted-term and repayment snapshots, protected destination capture, Customer acknowledgment, structured blockers, controlled destination refresh, and Accounting confirmation
 - **Manual Disbursement Activation** - Idempotent Accounting confirmation creates an active LoanAccount, final dated schedule, and Salary Advance reserved-to-used conversion atomically
 - **Document Upload & Management** — Checklist handling, metadata, storage abstraction, manual review, waiver, replacement, readiness checks, and OCR-assisted processing
 - **JWT Authentication & RBAC** — RS256 tokens, refresh rotation, role/action permission model
-- **Idempotent Financial Operations** — `Idempotency-Key` header processing for critical mutation endpoints
-- **Immutable Audit Trail** — Append-only event logging with JSONB state snapshots
+- **Idempotent Financial Operations** — Operation-specific request identities, transactional replay protection, semantic replay validation, and persisted outcomes for critical mutations
+- **Immutable Audit Trail** — Append-only business audit records with controlled structured JSONB payloads and ordered lifecycle history
 - **Structured Logging** — JSON-formatted logs with request correlation (userId, loanId, traceId)
 - **Data Encryption** — AES-256-GCM encryption at rest for sensitive personal and financial data
 
 ### User Roles
 
-| Role | Key Permissions | Notes |
+| Role | Representative Permissions | Notes |
 |---|---|---|
-| **Customer** | `loan:submit`, `loan:read` (own), `loan:cancel` (own), `document:upload`, `document:read` (own) | Self-service only; service layer enforces ownership |
-| **Loan Officer** | `loan:read`, `loan:review`, `approval:submit`, `document:review`, `customer:read` | Reviews applications, documents, product verification results, and recommendations |
-| **Approver** | `loan:read`, `approval:decide`, `document:read`, `audit:read` | Approves, rejects, or returns applications after Loan Officer review |
-| **Accounting Officer** | `loan:contract:prepare`, `loan:contract:read`, `loan:disbursement:prepare`, `loan:disburse`, `loan:read` | Prepares contracts, confirms readiness/manual transfer evidence, and may reveal the immutable destination only before activation |
-| **Back-Office Admin** | `loan:product:manage`, `partner:manage`, `admin:user:manage`, `admin:config`, `audit:read` | Manages products, partner data, internal users, and MVP configuration |
+| **Customer** | `loan:submit`, `loan:read:own`, `loan:cancel:own`, `partner:employee:verify:own`, `document:upload:own`, `document:read:own`, `loan:offer:respond:own`, `loan:contract:acknowledge:own` | Self-service only; service layer enforces ownership |
+| **Loan Officer** | `loan:read`, `loan:review`, `approval:recommend`, `document:review`, `customer:read`, `loan:correction:staff` | Reviews applications and evidence, records recommendations, and handles authorized Staff correction work |
+| **Approver** | `loan:read`, `approval:decide`, `document:read`, `audit:read` | Records independent approval decisions, returns applications to review, or requests structured correction |
+| **Accounting Officer** | `loan:contract:prepare`, `loan:contract:read`, `loan:disbursement:prepare`, `loan:disburse`, `repayment:update`, `loan:read` | Prepares contracts, confirms readiness/manual transfer evidence, reveals the immutable destination only for disbursement, and records authorized repayments |
+| **Back-Office Admin** | `loan:product:manage`, `partner:read`, `partner:manage`, `identity:user:manage`, `admin:config`, `audit:read` | Manages products, partner data, internal users, and MVP configuration |
 
 ---
 
@@ -144,7 +141,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 |---|---|
 | **Java 25** | LTS runtime with virtual threads and pattern matching |
 | **Spring Boot 4.1.x** | Application framework |
-| **Spring Modulith** | Module boundary enforcement, event publication, transactional outbox (`spring-modulith-events-jdbc`) |
+| **Spring Modulith** | Module boundary support, event publication, and Transactional Outbox persistence backed by PostgreSQL |
 | **Spring Security** | Authentication & authorization |
 | **Spring Data JPA / Hibernate** | Data persistence |
 | **Flyway** | Versioned database migrations |
@@ -170,7 +167,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 
 | Technology | Purpose |
 |---|---|
-| **PostgreSQL** | Primary data store (ACID-compliant), job queue (`SKIP LOCKED`), full-text search |
+| **PostgreSQL** | Primary relational store for ACID transactions, concurrency control, durable event publication, and asynchronous job queues (`SKIP LOCKED`) |
 
 ### Infrastructure
 
@@ -201,10 +198,11 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - [x] Approved-offer generation, expiry, customer acceptance, and decline
 - [x] Contract readiness and immutable disbursement preparation
 - [x] Manual disbursement confirmation, LoanAccount activation, and final repayment schedule generation for Salary Advance
-- [x] Salary Advance repayment posting/tracking, exact principal exposure release, overdue transitions, and secured servicing reads
-- [ ] Settlement administration, closure, reversal/refund, payment integrations, and UCL/Collateral repayment
-- [ ] Streamlined Unsecured Consumer Loan workflow
-- [ ] Streamlined Collateral Loan workflow
+- [x] Salary Advance repayment posting/tracking, exact principal exposure release, overdue transitions, contractual payoff to `SETTLED`, and secured servicing reads
+- [ ] Approved settlement administration and LoanAccount closure
+- [ ] Streamlined Unsecured Consumer Loan origination, review, approval, contract, and activation workflow
+- [ ] Streamlined Collateral Loan origination, review, approval, contract, and activation workflow
+- [ ] UCL and Collateral Loan repayment and servicing policies
 - [x] JWT authentication and permission-based RBAC
 - [x] Idempotent critical workflow operations
 - [x] Flyway migrations, Spring Modulith structure, event-publication persistence, and architecture verification
@@ -230,7 +228,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 ### Phase 4 — Operational Maturity
 
 - [ ] Production object storage, malware scanning, retention, and recovery controls
-- [ ] Redis for session controls, rate limiting, and appropriate idempotency caching
+- [ ] Redis for distributed rate limiting, session controls, and appropriate ephemeral caching
 - [ ] Prometheus metrics and Grafana dashboards
 - [ ] OpenTelemetry distributed tracing
 - [ ] Performance profiling, load testing, and security hardening
@@ -247,8 +245,9 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - Notification service for email, SMS, and in-app messages
 - Mobile application support
 - Payroll provider, employer API, payment gateway, bank transfer, and credit-bureau integrations
+- Repayment reversal/refund, unapplied cash, suspense processing, waiver/write-off, and bank reconciliation
 - Multi-level and configurable approval workflows
-- Microservice extraction where justified, with Kafka-backed event streaming
+- Selective microservice extraction where justified, with Kafka-backed event streaming
 
 #### Financial Ledger and Accounting
 
@@ -277,14 +276,14 @@ com.meridian.platform/
 │
 ├── customer/                # Customer bounded context
 ├── partner/                 # Partner company and employee import bounded context
-├── loan/                    # Generic lending core (product policies + full hexagonal)
-├── approval/                # Approval workflow
-├── document/                # Document checklist, review, and correction workflows
+├── loan/                    # Lending lifecycle: products, applications, review, activation, servicing
+├── approval/                # Recommendation and decision records
+├── document/                # Document checklist, versions, review, readiness, and OCR integration
 ├── audit/                   # Audit & compliance controls
 └── notification/            # Optional later
 ```
 
-Each module follows Practical Hexagonal Architecture internally:
+Feature modules use Meridian's Practical Hexagonal Architecture at the level each module needs:
 
 ```text
 module/
@@ -307,14 +306,18 @@ module/
     └── config/               # Module-specific configuration
 ```
 
-Feature modules follow Meridian's practical hexagonal structure; detailed layer and dependency rules are documented in [MER-ARCH-003](docs/architecture/MER-ARCH-003-dependency-rules.md).
+Not every module contains every package shown above. Full, Moderate, and Simplified module profiles preserve the same inward dependency direction while using only the structure each module needs. Detailed source-layout rules are documented in [MER-ARCH-002](docs/architecture/MER-ARCH-002-project-structure.md), and enforceable dependency rules are documented in [MER-ARCH-003](docs/architecture/MER-ARCH-003-dependency-rules.md).
 
 ---
 
 ## Documentation
 
 - [Business requirements and workflows](docs/business/MER-BIZ-001-business-requirements-and-workflows.md)
-- [Architecture and dependency rules](docs/architecture/MER-ARCH-003-dependency-rules.md)
+- [Bounded contexts and ownership](docs/architecture/MER-ARCH-001-bounded-contexts.md)
+- [Project structure](docs/architecture/MER-ARCH-002-project-structure.md)
+- [Dependency rules and architecture enforcement](docs/architecture/MER-ARCH-003-dependency-rules.md)
+- [OCR architecture](docs/architecture/MER-ARCH-005-ocr-architecture.md)
+- [API request flows and runtime dependencies](docs/architecture/MER-ARCH-006-api-request-flow-and-dependencies.md)
 - [Data model and ERD](docs/database/MER-DB-001-data-model-and-erd.md) and [current physical schema snapshot](docs/database/MER-DB-CURRENT-SCHEMA.sql)
 - [API endpoint and scenario guide](docs/api/MER-API-001-endpoints-and-postman-scenarios.md)
 - [Follow-up register](docs/project/MER-TRACK-001-follow-up-register.md)
