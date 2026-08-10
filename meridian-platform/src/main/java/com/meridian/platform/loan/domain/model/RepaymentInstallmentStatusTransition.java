@@ -54,6 +54,12 @@ public record RepaymentInstallmentStatusTransition(
                     "Non-initial installment transition requires fromStatus."
             );
         }
+        if (action == RepaymentInstallmentServicingAction.APPROVED_SETTLEMENT
+                && actorType != ActorType.USER) {
+            throw new IllegalArgumentException(
+                    "Approved settlement installment transitions require a user actor."
+            );
+        }
     }
 
     private static void validateActor(ActorType actorType, UUID actorUserId) {

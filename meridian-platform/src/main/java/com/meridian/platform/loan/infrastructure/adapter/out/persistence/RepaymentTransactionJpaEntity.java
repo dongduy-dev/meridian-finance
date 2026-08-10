@@ -2,8 +2,11 @@ package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.domain.model.RepaymentAllocation;
 import com.meridian.platform.loan.domain.model.RepaymentTransaction;
+import com.meridian.platform.loan.domain.model.RepaymentTransactionType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -29,6 +32,10 @@ public class RepaymentTransactionJpaEntity {
 
     @Column(name = "repayment_schedule_id", nullable = false, updatable = false)
     private UUID repaymentScheduleId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "transaction_type", nullable = false, length = 30, updatable = false)
+    private RepaymentTransactionType transactionType;
 
     @Column(name = "request_id", nullable = false, updatable = false)
     private UUID requestId;
@@ -62,6 +69,7 @@ public class RepaymentTransactionJpaEntity {
         this.loanApplicationId = transaction.loanApplicationId();
         this.loanAccountId = transaction.loanAccountId();
         this.repaymentScheduleId = transaction.repaymentScheduleId();
+        this.transactionType = transaction.transactionType();
         this.requestId = transaction.requestId();
         this.externalPaymentReference = transaction.externalPaymentReference();
         this.receivedAmount = transaction.receivedAmount();
@@ -76,6 +84,7 @@ public class RepaymentTransactionJpaEntity {
                 loanApplicationId,
                 loanAccountId,
                 repaymentScheduleId,
+                transactionType,
                 requestId,
                 externalPaymentReference,
                 receivedAmount,

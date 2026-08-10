@@ -46,6 +46,7 @@ class RepaymentTransactionTest {
         source.clear();
 
         assertTrue(transaction.externalPaymentReference().equals("BANK.REF/1"));
+        assertEquals(RepaymentTransactionType.REPAYMENT, transaction.transactionType());
         assertEquals(1, transaction.allocations().size());
         assertThrows(UnsupportedOperationException.class,
                 () -> transaction.allocations().clear());
@@ -133,6 +134,42 @@ class RepaymentTransactionTest {
                                 money("100")
                         ))
                 ));
+    }
+
+    @Test
+    void recordsApprovedSettlementAsDistinctPaymentOperation() {
+        UUID transactionId = UUID.randomUUID();
+        UUID approverId = UUID.randomUUID();
+        LocalDateTime approvedAt = LocalDateTime.of(2026, 8, 9, 10, 0);
+
+        RepaymentTransaction transaction = RepaymentTransaction.approvedSettlement(
+                transactionId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "SETTLEMENT-REFERENCE",
+                money("100"),
+                LocalDate.of(2026, 8, 9),
+                LocalDate.of(2026, 8, 1),
+                LocalDate.of(2026, 8, 9),
+                approverId,
+                approvedAt,
+                List.of(allocation(
+                        transactionId,
+                        1,
+                        RepaymentAllocationComponent.PRINCIPAL,
+                        "100"
+                ))
+        );
+
+        assertEquals(
+                RepaymentTransactionType.APPROVED_SETTLEMENT,
+                transaction.transactionType()
+        );
+        assertEquals(approverId, transaction.recordedByUserId());
+        assertEquals(approvedAt, transaction.recordedAt());
+        assertFalse(transaction.toString().contains("SETTLEMENT-REFERENCE"));
     }
 
     private static RepaymentTransaction transaction(

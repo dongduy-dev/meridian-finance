@@ -50,6 +50,23 @@ public record LoanAccountStatusTransition(
                     "Non-initial LoanAccount transition requires fromStatus."
             );
         }
+        if (action == LoanAccountServicingAction.APPROVED_SETTLEMENT
+                && (actorType != ActorType.USER
+                || (fromStatus != LoanAccountStatus.ACTIVE
+                && fromStatus != LoanAccountStatus.OVERDUE)
+                || toStatus != LoanAccountStatus.SETTLED)) {
+            throw new IllegalArgumentException(
+                    "Approved settlement must move an open LoanAccount to SETTLED."
+            );
+        }
+        if (action == LoanAccountServicingAction.ADMINISTRATIVE_CLOSURE
+                && (actorType != ActorType.USER
+                || fromStatus != LoanAccountStatus.SETTLED
+                || toStatus != LoanAccountStatus.CLOSED)) {
+            throw new IllegalArgumentException(
+                    "Administrative closure must move a settled LoanAccount to CLOSED."
+            );
+        }
     }
 
     private static void validateActor(ActorType actorType, UUID actorUserId) {
