@@ -48,11 +48,10 @@ public interface RecordRepaymentUseCase {
 
         @Override
         public String toString() {
-            return "Command[requestId=" + requestId
-                    + ", loanApplicationId=" + loanApplicationId
+            return "Command[loanApplicationId=" + loanApplicationId
                     + ", amount=" + amount
                     + ", paymentValueDate=" + paymentValueDate
-                    + ", externalPaymentReference=redacted]";
+                    + ", operationEvidence=redacted]";
         }
 
         private static BusinessRuleViolationException invalid(String message) {

@@ -15,12 +15,14 @@ class RecordRepaymentUseCaseTest {
     @Test
     void canonicalisesReferenceAtBoundaryAndRedactsItFromRendering() {
         String sensitiveReference = " payroll-secret/001 ";
+        UUID requestId = UUID.randomUUID();
         RecordRepaymentUseCase.Command command = new RecordRepaymentUseCase.Command(
-                UUID.randomUUID(), UUID.randomUUID(), sensitiveReference,
+                requestId, UUID.randomUUID(), sensitiveReference,
                 new BigDecimal("100.00"), LocalDate.of(2026, 7, 30)
         );
 
         assertTrue(command.externalPaymentReference().equals("PAYROLL-SECRET/001"));
+        assertFalse(command.toString().contains(requestId.toString()));
         assertFalse(command.toString().contains("PAYROLL-SECRET/001"));
         assertFalse(command.toString().contains(sensitiveReference));
     }

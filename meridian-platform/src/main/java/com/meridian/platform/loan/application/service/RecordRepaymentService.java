@@ -119,7 +119,9 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
     public Result record(Command command) {
         AuthenticatedUser actor = requireStaff(currentUsers.currentUser());
         Instant recordedInstant = clock.instant();
-        LocalDateTime recordedAt = LocalDateTime.ofInstant(recordedInstant, ZoneOffset.UTC);
+        LocalDateTime recordedAt = ServicingEvidenceTimestamp.normalizeForPersistence(
+                LocalDateTime.ofInstant(recordedInstant, ZoneOffset.UTC)
+        );
         LocalDate evaluationDate = LocalDate.ofInstant(recordedInstant, ZoneOffset.UTC);
 
         transactions.acquireRecordingRequestLock(command.requestId());
@@ -411,7 +413,8 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
                 || !transaction.repaymentScheduleId().equals(outcome.repaymentScheduleId())
                 || transaction.receivedAmount().compareTo(outcome.receivedAmount()) != 0
                 || !transaction.paymentValueDate().equals(outcome.paymentValueDate())
-                || !transaction.recordedAt().equals(outcome.recordedAt())
+                || !ServicingEvidenceTimestamp.same(
+                transaction.recordedAt(), outcome.recordedAt())
                 || principal.compareTo(outcome.principalReleased()) != 0) {
             throw stateConflict();
         }

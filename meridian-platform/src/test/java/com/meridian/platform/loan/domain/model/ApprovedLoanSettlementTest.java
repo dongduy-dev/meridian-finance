@@ -30,7 +30,11 @@ class ApprovedLoanSettlementTest {
         assertEquals(payment.receivedAmount(), settlement.settlementAmount());
         assertEquals(payment.recordedByUserId(), settlement.approvedByUserId());
         assertEquals(payment.recordedAt(), settlement.approvedAt());
+        assertFalse(settlement.toString().contains(settlement.id().toString()));
+        assertFalse(settlement.toString().contains(payment.id().toString()));
         assertFalse(settlement.toString().contains(payment.requestId().toString()));
+        assertFalse(settlement.toString().contains(
+                payment.recordedByUserId().toString()));
     }
 
     @Test

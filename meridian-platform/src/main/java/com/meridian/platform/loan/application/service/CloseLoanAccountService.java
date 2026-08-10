@@ -155,9 +155,8 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
                 null
         );
 
-        LocalDateTime closedAt = LocalDateTime.ofInstant(
-                clock.instant(),
-                ZoneOffset.UTC
+        LocalDateTime closedAt = ServicingEvidenceTimestamp.normalizeForPersistence(
+                LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)
         );
         LoanAccount closedAccount = account.closeAdministratively(closedAt);
         LoanAccountClosure closure = LoanAccountClosure.recorded(
@@ -438,7 +437,8 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
                 transaction.receivedAmount()) != 0
                 || !outcome.paymentValueDate().equals(
                 transaction.paymentValueDate())
-                || !outcome.recordedAt().equals(transaction.recordedAt())
+                || !ServicingEvidenceTimestamp.same(
+                outcome.recordedAt(), transaction.recordedAt())
                 || outcome.principalReleased().compareTo(principalAllocated) != 0
                 || !sameBalance(outcome.accountBalance(),
                 account.repaymentBalance())
@@ -462,7 +462,7 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
                 throw stateConflict();
             }
         });
-        if (!outcomeProgress.equals(currentProgress)) {
+        if (!sameProgress(outcomeProgress, currentProgress)) {
             throw stateConflict();
         }
         ApprovedLoanSettlement settlement = settlements
@@ -629,10 +629,55 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
                 right.totalOutstanding()) == 0
                 && java.util.Objects.equals(
                 left.lastPaymentValueDate(), right.lastPaymentValueDate())
-                && java.util.Objects.equals(
+                && ServicingEvidenceTimestamp.same(
                 left.lastPaymentRecordedAt(), right.lastPaymentRecordedAt())
                 && left.servicingEvaluationDate().equals(
                 right.servicingEvaluationDate());
+    }
+
+    private static boolean sameProgress(
+            Map<UUID, RepaymentInstallmentProgress> left,
+            Map<UUID, RepaymentInstallmentProgress> right
+    ) {
+        if (!left.keySet().equals(right.keySet())) {
+            return false;
+        }
+        return left.entrySet().stream().allMatch(entry ->
+                sameProgress(entry.getValue(), right.get(entry.getKey()))
+        );
+    }
+
+    private static boolean sameProgress(
+            RepaymentInstallmentProgress left,
+            RepaymentInstallmentProgress right
+    ) {
+        return right != null
+                && left.repaymentScheduleItemId().equals(
+                right.repaymentScheduleItemId())
+                && left.repaymentScheduleId().equals(right.repaymentScheduleId())
+                && left.loanAccountId().equals(right.loanAccountId())
+                && left.installmentNumber() == right.installmentNumber()
+                && left.principalPaid().compareTo(right.principalPaid()) == 0
+                && left.interestPaid().compareTo(right.interestPaid()) == 0
+                && left.feePaid().compareTo(right.feePaid()) == 0
+                && left.totalPaid().compareTo(right.totalPaid()) == 0
+                && left.principalOutstanding().compareTo(
+                right.principalOutstanding()) == 0
+                && left.interestOutstanding().compareTo(
+                right.interestOutstanding()) == 0
+                && left.feeOutstanding().compareTo(
+                right.feeOutstanding()) == 0
+                && left.totalOutstanding().compareTo(
+                right.totalOutstanding()) == 0
+                && left.status() == right.status()
+                && java.util.Objects.equals(
+                left.lastPaymentValueDate(), right.lastPaymentValueDate())
+                && ServicingEvidenceTimestamp.same(
+                left.lastPaymentRecordedAt(), right.lastPaymentRecordedAt())
+                && left.servicingEvaluationDate().equals(
+                right.servicingEvaluationDate())
+                && ServicingEvidenceTimestamp.same(
+                left.updatedAt(), right.updatedAt());
     }
 
     private static Result result(

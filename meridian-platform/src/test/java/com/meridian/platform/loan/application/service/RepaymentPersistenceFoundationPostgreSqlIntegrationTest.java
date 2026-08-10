@@ -735,8 +735,8 @@ class RepaymentPersistenceFoundationPostgreSqlIntegrationTest {
                 "insert into repayment_transactions "
                         + "(id,loan_application_id,loan_account_id,repayment_schedule_id,"
                         + "request_id,external_payment_reference,received_amount,"
-                        + "payment_value_date,recorded_by_user_id,recorded_at) "
-                        + "values (?,?,?,?,?,?,150,?,?,?)",
+                        + "payment_value_date,recorded_by_user_id,recorded_at,"
+                        + "transaction_type) values (?,?,?,?,?,?,150,?,?,?,'REPAYMENT')",
                 transactionId,
                 fixture.applicationId(),
                 activation.loanAccountId(),

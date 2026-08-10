@@ -111,12 +111,20 @@ class CloseLoanAccountPostgreSqlIntegrationTest {
     @Test
     void closesContractualPayoffWithoutFinancialMutationAndReplaysExactly() {
         Activated activated = activate("PAYOFF");
-        RecordRepaymentUseCase.Result payoff = repayFully(activated);
+        UUID sharedOperationId = UUID.randomUUID();
+        RecordRepaymentUseCase.Result payoff = repayments.record(
+                new RecordRepaymentUseCase.Command(
+                        sharedOperationId,
+                        activated.applicationId(),
+                        "CLOSURE-PAYOFF-" + activated.token(),
+                        outstanding(activated.accountId()),
+                        OPERATION_DATE
+                )
+        );
         assertEquals(LoanAccountStatus.SETTLED, payoff.accountBalance().status());
         FinancialFingerprint before = fingerprint(activated);
-        UUID requestId = UUID.randomUUID();
         CloseLoanAccountUseCase.Command command = new CloseLoanAccountUseCase.Command(
-                requestId,
+                sharedOperationId,
                 activated.applicationId()
         );
 
@@ -150,16 +158,21 @@ class CloseLoanAccountPostgreSqlIntegrationTest {
     @Test
     void closesApprovedSettlementAndPreservesPaymentEvidence() {
         Activated activated = activate("SETTLEMENT");
+        ApproveLoanSettlementUseCase.Command settlementCommand =
+                settlementCommand(activated);
         currentUser.approver();
         ApproveLoanSettlementUseCase.Result settlement = settlements.approve(
-                settlementCommand(activated)
+                settlementCommand
         );
         assertEquals(LoanAccountStatus.SETTLED, settlement.accountBalance().status());
         FinancialFingerprint before = fingerprint(activated);
         currentUser.accounting();
 
         CloseLoanAccountUseCase.Result result = closures.close(
-                closureCommand(activated)
+                new CloseLoanAccountUseCase.Command(
+                        settlementCommand.requestId(),
+                        activated.applicationId()
+                )
         );
 
         assertEquals(LoanAccountStatus.CLOSED, result.resultingStatus());
@@ -171,6 +184,11 @@ class CloseLoanAccountPostgreSqlIntegrationTest {
                 settlement.repaymentTransactionId()
         ));
         currentUser.approver();
+        ApproveLoanSettlementUseCase.Result replayAfterClosure =
+                settlements.approve(settlementCommand);
+        assertTrue(replayAfterClosure.idempotentReplay());
+        assertEquals(settlement.repaymentTransactionId(),
+                replayAfterClosure.repaymentTransactionId());
         BusinessStateConflictException settlementRejected = assertThrows(
                 BusinessStateConflictException.class,
                 () -> settlements.approve(new ApproveLoanSettlementUseCase.Command(

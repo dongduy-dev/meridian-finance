@@ -4,6 +4,7 @@ import com.meridian.platform.MeridianPlatformApplication;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationDto;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationRequest;
 import com.meridian.platform.loan.application.port.in.ConfirmManualDisbursementUseCase;
+import com.meridian.platform.loan.application.port.in.CloseLoanAccountUseCase;
 import com.meridian.platform.loan.application.port.in.EvaluateLoanAccountOverdueUseCase;
 import com.meridian.platform.loan.application.port.in.ApproveLoanSettlementUseCase;
 import com.meridian.platform.loan.application.port.in.RecordRepaymentUseCase;
@@ -76,6 +77,7 @@ class SalaryAdvanceOutstandingAccountConcurrencyPostgreSqlIntegrationTest {
             UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1");
 
     @Autowired ConfirmManualDisbursementUseCase disbursements;
+    @Autowired CloseLoanAccountUseCase closures;
     @Autowired EvaluateLoanAccountOverdueUseCase overdueEvaluator;
     @Autowired ApproveLoanSettlementUseCase settlements;
     @Autowired RecordRepaymentUseCase repayments;
@@ -443,6 +445,88 @@ class SalaryAdvanceOutstandingAccountConcurrencyPostgreSqlIntegrationTest {
                             .add(limit.get("used_amount"))));
         } finally {
             releaseSettlement.countDown();
+            pool.shutdownNow();
+            assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    void closureDoesNotChangeSubmissionEligibilityInEitherOrderOrWhenConcurrent()
+            throws Exception {
+        Activated closureFirst = activateAndPrepareCustomer();
+        currentUser.approver();
+        settleFully(closureFirst);
+        currentUser.staff();
+        closures.close(new CloseLoanAccountUseCase.Command(
+                UUID.randomUUID(),
+                closureFirst.fixture().applicationId()
+        ));
+        currentUser.customer(
+                closureFirst.userId(),
+                closureFirst.fixture().customerId()
+        );
+        assertNotNull(submit(closureFirst.fixture().linkId()).loanApplicationId());
+        assertEquals("CLOSED", status(closureFirst.accountId()));
+
+        Activated submissionFirst = activateAndPrepareCustomer();
+        currentUser.approver();
+        settleFully(submissionFirst);
+        currentUser.customer(
+                submissionFirst.userId(),
+                submissionFirst.fixture().customerId()
+        );
+        assertNotNull(submit(submissionFirst.fixture().linkId()).loanApplicationId());
+        currentUser.staff();
+        closures.close(new CloseLoanAccountUseCase.Command(
+                UUID.randomUUID(),
+                submissionFirst.fixture().applicationId()
+        ));
+        assertEquals("CLOSED", status(submissionFirst.accountId()));
+
+        Activated concurrent = activateAndPrepareCustomer();
+        currentUser.approver();
+        settleFully(concurrent);
+        int applicationsBefore = customerApplications(concurrent);
+        int reservationsBefore = reservationMovements(concurrent);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<CloseLoanAccountUseCase.Result> closure = pool.submit(() -> {
+                currentUser.staff();
+                start.await();
+                return closures.close(new CloseLoanAccountUseCase.Command(
+                        UUID.randomUUID(),
+                        concurrent.fixture().applicationId()
+                ));
+            });
+            Future<SalaryAdvanceApplicationDto> submission = pool.submit(() -> {
+                currentUser.customer(
+                        concurrent.userId(),
+                        concurrent.fixture().customerId()
+                );
+                start.await();
+                return submit(concurrent.fixture().linkId());
+            });
+            start.countDown();
+
+            assertEquals("CLOSED", closure.get(15, TimeUnit.SECONDS)
+                    .resultingStatus().name());
+            assertNotNull(submission.get(15, TimeUnit.SECONDS)
+                    .loanApplicationId());
+            assertEquals("CLOSED", status(concurrent.accountId()));
+            assertEquals(applicationsBefore + 1,
+                    customerApplications(concurrent));
+            assertEquals(reservationsBefore + 1,
+                    reservationMovements(concurrent));
+            assertEquals(0, count(
+                    "select count(*) from salary_advance_limit_movements "
+                            + "where loan_application_id=? "
+                            + "and movement_type='REPAID_RELEASED' "
+                            + "and repayment_transaction_id is null",
+                    concurrent.fixture().applicationId()
+            ));
+        } finally {
+            start.countDown();
             pool.shutdownNow();
             assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
         }

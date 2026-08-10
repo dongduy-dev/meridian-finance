@@ -56,7 +56,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     @Test
     void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
-        assertEquals("35", latestVersion(SCHEMA));
+        assertEquals("36", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -199,7 +199,9 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
             if (action != BusinessAuditAction
                     .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED
                     && action != BusinessAuditAction.REPAYMENT_RECORDED
-                    && action != BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED) {
+                    && action != BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED
+                    && action != BusinessAuditAction.LOAN_SETTLEMENT_APPROVED
+                    && action != BusinessAuditAction.LOAN_ACCOUNT_CLOSED) {
                 insertAuditEvent(schema, action.name());
             }
         }
@@ -208,7 +210,9 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
     private void assertThroughV31ActionsAccepted(String schema) {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
             if (action != BusinessAuditAction.REPAYMENT_RECORDED
-                    && action != BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED) {
+                    && action != BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED
+                    && action != BusinessAuditAction.LOAN_SETTLEMENT_APPROVED
+                    && action != BusinessAuditAction.LOAN_ACCOUNT_CLOSED) {
                 insertAuditEvent(schema, action.name());
             }
         }

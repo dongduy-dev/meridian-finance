@@ -21,8 +21,9 @@ class LoanAccountClosureTest {
         UUID requestId = UUID.randomUUID();
         UUID actorId = UUID.randomUUID();
 
+        UUID closureId = UUID.randomUUID();
         LoanAccountClosure closure = LoanAccountClosure.recorded(
-                UUID.randomUUID(),
+                closureId,
                 closed,
                 requestId,
                 actorId,
@@ -33,6 +34,9 @@ class LoanAccountClosureTest {
         assertEquals(closed.id(), closure.loanAccountId());
         assertEquals(requestId, closure.requestId());
         assertEquals(actorId, closure.closedByUserId());
+        assertFalse(closure.toString().contains(closureId.toString()));
+        assertFalse(closure.toString().contains(requestId.toString()));
+        assertFalse(closure.toString().contains(actorId.toString()));
         assertFalse(closure.toString().contains("reasonCode"));
     }
 

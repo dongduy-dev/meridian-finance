@@ -61,10 +61,8 @@ public record ApprovedLoanSettlement(
 
     @Override
     public String toString() {
-        return "ApprovedLoanSettlement[id=" + id
-                + ", loanApplicationId=" + loanApplicationId
+        return "ApprovedLoanSettlement[loanApplicationId=" + loanApplicationId
                 + ", loanAccountId=" + loanAccountId
-                + ", repaymentTransactionId=" + repaymentTransactionId
                 + ", financialEvidence=redacted]";
     }
 

@@ -127,9 +127,8 @@ public class ApproveLoanSettlementService implements ApproveLoanSettlementUseCas
     public Result approve(Command command) {
         AuthenticatedUser actor = requireApprover(currentUsers.currentUser());
         Instant approvedInstant = clock.instant();
-        LocalDateTime approvedAt = LocalDateTime.ofInstant(
-                approvedInstant,
-                ZoneOffset.UTC
+        LocalDateTime approvedAt = ServicingEvidenceTimestamp.normalizeForPersistence(
+                LocalDateTime.ofInstant(approvedInstant, ZoneOffset.UTC)
         );
         LocalDate evaluationDate = LocalDate.ofInstant(
                 approvedInstant,
@@ -548,7 +547,8 @@ public class ApproveLoanSettlementService implements ApproveLoanSettlementUseCas
                 outcome.repaymentScheduleId())
                 || transaction.receivedAmount().compareTo(outcome.receivedAmount()) != 0
                 || !transaction.paymentValueDate().equals(outcome.paymentValueDate())
-                || !transaction.recordedAt().equals(outcome.recordedAt())
+                || !ServicingEvidenceTimestamp.same(
+                transaction.recordedAt(), outcome.recordedAt())
                 || settlement.settlementAmount().compareTo(outcome.receivedAmount()) != 0
                 || principal.compareTo(outcome.principalReleased()) != 0
                 || outcome.accountStatus() != LoanAccountStatus.SETTLED

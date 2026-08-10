@@ -55,8 +55,7 @@ public record LoanAccountClosure(
 
     @Override
     public String toString() {
-        return "LoanAccountClosure[id=" + id
-                + ", loanApplicationId=" + loanApplicationId
+        return "LoanAccountClosure[loanApplicationId=" + loanApplicationId
                 + ", loanAccountId=" + loanAccountId
                 + ", administrativeEvidence=redacted]";
     }
