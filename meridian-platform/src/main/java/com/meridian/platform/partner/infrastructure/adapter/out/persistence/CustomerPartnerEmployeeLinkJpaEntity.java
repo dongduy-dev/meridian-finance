@@ -62,15 +62,17 @@ public class CustomerPartnerEmployeeLinkJpaEntity {
     protected CustomerPartnerEmployeeLinkJpaEntity() {
     }
 
-    public CustomerPartnerEmployeeLinkJpaEntity(CustomerPartnerEmployeeLink link) {
-        LocalDateTime now = LocalDateTime.now();
+    public CustomerPartnerEmployeeLinkJpaEntity(
+            CustomerPartnerEmployeeLink link,
+            LocalDateTime now
+    ) {
         this.id = link.id();
         this.createdAt = now;
         apply(link, now);
     }
 
-    public void updateFrom(CustomerPartnerEmployeeLink link) {
-        apply(link, LocalDateTime.now());
+    public void updateFrom(CustomerPartnerEmployeeLink link, LocalDateTime now) {
+        apply(link, now);
     }
 
     private void apply(CustomerPartnerEmployeeLink link, LocalDateTime updatedAt) {

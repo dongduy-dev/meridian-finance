@@ -11,4 +11,21 @@ public interface PartnerEligibilityPort {
             UUID customerId,
             UUID customerPartnerEmployeeLinkId
     );
+
+    default PartnerEligibilityAssessment inspectEmployeeLink(
+            UUID customerId,
+            UUID customerPartnerEmployeeLinkId
+    ) {
+        return findVerifiedEmployeeLink(customerId, customerPartnerEmployeeLinkId)
+                .map(PartnerEligibilityAssessment::eligible)
+                .orElseGet(() -> PartnerEligibilityAssessment.ineligible(
+                        PartnerEligibilityAssessment.Status.NOT_VERIFIED
+                ));
+    }
+
+    default PartnerEligibilityAssessment inspectCurrentEmployeeLink(UUID customerId) {
+        return PartnerEligibilityAssessment.ineligible(
+                PartnerEligibilityAssessment.Status.NOT_VERIFIED
+        );
+    }
 }

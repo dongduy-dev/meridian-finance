@@ -2,8 +2,12 @@ package com.meridian.platform.partner.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.partner.application.port.out.CustomerPartnerEmployeeLinkRepository;
 import com.meridian.platform.partner.domain.model.CustomerPartnerEmployeeLink;
+import com.meridian.platform.partner.domain.model.CustomerPartnerEmployeeLinkStatus;
 import org.springframework.stereotype.Repository;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -11,9 +15,14 @@ import java.util.UUID;
 public class CustomerPartnerEmployeeLinkRepositoryAdapter implements CustomerPartnerEmployeeLinkRepository {
 
     private final JpaCustomerPartnerEmployeeLinkRepository jpaRepository;
+    private final Clock clock;
 
-    public CustomerPartnerEmployeeLinkRepositoryAdapter(JpaCustomerPartnerEmployeeLinkRepository jpaRepository) {
+    public CustomerPartnerEmployeeLinkRepositoryAdapter(
+            JpaCustomerPartnerEmployeeLinkRepository jpaRepository,
+            Clock clock
+    ) {
         this.jpaRepository = jpaRepository;
+        this.clock = clock;
     }
 
     @Override
@@ -32,13 +41,27 @@ public class CustomerPartnerEmployeeLinkRepositoryAdapter implements CustomerPar
     }
 
     @Override
+    public List<CustomerPartnerEmployeeLink> findByCustomerId(UUID customerId) {
+        return jpaRepository.findByCustomerIdAndLinkStatusOrderByLastRefreshedAtDescIdAsc(
+                        customerId,
+                        CustomerPartnerEmployeeLinkStatus.VERIFIED
+                ).stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
     public CustomerPartnerEmployeeLink save(CustomerPartnerEmployeeLink customerPartnerEmployeeLink) {
+        LocalDateTime now = LocalDateTime.now(clock);
         CustomerPartnerEmployeeLinkJpaEntity entity = jpaRepository.findById(customerPartnerEmployeeLink.id())
                 .map(existingEntity -> {
-                    existingEntity.updateFrom(customerPartnerEmployeeLink);
+                    existingEntity.updateFrom(customerPartnerEmployeeLink, now);
                     return existingEntity;
                 })
-                .orElseGet(() -> new CustomerPartnerEmployeeLinkJpaEntity(customerPartnerEmployeeLink));
+                .orElseGet(() -> new CustomerPartnerEmployeeLinkJpaEntity(
+                        customerPartnerEmployeeLink,
+                        now
+                ));
 
         return toDomain(jpaRepository.save(entity));
     }

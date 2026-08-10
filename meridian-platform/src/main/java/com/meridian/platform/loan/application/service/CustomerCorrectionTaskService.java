@@ -89,6 +89,7 @@ public class CustomerCorrectionTaskService implements QueryOwnCorrectionTasksUse
             throw new AuthorizationException(
                     "CORRECTION_ACCESS_DENIED", "Customer cannot complete this correction task.");
         }
+        requireActiveRequest(request);
         LocalDateTime now = LocalDateTime.now(clock);
         LoanCorrectionTask completed = task.complete(user.userId(), command.completionRequestId(), now);
         if (completed == task) {
@@ -141,6 +142,15 @@ public class CustomerCorrectionTaskService implements QueryOwnCorrectionTasksUse
                     "CORRECTION_ACCESS_DENIED", "Customer cannot access another Loan Application correction.");
         }
         return application;
+    }
+
+    private static void requireActiveRequest(LoanCorrectionRequest request) {
+        if (!request.isActive()) {
+            throw new BusinessStateConflictException(
+                    "CORRECTION_REQUEST_CONFLICT",
+                    "Correction request is no longer actionable."
+            );
+        }
     }
 
     private CustomerCorrectionTaskDto toDto(LoanCorrectionTask task) {

@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.partner;
 
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityPort;
+import com.meridian.platform.loan.application.port.out.PartnerEligibilityAssessment;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceEmployeeVerificationOutcome;
 import com.meridian.platform.loan.domain.model.VerifiedPartnerEmployeeLinkSnapshot;
 import com.meridian.platform.partner.application.port.in.QueryCustomerPartnerEmployeeLinkUseCase;
@@ -23,8 +24,37 @@ public class PartnerEligibilityAdapter implements PartnerEligibilityPort {
             UUID customerId,
             UUID customerPartnerEmployeeLinkId
     ) {
-        return queryCustomerPartnerEmployeeLinkUseCase.findVerifiedActiveLink(customerId, customerPartnerEmployeeLinkId)
-                .map(snapshot -> new VerifiedPartnerEmployeeLinkSnapshot(
+        return inspectEmployeeLink(customerId, customerPartnerEmployeeLinkId).optionalSnapshot();
+    }
+
+    @Override
+    public PartnerEligibilityAssessment inspectEmployeeLink(
+            UUID customerId,
+            UUID customerPartnerEmployeeLinkId
+    ) {
+        return toLoanAssessment(queryCustomerPartnerEmployeeLinkUseCase.inspectEligibility(
+                customerId,
+                customerPartnerEmployeeLinkId
+        ));
+    }
+
+    @Override
+    public PartnerEligibilityAssessment inspectCurrentEmployeeLink(UUID customerId) {
+        return toLoanAssessment(queryCustomerPartnerEmployeeLinkUseCase.inspectCurrentEligibility(customerId));
+    }
+
+    private PartnerEligibilityAssessment toLoanAssessment(
+            com.meridian.platform.partner.application.dto.CustomerPartnerEmployeeEligibilityDto assessment
+    ) {
+        if (assessment.status()
+                != com.meridian.platform.partner.application.dto.CustomerPartnerEmployeeEligibilityDto.Status.ELIGIBLE) {
+            return PartnerEligibilityAssessment.ineligible(
+                    PartnerEligibilityAssessment.Status.valueOf(assessment.status().name())
+            );
+        }
+        return PartnerEligibilityAssessment.eligible(
+                assessment.optionalSnapshot()
+                        .map(snapshot -> new VerifiedPartnerEmployeeLinkSnapshot(
                         snapshot.customerId(),
                         snapshot.customerPartnerEmployeeLinkId(),
                         snapshot.partnerCompanyId(),
@@ -36,6 +66,8 @@ public class PartnerEligibilityAdapter implements PartnerEligibilityPort {
                         snapshot.employeeSalaryAdvanceLimit(),
                         snapshot.lastVerifiedAt(),
                         snapshot.lastRefreshedAt()
-                ));
+                ))
+                        .orElseThrow()
+        );
     }
 }

@@ -12,10 +12,22 @@ import java.util.UUID;
 public interface JpaSalaryAdvanceLimitRepository extends JpaRepository<SalaryAdvanceLimitJpaEntity, UUID> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select salaryLimit from SalaryAdvanceLimitJpaEntity salaryLimit
+            where salaryLimit.customerId = :customerId
+              and salaryLimit.customerPartnerEmployeeLinkId = :linkId
+            """)
+    Optional<SalaryAdvanceLimitJpaEntity> findByCustomerIdAndLinkIdForUpdate(
+            @Param("customerId") UUID customerId,
+            @Param("linkId") UUID customerPartnerEmployeeLinkId
+    );
+
     Optional<SalaryAdvanceLimitJpaEntity> findByCustomerIdAndCustomerPartnerEmployeeLinkId(
             UUID customerId,
             UUID customerPartnerEmployeeLinkId
     );
+
+    Optional<SalaryAdvanceLimitJpaEntity> findFirstByCustomerIdOrderByLastRefreshedAtDescIdAsc(UUID customerId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select salaryLimit from SalaryAdvanceLimitJpaEntity salaryLimit where salaryLimit.id = :id")

@@ -24,7 +24,9 @@ import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -39,6 +41,7 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
     private final CustomerIdentityEvidencePort customerIdentityEvidencePort;
     private final PartnerEmployeeVerificationMapper verificationMapper;
     private final CurrentUserProvider currentUserProvider;
+    private final Clock clock;
     private final PartnerEmployeeVerificationPolicy verificationPolicy = new PartnerEmployeeVerificationPolicy();
 
     public VerifyPartnerEmployeeService(
@@ -48,7 +51,8 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
             CustomerPartnerEmployeeLinkRepository linkRepository,
             CustomerIdentityEvidencePort customerIdentityEvidencePort,
             PartnerEmployeeVerificationMapper verificationMapper,
-            CurrentUserProvider currentUserProvider
+            CurrentUserProvider currentUserProvider,
+            Clock clock
     ) {
         this.partnerCompanyRepository = partnerCompanyRepository;
         this.importBatchRepository = importBatchRepository;
@@ -57,6 +61,7 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
         this.customerIdentityEvidencePort = customerIdentityEvidencePort;
         this.verificationMapper = verificationMapper;
         this.currentUserProvider = currentUserProvider;
+        this.clock = clock;
     }
 
     @Override
@@ -80,7 +85,10 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
                 ));
         verificationPolicy.validatePartnerCompanyCanBeUsedForEligibility(partnerCompany);
 
-        return importBatchRepository.findLatestCompletedByPartnerCompanyId(partnerCompanyId)
+        return importBatchRepository.findLatestCompletedByPartnerCompanyIdAndEffectiveMonth(
+                        partnerCompanyId,
+                        YearMonth.now(clock).toString()
+                )
                 .map(importBatch -> verifyAgainstBatch(
                         customerId,
                         partnerCompanyId,
@@ -168,7 +176,7 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
             String identityReference,
             String employeeCode
     ) {
-        LocalDateTime verifiedAt = LocalDateTime.now();
+        LocalDateTime verifiedAt = LocalDateTime.now(clock);
 
         return linkRepository.findCurrentByCustomerIdAndPartnerCompanyId(customerId, partnerCompanyId)
                 .map(existingLink -> handleExistingLink(

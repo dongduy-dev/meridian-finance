@@ -11,6 +11,7 @@ import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanProductRepository;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
+import com.meridian.platform.loan.application.port.out.PartnerEligibilityAssessment;
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityPort;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
@@ -190,10 +191,10 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
                 .findByLoanApplicationId(loanApplicationId)
                 .orElseThrow(() -> new BusinessStateConflictException(
                         "SALARY_ADVANCE_VERIFICATION_REQUIRED", "Existing Salary Advance verification was not found."));
-        VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot = partnerEligibilityPort.findVerifiedEmployeeLink(
-                        customerId, previousVerification.customerPartnerEmployeeLinkId())
-                .orElseThrow(() -> new BusinessRuleViolationException(
-                        "EMPLOYEE_NOT_VERIFIED", "Current verified employee eligibility is required."));
+        VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot = requireEligiblePartnerEmployeeLink(
+                customerId,
+                previousVerification.customerPartnerEmployeeLinkId()
+        );
 
         limitRepository.acquireCustomerLinkLock(customerId, partnerSnapshot.customerPartnerEmployeeLinkId());
         assertNoOtherBlockingApplication(application);
@@ -299,6 +300,27 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
             throw new BusinessRuleViolationException(
                     "PRIMARY_BANK_ACCOUNT_REQUIRED", "A primary active bank account is required.");
         }
+    }
+
+    private VerifiedPartnerEmployeeLinkSnapshot requireEligiblePartnerEmployeeLink(
+            UUID customerId,
+            UUID customerPartnerEmployeeLinkId
+    ) {
+        PartnerEligibilityAssessment assessment = partnerEligibilityPort.inspectEmployeeLink(
+                customerId,
+                customerPartnerEmployeeLinkId
+        );
+        if (assessment.status() == PartnerEligibilityAssessment.Status.EVIDENCE_STALE) {
+            throw new BusinessRuleViolationException(
+                    "SALARY_ADVANCE_ELIGIBILITY_DATA_STALE",
+                    "Partner employment evidence must be refreshed before correction resubmission."
+            );
+        }
+        return assessment.optionalSnapshot()
+                .orElseThrow(() -> new BusinessRuleViolationException(
+                        "EMPLOYEE_NOT_VERIFIED",
+                        "Current verified employee eligibility is required."
+                ));
     }
 
     private void assertNoOtherBlockingApplication(LoanApplication application) {

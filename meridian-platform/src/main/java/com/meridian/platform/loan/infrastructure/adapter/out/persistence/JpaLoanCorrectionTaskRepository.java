@@ -23,9 +23,10 @@ public interface JpaLoanCorrectionTaskRepository extends JpaRepository<LoanCorre
     @Query("select task from LoanCorrectionTaskJpaEntity task where task.correctionRequestId = :requestId order by task.taskSequence, task.id")
     List<LoanCorrectionTaskJpaEntity> findAllByRequestIdForUpdate(@Param("requestId") UUID correctionRequestId);
 
-    @Query("select task from LoanCorrectionTaskJpaEntity task join LoanCorrectionRequestJpaEntity request on request.id = task.correctionRequestId where request.loanApplicationId = :applicationId and task.responsibleParty = :responsibility order by task.createdAt, task.id")
+    @Query("select task from LoanCorrectionTaskJpaEntity task join LoanCorrectionRequestJpaEntity request on request.id = task.correctionRequestId where request.loanApplicationId = :applicationId and request.status in :requestStatuses and task.responsibleParty = :responsibility order by task.createdAt, task.id")
     List<LoanCorrectionTaskJpaEntity> findCustomerQueue(
             @Param("applicationId") UUID loanApplicationId,
+            @Param("requestStatuses") java.util.Collection<com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus> requestStatuses,
             @Param("responsibility") LoanCorrectionResponsibility responsibility
     );
 

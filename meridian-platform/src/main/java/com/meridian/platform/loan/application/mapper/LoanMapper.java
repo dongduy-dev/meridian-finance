@@ -34,8 +34,6 @@ public class LoanMapper {
                 result.loanApplication().requestedAmount(),
                 result.loanApplication().requestedTermMonths(),
                 result.salaryAdvanceVerification().customerPartnerEmployeeLinkId(),
-                result.salaryAdvanceLimit().id(),
-                result.salaryAdvanceVerification().id(),
                 result.salaryAdvanceVerification().productVerificationResult().name(),
                 result.salaryAdvanceVerification().totalLimitSnapshot(),
                 result.salaryAdvanceVerification().usedAmountSnapshot(),

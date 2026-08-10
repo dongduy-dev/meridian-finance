@@ -10,6 +10,7 @@ import com.meridian.platform.loan.application.port.out.LoanApplicationRepository
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanProductRepository;
 import com.meridian.platform.loan.application.port.out.OutstandingLoanAccountQuery;
+import com.meridian.platform.loan.application.port.out.PartnerEligibilityAssessment;
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityPort;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
@@ -134,14 +135,10 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         loanApplicationRepository.acquireCustomerProductLock(customerId, salaryAdvanceProduct.productCode());
         assertNoBlockingApplicationExists(customerId);
 
-        VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot = partnerEligibilityPort.findVerifiedEmployeeLink(
-                        customerId,
-                        request.customerPartnerEmployeeLinkId()
-                )
-                .orElseThrow(() -> new BusinessRuleViolationException(
-                        "EMPLOYEE_NOT_VERIFIED",
-                        "Customer must have a verified active employee link before creating a Salary Advance application."
-                ));
+        VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot = requireEligiblePartnerEmployeeLink(
+                customerId,
+                request.customerPartnerEmployeeLinkId()
+        );
 
         BigDecimal effectiveTotalLimit = applicationPolicy.calculateEffectiveTotalLimit(
                 salaryAdvanceProduct,
@@ -243,6 +240,27 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
                     "Customer must have a primary active bank account before creating a Salary Advance application."
             );
         }
+    }
+
+    private VerifiedPartnerEmployeeLinkSnapshot requireEligiblePartnerEmployeeLink(
+            UUID customerId,
+            UUID customerPartnerEmployeeLinkId
+    ) {
+        PartnerEligibilityAssessment assessment = partnerEligibilityPort.inspectEmployeeLink(
+                customerId,
+                customerPartnerEmployeeLinkId
+        );
+        if (assessment.status() == PartnerEligibilityAssessment.Status.EVIDENCE_STALE) {
+            throw new BusinessRuleViolationException(
+                    "SALARY_ADVANCE_ELIGIBILITY_DATA_STALE",
+                    "Partner employment evidence must be refreshed before creating a Salary Advance application."
+            );
+        }
+        return assessment.optionalSnapshot()
+                .orElseThrow(() -> new BusinessRuleViolationException(
+                        "EMPLOYEE_NOT_VERIFIED",
+                        "Customer must have a verified active employee link before creating a Salary Advance application."
+                ));
     }
 
     private void assertNoBlockingApplicationExists(UUID customerId) {

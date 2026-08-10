@@ -12,8 +12,15 @@ public interface JpaPartnerEmployeeImportBatchRepository
 
     List<PartnerEmployeeImportBatchJpaEntity> findByPartnerCompanyIdOrderByEffectiveMonthDesc(UUID partnerCompanyId);
 
-    Optional<PartnerEmployeeImportBatchJpaEntity> findFirstByPartnerCompanyIdAndStatusOrderByEffectiveMonthDescIdDesc(
+    Optional<PartnerEmployeeImportBatchJpaEntity> findFirstByPartnerCompanyIdAndStatusOrderByEffectiveMonthDescCreatedAtDescIdDesc(
             UUID partnerCompanyId,
             PartnerEmployeeImportBatchStatus status
     );
+
+    Optional<PartnerEmployeeImportBatchJpaEntity>
+            findFirstByPartnerCompanyIdAndEffectiveMonthAndStatusOrderByCreatedAtDescIdDesc(
+                    UUID partnerCompanyId,
+                    String effectiveMonth,
+                    PartnerEmployeeImportBatchStatus status
+            );
 }
