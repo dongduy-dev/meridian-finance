@@ -27,7 +27,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -42,6 +45,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VerifyPartnerEmployeeServiceTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-06-26T05:00:00Z"),
+            ZoneOffset.UTC
+    );
 
     private final UUID customerId = UUID.fromString("99999999-9999-9999-9999-999999999999");
     private final UUID partnerCompanyId = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -69,7 +77,8 @@ class VerifyPartnerEmployeeServiceTest {
                 linkRepository,
                 customerIdentityEvidencePort,
                 new PartnerEmployeeVerificationMapper(),
-                new FixedCurrentUserProvider(customerId)
+                new FixedCurrentUserProvider(customerId),
+                CLOCK
         );
     }
 
@@ -89,6 +98,39 @@ class VerifyPartnerEmployeeServiceTest {
         assertNotNull(result.customerPartnerEmployeeLinkId());
         assertEquals("IDREF-MER-001", linkRepository.savedLink.verifiedIdentityRef());
         assertEquals("MER-EMP-001", linkRepository.savedLink.verifiedEmployeeCode());
+    }
+
+    @Test
+    void reverificationRefreshesExistingVerifiedLinkToCurrentBatchEmployee() {
+        UUID oldBatchId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa9");
+        UUID oldEmployeeId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb09");
+        CustomerPartnerEmployeeLink existing = new CustomerPartnerEmployeeLink(
+                UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+                customerId,
+                partnerCompanyId,
+                oldEmployeeId,
+                oldBatchId,
+                EmployeeVerificationOutcome.MATCHED_ACTIVE,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED,
+                "IDREF-MER-001",
+                "MER-EMP-001",
+                LocalDateTime.now(CLOCK).minusMonths(1),
+                LocalDateTime.now(CLOCK).minusMonths(1)
+        );
+        linkRepository.currentLink = Optional.of(existing);
+        partnerEmployeeRepository.employees.add(activeEmployee());
+
+        PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
+                partnerCompanyId,
+                new PartnerEmployeeVerificationRequest("MER-EMP-001")
+        );
+
+        assertEquals("MATCHED_ACTIVE", result.outcome());
+        assertEquals(existing.id(), result.customerPartnerEmployeeLinkId());
+        assertEquals(existing.id(), linkRepository.savedLink.id());
+        assertEquals(partnerEmployeeId, linkRepository.savedLink.partnerEmployeeId());
+        assertEquals(importBatchId, linkRepository.savedLink.sourceImportBatchId());
+        assertEquals(LocalDateTime.now(CLOCK), linkRepository.savedLink.lastRefreshedAt());
     }
 
     @Test
@@ -252,8 +294,8 @@ class VerifyPartnerEmployeeServiceTest {
                 status,
                 "IDREF-MER-001",
                 "MER-EMP-001",
-                LocalDateTime.now(),
-                LocalDateTime.now()
+                LocalDateTime.now(CLOCK),
+                LocalDateTime.now(CLOCK)
         );
     }
 
@@ -345,6 +387,16 @@ class VerifyPartnerEmployeeServiceTest {
         public Optional<PartnerEmployeeImportBatch> findLatestCompletedByPartnerCompanyId(UUID partnerCompanyId) {
             return latestCompletedBatch.filter(batch -> batch.partnerCompanyId().equals(partnerCompanyId));
         }
+
+        @Override
+        public Optional<PartnerEmployeeImportBatch> findLatestCompletedByPartnerCompanyIdAndEffectiveMonth(
+                UUID partnerCompanyId,
+                String effectiveMonth
+        ) {
+            return latestCompletedBatch
+                    .filter(batch -> batch.partnerCompanyId().equals(partnerCompanyId))
+                    .filter(batch -> batch.effectiveMonth().equals(effectiveMonth));
+        }
     }
 
     private static class FakePartnerEmployeeRepository implements PartnerEmployeeRepository {
@@ -404,6 +456,11 @@ class VerifyPartnerEmployeeServiceTest {
             return currentLink.filter(link ->
                     link.customerId().equals(customerId) && link.partnerCompanyId().equals(partnerCompanyId)
             );
+        }
+
+        @Override
+        public List<CustomerPartnerEmployeeLink> findByCustomerId(UUID customerId) {
+            return currentLink.filter(link -> link.customerId().equals(customerId)).stream().toList();
         }
 
         @Override

@@ -31,6 +31,7 @@ import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationReques
 import com.meridian.platform.loan.application.dto.StaffCorrectionTaskDto;
 import com.meridian.platform.loan.application.port.in.CompleteOwnCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.CompleteStaffCorrectionTaskUseCase;
+import com.meridian.platform.loan.application.port.in.CancelLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.in.QueryOwnCorrectionTasksUseCase;
 import com.meridian.platform.loan.application.port.in.QueryStaffCorrectionTasksUseCase;
 import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
@@ -41,7 +42,10 @@ import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicat
 import com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
+import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.exception.AuthorizationException;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,11 +58,15 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -71,6 +79,9 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.reset;
 
 @SpringBootTest(
         classes = {
@@ -119,8 +130,11 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
     @Autowired private CompleteStaffCorrectionTaskUseCase staffTaskCompletion;
     @Autowired private ResubmitStaffCorrectionUseCase staffResubmission;
     @Autowired private RespondToApprovedOfferUseCase offerResponseUseCase;
+    @Autowired private CancelLoanApplicationUseCase cancellationUseCase;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private ThreadLocalCurrentUserProvider currentUserProvider;
+    @Autowired private Clock clock;
+    @MockitoSpyBean private BusinessAuditPublisher auditPublisher;
 
     private Fixture fixture;
 
@@ -135,6 +149,12 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        reset(auditPublisher);
+        jdbcTemplate.update(
+                "UPDATE partner_employee_import_batches SET effective_month = ? WHERE id = ?",
+                YearMonth.now(clock).toString(),
+                IMPORT_BATCH_ID
+        );
         fixture = createFixture();
         useCustomer();
     }
@@ -269,6 +289,360 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                 + "WHERE loan_application_id = ? AND status = 'RESUBMITTED'", applicationId));
         assertEquals(0, count("SELECT count(*) FROM audit_events WHERE payload::text LIKE '%payslip%' "
                 + "OR payload::text LIKE '%Restricted%'"));
+    }
+
+    @Test
+    @Transactional
+    void stalePartnerEvidenceRejectsCustomerResubmissionWithoutPartialEffects() {
+        SalaryAdvanceApplicationDto application = submissionUseCase.startSalaryAdvanceApplication(
+                new SalaryAdvanceApplicationRequest(fixture.linkId(), money(3_000_000), 1)
+        );
+        UUID applicationId = application.loanApplicationId();
+
+        useLoanOfficer();
+        reviewStartUseCase.startReview(applicationId);
+        UUID cycleId = activeCycle(applicationId);
+        recommendationUseCase.submitReviewRecommendation(
+                applicationId,
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION,
+                        null,
+                        "Restricted stale-evidence test note.",
+                        cycleId,
+                        CorrectionReasonCode.RECENT_PAYSLIP_REQUIRED,
+                        new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+                                CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
+                                CorrectionResponsibility.CUSTOMER,
+                                DocumentType.RECENT_PAYSLIP,
+                                true,
+                                null,
+                                null,
+                                "Upload a recent payslip.",
+                                null
+                        )))
+                )
+        );
+
+        useCustomer();
+        CustomerCorrectionTaskDto task = onlyTask(applicationId);
+        upload(applicationId, task.checklistItemId(), null, "stale-evidence-payslip.pdf");
+        customerTaskCompletion.complete(
+                applicationId,
+                task.correctionTaskId(),
+                new CompleteCorrectionTaskRequest(UUID.randomUUID())
+        );
+
+        UUID newerBatchId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO partner_employee_import_batches "
+                        + "(id, partner_company_id, effective_month, status, valid_row_count, "
+                        + "invalid_row_count, created_at, updated_at) "
+                        + "VALUES (?, ?, ?, 'COMPLETED', 0, 0, "
+                        + "TIMESTAMP '2099-01-01 00:00:00', TIMESTAMP '2099-01-01 00:00:00')",
+                newerBatchId,
+                PARTNER_COMPANY_ID,
+                YearMonth.now(clock).toString()
+        );
+        int verificationCount = count(
+                "SELECT count(*) FROM salary_advance_verifications WHERE loan_application_id = ?",
+                applicationId
+        );
+        int movementCount = count(
+                "SELECT count(*) FROM salary_advance_limit_movements WHERE loan_application_id = ?",
+                applicationId
+        );
+
+        BusinessRuleViolationException failure = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> customerResubmission.resubmit(
+                        applicationId,
+                        new CorrectionResubmissionRequest(UUID.randomUUID())
+                )
+        );
+
+        assertEquals("SALARY_ADVANCE_ELIGIBILITY_DATA_STALE", failure.getErrorCode());
+        assertEquals("RETURNED_FOR_REVISION", status(applicationId));
+        assertEquals("CORRECTION_REQUIRED", cycleStatus(cycleId));
+        assertEquals(verificationCount, count(
+                "SELECT count(*) FROM salary_advance_verifications WHERE loan_application_id = ?",
+                applicationId
+        ));
+        assertEquals(movementCount, count(
+                "SELECT count(*) FROM salary_advance_limit_movements WHERE loan_application_id = ?",
+                applicationId
+        ));
+        assertEquals(0, count(
+                "SELECT count(*) FROM loan_correction_requests "
+                        + "WHERE loan_application_id = ? AND resubmission_request_id IS NOT NULL",
+                applicationId
+        ));
+    }
+
+    @Test
+    void staleReturnedCorrectionCanBeCancelledExactlyOnceAndNoLongerBlocksSubmission() {
+        ReturnedCorrection returned = createReturnedCustomerCorrection();
+        UUID applicationId = returned.applicationId();
+        UUID requestId = UUID.randomUUID();
+        BigDecimal totalBefore = amount(
+                "SELECT total_limit FROM salary_advance_limits WHERE customer_id = ?",
+                fixture.customerId()
+        );
+        assertEquals(money(3_000_000), amount(
+                "SELECT reserved_amount FROM salary_advance_limits WHERE customer_id = ?",
+                fixture.customerId()
+        ));
+        int verificationCount = count(
+                "SELECT count(*) FROM salary_advance_verifications WHERE loan_application_id = ?",
+                applicationId
+        );
+        UUID staleBatchId = makePartnerEvidenceStale();
+
+        CancelLoanApplicationUseCase.Result first = cancellationUseCase.cancel(
+                new CancelLoanApplicationUseCase.Command(requestId, applicationId)
+        );
+
+        assertEquals("CANCELLED", first.resultingStatus().name());
+        assertEquals(false, first.idempotentReplay());
+        assertEquals("CANCELLED", status(applicationId));
+        assertEquals("CANCELLED", jdbcTemplate.queryForObject(
+                "SELECT status FROM loan_correction_requests WHERE loan_application_id = ?",
+                String.class,
+                applicationId
+        ));
+        assertEquals(0, customerTaskQuery.findOwnTasks(applicationId).size());
+        BusinessStateConflictException taskFailure = assertThrows(
+                BusinessStateConflictException.class,
+                () -> customerTaskCompletion.complete(
+                        applicationId,
+                        returned.task().correctionTaskId(),
+                        new CompleteCorrectionTaskRequest(UUID.randomUUID())
+                )
+        );
+        assertEquals("CORRECTION_REQUEST_CONFLICT", taskFailure.getErrorCode());
+        assertEquals(BigDecimal.ZERO.setScale(2), amount(
+                "SELECT reserved_amount FROM salary_advance_limits WHERE customer_id = ?",
+                fixture.customerId()
+        ));
+        assertEquals(totalBefore, amount(
+                "SELECT available_amount FROM salary_advance_limits WHERE customer_id = ?",
+                fixture.customerId()
+        ));
+        assertEquals(1, count(
+                "SELECT count(*) FROM salary_advance_limit_movements "
+                        + "WHERE loan_application_id = ? AND movement_type = 'RESERVATION_RELEASED'",
+                applicationId
+        ));
+        assertEquals(1, count(
+                "SELECT count(*) FROM loan_application_status_transitions "
+                        + "WHERE loan_application_id = ? "
+                        + "AND from_status = 'RETURNED_FOR_REVISION' "
+                        + "AND to_status = 'CANCELLED' AND action = 'CANCEL_APPLICATION'",
+                applicationId
+        ));
+        assertEquals(1, count(
+                "SELECT count(*) FROM audit_events WHERE entity_id = ? "
+                        + "AND action = 'LOAN_APPLICATION_CANCELLED'",
+                applicationId
+        ));
+        assertEquals(1, count(
+                "SELECT count(*) FROM audit_events WHERE action = 'RESERVATION_RELEASED' "
+                        + "AND payload ->> 'loanApplicationId' = ?",
+                applicationId.toString()
+        ));
+        assertEquals(1, count(
+                "SELECT count(*) FROM loan_application_cancellations "
+                        + "WHERE loan_application_id = ?",
+                applicationId
+        ));
+        assertEquals(verificationCount, count(
+                "SELECT count(*) FROM salary_advance_verifications WHERE loan_application_id = ?",
+                applicationId
+        ));
+
+        CancelLoanApplicationUseCase.Result replay = cancellationUseCase.cancel(
+                new CancelLoanApplicationUseCase.Command(requestId, applicationId)
+        );
+        assertEquals(true, replay.idempotentReplay());
+        assertEquals(first.cancelledAt(), replay.cancelledAt());
+        assertEquals(1, count(
+                "SELECT count(*) FROM salary_advance_limit_movements "
+                        + "WHERE loan_application_id = ? AND movement_type = 'RESERVATION_RELEASED'",
+                applicationId
+        ));
+        assertEquals(1, count(
+                "SELECT count(*) FROM loan_application_status_transitions "
+                        + "WHERE loan_application_id = ? AND action = 'CANCEL_APPLICATION'",
+                applicationId
+        ));
+        assertEquals(1, count(
+                "SELECT count(*) FROM audit_events WHERE entity_id = ? "
+                        + "AND action = 'LOAN_APPLICATION_CANCELLED'",
+                applicationId
+        ));
+        BusinessStateConflictException newAttempt = assertThrows(
+                BusinessStateConflictException.class,
+                () -> cancellationUseCase.cancel(new CancelLoanApplicationUseCase.Command(
+                        UUID.randomUUID(), applicationId
+                ))
+        );
+        assertEquals("LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED", newAttempt.getErrorCode());
+
+        jdbcTemplate.update(
+                "UPDATE partner_employee_import_batches SET status = 'FAILED' WHERE id = ?",
+                staleBatchId
+        );
+        SalaryAdvanceApplicationDto replacement = submissionUseCase.startSalaryAdvanceApplication(
+                new SalaryAdvanceApplicationRequest(fixture.linkId(), money(2_000_000), 1)
+        );
+        assertEquals("SUBMITTED", replacement.status());
+        assertEquals(2, count(
+                "SELECT count(*) FROM loan_applications WHERE customer_id = ?",
+                fixture.customerId()
+        ));
+    }
+
+    @Test
+    void resubmissionThenCancellationRejectsCancellationAndPreservesReservation() {
+        ReturnedCorrection returned = createReturnedCustomerCorrection();
+        completeCustomerCorrection(returned);
+
+        assertEquals("SUBMITTED", customerResubmission.resubmit(
+                returned.applicationId(),
+                new CorrectionResubmissionRequest(UUID.randomUUID())
+        ).loanApplicationStatus());
+        BusinessStateConflictException failure = assertThrows(
+                BusinessStateConflictException.class,
+                () -> cancellationUseCase.cancel(new CancelLoanApplicationUseCase.Command(
+                        UUID.randomUUID(), returned.applicationId()
+                ))
+        );
+
+        assertEquals("LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED", failure.getErrorCode());
+        assertEquals("SUBMITTED", status(returned.applicationId()));
+        assertEquals(money(3_000_000), amount(
+                "SELECT reserved_amount FROM salary_advance_limits WHERE customer_id = ?",
+                fixture.customerId()
+        ));
+        assertEquals(0, count(
+                "SELECT count(*) FROM salary_advance_limit_movements "
+                        + "WHERE loan_application_id = ? AND movement_type = 'RESERVATION_RELEASED'",
+                returned.applicationId()
+        ));
+    }
+
+    @Test
+    void concurrentCancellationAndResubmissionLeaveOneCoherentWinner() throws Exception {
+        ReturnedCorrection returned = createReturnedCustomerCorrection();
+        completeCustomerCorrection(returned);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<CorrectionTerminalRaceOutcome> cancellation = executor.submit(() ->
+                    raceCancellation(returned.applicationId(), ready, start));
+            Future<CorrectionTerminalRaceOutcome> resubmission = executor.submit(() ->
+                    raceCustomerResubmission(returned.applicationId(), ready, start));
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+
+            List<CorrectionTerminalRaceOutcome> outcomes = List.of(
+                    cancellation.get(20, TimeUnit.SECONDS),
+                    resubmission.get(20, TimeUnit.SECONDS)
+            );
+            assertEquals(1, outcomes.stream().filter(outcome -> outcome.failure() == null).count());
+            assertEquals(1, outcomes.stream().filter(outcome -> outcome.failure() != null).count());
+            String finalStatus = status(returned.applicationId());
+            if ("CANCELLED".equals(finalStatus)) {
+                assertEquals(1, count(
+                        "SELECT count(*) FROM salary_advance_limit_movements "
+                                + "WHERE loan_application_id = ? "
+                                + "AND movement_type = 'RESERVATION_RELEASED'",
+                        returned.applicationId()
+                ));
+                assertEquals(1, count(
+                        "SELECT count(*) FROM salary_advance_verifications "
+                                + "WHERE loan_application_id = ?",
+                        returned.applicationId()
+                ));
+                assertEquals("CANCELLED", jdbcTemplate.queryForObject(
+                        "SELECT status FROM loan_correction_requests WHERE loan_application_id = ?",
+                        String.class,
+                        returned.applicationId()
+                ));
+            } else {
+                assertEquals("SUBMITTED", finalStatus);
+                assertEquals(0, count(
+                        "SELECT count(*) FROM salary_advance_limit_movements "
+                                + "WHERE loan_application_id = ? "
+                                + "AND movement_type = 'RESERVATION_RELEASED'",
+                        returned.applicationId()
+                ));
+                assertEquals(2, count(
+                        "SELECT count(*) FROM salary_advance_verifications "
+                                + "WHERE loan_application_id = ?",
+                        returned.applicationId()
+                ));
+                assertEquals("RESUBMITTED", jdbcTemplate.queryForObject(
+                        "SELECT status FROM loan_correction_requests WHERE loan_application_id = ?",
+                        String.class,
+                        returned.applicationId()
+                ));
+            }
+        }
+    }
+
+    @Test
+    void lateCancellationAuditFailureRollsBackEveryTerminalAndFinancialEffect() {
+        ReturnedCorrection returned = createReturnedCustomerCorrection();
+        BigDecimal reservedBefore = amount(
+                "SELECT reserved_amount FROM salary_advance_limits WHERE customer_id = ?",
+                fixture.customerId()
+        );
+        BigDecimal availableBefore = amount(
+                "SELECT available_amount FROM salary_advance_limits WHERE customer_id = ?",
+                fixture.customerId()
+        );
+        int auditBefore = count("SELECT count(*) FROM audit_events");
+        doThrow(new IllegalStateException("injected cancellation audit failure"))
+                .when(auditPublisher)
+                .publish(argThat(event -> event.entries().stream().anyMatch(entry ->
+                        entry.action() == BusinessAuditAction.LOAN_APPLICATION_CANCELLED)));
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> cancellationUseCase.cancel(new CancelLoanApplicationUseCase.Command(
+                        UUID.randomUUID(), returned.applicationId()
+                ))
+        );
+
+        assertEquals("RETURNED_FOR_REVISION", status(returned.applicationId()));
+        assertEquals("OPEN", jdbcTemplate.queryForObject(
+                "SELECT status FROM loan_correction_requests WHERE loan_application_id = ?",
+                String.class,
+                returned.applicationId()
+        ));
+        assertEquals(reservedBefore, amount(
+                "SELECT reserved_amount FROM salary_advance_limits WHERE customer_id = ?",
+                fixture.customerId()
+        ));
+        assertEquals(availableBefore, amount(
+                "SELECT available_amount FROM salary_advance_limits WHERE customer_id = ?",
+                fixture.customerId()
+        ));
+        assertEquals(0, count(
+                "SELECT count(*) FROM salary_advance_limit_movements "
+                        + "WHERE loan_application_id = ? AND movement_type = 'RESERVATION_RELEASED'",
+                returned.applicationId()
+        ));
+        assertEquals(0, count(
+                "SELECT count(*) FROM loan_application_cancellations WHERE loan_application_id = ?",
+                returned.applicationId()
+        ));
+        assertEquals(0, count(
+                "SELECT count(*) FROM loan_application_status_transitions "
+                        + "WHERE loan_application_id = ? AND action = 'CANCEL_APPLICATION'",
+                returned.applicationId()
+        ));
+        assertEquals(auditBefore, count("SELECT count(*) FROM audit_events"));
     }
 
 
@@ -468,6 +842,117 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
     }
 
 
+
+    private ReturnedCorrection createReturnedCustomerCorrection() {
+        useCustomer();
+        SalaryAdvanceApplicationDto application = submissionUseCase.startSalaryAdvanceApplication(
+                new SalaryAdvanceApplicationRequest(fixture.linkId(), money(3_000_000), 1)
+        );
+        UUID applicationId = application.loanApplicationId();
+        useLoanOfficer();
+        reviewStartUseCase.startReview(applicationId);
+        UUID cycleId = activeCycle(applicationId);
+        recommendationUseCase.submitReviewRecommendation(
+                applicationId,
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION,
+                        null,
+                        "Restricted cancellation test note.",
+                        cycleId,
+                        CorrectionReasonCode.RECENT_PAYSLIP_REQUIRED,
+                        new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+                                CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
+                                CorrectionResponsibility.CUSTOMER,
+                                DocumentType.RECENT_PAYSLIP,
+                                true,
+                                null,
+                                null,
+                                "Upload a recent payslip.",
+                                null
+                        )))
+                )
+        );
+        useCustomer();
+        return new ReturnedCorrection(applicationId, cycleId, onlyTask(applicationId));
+    }
+
+    private void completeCustomerCorrection(ReturnedCorrection returned) {
+        upload(
+                returned.applicationId(),
+                returned.task().checklistItemId(),
+                null,
+                "cancellation-race-payslip.pdf"
+        );
+        customerTaskCompletion.complete(
+                returned.applicationId(),
+                returned.task().correctionTaskId(),
+                new CompleteCorrectionTaskRequest(UUID.randomUUID())
+        );
+    }
+
+    private UUID makePartnerEvidenceStale() {
+        UUID newerBatchId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO partner_employee_import_batches "
+                        + "(id, partner_company_id, effective_month, status, valid_row_count, "
+                        + "invalid_row_count, created_at, updated_at) "
+                        + "VALUES (?, ?, ?, 'COMPLETED', 0, 0, "
+                        + "TIMESTAMP '2099-01-01 00:00:00', TIMESTAMP '2099-01-01 00:00:00')",
+                newerBatchId,
+                PARTNER_COMPANY_ID,
+                YearMonth.now(clock).toString()
+        );
+        return newerBatchId;
+    }
+
+    private CorrectionTerminalRaceOutcome raceCancellation(
+            UUID applicationId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) throws InterruptedException {
+        useCustomer();
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Cancellation race did not start.");
+        }
+        try {
+            return new CorrectionTerminalRaceOutcome(
+                    cancellationUseCase.cancel(new CancelLoanApplicationUseCase.Command(
+                            UUID.randomUUID(), applicationId
+                    )).resultingStatus().name(),
+                    null
+            );
+        } catch (RuntimeException exception) {
+            return new CorrectionTerminalRaceOutcome(null, exception);
+        } finally {
+            currentUserProvider.clear();
+        }
+    }
+
+    private CorrectionTerminalRaceOutcome raceCustomerResubmission(
+            UUID applicationId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) throws InterruptedException {
+        useCustomer();
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Resubmission race did not start.");
+        }
+        try {
+            return new CorrectionTerminalRaceOutcome(
+                    customerResubmission.resubmit(
+                            applicationId,
+                            new CorrectionResubmissionRequest(UUID.randomUUID())
+                    ).loanApplicationStatus(),
+                    null
+            );
+        } catch (RuntimeException exception) {
+            return new CorrectionTerminalRaceOutcome(null, exception);
+        } finally {
+            currentUserProvider.clear();
+        }
+    }
 
     private UUID raceStaffResubmissions(UUID applicationId) throws Exception {
         CountDownLatch ready = new CountDownLatch(2);
@@ -771,11 +1256,21 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
         return jdbcTemplate.queryForObject(sql, Integer.class, arguments);
     }
 
+    private BigDecimal amount(String sql, Object... arguments) {
+        return jdbcTemplate.queryForObject(sql, BigDecimal.class, arguments);
+    }
+
     private void useCustomer() {
         currentUserProvider.use(new AuthenticatedUser(
                 fixture.customerUserId(), "correction-customer@meridian.test", "CUSTOMER",
                 fixture.customerId(), Set.of("CUSTOMER"),
-                Set.of("loan:submit", "loan:read:own", "loan:offer:respond:own", "loan:correction:own")
+                Set.of(
+                        "loan:submit",
+                        "loan:read:own",
+                        "loan:offer:respond:own",
+                        "loan:correction:own",
+                        "loan:cancel:own"
+                )
         ));
     }
 
@@ -826,6 +1321,19 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
     ) {
     }
 
+    private record ReturnedCorrection(
+            UUID applicationId,
+            UUID reviewCycleId,
+            CustomerCorrectionTaskDto task
+    ) {
+    }
+
+    private record CorrectionTerminalRaceOutcome(
+            String status,
+            RuntimeException failure
+    ) {
+    }
+
     private record Fixture(UUID customerId, UUID customerUserId, UUID linkId) {
     }
 
@@ -857,5 +1365,6 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
         ThreadLocalCurrentUserProvider currentUserProvider() {
             return new ThreadLocalCurrentUserProvider();
         }
+
     }
 }

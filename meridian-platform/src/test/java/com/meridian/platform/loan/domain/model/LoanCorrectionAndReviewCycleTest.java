@@ -68,6 +68,25 @@ class LoanCorrectionAndReviewCycleTest {
                 () -> resubmitted.resubmit(UUID.randomUUID(), STARTED_AT.plusMinutes(4)));
     }
 
+    @Test
+    void activeCorrectionCancellationPreservesEvidenceAndEndsActionability() {
+        LoanCorrectionRequest request = request();
+        LocalDateTime cancelledAt = STARTED_AT.plusMinutes(5);
+
+        LoanCorrectionRequest cancelled = request.cancel(cancelledAt);
+
+        assertEquals(LoanCorrectionRequestStatus.CANCELLED, cancelled.status());
+        assertEquals(cancelledAt, cancelled.cancelledAt());
+        assertEquals(request.reasonCode(), cancelled.reasonCode());
+        assertEquals(request.sourceAction(), cancelled.sourceAction());
+        assertEquals(request.sourceReviewCycleId(), cancelled.sourceReviewCycleId());
+        assertEquals(false, cancelled.isActive());
+        assertThrows(BusinessStateConflictException.class,
+                () -> cancelled.cancel(cancelledAt.plusMinutes(1)));
+        assertThrows(BusinessStateConflictException.class,
+                () -> cancelled.resubmit(UUID.randomUUID(), cancelledAt.plusMinutes(1)));
+    }
+
     private LoanApplicationReviewCycle activeCycle() {
         return LoanApplicationReviewCycle.active(UUID.randomUUID(), UUID.randomUUID(), 1, STARTED_AT);
     }

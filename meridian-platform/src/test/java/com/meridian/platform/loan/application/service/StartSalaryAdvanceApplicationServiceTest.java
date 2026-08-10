@@ -10,6 +10,7 @@ import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanProductRepository;
 import com.meridian.platform.loan.application.port.out.OutstandingLoanAccountQuery;
+import com.meridian.platform.loan.application.port.out.PartnerEligibilityAssessment;
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityPort;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
@@ -124,8 +125,8 @@ class StartSalaryAdvanceApplicationServiceTest {
         assertEquals(limit(3_000_000), result.requestedAmount());
         assertEquals(1, result.requestedTermMonths());
         assertEquals(linkId, result.customerPartnerEmployeeLinkId());
-        assertNotNull(result.salaryAdvanceLimitId());
-        assertNotNull(result.salaryAdvanceVerificationId());
+        assertNotNull(salaryAdvanceLimitRepository.currentLimit.orElseThrow().id());
+        assertNotNull(salaryAdvanceVerificationRepository.savedVerification.id());
         assertEquals("VERIFIED", result.productVerificationResult());
         assertEquals(limit(6_000_000), result.totalLimitSnapshot());
         assertEquals(limit(0), result.usedAmountSnapshot());
@@ -244,6 +245,24 @@ class StartSalaryAdvanceApplicationServiceTest {
 
         assertEquals("EMPLOYEE_NOT_VERIFIED", exception.getErrorCode());
         assertTrue(loanApplicationRepository.savedApplications.isEmpty());
+    }
+
+    @Test
+    void stalePartnerEvidenceFailsBeforeReservationOrApplicationEffects() {
+        partnerEligibilityPort.assessmentOverride = PartnerEligibilityAssessment.ineligible(
+                PartnerEligibilityAssessment.Status.EVIDENCE_STALE
+        );
+
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.startSalaryAdvanceApplication(request(limit(3_000_000), 1))
+        );
+
+        assertEquals("SALARY_ADVANCE_ELIGIBILITY_DATA_STALE", exception.getErrorCode());
+        assertFalse(salaryAdvanceLimitRepository.lockAcquired);
+        assertTrue(salaryAdvanceLimitMovementRepository.savedMovements.isEmpty());
+        assertTrue(loanApplicationRepository.savedApplications.isEmpty());
+        assertTrue(salaryAdvanceVerificationRepository.savedVerification == null);
     }
 
     @Test
@@ -756,6 +775,7 @@ class StartSalaryAdvanceApplicationServiceTest {
     private static class FakePartnerEligibilityPort implements PartnerEligibilityPort {
 
         private Optional<VerifiedPartnerEmployeeLinkSnapshot> snapshot;
+        private PartnerEligibilityAssessment assessmentOverride;
         private int findCalls;
 
         private FakePartnerEligibilityPort(VerifiedPartnerEmployeeLinkSnapshot snapshot) {
@@ -771,6 +791,24 @@ class StartSalaryAdvanceApplicationServiceTest {
             return snapshot
                     .filter(value -> value.customerId().equals(customerId))
                     .filter(value -> value.customerPartnerEmployeeLinkId().equals(customerPartnerEmployeeLinkId));
+        }
+
+        @Override
+        public PartnerEligibilityAssessment inspectEmployeeLink(
+                UUID customerId,
+                UUID customerPartnerEmployeeLinkId
+        ) {
+            findCalls++;
+            if (assessmentOverride != null) {
+                return assessmentOverride;
+            }
+            return snapshot
+                    .filter(value -> value.customerId().equals(customerId))
+                    .filter(value -> value.customerPartnerEmployeeLinkId().equals(customerPartnerEmployeeLinkId))
+                    .map(PartnerEligibilityAssessment::eligible)
+                    .orElseGet(() -> PartnerEligibilityAssessment.ineligible(
+                            PartnerEligibilityAssessment.Status.NOT_VERIFIED
+                    ));
         }
     }
 }

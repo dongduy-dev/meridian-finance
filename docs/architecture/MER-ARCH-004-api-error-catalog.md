@@ -30,6 +30,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 403 | `ACCOUNT_SUSPENDED` | Account suspended | Contact support to review the account status |
 | 403 | `ACCESS_DENIED` | Access denied | Use a principal whose role includes the required permission |
 | 403 | `CUSTOMER_CONTEXT_REQUIRED` | Customer context required | Use an authenticated customer-linked token for a customer-owned flow |
+| 403 | `SALARY_ADVANCE_READINESS_ACCESS_DENIED` | Salary Advance readiness access denied | Use an authenticated Customer principal with `loan:submit` |
 
 ---
 
@@ -57,6 +58,8 @@ Reserved codes are listed separately. They do not become part of an executable A
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
 | 404 | `LOAN_APPLICATION_NOT_FOUND` | Loan application not found | Verify the requested LoanApplication ID |
+| 403 | `LOAN_APPLICATION_CANCELLATION_ACCESS_DENIED` | Loan application cancellation access denied | Use the authenticated Customer owner with `loan:cancel:own` |
+| 409 | `LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED` | Loan application cancellation not allowed | Cancel only an active returned correction; otherwise refresh the application state |
 | 404 | `PRODUCT_NOT_FOUND` | Loan product not found | Verify the requested product ID |
 | 422 | `PRODUCT_INACTIVE` | Loan product inactive | Select an active loan product |
 | 422 | `PRODUCT_POLICY_INVALID` | Product policy invalid | Correct the product policy configuration before accepting applications |

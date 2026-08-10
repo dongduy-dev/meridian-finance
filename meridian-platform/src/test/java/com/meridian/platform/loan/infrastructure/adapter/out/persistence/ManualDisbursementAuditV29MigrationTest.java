@@ -34,6 +34,7 @@ class ManualDisbursementAuditV29MigrationTest {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
             if (action == BusinessAuditAction
                     .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED
+                    || action == BusinessAuditAction.LOAN_APPLICATION_CANCELLED
                     || action == BusinessAuditAction.REPAYMENT_RECORDED
                     || action == BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED
                     || action == BusinessAuditAction.LOAN_SETTLEMENT_APPROVED
@@ -64,12 +65,13 @@ class ManualDisbursementAuditV29MigrationTest {
     }
 
     @Test
-    void currentSchemaSnapshotDeclaresV36AndServicingFoundation() throws Exception {
+    void currentSchemaSnapshotDeclaresV37AndCancellationFoundation() throws Exception {
         String snapshot = Files.readString(Path.of(
                 "../docs/database/MER-DB-CURRENT-SCHEMA.sql"
         ));
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V36"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V37"));
+        assertTrue(snapshot.contains("CREATE TABLE loan_application_cancellations"));
         assertTrue(snapshot.contains("-- V29 manual disbursement audit action"));
         assertTrue(snapshot.contains("'MANUAL_DISBURSEMENT_CONFIRMED'"));
         assertTrue(snapshot.contains("'REPAYMENT_RECORDED'"));

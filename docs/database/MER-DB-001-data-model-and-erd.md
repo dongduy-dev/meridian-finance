@@ -20,7 +20,7 @@ The model supports the MVP lending workflow for:
 
 The MVP uses one PostgreSQL database. Tables are logically owned by modules, but Meridian does not use a database-per-service design.
 
-> **Model authority and state:** Sections 1-13 are a high-level logical/current-plus-target model; names in the ERD are not an exact physical-schema inventory. Executable Flyway migrations are authoritative for deployed structure, and `MER-DB-CURRENT-SCHEMA.sql` is the current human-readable V1-V36 snapshot. The current physical model has no `refresh_tokens`, `collaterals`, or OCR tables. It uses `manual_disbursements` rather than the conceptual `disbursement_records`, and servicing uses `repayment_schedule_items`, typed `repayment_transactions`, `repayment_allocations`, `repayment_installment_progress`, `repayment_operation_outcomes`, immutable approved-settlement and closure evidence, LoanAccount/installment status-transition tables, and Salary Advance movement/release evidence rather than a single `repayment_records` table.
+> **Model authority and state:** Sections 1-13 are a high-level logical/current-plus-target model; names in the ERD are not an exact physical-schema inventory. Executable Flyway migrations are authoritative for deployed structure, and `MER-DB-CURRENT-SCHEMA.sql` is the current human-readable V1-V37 snapshot. The current physical model has no `refresh_tokens`, `collaterals`, or OCR tables. It uses `manual_disbursements` rather than the conceptual `disbursement_records`, and servicing uses `repayment_schedule_items`, typed `repayment_transactions`, `repayment_allocations`, `repayment_installment_progress`, `repayment_operation_outcomes`, immutable approved-settlement and closure evidence, LoanAccount/installment status-transition tables, and Salary Advance movement/release evidence rather than a single `repayment_records` table.
 
 ## 3. Database Design Principles
 
@@ -504,7 +504,7 @@ Logical tables:
 - `permissions` - action-level permissions used by RBAC.
 - `role_assignments` - user-to-role assignment history/current assignments.
 - `role_permissions` - role-to-permission mapping.
-- `refresh_tokens` - target refresh-token records with hashed values, expiry, and revocation metadata; this table is not present in the current V35 schema.
+- `refresh_tokens` - target refresh-token records with hashed values, expiry, and revocation metadata; this table is not present in the current V37 schema.
 
 Current Identity persists users, roles, permissions, and assignments and issues/parses JWT access tokens. Refresh-token rotation and its persistence model remain deferred targets; permission enforcement is tied to role/action policy.
 
@@ -530,6 +530,8 @@ Logical tables:
 - `customer_partner_employee_links` - reusable relationship between a customer and a verified Partner Employee record.
 
 `customer_partner_employee_links` answers: "Is this customer verified as an employee of this partner company?" It is not a loan application and does not represent current lending exposure. It stores the customer ID, partner company ID, partner employee ID, verification/link status, and enough evidence to reuse the verified relationship for future Salary Advance applications. Partner employee source data remains owned by Partner Management; customer identity/profile data remains owned by Customer Management.
+
+For normal Salary Advance eligibility, Partner resolves the authoritative latest valid `COMPLETED` import batch for the current UTC effective month from existing batch timestamps and identifiers. A link and its employee source must both reference that batch. This rule requires no new persisted freshness flag or migration; re-verification updates the existing reusable link when current matching evidence is available.
 
 ### 5.4 Loan Core / Origination
 
@@ -769,7 +771,10 @@ Detailed index definitions are out of scope for this document. At implementation
   most one `ACTIVE` cycle.
 - `loan_correction_requests` and `loan_correction_tasks`: explicit source,
   responsibility, scope, proof baseline, audience-specific instruction, task
-  completion, and resubmission idempotency.
+  completion, resubmission idempotency, and terminal cancellation timestamp.
+- `loan_application_cancellations`: immutable one-per-application Customer command
+  evidence linking the terminal correction request, exact reservation-release
+  movement, request UUID, Customer actor, and cancellation time.
 
 `review_recommendations.review_cycle_id` has a composite foreign key proving that
 the recommendation and cycle belong to the same application. There is one
@@ -826,7 +831,7 @@ V28 also links `DISBURSED_TO_USED` movements to both Loan Application and LoanAc
 
 V29 allowlists `MANUAL_DISBURSEMENT_CONFIRMED` for the atomic activation audit. V30 makes the Loan Application product identity tuple immutable and foreign-keyed to the Loan Product, preventing product drift before policy selection. V31 adds only `LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED` to the audit action whitelist.
 
-The V29 and V31 migrations preflight the exact prior named whitelist predicate before replacing it. They reject missing, extra, weakened, repeated, or incompatible constraint state before any drop. `MER-DB-CURRENT-SCHEMA.sql` reflects the stable V1-V36 physical result, including the servicing structures summarized in Section 17; migration preflight machinery is intentionally kept only in executable Flyway history.
+The V29, V31, and V37 migrations preflight the exact prior state they replace or extend. They reject missing, extra, weakened, repeated, or incompatible constraint state before mutation. `MER-DB-CURRENT-SCHEMA.sql` reflects the stable V1-V37 physical result, including the servicing structures summarized in Section 17 and the returned-correction cancellation structures summarized in Section 14; migration preflight machinery is intentionally kept only in executable Flyway history.
 
 ## 17. Repayment, settlement, and closure servicing model
 

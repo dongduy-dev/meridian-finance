@@ -195,6 +195,35 @@ class LoanApplicationTest {
     }
 
     @Test
+    void customerCancellationMovesOnlyReturnedApplicationToCancelled() {
+        LoanApplicationTransitionResult result = loanApplication(
+                LoanApplicationStatus.RETURNED_FOR_REVISION
+        ).cancelReturnedForRevision();
+
+        assertEquals(LoanApplicationStatus.CANCELLED, result.loanApplication().status());
+        assertTransition(
+                result,
+                LoanApplicationStatus.RETURNED_FOR_REVISION,
+                LoanApplicationStatus.CANCELLED,
+                LoanApplicationTransitionAction.CANCEL_APPLICATION
+        );
+    }
+
+    @Test
+    void customerCancellationRejectsEveryOtherApplicationStatus() {
+        for (LoanApplicationStatus status : LoanApplicationStatus.values()) {
+            if (status == LoanApplicationStatus.RETURNED_FOR_REVISION) {
+                continue;
+            }
+            BusinessStateConflictException exception = assertThrows(
+                    BusinessStateConflictException.class,
+                    () -> loanApplication(status).cancelReturnedForRevision()
+            );
+            assertEquals("LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED", exception.getErrorCode());
+        }
+    }
+
+    @Test
     void approvalDecisionRejectsNonApprovalPendingApplication() {
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,

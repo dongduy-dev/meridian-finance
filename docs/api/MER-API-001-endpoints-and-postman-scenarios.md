@@ -72,15 +72,20 @@ Customer-owned read APIs may return the same generic `404` for a nonexistent res
 
 ### 1.5 Idempotency
 
-| Operation | Request UUID |
-|---|---|
-| Correction task completion | `completionRequestId` |
-| Correction resubmission | `resubmissionRequestId` |
-| Contract preparation/regeneration | `preparationRequestId` |
-| Contract acknowledgment | `acknowledgmentRequestId` |
-| Readiness confirmation | `confirmationRequestId` |
-| Disbursement confirmation | `requestId` |
-| Repayment posting | `requestId` |
+| Operation | Request UUID field | Durable replay semantics |
+|---|---|---|
+| Customer or Staff document upload/replacement | multipart `uploadRequestId` | Returns the same immutable document version; conflicting logical content is rejected. |
+| Document review/waiver/replacement decision | `reviewRequestId` | Returns the recorded immutable review outcome; conflicting logical content is rejected. |
+| Correction task completion | `completionRequestId` | Returns the completed task without a second completion effect. |
+| Correction resubmission | `resubmissionRequestId` | Returns the consumed resubmission result without another verification or transition. |
+| Customer correction cancellation | `requestId` | Returns the durable cancellation result without another terminal transition, reservation release, movement, history entry, or audit event. |
+| Contract preparation/regeneration | `preparationRequestId` | Returns the same prepared contract version. |
+| Contract acknowledgment | `acknowledgmentRequestId` | Returns the same acknowledgment result for the exact version. |
+| Readiness confirmation | `confirmationRequestId` | Returns the same confirmed-readiness result without another transition. |
+| Disbursement confirmation | `requestId` | Returns the durable activation result without another transfer, account, schedule, or exposure effect. |
+| Repayment posting | `requestId` | Returns the immutable operation outcome captured at first execution. |
+| Administrative Full-Balance Settlement | `requestId` | Returns the immutable settlement outcome without another payment, allocation, exposure, history, or audit effect. |
+| Administrative LoanAccount closure | `requestId` | Returns the immutable closure result without another status, closure-evidence, history, or audit effect. |
 
 An identical logical replay returns the original result without another business effect. Reuse with different logical content returns `409 IDEMPOTENCY_KEY_REUSED` without identifying the protected field that differed.
 
@@ -117,7 +122,10 @@ The contractual destination-reveal operation is the sole v1 JSON endpoint permit
 
 | Method | Path | Authorization | Summary |
 |---|---|---|---|
+| GET | `/api/v1/loan-products/salary-advance/readiness` | Customer with `loan:submit` | Return the authenticated Customer's advisory Salary Advance eligibility and safe limit view. |
 | POST | `/api/v1/loan-applications/salary-advance` | `loan:submit` | Submit a Salary Advance application and reserve eligible limit. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}` | Customer `loan:read:own` or Staff `loan:read` | Return a safe durable LoanApplication status projection. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/cancel` | Customer with `loan:cancel:own` | Cancel an owned Salary Advance only from `RETURNED_FOR_REVISION` and release its reservation exactly once. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review/start` | `loan:review` | Start Loan Officer review. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review-recommendations` | `approval:recommend` | Record a Loan Officer recommendation. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approval-decisions` | `approval:decide` | Record an Approver decision. |
@@ -229,7 +237,31 @@ Responses exclude salary, limit values, employee code, identity evidence, and ra
 
 ## 4. Salary Advance Origination
 
-### 4.1 Submit application
+### 4.1 Salary Advance readiness
+
+```text
+GET /api/v1/loan-products/salary-advance/readiness
+```
+
+This Customer-only read requires `loan:submit` and derives Customer identity from the Bearer token. It is advisory: it uses non-locking reads, creates no application or limit, reserves no exposure, writes no movement, verification, history, or audit evidence, and does not promise that a later command will succeed after concurrent state changes.
+
+The response contains `productCode`, the reusable `customerPartnerEmployeeLinkId` when currently eligible, `employeeVerificationStatus`, `partnerEligibilityStatus`, `limitStatus`, `totalAmount`, `usedAmount`, `reservedAmount`, `availableAmount`, `lastRefreshAt`, `applicationAllowed`, and ordered `blockerCodes`. It excludes Customer identity, Partner Employee and import-batch identity, Partner salary/evidence, Salary Advance limit and verification identity, workflow recommendations, and internal audit/history evidence.
+
+Important blockers include Customer/profile/bank readiness, `EMPLOYEE_NOT_VERIFIED`, `SALARY_ADVANCE_ELIGIBILITY_DATA_STALE`, `SALARY_ADVANCE_LIMIT_UNAVAILABLE`, `INSUFFICIENT_AVAILABLE_LIMIT`, `BLOCKING_APPLICATION_EXISTS`, `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, `PRODUCT_NOT_AVAILABLE`, and safe `SYSTEM_STATE_CONFLICT`. Current eligibility requires the authoritative latest valid completed Partner import batch for the current UTC effective month; stale evidence remains blocked until re-verification refreshes the reusable link.
+
+### 4.2 LoanApplication status read
+
+```text
+GET /api/v1/loan-applications/{loanApplicationId}
+```
+
+An authenticated Customer with `loan:read:own` may read only their own application. Missing and foreign-owned IDs both return `404 LOAN_APPLICATION_NOT_FOUND`. Authorized Staff require `loan:read`; `loan:submit`, `repayment:update`, `approval:decide`, and document permissions do not imply this read.
+
+The response contains only `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `requestedAmount`, `requestedTermMonths`, `status`, and `submittedAt`. It excludes Customer, employee-link, limit, verification, review-cycle, actor, audit/history, payment, and banking evidence. This is a durable status projection for reconnect/resume flows, not a next-action engine, command recommendation, history API, or Staff work queue.
+
+`CANCELLED` is executable in v0.1.0 only through the Customer-owned correction-abandonment command described in Section 5.4. Broader Customer cancellation from other states and every Staff or administrative cancellation policy remain deferred.
+
+### 4.3 Submit application
 
 ```json
 {
@@ -250,10 +282,11 @@ Important errors:
 | `409` | `BLOCKING_APPLICATION_EXISTS` |
 | `409` | `OUTSTANDING_LOAN_ACCOUNT_EXISTS` |
 | `422` | `EMPLOYEE_NOT_VERIFIED` |
+| `422` | `SALARY_ADVANCE_ELIGIBILITY_DATA_STALE` |
 | `422` | `INVALID_PRODUCT_AMOUNT` |
 | `422` | Applicable Salary Advance eligibility or limit code from the error catalogue |
 
-### 4.2 Start review
+### 4.4 Start review
 
 ```text
 POST /api/v1/loan-applications/{loanApplicationId}/review/start
@@ -359,7 +392,25 @@ Client-visible rules:
 
 Important codes: `STAFF_CORRECTION_MAKER_CHECKER_VIOLATION`, `CORRECTION_TASK_PROOF_MISSING`, `CORRECTION_TASKS_INCOMPLETE`, `CORRECTION_RESUBMISSION_DENIED`, and `CORRECTION_ALREADY_RESUBMITTED`.
 
-### 5.4 Document upload and review
+### 5.4 Customer cancellation from returned correction
+
+```http
+POST /api/v1/loan-applications/{loanApplicationId}/cancel
+Authorization: Bearer <customer-token>
+Content-Type: application/json
+```
+
+```json
+{ "requestId": "UUID" }
+```
+
+This narrow command requires an authenticated Customer with `loan:cancel:own`, derives Customer identity from the token, and accepts no Customer ID or financial amount. Missing and foreign-owned applications both return `404 LOAN_APPLICATION_NOT_FOUND`.
+
+The only allowed source status is `RETURNED_FOR_REVISION`. A new request against any other status, including an application already cancelled by another request, returns `409 LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED`. An exact replay of the successful request UUID returns the original `CANCELLED` result with `idempotentReplay = true`.
+
+Success atomically marks the active correction request `CANCELLED`, changes the LoanApplication to `CANCELLED`, releases the application’s repository-derived Salary Advance reservation back to available exposure, writes exactly one `RESERVATION_RELEASED` movement, and records immutable history and audit evidence. Cancellation does not run Partner freshness or re-verification; stale or otherwise unusable Partner evidence cannot prevent abandonment. Cancellation changes neither used exposure nor LoanAccount or repayment state.
+
+### 5.5 Document upload and review
 
 Upload is multipart with:
 
@@ -642,8 +693,8 @@ Collection:
 docs/api/Meridian-Platform.postman_collection.json
 ```
 
-It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows.
+It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, optional returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows.
 
-Complex correction scenarios require prepared application, review-cycle, checklist, and version variables. Seed fixtures and scenario-specific IDs belong to the collection or its environment, not this API contract.
+Complex correction scenarios require prepared application, review-cycle, checklist, and version variables. The optional cancellation folder requires `returnedCancellationScenarioEnabled=true` and a separate Customer-owned `cancellationLoanApplicationId` in `RETURNED_FOR_REVISION`; it confirms the command, exact replay, and terminal application GET without exposing internal evidence IDs. Seed fixtures and scenario-specific IDs belong to the collection or its environment, not this API contract.
 
 ---

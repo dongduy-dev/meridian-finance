@@ -118,8 +118,6 @@ class SalaryAdvanceLoanApplicationControllerTest {
                     BigDecimal.valueOf(3_000_000).setScale(2),
                     1,
                     request.customerPartnerEmployeeLinkId(),
-                    UUID.randomUUID(),
-                    UUID.randomUUID(),
                     "VERIFIED",
                     BigDecimal.valueOf(6_000_000).setScale(2),
                     BigDecimal.ZERO.setScale(2),
