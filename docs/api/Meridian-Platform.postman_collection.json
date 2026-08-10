@@ -417,6 +417,62 @@
                          "key":  "repaymentValueDate",
                          "value":  "2026-08-01",
                          "type":  "default"
+                     },
+                     {
+                         "key":  "settlementLoanApplicationId",
+                         "value":  "",
+                         "type":  "default",
+                         "description":  "A separate DISBURSED Salary Advance with an ACTIVE or OVERDUE LoanAccount for the ordered settlement/closure folder."
+                     },
+                     {
+                         "key":  "settlementRequestId",
+                         "value":  "50000000-0000-0000-0000-000000000001",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "settlementInvalidRequestId",
+                         "value":  "50000000-0000-0000-0000-000000000002",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "settlementDifferentRequestId",
+                         "value":  "50000000-0000-0000-0000-000000000003",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "closureBeforeSettlementRequestId",
+                         "value":  "60000000-0000-0000-0000-000000000001",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "closureRequestId",
+                         "value":  "60000000-0000-0000-0000-000000000002",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "closureDifferentRequestId",
+                         "value":  "60000000-0000-0000-0000-000000000003",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "settlementExpectedAmount",
+                         "value":  0,
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "settlementInvalidAmount",
+                         "value":  0,
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "settlementPaymentValueDate",
+                         "value":  "2026-08-10",
+                         "type":  "default"
+                     },
+                     {
+                         "key":  "settlementExternalReference",
+                         "value":  "MERIDIAN-SETTLEMENT-000001",
+                         "type":  "default"
                      }
                  ],
     "item":  [
@@ -5334,6 +5390,178 @@
                                   }
                               ],
                      "description":  "Run this folder in order after Auth and after a Salary Advance has reached DISBURSED with an ACTIVE LoanAccount. Scenarios 2-4 depend on scenario 1: exact replay reuses its request UUID and logical content; request-key reuse keeps that UUID but changes the reference; duplicate-reference uses a fresh request UUID with a canonically equivalent reference. Scenario 1 initializes fresh fictional request UUIDs and payment references for the entire run, so rerunning the folder against the same database creates a new initial repayment rather than an accidental replay. Scenarios 7-10 read the committed result using Customer/staff ownership rules. Scenario 11 requires a deliberately established OVERDUE fixture: run the UTC overdue evaluator after an installment due date, then run scenario 10 to capture a positive overdueCureAmount. If no overdue amount is present, scenario 11 is skipped and never sends zero. Scenarios 12-14 depend on the current outstanding amount captured by scenarios 1, 10, and optionally 11. Tokens, loanApplicationId, and normal Salary Advance submission prerequisites must already be present; scripts capture only non-sensitive run identities and derived amounts and never print them."
+                 },
+                 {
+                     "name":  "12 Administrative Settlement and LoanAccount Closure",
+                     "description":  "Run in order with settlementLoanApplicationId set to a separate DISBURSED Salary Advance whose LoanAccount is ACTIVE or OVERDUE. Set settlementPaymentValueDate within the disbursement-to-current-UTC range. The sequence proves pre-settlement closure rejection, permission boundaries, stale amount rejection, exact settlement and replay, post-settlement rejection, closure and replay, different-request rejection, and safe response fields. It intentionally does not reuse the payoff fixture from folder 11.",
+                     "item":  [
+                                  {
+                                      "name":  "Read serviceable account and initialize settlement run",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{settlementLoanApplicationId}}/loan-account",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},
+                                                      "description":  "Captures locked-amount expectations from a safe Staff LoanAccount read; it never captures internal payment or evidence identifiers."
+                                                  },
+                                      "response":  [],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const fresh = () => pm.variables.replaceIn(\"{{$guid}}\");",
+                                                                                    "const runId = fresh().replace(/-/g, \"\").toUpperCase();",
+                                                                                    "pm.collectionVariables.set(\"settlementRequestId\", fresh());",
+                                                                                    "pm.collectionVariables.set(\"settlementInvalidRequestId\", fresh());",
+                                                                                    "pm.collectionVariables.set(\"settlementDifferentRequestId\", fresh());",
+                                                                                    "pm.collectionVariables.set(\"closureBeforeSettlementRequestId\", fresh());",
+                                                                                    "pm.collectionVariables.set(\"closureRequestId\", fresh());",
+                                                                                    "pm.collectionVariables.set(\"closureDifferentRequestId\", fresh());",
+                                                                                    "pm.collectionVariables.set(\"settlementExternalReference\", `MER-SET-${runId}`);",
+                                                                                    "pm.collectionVariables.set(\"settlementInvalidExternalReference\", `MER-SET-${runId}-INVALID`);",
+                                                                                    "pm.collectionVariables.set(\"settlementLateExternalReference\", `MER-SET-${runId}-LATE`);"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Account is serviceable\", () => pm.expect([\"ACTIVE\",\"OVERDUE\"]).to.include(json.status));",
+                                                                                    "pm.collectionVariables.set(\"settlementExpectedAmount\", json.servicing.totalOutstanding);",
+                                                                                    "pm.collectionVariables.set(\"settlementInvalidAmount\", Number(json.servicing.totalOutstanding) + 1);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Reject closure before financial settlement",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{settlementLoanApplicationId}}/loan-account/closure",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},
+                                                      "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{closureBeforeSettlementRequestId}}\"\n}","options":{"raw":{"language":"json"}}}
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.test(\"Stable code\", () => pm.expect(pm.response.json().errorCode).to.eql(\"LOAN_ACCOUNT_CLOSURE_NOT_ALLOWED\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "Reject settlement without Approver authority",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{settlementLoanApplicationId}}/settlements",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},
+                                                      "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{settlementRequestId}}\",\n  \"expectedSettlementAmount\": {{settlementExpectedAmount}},\n  \"paymentValueDate\": \"{{settlementPaymentValueDate}}\",\n  \"externalPaymentReference\": \"{{settlementExternalReference}}\"\n}","options":{"raw":{"language":"json"}}}
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 403\", () => pm.response.to.have.status(403));"]}}]
+                                  },
+                                  {
+                                      "name":  "Reject stale settlement amount",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{settlementLoanApplicationId}}/settlements",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},
+                                                      "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{settlementInvalidRequestId}}\",\n  \"expectedSettlementAmount\": {{settlementInvalidAmount}},\n  \"paymentValueDate\": \"{{settlementPaymentValueDate}}\",\n  \"externalPaymentReference\": \"{{settlementInvalidExternalReference}}\"\n}","options":{"raw":{"language":"json"}}}
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 422\", () => pm.response.to.have.status(422));","pm.test(\"Stable code\", () => pm.expect(pm.response.json().errorCode).to.eql(\"SETTLEMENT_AMOUNT_INVALID\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "Apply Administrative Full-Balance Settlement",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{settlementLoanApplicationId}}/settlements",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},
+                                                      "description":  "Applies the complete locked outstanding as real payment evidence; no discounted or adjustment path exists.",
+                                                      "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{settlementRequestId}}\",\n  \"expectedSettlementAmount\": {{settlementExpectedAmount}},\n  \"paymentValueDate\": \"{{settlementPaymentValueDate}}\",\n  \"externalPaymentReference\": \"{{settlementExternalReference}}\"\n}","options":{"raw":{"language":"json"}}}
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Settlement is exact and final\", () => { pm.expect(json.idempotentReplay).to.eql(false); pm.expect(json.resultingLoanAccountStatus).to.eql(\"SETTLED\"); pm.expect(json.accountBalance.totalOutstanding).to.eql(0); pm.expect(json.settlementAmount).to.eql(Number(pm.collectionVariables.get(\"settlementExpectedAmount\"))); });","pm.test(\"Response excludes internal evidence\", () => { const text = pm.response.text(); pm.expect(text).not.to.include(pm.collectionVariables.get(\"settlementExternalReference\")); [\"requestId\",\"settlementId\",\"approvedByUserId\",\"salaryAdvanceLimitId\",\"movementId\",\"auditId\",\"historyId\"].forEach(key => pm.expect(json).not.to.have.property(key)); });"]}}]
+                                  },
+                                  {
+                                      "name":  "Replay Administrative Full-Balance Settlement exactly",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{settlementLoanApplicationId}}/settlements",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},
+                                                      "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{settlementRequestId}}\",\n  \"expectedSettlementAmount\": {{settlementExpectedAmount}},\n  \"paymentValueDate\": \"{{settlementPaymentValueDate}}\",\n  \"externalPaymentReference\": \"{{settlementExternalReference}}\"\n}","options":{"raw":{"language":"json"}}}
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"Replay is explicit\", () => pm.expect(pm.response.json().idempotentReplay).to.eql(true));"]}}]
+                                  },
+                                  {
+                                      "name":  "Reject another settlement after SETTLED",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{settlementLoanApplicationId}}/settlements",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},
+                                                      "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{settlementDifferentRequestId}}\",\n  \"expectedSettlementAmount\": {{settlementExpectedAmount}},\n  \"paymentValueDate\": \"{{settlementPaymentValueDate}}\",\n  \"externalPaymentReference\": \"{{settlementLateExternalReference}}\"\n}","options":{"raw":{"language":"json"}}}
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.test(\"Stable code\", () => pm.expect(pm.response.json().errorCode).to.eql(\"SETTLEMENT_NOT_ALLOWED\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "Reject closure without Accounting authority",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{settlementLoanApplicationId}}/loan-account/closure",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},
+                                                      "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{closureRequestId}}\"\n}","options":{"raw":{"language":"json"}}}
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 403\", () => pm.response.to.have.status(403));"]}}]
+                                  },
+                                  {
+                                      "name":  "Close settled LoanAccount administratively",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{settlementLoanApplicationId}}/loan-account/closure",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},
+                                                      "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{closureRequestId}}\"\n}","options":{"raw":{"language":"json"}}}
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Closure is separate and final\", () => { pm.expect(json.resultingStatus).to.eql(\"CLOSED\"); pm.expect(json.idempotentReplay).to.eql(false); });","pm.test(\"Response excludes internal evidence\", () => [\"requestId\",\"closureId\",\"closedByUserId\",\"repaymentTransactionId\",\"auditId\",\"historyId\"].forEach(key => pm.expect(json).not.to.have.property(key)));"]}}]
+                                  },
+                                  {
+                                      "name":  "Replay administrative closure exactly",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{settlementLoanApplicationId}}/loan-account/closure",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},
+                                                      "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{closureRequestId}}\"\n}","options":{"raw":{"language":"json"}}}
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"Replay is explicit\", () => pm.expect(pm.response.json().idempotentReplay).to.eql(true));"]}}]
+                                  },
+                                  {
+                                      "name":  "Reject different closure request after CLOSED",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{settlementLoanApplicationId}}/loan-account/closure",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},
+                                                      "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{closureDifferentRequestId}}\"\n}","options":{"raw":{"language":"json"}}}
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.test(\"Stable code\", () => pm.expect(pm.response.json().errorCode).to.eql(\"LOAN_ACCOUNT_CLOSURE_NOT_ALLOWED\"));"]}}]
+                                  }
+                              ]
                  }
              ]
 }

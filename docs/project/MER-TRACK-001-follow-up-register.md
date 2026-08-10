@@ -232,6 +232,7 @@ Continue implementation in vertical slices:
 4. Document/correction readiness through `MER-FU-012` and `MER-FU-031`. Done in V22-V24.
 5. Contract readiness and `CONTRACT_PENDING → DISBURSEMENT_PENDING`. Done in V25-V26.
 6. Manual disbursement confirmation and LoanAccount activation. Done in V28-V31.
+7. Salary Advance repayment, overdue servicing, contractual payoff, Administrative Full-Balance Settlement, and administrative LoanAccount closure. Done through V36.
 
 ### MER-FU-011 - Implement repayment tracking
 
@@ -246,13 +247,13 @@ Status: Done
 Blocks next major feature: No
 
 Completion:
-The authoritative final repayment schedule is immutable obligation evidence. Increments 1-4 implement generic repayment foundations and the complete executable Salary Advance slice: manual repayment posting, deterministic allocation, paid/outstanding tracking, exact principal used-exposure release, contractual payoff to `SETTLED`, date-driven overdue evaluation, ACTIVE/OVERDUE history and audit, outstanding-account submission blocking, the secured staff command API, immutable Customer/staff repayment history, and coherent LoanAccount servicing reads.
+The authoritative final repayment schedule is immutable obligation evidence. The executable Salary Advance slice includes manual repayment posting, deterministic allocation, paid/outstanding tracking, exact principal used-exposure release, contractual payoff to `SETTLED`, date-driven overdue evaluation, ACTIVE/OVERDUE history and audit, outstanding-account submission blocking, secured servicing reads, payment-backed Administrative Full-Balance Settlement, and separate administrative closure to `CLOSED`.
 
 Evidence:
-V32-V33 provide audit and physical servicing foundations. V34 provides immutable operation outcomes for exact replay after later servicing changes. V35 adds only the preflight-protected overdue-candidate index. The APIs preserve scheduled obligations separately from payment/allocation evidence, enforce ownership and permission boundaries, and add no schema migration. Salary Advance is the only executable repayment product; no UCL or Collateral placeholders exist.
+V32-V35 provide repayment, durable outcome, exposure-release, history, audit, and overdue-candidate foundations. V36 distinguishes settlement payment transactions, adds immutable approved-settlement and closure evidence, permissions, lifecycle vocabulary, and reciprocal deferred reconciliation. The APIs preserve scheduled obligations separately from payment/allocation evidence and enforce ownership, role, and permission boundaries. Salary Advance is the only executable servicing product; no UCL or Collateral servicing placeholders exist.
 
 Deferred boundary:
-Negotiated or administrative settlement, closure, reversal, refund, waiver, write-off, payment/bank integration, ledger, notifications, and UCL/Collateral repayment remain separate future capabilities. Completing this repayment-tracking follow-up does not mark those capabilities complete.
+Discounted or negotiated settlement, concession, reversal, refund, waiver, write-off, suspense/unapplied cash, payment/bank integration, reconciliation, ledger, collections, notifications, and UCL/Collateral servicing remain separate future capabilities. Administrative Full-Balance Settlement and LoanAccount closure are complete only for the approved Salary Advance MVP semantics.
 
 ### MER-FU-012 - Implement document checklist and manual document review foundation
 
@@ -525,7 +526,7 @@ Status: Done
 Blocks next major feature: No
 
 Resolution:
-`docs/api/Meridian-Platform.postman_collection.json` calls login, stores role-specific Bearer token variables, uses JWT auth for protected endpoints, removes request-provided customerId payload fields, and covers the executable Salary Advance path through manual repayment, immutable history, servicing reads, overdue evaluation scenarios, exact payoff, and post-payoff submission behavior.
+`docs/api/Meridian-Platform.postman_collection.json` calls login, stores role-specific Bearer token variables, uses JWT auth for protected endpoints, removes request-provided customerId payload fields, and covers the executable Salary Advance path through manual repayment, immutable history, servicing reads, overdue evaluation, exact payoff, Administrative Full-Balance Settlement, administrative closure, and post-settlement submission behavior.
 
 Suggested future branch name:
 `docs/update-postman-jwt-flow`
@@ -761,7 +762,6 @@ snapshots, validation, administrative authorization, and migration/backfill rule
 
 ## Recommended Next Roadmap
 
-1. Review and merge the documentation-alignment checkpoint after repository-scope and rendered-document verification.
-2. Define administrative settlement, closure, reversal/refund, suspense, waiver/write-off, reconciliation, and ledger rules before selecting any servicing continuation.
-3. Add complete UCL and Collateral origination, activation, and repayment policies only when their product rules are approved.
-4. Complete production document storage, malware-scanning, retention, and operational hardening before deployment.
+1. Define reversal/refund, suspense/unapplied cash, waiver/write-off, discounted settlement, reconciliation, ledger, and collections rules before selecting another financial-servicing continuation.
+2. Add complete UCL and Collateral origination, activation, and servicing policies only when their product rules are approved.
+3. Complete production document storage, malware-scanning, retention, and operational hardening before deployment.
