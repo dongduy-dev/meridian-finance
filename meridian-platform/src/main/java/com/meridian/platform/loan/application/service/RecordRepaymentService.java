@@ -28,6 +28,7 @@ import com.meridian.platform.loan.domain.model.RepaymentSchedule;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleItem;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
 import com.meridian.platform.loan.domain.model.RepaymentTransaction;
+import com.meridian.platform.loan.domain.model.RepaymentTransactionType;
 import com.meridian.platform.loan.domain.service.DeterministicRepaymentAllocator;
 import com.meridian.platform.loan.domain.service.RepaymentServicingCalculator;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
@@ -380,7 +381,9 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
             Command command,
             AuthenticatedUser actor
     ) {
-        if (!transaction.requestId().equals(command.requestId())
+        if (transaction.transactionType()
+                != RepaymentTransactionType.REPAYMENT
+                || !transaction.requestId().equals(command.requestId())
                 || !transaction.loanApplicationId().equals(command.loanApplicationId())
                 || !transaction.externalPaymentReference()
                 .equals(command.externalPaymentReference())
