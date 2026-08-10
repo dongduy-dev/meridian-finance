@@ -80,8 +80,8 @@ Meridian is delivered as a modular-monolith backend with one database and multip
 |---|---|
 | Customer | Maintains their own profile and bank accounts, selects products, verifies Salary Advance employment, creates and submits applications, completes Customer-owned corrections, uploads documents, accepts or declines offers, acknowledges contracts, and views their own application and LoanAccount state |
 | Loan Officer | Reviews application facts and documents, records recommendations, requests Customer or Staff correction, and performs authorized document review or waiver actions |
-| Approver | Records the independent final decision, returns an application to review, or requests structured correction |
-| Accounting Officer | Prepares operational contracts, confirms readiness, reveals a protected destination only for disbursement, confirms the external transfer, and records authorized repayment updates |
+| Approver | Records the independent final application decision, returns an application to review, requests structured correction, and performs authorized Loan-owned Administrative Full-Balance Settlement |
+| Accounting Officer | Prepares operational contracts, confirms readiness, reveals a protected destination only for disbursement, confirms the external transfer, records authorized repayment updates, and closes eligible settled LoanAccounts |
 | Back-Office Admin | Manages product configuration, Partner Companies, Partner Employee imports, internal users, role assignments, and operational configuration |
 | System | Applies validations, status transitions, calculations, expiry, overdue evaluation, idempotency, and audit rules |
 
@@ -103,6 +103,8 @@ Meridian is delivered as a modular-monolith backend with one database and multip
 | Reveal full disbursement destination | No | No | No | Yes with `loan:disburse` | No | Authorize and audit |
 | Confirm manual disbursement | No | No | No | Yes | No | Activate account atomically |
 | Record repayment | No | No | No | Yes | No | Allocate and update servicing |
+| Approve and apply Administrative Full-Balance Settlement | No | No | Yes | No | No | Verify exact outstanding, apply payment, and settle |
+| Close an eligible settled LoanAccount | No | No | No | Yes | No | Verify evidence and close administratively |
 | View audit evidence | No | Authorized | Authorized | Authorized | Authorized | Record |
 
 Authentication and permission are necessary but not sufficient. The owning business capability also verifies resource ownership, status, maker-checker separation, and every applicable business rule. All Staff business actions record the authenticated actor.
@@ -427,7 +429,7 @@ Repayment follows these rules:
 - never rewrite earlier allocations or servicing history;
 - prevent duplicate payment evidence from producing duplicate allocations or financial effects.
 
-Only principal allocated to a Salary Advance repayment releases used exposure, by exactly the allocated principal amount.
+Only principal allocated by an actual Salary Advance payment releases used exposure, by exactly the allocated principal amount. This rule applies to ordinary repayment and Administrative Full-Balance Settlement; fee and interest allocations release none.
 
 An installment is:
 
@@ -441,14 +443,18 @@ A LoanAccount is:
 
 - `ACTIVE` while contractual outstanding remains and no unpaid obligation is past due;
 - `OVERDUE` while any unpaid obligation is past due;
-- `SETTLED` after full contractual repayment or an approved settlement;
+- `SETTLED` after full contractual repayment or Administrative Full-Balance Settlement;
 - `CLOSED` only after an eligible settled account completes administrative closure.
 
 Full contractual payoff must atomically settle the account and release any remaining Salary Advance principal exposure required by policy.
 
+Administrative Full-Balance Settlement is an exceptional Loan-owned servicing operation performed by an authorized Approver. It records an actual payment equal to the complete current contractual outstanding, applies the same deterministic allocation rules as repayment, preserves `paid + outstanding = originated` for every component, releases only allocated Salary Advance principal, and moves an `ACTIVE` or `OVERDUE` LoanAccount to `SETTLED`. It is not a discounted settlement, concession, waiver, forgiveness, write-off, negotiation, or debt adjustment.
+
+Administrative closure is a separate Loan-owned operation performed by an authorized Accounting Officer. A `SETTLED` LoanAccount is immediately eligible when contractual outstanding is zero, installment progress is fully paid, financial-settlement provenance and status history are consistent, and Salary Advance principal exposure is fully released. Closure changes the account to `CLOSED` and records closure/history/audit evidence; it does not change the final schedule, payment evidence, allocations, balances, installment progress, Salary Advance exposure, or LoanApplication state. Either ordinary contractual payoff or Administrative Full-Balance Settlement may provide the financial-settlement provenance.
+
 A matching `ACTIVE` or `OVERDUE` Salary Advance LoanAccount with positive contractual outstanding blocks a new Salary Advance submission. Increased available limit or stale overdue evaluation does not bypass this guard.
 
-The MVP excludes unapplied cash, suspense processing, repayment reversal or refund, waiver or write-off, payment-provider integration, bank reconciliation, and a financial ledger.
+The MVP excludes discounted or negotiated settlement, unapplied cash, suspense processing, repayment reversal or refund, waiver or write-off, payment-provider integration, bank reconciliation, and a financial ledger.
 
 ---
 
@@ -528,7 +534,7 @@ Limit behavior:
 - Successful submission reserves the requested principal.
 - Rejection, cancellation, Customer decline, expiry, or another defined pre-disbursement release frees reserved exposure exactly once.
 - Disbursement converts the reservation to used exposure.
-- Repayment releases only allocated principal.
+- Ordinary repayment and Administrative Full-Balance Settlement release only allocated principal.
 - Existing loans and application history remain after suspension or disablement.
 
 Each submitted application records the employee-link, limit identity, limit values, and verification result used at submission.
@@ -567,7 +573,8 @@ Each submitted application records the employee-link, limit identity, limit valu
 30. Accounting confirms manual disbursement against the ready contract.
 31. System creates the LoanAccount and final schedule, records disbursement evidence, moves reserved exposure to used exposure, transitions the application to `DISBURSED`, and records audit and history atomically.
 32. Repayment and overdue evaluation move the LoanAccount between `ACTIVE` and `OVERDUE`; allocated principal releases used exposure.
-33. Full payoff or approved settlement moves the account to `SETTLED`; an eligible settled account may later move to `CLOSED`.
+33. Full contractual payoff or an Approver's payment-backed Administrative Full-Balance Settlement moves the account to `SETTLED`.
+34. Accounting may separately close an eligible settled LoanAccount without changing financial evidence or LoanApplication state.
 
 Salary Advance excludes automated payroll deduction and real employer, payroll, bank-transfer, and HR integrations, as well as an employer-facing production portal, counteroffers, and Approver-modified terms.
 
@@ -781,7 +788,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-016 | Every submitted Salary Advance application records its own verification snapshot even when the reusable link already exists. |
 | BR-017 | Rejection, cancellation, Customer decline, offer expiry, or another approved pre-disbursement release frees the Salary Advance reservation exactly once in the same controlled operation as the application outcome. |
 | BR-018 | Manual disbursement converts the Salary Advance reservation to used exposure when the LoanAccount is created. |
-| BR-019 | Salary Advance repayment releases used exposure only for allocated principal and by exactly that amount; fee and interest allocations release none. Any other settlement- or correction-based release requires an explicitly approved product policy. |
+| BR-019 | Salary Advance used exposure is released only for principal allocated by an actual ordinary repayment or Administrative Full-Balance Settlement payment and by exactly that amount; fee and interest allocations release none. Any non-payment release requires an explicitly approved future product rule. |
 | BR-020 | Unsecured Consumer Loan requires income and employment evidence and does not require collateral. |
 | BR-021 | Collateral Loan requires structured collateral facts and ownership or supporting evidence. |
 | BR-022 | Collateral estimated value is advisory in the MVP and does not create an automated loan-to-value decision. |
@@ -802,8 +809,8 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-036A | Customer retains ownership of mutable source bank accounts; Loan retains only purpose-protected immutable snapshots needed for contract and disbursement history. |
 | BR-037 | Repayment updates are manually entered or confirmed in the MVP. |
 | BR-038 | A LoanAccount is `OVERDUE` while any unpaid obligation is past its due date. |
-| BR-039 | Full contractual repayment or an approved settlement moves the LoanAccount to `SETTLED`. |
-| BR-040 | Administrative closure may move only an eligible settled LoanAccount to `CLOSED`. |
+| BR-039 | Full contractual repayment or an authorized Administrative Full-Balance Settlement payment equal to the complete current contractual outstanding moves the LoanAccount to `SETTLED`. |
+| BR-040 | Administrative closure may move only an eligible `SETTLED` LoanAccount to `CLOSED`; it is separate from financial settlement and cannot alter financial or LoanApplication evidence. |
 | BR-041 | Every important transition and financial outcome records the required audit evidence. |
 | BR-042 | MVP approval accepts the exact submitted amount and term; a change returns through review or correction and is not a counteroffer. |
 | BR-043 | Each LoanApplication has at most one approved offer in the MVP; financial terms are immutable after generation. |

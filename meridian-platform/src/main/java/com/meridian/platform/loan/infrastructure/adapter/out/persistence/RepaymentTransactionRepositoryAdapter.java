@@ -41,6 +41,7 @@ public class RepaymentTransactionRepositoryAdapter
                 transaction.loanApplicationId(),
                 transaction.loanAccountId(),
                 transaction.repaymentScheduleId(),
+                transaction.transactionType().name(),
                 transaction.requestId(),
                 transaction.externalPaymentReference(),
                 transaction.receivedAmount(),

@@ -4,7 +4,9 @@ import com.meridian.platform.MeridianPlatformApplication;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationDto;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationRequest;
 import com.meridian.platform.loan.application.port.in.ConfirmManualDisbursementUseCase;
+import com.meridian.platform.loan.application.port.in.CloseLoanAccountUseCase;
 import com.meridian.platform.loan.application.port.in.EvaluateLoanAccountOverdueUseCase;
+import com.meridian.platform.loan.application.port.in.ApproveLoanSettlementUseCase;
 import com.meridian.platform.loan.application.port.in.RecordRepaymentUseCase;
 import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicationUseCase;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
@@ -21,6 +23,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -48,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -73,7 +77,9 @@ class SalaryAdvanceOutstandingAccountConcurrencyPostgreSqlIntegrationTest {
             UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1");
 
     @Autowired ConfirmManualDisbursementUseCase disbursements;
+    @Autowired CloseLoanAccountUseCase closures;
     @Autowired EvaluateLoanAccountOverdueUseCase overdueEvaluator;
+    @Autowired ApproveLoanSettlementUseCase settlements;
     @Autowired RecordRepaymentUseCase repayments;
     @Autowired StartSalaryAdvanceApplicationUseCase submissions;
     @Autowired JdbcTemplate jdbc;
@@ -186,19 +192,15 @@ class SalaryAdvanceOutstandingAccountConcurrencyPostgreSqlIntegrationTest {
     }
 
     @Test
-    void corruptClosedAccountWithOutstandingDebtFailsClosedWithoutEvidenceLeak() {
+    void databaseRejectsClosedAccountWithOutstandingDebt() {
         Activated activated = activateAndPrepareCustomer();
         String originalStatus = status(activated.accountId());
-        currentUser.customer(activated.userId(), activated.fixture().customerId());
-        new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
-            jdbc.update("update loan_accounts set status='CLOSED' where id=?",
-                    activated.accountId());
-            BusinessStateConflictException conflict =
-                    conflictOnSubmit(activated.fixture().linkId());
-            assertEquals("SYSTEM_STATE_CONFLICT", conflict.getErrorCode());
-            assertSafeConflict(conflict, activated);
-            transaction.setRollbackOnly();
-        });
+
+        assertThrows(DataIntegrityViolationException.class, () ->
+                new TransactionTemplate(transactionManager).executeWithoutResult(transaction ->
+                        jdbc.update("update loan_accounts set status='CLOSED' where id=?",
+                                activated.accountId())));
+
         assertEquals(originalStatus, status(activated.accountId()));
     }
 
@@ -326,6 +328,210 @@ class SalaryAdvanceOutstandingAccountConcurrencyPostgreSqlIntegrationTest {
         }
     }
 
+    @Test
+    void submissionObservesOutstandingDebtBeforeSettlementTakesLinkLock() throws Exception {
+        Activated activated = activateAndPrepareCustomer();
+        int applicationsBefore = customerApplications(activated);
+        int reservationsBefore = reservationMovements(activated);
+        int snapshotsBefore = verificationSnapshots(activated);
+        int auditsBefore = auditCount();
+        CountDownLatch settlementAtBoundary = new CountDownLatch(1);
+        CountDownLatch releaseSettlement = new CountDownLatch(1);
+        installCustomerLinkBarrier(activated, "settlement-before-link", false,
+                settlementAtBoundary, releaseSettlement, null, null);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<ApproveLoanSettlementUseCase.Result> settlement = pool.submit(() -> {
+                Thread.currentThread().setName("settlement-before-link");
+                currentUser.approver();
+                return settleFully(activated);
+            });
+            assertTrue(settlementAtBoundary.await(5, TimeUnit.SECONDS));
+            Future<Object> submission = pool.submit(() -> {
+                Thread.currentThread().setName("submission-observes-settlement");
+                currentUser.customer(activated.userId(), activated.fixture().customerId());
+                try {
+                    return submit(activated.fixture().linkId());
+                } catch (BusinessStateConflictException conflict) {
+                    return conflict;
+                }
+            });
+            BusinessStateConflictException conflict = assertInstanceOf(
+                    BusinessStateConflictException.class,
+                    submission.get(15, TimeUnit.SECONDS)
+            );
+            assertEquals("OUTSTANDING_LOAN_ACCOUNT_EXISTS", conflict.getErrorCode());
+            assertFalse(settlement.isDone());
+            assertEquals(applicationsBefore, customerApplications(activated));
+            assertEquals(reservationsBefore, reservationMovements(activated));
+            assertEquals(snapshotsBefore, verificationSnapshots(activated));
+            assertEquals(auditsBefore, auditCount());
+
+            releaseSettlement.countDown();
+            ApproveLoanSettlementUseCase.Result result =
+                    settlement.get(15, TimeUnit.SECONDS);
+            assertEquals("SETTLED", status(activated.accountId()));
+            currentUser.customer(activated.userId(), activated.fixture().customerId());
+            assertNotNull(submit(activated.fixture().linkId()).loanApplicationId());
+            assertEquals(1, count("select count(*) from approved_loan_settlements "
+                    + "where repayment_transaction_id=?",
+                    result.repaymentTransactionId()));
+            assertEquals(1, count("select count(*) from salary_advance_limit_movements "
+                    + "where repayment_transaction_id=? "
+                    + "and movement_type='REPAID_RELEASED'",
+                    result.repaymentTransactionId()));
+        } finally {
+            releaseSettlement.countDown();
+            pool.shutdownNow();
+            assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    void settlementCompletesUnderLinkLockBeforeSubmissionReserves() throws Exception {
+        Activated activated = activateAndPrepareCustomer();
+        int applicationsBefore = customerApplications(activated);
+        int reservationsBefore = reservationMovements(activated);
+        CountDownLatch settlementHasLinkLock = new CountDownLatch(1);
+        CountDownLatch releaseSettlement = new CountDownLatch(1);
+        CountDownLatch submissionHasLinkLock = new CountDownLatch(1);
+        installCustomerLinkBarrier(activated, "settlement-holds-link", true,
+                settlementHasLinkLock, releaseSettlement,
+                "submission-waits-settlement", submissionHasLinkLock);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<ApproveLoanSettlementUseCase.Result> settlement = pool.submit(() -> {
+                Thread.currentThread().setName("settlement-holds-link");
+                currentUser.approver();
+                return settleFully(activated);
+            });
+            assertTrue(settlementHasLinkLock.await(5, TimeUnit.SECONDS));
+            Future<SalaryAdvanceApplicationDto> submission = pool.submit(() -> {
+                Thread.currentThread().setName("submission-waits-settlement");
+                currentUser.customer(activated.userId(), activated.fixture().customerId());
+                return submit(activated.fixture().linkId());
+            });
+            assertFalse(submissionHasLinkLock.await(300, TimeUnit.MILLISECONDS));
+            assertFalse(submission.isDone());
+            assertEquals(applicationsBefore, customerApplications(activated));
+            assertEquals(reservationsBefore, reservationMovements(activated));
+
+            releaseSettlement.countDown();
+            ApproveLoanSettlementUseCase.Result settlementResult =
+                    settlement.get(15, TimeUnit.SECONDS);
+            SalaryAdvanceApplicationDto submissionResult =
+                    submission.get(15, TimeUnit.SECONDS);
+            assertNotNull(submissionResult.loanApplicationId());
+            assertEquals("SETTLED", status(activated.accountId()));
+            assertEquals(1, count("select count(*) from approved_loan_settlements "
+                    + "where repayment_transaction_id=?",
+                    settlementResult.repaymentTransactionId()));
+            assertEquals(1, count("select count(*) from salary_advance_limit_movements "
+                    + "where repayment_transaction_id=? "
+                    + "and movement_type='REPAID_RELEASED'",
+                    settlementResult.repaymentTransactionId()));
+            assertEquals(applicationsBefore + 1, customerApplications(activated));
+            assertEquals(reservationsBefore + 1, reservationMovements(activated));
+            Map<String, BigDecimal> limit = jdbc.queryForMap(
+                    "select total_limit,available_amount,reserved_amount,used_amount "
+                            + "from salary_advance_limits where id=?",
+                    activated.fixture().limitId()).entrySet().stream().collect(
+                    java.util.stream.Collectors.toMap(Map.Entry::getKey,
+                            entry -> (BigDecimal) entry.getValue()));
+            assertEquals(0, money("500000").compareTo(limit.get("reserved_amount")));
+            assertEquals(0, money("0").compareTo(limit.get("used_amount")));
+            assertEquals(0, limit.get("total_limit").compareTo(
+                    limit.get("available_amount").add(limit.get("reserved_amount"))
+                            .add(limit.get("used_amount"))));
+        } finally {
+            releaseSettlement.countDown();
+            pool.shutdownNow();
+            assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    void closureDoesNotChangeSubmissionEligibilityInEitherOrderOrWhenConcurrent()
+            throws Exception {
+        Activated closureFirst = activateAndPrepareCustomer();
+        currentUser.approver();
+        settleFully(closureFirst);
+        currentUser.staff();
+        closures.close(new CloseLoanAccountUseCase.Command(
+                UUID.randomUUID(),
+                closureFirst.fixture().applicationId()
+        ));
+        currentUser.customer(
+                closureFirst.userId(),
+                closureFirst.fixture().customerId()
+        );
+        assertNotNull(submit(closureFirst.fixture().linkId()).loanApplicationId());
+        assertEquals("CLOSED", status(closureFirst.accountId()));
+
+        Activated submissionFirst = activateAndPrepareCustomer();
+        currentUser.approver();
+        settleFully(submissionFirst);
+        currentUser.customer(
+                submissionFirst.userId(),
+                submissionFirst.fixture().customerId()
+        );
+        assertNotNull(submit(submissionFirst.fixture().linkId()).loanApplicationId());
+        currentUser.staff();
+        closures.close(new CloseLoanAccountUseCase.Command(
+                UUID.randomUUID(),
+                submissionFirst.fixture().applicationId()
+        ));
+        assertEquals("CLOSED", status(submissionFirst.accountId()));
+
+        Activated concurrent = activateAndPrepareCustomer();
+        currentUser.approver();
+        settleFully(concurrent);
+        int applicationsBefore = customerApplications(concurrent);
+        int reservationsBefore = reservationMovements(concurrent);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<CloseLoanAccountUseCase.Result> closure = pool.submit(() -> {
+                currentUser.staff();
+                start.await();
+                return closures.close(new CloseLoanAccountUseCase.Command(
+                        UUID.randomUUID(),
+                        concurrent.fixture().applicationId()
+                ));
+            });
+            Future<SalaryAdvanceApplicationDto> submission = pool.submit(() -> {
+                currentUser.customer(
+                        concurrent.userId(),
+                        concurrent.fixture().customerId()
+                );
+                start.await();
+                return submit(concurrent.fixture().linkId());
+            });
+            start.countDown();
+
+            assertEquals("CLOSED", closure.get(15, TimeUnit.SECONDS)
+                    .resultingStatus().name());
+            assertNotNull(submission.get(15, TimeUnit.SECONDS)
+                    .loanApplicationId());
+            assertEquals("CLOSED", status(concurrent.accountId()));
+            assertEquals(applicationsBefore + 1,
+                    customerApplications(concurrent));
+            assertEquals(reservationsBefore + 1,
+                    reservationMovements(concurrent));
+            assertEquals(0, count(
+                    "select count(*) from salary_advance_limit_movements "
+                            + "where loan_application_id=? "
+                            + "and movement_type='REPAID_RELEASED' "
+                            + "and repayment_transaction_id is null",
+                    concurrent.fixture().applicationId()
+            ));
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+            assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
+        }
+    }
+
     private Activated activateAndPrepareCustomer() {
         var fixture = support.createFixture(true, ProductCode.SALARY_ADVANCE);
         currentUser.staff();
@@ -364,6 +570,21 @@ class SalaryAdvanceOutstandingAccountConcurrencyPostgreSqlIntegrationTest {
         return repayments.record(new RecordRepaymentUseCase.Command(
                 UUID.randomUUID(), activated.fixture().applicationId(),
                 "FINAL-" + UUID.randomUUID(), money("1100"), LocalDate.of(2026, 8, 29)));
+    }
+
+    private ApproveLoanSettlementUseCase.Result settleFully(Activated activated) {
+        BigDecimal outstanding = jdbc.queryForObject(
+                "select total_outstanding from loan_accounts where id=?",
+                BigDecimal.class,
+                activated.accountId()
+        );
+        return settlements.approve(new ApproveLoanSettlementUseCase.Command(
+                UUID.randomUUID(),
+                activated.fixture().applicationId(),
+                outstanding,
+                LocalDate.of(2026, 8, 29),
+                "ADMIN-SETTLEMENT-" + UUID.randomUUID()
+        ));
     }
 
     private SalaryAdvanceApplicationDto submit(UUID linkId) {
@@ -497,6 +718,13 @@ class SalaryAdvanceOutstandingAccountConcurrencyPostgreSqlIntegrationTest {
             users.set(new AuthenticatedUser(
                     userId, "customer@meridian.test", "CUSTOMER", customerId,
                     Set.of("CUSTOMER"), Set.of("loan:submit")));
+        }
+
+        void approver() {
+            users.set(new AuthenticatedUser(
+                    UUID.fromString("00000000-0000-0000-0000-000000000303"),
+                    "settlement.approver@meridian.test", "STAFF", null,
+                    Set.of("APPROVER"), Set.of("loan:settlement:approve")));
         }
 
         @Override

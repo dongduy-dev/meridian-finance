@@ -16,8 +16,12 @@ import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationDto;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationRequest;
 import com.meridian.platform.loan.application.port.in.ExpireApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.AcknowledgeLoanContractUseCase;
+import com.meridian.platform.loan.application.port.in.ApproveLoanSettlementUseCase;
+import com.meridian.platform.loan.application.port.in.CloseLoanAccountUseCase;
+import com.meridian.platform.loan.application.port.in.ConfirmManualDisbursementUseCase;
 import com.meridian.platform.loan.application.port.in.ConfirmContractReadinessUseCase;
 import com.meridian.platform.loan.application.port.in.PrepareLoanContractUseCase;
+import com.meridian.platform.loan.application.port.in.RecordRepaymentUseCase;
 import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicationUseCase;
@@ -41,6 +45,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -54,6 +60,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -108,6 +115,21 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
 
     @Autowired
     private ConfirmContractReadinessUseCase confirmContractReadinessUseCase;
+
+    @Autowired
+    private ConfirmManualDisbursementUseCase confirmManualDisbursementUseCase;
+
+    @Autowired
+    private RecordRepaymentUseCase recordRepaymentUseCase;
+
+    @Autowired
+    private ApproveLoanSettlementUseCase approveLoanSettlementUseCase;
+
+    @Autowired
+    private CloseLoanAccountUseCase closeLoanAccountUseCase;
+
+    @Autowired
+    private Clock clock;
 
     @Autowired
     private CustomerSensitiveValueProtector sensitiveValueProtector;
@@ -230,6 +252,97 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
                         "LOAN_CONTRACT_READINESS_CONFIRMED"
                 ),
                 new HashSet<>(auditActions)
+        );
+    }
+
+    @Test
+    void completeSalaryAdvanceLifecycleClosesAfterContractualPayoff() {
+        LifecycleActivation lifecycle = activateCompleteWorkflow("PAYOFF");
+        String scheduleBefore = scheduleFingerprint(lifecycle.repaymentScheduleId());
+        int applicationHistoryBefore = transitionCount(lifecycle.loanApplicationId());
+        BigDecimal outstanding = accountOutstanding(lifecycle.loanAccountId());
+
+        useAccounting();
+        RecordRepaymentUseCase.Result payoff = recordRepaymentUseCase.record(
+                new RecordRepaymentUseCase.Command(
+                        UUID.randomUUID(),
+                        lifecycle.loanApplicationId(),
+                        "E2E-PAYOFF-" + lifecycle.token(),
+                        outstanding,
+                        lifecycle.valueDate()
+                )
+        );
+        assertEquals("SETTLED", payoff.accountBalance().status().name());
+        CloseLoanAccountUseCase.Result closure = closeLoanAccountUseCase.close(
+                new CloseLoanAccountUseCase.Command(
+                        UUID.randomUUID(),
+                        lifecycle.loanApplicationId()
+                )
+        );
+
+        assertEquals("CLOSED", closure.resultingStatus().name());
+        assertTerminalServicingState(
+                lifecycle,
+                scheduleBefore,
+                applicationHistoryBefore,
+                "REPAYMENT",
+                0
+        );
+        useCustomer();
+        SalaryAdvanceApplicationDto next = submissionUseCase
+                .startSalaryAdvanceApplication(new SalaryAdvanceApplicationRequest(
+                        fixture.linkId(),
+                        REQUESTED_AMOUNT,
+                        1
+                ));
+        assertNotNull(next.loanApplicationId());
+        assertEquals("CLOSED", accountStatus(lifecycle.loanAccountId()));
+    }
+
+    @Test
+    void completeSalaryAdvanceLifecycleClosesAfterAdministrativeSettlement() {
+        LifecycleActivation lifecycle = activateCompleteWorkflow("SETTLEMENT");
+        String scheduleBefore = scheduleFingerprint(lifecycle.repaymentScheduleId());
+        int applicationHistoryBefore = transitionCount(lifecycle.loanApplicationId());
+        BigDecimal outstanding = accountOutstanding(lifecycle.loanAccountId());
+
+        useApprover();
+        ApproveLoanSettlementUseCase.Result settlement =
+                approveLoanSettlementUseCase.approve(
+                        new ApproveLoanSettlementUseCase.Command(
+                                UUID.randomUUID(),
+                                lifecycle.loanApplicationId(),
+                                outstanding,
+                                lifecycle.valueDate(),
+                                "E2E-SETTLEMENT-" + lifecycle.token()
+                        )
+                );
+        assertEquals("SETTLED", settlement.accountBalance().status().name());
+
+        useCustomer();
+        SalaryAdvanceApplicationDto next = submissionUseCase
+                .startSalaryAdvanceApplication(new SalaryAdvanceApplicationRequest(
+                        fixture.linkId(),
+                        REQUESTED_AMOUNT,
+                        1
+                ));
+        assertNotNull(next.loanApplicationId());
+        assertEquals("SETTLED", accountStatus(lifecycle.loanAccountId()));
+
+        useAccounting();
+        CloseLoanAccountUseCase.Result closure = closeLoanAccountUseCase.close(
+                new CloseLoanAccountUseCase.Command(
+                        UUID.randomUUID(),
+                        lifecycle.loanApplicationId()
+                )
+        );
+        assertEquals("CLOSED", closure.resultingStatus().name());
+        assertTerminalServicingState(
+                lifecycle,
+                scheduleBefore,
+                applicationHistoryBefore,
+                "APPROVED_SETTLEMENT",
+                1
         );
     }
 
@@ -396,6 +509,147 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
             assertEquals(1, auditActionCount(loanApplicationId, "OFFER_EXPIRED"));
             assertEquals(1, auditActionCount(loanApplicationId, "RESERVATION_RELEASED"));
         }
+    }
+
+    private LifecycleActivation activateCompleteWorkflow(String path) {
+        UUID loanApplicationId = createCustomerAcceptancePendingApplication();
+        useCustomer();
+        ApprovedOfferActionResult acceptance = offerResponseUseCase.acceptOffer(
+                loanApplicationId
+        );
+        assertEquals(ApprovedOfferActionOutcome.SUCCESS, acceptance.outcome());
+
+        useAccounting();
+        LoanContract prepared = prepareLoanContractUseCase.prepare(
+                new PrepareLoanContractUseCase.Command(
+                        UUID.randomUUID(),
+                        loanApplicationId,
+                        0,
+                        null
+                )
+        );
+        useCustomer();
+        LoanContract acknowledged = acknowledgeLoanContractUseCase.acknowledge(
+                new AcknowledgeLoanContractUseCase.Command(
+                        UUID.randomUUID(),
+                        loanApplicationId,
+                        prepared.contractVersion()
+                )
+        );
+        useAccounting();
+        LoanContract ready = confirmContractReadinessUseCase.confirm(
+                new ConfirmContractReadinessUseCase.Command(
+                        UUID.randomUUID(),
+                        loanApplicationId,
+                        acknowledged.id(),
+                        acknowledged.contractVersion()
+                )
+        );
+        LocalDate valueDate = LocalDate.now(clock);
+        String token = loanApplicationId.toString()
+                .replace("-", "")
+                .substring(0, 12)
+                .toUpperCase(java.util.Locale.ROOT);
+        ConfirmManualDisbursementUseCase.Result activation =
+                confirmManualDisbursementUseCase.confirm(
+                        new ConfirmManualDisbursementUseCase.Command(
+                                UUID.randomUUID(),
+                                loanApplicationId,
+                                ready.contractVersion(),
+                                "E2E-DISBURSEMENT-" + path + "-" + token,
+                                valueDate,
+                                valueDate.plusMonths(1)
+                        )
+                );
+        assertEquals("DISBURSED", activation.applicationStatus().name());
+        assertEquals("ACTIVE", activation.loanAccountStatus().name());
+        assertEquals("FINAL", activation.scheduleType().name());
+        return new LifecycleActivation(
+                loanApplicationId,
+                activation.loanAccountId(),
+                activation.repaymentScheduleId(),
+                valueDate,
+                token
+        );
+    }
+
+    private void assertTerminalServicingState(
+            LifecycleActivation lifecycle,
+            String scheduleBefore,
+            int applicationHistoryBefore,
+            String transactionType,
+            int expectedSettlementRows
+    ) {
+        assertEquals("CLOSED", accountStatus(lifecycle.loanAccountId()));
+        assertEquals(0, accountOutstanding(lifecycle.loanAccountId()).signum());
+        assertEquals(scheduleBefore,
+                scheduleFingerprint(lifecycle.repaymentScheduleId()));
+        assertEquals(0, count(
+                "SELECT count(*) FROM repayment_installment_progress "
+                        + "WHERE loan_account_id = ? "
+                        + "AND (status <> 'PAID' OR total_outstanding <> 0)",
+                lifecycle.loanAccountId()
+        ));
+        assertEquals(1, count(
+                "SELECT count(*) FROM repayment_transactions "
+                        + "WHERE loan_account_id = ? AND transaction_type = ?",
+                lifecycle.loanAccountId(),
+                transactionType
+        ));
+        assertEquals(expectedSettlementRows, count(
+                "SELECT count(*) FROM approved_loan_settlements "
+                        + "WHERE loan_account_id = ?",
+                lifecycle.loanAccountId()
+        ));
+        assertEquals(1, count(
+                "SELECT count(*) FROM loan_account_closures "
+                        + "WHERE loan_account_id = ?",
+                lifecycle.loanAccountId()
+        ));
+        assertEquals(REQUESTED_AMOUNT, amount(
+                "SELECT COALESCE(sum(amount), 0) "
+                        + "FROM salary_advance_limit_movements "
+                        + "WHERE loan_application_id = ? "
+                        + "AND movement_type = 'REPAID_RELEASED'",
+                lifecycle.loanApplicationId()
+        ));
+        assertEquals(money(0), amount(
+                "SELECT used_amount FROM salary_advance_limits "
+                        + "WHERE customer_id = ? "
+                        + "AND customer_partner_employee_link_id = ?",
+                fixture.customerId(),
+                fixture.linkId()
+        ));
+        assertEquals("DISBURSED", applicationStatus(lifecycle.loanApplicationId()));
+        assertEquals(applicationHistoryBefore,
+                transitionCount(lifecycle.loanApplicationId()));
+    }
+
+    private BigDecimal accountOutstanding(UUID loanAccountId) {
+        return amount(
+                "SELECT total_outstanding FROM loan_accounts WHERE id = ?",
+                loanAccountId
+        );
+    }
+
+    private String accountStatus(UUID loanAccountId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT status FROM loan_accounts WHERE id = ?",
+                String.class,
+                loanAccountId
+        );
+    }
+
+    private String scheduleFingerprint(UUID repaymentScheduleId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT string_agg(concat_ws('|', installment_number, due_date, "
+                        + "principal_due, interest_due, fee_due, total_due), ',' "
+                        + "ORDER BY installment_number) "
+                        + "FROM repayment_schedule_items "
+                        + "WHERE repayment_schedule_id = ?",
+                String.class,
+                repaymentScheduleId
+        );
     }
 
     private UUID createApprovalPendingApplication() {
@@ -711,7 +965,7 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
                 "STAFF",
                 null,
                 Set.of("APPROVER"),
-                Set.of("loan:read", "approval:decide")
+                Set.of("loan:read", "approval:decide", "loan:settlement:approve")
         ));
     }
 
@@ -722,7 +976,14 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
                 "STAFF",
                 null,
                 Set.of("ACCOUNTING_OFFICER"),
-                Set.of("loan:contract:prepare", "loan:contract:read", "loan:disbursement:prepare")
+                Set.of(
+                        "loan:contract:prepare",
+                        "loan:contract:read",
+                        "loan:disbursement:prepare",
+                        "loan:disburse",
+                        "repayment:update",
+                        "loan:account:close"
+                )
         ));
     }
 
@@ -742,6 +1003,15 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
     }
 
     private record Fixture(UUID customerId, UUID customerUserId, UUID linkId) {
+    }
+
+    private record LifecycleActivation(
+            UUID loanApplicationId,
+            UUID loanAccountId,
+            UUID repaymentScheduleId,
+            LocalDate valueDate,
+            String token
+    ) {
     }
 
     private record DecisionAttempt(

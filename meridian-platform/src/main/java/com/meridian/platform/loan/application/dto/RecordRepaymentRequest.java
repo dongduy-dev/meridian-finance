@@ -15,8 +15,7 @@ public record RecordRepaymentRequest(
 ) {
     @Override
     public String toString() {
-        return "RecordRepaymentRequest[requestId=" + requestId
-                + ", externalPaymentReference=redacted, amount=redacted"
+        return "RecordRepaymentRequest[operationEvidence=redacted, amount=redacted"
                 + ", paymentValueDate=" + paymentValueDate + "]";
     }
 }

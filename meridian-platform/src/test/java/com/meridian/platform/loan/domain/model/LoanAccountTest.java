@@ -6,6 +6,7 @@ import com.meridian.platform.shared.domain.exception.BusinessStateConflictExcept
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -126,6 +127,71 @@ class LoanAccountTest {
         assertFalse(account.toString().contains("1100.00"));
     }
 
+    @Test
+    void closesOnlyAZeroOutstandingSettledAccountWithoutChangingFinancialState() {
+        LoanAccount settled = settledAccount();
+        LocalDateTime closedAt = settled.updatedAt().plusMinutes(1);
+
+        LoanAccount closed = settled.closeAdministratively(closedAt);
+
+        assertEquals(LoanAccountStatus.CLOSED, closed.status());
+        assertEquals(settled.repaymentBalance(), closed.repaymentBalance());
+        assertEquals(closedAt, closed.updatedAt());
+    }
+
+    @Test
+    void rejectsAdministrativeClosureFromOpenStateOrAtAnEarlierTime() {
+        LoanAccount active = LoanAccount.activate(
+                UUID.randomUUID(),
+                LoanContractTestData.ready(),
+                LocalDateTime.of(2026, 7, 27, 10, 0)
+        );
+        LoanAccount settled = settledAccount();
+
+        assertThrows(
+                BusinessStateConflictException.class,
+                () -> active.closeAdministratively(active.updatedAt())
+        );
+        assertThrows(
+                BusinessRuleViolationException.class,
+                () -> settled.closeAdministratively(settled.updatedAt().minusNanos(1))
+        );
+    }
+
+    @Test
+    void closedAccountRequiresZeroOutstandingAndCannotComeFromServicingState() {
+        LoanAccount active = LoanAccount.activate(
+                UUID.randomUUID(),
+                LoanContractTestData.ready(),
+                LocalDateTime.of(2026, 7, 27, 10, 0)
+        );
+
+        assertThrows(BusinessRuleViolationException.class, () -> new LoanAccount(
+                active.id(),
+                active.loanApplicationId(),
+                active.loanContractId(),
+                active.customerId(),
+                active.accountNumber(),
+                LoanAccountStatus.CLOSED,
+                active.approvedPrincipal(),
+                active.approvedTermMonths(),
+                active.totalInterest(),
+                active.feeAmount(),
+                active.totalRepaymentAmount(),
+                active.activatedAt(),
+                active.repaymentBalance(),
+                active.updatedAt()
+        ));
+        assertThrows(
+                BusinessStateConflictException.class,
+                () -> active.withServicingState(
+                        active.repaymentBalance(),
+                        LoanAccountStatus.CLOSED,
+                        active.updatedAt()
+                )
+        );
+    }
+
     private static LoanAccount copy(
             LoanAccount source,
             String accountNumber,
@@ -154,5 +220,29 @@ class LoanAccountTest {
 
     private static BigDecimal money(long value) {
         return BigDecimal.valueOf(value).setScale(2);
+    }
+
+    private static LoanAccount settledAccount() {
+        LoanAccount active = LoanAccount.activate(
+                UUID.randomUUID(),
+                LoanContractTestData.ready(),
+                LocalDateTime.of(2026, 7, 27, 10, 0)
+        );
+        LocalDate paymentDate = LocalDate.of(2026, 7, 28);
+        LocalDateTime paidAt = LocalDateTime.of(2026, 7, 28, 11, 0);
+        RepaymentBalance paid = new RepaymentBalance(
+                active.approvedPrincipal(),
+                active.totalInterest(),
+                active.feeAmount(),
+                active.totalRepaymentAmount(),
+                money(0),
+                money(0),
+                money(0),
+                money(0),
+                paymentDate,
+                paidAt,
+                paymentDate
+        );
+        return active.withServicingState(paid, LoanAccountStatus.SETTLED, paidAt);
     }
 }

@@ -17,6 +17,7 @@ public record RepaymentTransaction(
         UUID loanApplicationId,
         UUID loanAccountId,
         UUID repaymentScheduleId,
+        RepaymentTransactionType transactionType,
         UUID requestId,
         String externalPaymentReference,
         BigDecimal receivedAmount,
@@ -35,6 +36,7 @@ public record RepaymentTransaction(
         Objects.requireNonNull(loanAccountId, "loanAccountId must not be null");
         Objects.requireNonNull(repaymentScheduleId,
                 "repaymentScheduleId must not be null");
+        Objects.requireNonNull(transactionType, "transactionType must not be null");
         Objects.requireNonNull(requestId, "requestId must not be null");
         requireCanonicalReference(externalPaymentReference);
         Objects.requireNonNull(receivedAmount, "receivedAmount must not be null");
@@ -51,6 +53,35 @@ public record RepaymentTransaction(
             throw invalid("Received amount must be a positive whole VND amount.");
         }
         validateAllocations(id, receivedAmount, allocations);
+    }
+
+    public RepaymentTransaction(
+            UUID id,
+            UUID loanApplicationId,
+            UUID loanAccountId,
+            UUID repaymentScheduleId,
+            UUID requestId,
+            String externalPaymentReference,
+            BigDecimal receivedAmount,
+            LocalDate paymentValueDate,
+            UUID recordedByUserId,
+            LocalDateTime recordedAt,
+            List<RepaymentAllocation> allocations
+    ) {
+        this(
+                id,
+                loanApplicationId,
+                loanAccountId,
+                repaymentScheduleId,
+                RepaymentTransactionType.REPAYMENT,
+                requestId,
+                externalPaymentReference,
+                receivedAmount,
+                paymentValueDate,
+                recordedByUserId,
+                recordedAt,
+                allocations
+        );
     }
 
     public static RepaymentTransaction recorded(
@@ -74,12 +105,45 @@ public record RepaymentTransaction(
                 loanApplicationId,
                 loanAccountId,
                 repaymentScheduleId,
+                RepaymentTransactionType.REPAYMENT,
                 requestId,
                 externalPaymentReference,
                 receivedAmount,
                 paymentValueDate,
                 recordedByUserId,
                 recordedAt,
+                allocations
+        );
+    }
+
+    public static RepaymentTransaction approvedSettlement(
+            UUID id,
+            UUID loanApplicationId,
+            UUID loanAccountId,
+            UUID repaymentScheduleId,
+            UUID requestId,
+            String externalPaymentReference,
+            BigDecimal receivedAmount,
+            LocalDate paymentValueDate,
+            LocalDate disbursementValueDate,
+            LocalDate currentUtcDate,
+            UUID approvedByUserId,
+            LocalDateTime approvedAt,
+            List<RepaymentAllocation> allocations
+    ) {
+        validateValueDate(paymentValueDate, disbursementValueDate, currentUtcDate);
+        return new RepaymentTransaction(
+                id,
+                loanApplicationId,
+                loanAccountId,
+                repaymentScheduleId,
+                RepaymentTransactionType.APPROVED_SETTLEMENT,
+                requestId,
+                externalPaymentReference,
+                receivedAmount,
+                paymentValueDate,
+                approvedByUserId,
+                approvedAt,
                 allocations
         );
     }
@@ -122,6 +186,7 @@ public record RepaymentTransaction(
                 + ", loanApplicationId=" + loanApplicationId
                 + ", loanAccountId=" + loanAccountId
                 + ", repaymentScheduleId=" + repaymentScheduleId
+                + ", transactionType=" + transactionType
                 + ", paymentEvidence=redacted]";
     }
 

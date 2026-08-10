@@ -28,6 +28,7 @@ import com.meridian.platform.loan.domain.model.RepaymentSchedule;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleItem;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
 import com.meridian.platform.loan.domain.model.RepaymentTransaction;
+import com.meridian.platform.loan.domain.model.RepaymentTransactionType;
 import com.meridian.platform.loan.domain.service.DeterministicRepaymentAllocator;
 import com.meridian.platform.loan.domain.service.RepaymentServicingCalculator;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
@@ -118,7 +119,9 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
     public Result record(Command command) {
         AuthenticatedUser actor = requireStaff(currentUsers.currentUser());
         Instant recordedInstant = clock.instant();
-        LocalDateTime recordedAt = LocalDateTime.ofInstant(recordedInstant, ZoneOffset.UTC);
+        LocalDateTime recordedAt = ServicingEvidenceTimestamp.normalizeForPersistence(
+                LocalDateTime.ofInstant(recordedInstant, ZoneOffset.UTC)
+        );
         LocalDate evaluationDate = LocalDate.ofInstant(recordedInstant, ZoneOffset.UTC);
 
         transactions.acquireRecordingRequestLock(command.requestId());
@@ -380,7 +383,9 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
             Command command,
             AuthenticatedUser actor
     ) {
-        if (!transaction.requestId().equals(command.requestId())
+        if (transaction.transactionType()
+                != RepaymentTransactionType.REPAYMENT
+                || !transaction.requestId().equals(command.requestId())
                 || !transaction.loanApplicationId().equals(command.loanApplicationId())
                 || !transaction.externalPaymentReference()
                 .equals(command.externalPaymentReference())
@@ -408,7 +413,8 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
                 || !transaction.repaymentScheduleId().equals(outcome.repaymentScheduleId())
                 || transaction.receivedAmount().compareTo(outcome.receivedAmount()) != 0
                 || !transaction.paymentValueDate().equals(outcome.paymentValueDate())
-                || !transaction.recordedAt().equals(outcome.recordedAt())
+                || !ServicingEvidenceTimestamp.same(
+                transaction.recordedAt(), outcome.recordedAt())
                 || principal.compareTo(outcome.principalReleased()) != 0) {
             throw stateConflict();
         }

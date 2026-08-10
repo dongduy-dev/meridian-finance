@@ -197,7 +197,15 @@ class OverdueEvaluationBatchPostgreSqlIntegrationTest {
 
         Activated closed = activate("CLOSED");
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            jdbc.update("update loan_accounts set status='CLOSED' where id=?",
+            jdbc.update("update loan_accounts set status='CLOSED', "
+                            + "principal_paid=approved_principal, "
+                            + "interest_paid=total_interest, "
+                            + "fee_paid=fee_amount, "
+                            + "total_paid=total_repayment_amount, "
+                            + "principal_outstanding=0, interest_outstanding=0, "
+                            + "fee_outstanding=0, total_outstanding=0, "
+                            + "last_payment_value_date=servicing_evaluation_date, "
+                            + "last_payment_recorded_at=updated_at where id=?",
                     closed.accountId());
             assertFalse(candidates.findCandidates(target, 100).stream().anyMatch(candidate ->
                     candidate.loanAccountId().equals(closed.accountId())));

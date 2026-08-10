@@ -134,7 +134,7 @@ The contractual destination-reveal operation is the sole v1 JSON endpoint permit
 | POST | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions` | `document:upload:staff` | Upload for an open Staff upload task. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | `document:review` | Stream a review-authorized immutable version. |
 
-### 2.3 Offers, contracts, disbursement, account, and repayment
+### 2.3 Offers, contracts, disbursement, account, and servicing
 
 | Method | Path | Authorization | Summary |
 |---|---|---|---|
@@ -151,6 +151,8 @@ The contractual destination-reveal operation is the sole v1 JSON endpoint permit
 | GET | `/api/v1/loan-applications/{loanApplicationId}/loan-account` | `loan:read:own` or `loan:read` | Return originated terms, final schedule, and servicing state. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/repayments` | `repayment:update` | Record or replay a manual Salary Advance repayment. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read:own` or `loan:read` | Return immutable paged repayment history. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/settlements` | `loan:settlement:approve` plus Approver role | Approve and apply an Administrative Full-Balance Settlement. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/loan-account/closure` | `loan:account:close` plus Accounting Officer role | Close an eligible settled LoanAccount administratively. |
 
 ---
 
@@ -589,6 +591,47 @@ GET /api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20
 - The response excludes replay flags and external payment references.
 - Customers require ownership plus `loan:read:own`; Staff use `loan:read`. `repayment:update` alone does not grant read access.
 
+### 8.3 Administrative Full-Balance Settlement
+
+```http
+POST /api/v1/loan-applications/{loanApplicationId}/settlements
+Authorization: Bearer <approver-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "requestId": "5adc5851-af5a-4fb0-8745-bd66a0cf36c4",
+  "expectedSettlementAmount": 1230000,
+  "paymentValueDate": "2026-08-09",
+  "externalPaymentReference": "BANK-REFERENCE"
+}
+```
+
+The caller must be an Approver with `loan:settlement:approve`. The account must be `ACTIVE` or `OVERDUE`, and `expectedSettlementAmount` must equal locked current total outstanding. Meridian records an `APPROVED_SETTLEMENT` payment transaction, applies oldest-installment and fee-interest-principal allocation, releases only allocated Salary Advance principal, and returns a `SETTLED` result. Discounted, concessionary, waiver, forgiveness, and write-off outcomes are not accepted.
+
+The response contains safe application/account/payment/schedule identifiers, amount and value date, approval time, principal allocated and released, resulting balances/status, and `idempotentReplay`. It excludes the request UUID, canonical external payment reference, actor and Customer identities, settlement evidence identity, limit/movement identities, audit/history identities, and internal reconciliation evidence.
+
+An identical request replay returns the original durable settlement result, including after later administrative closure, without new payment, allocation, exposure, history, settlement, or audit evidence. Reusing the request UUID with different logical content returns `409 IDEMPOTENCY_KEY_REUSED`. Other relevant outcomes are `422 SETTLEMENT_AMOUNT_INVALID`, `422 SETTLEMENT_VALUE_DATE_INVALID`, `409 DUPLICATE_PAYMENT_REFERENCE`, `409 SETTLEMENT_NOT_ALLOWED`, and safe `409 SYSTEM_STATE_CONFLICT`; missing permission or business role returns `403`.
+
+### 8.4 Administrative LoanAccount closure
+
+```http
+POST /api/v1/loan-applications/{loanApplicationId}/loan-account/closure
+Authorization: Bearer <accounting-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "requestId": "c2cb8155-e3c9-40e9-8887-81de1b37474f"
+}
+```
+
+The caller must be an Accounting Officer with `loan:account:close`. Closure requires a fully reconciled `SETTLED` LoanAccount produced by ordinary contractual payoff or Administrative Full-Balance Settlement. It records a separate `SETTLED -> CLOSED` administrative result and does not change payments, allocations, balances, the final schedule, installment progress, Salary Advance exposure, or LoanApplication state.
+
+The response contains only application/account identity, `CLOSED`, closure time, and `idempotentReplay`. It excludes request, closure-evidence, actor, payment, limit/movement, audit/history, and internal reconciliation identities. An identical replay returns the original closure result. A different request after closure or an attempt before `SETTLED` returns `409 LOAN_ACCOUNT_CLOSURE_NOT_ALLOWED`; conflicting reuse of the same request UUID returns `409 IDEMPOTENCY_KEY_REUSED`; inconsistent evidence returns safe `409 SYSTEM_STATE_CONFLICT`; missing permission or business role returns `403`.
+
 ---
 
 ## 9. Postman Collection
@@ -599,7 +642,7 @@ Collection:
 docs/api/Meridian-Platform.postman_collection.json
 ```
 
-It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, and negative-security flows.
+It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows.
 
 Complex correction scenarios require prepared application, review-cycle, checklist, and version variables. Seed fixtures and scenario-specific IDs belong to the collection or its environment, not this API contract.
 

@@ -22,10 +22,12 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Set;
 import java.util.UUID;
@@ -332,6 +334,237 @@ class RecordRepaymentPostgreSqlIntegrationTest {
                 "select count(*) from repayment_transactions "
                         + "where loan_application_id = ?",
                 fixture.applicationId()
+        ));
+    }
+
+    @Test
+    void closureFoundationRequiresAndReconcilesImmutableClosureEvidence() {
+        var fixture = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var activation = disbursements.confirm(support.command(
+                fixture, UUID.randomUUID(), "CLOSE-" + fixture.token()
+        ));
+        BigDecimal outstanding = amount(
+                "select total_outstanding from loan_accounts where id = ?",
+                activation.loanAccountId()
+        );
+        repayments.record(new RecordRepaymentUseCase.Command(
+                UUID.randomUUID(), fixture.applicationId(),
+                "CLOSE-PAYOFF-" + fixture.token(), outstanding, VALUE_DATE
+        ));
+        int allocationCountBefore = count(
+                "select count(*) from repayment_allocations allocation_row "
+                        + "join repayment_transactions transaction_row "
+                        + "on transaction_row.id=allocation_row.repayment_transaction_id "
+                        + "where transaction_row.loan_account_id=?",
+                activation.loanAccountId()
+        );
+        int movementCountBefore = count(
+                "select count(*) from salary_advance_limit_movements "
+                        + "where loan_account_id=?",
+                activation.loanAccountId()
+        );
+        UUID closureId = UUID.randomUUID();
+        LocalDateTime closedAt = LocalDateTime.of(2026, 7, 28, 10, 1);
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            jdbc.update(
+                    "insert into loan_account_closures "
+                            + "(id,loan_application_id,loan_account_id,request_id,"
+                            + "closed_by_user_id,closed_at) values (?,?,?,?,?,?)",
+                    closureId, fixture.applicationId(), activation.loanAccountId(),
+                    UUID.randomUUID(), ACCOUNTING_USER_ID, closedAt
+            );
+            jdbc.update(
+                    "update loan_accounts set status='CLOSED',updated_at=? where id=?",
+                    closedAt, activation.loanAccountId()
+            );
+            Integer sequence = jdbc.queryForObject(
+                    "select max(sequence_number)+1 "
+                            + "from loan_account_status_transitions "
+                            + "where loan_account_id=?",
+                    Integer.class, activation.loanAccountId()
+            );
+            java.time.LocalDate evaluationDate = jdbc.queryForObject(
+                    "select servicing_evaluation_date from loan_accounts where id=?",
+                    java.time.LocalDate.class, activation.loanAccountId()
+            );
+            jdbc.update(
+                    "insert into loan_account_status_transitions "
+                            + "(id,loan_account_id,sequence_number,operation_id,"
+                            + "from_status,to_status,action,actor_type,actor_user_id,"
+                            + "servicing_evaluation_date,occurred_at) "
+                            + "values (?,?,?,?,?,?,?,?,?,?,?)",
+                    UUID.randomUUID(), activation.loanAccountId(), sequence, closureId,
+                    "SETTLED", "CLOSED", "ADMINISTRATIVE_CLOSURE", "USER",
+                    ACCOUNTING_USER_ID, evaluationDate, closedAt
+            );
+            persistClosureAudit(
+                    closureId, 1, "LOAN_ACCOUNT_CLOSURE", closureId,
+                    "LOAN_ACCOUNT_CLOSED", closedAt
+            );
+            persistClosureAudit(
+                    closureId, 2, "LOAN_ACCOUNT", activation.loanAccountId(),
+                    "LOAN_ACCOUNT_STATUS_CHANGED", closedAt
+            );
+        });
+
+        assertEquals("CLOSED", jdbc.queryForObject(
+                "select status from loan_accounts where id=?",
+                String.class, activation.loanAccountId()
+        ));
+        assertEquals(0, amount(
+                "select total_outstanding from loan_accounts where id=?",
+                activation.loanAccountId()
+        ).signum());
+        assertEquals(allocationCountBefore, count(
+                "select count(*) from repayment_allocations allocation_row "
+                        + "join repayment_transactions transaction_row "
+                        + "on transaction_row.id=allocation_row.repayment_transaction_id "
+                        + "where transaction_row.loan_account_id=?",
+                activation.loanAccountId()
+        ));
+        assertEquals(movementCountBefore, count(
+                "select count(*) from salary_advance_limit_movements "
+                        + "where loan_account_id=?",
+                activation.loanAccountId()
+        ));
+        assertEquals(1, count(
+                "select count(*) from loan_account_closures where id=?", closureId
+        ));
+    }
+
+    @Test
+    void approvedSettlementEvidenceReconcilesAgainstExactPaymentOutcome() {
+        var fixture = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var activation = disbursements.confirm(support.command(
+                fixture, UUID.randomUUID(), "SETTLEMENT-" + fixture.token()
+        ));
+        BigDecimal outstanding = amount(
+                "select total_outstanding from loan_accounts where id = ?",
+                activation.loanAccountId()
+        );
+        RecordRepaymentUseCase.Result payoff = repayments.record(
+                new RecordRepaymentUseCase.Command(
+                        UUID.randomUUID(), fixture.applicationId(),
+                        "SETTLEMENT-PAYMENT-" + fixture.token(),
+                        outstanding,
+                        VALUE_DATE
+                )
+        );
+        UUID settlementId = UUID.randomUUID();
+
+        setImmutableEvidenceTriggers(false);
+        try {
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                jdbc.update(
+                        "update repayment_transactions "
+                                + "set transaction_type='APPROVED_SETTLEMENT' where id=?",
+                        payoff.repaymentTransactionId()
+                );
+                jdbc.update(
+                        "update loan_account_status_transitions "
+                                + "set action='APPROVED_SETTLEMENT' where operation_id=?",
+                        payoff.repaymentTransactionId()
+                );
+                jdbc.update(
+                        "update repayment_installment_status_transitions "
+                                + "set action='APPROVED_SETTLEMENT' where operation_id=?",
+                        payoff.repaymentTransactionId()
+                );
+                jdbc.update(
+                        "update audit_events set action='LOAN_SETTLEMENT_APPROVED',"
+                                + "entity_type='LOAN_SETTLEMENT',entity_id=? "
+                                + "where operation_id=? and action='REPAYMENT_RECORDED'",
+                        settlementId, payoff.repaymentTransactionId()
+                );
+                jdbc.update(
+                        "insert into approved_loan_settlements "
+                                + "(id,loan_application_id,loan_account_id,"
+                                + "repayment_transaction_id,request_id,settlement_amount,"
+                                + "approved_by_user_id,approved_at) "
+                                + "select ?,loan_application_id,loan_account_id,id,request_id,"
+                                + "received_amount,recorded_by_user_id,recorded_at "
+                                + "from repayment_transactions where id=?",
+                        settlementId, payoff.repaymentTransactionId()
+                );
+                jdbc.execute("set constraints all immediate");
+            });
+        } finally {
+            setImmutableEvidenceTriggers(true);
+        }
+
+        assertEquals("APPROVED_SETTLEMENT", jdbc.queryForObject(
+                "select transaction_type from repayment_transactions where id=?",
+                String.class, payoff.repaymentTransactionId()
+        ));
+        assertEquals(1, count(
+                "select count(*) from approved_loan_settlements where id=?",
+                settlementId
+        ));
+        assertEquals(1, count(
+                "select count(*) from audit_events where operation_id=? "
+                        + "and action='LOAN_SETTLEMENT_APPROVED' "
+                        + "and entity_type='LOAN_SETTLEMENT' and entity_id=?",
+                payoff.repaymentTransactionId(), settlementId
+        ));
+        assertThrows(RuntimeException.class, () -> jdbc.update(
+                "update approved_loan_settlements set approved_at=approved_at "
+                        + "where id=?",
+                settlementId
+        ));
+    }
+
+    @Test
+    void closedStatusWithoutClosureEvidenceRollsBack() {
+        var fixture = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        var activation = disbursements.confirm(support.command(
+                fixture, UUID.randomUUID(), "NO-EVIDENCE-" + fixture.token()
+        ));
+        BigDecimal outstanding = amount(
+                "select total_outstanding from loan_accounts where id = ?",
+                activation.loanAccountId()
+        );
+        repayments.record(new RecordRepaymentUseCase.Command(
+                UUID.randomUUID(), fixture.applicationId(),
+                "NO-EVIDENCE-PAYOFF-" + fixture.token(), outstanding, VALUE_DATE
+        ));
+
+        assertThrows(RuntimeException.class, () ->
+                new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                    UUID operationId = UUID.randomUUID();
+                    LocalDateTime closedAt = LocalDateTime.of(2026, 7, 28, 10, 1);
+                    jdbc.update(
+                            "update loan_accounts set status='CLOSED',updated_at=? "
+                                    + "where id=?",
+                            closedAt, activation.loanAccountId()
+                    );
+                    Integer sequence = jdbc.queryForObject(
+                            "select max(sequence_number)+1 "
+                                    + "from loan_account_status_transitions "
+                                    + "where loan_account_id=?",
+                            Integer.class, activation.loanAccountId()
+                    );
+                    java.time.LocalDate evaluationDate = jdbc.queryForObject(
+                            "select servicing_evaluation_date from loan_accounts where id=?",
+                            java.time.LocalDate.class, activation.loanAccountId()
+                    );
+                    jdbc.update(
+                            "insert into loan_account_status_transitions "
+                                    + "(id,loan_account_id,sequence_number,operation_id,"
+                                    + "from_status,to_status,action,actor_type,actor_user_id,"
+                                    + "servicing_evaluation_date,occurred_at) "
+                                    + "values (?,?,?,?,?,?,?,?,?,?,?)",
+                            UUID.randomUUID(), activation.loanAccountId(), sequence,
+                            operationId, "SETTLED", "CLOSED",
+                            "ADMINISTRATIVE_CLOSURE", "USER", ACCOUNTING_USER_ID,
+                            evaluationDate, closedAt
+                    );
+                })
+        );
+
+        assertEquals("SETTLED", jdbc.queryForObject(
+                "select status from loan_accounts where id=?",
+                String.class, activation.loanAccountId()
         ));
     }
 
@@ -755,6 +988,37 @@ class RecordRepaymentPostgreSqlIntegrationTest {
                 loanAccountId
         );
     }
+
+    private void persistClosureAudit(
+            UUID operationId,
+            int sequence,
+            String entityType,
+            UUID entityId,
+            String action,
+            LocalDateTime occurredAt
+    ) {
+        jdbc.update(
+                "insert into audit_events "
+                        + "(id,operation_id,sequence_number,actor_type,actor_user_id,"
+                        + "entity_type,entity_id,action,payload,occurred_at) "
+                        + "values (?,?,?,?,?,?,?,?,cast('{}' as jsonb),?)",
+                UUID.randomUUID(), operationId, sequence, "USER", ACCOUNTING_USER_ID,
+                entityType, entityId, action, occurredAt
+        );
+    }
+
+    private void setImmutableEvidenceTriggers(boolean enabled) {
+        String command = enabled ? "enable" : "disable";
+        jdbc.execute("alter table repayment_transactions " + command
+                + " trigger trg_repayment_transactions_immutable");
+        jdbc.execute("alter table loan_account_status_transitions " + command
+                + " trigger trg_loan_account_status_transitions_immutable");
+        jdbc.execute("alter table repayment_installment_status_transitions " + command
+                + " trigger trg_repayment_installment_status_transitions_immutable");
+        jdbc.execute("alter table audit_events " + command
+                + " trigger trg_audit_events_immutable");
+    }
+
     private Object recordOrConflict(
             CountDownLatch start,
             RecordRepaymentUseCase.Command command

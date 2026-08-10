@@ -2,7 +2,7 @@
 
 ## Meridian Lending Platform
 
-Meridian is a multi-product digital lending platform centered on its flagship Salary Advance workflow, with streamlined workflows for Unsecured Consumer Loan and Collateral Loan. It supports the lending lifecycle — application submission, document upload, OCR-assisted document processing, checklist handling, manual document review, controlled review and approval, customer acceptance, manual disbursement confirmation, repayment tracking, and audit tracking — while helping lending teams operate with clearer and more consistent processes.
+Meridian is a multi-product digital lending platform centered on its flagship Salary Advance workflow, with streamlined workflows for Unsecured Consumer Loan and Collateral Loan. It supports the lending lifecycle — application submission, document upload, OCR-assisted document processing, checklist handling, manual document review, controlled review and approval, customer acceptance, manual disbursement confirmation, repayment tracking, full-balance settlement, administrative account closure, and audit tracking — while helping lending teams operate with clearer and more consistent processes.
 
 At its core, Meridian uses one generic lending core shared across all loan products, with product-specific behavior handled through loan product policies and strategies. The platform is built around practical financial software concerns such as auditability, security, data integrity, controlled status transitions, approval controls, document traceability, and clear operational workflows.
 
@@ -114,6 +114,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - **Controlled Review & Approval Workflow** — Loan-owned review and correction lifecycle with immutable Loan Officer recommendations, independent Approver decisions, customer acceptance, and maker-checker controls
 - **Operational Contract Readiness** — Immutable accepted-term and repayment snapshots, protected destination capture, Customer acknowledgment, structured blockers, controlled destination refresh, and Accounting confirmation
 - **Manual Disbursement Activation** - Idempotent Accounting confirmation creates an active LoanAccount, final dated schedule, and Salary Advance reserved-to-used conversion atomically
+- **Salary Advance Servicing Lifecycle** — Deterministic repayment, overdue evaluation, contractual payoff, payment-backed Administrative Full-Balance Settlement, and separate administrative LoanAccount closure
 - **Document Upload & Management** — Checklist handling, metadata, storage abstraction, manual review, waiver, replacement, readiness checks, and OCR-assisted processing
 - **JWT Authentication & RBAC** — RS256 tokens, refresh rotation, role/action permission model
 - **Idempotent Financial Operations** — Operation-specific request identities, transactional replay protection, semantic replay validation, and persisted outcomes for critical mutations
@@ -127,8 +128,8 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 |---|---|---|
 | **Customer** | `loan:submit`, `loan:read:own`, `loan:cancel:own`, `partner:employee:verify:own`, `document:upload:own`, `document:read:own`, `loan:offer:respond:own`, `loan:contract:acknowledge:own` | Self-service only; service layer enforces ownership |
 | **Loan Officer** | `loan:read`, `loan:review`, `approval:recommend`, `document:review`, `customer:read`, `loan:correction:staff` | Reviews applications and evidence, records recommendations, and handles authorized Staff correction work |
-| **Approver** | `loan:read`, `approval:decide`, `document:read`, `audit:read` | Records independent approval decisions, returns applications to review, or requests structured correction |
-| **Accounting Officer** | `loan:contract:prepare`, `loan:contract:read`, `loan:disbursement:prepare`, `loan:disburse`, `repayment:update`, `loan:read` | Prepares contracts, confirms readiness/manual transfer evidence, reveals the immutable destination only for disbursement, and records authorized repayments |
+| **Approver** | `loan:read`, `approval:decide`, `loan:settlement:approve`, `document:read`, `audit:read` | Records independent application decisions and performs authorized Loan-owned Administrative Full-Balance Settlement |
+| **Accounting Officer** | `loan:contract:prepare`, `loan:contract:read`, `loan:disbursement:prepare`, `loan:disburse`, `repayment:update`, `loan:account:close`, `loan:read` | Prepares contracts, confirms readiness/manual transfer evidence, records authorized repayments, and closes eligible settled LoanAccounts |
 | **Back-Office Admin** | `loan:product:manage`, `partner:read`, `partner:manage`, `identity:user:manage`, `admin:config`, `audit:read` | Manages products, partner data, internal users, and MVP configuration |
 
 ---
@@ -199,7 +200,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - [x] Contract readiness and immutable disbursement preparation
 - [x] Manual disbursement confirmation, LoanAccount activation, and final repayment schedule generation for Salary Advance
 - [x] Salary Advance repayment posting/tracking, exact principal exposure release, overdue transitions, contractual payoff to `SETTLED`, and secured servicing reads
-- [ ] Approved settlement administration and LoanAccount closure
+- [x] Payment-backed Administrative Full-Balance Settlement and separate LoanAccount closure for Salary Advance
 - [ ] Streamlined Unsecured Consumer Loan origination, review, approval, contract, and activation workflow
 - [ ] Streamlined Collateral Loan origination, review, approval, contract, and activation workflow
 - [ ] UCL and Collateral Loan repayment and servicing policies

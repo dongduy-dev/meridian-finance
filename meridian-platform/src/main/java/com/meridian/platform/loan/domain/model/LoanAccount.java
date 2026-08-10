@@ -64,9 +64,9 @@ public record LoanAccount(
         if (updatedAt.isBefore(activatedAt)) {
             throw invalid("Loan Account update time cannot precede activation.");
         }
-        if (status == LoanAccountStatus.SETTLED
+        if ((status == LoanAccountStatus.SETTLED || status == LoanAccountStatus.CLOSED)
                 && repaymentBalance.totalOutstanding().signum() != 0) {
-            throw invalid("Settled Loan Account must have zero outstanding.");
+            throw invalid("Settled or closed Loan Account must have zero outstanding.");
         }
         if ((status == LoanAccountStatus.ACTIVE || status == LoanAccountStatus.OVERDUE)
                 && repaymentBalance.totalOutstanding().signum() == 0) {
@@ -172,6 +172,36 @@ public record LoanAccount(
                 activatedAt,
                 newBalance,
                 changedAt
+        );
+    }
+
+    public LoanAccount closeAdministratively(LocalDateTime closedAt) {
+        Objects.requireNonNull(closedAt, "closedAt must not be null");
+        if (status != LoanAccountStatus.SETTLED
+                || repaymentBalance.totalOutstanding().signum() != 0) {
+            throw new BusinessStateConflictException(
+                    "LOAN_ACCOUNT_CLOSURE_NOT_ALLOWED",
+                    "Administrative closure requires a settled Loan Account."
+            );
+        }
+        if (closedAt.isBefore(updatedAt)) {
+            throw invalid("Loan Account closure time cannot precede its last update.");
+        }
+        return new LoanAccount(
+                id,
+                loanApplicationId,
+                loanContractId,
+                customerId,
+                accountNumber,
+                LoanAccountStatus.CLOSED,
+                approvedPrincipal,
+                approvedTermMonths,
+                totalInterest,
+                feeAmount,
+                totalRepaymentAmount,
+                activatedAt,
+                repaymentBalance,
+                closedAt
         );
     }
 

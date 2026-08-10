@@ -20,7 +20,7 @@ The model supports the MVP lending workflow for:
 
 The MVP uses one PostgreSQL database. Tables are logically owned by modules, but Meridian does not use a database-per-service design.
 
-> **Model authority and state:** Sections 1-13 are a high-level logical/current-plus-target model; names in the ERD are not an exact physical-schema inventory. Executable Flyway migrations are authoritative for deployed structure, and `MER-DB-CURRENT-SCHEMA.sql` is the current human-readable V1-V35 snapshot. The current physical model has no `refresh_tokens`, `collaterals`, or OCR tables. It uses `manual_disbursements` rather than the conceptual `disbursement_records`, and repayment servicing uses `repayment_schedule_items`, `repayment_transactions`, `repayment_allocations`, `repayment_installment_progress`, `repayment_operation_outcomes`, LoanAccount/installment status-transition tables, and Salary Advance movement/release evidence rather than a single `repayment_records` table. Sections 14-17 record implemented physical increments explicitly.
+> **Model authority and state:** Sections 1-13 are a high-level logical/current-plus-target model; names in the ERD are not an exact physical-schema inventory. Executable Flyway migrations are authoritative for deployed structure, and `MER-DB-CURRENT-SCHEMA.sql` is the current human-readable V1-V36 snapshot. The current physical model has no `refresh_tokens`, `collaterals`, or OCR tables. It uses `manual_disbursements` rather than the conceptual `disbursement_records`, and servicing uses `repayment_schedule_items`, typed `repayment_transactions`, `repayment_allocations`, `repayment_installment_progress`, `repayment_operation_outcomes`, immutable approved-settlement and closure evidence, LoanAccount/installment status-transition tables, and Salary Advance movement/release evidence rather than a single `repayment_records` table.
 
 ## 3. Database Design Principles
 
@@ -550,6 +550,8 @@ Logical tables:
 - `disbursement_records` - conceptual disbursement evidence; the current physical table is immutable `manual_disbursements`.
 - `repayment_schedules` - provisional or final repayment schedule headers.
 - `repayment_records` - conceptual repayment tracking; the current physical model separates immutable `repayment_transactions`/`repayment_allocations`, component progress, durable operation outcomes, and account/installment histories.
+- `approved_loan_settlements` - one immutable Administrative Full-Balance Settlement identity linked to its authoritative payment transaction.
+- `loan_account_closures` - one immutable administrative closure identity for a financially reconciled settled LoanAccount.
 - `collaterals` - target collateral detail records for a future approved `COLLATERAL_LOAN` slice; no current physical table or executable collateral repayment flow exists.
 
 `salary_advance_limits` answers: "How much Salary Advance limit does this customer currently have available?" It tracks total, used, reserved, and available amounts as ongoing lending state. It is recalculated when partner employee data changes and adjusted when applications reserve/release limit, disbursements convert reserved amount to used amount, and repayments release used amount.
@@ -614,7 +616,7 @@ OCR belongs under Document Management. It is planned for Phase 2 and remains ass
 - In the target Collateral model, one `loan_applications` record may have one or more `collaterals`; that product slice and table are not currently executable.
 - One approved `loan_applications` record may produce one `approved_offers` record, and each approved offer contains one `approved_offer_repayment_items` row per approved term month.
 - One manually disbursed `loan_applications` record creates one `loan_accounts` record.
-- One current `loan_accounts` record has one authoritative final `repayment_schedules` version with items, many immutable repayment transactions/allocations and outcomes, one row of progress per installment, and ordered account/installment status histories.
+- One current `loan_accounts` record has one authoritative final `repayment_schedules` version with items, many immutable repayment transactions/allocations and outcomes, one row of progress per installment, and ordered account/installment status histories. It may have one approved-settlement record linked to an `APPROVED_SETTLEMENT` transaction and one administrative closure record after financial settlement.
 - One `loan_applications` record has one `document_checklists` header and many checklist items.
 - A `document_checklist_items` record may be satisfied by a current `documents` record, waived by `document_waivers`, or marked not required by policy.
 - One `documents` record may have many `document_reviews`, replacement requests, and Phase 2 OCR jobs.
@@ -629,6 +631,7 @@ Status names are namespace-scoped. For example, `LoanApplicationStatus.UNDER_REV
 | `LoanApplicationStatus` | `DRAFT`, `SUBMITTED`, `VERIFICATION_PENDING`, `VERIFICATION_FAILED`, `DOCUMENTS_PENDING`, `UNDER_REVIEW`, `RETURNED_FOR_REVISION`, `RETURNED_TO_REVIEW`, `APPROVAL_PENDING`, `APPROVED`, `REJECTED`, `CUSTOMER_ACCEPTANCE_PENDING`, `CUSTOMER_DECLINED`, `CONTRACT_PENDING`, `DISBURSEMENT_PENDING`, `DISBURSED`, `CANCELLED`, `EXPIRED` |
 | Terminal `LoanApplicationStatus` values | `REJECTED`, `CUSTOMER_DECLINED`, `DISBURSED`, `CANCELLED`, `EXPIRED` |
 | `LoanAccountStatus` | `ACTIVE`, `OVERDUE`, `SETTLED`, `CLOSED` |
+| `RepaymentTransactionType` | `REPAYMENT`, `APPROVED_SETTLEMENT` |
 | `ProductVerificationResult` | `VERIFIED`, `FAILED`, `PENDING_MANUAL_REVIEW`, `REQUIRES_MORE_INFORMATION` |
 | `DocumentReviewStatus` | `NOT_REQUIRED`, `PENDING_UPLOAD`, `UPLOADED`, `UNDER_REVIEW`, `ACCEPTED`, `REJECTED`, `EXPIRED`, `WAIVED` |
 | Manual document review actions | `ACCEPT_DOCUMENT`, `REJECT_DOCUMENT`, `WAIVE_DOCUMENT`, `REQUEST_REPLACEMENT` |
@@ -676,10 +679,12 @@ Salary Advance employee verification maps to `ProductVerificationResult` as foll
 - Draft Salary Advance application creation does not reserve limit.
 - Submitted or approved Salary Advance applications reserve limit until they are rejected, cancelled, declined, expired, disbursed, or otherwise released by workflow rules.
 - Manual disbursement converts the reserved amount into used amount as part of the same controlled transaction that creates the `loan_accounts` record.
-- Current Salary Advance repayment releases used exposure only for newly allocated principal, by exactly that amount; fee and interest release none. Administrative correction, negotiated settlement, waiver/write-off, reversal/refund, and manual exposure adjustment workflows remain deferred.
+- Salary Advance ordinary repayment and Administrative Full-Balance Settlement release used exposure only for newly allocated principal, by exactly that amount; fee and interest release none. Administrative correction, discounted or negotiated settlement, waiver/write-off, reversal/refund, and manual exposure adjustment workflows remain deferred.
 - `salary_advance_limit_movements.loan_application_id` and `loan_account_id` are nullable logical references. A movement should include the relevant reference when it is caused by an application or account event, but initialization, refresh, suspension, disablement, and some manual adjustments may not have either reference.
 - Salary Advance verification snapshot records must preserve employee outcome, product verification result, employee/link references, and total/used/reserved/available limit values needed to explain the application decision.
-- Current UTC date-driven evaluation moves a LoanAccount between `ACTIVE` and `OVERDUE`, and exact contractual payoff moves it to `SETTLED`. `CLOSED` remains a reserved schema status with no current command; administrative settlement and closure are deferred.
+- UTC date-driven evaluation moves a LoanAccount between `ACTIVE` and `OVERDUE`. Exact contractual payoff or payment-backed Administrative Full-Balance Settlement moves it to `SETTLED`. Only separate administrative closure moves an eligible reconciled account from `SETTLED` to `CLOSED`; both terminal states require zero contractual outstanding.
+- Approved settlement evidence must reconcile reciprocally with one typed payment transaction, allocations, durable operation outcome, installment/account history, Salary Advance principal release, and audit evidence. It cannot extinguish an unpaid component.
+- Closure evidence must reconcile reciprocally with a `SETTLED -> CLOSED` history transition and closure/status audits. Financial provenance may be ordinary payoff or approved settlement, and closure cannot mutate payment, schedule, progress, balance, exposure, or LoanApplication evidence.
 
 ## 9. Audit and Traceability Rules
 
@@ -821,10 +826,14 @@ V28 also links `DISBURSED_TO_USED` movements to both Loan Application and LoanAc
 
 V29 allowlists `MANUAL_DISBURSEMENT_CONFIRMED` for the atomic activation audit. V30 makes the Loan Application product identity tuple immutable and foreign-keyed to the Loan Product, preventing product drift before policy selection. V31 adds only `LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED` to the audit action whitelist.
 
-The V29 and V31 migrations preflight the exact prior named whitelist predicate before replacing it. They reject missing, extra, weakened, repeated, or incompatible constraint state before any drop. `MER-DB-CURRENT-SCHEMA.sql` reflects the stable V1-V35 physical result, including the repayment-servicing structures summarized in Section 17; migration preflight machinery is intentionally kept only in executable Flyway history.
+The V29 and V31 migrations preflight the exact prior named whitelist predicate before replacing it. They reject missing, extra, weakened, repeated, or incompatible constraint state before any drop. `MER-DB-CURRENT-SCHEMA.sql` reflects the stable V1-V36 physical result, including the servicing structures summarized in Section 17; migration preflight machinery is intentionally kept only in executable Flyway history.
 
-## 17. Repayment servicing physical model and read boundary (V32-V35)
+## 17. Repayment, settlement, and closure servicing model
 
-V32-V33 add immutable repayment transactions and allocations, component-level installment progress, LoanAccount servicing balances/dates, exact Salary Advance principal-release movements, append-only installment/account histories, and deferred reconciliation. V34 adds the immutable repayment operation outcome required for exact replay after later servicing mutations. V35 adds only the preflight-protected bounded overdue-candidate index; it performs no business backfill.
+`repayment_transactions.transaction_type` distinguishes ordinary `REPAYMENT` from `APPROVED_SETTLEMENT` while retaining one authoritative payment/allocation model, globally unique canonical external payment references, and immutable durable operation outcomes. Component-level installment progress, LoanAccount servicing balances/dates, Salary Advance principal-release movements, and append-only installment/account histories reconcile reciprocally at commit. The final contractual schedule remains insert-only obligation evidence.
 
-The secured history query pages by LoanAccount with deterministic `recorded_at DESC, id DESC` order, then reconciles every transaction against its immutable allocations and V34 outcome. The LoanAccount query reads the immutable final schedule and stored progress in one repeatable-read snapshot. These are application/API additions only: Increment 4 adds no table, column, constraint, trigger, index, seed, or Flyway migration, and V35 remains the latest schema.
+`approved_loan_settlements` stores only the distinct administrative operation identity: request identity, application/account, linked payment transaction, settlement amount, authorized actor, and time. Unique relationships permit at most one approved settlement per LoanAccount and prevent a transaction or request from representing multiple settlements. Deferred reciprocal checks require exact full-balance payment evidence, zero outstanding, fully paid progress, `APPROVED_SETTLEMENT` history, matching principal exposure release, and required audit evidence.
+
+`loan_account_closures` stores request identity, application/account, authorized actor, and closure time, with one closure per LoanAccount. Deferred reciprocal checks accept ordinary contractual-payoff or approved-settlement provenance, require complete financial/exposure reconciliation and `SETTLED -> CLOSED` history/audit evidence, and reject closure without its reciprocal record. Evidence tables, payment transactions, allocations, outcomes, final schedules, and servicing histories are immutable; the closure operation changes only the LoanAccount administrative status and timestamp plus its evidence/history/audit records.
+
+The secured history query pages by LoanAccount with deterministic `recorded_at DESC, id DESC` order and reconstructs each transaction from immutable allocation and outcome evidence. The LoanAccount query reads the immutable final schedule and stored progress in one repeatable-read snapshot.

@@ -143,7 +143,8 @@ public class QueryRepaymentsService implements QueryRepaymentsUseCase {
                 || !outcome.repaymentScheduleId().equals(schedule.id())
                 || outcome.receivedAmount().compareTo(transaction.receivedAmount()) != 0
                 || !outcome.paymentValueDate().equals(transaction.paymentValueDate())
-                || !outcome.recordedAt().equals(transaction.recordedAt())
+                || !ServicingEvidenceTimestamp.same(
+                outcome.recordedAt(), transaction.recordedAt())
                 || outcome.installments().size() != schedule.items().size()) {
             throw stateConflict();
         }
