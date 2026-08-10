@@ -14,6 +14,17 @@ public interface SalaryAdvanceLimitRepository {
             UUID customerPartnerEmployeeLinkId
     );
 
+    default Optional<SalaryAdvanceLimit> findByCustomerIdAndCustomerPartnerEmployeeLinkId(
+            UUID customerId,
+            UUID customerPartnerEmployeeLinkId
+    ) {
+        return Optional.empty();
+    }
+
+    default Optional<SalaryAdvanceLimit> findLatestByCustomerId(UUID customerId) {
+        return Optional.empty();
+    }
+
     default Optional<SalaryAdvanceLimit> findById(UUID salaryAdvanceLimitId) {
         return Optional.empty();
     }

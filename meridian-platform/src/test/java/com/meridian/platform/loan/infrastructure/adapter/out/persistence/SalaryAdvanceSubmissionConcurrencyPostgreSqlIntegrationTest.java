@@ -28,7 +28,9 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -86,6 +88,9 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
+    private Clock clock;
+
+    @Autowired
     private MutableCurrentUserProvider currentUserProvider;
 
     private Fixture fixture;
@@ -100,6 +105,12 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        jdbcTemplate.update(
+                "UPDATE partner_employee_import_batches SET effective_month = ? WHERE id IN (?, ?)",
+                YearMonth.now(clock).toString(),
+                FIRST_IMPORT_BATCH_ID,
+                SECOND_IMPORT_BATCH_ID
+        );
         fixture = createFixture();
         currentUserProvider.use(fixture.userId(), fixture.customerId());
     }
@@ -550,6 +561,7 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
         MutableCurrentUserProvider mutableCurrentUserProvider() {
             return new MutableCurrentUserProvider();
         }
+
     }
 
     static class MutableCurrentUserProvider implements CurrentUserProvider {

@@ -170,7 +170,7 @@ Problem:
 The logical ERD used conceptual names and target fields that could be mistaken for the current physical schema.
 
 Resolution:
-`MER-DB-001` now labels Sections 1-13 as a logical/current-plus-target model, maps conceptual disbursement and repayment names to the V35 physical structures, and identifies deferred `product_details`, refresh-token, Collateral, and OCR structures. Flyway history and `MER-DB-CURRENT-SCHEMA.sql` remain the physical authorities.
+`MER-DB-001` now labels Sections 1-13 as a logical/current-plus-target model, maps conceptual disbursement and repayment names to the V37 physical structures, and identifies deferred `product_details`, refresh-token, Collateral, and OCR structures. Flyway history and `MER-DB-CURRENT-SCHEMA.sql` remain the physical authorities.
 
 ### MER-FU-008 - Replace hardcoded Salary Advance salary cap/policy terms with policy config
 
@@ -233,6 +233,7 @@ Continue implementation in vertical slices:
 5. Contract readiness and `CONTRACT_PENDING → DISBURSEMENT_PENDING`. Done in V25-V26.
 6. Manual disbursement confirmation and LoanAccount activation. Done in V28-V31.
 7. Salary Advance repayment, overdue servicing, contractual payoff, Administrative Full-Balance Settlement, and administrative LoanAccount closure. Done through V36.
+8. Customer-owned cancellation of a returned Salary Advance correction with exact reservation release. Done in V37.
 
 ### MER-FU-011 - Implement repayment tracking
 
@@ -311,7 +312,7 @@ Problem:
 Flyway migrations are growing and current schema is harder to inspect from migrations alone.
 
 Recommendation:
-`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V35. This file is documentation only and must not be placed in the Flyway migration folder.
+`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V37. This file is documentation only and must not be placed in the Flyway migration folder.
 
 ### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
 
@@ -565,13 +566,30 @@ Status: Open
 Blocks current PR: No
 
 Problem:
-Customer Partner Employee links are currently refreshed when the customer verifies again. They are not automatically refreshed when new Partner Employee imports are completed.
+Customer Partner Employee links are refreshed when the Customer verifies again. They are not automatically refreshed when new Partner Employee imports are completed.
 
 Risk:
-Reusable employee links and Salary Advance limits may continue to reference older imported employee rows until the customer re-verifies, even when fresher active employee data is available.
+Normal Salary Advance eligibility now fails closed when a reusable link is backed by stale or non-current-month Partner evidence. This prevents stale evidence from authorizing credit, but Customers remain blocked until re-verification or a future proactive refresh process updates the link.
+
+Completed for v0.1.0:
+
+- Partner evidence freshness is enforced for normal Salary Advance eligibility.
+- Verified links backed by stale/non-current effective-month evidence fail closed.
+- Current eligibility uses the authoritative latest valid `COMPLETED` current-month import evidence.
+- Re-verification can refresh the reusable link.
+- Submission and correction resubmission cannot authorize credit using stale Partner evidence.
+
+Still deferred:
+
+- Automatic refresh immediately after Partner import completion.
+- Background reconciliation of all affected Customer links.
+- Automatic bulk Salary Advance limit recalculation.
+- Event- or scheduler-based proactive refresh.
+- Operational reconciliation and retry tooling.
+- Richer configurable aging windows beyond the approved current-month MVP rule if business policy later changes.
 
 Recommendation:
-Automatically refresh verified customer employee links when new valid Partner Employee imports are completed. The refresh should preserve inactive Partner Company and inactive Partner Employee hard stops, update the linked Partner Employee/source batch when the verified evidence still matches, and trigger Salary Advance limit recalculation where applicable.
+Implement the proactive refresh and reconciliation capabilities above without weakening inactive Partner Company/Employee hard stops or the completed fail-closed boundary.
 
 Suggested future branch name:
 `feature/partner-employee-import-link-refresh`
@@ -759,6 +777,47 @@ Recommendation:
 When multiple products or operational template changes require it, introduce
 versioned database configuration with effective dates, immutable per-application
 snapshots, validation, administrative authorization, and migration/backfill rules.
+
+### MER-FU-037 - Expand lending workflow read projections
+
+Area: Loan / Application Queries / UX
+
+Type: Deferred feature
+
+Priority: P2
+
+Status: Open
+
+Blocks current checkpoint: No
+
+Problem:
+The v0.1.0 query foundation intentionally exposes only the minimum safe reads needed
+to inspect pre-submission Salary Advance readiness and recover one durable
+LoanApplication status. It is not a generic workflow projection engine.
+
+Completed for v0.1.0:
+
+- Customer Salary Advance readiness and safe limit read.
+- Safe Customer-owned or authorized Staff LoanApplication status read.
+
+Still deferred:
+
+- Richer next-action projection and workflow command suggestions.
+- Staff work queues and application search/filtering.
+- Consolidated lifecycle and history views.
+- Dashboard aggregation and frontend-specific query composition.
+- Broader read models for Unsecured Consumer Loan and Collateral Loan.
+
+Cancellation note:
+V37 completes the narrow v0.1.0 Customer-owned command from
+`RETURNED_FOR_REVISION` to `CANCELLED`, including terminal correction state, exact
+reservation release, history, audit, request idempotency, and cancellation-versus-
+resubmission concurrency. Customer cancellation from other states, Staff or
+administrative cancellation, product-generic/UCL/Collateral policy, richer reasons,
+and operational tooling remain deferred.
+
+Suggested future branch name:
+`feature/lending-workflow-read-projections`
 
 ## Recommended Next Roadmap
 

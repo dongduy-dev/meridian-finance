@@ -41,7 +41,27 @@ public class SalaryAdvanceLimitRepositoryAdapter implements SalaryAdvanceLimitRe
             UUID customerPartnerEmployeeLinkId
     ) {
         return jpaSalaryAdvanceLimitRepository
-                .findByCustomerIdAndCustomerPartnerEmployeeLinkId(customerId, customerPartnerEmployeeLinkId)
+                .findByCustomerIdAndLinkIdForUpdate(customerId, customerPartnerEmployeeLinkId)
+                .map(this::toDomain);
+    }
+
+    @Override
+    public Optional<SalaryAdvanceLimit> findByCustomerIdAndCustomerPartnerEmployeeLinkId(
+            UUID customerId,
+            UUID customerPartnerEmployeeLinkId
+    ) {
+        return jpaSalaryAdvanceLimitRepository
+                .findByCustomerIdAndCustomerPartnerEmployeeLinkId(
+                        customerId,
+                        customerPartnerEmployeeLinkId
+                )
+                .map(this::toDomain);
+    }
+
+    @Override
+    public Optional<SalaryAdvanceLimit> findLatestByCustomerId(UUID customerId) {
+        return jpaSalaryAdvanceLimitRepository
+                .findFirstByCustomerIdOrderByLastRefreshedAtDescIdAsc(customerId)
                 .map(this::toDomain);
     }
 

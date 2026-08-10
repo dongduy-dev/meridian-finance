@@ -188,15 +188,27 @@ flowchart LR
 
 Runtime rules:
 
-1. Partner Company existence and active status are checked before import-batch lookup, employee matching, link creation, or manual-review routing.
+1. Partner Company existence and active status are checked before import-batch lookup, employee matching, link creation, or manual-review routing. Partner derives the current effective month from the shared UTC `Clock` and selects the latest valid `COMPLETED` batch for that Partner Company and exact month, ordered deterministically by creation time and identifier.
 2. One active match may create or refresh the reusable Customer–Partner Employee link.
-3. Missing or ambiguous evidence follows the authorized manual-review policy.
-4. An inactive Partner Company is a hard stop.
+3. Missing or ambiguous current-month evidence follows the authorized manual-review policy during verification. A reused verified link whose source batch or employee batch is not authoritative fails closed as stale for lending eligibility.
+4. An inactive Partner Company or Partner Employee is a hard stop. Re-verification may restore eligibility only by refreshing the link to matching active evidence in the authoritative batch.
 5. The response may expose identifiers, outcome, link status, and whether manual review is required. It must not expose raw identity evidence, employee code, salary, Salary Advance limit, or matching evidence.
 
 ---
 
-## 6. Salary Advance Submission
+## 6. Salary Advance Readiness, Status, and Submission
+
+### Advisory Readiness Query
+
+`GET /api/v1/loan-products/salary-advance/readiness` requires an authenticated Customer with `loan:submit`. Loan derives the Customer from the actor, reads Customer readiness, product policy, the Partner-owned current eligibility assessment, current limit/exposure, blocking applications, and outstanding-account guard, then returns safe values and blocker codes. Partner owns the current-month authoritative-batch decision; Loan consumes only the purpose-limited status and eligible snapshot.
+
+The query is read-only and non-locking. It does not initialize or refresh a persisted limit, reserve exposure, create a LoanApplication or verification, or append movements, history, or audit. A later submission command reacquires authoritative state and may reject after concurrent change.
+
+### LoanApplication Status Query
+
+`GET /api/v1/loan-applications/{loanApplicationId}` returns a minimal durable status projection. Customers require `loan:read:own`, must own the application, and receive the same not-found result for missing and foreign-owned IDs. Staff require `loan:read`. The service returns application identity, product, requested terms, status, and submission time without exposing Customer, Partner, limit, verification, actor, audit/history, or financial-servicing evidence. It does not infer next actions or mutate workflow state.
+
+### Submission Command
 
 `POST /api/v1/loan-applications/salary-advance` requires Bearer authentication and `loan:submit`. The application service derives the Customer from the authenticated actor and obtains Customer and Partner facts through their public contracts.
 
@@ -233,14 +245,13 @@ The response contains the application identity, requested terms, product-verific
 
 The transaction follows this order:
 
-1. acquire the Customer-and-product advisory lock;
-2. perform the authoritative blocking-application check;
-3. resolve Customer and Partner eligibility;
-4. acquire the Customer-and-employee-link advisory lock;
-5. repeat the blocking check;
-6. inspect blocking LoanAccount evidence;
-7. lock or initialize the Salary Advance limit;
-8. reserve exposure and persist the application and verification snapshot.
+1. validate Customer readiness and product/amount/term policy before workflow locks;
+2. acquire the Customer-and-product advisory lock and perform the authoritative blocking-application check;
+3. resolve Partner-owned current-month eligibility and calculate the effective limit;
+4. acquire the Customer-and-employee-link advisory lock and repeat the blocking check;
+5. inspect blocking LoanAccount evidence;
+6. lock or initialize the Salary Advance limit;
+7. reserve exposure and persist the application, verification snapshot, history, and audit atomically.
 
 The partial unique constraint for one blocking application per Customer and product is the final database guard. Only a violation of that exact constraint maps to `BLOCKING_APPLICATION_EXISTS`; unrelated integrity failures remain system errors.
 
@@ -285,8 +296,11 @@ Customer correction endpoints derive the exact owner from `CurrentUserProvider`.
 2. Manual review targets one immutable document version and rejects a stale review target.
 3. Task completion locks the task and correction request. An identical completion is replay; different content after completion is a conflict.
 4. Resubmission locks the Loan workflow first, followed by correction rows, Document readiness, Customer-and-product scope, and the Salary Advance limit.
-5. One resubmission request is consumed exactly once.
-6. Failure in synchronous Approval-to-Loan coordination rolls back the entire transaction.
+5. Salary Advance resubmission rechecks Partner-owned current-month freshness; stale evidence rejects the operation before a new verification or workflow effect and preserves the existing reservation.
+6. One resubmission request is consumed exactly once.
+7. Customer cancellation first serializes the request UUID, then locks the Loan workflow, application, active correction request, Customer-and-product scope, latest verification context, Customer-link scope, reservation movements, and Salary Advance limit before terminalizing the correction and application and recording the exact release, history, audit, and immutable cancellation evidence.
+8. Cancellation intentionally does not recheck Partner freshness: a Customer must be able to abandon a returned correction after its Partner evidence becomes stale. Resubmission and cancellation share the workflow/application/correction lock order, so a PostgreSQL race permits exactly one operation to win.
+9. Failure in synchronous Approval-to-Loan coordination or any cancellation evidence write rolls back the entire transaction.
 
 ---
 

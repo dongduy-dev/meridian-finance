@@ -3,6 +3,7 @@ package com.meridian.platform.partner.infrastructure.adapter.out.persistence;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatchStatus;
 import jakarta.persistence.*;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -29,6 +30,9 @@ public class PartnerEmployeeImportBatchJpaEntity {
     @Column(name = "invalid_row_count", nullable = false)
     private int invalidRowCount;
 
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
     protected PartnerEmployeeImportBatchJpaEntity() {
     }
 
@@ -54,5 +58,9 @@ public class PartnerEmployeeImportBatchJpaEntity {
 
     public int getInvalidRowCount() {
         return invalidRowCount;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
     }
 }

@@ -27,6 +27,7 @@ public class LoanCorrectionRequestJpaEntity {
     @Column(name = "created_at", nullable = false) private LocalDateTime createdAt;
     @Column(name = "ready_at") private LocalDateTime readyAt;
     @Column(name = "resubmitted_at") private LocalDateTime resubmittedAt;
+    @Column(name = "cancelled_at") private LocalDateTime cancelledAt;
     @Column(name = "updated_at", nullable = false) private LocalDateTime updatedAt;
 
     protected LoanCorrectionRequestJpaEntity() {
@@ -48,13 +49,15 @@ public class LoanCorrectionRequestJpaEntity {
         createdAt = request.createdAt();
         readyAt = request.readyAt();
         resubmittedAt = request.resubmittedAt();
-        updatedAt = request.resubmittedAt() != null ? request.resubmittedAt()
+        cancelledAt = request.cancelledAt();
+        updatedAt = request.cancelledAt() != null ? request.cancelledAt()
+                : request.resubmittedAt() != null ? request.resubmittedAt()
                 : request.readyAt() != null ? request.readyAt() : request.createdAt();
     }
 
     public LoanCorrectionRequest toDomain() {
         return new LoanCorrectionRequest(id, loanApplicationId, sourceReviewCycleId, sourceAction, reasonCode,
-                createdByUserId, status, resubmissionRequestId, createdAt, readyAt, resubmittedAt);
+                createdByUserId, status, resubmissionRequestId, createdAt, readyAt, resubmittedAt, cancelledAt);
     }
 
     public UUID getLoanApplicationId() { return loanApplicationId; }

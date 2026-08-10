@@ -322,6 +322,8 @@ Every correction task has one owner: Customer or Staff. Mixed correction plans u
 
 Task completion requires the requested evidence. Customer-only corrections are resubmitted by the Customer owner. Staff-only and mixed corrections are resubmitted by authorized Staff.
 
+An authenticated Customer owner may instead terminate a Salary Advance application while it is `RETURNED_FOR_REVISION`. This narrow cancellation ends the active correction request, changes the application to `CANCELLED`, and releases the existing pre-disbursement reservation exactly once in the same transaction. It does not require current Partner eligibility because abandonment must remain possible when correction re-verification cannot succeed. Cancellation from other states and Staff or administrative cancellation remain future policies.
+
 Resubmission revalidates every affected business condition and routes the application to the earliest stage that still requires work. Salary Advance amount and term remain immutable through correction, and the existing reservation is preserved unless a defined terminal or release rule applies.
 
 ### 6.5 Loan Officer Review
@@ -471,7 +473,7 @@ Salary Advance is Meridian's flagship MVP product. It is a limit-based product i
 - Back-Office Admin creates, activates, suspends, or deactivates Partner Companies.
 - Back-Office Admin imports Partner Employee data by effective month.
 - System records the import batch, validates each row, stores valid records, and prevents invalid or unresolved duplicate rows from normal eligibility.
-- Normal eligibility uses the latest valid active record within the configured freshness window.
+- Normal eligibility uses the authoritative latest valid `COMPLETED` import batch for the current UTC effective month. If no such batch exists, or a verified link and its employee source do not both reference that batch, the evidence is stale and normal eligibility fails closed.
 - An inactive Partner Company or Partner Employee is a hard stop.
 
 #### Customer Verification and Dashboard
@@ -485,7 +487,7 @@ The Salary Advance product page shows:
 - last refresh time;
 - the business reason normal application creation is blocked.
 
-A Customer without a valid employee link completes employee verification before starting a Salary Advance application. A link remains reusable while its status is `VERIFIED` and current Partner evidence remains eligible.
+A Customer without a valid employee link completes employee verification before starting a Salary Advance application. A link remains reusable while its status is `VERIFIED` and current Partner evidence remains eligible. Re-verification against the authoritative current-month batch refreshes the reusable link and restores eligibility when the current evidence matches.
 
 Employee-verification outcomes:
 
@@ -715,8 +717,9 @@ Upload completeness and processing readiness are calculated results. They must n
 | `CUSTOMER_ACCEPTANCE_PENDING` | Expire pending offer | System | Current time is at or after expiry | `EXPIRED` | No |
 | `CONTRACT_PENDING` | Confirm readiness | Accounting Officer | Current contract acknowledged and every blocker is cleared | `DISBURSEMENT_PENDING` | No |
 | `DISBURSEMENT_PENDING` | Confirm manual disbursement | Accounting Officer | Ready contract and valid transfer evidence | `DISBURSED` | No |
-| Any non-terminal status before `APPROVED` | Cancel own application | Customer | Authenticated owner and approval has not been recorded | `CANCELLED` | No |
-| Any eligible pre-`DISBURSED` non-terminal status | Cancel application | Authorized Staff | Staff cancellation policy allows the status | `CANCELLED` | Yes |
+| `RETURNED_FOR_REVISION` | Cancel returned correction | Customer | Authenticated owner; active correction and unreleased Salary Advance reservation remain consistent | `CANCELLED` | No |
+
+Customer cancellation from other pre-disbursement states and every Staff or administrative cancellation transition remain target-state requirements, not executable v0.1.0 behavior.
 
 A transition and its financial, correction, document, offer, contract, exposure, history, and audit effects must commit as one business outcome where the rule requires atomicity.
 
@@ -774,8 +777,8 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-002 | The Customer profile must satisfy the selected product's completeness rule before submission. |
 | BR-003 | A LoanApplication must pass every required submission validation before becoming submitted. |
 | BR-004 | A Customer may keep multiple drafts but cannot submit the same product while another blocking non-terminal application for that product exists. |
-| BR-005 | A Customer may cancel their own application before approval is recorded. |
-| BR-006 | Authorized Staff may cancel an eligible pre-disbursement application with a controlled reason. |
+| BR-005 | A Customer may cancel their own application from `RETURNED_FOR_REVISION`; the active correction ends and any Salary Advance reservation is released atomically. |
+| BR-006 | Future cancellation policies may authorize Customer cancellation from other pre-disbursement states or Staff cancellation with a controlled reason; neither is executable in v0.1.0. |
 | BR-007 | A `DISBURSED` application cannot be cancelled. |
 | BR-008 | Normal Salary Advance creation requires an active verified Customer–Partner Employee link. |
 | BR-009 | Salary Advance requested principal must not exceed active available limit. |
@@ -783,7 +786,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-011 | An inactive Partner Employee cannot support normal Salary Advance eligibility. |
 | BR-012 | A matching `ACTIVE` or `OVERDUE` Salary Advance LoanAccount with positive contractual outstanding blocks new Salary Advance submission independently of overdue-evaluation freshness. |
 | BR-013 | Disbursed unreleased Salary Advance principal contributes to used exposure; submitted unreleased applications contribute to reserved exposure. |
-| BR-014 | Salary Advance calculation and refresh use the latest valid Partner Employee evidence within the configured freshness window. |
+| BR-014 | Salary Advance calculation and refresh use the authoritative latest valid `COMPLETED` Partner Employee import batch for the current UTC effective month. Missing current-month evidence or a verified link/employee sourced from another batch is stale and fails closed until re-verification refreshes the link. |
 | BR-015 | `SUSPENDED`, `DISABLED`, `STALE`, absent, or insufficient Salary Advance limit blocks normal creation and submission. |
 | BR-016 | Every submitted Salary Advance application records its own verification snapshot even when the reusable link already exists. |
 | BR-017 | Rejection, cancellation, Customer decline, offer expiry, or another approved pre-disbursement release frees the Salary Advance reservation exactly once in the same controlled operation as the application outcome. |
@@ -865,7 +868,7 @@ The UCL and Collateral Loan rates above are product-configuration targets. Secti
 | Used-exposure rule | Disbursed unreleased principal contributes to used amount |
 | Reserved-exposure rule | Submitted unreleased applications contribute to reserved amount; drafts do not |
 | Blocking-debt rule | Matching `ACTIVE` or `OVERDUE` debt with positive contractual outstanding blocks submission |
-| Freshness rule | Use the latest valid active employee record within the configured window |
+| Freshness rule | Use the authoritative latest valid `COMPLETED` import batch for the current UTC effective month; stale/non-current link evidence fails closed until re-verification |
 | Limit statuses | `ACTIVE`, `SUSPENDED`, `DISABLED`, `STALE` |
 | Manual-review rule | `NOT_FOUND` and `MULTIPLE_MATCHES` may be reviewed; inactive Partner evidence cannot be overridden |
 | Interest method | Flat interest on original principal |

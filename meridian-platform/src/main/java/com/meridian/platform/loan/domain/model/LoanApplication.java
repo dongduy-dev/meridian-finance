@@ -182,6 +182,19 @@ public record LoanApplication(
         return transitionTo(targetStatus, LoanApplicationTransitionAction.RESUBMIT_CORRECTION);
     }
 
+    public LoanApplicationTransitionResult cancelReturnedForRevision() {
+        if (status != LoanApplicationStatus.RETURNED_FOR_REVISION) {
+            throw new BusinessStateConflictException(
+                    "LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED",
+                    "Only a Loan Application returned for revision can be cancelled by its Customer."
+            );
+        }
+        return transitionTo(
+                LoanApplicationStatus.CANCELLED,
+                LoanApplicationTransitionAction.CANCEL_APPLICATION
+        );
+    }
+
     public LoanApplicationTransitionResult markCustomerAcceptancePending() {
         if (status != LoanApplicationStatus.APPROVED) {
             throw new BusinessStateConflictException(

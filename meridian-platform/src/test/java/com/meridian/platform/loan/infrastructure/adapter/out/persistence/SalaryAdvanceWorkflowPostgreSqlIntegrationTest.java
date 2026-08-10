@@ -48,6 +48,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -152,6 +153,11 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        jdbcTemplate.update(
+                "UPDATE partner_employee_import_batches SET effective_month = ? WHERE id = ?",
+                YearMonth.now(clock).toString(),
+                IMPORT_BATCH_ID
+        );
         fixture = createFixture();
         useCustomer();
     }
@@ -1051,6 +1057,7 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
         ThreadLocalCurrentUserProvider threadLocalCurrentUserProvider() {
             return new ThreadLocalCurrentUserProvider();
         }
+
     }
 
     static class ThreadLocalCurrentUserProvider implements CurrentUserProvider {

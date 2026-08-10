@@ -258,6 +258,21 @@
                          "type":  "string"
                      },
                      {
+                         "key":  "returnedCancellationScenarioEnabled",
+                         "value":  "false",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "cancellationLoanApplicationId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "cancellationRequestId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
                          "key":  "contractPreparationRequestId",
                          "value":  "10000000-0000-0000-0000-000000000001",
                          "type":  "string"
@@ -417,6 +432,12 @@
                          "key":  "repaymentValueDate",
                          "value":  "2026-08-01",
                          "type":  "default"
+                     },
+                     {
+                         "key":  "runStaleReadinessScenario",
+                         "value":  "false",
+                         "type":  "default",
+                         "description":  "Set true only for a Customer fixture whose verified Partner link is backed by non-authoritative current-month evidence."
                      },
                      {
                          "key":  "settlementLoanApplicationId",
@@ -1732,6 +1753,33 @@
                      "name":  "05 Loan Application - Salary Advance",
                      "item":  [
                                   {
+                                      "name":  "GET Salary Advance readiness - current eligible",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-products/salary-advance/readiness",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},
+                                                      "description":  "Reads the authenticated Customer's current advisory eligibility and safe limit values without creating or reserving workflow state."
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Fresh readiness is eligible and numerically safe\", () => { pm.expect(json.applicationAllowed).to.eql(true); pm.expect(json.partnerEligibilityStatus).to.eql(\"ELIGIBLE\"); [\"totalAmount\",\"usedAmount\",\"reservedAmount\",\"availableAmount\"].forEach(key => pm.expect(json[key]).to.be.a(\"number\").and.at.least(0)); pm.expect(json.blockerCodes).to.eql([]); });","pm.test(\"Readiness excludes internal Partner and Loan evidence\", () => [\"customerId\",\"partnerCompanyId\",\"partnerEmployeeId\",\"sourceImportBatchId\",\"importBatchId\",\"salaryAdvanceLimitId\",\"salaryAdvanceVerificationId\"].forEach(key => pm.expect(json).not.to.have.property(key)));","pm.collectionVariables.set(\"customerPartnerEmployeeLinkId\", json.customerPartnerEmployeeLinkId);"]}}]
+                                  },
+                                  {
+                                      "name":  "GET Salary Advance readiness - stale evidence blocked (prepared fixture)",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-products/salary-advance/readiness",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},
+                                                      "description":  "Optional negative scenario. Prepare a verified link backed by non-authoritative current-month evidence and set runStaleReadinessScenario=true."
+                                                  },
+                                      "response":  [],
+                                      "event":  [
+                                                    {"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"runStaleReadinessScenario\") !== \"true\") { pm.execution.skipRequest(); }"]}},
+                                                    {"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Stale evidence fails closed\", () => { pm.expect(json.applicationAllowed).to.eql(false); pm.expect(json.partnerEligibilityStatus).to.eql(\"EVIDENCE_STALE\"); pm.expect(json.blockerCodes).to.include(\"SALARY_ADVANCE_ELIGIBILITY_DATA_STALE\"); });","pm.test(\"Blocked readiness excludes internal evidence\", () => [\"customerId\",\"partnerCompanyId\",\"partnerEmployeeId\",\"sourceImportBatchId\",\"importBatchId\",\"salaryAdvanceLimitId\",\"salaryAdvanceVerificationId\"].forEach(key => pm.expect(json).not.to.have.property(key)));"]}}
+                                                ]
+                                  },
+                                  {
                                       "name":  "POST /api/v1/loan-applications/salary-advance - fractional VND rejected",
                                       "request":  {
                                                       "method":  "POST",
@@ -1864,6 +1912,18 @@
                                                                    }
                                                     }
                                                 ]
+                                  },
+                                  {
+                                      "name":  "GET submitted LoanApplication for resume",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},
+                                                      "description":  "Recovers the durable Customer-owned application status by ID before continuing through the specialized review-start command."
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Submitted status is recoverable\", () => { pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"loanApplicationId\")); pm.expect(json.status).to.eql(\"SUBMITTED\"); pm.expect(json.applicationNumber).to.be.a(\"string\").and.not.empty; });","pm.test(\"Application status response excludes internal evidence\", () => [\"customerId\",\"customerPartnerEmployeeLinkId\",\"salaryAdvanceLimitId\",\"salaryAdvanceVerificationId\",\"reviewCycleId\",\"actorUserId\",\"auditId\",\"historyId\"].forEach(key => pm.expect(json).not.to.have.property(key)));"]}}]
                                   },
                                   {
                                       "name":  "POST /api/v1/loan-applications/salary-advance - duplicate check",
@@ -2003,6 +2063,18 @@
                                                                    }
                                                     }
                                                 ]
+                                  },
+                                  {
+                                      "name":  "GET LoanApplication after review start as Staff",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{loanApplicationId}}",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},
+                                                      "description":  "Confirms the durable UNDER_REVIEW state through the Staff read permission before the recommendation command."
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Staff sees durable review status\", () => pm.expect(json.status).to.eql(\"UNDER_REVIEW\"));","pm.test(\"Staff status response remains minimal\", () => [\"customerId\",\"customerPartnerEmployeeLinkId\",\"salaryAdvanceLimitId\",\"salaryAdvanceVerificationId\",\"reviewCycleId\",\"actorUserId\"].forEach(key => pm.expect(json).not.to.have.property(key)));"]}}]
                                   },
                                   {
                                       "name":  "POST recommend approval",
@@ -3117,6 +3189,216 @@
                                                 ]
                                   }
                               ]
+                 },
+                 {
+                     "name":  "07A Returned Correction Cancellation - Prepared Fixture",
+                     "item":  [
+                                  {
+                                      "name":  "POST cancel returned correction",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{cancellationLoanApplicationId}}/cancel",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{cancellationLoanApplicationId}}",
+                                                                               "cancel"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestId\": \"{{cancellationRequestId}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "description":  "Requires a fresh Customer-owned Salary Advance fixture in RETURNED_FOR_REVISION with an active correction and unreleased reservation. Cancellation remains available even when Partner evidence is stale."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "if (pm.collectionVariables.get(\"returnedCancellationScenarioEnabled\") !== \"true\") { console.warn(\"Set returnedCancellationScenarioEnabled=true and cancellationLoanApplicationId to a fresh Customer-owned returned correction.\"); pm.execution.skipRequest(); }",
+                                                                                    "pm.collectionVariables.set(\"cancellationRequestId\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"cancellationLoanApplicationId\"));",
+                                                                                    "pm.expect(json.resultingStatus).to.eql(\"CANCELLED\");",
+                                                                                    "pm.expect(json.idempotentReplay).to.eql(false);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST replay returned correction cancellation",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{cancellationLoanApplicationId}}/cancel",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{cancellationLoanApplicationId}}",
+                                                                               "cancel"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestId\": \"{{cancellationRequestId}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "description":  "Replays the exact durable cancellation outcome without another movement, history row, or audit effect."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "if (pm.collectionVariables.get(\"returnedCancellationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.expect(json.resultingStatus).to.eql(\"CANCELLED\");",
+                                                                                    "pm.expect(json.idempotentReplay).to.eql(true);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET cancelled LoanApplication",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-applications/{{cancellationLoanApplicationId}}",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-applications",
+                                                                               "{{cancellationLoanApplicationId}}"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Uses the safe Customer-owned workflow read to confirm the application is terminal."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "if (pm.collectionVariables.get(\"returnedCancellationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"cancellationLoanApplicationId\"));",
+                                                                                    "pm.expect(json.status).to.eql(\"CANCELLED\");"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ],
+                     "description":  "Optional manual scenario. Enable it only after preparing a separate returned-correction fixture; it does not disturb the main happy-path loanApplicationId."
                  },
                  {
                      "name":  "08 Staff Correction Operations",

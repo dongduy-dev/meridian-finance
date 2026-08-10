@@ -14,8 +14,6 @@ public record SalaryAdvanceApplicationDto(
         BigDecimal requestedAmount,
         int requestedTermMonths,
         UUID customerPartnerEmployeeLinkId,
-        UUID salaryAdvanceLimitId,
-        UUID salaryAdvanceVerificationId,
         String productVerificationResult,
         BigDecimal totalLimitSnapshot,
         BigDecimal usedAmountSnapshot,

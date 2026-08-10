@@ -58,7 +58,7 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
 
     @Test
     void installedLatestRetainsEveryKnownAuditActionAndRejectsUnknownAction() {
-        assertEquals("36", latestVersion(SCHEMA));
+        assertEquals("37", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -242,6 +242,7 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
             if (action == BusinessAuditAction
                     .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED
+                    || action == BusinessAuditAction.LOAN_APPLICATION_CANCELLED
                     || action == BusinessAuditAction.REPAYMENT_RECORDED
                     || action == BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED
                     || action == BusinessAuditAction.LOAN_SETTLEMENT_APPROVED

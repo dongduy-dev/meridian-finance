@@ -28,8 +28,22 @@ public class PartnerEmployeeImportBatchRepositoryAdapter implements PartnerEmplo
 
     @Override
     public Optional<PartnerEmployeeImportBatch> findLatestCompletedByPartnerCompanyId(UUID partnerCompanyId) {
-        return jpaRepository.findFirstByPartnerCompanyIdAndStatusOrderByEffectiveMonthDescIdDesc(
+        return jpaRepository.findFirstByPartnerCompanyIdAndStatusOrderByEffectiveMonthDescCreatedAtDescIdDesc(
                         partnerCompanyId,
+                        PartnerEmployeeImportBatchStatus.COMPLETED
+                )
+                .map(this::toDomain);
+    }
+
+    @Override
+    public Optional<PartnerEmployeeImportBatch> findLatestCompletedByPartnerCompanyIdAndEffectiveMonth(
+            UUID partnerCompanyId,
+            String effectiveMonth
+    ) {
+        return jpaRepository
+                .findFirstByPartnerCompanyIdAndEffectiveMonthAndStatusOrderByCreatedAtDescIdDesc(
+                        partnerCompanyId,
+                        effectiveMonth,
                         PartnerEmployeeImportBatchStatus.COMPLETED
                 )
                 .map(this::toDomain);

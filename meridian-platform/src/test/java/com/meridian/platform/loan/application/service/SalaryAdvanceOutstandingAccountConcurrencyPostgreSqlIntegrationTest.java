@@ -102,6 +102,8 @@ class SalaryAdvanceOutstandingAccountConcurrencyPostgreSqlIntegrationTest {
     @BeforeEach
     void setUp() {
         reset(limitRepository);
+        jdbc.update("update partner_employee_import_batches set effective_month='2026-08' where id=?",
+                IMPORT_BATCH_ID);
         support = new ManualDisbursementActivationPostgreSqlTestSupport(jdbc, transactionManager);
     }
 

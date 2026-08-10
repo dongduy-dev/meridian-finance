@@ -11,4 +11,9 @@ public interface PartnerEmployeeImportBatchRepository {
     List<PartnerEmployeeImportBatch> findByPartnerCompanyId(UUID partnerCompanyId);
 
     Optional<PartnerEmployeeImportBatch> findLatestCompletedByPartnerCompanyId(UUID partnerCompanyId);
+
+    Optional<PartnerEmployeeImportBatch> findLatestCompletedByPartnerCompanyIdAndEffectiveMonth(
+            UUID partnerCompanyId,
+            String effectiveMonth
+    );
 }

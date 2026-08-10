@@ -95,6 +95,12 @@ public class StaffCorrectionTaskService
             throw new AuthorizationException(
                     "STAFF_CORRECTION_ACCESS_DENIED", "This is not a staff-owned correction task.");
         }
+        if (!request.isActive()) {
+            throw new BusinessStateConflictException(
+                    "CORRECTION_REQUEST_CONFLICT",
+                    "Correction request is no longer actionable."
+            );
+        }
         if (request.createdByUserId().equals(user.userId())) {
             throw new AuthorizationException(
                     "STAFF_CORRECTION_MAKER_CHECKER_VIOLATION",
