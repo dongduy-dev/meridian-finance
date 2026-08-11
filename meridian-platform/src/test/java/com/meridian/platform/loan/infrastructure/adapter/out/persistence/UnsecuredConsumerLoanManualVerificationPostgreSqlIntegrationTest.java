@@ -15,12 +15,19 @@ import com.meridian.platform.document.application.port.in.UploadDocumentUseCase;
 import com.meridian.platform.document.domain.model.DocumentReviewOutcome;
 import com.meridian.platform.document.domain.model.DocumentUploaderActorType;
 import com.meridian.platform.loan.application.dto.CompleteUnsecuredConsumerLoanVerificationRequest;
+import com.meridian.platform.loan.application.dto.ApprovedOfferActionResult;
+import com.meridian.platform.loan.application.dto.ApprovedOfferDto;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicationDto;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicationRequest;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanVerificationDto;
 import com.meridian.platform.loan.application.port.in.ManageUnsecuredConsumerLoanVerificationUseCase;
+import com.meridian.platform.loan.application.port.in.PrepareLoanContractUseCase;
+import com.meridian.platform.loan.application.port.in.QueryApprovedOfferUseCase;
+import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.in.StartUnsecuredConsumerLoanApplicationUseCase;
+import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
+import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
@@ -63,6 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @SpringBootTest(
         classes = {
@@ -87,7 +95,9 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
             UUID.fromString("00000000-0000-0000-0000-000000000303");
     private static final UUID SECOND_STAFF_USER_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000305");
-    private static final byte[] PDF = "%PDF-1.7\n% Meridian UCL CP2 evidence\n"
+    private static final UUID ACCOUNTING_USER_ID =
+            UUID.fromString("00000000-0000-0000-0000-000000000304");
+    private static final byte[] PDF = "%PDF-1.7\n% Meridian UCL evidence\n"
             .getBytes(StandardCharsets.US_ASCII);
 
     @Autowired private StartUnsecuredConsumerLoanApplicationUseCase submissionUseCase;
@@ -97,9 +107,14 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     @Autowired private StartLoanApplicationReviewUseCase reviewStartUseCase;
     @Autowired private SubmitReviewRecommendationUseCase recommendationUseCase;
     @Autowired private SubmitApprovalDecisionUseCase decisionUseCase;
+    @Autowired private QueryApprovedOfferUseCase queryApprovedOfferUseCase;
+    @Autowired private RespondToApprovedOfferUseCase respondToApprovedOfferUseCase;
+    @Autowired private PrepareLoanContractUseCase prepareLoanContractUseCase;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private ThreadLocalCurrentUserProvider currentUserProvider;
     @MockitoSpyBean private BusinessAuditPublisher auditPublisher;
+    @MockitoSpyBean private SalaryAdvanceVerificationRepository salaryAdvanceVerificationRepository;
+    @MockitoSpyBean private SalaryAdvanceLimitMovementRepository salaryAdvanceLimitMovementRepository;
 
     private Fixture fixture;
 
@@ -114,7 +129,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        reset(auditPublisher);
+        reset(auditPublisher, salaryAdvanceVerificationRepository, salaryAdvanceLimitMovementRepository);
         fixture = createReadyCustomer();
         useCustomer();
     }
@@ -125,62 +140,134 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     }
 
     @Test
-    void documentBackedUclLifecycleReachesApprovalPendingAndBlocksApprovalWithoutOffer() {
-        UUID applicationId = originateAndMakeProcessingReady();
-
-        useLoanOfficer();
-        UnsecuredConsumerLoanVerificationDto started = verificationUseCase
-                .startManualVerification(applicationId);
-        assertEquals("VERIFICATION_PENDING", started.status());
-        assertEquals("PENDING_MANUAL_REVIEW", started.productVerificationResult());
-
-        UnsecuredConsumerLoanVerificationDto completed = verificationUseCase
-                .completeManualVerification(
-                        applicationId,
-                        new CompleteUnsecuredConsumerLoanVerificationRequest(
-                                "Income and employment evidence are consistent for Loan Officer review."
-                        )
-                );
-        assertEquals("SUBMITTED", completed.status());
-        assertEquals("VERIFIED", completed.productVerificationResult());
-        assertEquals(LOAN_OFFICER_USER_ID, uuid(
-                "SELECT reviewed_by_user_id FROM unsecured_consumer_loan_verifications "
-                        + "WHERE loan_application_id = ?",
-                applicationId
-        ));
-        assertTrue(Math.abs(java.time.temporal.ChronoUnit.NANOS.between(
-                completed.reviewedAt(),
-                timestamp("SELECT reviewed_at FROM unsecured_consumer_loan_verifications "
-                        + "WHERE loan_application_id = ?", applicationId)
-        )) <= 1_000);
-
-        assertEquals("UNDER_REVIEW", reviewStartUseCase.startReview(applicationId).status());
-        recommendationUseCase.submitReviewRecommendation(
+    void documentBackedUclLifecycleCreatesOfferAcceptsAndBlocksContractExecution() {
+        UUID applicationId = originateToApprovalPending();
+        useApprover();
+        decisionUseCase.submitApprovalDecision(
                 applicationId,
-                new ReviewRecommendationRequest(ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null)
+                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
         );
-        assertEquals("APPROVAL_PENDING", status(applicationId));
+        assertEquals("CUSTOMER_ACCEPTANCE_PENDING", status(applicationId));
+        assertEquals(1, count("SELECT count(*) FROM approved_offers WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM approval_decisions WHERE loan_application_id = ?", applicationId));
+        assertEquals(6, count("SELECT count(*) FROM approved_offer_repayment_items item "
+                + "JOIN approved_offers offer ON offer.id = item.approved_offer_id "
+                + "WHERE offer.loan_application_id = ?", applicationId));
+        assertEquals("COMPLETED", text("SELECT status FROM loan_application_review_cycles "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND action = 'APPROVE'", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND action = 'GENERATE_APPROVED_OFFER'", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM audit_events "
+                + "WHERE action = 'APPROVAL_DECISION_RECORDED' "
+                + "AND payload ->> 'loanApplicationId' = ?", applicationId.toString()));
+        assertEquals(1, count("SELECT count(*) FROM audit_events WHERE action = 'APPROVED_OFFER_GENERATED' "
+                + "AND payload ->> 'loanApplicationId' = ?", applicationId.toString()));
+
+        useCustomer();
+        int transitionCountBeforeRead = count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ?", applicationId);
+        ApprovedOfferDto offer = queryApprovedOfferUseCase.getApprovedOffer(applicationId);
+        assertEquals("PENDING", offer.status());
+        assertEquals(new BigDecimal("5000000.00"), offer.approvedPrincipal());
+        assertEquals(6, offer.approvedTermMonths());
+        assertEquals("FLAT_ORIGINAL_PRINCIPAL", offer.interestCalculationMethod());
+        assertEquals(new BigDecimal("0.018000"), offer.flatMonthlyInterestRate());
+        assertEquals(new BigDecimal("540000.00"), offer.totalInterest());
+        assertEquals(new BigDecimal("0.00"), offer.feeAmount());
+        assertEquals(new BigDecimal("5540000.00"), offer.totalRepaymentAmount());
+        assertEquals("MONTHLY_INSTALLMENT", offer.repaymentMethod());
+        assertEquals(6, offer.repaymentItems().size());
+        assertEquals(offer.generatedAt().plusDays(7), offer.expiresAt());
+        assertEquals(transitionCountBeforeRead, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals("PENDING", text("SELECT status FROM approved_offers WHERE loan_application_id = ?", applicationId));
+
+        ApprovedOfferActionResult accepted = respondToApprovedOfferUseCase.acceptOffer(applicationId);
+        assertEquals("ACCEPTED", accepted.offer().status());
+        assertEquals(offer.approvedPrincipal(), accepted.offer().approvedPrincipal());
+        assertEquals(offer.totalInterest(), accepted.offer().totalInterest());
+        assertEquals(offer.totalRepaymentAmount(), accepted.offer().totalRepaymentAmount());
+        assertEquals(offer.repaymentItems(), accepted.offer().repaymentItems());
+        assertEquals("CONTRACT_PENDING", status(applicationId));
+        assertEquals(1, count("SELECT count(*) FROM approved_offers "
+                + "WHERE loan_application_id = ? AND status = 'ACCEPTED'", applicationId));
+
+        useAccounting();
+        BusinessStateConflictException contractFailure = assertThrows(
+                BusinessStateConflictException.class,
+                () -> prepareLoanContractUseCase.prepare(new PrepareLoanContractUseCase.Command(
+                        UUID.randomUUID(), applicationId, 0, null
+                ))
+        );
+        assertEquals("UCL_CONTRACT_EXECUTION_NOT_READY", contractFailure.getErrorCode());
+        assertEquals("CONTRACT_PENDING", status(applicationId));
+        assertEquals(0, count("SELECT count(*) FROM loan_contracts WHERE loan_application_id = ?", applicationId));
+        assertEquals(0, count("SELECT count(*) FROM salary_advance_limit_movements "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM review_recommendations WHERE loan_application_id = ?",
+                applicationId));
+        verifyNoInteractions(salaryAdvanceVerificationRepository, salaryAdvanceLimitMovementRepository);
+    }
+
+    @Test
+    void uclCustomerDeclineCreatesNoSalaryReservationRelease() {
+        UUID applicationId = originateToApprovalPending();
+        useApprover();
+        decisionUseCase.submitApprovalDecision(
+                applicationId,
+                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+        );
+
+        useCustomer();
+        ApprovedOfferActionResult declined = respondToApprovedOfferUseCase.declineOffer(applicationId);
+
+        assertEquals("DECLINED", declined.offer().status());
+        assertEquals("CUSTOMER_DECLINED", status(applicationId));
+        assertEquals(0, count("SELECT count(*) FROM salary_advance_limit_movements "
+                + "WHERE loan_application_id = ?", applicationId));
+        verifyNoInteractions(salaryAdvanceVerificationRepository, salaryAdvanceLimitMovementRepository);
+    }
+
+    @Test
+    void concurrentUclApprovalsCreateOneDecisionAndOneOffer() throws Exception {
+        UUID applicationId = originateToApprovalPending();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<CommandOutcome> outcomes;
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<CommandOutcome> first = executor.submit(() -> approveAfter(applicationId, ready, start));
+            Future<CommandOutcome> second = executor.submit(() -> approveAfter(applicationId, ready, start));
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            outcomes = List.of(first.get(20, TimeUnit.SECONDS), second.get(20, TimeUnit.SECONDS));
+        }
+
+        assertEquals(1, outcomes.stream().filter(CommandOutcome::successful).count());
+        assertEquals("CUSTOMER_ACCEPTANCE_PENDING", status(applicationId));
+        assertEquals(1, count("SELECT count(*) FROM approval_decisions WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM approved_offers WHERE loan_application_id = ?", applicationId));
+        assertEquals(6, count("SELECT count(*) FROM approved_offer_repayment_items item "
+                + "JOIN approved_offers offer ON offer.id = item.approved_offer_id "
+                + "WHERE offer.loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND action = 'APPROVE'", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND action = 'GENERATE_APPROVED_OFFER'", applicationId));
 
         useApprover();
-        BusinessStateConflictException approvalFailure = assertThrows(
+        BusinessStateConflictException replayFailure = assertThrows(
                 BusinessStateConflictException.class,
                 () -> decisionUseCase.submitApprovalDecision(
                         applicationId,
                         new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
                 )
         );
-        assertEquals("UCL_OFFER_EXECUTION_NOT_READY", approvalFailure.getErrorCode());
-        assertEquals("APPROVAL_PENDING", status(applicationId));
-        assertEquals(0, count("SELECT count(*) FROM approved_offers WHERE loan_application_id = ?", applicationId));
-        assertEquals(0, count("SELECT count(*) FROM approval_decisions WHERE loan_application_id = ?", applicationId));
-        assertEquals(0, count("SELECT count(*) FROM audit_events "
-                + "WHERE action = 'APPROVAL_DECISION_RECORDED'"));
-        assertEquals(1, count("SELECT count(*) FROM review_recommendations WHERE loan_application_id = ?",
-                applicationId));
-        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
-                + "WHERE loan_application_id = ? AND action = 'START_PRODUCT_VERIFICATION'", applicationId));
-        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
-                + "WHERE loan_application_id = ? AND action = 'COMPLETE_PRODUCT_VERIFICATION'", applicationId));
+        assertEquals("APPROVAL_DECISION_NOT_ALLOWED", replayFailure.getErrorCode());
+        assertEquals(1, count("SELECT count(*) FROM approval_decisions WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM approved_offers WHERE loan_application_id = ?", applicationId));
     }
 
     @Test
@@ -356,6 +443,43 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         ));
     }
 
+    private UUID originateToApprovalPending() {
+        UUID applicationId = originateAndMakeProcessingReady();
+        useLoanOfficer();
+        UnsecuredConsumerLoanVerificationDto started = verificationUseCase
+                .startManualVerification(applicationId);
+        assertEquals("VERIFICATION_PENDING", started.status());
+        assertEquals("PENDING_MANUAL_REVIEW", started.productVerificationResult());
+
+        UnsecuredConsumerLoanVerificationDto completed = verificationUseCase
+                .completeManualVerification(
+                        applicationId,
+                        new CompleteUnsecuredConsumerLoanVerificationRequest(
+                                "Income and employment evidence are consistent for Loan Officer review."
+                        )
+                );
+        assertEquals("SUBMITTED", completed.status());
+        assertEquals("VERIFIED", completed.productVerificationResult());
+        assertEquals(LOAN_OFFICER_USER_ID, uuid(
+                "SELECT reviewed_by_user_id FROM unsecured_consumer_loan_verifications "
+                        + "WHERE loan_application_id = ?",
+                applicationId
+        ));
+        assertTrue(Math.abs(java.time.temporal.ChronoUnit.NANOS.between(
+                completed.reviewedAt(),
+                timestamp("SELECT reviewed_at FROM unsecured_consumer_loan_verifications "
+                        + "WHERE loan_application_id = ?", applicationId)
+        )) <= 1_000);
+
+        assertEquals("UNDER_REVIEW", reviewStartUseCase.startReview(applicationId).status());
+        recommendationUseCase.submitReviewRecommendation(
+                applicationId,
+                new ReviewRecommendationRequest(ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null)
+        );
+        assertEquals("APPROVAL_PENDING", status(applicationId));
+        return applicationId;
+    }
+
     private UUID originateAndMakeProcessingReady() {
         useCustomer();
         UnsecuredConsumerLoanApplicationDto application = submissionUseCase
@@ -446,6 +570,18 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         return afterBarrier(ready, start, () -> reviewStartUseCase.startReview(applicationId));
     }
 
+    private CommandOutcome approveAfter(
+            UUID applicationId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
+        useApprover();
+        return afterBarrier(ready, start, () -> decisionUseCase.submitApprovalDecision(
+                applicationId,
+                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+        ));
+    }
+
     private CommandOutcome afterBarrier(
             CountDownLatch ready,
             CountDownLatch start,
@@ -514,7 +650,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 "CUSTOMER",
                 fixture.customerId(),
                 Set.of("CUSTOMER"),
-                Set.of("loan:submit", "document:upload:own")
+                Set.of("loan:submit", "document:upload:own", "loan:read:own", "loan:offer:respond:own")
         ));
     }
 
@@ -530,6 +666,17 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 null,
                 Set.of("APPROVER"),
                 Set.of("approval:decide")
+        ));
+    }
+
+    private void useAccounting() {
+        currentUserProvider.use(new AuthenticatedUser(
+                ACCOUNTING_USER_ID,
+                "accounting@meridian.local",
+                "STAFF",
+                null,
+                Set.of("ACCOUNTING_OFFICER"),
+                Set.of("loan:contract:prepare")
         ));
     }
 

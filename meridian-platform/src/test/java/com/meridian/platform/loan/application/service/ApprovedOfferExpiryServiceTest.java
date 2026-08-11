@@ -101,6 +101,20 @@ class ApprovedOfferExpiryServiceTest {
     }
 
     @Test
+    void expiresDuePendingUclOfferWithoutSalaryExposureEffects() {
+        loanApplicationRepository.application = uclApplication(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING);
+
+        service.expireDueOffer(LOAN_APPLICATION_ID, systemContext(), ExpiryDiscoveryTrigger.SCHEDULED_SCAN);
+
+        assertEquals(ApprovedOfferStatus.EXPIRED, approvedOfferRepository.savedOffer.status());
+        assertEquals(LoanApplicationStatus.EXPIRED, loanApplicationRepository.savedApplication.status());
+        assertNull(limitRepository.savedLimit);
+        assertTrue(movementRepository.savedMovements.isEmpty());
+        assertEquals(BusinessAuditAction.OFFER_EXPIRED,
+                auditPublisher.lastEvent().entries().getFirst().action());
+    }
+
+    @Test
     void skipsPendingOfferBeforeExpiry() {
         approvedOfferRepository.offer = pendingOffer(NOW.plusSeconds(1));
 
@@ -202,6 +216,21 @@ class ApprovedOfferExpiryServiceTest {
                 status,
                 money(3_000_000),
                 1,
+                NOW.minusDays(2)
+        );
+    }
+
+    private static LoanApplication uclApplication(LoanApplicationStatus status) {
+        return new LoanApplication(
+                LOAN_APPLICATION_ID,
+                CUSTOMER_ID,
+                UUID.fromString("13131313-1313-1313-1313-131313131313"),
+                "UCL-20260706-000001",
+                ProductCode.UNSECURED_CONSUMER_LOAN,
+                ProductType.UNSECURED,
+                status,
+                money(5_000_000),
+                6,
                 NOW.minusDays(2)
         );
     }

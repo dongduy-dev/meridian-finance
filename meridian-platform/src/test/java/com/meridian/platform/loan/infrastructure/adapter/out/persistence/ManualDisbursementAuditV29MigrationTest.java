@@ -68,12 +68,12 @@ class ManualDisbursementAuditV29MigrationTest {
     }
 
     @Test
-    void currentSchemaSnapshotDeclaresV39AndCurrentFoundations() throws Exception {
+    void currentSchemaSnapshotDeclaresV40AndCurrentFoundations() throws Exception {
         String snapshot = Files.readString(Path.of(
                 "../docs/database/MER-DB-CURRENT-SCHEMA.sql"
         ));
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V39"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V40"));
         assertTrue(snapshot.contains("CREATE TABLE unsecured_consumer_loan_verifications"));
         assertTrue(snapshot.contains("ADD COLUMN reviewed_by_user_id UUID"));
         assertTrue(snapshot.contains("'UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED'"));
@@ -91,5 +91,6 @@ class ManualDisbursementAuditV29MigrationTest {
                 "'LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED'"));
         assertTrue(snapshot.contains("uq_loan_products_identity_tuple"));
         assertTrue(snapshot.contains("trg_loan_applications_product_identity_immutable"));
+        assertTrue(snapshot.contains("'ON_SALARY_DATE', 'MONTHLY_INSTALLMENT'"));
     }
 }

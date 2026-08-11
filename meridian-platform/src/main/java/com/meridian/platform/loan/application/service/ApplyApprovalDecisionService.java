@@ -7,6 +7,7 @@ import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyRepository;
+import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanOfferPolicyRepository;
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
@@ -16,7 +17,9 @@ import com.meridian.platform.loan.domain.model.LoanApprovalDecisionAction;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ReservationReleaseTrigger;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
+import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanOfferPolicy;
 import com.meridian.platform.loan.domain.service.SalaryAdvanceOfferCalculator;
+import com.meridian.platform.loan.domain.service.UnsecuredConsumerLoanOfferCalculator;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -45,10 +48,13 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
     private final CustomerCorrectionWorkflowService customerCorrectionWorkflowService;
     private final ApprovedOfferRepository approvedOfferRepository;
     private final SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository;
+    private final UnsecuredConsumerLoanOfferPolicyRepository unsecuredConsumerLoanOfferPolicyRepository;
     private final SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
     private final BusinessAuditPublisher businessAuditPublisher;
     private final SalaryAdvanceOfferCalculator salaryAdvanceOfferCalculator = new SalaryAdvanceOfferCalculator();
+    private final UnsecuredConsumerLoanOfferCalculator unsecuredConsumerLoanOfferCalculator =
+            new UnsecuredConsumerLoanOfferCalculator();
 
     @Autowired
     public ApplyApprovalDecisionService(
@@ -57,6 +63,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
             CustomerCorrectionWorkflowService customerCorrectionWorkflowService,
             ApprovedOfferRepository approvedOfferRepository,
             SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository,
+            UnsecuredConsumerLoanOfferPolicyRepository unsecuredConsumerLoanOfferPolicyRepository,
             SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
             BusinessAuditPublisher businessAuditPublisher
@@ -66,6 +73,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         this.customerCorrectionWorkflowService = customerCorrectionWorkflowService;
         this.approvedOfferRepository = approvedOfferRepository;
         this.salaryAdvanceOfferPolicyRepository = salaryAdvanceOfferPolicyRepository;
+        this.unsecuredConsumerLoanOfferPolicyRepository = unsecuredConsumerLoanOfferPolicyRepository;
         this.salaryAdvanceReservationReleaseService = salaryAdvanceReservationReleaseService;
         this.transitionRecorder = transitionRecorder;
         this.businessAuditPublisher = businessAuditPublisher;
@@ -76,12 +84,14 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
             LoanReviewCycleRepository reviewCycleRepository,
             ApprovedOfferRepository approvedOfferRepository,
             SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository,
+            UnsecuredConsumerLoanOfferPolicyRepository unsecuredConsumerLoanOfferPolicyRepository,
             SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
             BusinessAuditPublisher businessAuditPublisher
     ) {
         this(loanApplicationRepository, reviewCycleRepository, null, approvedOfferRepository,
-                salaryAdvanceOfferPolicyRepository, salaryAdvanceReservationReleaseService,
+                salaryAdvanceOfferPolicyRepository, unsecuredConsumerLoanOfferPolicyRepository,
+                salaryAdvanceReservationReleaseService,
                 transitionRecorder, businessAuditPublisher);
     }
 
@@ -120,8 +130,8 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         List<LoanApplicationTransitionFact> transitionFacts = new ArrayList<>(decisionTransition.facts());
         ApprovedOffer savedApprovedOffer = null;
 
-        if (shouldGenerateSalaryAdvanceOffer(loanApplication, command.action())) {
-            ApprovedOffer approvedOffer = generateSalaryAdvanceOffer(loanApplication, command);
+        if (shouldGenerateApprovedOffer(loanApplication, command.action())) {
+            ApprovedOffer approvedOffer = generateApprovedOffer(loanApplication, command);
             savedApprovedOffer = approvedOfferRepository.save(approvedOffer);
             LoanApplicationTransitionResult acceptancePendingTransition =
                     transitionedApplication.markCustomerAcceptancePending();
@@ -193,11 +203,12 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         }
     }
 
-    private boolean shouldGenerateSalaryAdvanceOffer(
+    private boolean shouldGenerateApprovedOffer(
             LoanApplication loanApplication,
             LoanApprovalDecisionAction action
     ) {
-        return loanApplication.productCode() == ProductCode.SALARY_ADVANCE
+        return (loanApplication.productCode() == ProductCode.SALARY_ADVANCE
+                || loanApplication.productCode() == ProductCode.UNSECURED_CONSUMER_LOAN)
                 && action == LoanApprovalDecisionAction.APPROVE;
     }
 
@@ -207,12 +218,6 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
     ) {
         if (loanApplication.productCode() != ProductCode.UNSECURED_CONSUMER_LOAN) {
             return;
-        }
-        if (action == LoanApprovalDecisionAction.APPROVE) {
-            throw new BusinessStateConflictException(
-                    "UCL_OFFER_EXECUTION_NOT_READY",
-                    "Unsecured Consumer Loan approval is unavailable until offer execution is defined."
-            );
         }
         if (action == LoanApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION) {
             throw new BusinessStateConflictException(
@@ -233,6 +238,40 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
                 ));
 
         return salaryAdvanceOfferCalculator.generate(
+                UUID.randomUUID(),
+                loanApplication.id(),
+                policy,
+                loanApplication.requestedAmount(),
+                loanApplication.requestedTermMonths(),
+                command.operationContext().occurredAt()
+        );
+    }
+
+    private ApprovedOffer generateApprovedOffer(
+            LoanApplication loanApplication,
+            ApplyApprovalDecisionCommand command
+    ) {
+        return switch (loanApplication.productCode()) {
+            case SALARY_ADVANCE -> generateSalaryAdvanceOffer(loanApplication, command);
+            case UNSECURED_CONSUMER_LOAN -> generateUnsecuredConsumerLoanOffer(loanApplication, command);
+            case COLLATERAL_LOAN -> throw new IllegalStateException(
+                    "Collateral Loan cannot enter executable approved-offer generation."
+            );
+        };
+    }
+
+    private ApprovedOffer generateUnsecuredConsumerLoanOffer(
+            LoanApplication loanApplication,
+            ApplyApprovalDecisionCommand command
+    ) {
+        UnsecuredConsumerLoanOfferPolicy policy = unsecuredConsumerLoanOfferPolicyRepository
+                .findActiveDefaultPolicy()
+                .orElseThrow(() -> new BusinessRuleViolationException(
+                        "PRODUCT_POLICY_INVALID",
+                        "Unsecured Consumer Loan active default offer policy was not found."
+                ));
+
+        return unsecuredConsumerLoanOfferCalculator.generate(
                 UUID.randomUUID(),
                 loanApplication.id(),
                 policy,

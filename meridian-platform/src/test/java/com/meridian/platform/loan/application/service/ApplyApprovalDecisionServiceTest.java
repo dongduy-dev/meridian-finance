@@ -10,6 +10,7 @@ import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovemen
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
+import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanOfferPolicyRepository;
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
 import com.meridian.platform.loan.domain.model.InterestCalculationMethod;
 import com.meridian.platform.loan.domain.model.LoanApplication;
@@ -28,6 +29,7 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
+import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanOfferPolicy;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
@@ -61,12 +63,14 @@ class ApplyApprovalDecisionServiceTest {
     private static final UUID LINK_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
     private static final UUID LIMIT_ID = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
     private static final UUID POLICY_ID = UUID.fromString("12121212-1212-1212-1212-121212121212");
+    private static final UUID UCL_POLICY_ID = UUID.fromString("13131313-1313-1313-1313-131313131313");
     private static final LocalDateTime DECIDED_AT = LocalDateTime.of(2026, 7, 6, 9, 30);
 
     private FakeLoanApplicationRepository loanApplicationRepository;
     private LoanReviewCycleRepository reviewCycleRepository;
     private FakeApprovedOfferRepository approvedOfferRepository;
     private FakeSalaryAdvanceOfferPolicyRepository offerPolicyRepository;
+    private FakeUnsecuredConsumerLoanOfferPolicyRepository unsecuredConsumerLoanOfferPolicyRepository;
     private FakeSalaryAdvanceVerificationRepository verificationRepository;
     private FakeSalaryAdvanceLimitRepository limitRepository;
     private FakeSalaryAdvanceLimitMovementRepository movementRepository;
@@ -87,6 +91,7 @@ class ApplyApprovalDecisionServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         approvedOfferRepository = new FakeApprovedOfferRepository();
         offerPolicyRepository = new FakeSalaryAdvanceOfferPolicyRepository();
+        unsecuredConsumerLoanOfferPolicyRepository = new FakeUnsecuredConsumerLoanOfferPolicyRepository();
         verificationRepository = new FakeSalaryAdvanceVerificationRepository();
         limitRepository = new FakeSalaryAdvanceLimitRepository();
         movementRepository = new FakeSalaryAdvanceLimitMovementRepository();
@@ -103,6 +108,7 @@ class ApplyApprovalDecisionServiceTest {
                 reviewCycleRepository,
                 approvedOfferRepository,
                 offerPolicyRepository,
+                unsecuredConsumerLoanOfferPolicyRepository,
                 releaseService,
                 new LoanApplicationStatusTransitionRecorder(transitionRepository),
                 auditPublisher
@@ -190,15 +196,49 @@ class ApplyApprovalDecisionServiceTest {
     }
 
     @Test
-    void uclApproveFailsClosedWithoutApplicationOrOfferEffects() {
+    void uclApprovalGeneratesExactMonthlyInstallmentOffer() {
         loanApplicationRepository.application = uclApplication(LoanApplicationStatus.APPROVAL_PENDING);
 
-        BusinessStateConflictException exception = assertThrows(
-                BusinessStateConflictException.class,
+        LoanApplicationReviewDto result = service.applyApprovalDecision(
+                command(LoanApprovalDecisionAction.APPROVE)
+        );
+
+        assertEquals("CUSTOMER_ACCEPTANCE_PENDING", result.status());
+        assertEquals(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING,
+                loanApplicationRepository.savedApplication.status());
+        assertNotNull(approvedOfferRepository.savedOffer);
+        assertEquals(UCL_POLICY_ID, approvedOfferRepository.savedOffer.sourceLoanProductPolicyId());
+        assertEquals(limit(5_000_000), approvedOfferRepository.savedOffer.financialTerms().approvedPrincipal());
+        assertEquals(6, approvedOfferRepository.savedOffer.financialTerms().approvedTermMonths());
+        assertEquals(InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL,
+                approvedOfferRepository.savedOffer.financialTerms().interestCalculationMethod());
+        assertEquals(new BigDecimal("0.018000"),
+                approvedOfferRepository.savedOffer.financialTerms().flatMonthlyInterestRate());
+        assertEquals(limit(540_000), approvedOfferRepository.savedOffer.financialTerms().totalInterest());
+        assertEquals(limit(0), approvedOfferRepository.savedOffer.financialTerms().feeAmount());
+        assertEquals(limit(5_540_000), approvedOfferRepository.savedOffer.financialTerms().totalRepaymentAmount());
+        assertEquals(RepaymentMethod.MONTHLY_INSTALLMENT,
+                approvedOfferRepository.savedOffer.financialTerms().repaymentMethod());
+        assertEquals(6, approvedOfferRepository.savedOffer.repaymentItems().size());
+        assertEquals(DECIDED_AT.plusDays(7), approvedOfferRepository.savedOffer.expiresAt());
+        assertEquals(2, transitionRepository.savedTransitions.size());
+        assertTrue(movementRepository.savedMovements.isEmpty());
+        assertNull(limitRepository.savedLimit);
+        assertEquals(BusinessAuditAction.APPROVED_OFFER_GENERATED,
+                auditPublisher.lastEvent().entries().getFirst().action());
+    }
+
+    @Test
+    void uclApprovalFailsWithoutPersistingWhenPolicyIsMissing() {
+        loanApplicationRepository.application = uclApplication(LoanApplicationStatus.APPROVAL_PENDING);
+        unsecuredConsumerLoanOfferPolicyRepository.policy = Optional.empty();
+
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
                 () -> service.applyApprovalDecision(command(LoanApprovalDecisionAction.APPROVE))
         );
 
-        assertEquals("UCL_OFFER_EXECUTION_NOT_READY", exception.getErrorCode());
+        assertEquals("PRODUCT_POLICY_INVALID", exception.getErrorCode());
         assertNull(loanApplicationRepository.savedApplication);
         assertNull(approvedOfferRepository.savedOffer);
         assertTrue(transitionRepository.savedTransitions.isEmpty());
@@ -463,6 +503,27 @@ class ApplyApprovalDecisionServiceTest {
 
         @Override
         public Optional<SalaryAdvanceOfferPolicy> findActiveDefaultPolicy() {
+            return policy;
+        }
+    }
+
+    private static class FakeUnsecuredConsumerLoanOfferPolicyRepository
+            implements UnsecuredConsumerLoanOfferPolicyRepository {
+
+        private Optional<UnsecuredConsumerLoanOfferPolicy> policy = Optional.of(
+                new UnsecuredConsumerLoanOfferPolicy(
+                        UCL_POLICY_ID,
+                        InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL,
+                        new BigDecimal("0.018000"),
+                        BigDecimal.ZERO.setScale(2),
+                        RepaymentMethod.MONTHLY_INSTALLMENT,
+                        7,
+                        Set.of(3, 6, 9, 12)
+                )
+        );
+
+        @Override
+        public Optional<UnsecuredConsumerLoanOfferPolicy> findActiveDefaultPolicy() {
             return policy;
         }
     }

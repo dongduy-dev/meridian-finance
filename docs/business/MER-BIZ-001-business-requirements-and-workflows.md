@@ -588,6 +588,29 @@ Unsecured Consumer Loan is a streamlined document-based product. It requires inc
 
 Required evidence is defined in Section 11.3. Loan purpose may be an optional product-policy field or document.
 
+#### UCL financial policy
+
+UCL uses exact-request approval. The approved principal and term equal the submitted requested amount and term; the Approver cannot create a counteroffer or edit either value. Supported terms are exactly 3, 6, 9, and 12 months.
+
+The active default policy uses `FLAT_ORIGINAL_PRINCIPAL` interest at a monthly rate of `0.018000`, zero fee, `MONTHLY_INSTALLMENT` repayment, and seven-calendar-day offer validity. Pricing is:
+
+```text
+approvedPrincipal = submitted requested amount
+approvedTermMonths = submitted requested term
+unroundedTotalInterest = approvedPrincipal × 0.018 × approvedTermMonths
+totalInterest = round(unroundedTotalInterest, whole VND, HALF_UP)
+feeAmount = 0 VND
+totalRepaymentAmount = approvedPrincipal + totalInterest
+```
+
+The immutable offer contains one provisional repayment item per approved term month and no calendar due dates. Principal and total interest are each divided into equal whole-VND base portions; any remainder is assigned only to the final item. Every item has zero fee, and item totals must reconcile exactly to the offer principal, interest, fee, and total repayment.
+
+At later manual disbursement, the controlled `firstRepaymentDate` must be after the disbursement value date and no later than one calendar month after it. The first installment uses that date. Later installments use its day-of-month as the monthly anchor; when a month does not contain that day, its final calendar day applies.
+
+For example, a January 30 first repayment date produces January 30, February 28 or 29, March 30, April 30, and the same anchored sequence thereafter.
+
+Early or partial payment does not reprice the loan, rebate future interest, regenerate the schedule, mutate contractual due dates, or reduce contractual interest. Allocation follows the common `FEE → INTEREST → PRINCIPAL` order. Full contractual payoff requires the complete contractual outstanding. Administrative Full-Balance Settlement, when UCL servicing becomes executable, must be backed by payment of that complete outstanding and is not a discount, concession, forgiveness, waiver, or repricing event.
+
 End-to-end workflow:
 
 1. Customer completes the required profile and primary bank-account setup.
@@ -858,7 +881,7 @@ These values define Meridian's portfolio and test configuration. They do not rep
 
 For Salary Advance, the term is both the approved month count and the number of provisional repayment items.
 
-The UCL and Collateral Loan rates above are product-configuration targets. Section 13.4 identifies the pricing and installment decisions that still require an exact business rule before those products generate executable approved offers.
+The UCL rate and installment rules are executable business policy as defined in Section 7.2. The Collateral Loan rate remains a configuration target pending the decisions identified in Section 13.4.
 
 ### 11.2 Salary Advance Policy Values
 
@@ -1019,11 +1042,11 @@ OCR remains advisory to Document review. Notification remains observational and 
 - full mobile delivery;
 - savings, entrusted, corporate, or other non-lending products.
 
-### 13.4 Business Decisions Required Before UCL and Collateral Offer Execution
+### 13.4 Business Decisions Required Before Collateral Loan Offer Execution
 
-The workflow and seed configuration for UCL and Collateral Loan are defined, but this version does not invent unsupported pricing details. These are MVP-completion dependencies, not post-MVP enhancements.
+The Collateral Loan workflow and seed configuration are defined, but Meridian does not invent unsupported pricing details. These are MVP-completion dependencies, not post-MVP enhancements.
 
-Before either product generates an approved offer, its policy must define:
+Before Collateral Loan generates an approved offer, its policy must define:
 
 - interest-calculation method;
 - rate interpretation and rounding;
@@ -1034,7 +1057,7 @@ Before either product generates an approved offer, its policy must define:
 - settlement effect;
 - any collateral-specific activation or closure requirement.
 
-Until those rules are approved, the catalog rates remain configuration targets rather than complete executable financial formulas.
+Until those rules are approved, the Collateral Loan catalog rate remains a configuration target rather than a complete executable financial formula. UCL financial policy is defined in Section 7.2.
 
 ### 13.5 Post-MVP Product Extensions
 
