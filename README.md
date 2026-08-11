@@ -110,10 +110,10 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 ### Core Platform
 - **Loan Application Lifecycle** — State machine–driven origination through disbursement, followed by LoanAccount servicing after activation
 - **Salary Advance Workflow** — Employer-linked salary advance with Partner Company, Partner Employee, and eligibility verification support
-- **Unsecured Consumer Loan Offer Workflow** — Customer-owned origination, required evidence, positive manual verification, common review and approval, executable flat-rate pricing, immutable offers, and Customer response with fail-closed pre-contract safety
+- **Unsecured Consumer Loan Workflow** — Customer-owned origination, required evidence, positive manual verification, common review and approval, executable flat-rate pricing, immutable offers, operational contracts, readiness, and manual-disbursement activation
 - **Controlled Review & Approval Workflow** — Loan-owned review and correction lifecycle with immutable Loan Officer recommendations, independent Approver decisions, customer acceptance, and maker-checker controls
 - **Operational Contract Readiness** — Immutable accepted-term and repayment snapshots, protected destination capture, Customer acknowledgment, structured blockers, controlled destination refresh, and Accounting confirmation
-- **Manual Disbursement Activation** - Idempotent Accounting confirmation creates an active LoanAccount, final dated schedule, and Salary Advance reserved-to-used conversion atomically
+- **Manual Disbursement Activation** - Idempotent Accounting confirmation creates an active LoanAccount and final dated schedule atomically, with Salary Advance exposure conversion only for Salary Advance
 - **Salary Advance Servicing Lifecycle** — Deterministic repayment, overdue evaluation, contractual payoff, payment-backed Administrative Full-Balance Settlement, and separate administrative LoanAccount closure
 - **Document Upload & Management** — Checklist handling, metadata, storage abstraction, manual review, waiver, replacement, readiness checks, and OCR-assisted processing
 - **JWT Authentication & RBAC** — RS256 tokens, refresh rotation, role/action permission model
@@ -204,7 +204,8 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - [x] Unsecured Consumer Loan origination and evidence foundation
 - [x] Unsecured Consumer Loan positive manual verification and review/recommendation integration through `APPROVAL_PENDING`
 - [x] Unsecured Consumer Loan exact-request pricing, approval, immutable offer generation, expiry, Customer acceptance, and decline
-- [ ] Remaining Unsecured Consumer Loan negative verification, correction/resubmission, contract readiness, activation, and cancellation
+- [x] Unsecured Consumer Loan operational contract, acknowledgment, readiness, manual disbursement, LoanAccount activation, and final monthly schedule
+- [ ] Remaining Unsecured Consumer Loan negative verification, correction/resubmission, repayment/servicing, settlement, closure, outstanding-debt policy, and cancellation
 - [ ] Streamlined Collateral Loan origination, review, approval, contract, and activation workflow
 - [ ] UCL repayment/servicing execution and Collateral Loan repayment/servicing policy and execution
 - [x] JWT authentication and permission-based RBAC

@@ -7,6 +7,8 @@ import com.meridian.platform.approval.application.port.in.SubmitApprovalDecision
 import com.meridian.platform.approval.application.port.in.SubmitReviewRecommendationUseCase;
 import com.meridian.platform.approval.domain.model.ApprovalDecisionAction;
 import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
+import com.meridian.platform.customer.application.dto.AddCustomerBankAccountRequest;
+import com.meridian.platform.customer.application.port.in.ManageOwnCustomerBankAccountUseCase;
 import com.meridian.platform.document.application.dto.DocumentVersionDto;
 import com.meridian.platform.document.application.dto.ReviewDocumentCommand;
 import com.meridian.platform.document.application.dto.UploadDocumentCommand;
@@ -20,14 +22,22 @@ import com.meridian.platform.loan.application.dto.ApprovedOfferDto;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicationDto;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicationRequest;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanVerificationDto;
+import com.meridian.platform.loan.application.port.in.AcknowledgeLoanContractUseCase;
+import com.meridian.platform.loan.application.port.in.ConfirmContractReadinessUseCase;
+import com.meridian.platform.loan.application.port.in.ConfirmManualDisbursementUseCase;
 import com.meridian.platform.loan.application.port.in.ManageUnsecuredConsumerLoanVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.PrepareLoanContractUseCase;
 import com.meridian.platform.loan.application.port.in.QueryApprovedOfferUseCase;
+import com.meridian.platform.loan.application.port.in.QueryContractReadinessUseCase;
 import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.in.StartUnsecuredConsumerLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
+import com.meridian.platform.loan.domain.model.LoanContract;
+import com.meridian.platform.loan.domain.model.LoanContractStatus;
+import com.meridian.platform.loan.domain.model.ContractSupersessionReason;
+import com.meridian.platform.loan.domain.model.RepaymentMethod;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
@@ -53,6 +63,9 @@ import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -63,6 +76,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -109,7 +123,12 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     @Autowired private SubmitApprovalDecisionUseCase decisionUseCase;
     @Autowired private QueryApprovedOfferUseCase queryApprovedOfferUseCase;
     @Autowired private RespondToApprovedOfferUseCase respondToApprovedOfferUseCase;
+    @Autowired private ManageOwnCustomerBankAccountUseCase bankAccountUseCase;
     @Autowired private PrepareLoanContractUseCase prepareLoanContractUseCase;
+    @Autowired private AcknowledgeLoanContractUseCase acknowledgeLoanContractUseCase;
+    @Autowired private QueryContractReadinessUseCase queryContractReadinessUseCase;
+    @Autowired private ConfirmContractReadinessUseCase confirmContractReadinessUseCase;
+    @Autowired private ConfirmManualDisbursementUseCase confirmManualDisbursementUseCase;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private ThreadLocalCurrentUserProvider currentUserProvider;
     @MockitoSpyBean private BusinessAuditPublisher auditPublisher;
@@ -132,6 +151,9 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         reset(auditPublisher, salaryAdvanceVerificationRepository, salaryAdvanceLimitMovementRepository);
         fixture = createReadyCustomer();
         useCustomer();
+        bankAccountUseCase.addBankAccount(new AddCustomerBankAccountRequest(
+                "TEST", "Test Bank", "UCL Customer", "12345678905678"
+        ));
     }
 
     @AfterEach
@@ -140,7 +162,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     }
 
     @Test
-    void documentBackedUclLifecycleCreatesOfferAcceptsAndBlocksContractExecution() {
+    void documentBackedUclLifecycleReachesDisbursedWithoutSalaryExposure() {
         UUID applicationId = originateToApprovalPending();
         useApprover();
         decisionUseCase.submitApprovalDecision(
@@ -195,19 +217,148 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 + "WHERE loan_application_id = ? AND status = 'ACCEPTED'", applicationId));
 
         useAccounting();
-        BusinessStateConflictException contractFailure = assertThrows(
-                BusinessStateConflictException.class,
-                () -> prepareLoanContractUseCase.prepare(new PrepareLoanContractUseCase.Command(
-                        UUID.randomUUID(), applicationId, 0, null
-                ))
+        LoanContract prepared = prepareLoanContractUseCase.prepare(
+                new PrepareLoanContractUseCase.Command(UUID.randomUUID(), applicationId, 0, null)
         );
-        assertEquals("UCL_CONTRACT_EXECUTION_NOT_READY", contractFailure.getErrorCode());
-        assertEquals("CONTRACT_PENDING", status(applicationId));
-        assertEquals(0, count("SELECT count(*) FROM loan_contracts WHERE loan_application_id = ?", applicationId));
+        assertEquals(LoanContractStatus.PREPARED, prepared.status());
+        assertEquals(offer.approvedPrincipal(), prepared.financialTerms().approvedPrincipal());
+        assertEquals(offer.approvedTermMonths(), prepared.financialTerms().approvedTermMonths());
+        assertEquals(offer.flatMonthlyInterestRate(),
+                prepared.financialTerms().flatMonthlyInterestRate());
+        assertEquals(offer.totalInterest(), prepared.financialTerms().totalInterest());
+        assertEquals(offer.feeAmount(), prepared.financialTerms().feeAmount());
+        assertEquals(offer.totalRepaymentAmount(),
+                prepared.financialTerms().totalRepaymentAmount());
+        assertEquals(RepaymentMethod.MONTHLY_INSTALLMENT,
+                prepared.financialTerms().repaymentMethod());
+        assertEquals(offer.repaymentItems().size(), prepared.repaymentItems().size());
+        for (int index = 0; index < offer.repaymentItems().size(); index++) {
+            var offerItem = offer.repaymentItems().get(index);
+            var contractItem = prepared.repaymentItems().get(index);
+            assertEquals(offerItem.installmentNumber(), contractItem.installmentNumber());
+            assertEquals(offerItem.principalDue(), contractItem.principalDue());
+            assertEquals(offerItem.interestDue(), contractItem.interestDue());
+            assertEquals(offerItem.feeDue(), contractItem.feeDue());
+            assertEquals(offerItem.totalDue(), contractItem.totalDue());
+        }
+        assertTrue(count("SELECT octet_length(protected_account_number) FROM loan_contracts "
+                + "WHERE id = ?", prepared.id()) > 0);
+
+        useCustomer();
+        LoanContract acknowledged = acknowledgeLoanContractUseCase.acknowledge(
+                new AcknowledgeLoanContractUseCase.Command(
+                        UUID.randomUUID(), applicationId, prepared.contractVersion()
+                )
+        );
+        assertEquals(LoanContractStatus.ACKNOWLEDGED, acknowledged.status());
+
+        useAccounting();
+        QueryContractReadinessUseCase.Snapshot readiness =
+                queryContractReadinessUseCase.query(applicationId, prepared.contractVersion());
+        assertTrue(readiness.ready());
+        assertTrue(readiness.blockers().isEmpty());
+        LoanContract ready = confirmContractReadinessUseCase.confirm(
+                new ConfirmContractReadinessUseCase.Command(
+                        UUID.randomUUID(), applicationId, prepared.id(), prepared.contractVersion()
+                )
+        );
+        assertEquals(LoanContractStatus.READY_FOR_DISBURSEMENT, ready.status());
+        assertEquals("DISBURSEMENT_PENDING", status(applicationId));
+
+        LocalDate valueDate = LocalDate.now(ZoneOffset.UTC);
+        LocalDate firstRepaymentDate = valueDate.plusMonths(1);
+        UUID disbursementRequestId = UUID.randomUUID();
+        ConfirmManualDisbursementUseCase.Command disbursementCommand =
+                new ConfirmManualDisbursementUseCase.Command(
+                        disbursementRequestId,
+                        applicationId,
+                        ready.contractVersion(),
+                        "UCL-TRANSFER-" + applicationId,
+                        valueDate,
+                        firstRepaymentDate
+                );
+        ConfirmManualDisbursementUseCase.Result disbursed =
+                confirmManualDisbursementUseCase.confirm(disbursementCommand);
+
+        assertEquals("DISBURSED", status(applicationId));
+        assertEquals("ACTIVE", disbursed.loanAccountStatus().name());
+        assertEquals(6, disbursed.scheduleItems().size());
+        assertEquals(firstRepaymentDate, disbursed.scheduleItems().getFirst().dueDate());
+        for (int index = 0; index < disbursed.scheduleItems().size(); index++) {
+            var finalItem = disbursed.scheduleItems().get(index);
+            var contractItem = prepared.repaymentItems().get(index);
+            assertEquals(anchoredDate(firstRepaymentDate, index), finalItem.dueDate());
+            assertEquals(contractItem.id(), finalItem.sourceLoanContractRepaymentItemId());
+            assertEquals(contractItem.principalDue(), finalItem.principalDue());
+            assertEquals(contractItem.interestDue(), finalItem.interestDue());
+            assertEquals(contractItem.feeDue(), finalItem.feeDue());
+            assertEquals(contractItem.totalDue(), finalItem.totalDue());
+        }
+        assertEquals(1, count("SELECT count(*) FROM loan_accounts WHERE loan_application_id = ?",
+                applicationId));
+        assertEquals(1, count("SELECT count(*) FROM manual_disbursements "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM repayment_schedules "
+                + "WHERE loan_application_id = ? AND schedule_type = 'FINAL'", applicationId));
+        assertEquals(6, count("SELECT count(*) FROM repayment_schedule_items item "
+                + "JOIN repayment_schedules schedule ON schedule.id = item.repayment_schedule_id "
+                + "WHERE schedule.loan_application_id = ?", applicationId));
+        assertEquals(6, count("SELECT count(*) FROM repayment_installment_progress progress "
+                + "JOIN repayment_schedule_items item ON item.id = progress.repayment_schedule_item_id "
+                + "JOIN repayment_schedules schedule ON schedule.id = item.repayment_schedule_id "
+                + "WHERE schedule.loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_account_status_transitions history "
+                + "JOIN loan_accounts account ON account.id = history.loan_account_id "
+                + "WHERE account.loan_application_id = ? AND history.action = 'ACTIVATION_INITIALIZED'",
+                applicationId));
+        assertEquals(6, count("SELECT count(*) FROM repayment_installment_status_transitions history "
+                + "JOIN repayment_schedule_items item ON item.id = history.repayment_schedule_item_id "
+                + "JOIN repayment_schedules schedule ON schedule.id = item.repayment_schedule_id "
+                + "WHERE schedule.loan_application_id = ? AND history.action = 'ACTIVATION_INITIALIZED'",
+                applicationId));
+        assertEquals(new BigDecimal("0.00"), jdbcTemplate.queryForObject(
+                "SELECT total_paid FROM loan_accounts WHERE loan_application_id = ?",
+                BigDecimal.class, applicationId
+        ));
+        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND action = 'CONFIRM_MANUAL_DISBURSEMENT'",
+                applicationId));
+        assertEquals(1, count("SELECT count(*) FROM audit_events "
+                + "WHERE action = 'MANUAL_DISBURSEMENT_CONFIRMED' "
+                + "AND payload ->> 'loanApplicationId' = ?", applicationId.toString()));
         assertEquals(0, count("SELECT count(*) FROM salary_advance_limit_movements "
                 + "WHERE loan_application_id = ?", applicationId));
+        assertEquals("VERIFIED", text("SELECT product_verification_result "
+                + "FROM unsecured_consumer_loan_verifications WHERE loan_application_id = ?",
+                applicationId));
         assertEquals(1, count("SELECT count(*) FROM review_recommendations WHERE loan_application_id = ?",
                 applicationId));
+
+        ConfirmManualDisbursementUseCase.Result replay =
+                confirmManualDisbursementUseCase.confirm(disbursementCommand);
+        assertTrue(replay.idempotentReplay());
+        assertEquals(disbursed.loanAccountId(), replay.loanAccountId());
+        assertEquals(disbursed.manualDisbursementId(), replay.manualDisbursementId());
+        assertEquals(disbursed.repaymentScheduleId(), replay.repaymentScheduleId());
+        assertEquals(1, count("SELECT count(*) FROM loan_accounts WHERE loan_application_id = ?",
+                applicationId));
+        assertEquals(1, count("SELECT count(*) FROM audit_events "
+                + "WHERE action = 'MANUAL_DISBURSEMENT_CONFIRMED' "
+                + "AND payload ->> 'loanApplicationId' = ?", applicationId.toString()));
+        BusinessStateConflictException contradictoryReplay = assertThrows(
+                BusinessStateConflictException.class,
+                () -> confirmManualDisbursementUseCase.confirm(
+                        new ConfirmManualDisbursementUseCase.Command(
+                                disbursementRequestId,
+                                applicationId,
+                                ready.contractVersion(),
+                                "UCL-DIFFERENT-TRANSFER-" + applicationId,
+                                valueDate,
+                                firstRepaymentDate
+                        )
+                )
+        );
+        assertEquals("IDEMPOTENCY_KEY_REUSED", contradictoryReplay.getErrorCode());
         verifyNoInteractions(salaryAdvanceVerificationRepository, salaryAdvanceLimitMovementRepository);
     }
 
@@ -228,6 +379,157 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         assertEquals(0, count("SELECT count(*) FROM salary_advance_limit_movements "
                 + "WHERE loan_application_id = ?", applicationId));
         verifyNoInteractions(salaryAdvanceVerificationRepository, salaryAdvanceLimitMovementRepository);
+    }
+
+    @Test
+    void uclDestinationRefreshSupersedesContractWithoutChangingFinancialTerms() {
+        AcceptedUcl accepted = acceptedUcl();
+        useAccounting();
+        LoanContract first = prepareLoanContractUseCase.prepare(
+                new PrepareLoanContractUseCase.Command(
+                        UUID.randomUUID(), accepted.applicationId, 0, null
+                )
+        );
+
+        useCustomer();
+        var refreshedAccount = bankAccountUseCase.addBankAccount(
+                new AddCustomerBankAccountRequest(
+                        "ALT", "Alternate Test Bank", "UCL Customer", "99887766554433"
+                )
+        );
+        bankAccountUseCase.makePrimary(refreshedAccount.customerBankAccountId());
+
+        useAccounting();
+        LoanContract second = prepareLoanContractUseCase.prepare(
+                new PrepareLoanContractUseCase.Command(
+                        UUID.randomUUID(), accepted.applicationId, 1,
+                        ContractSupersessionReason.DISBURSEMENT_ACCOUNT_REFRESH
+                )
+        );
+
+        assertEquals(2, second.contractVersion());
+        assertEquals(LoanContractStatus.PREPARED, second.status());
+        assertEquals(first.financialTerms(), second.financialTerms());
+        assertEquals(
+                first.repaymentItems().stream()
+                        .map(item -> List.of(
+                                item.installmentNumber(), item.principalDue(), item.interestDue(),
+                                item.feeDue(), item.totalDue()
+                        ))
+                        .toList(),
+                second.repaymentItems().stream()
+                        .map(item -> List.of(
+                                item.installmentNumber(), item.principalDue(), item.interestDue(),
+                                item.feeDue(), item.totalDue()
+                        ))
+                        .toList()
+        );
+        assertFalse(first.disbursementBankAccount().sourceBankAccountId().equals(
+                second.disbursementBankAccount().sourceBankAccountId()
+        ));
+        assertEquals(refreshedAccount.customerBankAccountId(),
+                second.disbursementBankAccount().sourceBankAccountId());
+        assertNull(second.acknowledgedAt());
+        assertEquals("SUPERSEDED", text("SELECT status FROM loan_contracts WHERE id = ?", first.id()));
+        assertEquals(0, count("SELECT count(*) FROM salary_advance_limit_movements "
+                + "WHERE loan_application_id = ?", accepted.applicationId));
+    }
+
+    @Test
+    void concurrentUclManualDisbursementsCreateOneCompleteActivation() throws Exception {
+        ReadyUcl readyUcl = readyUcl();
+        LocalDate valueDate = LocalDate.now(ZoneOffset.UTC);
+        LocalDate firstRepaymentDate = valueDate.plusMonths(1);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<CommandOutcome> outcomes;
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<CommandOutcome> first = executor.submit(() -> disburseAfter(
+                    readyUcl, UUID.randomUUID(), "UCL-CONCURRENT-A-" + readyUcl.applicationId,
+                    valueDate, firstRepaymentDate, ready, start
+            ));
+            Future<CommandOutcome> second = executor.submit(() -> disburseAfter(
+                    readyUcl, UUID.randomUUID(), "UCL-CONCURRENT-B-" + readyUcl.applicationId,
+                    valueDate, firstRepaymentDate, ready, start
+            ));
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            outcomes = List.of(first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS));
+        }
+
+        assertEquals(1, outcomes.stream().filter(CommandOutcome::successful).count());
+        BusinessStateConflictException loser = assertInstanceOf(
+                BusinessStateConflictException.class,
+                outcomes.stream().filter(outcome -> !outcome.successful())
+                        .map(CommandOutcome::failure).findFirst().orElseThrow()
+        );
+        assertEquals("DISBURSEMENT_ALREADY_COMPLETED", loser.getErrorCode());
+        assertEquals("DISBURSED", status(readyUcl.applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_accounts WHERE loan_application_id = ?",
+                readyUcl.applicationId));
+        assertEquals(1, count("SELECT count(*) FROM manual_disbursements "
+                + "WHERE loan_application_id = ?", readyUcl.applicationId));
+        assertEquals(1, count("SELECT count(*) FROM repayment_schedules "
+                + "WHERE loan_application_id = ?", readyUcl.applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND action = 'CONFIRM_MANUAL_DISBURSEMENT'",
+                readyUcl.applicationId));
+        assertEquals(1, count("SELECT count(*) FROM audit_events "
+                + "WHERE action = 'MANUAL_DISBURSEMENT_CONFIRMED' "
+                + "AND payload ->> 'loanApplicationId' = ?",
+                readyUcl.applicationId.toString()));
+        assertEquals(0, count("SELECT count(*) FROM salary_advance_limit_movements "
+                + "WHERE loan_application_id = ?", readyUcl.applicationId));
+    }
+
+    @Test
+    void failedMandatoryActivationAuditRollsBackEveryUclActivationEffect() {
+        ReadyUcl readyUcl = readyUcl();
+        useAccounting();
+        doThrow(new IllegalStateException("simulated mandatory activation audit failure"))
+                .when(auditPublisher)
+                .publish(argThat(this::containsManualDisbursementAudit));
+
+        LocalDate valueDate = LocalDate.now(ZoneOffset.UTC);
+        assertThrows(IllegalStateException.class, () -> confirmManualDisbursementUseCase.confirm(
+                new ConfirmManualDisbursementUseCase.Command(
+                        UUID.randomUUID(), readyUcl.applicationId, readyUcl.contractVersion,
+                        "UCL-ROLLBACK-" + readyUcl.applicationId, valueDate,
+                        valueDate.plusMonths(1)
+                )
+        ));
+
+        assertEquals("DISBURSEMENT_PENDING", status(readyUcl.applicationId));
+        assertEquals("READY_FOR_DISBURSEMENT", text(
+                "SELECT status FROM loan_contracts WHERE id = ?", readyUcl.contractId
+        ));
+        assertEquals(0, count("SELECT count(*) FROM loan_accounts WHERE loan_application_id = ?",
+                readyUcl.applicationId));
+        assertEquals(0, count("SELECT count(*) FROM manual_disbursements "
+                + "WHERE loan_application_id = ?", readyUcl.applicationId));
+        assertEquals(0, count("SELECT count(*) FROM repayment_schedules "
+                + "WHERE loan_application_id = ?", readyUcl.applicationId));
+        assertEquals(0, count("SELECT count(*) FROM repayment_installment_progress progress "
+                + "JOIN repayment_schedule_items item ON item.id = progress.repayment_schedule_item_id "
+                + "JOIN repayment_schedules schedule ON schedule.id = item.repayment_schedule_id "
+                + "WHERE schedule.loan_application_id = ?", readyUcl.applicationId));
+        assertEquals(0, count("SELECT count(*) FROM loan_account_status_transitions history "
+                + "JOIN loan_accounts account ON account.id = history.loan_account_id "
+                + "WHERE account.loan_application_id = ?", readyUcl.applicationId));
+        assertEquals(0, count("SELECT count(*) FROM repayment_installment_status_transitions history "
+                + "JOIN repayment_schedule_items item ON item.id = history.repayment_schedule_item_id "
+                + "JOIN repayment_schedules schedule ON schedule.id = item.repayment_schedule_id "
+                + "WHERE schedule.loan_application_id = ?", readyUcl.applicationId));
+        assertEquals(0, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND action = 'CONFIRM_MANUAL_DISBURSEMENT'",
+                readyUcl.applicationId));
+        assertEquals(0, count("SELECT count(*) FROM audit_events "
+                + "WHERE action = 'MANUAL_DISBURSEMENT_CONFIRMED' "
+                + "AND payload ->> 'loanApplicationId' = ?",
+                readyUcl.applicationId.toString()));
+        assertEquals(0, count("SELECT count(*) FROM salary_advance_limit_movements "
+                + "WHERE loan_application_id = ?", readyUcl.applicationId));
     }
 
     @Test
@@ -443,6 +745,43 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         ));
     }
 
+    private AcceptedUcl acceptedUcl() {
+        UUID applicationId = originateToApprovalPending();
+        useApprover();
+        decisionUseCase.submitApprovalDecision(
+                applicationId,
+                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+        );
+        useCustomer();
+        ApprovedOfferDto offer = queryApprovedOfferUseCase.getApprovedOffer(applicationId);
+        respondToApprovedOfferUseCase.acceptOffer(applicationId);
+        return new AcceptedUcl(applicationId, offer);
+    }
+
+    private ReadyUcl readyUcl() {
+        AcceptedUcl accepted = acceptedUcl();
+        useAccounting();
+        LoanContract prepared = prepareLoanContractUseCase.prepare(
+                new PrepareLoanContractUseCase.Command(
+                        UUID.randomUUID(), accepted.applicationId, 0, null
+                )
+        );
+        useCustomer();
+        acknowledgeLoanContractUseCase.acknowledge(
+                new AcknowledgeLoanContractUseCase.Command(
+                        UUID.randomUUID(), accepted.applicationId, prepared.contractVersion()
+                )
+        );
+        useAccounting();
+        LoanContract ready = confirmContractReadinessUseCase.confirm(
+                new ConfirmContractReadinessUseCase.Command(
+                        UUID.randomUUID(), accepted.applicationId, prepared.id(),
+                        prepared.contractVersion()
+                )
+        );
+        return new ReadyUcl(accepted.applicationId, ready.id(), ready.contractVersion());
+    }
+
     private UUID originateToApprovalPending() {
         UUID applicationId = originateAndMakeProcessingReady();
         useLoanOfficer();
@@ -582,6 +921,28 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         ));
     }
 
+    private CommandOutcome disburseAfter(
+            ReadyUcl readyUcl,
+            UUID requestId,
+            String transferReference,
+            LocalDate valueDate,
+            LocalDate firstRepaymentDate,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
+        useAccounting();
+        return afterBarrier(ready, start, () -> confirmManualDisbursementUseCase.confirm(
+                new ConfirmManualDisbursementUseCase.Command(
+                        requestId,
+                        readyUcl.applicationId,
+                        readyUcl.contractVersion,
+                        transferReference,
+                        valueDate,
+                        firstRepaymentDate
+                )
+        ));
+    }
+
     private CommandOutcome afterBarrier(
             CountDownLatch ready,
             CountDownLatch start,
@@ -610,6 +971,12 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         );
     }
 
+    private boolean containsManualDisbursementAudit(BusinessAuditEvent event) {
+        return event != null && event.entries().stream().anyMatch(
+                entry -> entry.action() == BusinessAuditAction.MANUAL_DISBURSEMENT_CONFIRMED
+        );
+    }
+
     private Fixture createReadyCustomer() {
         UUID customerId = UUID.randomUUID();
         UUID customerUserId = UUID.randomUUID();
@@ -626,13 +993,6 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                         + "VALUES (?, ?, 'UCL CP2 Customer', 'protected-test-value', ?, '1234', "
                         + "'0900000000', 'Test Address', 'EMPLOYED', 'Test Employer', TRUE, TRUE)",
                 UUID.randomUUID(), customerId, "identity-" + unique);
-        jdbcTemplate.update("INSERT INTO customer_bank_accounts "
-                        + "(id, customer_id, bank_code, bank_name_snapshot, account_holder_name, "
-                        + "account_number_ciphertext, account_number_fingerprint, account_number_last_four, "
-                        + "status, primary_account) "
-                        + "VALUES (?, ?, 'TEST', 'Test Bank', 'UCL CP2 Customer', "
-                        + "'protected-test-account', ?, '5678', 'ACTIVE', TRUE)",
-                UUID.randomUUID(), customerId, "account-" + unique);
         jdbcTemplate.update("INSERT INTO users "
                         + "(id, email, normalized_email, password_hash, user_type, status, display_name, customer_id) "
                         + "VALUES (?, ?, ?, 'test-password-hash', 'CUSTOMER', 'ACTIVE', 'UCL CP2 Customer', ?)",
@@ -691,6 +1051,11 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         ));
     }
 
+    private static LocalDate anchoredDate(LocalDate firstDate, int monthOffset) {
+        YearMonth month = YearMonth.from(firstDate).plusMonths(monthOffset);
+        return month.atDay(Math.min(firstDate.getDayOfMonth(), month.lengthOfMonth()));
+    }
+
     private String status(UUID applicationId) {
         return text("SELECT status FROM loan_applications WHERE id = ?", applicationId);
     }
@@ -719,6 +1084,12 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     }
 
     private record UploadedEvidence(UUID checklistItemId, DocumentVersionDto version) {
+    }
+
+    private record AcceptedUcl(UUID applicationId, ApprovedOfferDto offer) {
+    }
+
+    private record ReadyUcl(UUID applicationId, UUID contractId, int contractVersion) {
     }
 
     private record CommandOutcome(RuntimeException failure) {

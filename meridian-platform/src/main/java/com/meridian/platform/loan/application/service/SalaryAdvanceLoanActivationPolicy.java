@@ -119,7 +119,7 @@ public class SalaryAdvanceLoanActivationPolicy implements LoanProductActivationP
                 )
         );
 
-        return new ProductActivationResult(
+        return ProductActivationResult.withExposureEffect(
                 ProductCode.SALARY_ADVANCE,
                 converted.id(),
                 movement.id(),

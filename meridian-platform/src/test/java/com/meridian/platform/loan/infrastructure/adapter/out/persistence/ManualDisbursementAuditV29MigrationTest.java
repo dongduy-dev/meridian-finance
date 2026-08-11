@@ -73,7 +73,7 @@ class ManualDisbursementAuditV29MigrationTest {
                 "../docs/database/MER-DB-CURRENT-SCHEMA.sql"
         ));
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V40"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V41"));
         assertTrue(snapshot.contains("CREATE TABLE unsecured_consumer_loan_verifications"));
         assertTrue(snapshot.contains("ADD COLUMN reviewed_by_user_id UUID"));
         assertTrue(snapshot.contains("'UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED'"));

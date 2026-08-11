@@ -8,6 +8,7 @@ import com.meridian.platform.loan.domain.model.ProductCode;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface LoanProductActivationPolicy {
@@ -64,6 +65,52 @@ public interface LoanProductActivationPolicy {
     }
     record ProductActivationResult(
             ProductCode productCode,
+            Optional<ProductExposureEffect> exposureEffect
+    ) {
+        public ProductActivationResult {
+            Objects.requireNonNull(productCode, "productCode must not be null");
+            exposureEffect = Objects.requireNonNull(
+                    exposureEffect,
+                    "exposureEffect must not be null"
+            );
+        }
+
+        public static ProductActivationResult withoutExposureEffect(ProductCode productCode) {
+            return new ProductActivationResult(productCode, Optional.empty());
+        }
+
+        public static ProductActivationResult withExposureEffect(
+                ProductCode productCode,
+                UUID productExposureId,
+                UUID movementId,
+                BigDecimal convertedAmount,
+                BigDecimal resultingUsedAmount,
+                BigDecimal resultingReservedAmount,
+                BigDecimal resultingAvailableAmount
+        ) {
+            return new ProductActivationResult(
+                    productCode,
+                    Optional.of(new ProductExposureEffect(
+                            productExposureId,
+                            movementId,
+                            convertedAmount,
+                            resultingUsedAmount,
+                            resultingReservedAmount,
+                            resultingAvailableAmount
+                    ))
+            );
+        }
+
+        @Override
+        public String toString() {
+            return "ProductActivationResult[productCode=" + productCode
+                    + ", productExposureEffect="
+                    + (exposureEffect.isPresent() ? "present" : "absent")
+                    + ", exposureAmounts=redacted]";
+        }
+    }
+
+    record ProductExposureEffect(
             UUID productExposureId,
             UUID movementId,
             BigDecimal convertedAmount,
@@ -71,8 +118,7 @@ public interface LoanProductActivationPolicy {
             BigDecimal resultingReservedAmount,
             BigDecimal resultingAvailableAmount
     ) {
-        public ProductActivationResult {
-            Objects.requireNonNull(productCode, "productCode must not be null");
+        public ProductExposureEffect {
             Objects.requireNonNull(productExposureId, "productExposureId must not be null");
             Objects.requireNonNull(movementId, "movementId must not be null");
             Objects.requireNonNull(convertedAmount, "convertedAmount must not be null");
@@ -83,8 +129,7 @@ public interface LoanProductActivationPolicy {
 
         @Override
         public String toString() {
-            return "ProductActivationResult[productCode=" + productCode
-                    + ", productExposureId=" + productExposureId
+            return "ProductExposureEffect[productExposureId=" + productExposureId
                     + ", movementId=" + movementId
                     + ", exposureAmounts=redacted]";
         }

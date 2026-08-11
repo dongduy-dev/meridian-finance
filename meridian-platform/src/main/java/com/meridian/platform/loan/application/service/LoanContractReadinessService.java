@@ -32,6 +32,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
     private final ContractBankAccountPort bankAccounts;
     private final DisbursementBankAccountProtector accountProtector;
     private final SalaryAdvanceVerificationRepository verifications;
+    private final UnsecuredConsumerLoanVerificationRepository uclVerifications;
     private final SalaryAdvanceLimitRepository limits;
     private final SalaryAdvanceLimitMovementRepository movements;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
@@ -44,7 +45,9 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
             LoanContractRepository contracts, LoanCorrectionRepository corrections,
             LoanDocumentChecklistPort documents, ContractBankAccountPort bankAccounts,
             DisbursementBankAccountProtector accountProtector,
-            SalaryAdvanceVerificationRepository verifications, SalaryAdvanceLimitRepository limits,
+            SalaryAdvanceVerificationRepository verifications,
+            UnsecuredConsumerLoanVerificationRepository uclVerifications,
+            SalaryAdvanceLimitRepository limits,
             SalaryAdvanceLimitMovementRepository movements,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
             BusinessAuditPublisher auditPublisher, CurrentUserProvider currentUserProvider, Clock clock
@@ -52,6 +55,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
         this.applications = applications; this.offers = offers; this.contracts = contracts;
         this.corrections = corrections; this.documents = documents; this.bankAccounts = bankAccounts;
         this.accountProtector = accountProtector; this.verifications = verifications; this.limits = limits;
+        this.uclVerifications = uclVerifications;
         this.movements = movements; this.transitionRecorder = transitionRecorder;
         this.auditPublisher = auditPublisher; this.currentUserProvider = currentUserProvider; this.clock = clock;
     }
@@ -82,6 +86,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
         if (!documents.isProcessingReady(application.id())) {
             throw conflict("DOCUMENTS_NOT_PROCESSING_READY", "Documents are not processing-ready.");
         }
+        requirePreCaptureProductEvidence(application);
 
         LocalDateTime now = LocalDateTime.now(clock);
         UUID contractId = UUID.randomUUID();
@@ -110,7 +115,10 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
                 "MCT-" + contractId.toString().toUpperCase(Locale.ROOT), version, offer.financialTerms(),
                 repaymentItems, protectedAccount, command.requestId(), current == null ? null : current.contractVersion(),
                 command.supersessionReason(), actor.userId(), now, current == null ? null : current.id());
-        requireValidReservation(application, prepared.financialTerms().approvedPrincipal(), true);
+        requireValidPreparationProductEvidence(
+                application,
+                prepared.financialTerms().approvedPrincipal()
+        );
 
         BusinessOperationContext operation = BusinessOperationContext.user(UUID.randomUUID(), actor.userId(), now);
         if (current != null) {
@@ -273,16 +281,66 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
             if (!account.customerActive()) blockers.add(ContractReadinessBlockerCode.CUSTOMER_INACTIVE);
             if (!account.accountExists()) blockers.add(ContractReadinessBlockerCode.CAPTURED_ACCOUNT_MISSING);
             else if (!account.accountActive()) blockers.add(ContractReadinessBlockerCode.CAPTURED_ACCOUNT_INACTIVE);
-            ContractReadinessBlockerCode reservation = reservationBlocker(
-                    application, contract.financialTerms().approvedPrincipal(), lockReservation);
-            if (reservation != null) blockers.add(reservation);
+            ContractReadinessBlockerCode productEvidence = productReadinessBlocker(
+                    application,
+                    contract.financialTerms().approvedPrincipal(),
+                    lockReservation
+            );
+            if (productEvidence != null) blockers.add(productEvidence);
         }
         return List.copyOf(blockers);
     }
 
-    private void requireValidReservation(LoanApplication application, BigDecimal approvedPrincipal, boolean lock) {
-        ContractReadinessBlockerCode blocker = reservationBlocker(application, approvedPrincipal, lock);
-        if (blocker != null) throw conflict(blocker.name(), "Salary Advance reservation is not valid.");
+    private void requireValidPreparationProductEvidence(
+            LoanApplication application,
+            BigDecimal approvedPrincipal
+    ) {
+        if (application.productCode() != ProductCode.SALARY_ADVANCE) {
+            return;
+        }
+        ContractReadinessBlockerCode blocker = productReadinessBlocker(
+                application,
+                approvedPrincipal,
+                true
+        );
+        if (blocker != null) {
+            throw conflict(blocker.name(), "Product evidence is not valid for contract preparation.");
+        }
+    }
+
+    private void requirePreCaptureProductEvidence(LoanApplication application) {
+        if (application.productCode() == ProductCode.UNSECURED_CONSUMER_LOAN
+                && uclVerificationBlocker(application) != null) {
+            throw conflict(
+                    ContractReadinessBlockerCode.UCL_VERIFICATION_INVALID.name(),
+                    "Unsecured Consumer Loan verification is not valid for contract preparation."
+            );
+        }
+    }
+
+    private ContractReadinessBlockerCode productReadinessBlocker(
+            LoanApplication application,
+            BigDecimal approvedPrincipal,
+            boolean lock
+    ) {
+        return switch (application.productCode()) {
+            case SALARY_ADVANCE -> reservationBlocker(application, approvedPrincipal, lock);
+            case UNSECURED_CONSUMER_LOAN -> uclVerificationBlocker(application);
+            case COLLATERAL_LOAN ->
+                    ContractReadinessBlockerCode.PRODUCT_CONTRACT_EXECUTION_UNSUPPORTED;
+        };
+    }
+
+    private ContractReadinessBlockerCode uclVerificationBlocker(LoanApplication application) {
+        UnsecuredConsumerLoanVerification verification = uclVerifications
+                .findByLoanApplicationId(application.id())
+                .orElse(null);
+        if (verification == null
+                || !verification.loanApplicationId().equals(application.id())
+                || verification.productVerificationResult() != ProductVerificationResult.VERIFIED) {
+            return ContractReadinessBlockerCode.UCL_VERIFICATION_INVALID;
+        }
+        return null;
     }
 
     private ContractReadinessBlockerCode reservationBlocker(
@@ -336,11 +394,11 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
         if (application.status() != LoanApplicationStatus.CONTRACT_PENDING)
             throw conflict("INVALID_APPLICATION_STATE", "Loan application is not contract-pending.");
     }
-    private static void requireExecutableContractPreparation(LoanApplication application) {
-        if (application.productCode() == ProductCode.UNSECURED_CONSUMER_LOAN) {
+    private void requireExecutableContractPreparation(LoanApplication application) {
+        if (application.productCode() == ProductCode.COLLATERAL_LOAN) {
             throw conflict(
-                    "UCL_CONTRACT_EXECUTION_NOT_READY",
-                    "Unsecured Consumer Loan contract execution is not available."
+                    ContractReadinessBlockerCode.PRODUCT_CONTRACT_EXECUTION_UNSUPPORTED.name(),
+                    "Loan product contract execution is not supported."
             );
         }
     }

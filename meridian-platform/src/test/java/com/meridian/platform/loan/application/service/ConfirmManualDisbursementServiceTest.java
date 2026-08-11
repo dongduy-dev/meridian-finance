@@ -608,9 +608,9 @@ class ConfirmManualDisbursementServiceTest {
     @Test
     void unsupportedProductAndPolicyFailureRollbackThroughException() {
         application = application(LoanApplicationStatus.DISBURSEMENT_PENDING,
-                ProductCode.UNSECURED_CONSUMER_LOAN);
+                ProductCode.COLLATERAL_LOAN);
         when(applications.findByIdForUpdate(application.id())).thenReturn(Optional.of(application));
-        when(activationPolicies.resolve(ProductCode.UNSECURED_CONSUMER_LOAN)).thenThrow(
+        when(activationPolicies.resolve(ProductCode.COLLATERAL_LOAN)).thenThrow(
                 new BusinessRuleViolationException(
                         "PRODUCT_ACTIVATION_NOT_SUPPORTED",
                         "Loan product activation is not supported."
@@ -628,6 +628,14 @@ class ConfirmManualDisbursementServiceTest {
                 "Reservation evidence is invalid."
         )).when(activationPolicy).activate(any());
         assertCode("SALARY_ADVANCE_RESERVATION_INVALID", () -> service.confirm(command()));
+    }
+
+    @Test
+    void missingProductActivationResultFailsClosed() {
+        doReturn(null).when(activationPolicy).activate(any());
+
+        assertCode("SYSTEM_STATE_CONFLICT", () -> service.confirm(command()));
+        verify(activationPolicy, never()).validateCompletedActivation(any());
     }
 
     @Test
@@ -797,7 +805,7 @@ class ConfirmManualDisbursementServiceTest {
         lenient().when(activationPolicy.activate(any())).thenAnswer(invocation -> {
             LoanProductActivationPolicy.ProductActivationCommand activation =
                     invocation.getArgument(0);
-            return new LoanProductActivationPolicy.ProductActivationResult(
+            return LoanProductActivationPolicy.ProductActivationResult.withExposureEffect(
                     ProductCode.SALARY_ADVANCE,
                     UUID.randomUUID(),
                     activation.movementId(),

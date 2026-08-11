@@ -308,7 +308,7 @@ The API derives Customer identity from the Bearer token and does not accept `cus
 
 Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `status`, `requestedAmount`, `requestedTermMonths`, `productVerificationResult`, and `submittedAt`. Loan records the application in `DOCUMENTS_PENDING`, stores `PENDING_MANUAL_REVIEW` as its product-verification result, and creates required `INCOME_PROOF`, `BANK_STATEMENT`, and `EMPLOYMENT_PROOF` checklist items.
 
-The endpoint stops at origination and evidence setup. Separate Staff commands perform positive manual verification and review entry. UCL approval then generates an immutable exact-request offer under the active UCL policy, and the generic Customer offer endpoints support read, accept, decline, and expiry. Negative-verification outcomes, correction, contract execution, activation, cancellation, and servicing are not executable.
+The endpoint stops at origination and evidence setup. Separate Staff commands perform positive manual verification and review entry. UCL approval then generates an immutable exact-request offer under the active UCL policy, and the generic Customer offer endpoints support read, accept, decline, and expiry. An accepted offer can proceed through operational contract preparation, acknowledgment, readiness, manual disbursement, LoanAccount activation, and final monthly schedule creation. Negative-verification outcomes, correction, cancellation, and post-activation servicing are not executable.
 
 Important errors:
 
@@ -560,9 +560,9 @@ Regeneration:
 }
 ```
 
-Regeneration preserves accepted terms and repayment items, supersedes the prior version, refreshes the eligible destination, and requires fresh Customer acknowledgment. Contract preparation is currently executable only for Salary Advance. An accepted UCL remains in `CONTRACT_PENDING`, and preparation returns `409 UCL_CONTRACT_EXECUTION_NOT_READY` before contract, destination, Salary verification, limit, history, or audit effects.
+Regeneration preserves accepted terms and repayment items, supersedes the prior version, refreshes the eligible destination, and requires fresh Customer acknowledgment. Contract preparation is executable for Salary Advance and UCL. A UCL contract copies the accepted offer's exact financial terms and monthly repayment items, requires application-owned `VERIFIED` UCL evidence, captures the eligible destination through the common protected mechanism, and never reads or mutates Salary Advance verification, limit, or movement state. Collateral Loan contract execution remains unsupported.
 
-Important errors: `APPROVED_OFFER_NOT_FOUND`, `OFFER_NOT_ACCEPTED`, `UCL_CONTRACT_EXECUTION_NOT_READY`, `CONTRACT_VERSION_STALE`, `CONTRACT_REGENERATION_NOT_ALLOWED`, and `IDEMPOTENCY_KEY_REUSED`.
+Important errors: `APPROVED_OFFER_NOT_FOUND`, `OFFER_NOT_ACCEPTED`, `UCL_VERIFICATION_INVALID`, `PRODUCT_CONTRACT_EXECUTION_UNSUPPORTED`, `CONTRACT_VERSION_STALE`, `CONTRACT_REGENERATION_NOT_ALLOWED`, and `IDEMPOTENCY_KEY_REUSED`.
 
 ### 6.3 Read and acknowledge contract
 
@@ -613,7 +613,9 @@ Confirmation:
 
 Success moves the contract to `READY_FOR_DISBURSEMENT` and the application to `DISBURSEMENT_PENDING`; it does not perform a transfer or activate a LoanAccount.
 
-Stable blockers include `DOCUMENTS_NOT_PROCESSING_READY`, `ACTIVE_CORRECTION_REQUEST`, `CUSTOMER_INACTIVE`, `CAPTURED_ACCOUNT_MISSING`, `CAPTURED_ACCOUNT_INACTIVE`, `SALARY_ADVANCE_RESERVATION_INVALID`, `SALARY_ADVANCE_RESERVATION_RELEASED`, `READINESS_ALREADY_CONFIRMED`, and `CONTRACT_VERSION_STALE`.
+Stable blockers include `DOCUMENTS_NOT_PROCESSING_READY`, `ACTIVE_CORRECTION_REQUEST`, `CUSTOMER_INACTIVE`, `CAPTURED_ACCOUNT_MISSING`, `CAPTURED_ACCOUNT_INACTIVE`, `SALARY_ADVANCE_RESERVATION_INVALID`, `SALARY_ADVANCE_RESERVATION_RELEASED`, `UCL_VERIFICATION_INVALID`, `PRODUCT_CONTRACT_EXECUTION_UNSUPPORTED`, `READINESS_ALREADY_CONFIRMED`, and `CONTRACT_VERSION_STALE`.
+
+Product readiness is explicit: Salary Advance requires its exact unreleased reservation, while UCL requires application-owned `VERIFIED` evidence and has no Salary Advance reservation or exposure effect. Collateral Loan fails closed as unsupported.
 
 ---
 
@@ -656,6 +658,8 @@ Important conflicts: `CONTRACT_VERSION_STALE`, `DISBURSEMENT_DESTINATION_REVEAL_
 The body cannot supply Customer, product, destination, amount, pricing, term, limit, account, or schedule facts. Those values come from the ready contract.
 
 The external reference is normalized, retained as protected evidence, and never returned. Success returns safe application/account/disbursement/schedule identifiers, amount and dates, activation time, final schedule, and `idempotentReplay`.
+
+Salary Advance activation converts the exact reserved principal to used exposure. UCL activation creates the same common account, disbursement, final-schedule, progress, history, transition, and audit evidence without creating or mutating any Salary Advance exposure artifact. Its final `MONTHLY_INSTALLMENT` schedule copies the contract amounts and item order exactly and applies the controlled first repayment date plus monthly anchor.
 
 Important errors:
 

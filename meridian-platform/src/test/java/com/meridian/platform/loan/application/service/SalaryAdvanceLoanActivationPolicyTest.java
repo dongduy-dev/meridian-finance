@@ -90,14 +90,16 @@ class SalaryAdvanceLoanActivationPolicyTest {
 
         LoanProductActivationPolicy.ProductActivationResult result =
                 policy.activate(fixture.command());
+        LoanProductActivationPolicy.ProductExposureEffect effect =
+                result.exposureEffect().orElseThrow();
 
         assertEquals(ProductCode.SALARY_ADVANCE, result.productCode());
-        assertEquals(LIMIT_ID, result.productExposureId());
-        assertEquals(MOVEMENT_ID, result.movementId());
-        assertMoney(PRINCIPAL, result.convertedAmount());
-        assertMoney(money(1_500), result.resultingUsedAmount());
-        assertMoney(BigDecimal.ZERO, result.resultingReservedAmount());
-        assertMoney(AVAILABLE, result.resultingAvailableAmount());
+        assertEquals(LIMIT_ID, effect.productExposureId());
+        assertEquals(MOVEMENT_ID, effect.movementId());
+        assertMoney(PRINCIPAL, effect.convertedAmount());
+        assertMoney(money(1_500), effect.resultingUsedAmount());
+        assertMoney(BigDecimal.ZERO, effect.resultingReservedAmount());
+        assertMoney(AVAILABLE, effect.resultingAvailableAmount());
 
         ArgumentCaptor<SalaryAdvanceLimit> limitCaptor =
                 ArgumentCaptor.forClass(SalaryAdvanceLimit.class);

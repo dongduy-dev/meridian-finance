@@ -636,9 +636,11 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
         );
 
         assertNotNull(result);
-        assertEquals(fixture.limitId(), result.productExposureId());
-        assertEquals(fixture.movementId(), result.movementId());
-        assertEquals(0, amount("1000").compareTo(result.convertedAmount()));
+        LoanProductActivationPolicy.ProductExposureEffect effect =
+                result.exposureEffect().orElseThrow();
+        assertEquals(fixture.limitId(), effect.productExposureId());
+        assertEquals(fixture.movementId(), effect.movementId());
+        assertEquals(0, amount("1000").compareTo(effect.convertedAmount()));
         Map<String, Object> limit = jdbc.queryForMap(
                 "select used_amount,reserved_amount,available_amount,status "
                         + "from salary_advance_limits where id = ?",
