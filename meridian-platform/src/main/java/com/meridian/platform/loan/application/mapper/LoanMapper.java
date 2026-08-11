@@ -2,8 +2,11 @@ package com.meridian.platform.loan.application.mapper;
 
 import com.meridian.platform.loan.application.dto.LoanProductDto;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationDto;
+import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicationDto;
+import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanProduct;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceApplicationCreationResult;
+import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanVerification;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -40,6 +43,23 @@ public class LoanMapper {
                 result.salaryAdvanceVerification().reservedAmountSnapshot(),
                 result.salaryAdvanceVerification().availableLimitSnapshot(),
                 result.loanApplication().submittedAt()
+        );
+    }
+
+    public UnsecuredConsumerLoanApplicationDto toUnsecuredConsumerLoanApplicationDto(
+            LoanApplication application,
+            UnsecuredConsumerLoanVerification verification
+    ) {
+        return new UnsecuredConsumerLoanApplicationDto(
+                application.id(),
+                application.applicationNumber(),
+                application.productCode().name(),
+                application.productType().name(),
+                application.status().name(),
+                application.requestedAmount(),
+                application.requestedTermMonths(),
+                verification.productVerificationResult().name(),
+                application.submittedAt()
         );
     }
 }

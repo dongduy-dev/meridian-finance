@@ -1993,6 +1993,111 @@
                               ]
                  },
                  {
+                     "name":  "05A Loan Application - Unsecured Consumer Loan",
+                     "item":  [
+                                  {
+                                      "name":  "POST Unsecured Consumer Loan application - happy path",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/unsecured-consumer-loan",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Creates an Unsecured Consumer Loan application in DOCUMENTS_PENDING with required evidence and a PENDING_MANUAL_REVIEW product-verification result. Customer identity comes from the Bearer token.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestedAmount\": 5000000,\n  \"requestedTermMonths\": 6\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Origination state is returned\", () => { pm.expect(json.productCode).to.eql(\"UNSECURED_CONSUMER_LOAN\"); pm.expect(json.status).to.eql(\"DOCUMENTS_PENDING\"); pm.expect(json.productVerificationResult).to.eql(\"PENDING_MANUAL_REVIEW\"); });",
+                                                                                    "pm.collectionVariables.set(\"uclLoanApplicationId\", json.loanApplicationId);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "POST Unsecured Consumer Loan application - duplicate blocking check",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/unsecured-consumer-loan",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Run after the happy path to verify the Customer/product blocking invariant.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestedAmount\": 5000000,\n  \"requestedTermMonths\": 6\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 409\", () => pm.response.to.have.status(409));",
+                                                                                    "pm.test(\"Duplicate UCL application is blocked\", () => pm.expect(pm.response.json().errorCode).to.eql(\"BLOCKING_APPLICATION_EXISTS\"));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
                      "name":  "06 Loan Officer Review and Recommendation",
                      "item":  [
                                   {
