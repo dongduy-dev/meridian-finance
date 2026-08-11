@@ -75,7 +75,7 @@ public class LoanApplicationRepositoryAdapter implements LoanApplicationReposito
             ));
         } catch (DataIntegrityViolationException exception) {
             if (isActiveApplicationConstraintViolation(exception)) {
-                throw blockingApplicationExists();
+                throw blockingApplicationExists(loanApplication.productCode());
             }
             throw exception;
         }
@@ -144,10 +144,15 @@ public class LoanApplicationRepositoryAdapter implements LoanApplicationReposito
                 && exception.getMessage().contains(ACTIVE_APPLICATION_CONSTRAINT);
     }
 
-    private BusinessStateConflictException blockingApplicationExists() {
+    private BusinessStateConflictException blockingApplicationExists(ProductCode productCode) {
+        String productName = switch (productCode) {
+            case SALARY_ADVANCE -> "Salary Advance";
+            case UNSECURED_CONSUMER_LOAN -> "Unsecured Consumer Loan";
+            default -> "loan product";
+        };
         return new BusinessStateConflictException(
                 "BLOCKING_APPLICATION_EXISTS",
-                "A blocking Salary Advance application already exists for this customer."
+                "A blocking " + productName + " application already exists for this customer."
         );
     }
 

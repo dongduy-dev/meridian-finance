@@ -110,7 +110,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 ### Core Platform
 - **Loan Application Lifecycle** — State machine–driven origination through disbursement, followed by LoanAccount servicing after activation
 - **Salary Advance Workflow** — Employer-linked salary advance with Partner Company, Partner Employee, and eligibility verification support
-- **Streamlined Product Workflows** — Unsecured Consumer Loan and Collateral Loan support through shared lifecycle capabilities
+- **Unsecured Consumer Loan Foundation** — Customer-owned origination, manual-verification state, and required evidence checklist
 - **Controlled Review & Approval Workflow** — Loan-owned review and correction lifecycle with immutable Loan Officer recommendations, independent Approver decisions, customer acceptance, and maker-checker controls
 - **Operational Contract Readiness** — Immutable accepted-term and repayment snapshots, protected destination capture, Customer acknowledgment, structured blockers, controlled destination refresh, and Accounting confirmation
 - **Manual Disbursement Activation** - Idempotent Accounting confirmation creates an active LoanAccount, final dated schedule, and Salary Advance reserved-to-used conversion atomically
@@ -201,7 +201,8 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - [x] Manual disbursement confirmation, LoanAccount activation, and final repayment schedule generation for Salary Advance
 - [x] Salary Advance repayment posting/tracking, exact principal exposure release, overdue transitions, contractual payoff to `SETTLED`, and secured servicing reads
 - [x] Payment-backed Administrative Full-Balance Settlement and separate LoanAccount closure for Salary Advance
-- [ ] Streamlined Unsecured Consumer Loan origination, review, approval, contract, and activation workflow
+- [x] Unsecured Consumer Loan origination and evidence foundation
+- [ ] Remaining Unsecured Consumer Loan manual verification, correction/resubmission, review and approval integration, pricing, offers, contract readiness, activation, and cancellation
 - [ ] Streamlined Collateral Loan origination, review, approval, contract, and activation workflow
 - [ ] UCL and Collateral Loan repayment and servicing policies
 - [x] JWT authentication and permission-based RBAC

@@ -29,10 +29,12 @@ import com.meridian.platform.loan.application.port.in.QueryLoanProductUseCase;
 import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicationUseCase;
+import com.meridian.platform.loan.application.port.in.StartUnsecuredConsumerLoanApplicationUseCase;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.ApprovedOfferController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanApplicationReviewController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanProductController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.SalaryAdvanceLoanApplicationController;
+import com.meridian.platform.loan.infrastructure.adapter.in.web.UnsecuredConsumerLoanApplicationController;
 import com.meridian.platform.partner.application.port.in.QueryPartnerCompanyUseCase;
 import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeImportBatchUseCase;
 import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeUseCase;
@@ -74,6 +76,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         AuthController.class,
         LoanProductController.class,
         SalaryAdvanceLoanApplicationController.class,
+        UnsecuredConsumerLoanApplicationController.class,
         LoanApplicationReviewController.class,
         ReviewRecommendationController.class,
         ApprovalDecisionController.class,
@@ -116,6 +119,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private StartSalaryAdvanceApplicationUseCase startSalaryAdvanceApplicationUseCase;
+
+    @MockitoBean
+    private StartUnsecuredConsumerLoanApplicationUseCase startUnsecuredConsumerLoanApplicationUseCase;
 
     @MockitoBean
     private StartLoanApplicationReviewUseCase startLoanApplicationReviewUseCase;
@@ -232,6 +238,11 @@ class SecurityConfigTest {
                 .andExpect(status().isUnauthorized());
 
         mockMvc.perform(post("/api/v1/loan-applications/salary-advance")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/loan-applications/unsecured-consumer-loan")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isUnauthorized());
@@ -436,6 +447,37 @@ class SecurityConfigTest {
                         .with(user("customer")
                                 .authorities(new SimpleGrantedAuthority("loan:submit"))))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void allowsCustomerWithLoanSubmitPermissionToCreateUnsecuredConsumerLoanApplication() throws Exception {
+        mockMvc.perform(post("/api/v1/loan-applications/unsecured-consumer-loan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestedAmount": 5000000,
+                                  "requestedTermMonths": 6
+                                }
+                                """)
+                        .with(user("customer")
+                                .authorities(new SimpleGrantedAuthority("loan:submit"))))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void rejectsUnsecuredConsumerLoanSubmissionWithoutLoanSubmitPermission() throws Exception {
+        mockMvc.perform(post("/api/v1/loan-applications/unsecured-consumer-loan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestedAmount": 5000000,
+                                  "requestedTermMonths": 6
+                                }
+                                """)
+                        .with(user("customer")
+                                .authorities(new SimpleGrantedAuthority("loan:read:own"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
     }
 
     @Test

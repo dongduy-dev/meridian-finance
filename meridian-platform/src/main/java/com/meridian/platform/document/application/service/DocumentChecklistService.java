@@ -32,24 +32,27 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
 
     private final DocumentChecklistRepository checklistRepository;
     private final DocumentRepository documentRepository;
-    private final SalaryAdvanceDocumentChecklistResolver checklistResolver;
+    private final SalaryAdvanceDocumentChecklistResolver salaryAdvanceChecklistResolver;
+    private final UnsecuredConsumerLoanDocumentChecklistResolver unsecuredConsumerLoanChecklistResolver;
     private final BusinessAuditPublisher businessAuditPublisher;
 
     public DocumentChecklistService(
             DocumentChecklistRepository checklistRepository,
             DocumentRepository documentRepository,
-            SalaryAdvanceDocumentChecklistResolver checklistResolver,
+            SalaryAdvanceDocumentChecklistResolver salaryAdvanceChecklistResolver,
+            UnsecuredConsumerLoanDocumentChecklistResolver unsecuredConsumerLoanChecklistResolver,
             BusinessAuditPublisher businessAuditPublisher
     ) {
         this.checklistRepository = checklistRepository;
         this.documentRepository = documentRepository;
-        this.checklistResolver = checklistResolver;
+        this.salaryAdvanceChecklistResolver = salaryAdvanceChecklistResolver;
+        this.unsecuredConsumerLoanChecklistResolver = unsecuredConsumerLoanChecklistResolver;
         this.businessAuditPublisher = businessAuditPublisher;
     }
 
     @Override
     public SubmissionChecklistInitialState resolveSubmissionInitialState(ProductCode productCode) {
-        List<DocumentChecklistItem> items = checklistResolver.resolve(
+        List<DocumentChecklistItem> items = resolveChecklistItems(
                 UUID.randomUUID(),
                 productCode,
                 java.time.LocalDateTime.MIN
@@ -68,7 +71,7 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
         Objects.requireNonNull(operationContext, "operationContext must not be null");
 
         UUID checklistId = UUID.randomUUID();
-        List<DocumentChecklistItem> items = checklistResolver.resolve(
+        List<DocumentChecklistItem> items = resolveChecklistItems(
                 checklistId,
                 productCode,
                 operationContext.occurredAt()
@@ -251,5 +254,18 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
             );
         }
         return item;
+    }
+
+    private List<DocumentChecklistItem> resolveChecklistItems(
+            UUID checklistId,
+            ProductCode productCode,
+            java.time.LocalDateTime createdAt
+    ) {
+        return switch (productCode) {
+            case SALARY_ADVANCE -> salaryAdvanceChecklistResolver.resolve(checklistId, productCode, createdAt);
+            case UNSECURED_CONSUMER_LOAN ->
+                    unsecuredConsumerLoanChecklistResolver.resolve(checklistId, productCode, createdAt);
+            default -> throw new IllegalArgumentException("Unsupported document checklist product.");
+        };
     }
 }

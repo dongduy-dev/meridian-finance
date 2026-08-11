@@ -170,7 +170,7 @@ Problem:
 The logical ERD used conceptual names and target fields that could be mistaken for the current physical schema.
 
 Resolution:
-`MER-DB-001` now labels Sections 1-13 as a logical/current-plus-target model, maps conceptual disbursement and repayment names to the V37 physical structures, and identifies deferred `product_details`, refresh-token, Collateral, and OCR structures. Flyway history and `MER-DB-CURRENT-SCHEMA.sql` remain the physical authorities.
+`MER-DB-001` now labels Sections 1-13 as a logical/current-plus-target model, maps conceptual disbursement and repayment names to the current V38 physical structures, and identifies deferred `product_details`, refresh-token, Collateral, and OCR structures. Flyway history and `MER-DB-CURRENT-SCHEMA.sql` remain the physical authorities.
 
 ### MER-FU-008 - Replace hardcoded Salary Advance salary cap/policy terms with policy config
 
@@ -312,7 +312,7 @@ Problem:
 Flyway migrations are growing and current schema is harder to inspect from migrations alone.
 
 Recommendation:
-`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V37. This file is documentation only and must not be placed in the Flyway migration folder.
+`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V38. This file is documentation only and must not be placed in the Flyway migration folder.
 
 ### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
 
@@ -819,8 +819,47 @@ and operational tooling remain deferred.
 Suggested future branch name:
 `feature/lending-workflow-read-projections`
 
+### MER-FU-038 - Complete the UCL lifecycle after CP1 origination
+
+Area: Loan / Document / Approval / Servicing
+
+Type: Deferred feature
+
+Priority: P1
+
+Status: Open
+
+Blocks current checkpoint: No
+
+Problem:
+The executable UCL lifecycle stops after origination and evidence setup.
+
+Completed in CP1:
+
+- Authenticated Customer-owned UCL origination.
+- Required income-proof, bank-statement, and employment-proof checklist creation.
+- Initial `PENDING_MANUAL_REVIEW` product-verification persistence.
+
+Still deferred:
+
+- Manual verification decision command.
+- Correction and resubmission.
+- Review and approval integration changes.
+- Pricing and offer generation.
+- Contract readiness and activation.
+- Repayment, settlement, and closure.
+- Outstanding UCL debt policy.
+- UCL cancellation.
+
+Recommendation:
+Define each later checkpoint from approved UCL rules. Do not reuse Salary Advance
+exposure or servicing rules unless an approved UCL rule requires an equivalent.
+
+Suggested future branch name:
+`feature/ucl-manual-verification`
+
 ## Recommended Next Roadmap
 
 1. Define reversal/refund, suspense/unapplied cash, waiver/write-off, discounted settlement, reconciliation, ledger, and collections rules before selecting another financial-servicing continuation.
-2. Add complete UCL and Collateral origination, activation, and servicing policies only when their product rules are approved.
+2. Continue UCL beyond its CP1 origination/evidence foundation, and add Collateral origination, activation, and servicing policies, only when their product rules are approved.
 3. Complete production document storage, malware-scanning, retention, and operational hardening before deployment.

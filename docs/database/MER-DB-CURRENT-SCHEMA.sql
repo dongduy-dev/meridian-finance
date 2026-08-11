@@ -1,7 +1,7 @@
 -- Meridian current physical schema snapshot.
 -- Documentation only. Flyway migrations under meridian-platform/src/main/resources/db/migration
 -- remain the executable database history.
--- Snapshot source: migrations V1 through V37.
+-- Snapshot source: migrations V1 through V38.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -6927,3 +6927,58 @@ CREATE CONSTRAINT TRIGGER trg_loan_application_cancellations_reconcile
 AFTER INSERT ON loan_application_cancellations
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION validate_loan_application_cancellation_evidence();
+
+-- V38 UCL origination and evidence foundation
+
+CREATE TABLE unsecured_consumer_loan_verifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    loan_application_id UUID NOT NULL,
+    product_verification_result VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+
+    CONSTRAINT fk_ucl_verifications_application
+        FOREIGN KEY (loan_application_id) REFERENCES loan_applications (id),
+    CONSTRAINT uq_ucl_verifications_application
+        UNIQUE (loan_application_id),
+    CONSTRAINT chk_ucl_verifications_result
+        CHECK (product_verification_result IN (
+            'VERIFIED', 'FAILED', 'PENDING_MANUAL_REVIEW', 'REQUIRES_MORE_INFORMATION'
+        ))
+);
+
+ALTER TABLE document_checklist_items
+    DROP CONSTRAINT chk_document_checklist_items_type,
+    ADD CONSTRAINT chk_document_checklist_items_type CHECK (document_type IN (
+        'RECENT_PAYSLIP', 'INCOME_PROOF', 'BANK_STATEMENT', 'EMPLOYMENT_PROOF'
+    ));
+
+ALTER TABLE audit_events
+    DROP CONSTRAINT chk_audit_events_action,
+    ADD CONSTRAINT chk_audit_events_action CHECK (action IN (
+        'CUSTOMER_PROFILE_CREATED', 'CUSTOMER_PROFILE_UPDATED',
+        'CUSTOMER_PROFILE_COMPLETED', 'CUSTOMER_BANK_ACCOUNT_ADDED',
+        'CUSTOMER_BANK_ACCOUNT_MADE_PRIMARY',
+        'CUSTOMER_BANK_ACCOUNT_DEACTIVATED',
+        'SALARY_ADVANCE_APPLICATION_SUBMITTED',
+        'UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED',
+        'SALARY_ADVANCE_LIMIT_INITIALIZED',
+        'SALARY_ADVANCE_LIMIT_REFRESHED',
+        'SALARY_ADVANCE_LIMIT_RESERVED', 'LOAN_REVIEW_STARTED',
+        'REVIEW_RECOMMENDATION_RECORDED', 'APPROVAL_DECISION_RECORDED',
+        'APPROVED_OFFER_GENERATED', 'APPROVED_OFFER_ACCEPTED',
+        'APPROVED_OFFER_DECLINED', 'OFFER_EXPIRED',
+        'RESERVATION_RELEASED', 'DOCUMENT_CHECKLIST_CREATED',
+        'DOCUMENT_CHECKLIST_ITEM_CREATED', 'DOCUMENT_VERSION_UPLOADED',
+        'DOCUMENT_REVIEW_ACCEPTED', 'DOCUMENT_WAIVED',
+        'DOCUMENT_REPLACEMENT_REQUESTED', 'DOCUMENT_UPLOADS_COMPLETED',
+        'REVIEW_CYCLE_CREATED', 'REVIEW_CYCLE_STATE_CHANGED',
+        'CORRECTION_REQUEST_CREATED', 'CORRECTION_TASK_COMPLETED',
+        'CORRECTION_RESUBMITTED', 'LOAN_APPLICATION_CANCELLED',
+        'SALARY_ADVANCE_REVALIDATED', 'LOAN_CONTRACT_PREPARED',
+        'LOAN_CONTRACT_SUPERSEDED', 'LOAN_CONTRACT_ACKNOWLEDGED',
+        'LOAN_CONTRACT_READINESS_CONFIRMED',
+        'MANUAL_DISBURSEMENT_CONFIRMED',
+        'LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED',
+        'REPAYMENT_RECORDED', 'LOAN_ACCOUNT_STATUS_CHANGED',
+        'LOAN_SETTLEMENT_APPROVED', 'LOAN_ACCOUNT_CLOSED'
+    ));

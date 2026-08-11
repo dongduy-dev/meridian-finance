@@ -124,6 +124,7 @@ The contractual destination-reveal operation is the sole v1 JSON endpoint permit
 |---|---|---|---|
 | GET | `/api/v1/loan-products/salary-advance/readiness` | Customer with `loan:submit` | Return the authenticated Customer's advisory Salary Advance eligibility and safe limit view. |
 | POST | `/api/v1/loan-applications/salary-advance` | `loan:submit` | Submit a Salary Advance application and reserve eligible limit. |
+| POST | `/api/v1/loan-applications/unsecured-consumer-loan` | Customer with `loan:submit` | Submit an Unsecured Consumer Loan application for manual verification and required evidence collection. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}` | Customer `loan:read:own` or Staff `loan:read` | Return a safe durable LoanApplication status projection. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/cancel` | Customer with `loan:cancel:own` | Cancel an owned Salary Advance only from `RETURNED_FOR_REVISION` and release its reservation exactly once. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review/start` | `loan:review` | Start Loan Officer review. |
@@ -235,7 +236,7 @@ Responses exclude salary, limit values, employee code, identity evidence, and ra
 
 ---
 
-## 4. Salary Advance Origination
+## 4. Salary Advance and UCL Origination
 
 ### 4.1 Salary Advance readiness
 
@@ -286,7 +287,36 @@ Important errors:
 | `422` | `INVALID_PRODUCT_AMOUNT` |
 | `422` | Applicable Salary Advance eligibility or limit code from the error catalogue |
 
-### 4.4 Start review
+### 4.4 Submit Unsecured Consumer Loan application
+
+```text
+POST /api/v1/loan-applications/unsecured-consumer-loan
+```
+
+The authenticated Customer supplies only the requested amount and term:
+
+```json
+{
+  "requestedAmount": 5000000,
+  "requestedTermMonths": 6
+}
+```
+
+The API derives Customer identity from the Bearer token and does not accept `customerId`. The Customer must be active, have a complete required profile and a primary active bank account, and hold `loan:submit`. The active catalog product must be `UNSECURED_CONSUMER_LOAN` / `UNSECURED`. Amounts must be whole VND from 2,000,000 through 50,000,000 inclusive. Supported terms are 3, 6, 9, and 12 months.
+
+Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `status`, `requestedAmount`, `requestedTermMonths`, `productVerificationResult`, and `submittedAt`. Loan records the application in `DOCUMENTS_PENDING`, stores `PENDING_MANUAL_REVIEW` as its product-verification result, and creates required `INCOME_PROOF`, `BANK_STATEMENT`, and `EMPLOYMENT_PROOF` checklist items.
+
+The endpoint stops at origination and evidence setup. It does not decide manual verification or progress the application through correction, review, approval, pricing, offer, contract, activation, cancellation, or servicing.
+
+Important errors:
+
+| Status | Code |
+|---|---|
+| `404` | `CUSTOMER_NOT_FOUND` or `PRODUCT_NOT_FOUND` |
+| `409` | `CUSTOMER_NOT_ACTIVE` or `BLOCKING_APPLICATION_EXISTS` |
+| `422` | `PROFILE_INCOMPLETE`, `PRIMARY_BANK_ACCOUNT_REQUIRED`, `PRODUCT_INACTIVE`, `PRODUCT_POLICY_INVALID`, `INVALID_PRODUCT_AMOUNT`, or `INVALID_PRODUCT_TERM` |
+
+### 4.5 Start review
 
 ```text
 POST /api/v1/loan-applications/{loanApplicationId}/review/start
