@@ -72,6 +72,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
         LoanApplication application = lockApplication(command.loanApplicationId());
         requireAccounting(actor);
         requireContractPending(application);
+        requireExecutableContractPreparation(application);
         ApprovedOffer offer = lockAcceptedOffer(application.id());
         LoanContract current = contracts.findCurrentByApplicationIdForUpdate(application.id()).orElse(null);
         validatePreparationVersion(command, current);
@@ -334,6 +335,14 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
     private static void requireContractPending(LoanApplication application) {
         if (application.status() != LoanApplicationStatus.CONTRACT_PENDING)
             throw conflict("INVALID_APPLICATION_STATE", "Loan application is not contract-pending.");
+    }
+    private static void requireExecutableContractPreparation(LoanApplication application) {
+        if (application.productCode() == ProductCode.UNSECURED_CONSUMER_LOAN) {
+            throw conflict(
+                    "UCL_CONTRACT_EXECUTION_NOT_READY",
+                    "Unsecured Consumer Loan contract execution is not available."
+            );
+        }
     }
     private static void validatePreparationVersion(PrepareLoanContractUseCase.Command command, LoanContract current) {
         int actual = current == null ? 0 : current.contractVersion();

@@ -65,6 +65,37 @@ class LoanContractReadinessServiceTest {
         verify(contracts, times(1)).save(any());
     }
 
+    @Test void uclPreparationFailsBeforeOfferContractDestinationOrSalarySpecificWork() {
+        Fixture f = fixture();
+        LoanApplication uclApplication = new LoanApplication(
+                f.application.id(),
+                f.application.customerId(),
+                f.application.loanProductId(),
+                "UCL-1",
+                ProductCode.UNSECURED_CONSUMER_LOAN,
+                ProductType.UNSECURED,
+                LoanApplicationStatus.CONTRACT_PENDING,
+                money(5_000_000),
+                6,
+                f.application.submittedAt()
+        );
+        when(users.currentUser()).thenReturn(staff());
+        when(contracts.findByPreparationRequestId(any())).thenReturn(Optional.empty());
+        when(applications.findByIdForUpdate(uclApplication.id())).thenReturn(Optional.of(uclApplication));
+
+        BusinessStateConflictException error = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.prepare(new PrepareLoanContractUseCase.Command(
+                        UUID.randomUUID(), uclApplication.id(), 0, null
+                ))
+        );
+
+        assertEquals("UCL_CONTRACT_EXECUTION_NOT_READY", error.getErrorCode());
+        verifyNoInteractions(offers, corrections, documents, bankAccounts, protector,
+                verifications, limits, movements, transitionRecorder, audit);
+        verify(contracts, never()).save(any());
+    }
+
     @Test void preparationRejectsDocumentsNotReadyBeforeSensitiveCapture() {
         Fixture f = fixture();
         when(users.currentUser()).thenReturn(staff());

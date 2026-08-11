@@ -26,7 +26,9 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
+import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanOfferPolicy;
 import com.meridian.platform.loan.domain.service.SalaryAdvanceOfferCalculator;
+import com.meridian.platform.loan.domain.service.UnsecuredConsumerLoanOfferCalculator;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
@@ -113,6 +115,20 @@ class RespondToApprovedOfferServiceTest {
     }
 
     @Test
+    void acceptsPendingUclOfferWithoutSalaryExposureEffects() {
+        loanApplicationRepository.application = uclApplication(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING);
+        approvedOfferRepository.offer = pendingUclOffer(NOW.plusDays(3));
+
+        ApprovedOfferActionResult result = service.acceptOffer(LOAN_APPLICATION_ID);
+
+        assertEquals(ApprovedOfferActionOutcome.SUCCESS, result.outcome());
+        assertEquals("ACCEPTED", result.offer().status());
+        assertEquals(LoanApplicationStatus.CONTRACT_PENDING, loanApplicationRepository.savedApplication.status());
+        assertNull(limitRepository.savedLimit);
+        assertTrue(movementRepository.savedMovements.isEmpty());
+    }
+
+    @Test
     void acceptAfterAcceptReturnsCurrentAcceptedResult() {
         loanApplicationRepository.application = loanApplication(LoanApplicationStatus.CONTRACT_PENDING, CUSTOMER_ID);
         approvedOfferRepository.offer = pendingOffer(NOW.plusDays(3)).accept(NOW.minusHours(1));
@@ -139,6 +155,22 @@ class RespondToApprovedOfferServiceTest {
         assertEquals(1, transitionRepository.savedTransitions.size());
         assertEquals(ActorType.USER, transitionRepository.savedTransitions.getFirst().actorType());
         assertEquals(BusinessAuditAction.RESERVATION_RELEASED, auditPublisher.lastEvent().entries().getFirst().action());
+    }
+
+    @Test
+    void declinesPendingUclOfferWithoutSalaryExposureEffects() {
+        loanApplicationRepository.application = uclApplication(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING);
+        approvedOfferRepository.offer = pendingUclOffer(NOW.plusDays(3));
+
+        ApprovedOfferActionResult result = service.declineOffer(LOAN_APPLICATION_ID);
+
+        assertEquals(ApprovedOfferActionOutcome.SUCCESS, result.outcome());
+        assertEquals("DECLINED", result.offer().status());
+        assertEquals(LoanApplicationStatus.CUSTOMER_DECLINED, loanApplicationRepository.savedApplication.status());
+        assertNull(limitRepository.savedLimit);
+        assertTrue(movementRepository.savedMovements.isEmpty());
+        assertEquals(BusinessAuditAction.APPROVED_OFFER_DECLINED,
+                auditPublisher.lastEvent().entries().getFirst().action());
     }
 
     @Test
@@ -292,6 +324,30 @@ class RespondToApprovedOfferServiceTest {
         );
     }
 
+    private ApprovedOffer pendingUclOffer(LocalDateTime expiresAt) {
+        ApprovedOffer generated = new UnsecuredConsumerLoanOfferCalculator().generate(
+                UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd"),
+                LOAN_APPLICATION_ID,
+                new UnsecuredConsumerLoanOfferPolicy(
+                        UUID.fromString("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+                        InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL,
+                        new BigDecimal("0.018000"),
+                        money(0),
+                        RepaymentMethod.MONTHLY_INSTALLMENT,
+                        7,
+                        Set.of(3, 6, 9, 12)
+                ),
+                money(5_000_000),
+                6,
+                NOW.minusDays(1)
+        );
+        return new ApprovedOffer(
+                generated.id(), generated.loanApplicationId(), generated.sourceLoanProductPolicyId(),
+                generated.status(), generated.financialTerms(), generated.repaymentItems(),
+                generated.generatedAt(), expiresAt, null, null, null
+        );
+    }
+
     private LoanApplication loanApplication(LoanApplicationStatus status, UUID customerId) {
         return new LoanApplication(
                 LOAN_APPLICATION_ID,
@@ -303,6 +359,21 @@ class RespondToApprovedOfferServiceTest {
                 status,
                 money(3_000_000),
                 1,
+                NOW.minusDays(2)
+        );
+    }
+
+    private LoanApplication uclApplication(LoanApplicationStatus status) {
+        return new LoanApplication(
+                LOAN_APPLICATION_ID,
+                CUSTOMER_ID,
+                UUID.fromString("13131313-1313-1313-1313-131313131313"),
+                "UCL-20260706-000001",
+                ProductCode.UNSECURED_CONSUMER_LOAN,
+                ProductType.UNSECURED,
+                status,
+                money(5_000_000),
+                6,
                 NOW.minusDays(2)
         );
     }

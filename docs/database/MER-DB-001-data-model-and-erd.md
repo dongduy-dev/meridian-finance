@@ -21,7 +21,7 @@ The model supports the MVP lending workflow for:
 
 The MVP uses one PostgreSQL database. Tables are logically owned by modules, but Meridian does not use a database-per-service design.
 
-> **Model authority and state:** Sections 1-13 are a high-level logical/current-plus-target model; names in the ERD are not an exact physical-schema inventory. Executable Flyway migrations are authoritative for deployed structure, and `MER-DB-CURRENT-SCHEMA.sql` is the current human-readable V1-V39 snapshot. The current physical model has no `refresh_tokens`, `collaterals`, or OCR tables. It includes one application-owned `unsecured_consumer_loan_verifications` row for UCL product-verification state, authoritative manual-review evidence, and UCL-specific document categories. The platform uses `manual_disbursements` rather than the conceptual `disbursement_records`, and servicing uses `repayment_schedule_items`, typed `repayment_transactions`, `repayment_allocations`, `repayment_installment_progress`, `repayment_operation_outcomes`, immutable approved-settlement and closure evidence, LoanAccount/installment status-transition tables, and Salary Advance movement/release evidence rather than a single `repayment_records` table.
+> **Model authority and state:** Sections 1-13 are a high-level logical/current-plus-target model; names in the ERD are not an exact physical-schema inventory. Executable Flyway migrations are authoritative for deployed structure, and `MER-DB-CURRENT-SCHEMA.sql` is the current human-readable V1-V40 snapshot. The current physical model has no `refresh_tokens`, `collaterals`, or OCR tables. It includes one application-owned `unsecured_consumer_loan_verifications` row for UCL product-verification state, authoritative manual-review evidence, UCL-specific document categories, executable UCL default pricing and terms, and immutable UCL approved-offer snapshots. The platform uses `manual_disbursements` rather than the conceptual `disbursement_records`, and servicing uses `repayment_schedule_items`, typed `repayment_transactions`, `repayment_allocations`, `repayment_installment_progress`, `repayment_operation_outcomes`, immutable approved-settlement and closure evidence, LoanAccount/installment status-transition tables, and Salary Advance movement/release evidence rather than a single `repayment_records` table.
 
 ## 3. Database Design Principles
 
@@ -547,14 +547,14 @@ For normal Salary Advance eligibility, Partner resolves the authoritative latest
 Logical tables:
 
 - `loan_products` - product catalog for `SALARY_ADVANCE`, `UNSECURED_CONSUMER_LOAN`, and `COLLATERAL_LOAN`.
-- `loan_product_policies` - configurable product policy values such as amount ranges, allowed terms, required document rules, offer validity, and product-specific validation settings.
+- `loan_product_policies` - configurable product policy values such as amount ranges, allowed terms, pricing method and rate, fee, repayment method, offer validity, and product-specific validation settings. The active UCL `DEFAULT_POLICY` stores `FLAT_ORIGINAL_PRINCIPAL`, `0.018000`, zero fee, `MONTHLY_INSTALLMENT`, and seven-day validity.
 - `loan_applications` - common workflow aggregate for all supported lending products.
 - `salary_advance_limits` - current Salary Advance limit state for a customer with a verified customer-partner employee link.
 - `salary_advance_limit_movements` - lightweight history explaining limit changes such as refresh, reservation, release, disbursement usage, repayment release, suspension, and disablement. It is not a double-entry accounting ledger.
 - `salary_advance_verifications` - application-specific Salary Advance employee and limit snapshot associated with a submitted or in-progress `loan_application`. This is the clearer name for the previous `employee_verifications` concept.
 - `unsecured_consumer_loan_verifications` - application-owned UCL product-verification state, initialized as `PENDING_MANUAL_REVIEW` at origination, with nullable authoritative reviewer, completion-time, and restricted assessment evidence populated together when a decision is recorded.
 - `loan_application_status_transitions` - ordered Loan-owned status transition history for `loan_applications`, keyed by `loan_application_id` rather than generic polymorphic entity references.
-- `approved_offers` - immutable customer-facing approved-offer snapshots generated after approval and before customer acceptance.
+- `approved_offers` - immutable customer-facing approved-offer snapshots generated after approval and before customer acceptance. Repayment method permits the executable Salary Advance `ON_SALARY_DATE` and UCL `MONTHLY_INSTALLMENT` values.
 - `approved_offer_repayment_items` - provisional installment-level principal, interest, fee, and total-due items owned by an approved offer.
 - `loan_contracts` - immutable versioned operational contract snapshot, purpose-protected destination, command identities, and controlled lifecycle evidence.
 - `loan_contract_repayment_items` - immutable exact copies of the accepted offer's provisional repayment items, reconciled to the contract totals.
@@ -574,7 +574,7 @@ Logical tables:
 
 `unsecured_consumer_loan_verifications` records one product-verification result for a UCL application. Its unique `loan_application_id` permits at most one verification row per application. `PENDING_MANUAL_REVIEW` carries no decision evidence. A `VERIFIED` row requires `reviewed_by_user_id`, `reviewed_at`, and a nonblank `assessment_note`; the review time cannot precede row creation. The model also permits future non-pending outcomes to remain without decision evidence until their authoritative command semantics are introduced, but never permits partially populated decision evidence.
 
-`loan_applications` keeps `product_code` and `product_type` snapshots for reporting and historical stability. Product-specific request details can start in `product_details` JSONB when they are simple; data with lifecycle rules, review notes, or reporting needs should graduate into dedicated tables.
+`loan_applications` keeps `product_code` and `product_type` snapshots for reporting and historical stability. Product-specific request details can start in `product_details` JSONB when they are simple; data with lifecycle rules, review notes, or reporting needs should graduate into dedicated tables. UCL uses the active `DEFAULT_POLICY` and its exact 3, 6, 9, and 12-month term rows to create immutable offer terms and one provisional repayment item per month. Contract persistence remains Salary Advance-only until UCL contract rules are executable.
 
 ### 5.5 Approval Workflow
 
@@ -844,7 +844,7 @@ V28 also links `DISBURSED_TO_USED` movements to both Loan Application and LoanAc
 
 V29 allowlists `MANUAL_DISBURSEMENT_CONFIRMED` for the atomic activation audit. V30 makes the Loan Application product identity tuple immutable and foreign-keyed to the Loan Product, preventing product drift before policy selection. V31 adds only `LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED` to the audit action whitelist.
 
-The V29, V31, and V37 migrations preflight the exact prior state they replace or extend. They reject missing, extra, weakened, repeated, or incompatible constraint state before mutation. `MER-DB-CURRENT-SCHEMA.sql` reflects the stable V1-V39 physical result, including UCL application verification and manual-review evidence, the servicing structures summarized in Section 17, and the returned-correction cancellation structures summarized in Section 14; migration preflight machinery is intentionally kept only in executable Flyway history.
+The V29, V31, and V37 migrations preflight the exact prior state they replace or extend. They reject missing, extra, weakened, repeated, or incompatible constraint state before mutation. `MER-DB-CURRENT-SCHEMA.sql` reflects the stable V1-V40 physical result, including UCL application verification, manual-review evidence, executable offer policy and repayment-method support, the servicing structures summarized in Section 17, and the returned-correction cancellation structures summarized in Section 14; migration preflight machinery is intentionally kept only in executable Flyway history.
 
 ## 17. Repayment, settlement, and closure servicing model
 

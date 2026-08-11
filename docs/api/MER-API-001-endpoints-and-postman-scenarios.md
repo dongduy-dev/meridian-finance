@@ -151,7 +151,7 @@ The contractual destination-reveal operation is the sole v1 JSON endpoint permit
 |---|---|---|---|
 | GET | `/api/v1/loan-applications/{loanApplicationId}/approved-offer` | `loan:read:own` | Return the Customer’s approved offer without mutating state. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept` | `loan:offer:respond:own` | Accept a valid pending offer. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/decline` | `loan:offer:respond:own` | Decline a valid pending offer and release reservation once. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/decline` | `loan:offer:respond:own` | Decline a valid pending offer and release a Salary Advance reservation when applicable. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts` | `loan:contract:prepare` | Prepare version 1 or regenerate the current contract. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/contracts/current` | `loan:read:own` or `loan:contract:read` | Return the safe masked current contract. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/acknowledgment` | `loan:contract:acknowledge:own` | Acknowledge the exact current version. |
@@ -308,7 +308,7 @@ The API derives Customer identity from the Bearer token and does not accept `cus
 
 Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `status`, `requestedAmount`, `requestedTermMonths`, `productVerificationResult`, and `submittedAt`. Loan records the application in `DOCUMENTS_PENDING`, stores `PENDING_MANUAL_REVIEW` as its product-verification result, and creates required `INCOME_PROOF`, `BANK_STATEMENT`, and `EMPLOYMENT_PROOF` checklist items.
 
-The endpoint stops at origination and evidence setup. Separate Staff commands perform positive manual verification and review entry. UCL negative-verification outcomes, correction, final approval, pricing, offer, contract, activation, cancellation, and servicing are not executable.
+The endpoint stops at origination and evidence setup. Separate Staff commands perform positive manual verification and review entry. UCL approval then generates an immutable exact-request offer under the active UCL policy, and the generic Customer offer endpoints support read, accept, decline, and expiry. Negative-verification outcomes, correction, contract execution, activation, cancellation, and servicing are not executable.
 
 Important errors:
 
@@ -452,7 +452,7 @@ Supported actions:
 
 The Approver must differ from the Loan Officer who submitted the applicable recommendation. Mixed corrections use separate Customer and Staff tasks.
 
-For UCL, `REJECT` and `RETURN_TO_LOAN_OFFICER_REVIEW` remain available common decisions. `APPROVE` returns `409 UCL_OFFER_EXECUTION_NOT_READY`, and structured correction returns `409 UCL_CORRECTION_NOT_READY`. Both fail before durable decision, transition, correction, or offer effects. UCL cannot reach `APPROVED` until its pricing and approved-offer execution are implemented.
+For UCL, `APPROVE` atomically records the decision, generates one immutable exact-request offer with `FLAT_ORIGINAL_PRINCIPAL` pricing and `MONTHLY_INSTALLMENT` items, and finishes in `CUSTOMER_ACCEPTANCE_PENDING`. `REJECT` and `RETURN_TO_LOAN_OFFICER_REVIEW` remain available common decisions. Structured correction returns `409 UCL_CORRECTION_NOT_READY` before durable decision, transition, correction, or offer effects.
 
 Important errors include `MAKER_CHECKER_VIOLATION`, `STALE_REVIEW_CYCLE`, and controlled reason/plan validation errors.
 
@@ -534,7 +534,7 @@ Response actions require no body.
 
 Safe offer data includes approved principal and term, pricing method, flat monthly rate, interest, fee, total repayment, repayment method, generated/expiry times, effective status, available actions, and provisional repayment items. Provisional items do not contain final calendar due dates.
 
-`GET` is read-only. Acceptance moves the application to `CONTRACT_PENDING`. Decline or first discovery of pending expiry applies the terminal outcome and reservation release exactly once.
+`GET` is read-only. Acceptance moves either an eligible Salary Advance or UCL application to `CONTRACT_PENDING`. Decline or first discovery of pending expiry applies the terminal outcome exactly once; Salary Advance reservation release runs only for Salary Advance and has no UCL exposure side effect.
 
 Important conflicts: `OFFER_EXPIRED` and `OFFER_ACTION_CONFLICT`.
 
@@ -560,9 +560,9 @@ Regeneration:
 }
 ```
 
-Regeneration preserves accepted terms and repayment items, supersedes the prior version, refreshes the eligible destination, and requires fresh Customer acknowledgment.
+Regeneration preserves accepted terms and repayment items, supersedes the prior version, refreshes the eligible destination, and requires fresh Customer acknowledgment. Contract preparation is currently executable only for Salary Advance. An accepted UCL remains in `CONTRACT_PENDING`, and preparation returns `409 UCL_CONTRACT_EXECUTION_NOT_READY` before contract, destination, Salary verification, limit, history, or audit effects.
 
-Important errors: `APPROVED_OFFER_NOT_FOUND`, `OFFER_NOT_ACCEPTED`, `CONTRACT_VERSION_STALE`, `CONTRACT_REGENERATION_NOT_ALLOWED`, and `IDEMPOTENCY_KEY_REUSED`.
+Important errors: `APPROVED_OFFER_NOT_FOUND`, `OFFER_NOT_ACCEPTED`, `UCL_CONTRACT_EXECUTION_NOT_READY`, `CONTRACT_VERSION_STALE`, `CONTRACT_REGENERATION_NOT_ALLOWED`, and `IDEMPOTENCY_KEY_REUSED`.
 
 ### 6.3 Read and acknowledge contract
 

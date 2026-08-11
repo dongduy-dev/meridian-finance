@@ -79,7 +79,6 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 409 | `UCL_VERIFICATION_REQUIRED` | UCL verification record required | Repair the missing application-owned verification state before review progression |
 | 409 | `UCL_VERIFICATION_DOCUMENTS_NOT_READY` | UCL verification documents not ready | Accept or validly waive all required evidence before starting or completing verification |
 | 422 | `UCL_VERIFICATION_ASSESSMENT_REQUIRED` | UCL verification assessment required | Supply a nonblank restricted assessment note no longer than 2,000 characters |
-| 409 | `UCL_OFFER_EXECUTION_NOT_READY` | UCL offer execution not ready | Do not approve UCL until approved pricing and offer execution are available |
 
 ---
 
@@ -197,6 +196,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 409 | `CAPTURED_ACCOUNT_INACTIVE` | Captured destination is inactive | Regenerate the contract with `DISBURSEMENT_ACCOUNT_REFRESH` before readiness |
 | 409 | `READINESS_ALREADY_CONFIRMED` | Contract readiness was already confirmed | Treat an identical request ID as replay; otherwise refresh the contract state |
 | 422 | `OFFER_NOT_ACCEPTED` | Offer not accepted | The Customer must accept the offer before contract preparation or disbursement |
+| 409 | `UCL_CONTRACT_EXECUTION_NOT_READY` | UCL contract execution not ready | Retain the accepted offer in `CONTRACT_PENDING` until UCL contract execution is available |
 | 422 | `CONTRACT_DOCUMENTS_NOT_READY` | Contract documents not ready | Complete the required contract or disbursement documents |
 | 422 | `DISBURSEMENT_NOT_READY` | Disbursement not ready | Complete approval, Customer acceptance, document readiness, and destination requirements |
 | 409 | `DISBURSEMENT_ALREADY_COMPLETED` | Disbursement already completed | Refresh the application; disbursement can be confirmed only once |

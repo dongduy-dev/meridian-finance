@@ -96,6 +96,30 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
         assertEquals(1, countRows("review_recommendations", "id", recommendationId));
     }
 
+    @Test
+    void uclApprovalAndOfferRollBackWhenMandatoryTransitionHistoryPersistenceFails() {
+        UUID loanApplicationId = insertApprovalPendingUclApplication();
+        UUID recommendationId = insertReviewRecommendation(loanApplicationId);
+        insertTransitionOverflowSeed(loanApplicationId);
+        authenticateApprover();
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> submitApprovalDecisionService.submitApprovalDecision(
+                        loanApplicationId,
+                        new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                )
+        );
+        assertTrue(containsMessage(exception, "sequenceNumber exceeds smallint range."));
+
+        assertEquals(0, countRows("approval_decisions", "loan_application_id", loanApplicationId));
+        assertEquals("APPROVAL_PENDING", currentStatus(loanApplicationId));
+        assertEquals(0, countRows("approved_offers", "loan_application_id", loanApplicationId));
+        assertEquals(1, countRows("loan_application_status_transitions", "loan_application_id", loanApplicationId));
+        assertEquals(0, countAllRows("audit_events"));
+        assertEquals(1, countRows("review_recommendations", "id", recommendationId));
+    }
+
     @ParameterizedTest
     @EnumSource(
             value = ReviewRecommendationAction.class,
@@ -237,6 +261,36 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
                 salaryAdvanceProductId(),
                 "SA-ROLLBACK-" + id,
                 BigDecimal.valueOf(3_000_000).setScale(2),
+                NOW.minusDays(1)
+        );
+        insertActiveReviewCycle(id);
+        return id;
+    }
+
+    private UUID insertApprovalPendingUclApplication() {
+        UUID id = UUID.randomUUID();
+        UUID customerId = insertCustomer();
+        jdbcTemplate.update(
+                """
+                        insert into %s.loan_applications (
+                            id,
+                            customer_id,
+                            loan_product_id,
+                            application_number,
+                            product_code,
+                            product_type,
+                            status,
+                            requested_amount,
+                            requested_term_months,
+                            submitted_at
+                        ) values (?, ?, ?, ?, 'UNSECURED_CONSUMER_LOAN', 'UNSECURED',
+                                  'APPROVAL_PENDING', ?, 6, ?)
+                        """.formatted(TEST_SCHEMA),
+                id,
+                customerId,
+                unsecuredConsumerLoanProductId(),
+                "UCL-ROLLBACK-" + id,
+                BigDecimal.valueOf(5_000_000).setScale(2),
                 NOW.minusDays(1)
         );
         insertActiveReviewCycle(id);
@@ -422,6 +476,14 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
     private UUID salaryAdvanceProductId() {
         return jdbcTemplate.queryForObject(
                 "select id from " + table("loan_products") + " where product_code = 'SALARY_ADVANCE'",
+                UUID.class
+        );
+    }
+
+    private UUID unsecuredConsumerLoanProductId() {
+        return jdbcTemplate.queryForObject(
+                "select id from " + table("loan_products")
+                        + " where product_code = 'UNSECURED_CONSUMER_LOAN'",
                 UUID.class
         );
     }

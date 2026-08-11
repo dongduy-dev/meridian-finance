@@ -170,7 +170,7 @@ Problem:
 The logical ERD used conceptual names and target fields that could be mistaken for the current physical schema.
 
 Resolution:
-`MER-DB-001` now labels Sections 1-13 as a logical/current-plus-target model, maps conceptual disbursement and repayment names to the current V39 physical structures, and identifies deferred `product_details`, refresh-token, Collateral, and OCR structures. Flyway history and `MER-DB-CURRENT-SCHEMA.sql` remain the physical authorities.
+`MER-DB-001` now labels Sections 1-13 as a logical/current-plus-target model, maps conceptual disbursement and repayment names to the current V40 physical structures, and identifies deferred `product_details`, refresh-token, Collateral, and OCR structures. Flyway history and `MER-DB-CURRENT-SCHEMA.sql` remain the physical authorities.
 
 ### MER-FU-008 - Replace hardcoded Salary Advance salary cap/policy terms with policy config
 
@@ -312,7 +312,7 @@ Problem:
 Flyway migrations are growing and current schema is harder to inspect from migrations alone.
 
 Recommendation:
-`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V39. This file is documentation only and must not be placed in the Flyway migration folder.
+`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V40. This file is documentation only and must not be placed in the Flyway migration folder.
 
 ### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
 
@@ -819,7 +819,7 @@ and operational tooling remain deferred.
 Suggested future branch name:
 `feature/lending-workflow-read-projections`
 
-### MER-FU-038 - Complete the UCL lifecycle after positive manual verification
+### MER-FU-038 - Complete the UCL lifecycle after approved-offer response
 
 Area: Loan / Document / Approval / Servicing
 
@@ -832,7 +832,7 @@ Status: Open
 Blocks current checkpoint: No
 
 Problem:
-The executable positive UCL lifecycle stops at `APPROVAL_PENDING`; negative verification, correction, final approval, and downstream lending remain deferred.
+The executable positive UCL lifecycle reaches immutable approved-offer generation and Customer accept, decline, or expiry. Acceptance stops safely at `CONTRACT_PENDING`; negative verification, correction, contract execution, activation, and servicing remain deferred.
 
 Completed:
 
@@ -842,15 +842,18 @@ Completed:
 - Document-readiness-gated manual verification start and positive `VERIFIED` completion with authoritative Staff actor, time, and restricted assessment evidence.
 - Verified-only entry into common Loan Officer review and approval or rejection recommendation through `APPROVAL_PENDING`.
 - Common Approver rejection and return-to-review decisions for UCL.
-- Fail-closed UCL correction and pre-pricing approval guards.
+- Exact-request UCL approval under the active 1.8% flat monthly policy.
+- Immutable monthly-installment offer generation with exact whole-VND reconciliation and seven-day validity.
+- Generic Customer offer read, accept, decline, and expiry without Salary Advance exposure effects.
+- UCL early-payment and non-discounted full-balance settlement business semantics; executable servicing remains deferred.
+- Fail-closed UCL correction and pre-contract execution guards.
 
 Still deferred:
 
 - `FAILED` and `REQUIRES_MORE_INFORMATION` verification commands.
 - Correction and resubmission.
-- Pricing-backed UCL `APPROVE` execution.
-- Pricing and offer generation.
-- Contract readiness and activation.
+- Contract readiness.
+- Activation and final dated schedule execution.
 - Repayment, settlement, and closure.
 - Outstanding UCL debt policy.
 - UCL cancellation.
