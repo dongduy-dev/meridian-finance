@@ -24,6 +24,8 @@ import com.meridian.platform.loan.application.dto.ApprovedOfferActionOutcome;
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionResult;
 import com.meridian.platform.loan.application.dto.ApprovedOfferDto;
 import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
+import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanVerificationDto;
+import com.meridian.platform.loan.application.port.in.ManageUnsecuredConsumerLoanVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.QueryApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.QueryLoanProductUseCase;
 import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
@@ -35,6 +37,7 @@ import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanApplicationR
 import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanProductController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.SalaryAdvanceLoanApplicationController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.UnsecuredConsumerLoanApplicationController;
+import com.meridian.platform.loan.infrastructure.adapter.in.web.UnsecuredConsumerLoanVerificationController;
 import com.meridian.platform.partner.application.port.in.QueryPartnerCompanyUseCase;
 import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeImportBatchUseCase;
 import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeUseCase;
@@ -77,6 +80,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         LoanProductController.class,
         SalaryAdvanceLoanApplicationController.class,
         UnsecuredConsumerLoanApplicationController.class,
+        UnsecuredConsumerLoanVerificationController.class,
         LoanApplicationReviewController.class,
         ReviewRecommendationController.class,
         ApprovalDecisionController.class,
@@ -122,6 +126,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private StartUnsecuredConsumerLoanApplicationUseCase startUnsecuredConsumerLoanApplicationUseCase;
+
+    @MockitoBean
+    private ManageUnsecuredConsumerLoanVerificationUseCase manageUnsecuredConsumerLoanVerificationUseCase;
 
     @MockitoBean
     private StartLoanApplicationReviewUseCase startLoanApplicationReviewUseCase;
@@ -490,6 +497,58 @@ class SecurityConfigTest {
                                 .authorities(new SimpleGrantedAuthority("loan:review"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UNDER_REVIEW"));
+    }
+
+    @Test
+    void allowsOnlyLoanReviewAuthorityForUclManualVerificationCommands() throws Exception {
+        when(manageUnsecuredConsumerLoanVerificationUseCase.startManualVerification(LOAN_APPLICATION_ID))
+                .thenReturn(new UnsecuredConsumerLoanVerificationDto(
+                        LOAN_APPLICATION_ID, "VERIFICATION_PENDING", "PENDING_MANUAL_REVIEW", null));
+        when(manageUnsecuredConsumerLoanVerificationUseCase.completeManualVerification(any(), any()))
+                .thenReturn(new UnsecuredConsumerLoanVerificationDto(
+                        LOAN_APPLICATION_ID, "SUBMITTED", "VERIFIED", LocalDateTime.now()));
+
+        mockMvc.perform(post(
+                        "/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start",
+                        LOAN_APPLICATION_ID
+                ).with(user("loan-officer").authorities(new SimpleGrantedAuthority("loan:review"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("VERIFICATION_PENDING"));
+
+        mockMvc.perform(post(
+                        "/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete",
+                        LOAN_APPLICATION_ID
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "assessmentNote": "Evidence is consistent."
+                                }
+                                """)
+                        .with(user("loan-officer").authorities(new SimpleGrantedAuthority("loan:review"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUBMITTED"));
+
+        mockMvc.perform(post(
+                        "/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start",
+                        LOAN_APPLICATION_ID
+                ).with(user("customer").authorities(new SimpleGrantedAuthority("loan:submit"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        mockMvc.perform(post(
+                        "/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete",
+                        LOAN_APPLICATION_ID
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "assessmentNote": "Evidence is consistent."
+                                }
+                                """)
+                        .with(user("approver").authorities(new SimpleGrantedAuthority("approval:decide"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
     }
 
     @Test

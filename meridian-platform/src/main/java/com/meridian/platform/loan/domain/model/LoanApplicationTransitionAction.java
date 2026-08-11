@@ -3,6 +3,8 @@ package com.meridian.platform.loan.domain.model;
 public enum LoanApplicationTransitionAction {
     SUBMIT_APPLICATION,
     COMPLETE_DOCUMENT_UPLOADS,
+    START_PRODUCT_VERIFICATION,
+    COMPLETE_PRODUCT_VERIFICATION,
     START_REVIEW,
     RECOMMEND_APPROVAL,
     RECOMMEND_REJECTION,

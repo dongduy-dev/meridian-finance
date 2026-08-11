@@ -98,6 +98,32 @@ public record LoanApplication(
         return transitionTo(LoanApplicationStatus.SUBMITTED, LoanApplicationTransitionAction.COMPLETE_DOCUMENT_UPLOADS);
     }
 
+    public LoanApplicationTransitionResult startProductVerification() {
+        if (status != LoanApplicationStatus.SUBMITTED) {
+            throw new BusinessStateConflictException(
+                    "PRODUCT_VERIFICATION_START_NOT_ALLOWED",
+                    "Product verification can only start for a submitted Loan Application."
+            );
+        }
+        return transitionTo(
+                LoanApplicationStatus.VERIFICATION_PENDING,
+                LoanApplicationTransitionAction.START_PRODUCT_VERIFICATION
+        );
+    }
+
+    public LoanApplicationTransitionResult completeProductVerification() {
+        if (status != LoanApplicationStatus.VERIFICATION_PENDING) {
+            throw new BusinessStateConflictException(
+                    "PRODUCT_VERIFICATION_COMPLETION_NOT_ALLOWED",
+                    "Product verification can only complete while verification is pending."
+            );
+        }
+        return transitionTo(
+                LoanApplicationStatus.SUBMITTED,
+                LoanApplicationTransitionAction.COMPLETE_PRODUCT_VERIFICATION
+        );
+    }
+
     public LoanApplicationTransitionResult startReview() {
         if (status != LoanApplicationStatus.SUBMITTED) {
             throw new BusinessStateConflictException(

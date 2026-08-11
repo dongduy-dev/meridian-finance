@@ -190,6 +190,65 @@ class ApplyApprovalDecisionServiceTest {
     }
 
     @Test
+    void uclApproveFailsClosedWithoutApplicationOrOfferEffects() {
+        loanApplicationRepository.application = uclApplication(LoanApplicationStatus.APPROVAL_PENDING);
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.applyApprovalDecision(command(LoanApprovalDecisionAction.APPROVE))
+        );
+
+        assertEquals("UCL_OFFER_EXECUTION_NOT_READY", exception.getErrorCode());
+        assertNull(loanApplicationRepository.savedApplication);
+        assertNull(approvedOfferRepository.savedOffer);
+        assertTrue(transitionRepository.savedTransitions.isEmpty());
+        assertTrue(movementRepository.savedMovements.isEmpty());
+    }
+
+    @Test
+    void uclCorrectionDecisionFailsClosed() {
+        loanApplicationRepository.application = uclApplication(LoanApplicationStatus.APPROVAL_PENDING);
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.applyApprovalDecision(
+                        command(LoanApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION)
+                )
+        );
+
+        assertEquals("UCL_CORRECTION_NOT_READY", exception.getErrorCode());
+        assertNull(loanApplicationRepository.savedApplication);
+        assertNull(approvedOfferRepository.savedOffer);
+        assertTrue(transitionRepository.savedTransitions.isEmpty());
+    }
+
+    @Test
+    void uclRejectionUsesGenericDecisionWithoutSalaryAdvanceRelease() {
+        loanApplicationRepository.application = uclApplication(LoanApplicationStatus.APPROVAL_PENDING);
+
+        LoanApplicationReviewDto result = service.applyApprovalDecision(command(LoanApprovalDecisionAction.REJECT));
+
+        assertEquals("REJECTED", result.status());
+        assertEquals(LoanApplicationStatus.REJECTED, loanApplicationRepository.savedApplication.status());
+        assertNull(approvedOfferRepository.savedOffer);
+        assertTrue(movementRepository.savedMovements.isEmpty());
+        assertNull(limitRepository.savedLimit);
+    }
+
+    @Test
+    void uclReturnToReviewUsesGenericDecision() {
+        loanApplicationRepository.application = uclApplication(LoanApplicationStatus.APPROVAL_PENDING);
+
+        LoanApplicationReviewDto result = service.applyApprovalDecision(
+                command(LoanApprovalDecisionAction.RETURN_TO_LOAN_OFFICER_REVIEW)
+        );
+
+        assertEquals("RETURNED_TO_REVIEW", result.status());
+        assertNull(approvedOfferRepository.savedOffer);
+        assertTrue(movementRepository.savedMovements.isEmpty());
+    }
+
+    @Test
     void rejectsDecisionWhenLoanApplicationIsNotApprovalPending() {
         loanApplicationRepository.application = loanApplication(LoanApplicationStatus.UNDER_REVIEW);
 
@@ -294,6 +353,22 @@ class ApplyApprovalDecisionServiceTest {
                 limit(3_000_000),
                 1,
                 LocalDateTime.now()
+        );
+    }
+
+    private LoanApplication uclApplication(LoanApplicationStatus status) {
+        LoanApplication salaryAdvance = loanApplication(status);
+        return new LoanApplication(
+                salaryAdvance.id(),
+                salaryAdvance.customerId(),
+                salaryAdvance.loanProductId(),
+                "UCL-20260630-000001",
+                ProductCode.UNSECURED_CONSUMER_LOAN,
+                ProductType.UNSECURED,
+                status,
+                limit(5_000_000),
+                6,
+                salaryAdvance.submittedAt()
         );
     }
 

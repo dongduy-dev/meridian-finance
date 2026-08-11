@@ -127,6 +127,8 @@ The contractual destination-reveal operation is the sole v1 JSON endpoint permit
 | POST | `/api/v1/loan-applications/unsecured-consumer-loan` | Customer with `loan:submit` | Submit an Unsecured Consumer Loan application for manual verification and required evidence collection. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}` | Customer `loan:read:own` or Staff `loan:read` | Return a safe durable LoanApplication status projection. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/cancel` | Customer with `loan:cancel:own` | Cancel an owned Salary Advance only from `RETURNED_FOR_REVISION` and release its reservation exactly once. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start` | Staff with `loan:review` | Start positive-path manual UCL verification after document processing readiness. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete` | Staff with `loan:review` | Complete positive-path manual UCL verification as `VERIFIED`. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review/start` | `loan:review` | Start Loan Officer review. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review-recommendations` | `approval:recommend` | Record a Loan Officer recommendation. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approval-decisions` | `approval:decide` | Record an Approver decision. |
@@ -306,7 +308,7 @@ The API derives Customer identity from the Bearer token and does not accept `cus
 
 Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `status`, `requestedAmount`, `requestedTermMonths`, `productVerificationResult`, and `submittedAt`. Loan records the application in `DOCUMENTS_PENDING`, stores `PENDING_MANUAL_REVIEW` as its product-verification result, and creates required `INCOME_PROOF`, `BANK_STATEMENT`, and `EMPLOYMENT_PROOF` checklist items.
 
-The endpoint stops at origination and evidence setup. It does not decide manual verification or progress the application through correction, review, approval, pricing, offer, contract, activation, cancellation, or servicing.
+The endpoint stops at origination and evidence setup. Separate Staff commands perform positive manual verification and review entry. UCL negative-verification outcomes, correction, final approval, pricing, offer, contract, activation, cancellation, and servicing are not executable.
 
 Important errors:
 
@@ -316,13 +318,65 @@ Important errors:
 | `409` | `CUSTOMER_NOT_ACTIVE` or `BLOCKING_APPLICATION_EXISTS` |
 | `422` | `PROFILE_INCOMPLETE`, `PRIMARY_BANK_ACCOUNT_REQUIRED`, `PRODUCT_INACTIVE`, `PRODUCT_POLICY_INVALID`, `INVALID_PRODUCT_AMOUNT`, or `INVALID_PRODUCT_TERM` |
 
-### 4.5 Start review
+### 4.5 Start UCL manual verification
+
+```text
+POST /api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start
+```
+
+No body is required. The authenticated Staff actor must hold `loan:review`. The application must be `UNSECURED_CONSUMER_LOAN` / `UNSECURED`, be in `SUBMITTED`, have an existing `PENDING_MANUAL_REVIEW` verification record, and have a processing-ready submission checklist. Success atomically moves the application to `VERIFICATION_PENDING` and records status history and a PII-safe business audit event. It does not create a review cycle or modify the verification result.
+
+Representative response:
+
+```json
+{
+  "loanApplicationId": "UUID",
+  "status": "VERIFICATION_PENDING",
+  "productVerificationResult": "PENDING_MANUAL_REVIEW",
+  "reviewedAt": null
+}
+```
+
+Important errors include `UCL_VERIFICATION_NOT_APPLICABLE`, `UCL_VERIFICATION_REQUIRED`, `UCL_VERIFICATION_DOCUMENTS_NOT_READY`, `PRODUCT_VERIFICATION_NOT_PENDING`, and `PRODUCT_VERIFICATION_START_NOT_ALLOWED`.
+
+### 4.6 Complete UCL manual verification
+
+```text
+POST /api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete
+```
+
+The request contains only a required restricted assessment note:
+
+```json
+{
+  "assessmentNote": "Income and employment evidence are consistent for Loan Officer review."
+}
+```
+
+Unknown properties and blank or over-2,000-character notes return `400 VALIDATION_FAILED`. The application must be in `VERIFICATION_PENDING`, the existing result must remain `PENDING_MANUAL_REVIEW`, and documents must still be processing-ready. Success stores `VERIFIED` with the authenticated Staff actor, one sampled UTC completion time, and the restricted note; moves the application back to `SUBMITTED`; and records history and audit atomically. The response does not expose the Staff actor or assessment note:
+
+```json
+{
+  "loanApplicationId": "UUID",
+  "status": "SUBMITTED",
+  "productVerificationResult": "VERIFIED",
+  "reviewedAt": "2026-08-11T09:30:00"
+}
+```
+
+This command implements only the positive `VERIFIED` outcome. `FAILED` and `REQUIRES_MORE_INFORMATION` remain non-executable.
+
+Important errors include `UCL_VERIFICATION_NOT_APPLICABLE`, `UCL_VERIFICATION_REQUIRED`, `UCL_VERIFICATION_DOCUMENTS_NOT_READY`, `PRODUCT_VERIFICATION_NOT_PENDING`, `PRODUCT_VERIFICATION_COMPLETION_NOT_ALLOWED`, and `UCL_VERIFICATION_ASSESSMENT_REQUIRED`.
+
+### 4.7 Start review
 
 ```text
 POST /api/v1/loan-applications/{loanApplicationId}/review/start
 ```
 
 No body is required. The reviewer is derived from the Bearer token.
+
+For UCL, review start additionally requires the authoritative verification result to be `VERIFIED`. Missing, pending, `FAILED`, and `REQUIRES_MORE_INFORMATION` records fail closed. The same Loan Officer may complete UCL manual verification and start review; the existing maker-checker rule still requires a different Approver for the final decision.
 
 ---
 
@@ -348,6 +402,8 @@ Normal recommendation:
 ```
 
 Rejection requires a nonblank `reason`. Revision actions require `expectedReviewCycleId`, a controlled `reasonCode`, and one to ten tasks.
+
+For UCL, only `RECOMMEND_APPROVAL` and `RECOMMEND_REJECTION` are executable. UCL Customer or Staff correction recommendations return `409 UCL_CORRECTION_NOT_READY` before any correction request or task is created.
 
 Representative Customer task:
 
@@ -395,6 +451,8 @@ Supported actions:
 ```
 
 The Approver must differ from the Loan Officer who submitted the applicable recommendation. Mixed corrections use separate Customer and Staff tasks.
+
+For UCL, `REJECT` and `RETURN_TO_LOAN_OFFICER_REVIEW` remain available common decisions. `APPROVE` returns `409 UCL_OFFER_EXECUTION_NOT_READY`, and structured correction returns `409 UCL_CORRECTION_NOT_READY`. Both fail before durable decision, transition, correction, or offer effects. UCL cannot reach `APPROVED` until its pricing and approved-offer execution are implemented.
 
 Important errors include `MAKER_CHECKER_VIOLATION`, `STALE_REVIEW_CYCLE`, and controlled reason/plan validation errors.
 

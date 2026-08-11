@@ -9,6 +9,8 @@ import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
+import com.meridian.platform.loan.domain.model.LoanReviewRecommendationAction;
+import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
@@ -76,6 +78,15 @@ public class ApplyReviewRecommendationService implements ApplyReviewRecommendati
             throw new BusinessStateConflictException(
                     "LOAN_REVIEW_DOCUMENTS_NOT_READY",
                     "Loan Application documents are not ready for recommendation."
+            );
+        }
+
+        if (loanApplication.productCode() == ProductCode.UNSECURED_CONSUMER_LOAN
+                && (command.action() == LoanReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION
+                || command.action() == LoanReviewRecommendationAction.REQUEST_STAFF_CORRECTION)) {
+            throw new BusinessStateConflictException(
+                    "UCL_CORRECTION_NOT_READY",
+                    "Unsecured Consumer Loan correction execution is not available."
             );
         }
 

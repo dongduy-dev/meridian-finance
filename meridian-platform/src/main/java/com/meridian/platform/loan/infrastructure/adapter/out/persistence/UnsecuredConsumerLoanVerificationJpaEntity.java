@@ -30,6 +30,15 @@ public class UnsecuredConsumerLoanVerificationJpaEntity {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "reviewed_by_user_id")
+    private UUID reviewedByUserId;
+
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
+    @Column(name = "assessment_note", length = 2000)
+    private String assessmentNote;
+
     protected UnsecuredConsumerLoanVerificationJpaEntity() {
     }
 
@@ -38,6 +47,9 @@ public class UnsecuredConsumerLoanVerificationJpaEntity {
         this.loanApplicationId = verification.loanApplicationId();
         this.productVerificationResult = verification.productVerificationResult();
         this.createdAt = verification.createdAt();
+        this.reviewedByUserId = verification.reviewedByUserId();
+        this.reviewedAt = verification.reviewedAt();
+        this.assessmentNote = verification.assessmentNote();
     }
 
     public UnsecuredConsumerLoanVerification toDomain() {
@@ -45,7 +57,10 @@ public class UnsecuredConsumerLoanVerificationJpaEntity {
                 id,
                 loanApplicationId,
                 productVerificationResult,
-                createdAt
+                createdAt,
+                reviewedByUserId,
+                reviewedAt,
+                assessmentNote
         );
     }
 }

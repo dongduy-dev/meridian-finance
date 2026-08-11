@@ -42,6 +42,7 @@ class ApplyReviewRecommendationServiceTest {
     private FakeLoanApplicationRepository loanApplicationRepository;
     private ReadyDocumentChecklistPort documentChecklistPort;
     private LoanReviewCycleRepository reviewCycleRepository;
+    private CustomerCorrectionWorkflowService correctionWorkflowService;
     private FakeLoanApplicationStatusTransitionRepository transitionRepository;
     private ApplyReviewRecommendationService service;
 
@@ -53,12 +54,13 @@ class ApplyReviewRecommendationServiceTest {
         org.mockito.Mockito.when(reviewCycleRepository.findActiveByLoanApplicationIdForUpdate(LOAN_APPLICATION_ID))
                 .thenReturn(Optional.of(LoanApplicationReviewCycle.active(
                         REVIEW_CYCLE_ID, LOAN_APPLICATION_ID, 1, RECOMMENDED_AT.minusHours(1))));
+        correctionWorkflowService = org.mockito.Mockito.mock(CustomerCorrectionWorkflowService.class);
         transitionRepository = new FakeLoanApplicationStatusTransitionRepository();
         service = new ApplyReviewRecommendationService(
                 loanApplicationRepository,
                 documentChecklistPort,
                 reviewCycleRepository,
-                org.mockito.Mockito.mock(CustomerCorrectionWorkflowService.class),
+                correctionWorkflowService,
                 new LoanApplicationStatusTransitionRecorder(transitionRepository)
         );
     }
@@ -70,6 +72,50 @@ class ApplyReviewRecommendationServiceTest {
         assertEquals(LoanApplicationStatus.APPROVAL_PENDING, loanApplicationRepository.savedApplication.status());
         assertEquals(1, transitionRepository.savedTransitions.size());
         assertEquals(LOAN_OFFICER_USER_ID, transitionRepository.savedTransitions.getFirst().actorUserId());
+    }
+
+    @Test
+    void uclApprovalRecommendationReusesCommonApprovalPendingTransition() {
+        loanApplicationRepository.application = uclApplication();
+
+        service.applyReviewRecommendation(command(
+                LoanReviewRecommendationAction.RECOMMEND_APPROVAL,
+                validContext()
+        ));
+
+        assertEquals(LoanApplicationStatus.APPROVAL_PENDING, loanApplicationRepository.savedApplication.status());
+    }
+
+    @Test
+    void uclRejectionRecommendationReusesCommonApprovalPendingTransition() {
+        loanApplicationRepository.application = uclApplication();
+
+        service.applyReviewRecommendation(command(
+                LoanReviewRecommendationAction.RECOMMEND_REJECTION,
+                validContext()
+        ));
+
+        assertEquals(LoanApplicationStatus.APPROVAL_PENDING, loanApplicationRepository.savedApplication.status());
+    }
+
+    @Test
+    void uclCorrectionRecommendationsFailClosed() {
+        for (LoanReviewRecommendationAction action : List.of(
+                LoanReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION,
+                LoanReviewRecommendationAction.REQUEST_STAFF_CORRECTION
+        )) {
+            loanApplicationRepository.application = uclApplication();
+            loanApplicationRepository.savedApplication = null;
+
+            BusinessStateConflictException exception = assertThrows(
+                    BusinessStateConflictException.class,
+                    () -> service.applyReviewRecommendation(command(action, validContext()))
+            );
+
+            assertEquals("UCL_CORRECTION_NOT_READY", exception.getErrorCode());
+            assertNull(loanApplicationRepository.savedApplication);
+            org.mockito.Mockito.verifyNoInteractions(correctionWorkflowService);
+        }
     }
 
     @Test
@@ -128,12 +174,19 @@ class ApplyReviewRecommendationServiceTest {
     }
 
     private ApplyReviewRecommendationCommand command(BusinessOperationContext operationContext) {
+        return command(LoanReviewRecommendationAction.RECOMMEND_APPROVAL, operationContext);
+    }
+
+    private ApplyReviewRecommendationCommand command(
+            LoanReviewRecommendationAction action,
+            BusinessOperationContext operationContext
+    ) {
         return new ApplyReviewRecommendationCommand(
                 LOAN_APPLICATION_ID,
                 RECOMMENDATION_ID,
                 REVIEW_CYCLE_ID,
                 LOAN_OFFICER_USER_ID,
-                LoanReviewRecommendationAction.RECOMMEND_APPROVAL,
+                action,
                 null,
                 null,
                 null,
@@ -162,6 +215,22 @@ class ApplyReviewRecommendationServiceTest {
                 BigDecimal.valueOf(3_000_000).setScale(2),
                 1,
                 RECOMMENDED_AT.minusDays(1)
+        );
+    }
+
+    private static LoanApplication uclApplication() {
+        LoanApplication salaryAdvance = loanApplication();
+        return new LoanApplication(
+                salaryAdvance.id(),
+                salaryAdvance.customerId(),
+                salaryAdvance.loanProductId(),
+                "UCL-20260630-000001",
+                ProductCode.UNSECURED_CONSUMER_LOAN,
+                ProductType.UNSECURED,
+                LoanApplicationStatus.UNDER_REVIEW,
+                BigDecimal.valueOf(5_000_000).setScale(2),
+                6,
+                salaryAdvance.submittedAt()
         );
     }
 
