@@ -51,6 +51,44 @@ class LoanApplicationTest {
     }
 
     @Test
+    void startsAndCompletesProductVerificationThroughCommonLifecycle() {
+        LoanApplicationTransitionResult started = loanApplication(LoanApplicationStatus.SUBMITTED)
+                .startProductVerification();
+
+        assertEquals(LoanApplicationStatus.VERIFICATION_PENDING, started.loanApplication().status());
+        assertTransition(
+                started,
+                LoanApplicationStatus.SUBMITTED,
+                LoanApplicationStatus.VERIFICATION_PENDING,
+                LoanApplicationTransitionAction.START_PRODUCT_VERIFICATION
+        );
+
+        LoanApplicationTransitionResult completed = started.loanApplication().completeProductVerification();
+        assertEquals(LoanApplicationStatus.SUBMITTED, completed.loanApplication().status());
+        assertTransition(
+                completed,
+                LoanApplicationStatus.VERIFICATION_PENDING,
+                LoanApplicationStatus.SUBMITTED,
+                LoanApplicationTransitionAction.COMPLETE_PRODUCT_VERIFICATION
+        );
+    }
+
+    @Test
+    void productVerificationTransitionsRejectWrongStatuses() {
+        BusinessStateConflictException startFailure = assertThrows(
+                BusinessStateConflictException.class,
+                () -> loanApplication(LoanApplicationStatus.VERIFICATION_PENDING).startProductVerification()
+        );
+        BusinessStateConflictException completionFailure = assertThrows(
+                BusinessStateConflictException.class,
+                () -> loanApplication(LoanApplicationStatus.SUBMITTED).completeProductVerification()
+        );
+
+        assertEquals("PRODUCT_VERIFICATION_START_NOT_ALLOWED", startFailure.getErrorCode());
+        assertEquals("PRODUCT_VERIFICATION_COMPLETION_NOT_ALLOWED", completionFailure.getErrorCode());
+    }
+
+    @Test
     void startReviewRejectsNonSubmittedApplication() {
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,

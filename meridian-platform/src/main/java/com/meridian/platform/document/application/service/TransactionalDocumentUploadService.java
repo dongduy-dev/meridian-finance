@@ -139,10 +139,14 @@ public class TransactionalDocumentUploadService {
             }
             return toDto(idempotent, item.id());
         }
-        if (command.uploaderActorType() == DocumentUploaderActorType.CUSTOMER) {
+        boolean initialCustomerUpload = command.uploaderActorType() == DocumentUploaderActorType.CUSTOMER
+                && workflow.status() == LoanApplicationStatus.DOCUMENTS_PENDING
+                && document.currentVersionId() == null
+                && command.expectedCurrentVersionId() == null;
+        if (command.uploaderActorType() == DocumentUploaderActorType.CUSTOMER && !initialCustomerUpload) {
             correctionPort.authorizeCustomerUpload(
                     command.loanApplicationId(), item.id(), command.expectedCurrentVersionId());
-        } else {
+        } else if (command.uploaderActorType() == DocumentUploaderActorType.STAFF) {
             correctionPort.authorizeStaffUpload(
                     command.loanApplicationId(), item.id(), command.expectedCurrentVersionId());
         }

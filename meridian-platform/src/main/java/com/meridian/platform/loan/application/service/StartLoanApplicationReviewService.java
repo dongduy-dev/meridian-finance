@@ -5,9 +5,12 @@ import com.meridian.platform.loan.application.port.in.StartLoanApplicationReview
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
+import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
+import com.meridian.platform.loan.domain.model.ProductCode;
+import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanVerification;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -16,6 +19,7 @@ import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.springframework.stereotype.Service;
@@ -31,6 +35,7 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
 
     private final LoanApplicationRepository loanApplicationRepository;
     private final LoanDocumentChecklistPort documentChecklistPort;
+    private final UnsecuredConsumerLoanVerificationRepository uclVerificationRepository;
     private final LoanReviewCycleRepository reviewCycleRepository;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
     private final BusinessAuditPublisher businessAuditPublisher;
@@ -40,6 +45,7 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
     public StartLoanApplicationReviewService(
             LoanApplicationRepository loanApplicationRepository,
             LoanDocumentChecklistPort documentChecklistPort,
+            UnsecuredConsumerLoanVerificationRepository uclVerificationRepository,
             LoanReviewCycleRepository reviewCycleRepository,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
             BusinessAuditPublisher businessAuditPublisher,
@@ -48,6 +54,7 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
     ) {
         this.loanApplicationRepository = loanApplicationRepository;
         this.documentChecklistPort = documentChecklistPort;
+        this.uclVerificationRepository = uclVerificationRepository;
         this.reviewCycleRepository = reviewCycleRepository;
         this.transitionRecorder = transitionRecorder;
         this.businessAuditPublisher = businessAuditPublisher;
@@ -74,6 +81,7 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
                         "Loan application was not found."
                 ));
 
+        requireProductReadyForReview(loanApplication);
         if (!documentChecklistPort.isProcessingReady(loanApplicationId)) {
             throw new BusinessStateConflictException(
                     "LOAN_REVIEW_DOCUMENTS_NOT_READY",
@@ -122,5 +130,35 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
                 savedApplication.status().name(),
                 reviewCycle.id()
         );
+    }
+
+    private void requireProductReadyForReview(LoanApplication loanApplication) {
+        if (loanApplication.productCode() != ProductCode.UNSECURED_CONSUMER_LOAN) {
+            return;
+        }
+
+        UnsecuredConsumerLoanVerification verification = uclVerificationRepository
+                .findByLoanApplicationId(loanApplication.id())
+                .orElseThrow(() -> new BusinessStateConflictException(
+                        "UCL_VERIFICATION_REQUIRED",
+                        "Unsecured Consumer Loan verification evidence is required before review."
+                ));
+
+        switch (verification.productVerificationResult()) {
+            case VERIFIED -> {
+            }
+            case PENDING_MANUAL_REVIEW -> throw new BusinessRuleViolationException(
+                    "PRODUCT_VERIFICATION_PENDING",
+                    "Unsecured Consumer Loan verification must complete before review."
+            );
+            case FAILED -> throw new BusinessRuleViolationException(
+                    "PRODUCT_VERIFICATION_FAILED",
+                    "Unsecured Consumer Loan verification failed."
+            );
+            case REQUIRES_MORE_INFORMATION -> throw new BusinessRuleViolationException(
+                    "PRODUCT_VERIFICATION_REQUIRES_MORE_INFORMATION",
+                    "Unsecured Consumer Loan verification requires more information."
+            );
+        }
     }
 }

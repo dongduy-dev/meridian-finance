@@ -72,6 +72,14 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 422 | `PRODUCT_VERIFICATION_PENDING` | Product verification pending | Complete or wait for product-specific verification |
 | 422 | `PRODUCT_VERIFICATION_FAILED` | Product verification failed | Correct the product information or follow the configured review path |
 | 422 | `PRODUCT_VERIFICATION_REQUIRES_MORE_INFORMATION` | Product verification requires more information | Complete the requested Customer or Staff correction |
+| 409 | `PRODUCT_VERIFICATION_START_NOT_ALLOWED` | Product verification start not allowed | Start verification only from an eligible submitted application |
+| 409 | `PRODUCT_VERIFICATION_COMPLETION_NOT_ALLOWED` | Product verification completion not allowed | Complete verification only while the application is verification-pending |
+| 409 | `PRODUCT_VERIFICATION_NOT_PENDING` | Product verification not pending | Refresh the application; only a pending product-verification record can be decided |
+| 422 | `UCL_VERIFICATION_NOT_APPLICABLE` | UCL verification not applicable | Use the command only for an Unsecured Consumer Loan application |
+| 409 | `UCL_VERIFICATION_REQUIRED` | UCL verification record required | Repair the missing application-owned verification state before review progression |
+| 409 | `UCL_VERIFICATION_DOCUMENTS_NOT_READY` | UCL verification documents not ready | Accept or validly waive all required evidence before starting or completing verification |
+| 422 | `UCL_VERIFICATION_ASSESSMENT_REQUIRED` | UCL verification assessment required | Supply a nonblank restricted assessment note no longer than 2,000 characters |
+| 409 | `UCL_OFFER_EXECUTION_NOT_READY` | UCL offer execution not ready | Do not approve UCL until approved pricing and offer execution are available |
 
 ---
 
@@ -140,6 +148,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 409 | `CORRECTION_ALREADY_RESUBMITTED` | Correction already resubmitted | Treat an identical resubmission as replay; otherwise refresh the application |
 | 409 | `CORRECTION_DOCUMENTS_INCOMPLETE` | Correction uploads incomplete | Upload a current version for every required checklist item |
 | 409 | `LOAN_REVIEW_DOCUMENTS_NOT_READY` | Documents not processing-ready | Complete manual acceptance or an authorized waiver before review |
+| 409 | `UCL_CORRECTION_NOT_READY` | UCL correction not ready | Use only the currently supported UCL recommendation and decision actions |
 
 ---
 

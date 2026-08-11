@@ -185,6 +185,8 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
     private void assertThroughV31ActionsAccepted(String schema) {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
             if (action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
+                    && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED
+                    && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED
                     && action != BusinessAuditAction.LOAN_APPLICATION_CANCELLED
                     && action != BusinessAuditAction.REPAYMENT_RECORDED
                     && action != BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED
@@ -209,6 +211,8 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
     private void assertAllKnownActionsAccepted(String schema) {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
             if (action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
+                    || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED
+                    || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED
                     || action == BusinessAuditAction.LOAN_APPLICATION_CANCELLED
                     || action == BusinessAuditAction.LOAN_SETTLEMENT_APPROVED
                     || action == BusinessAuditAction.LOAN_ACCOUNT_CLOSED) {

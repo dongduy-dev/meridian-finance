@@ -143,6 +143,17 @@
                          "type":  "string"
                      },
                      {
+                         "key":  "uclLoanApplicationId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "uclCp2ReadyScenarioEnabled",
+                         "value":  "false",
+                         "type":  "string",
+                         "description":  "Set true after all required UCL uploads have been accepted and the application is SUBMITTED."
+                     },
+                     {
                          "key":  "applicationNumber",
                          "value":  "",
                          "type":  "string"
@@ -2089,11 +2100,41 @@
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
                                                                                     "pm.test(\"Status is 409\", () => pm.response.to.have.status(409));",
-                                                                                    "pm.test(\"Duplicate UCL application is blocked\", () => pm.expect(pm.response.json().errorCode).to.eql(\"BLOCKING_APPLICATION_EXISTS\"));"
-                                                                                ]
-                                                                   }
-                                                    }
-                                                ]
+                                                                                     "pm.test(\"Duplicate UCL application is blocked\", () => pm.expect(pm.response.json().errorCode).to.eql(\"BLOCKING_APPLICATION_EXISTS\"));"
+                                                                                 ]
+                                                                    }
+                                                     }
+                                                 ]
+                                  },
+                                  {
+                                      "name":  "POST start UCL manual verification - prepared evidence",
+                                      "request":  {"method":"POST","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/unsecured-consumer-loan-verification/start","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Requires a UCL application whose required uploads have been accepted and whose status is SUBMITTED. Set uclCp2ReadyScenarioEnabled=true after preparing that evidence."},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclCp2ReadyScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Verification started without deciding the result\", () => { pm.expect(json.status).to.eql(\"VERIFICATION_PENDING\"); pm.expect(json.productVerificationResult).to.eql(\"PENDING_MANUAL_REVIEW\"); pm.expect(json.reviewedAt).to.eql(null); });"]}}]
+                                  },
+                                  {
+                                      "name":  "POST complete UCL manual verification as VERIFIED",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/unsecured-consumer-loan-verification/complete","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Completes only the positive manual-verification path. The restricted assessment note and Staff identity are not returned.","body":{"mode":"raw","raw":"{\n  \"assessmentNote\": \"Income and employment evidence are consistent for Loan Officer review.\"\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclCp2ReadyScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Positive verification completed safely\", () => { pm.expect(json.status).to.eql(\"SUBMITTED\"); pm.expect(json.productVerificationResult).to.eql(\"VERIFIED\"); pm.expect(json.reviewedAt).to.be.a(\"string\"); pm.expect(json).not.to.have.property(\"reviewedByUserId\"); pm.expect(json).not.to.have.property(\"assessmentNote\"); });"]}}]
+                                  },
+                                  {
+                                      "name":  "POST start UCL review after verification",
+                                      "request":  {"method":"POST","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/review/start","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Starts the common Loan Officer review only after authoritative UCL verification is VERIFIED."},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclCp2ReadyScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"UCL entered common review\", () => pm.expect(pm.response.json().status).to.eql(\"UNDER_REVIEW\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "POST recommend UCL approval",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/review-recommendations","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Records the executable positive UCL recommendation and moves the application to APPROVAL_PENDING.","body":{"mode":"raw","raw":"{\n  \"action\": \"RECOMMEND_APPROVAL\",\n  \"reason\": \"Manual verification and document review are complete.\",\n  \"internalNotes\": \"Prepared UCL positive-path scenario.\"\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclCp2ReadyScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Recommendation belongs to the UCL application\", () => pm.expect(pm.response.json().loanApplicationId).to.eql(pm.collectionVariables.get(\"uclLoanApplicationId\")));"]}}]
+                                  },
+                                  {
+                                      "name":  "POST block UCL approval before pricing exists",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Confirms fail-closed pre-pricing safety: UCL approval is not executable and creates no ApprovedOffer.","body":{"mode":"raw","raw":"{\n  \"action\": \"APPROVE\",\n  \"reason\": \"This request must be blocked before persistence.\",\n  \"internalNotes\": null\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclCp2ReadyScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.test(\"Stable pre-pricing safety code\", () => pm.expect(pm.response.json().errorCode).to.eql(\"UCL_OFFER_EXECUTION_NOT_READY\"));"]}}]
                                   }
                               ]
                  },

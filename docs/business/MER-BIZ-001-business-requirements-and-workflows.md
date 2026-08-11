@@ -299,6 +299,8 @@ Each submitted application records a formal product-verification result.
 
 `VERIFIED` permits progression. `FAILED` records an unsuccessful check. `PENDING_MANUAL_REVIEW` waits for an authorized decision. `REQUIRES_MORE_INFORMATION` requires a correction path and is not an approval outcome.
 
+For Unsecured Consumer Loan, `VERIFIED` means that an authorized Staff reviewer completed the manual evidence-consistency and basic repayment-capacity assessment. It is not credit approval. The verification records the authoritative Staff actor, completion time, and restricted internal assessment evidence. The same Loan Officer may perform this verification and later record the review recommendation; maker-checker separation remains between that recommendation and the Approver's final decision.
+
 ### 6.4 Document Review and Correction
 
 Upload completeness is satisfied when every required checklist item has a current upload or an authorized non-upload outcome. Processing readiness requires every required item to be accepted or waived, while non-required items remain outside the readiness obligation.
@@ -595,7 +597,7 @@ End-to-end workflow:
 5. System validates Customer readiness, product rules, requested amount and term, required fields, checklist upload completeness, and blocking applications.
 6. Customer submits the application.
 7. System records `VERIFIED`, `FAILED`, `PENDING_MANUAL_REVIEW`, or `REQUIRES_MORE_INFORMATION` according to the product policy.
-8. An authorized reviewer evaluates income and employment consistency and basic repayment capacity.
+8. An authorized Staff reviewer records the manual verification outcome, authoritative actor and time, and restricted internal assessment evidence for income and employment consistency and basic repayment capacity. A `VERIFIED` outcome permits review entry but is not credit approval.
 9. Document replacement and correction follow Section 6.4.
 10. The Loan Officer records a recommendation or correction outcome.
 11. The Approver records the independent decision.
@@ -696,7 +698,7 @@ Upload completeness and processing readiness are calculated results. They must n
 | Current Status | Trigger or Action | Actor | Guard | Next Status | Reason Required |
 |---|---|---|---|---|---|
 | `DRAFT` | Submit application | Customer | All submission checks pass | `SUBMITTED` or `DOCUMENTS_PENDING` | No |
-| `SUBMITTED` | Start product verification when required | System | Product policy requires a separate verification stage | `VERIFICATION_PENDING` | No |
+| `SUBMITTED` | Start product verification when required | System or authorized reviewer | Product policy requires a separate verification stage | `VERIFICATION_PENDING` | No |
 | `SUBMITTED` | Start Loan Officer review | Loan Officer | Product verification is complete and documents meet the review-entry rule | `UNDER_REVIEW` | No |
 | `VERIFICATION_PENDING` | Verification passes | System or authorized reviewer | Result is `VERIFIED` | `DOCUMENTS_PENDING` or `SUBMITTED` | No |
 | `VERIFICATION_PENDING` | Verification fails | System or authorized reviewer | Result is `FAILED` | `VERIFICATION_FAILED` | Yes |
@@ -793,6 +795,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-018 | Manual disbursement converts the Salary Advance reservation to used exposure when the LoanAccount is created. |
 | BR-019 | Salary Advance used exposure is released only for principal allocated by an actual ordinary repayment or Administrative Full-Balance Settlement payment and by exactly that amount; fee and interest allocations release none. Any non-payment release requires an explicitly approved future product rule. |
 | BR-020 | Unsecured Consumer Loan requires income and employment evidence and does not require collateral. |
+| BR-020A | Unsecured Consumer Loan `VERIFIED` records completed manual evidence and basic repayment-capacity verification, not credit approval. The same Loan Officer may verify and recommend; the Approver remains a separate actor. |
 | BR-021 | Collateral Loan requires structured collateral facts and ownership or supporting evidence. |
 | BR-022 | Collateral estimated value is advisory in the MVP and does not create an automated loan-to-value decision. |
 | BR-023 | Upload completeness, manual document review and processing readiness, and product verification are separate controls. |

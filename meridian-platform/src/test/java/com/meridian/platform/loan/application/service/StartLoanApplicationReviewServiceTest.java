@@ -3,13 +3,16 @@ package com.meridian.platform.loan.application.service;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
+import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
+import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanVerification;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +38,7 @@ class StartLoanApplicationReviewServiceTest {
     private final UUID applicationId = UUID.randomUUID();
     private LoanApplicationRepository applicationRepository;
     private LoanDocumentChecklistPort documentChecklistPort;
+    private UnsecuredConsumerLoanVerificationRepository uclVerificationRepository;
     private LoanReviewCycleRepository reviewCycleRepository;
     private LoanApplicationStatusTransitionRecorder transitionRecorder;
     private BusinessAuditPublisher auditPublisher;
@@ -44,6 +48,7 @@ class StartLoanApplicationReviewServiceTest {
     void setUp() {
         applicationRepository = mock(LoanApplicationRepository.class);
         documentChecklistPort = mock(LoanDocumentChecklistPort.class);
+        uclVerificationRepository = mock(UnsecuredConsumerLoanVerificationRepository.class);
         reviewCycleRepository = mock(LoanReviewCycleRepository.class);
         transitionRecorder = mock(LoanApplicationStatusTransitionRecorder.class);
         auditPublisher = mock(BusinessAuditPublisher.class);
@@ -62,6 +67,7 @@ class StartLoanApplicationReviewServiceTest {
         service = new StartLoanApplicationReviewService(
                 applicationRepository,
                 documentChecklistPort,
+                uclVerificationRepository,
                 reviewCycleRepository,
                 transitionRecorder,
                 auditPublisher,
@@ -97,6 +103,67 @@ class StartLoanApplicationReviewServiceTest {
         );
     }
 
+    @Test
+    void pendingUclVerificationCannotStartReview() {
+        LoanApplication application = uclApplication(LoanApplicationStatus.SUBMITTED);
+        when(applicationRepository.findByIdForUpdate(applicationId)).thenReturn(Optional.of(application));
+        when(uclVerificationRepository.findByLoanApplicationId(applicationId))
+                .thenReturn(Optional.of(pendingUclVerification(application)));
+
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.startReview(applicationId)
+        );
+
+        assertEquals("PRODUCT_VERIFICATION_PENDING", exception.getErrorCode());
+        verify(applicationRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void missingUclVerificationCannotStartReview() {
+        LoanApplication application = uclApplication(LoanApplicationStatus.SUBMITTED);
+        when(applicationRepository.findByIdForUpdate(applicationId)).thenReturn(Optional.of(application));
+        when(uclVerificationRepository.findByLoanApplicationId(applicationId)).thenReturn(Optional.empty());
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.startReview(applicationId)
+        );
+
+        assertEquals("UCL_VERIFICATION_REQUIRED", exception.getErrorCode());
+        verify(applicationRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void verificationPendingUclCannotStartReview() {
+        LoanApplication application = uclApplication(LoanApplicationStatus.VERIFICATION_PENDING);
+        when(applicationRepository.findByIdForUpdate(applicationId)).thenReturn(Optional.of(application));
+        when(uclVerificationRepository.findByLoanApplicationId(applicationId))
+                .thenReturn(Optional.of(pendingUclVerification(application)));
+
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.startReview(applicationId)
+        );
+
+        assertEquals("PRODUCT_VERIFICATION_PENDING", exception.getErrorCode());
+        verify(applicationRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void verifiedUclCanStartCommonLoanOfficerReview() {
+        LoanApplication application = uclApplication(LoanApplicationStatus.SUBMITTED);
+        UnsecuredConsumerLoanVerification verified = pendingUclVerification(application)
+                .completeManualReview(UUID.randomUUID(), LocalDateTime.of(2026, 7, 19, 7, 30), "Verified evidence.");
+        when(applicationRepository.findByIdForUpdate(applicationId)).thenReturn(Optional.of(application));
+        when(uclVerificationRepository.findByLoanApplicationId(applicationId)).thenReturn(Optional.of(verified));
+        when(documentChecklistPort.isProcessingReady(applicationId)).thenReturn(true);
+        when(applicationRepository.save(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertEquals("UNDER_REVIEW", service.startReview(applicationId).status());
+    }
+
     private LoanApplication application() {
         return new LoanApplication(
                 applicationId,
@@ -108,6 +175,29 @@ class StartLoanApplicationReviewServiceTest {
                 LoanApplicationStatus.SUBMITTED,
                 BigDecimal.valueOf(3_000_000).setScale(2),
                 1,
+                LocalDateTime.of(2026, 7, 19, 7, 0)
+        );
+    }
+
+    private LoanApplication uclApplication(LoanApplicationStatus status) {
+        return new LoanApplication(
+                applicationId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "UCL-20260719-000001",
+                ProductCode.UNSECURED_CONSUMER_LOAN,
+                ProductType.UNSECURED,
+                status,
+                BigDecimal.valueOf(5_000_000).setScale(2),
+                6,
+                LocalDateTime.of(2026, 7, 19, 7, 0)
+        );
+    }
+
+    private UnsecuredConsumerLoanVerification pendingUclVerification(LoanApplication application) {
+        return UnsecuredConsumerLoanVerification.pendingManualReview(
+                UUID.randomUUID(),
+                application,
                 LocalDateTime.of(2026, 7, 19, 7, 0)
         );
     }

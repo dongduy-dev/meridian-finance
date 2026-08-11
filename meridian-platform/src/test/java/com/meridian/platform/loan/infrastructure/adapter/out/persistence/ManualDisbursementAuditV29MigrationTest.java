@@ -35,6 +35,8 @@ class ManualDisbursementAuditV29MigrationTest {
             if (action == BusinessAuditAction
                     .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED
                     || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
+                    || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED
+                    || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED
                     || action == BusinessAuditAction.LOAN_APPLICATION_CANCELLED
                     || action == BusinessAuditAction.REPAYMENT_RECORDED
                     || action == BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED
@@ -66,13 +68,16 @@ class ManualDisbursementAuditV29MigrationTest {
     }
 
     @Test
-    void currentSchemaSnapshotDeclaresV38AndCurrentFoundations() throws Exception {
+    void currentSchemaSnapshotDeclaresV39AndCurrentFoundations() throws Exception {
         String snapshot = Files.readString(Path.of(
                 "../docs/database/MER-DB-CURRENT-SCHEMA.sql"
         ));
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V38"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V39"));
         assertTrue(snapshot.contains("CREATE TABLE unsecured_consumer_loan_verifications"));
+        assertTrue(snapshot.contains("ADD COLUMN reviewed_by_user_id UUID"));
+        assertTrue(snapshot.contains("'UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED'"));
+        assertTrue(snapshot.contains("'UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED'"));
         assertTrue(snapshot.contains("CREATE TABLE loan_application_cancellations"));
         assertTrue(snapshot.contains("-- V29 manual disbursement audit action"));
         assertTrue(snapshot.contains("'MANUAL_DISBURSEMENT_CONFIRMED'"));
