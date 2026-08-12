@@ -15,10 +15,19 @@ class LoanProductActivationPolicyResolverTest {
     @Test
     void resolvesTheExactRegisteredPolicy() {
         LoanProductActivationPolicy salaryAdvance = policy(ProductCode.SALARY_ADVANCE);
+        LoanProductActivationPolicy unsecuredConsumerLoan =
+                policy(ProductCode.UNSECURED_CONSUMER_LOAN);
         LoanProductActivationPolicyResolver resolver =
-                new LoanProductActivationPolicyResolver(List.of(salaryAdvance));
+                new LoanProductActivationPolicyResolver(List.of(
+                        salaryAdvance,
+                        unsecuredConsumerLoan
+                ));
 
         assertSame(salaryAdvance, resolver.resolve(ProductCode.SALARY_ADVANCE));
+        assertSame(
+                unsecuredConsumerLoan,
+                resolver.resolve(ProductCode.UNSECURED_CONSUMER_LOAN)
+        );
     }
 
     @Test
@@ -40,7 +49,7 @@ class LoanProductActivationPolicyResolverTest {
 
         BusinessRuleViolationException failure = assertThrows(
                 BusinessRuleViolationException.class,
-                () -> resolver.resolve(ProductCode.UNSECURED_CONSUMER_LOAN)
+                () -> resolver.resolve(ProductCode.COLLATERAL_LOAN)
         );
 
         assertEquals("PRODUCT_ACTIVATION_NOT_SUPPORTED", failure.getErrorCode());

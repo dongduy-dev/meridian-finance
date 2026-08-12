@@ -508,10 +508,10 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
 
     @Test
     void unsupportedProductAndReleasedReservationRollbackEveryGenericWrite() {
-        var unsupported = support.createFixture(true, ProductCode.UNSECURED_CONSUMER_LOAN);
+        var unsupported = support.createFixture(true, ProductCode.COLLATERAL_LOAN);
         var unsupportedFailure = assertThrows(BusinessRuleViolationException.class, () ->
                 disbursements.confirm(support.command(
-                        unsupported, UUID.randomUUID(), "UCL-" + unsupported.token())));
+                        unsupported, UUID.randomUUID(), "COLLATERAL-" + unsupported.token())));
         assertEquals("PRODUCT_ACTIVATION_NOT_SUPPORTED", unsupportedFailure.getErrorCode());
         support.assertNoActivation(unsupported);
 

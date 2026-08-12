@@ -93,8 +93,11 @@ final class ManualDisbursementActivationPostgreSqlTestSupport {
                             + "values (?,?,?,?,?,?,?,1000,2,?)",
                     applicationId, customerId, productId, "I3-" + token,
                     productCode.name(),
-                    productCode == ProductCode.SALARY_ADVANCE
-                            ? "SALARY_BASED" : "UNSECURED",
+                    switch (productCode) {
+                        case SALARY_ADVANCE -> "SALARY_BASED";
+                        case UNSECURED_CONSUMER_LOAN -> "UNSECURED";
+                        case COLLATERAL_LOAN -> "SECURED";
+                    },
                     ready ? "DISBURSEMENT_PENDING" : "CONTRACT_PENDING",
                     NOW.minusMonths(1)
             );

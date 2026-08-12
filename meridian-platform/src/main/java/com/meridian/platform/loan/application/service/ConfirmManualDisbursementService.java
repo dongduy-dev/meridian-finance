@@ -222,8 +222,10 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
         );
         account = initializeRepaymentServicing(account, schedule, operation);
 
+        LoanProductActivationPolicy activationPolicy =
+                activationPolicies.resolve(application.productCode());
         LoanProductActivationPolicy.ProductActivationResult activationResult =
-                activationPolicies.resolve(application.productCode()).activate(
+                activationPolicy.activate(
                         new LoanProductActivationPolicy.ProductActivationCommand(
                                 application,
                                 contract,
@@ -233,6 +235,13 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
                         )
                 );
         validateActivationResult(application, contract, movementId, activationResult);
+        activationPolicy.validateCompletedActivation(
+                new LoanProductActivationPolicy.CompletedActivationValidationCommand(
+                        application,
+                        contract,
+                        account
+                )
+        );
 
         LoanApplicationTransitionResult transition = application.confirmManualDisbursement();
         LoanApplication disbursedApplication = applications.save(transition.loanApplication());
@@ -685,12 +694,16 @@ public class ConfirmManualDisbursementService implements ConfirmManualDisburseme
             UUID movementId,
             LoanProductActivationPolicy.ProductActivationResult result
     ) {
-        BigDecimal principal = contract.financialTerms().approvedPrincipal();
-        if (result.productCode() != application.productCode()
-                || !result.movementId().equals(movementId)
-                || result.convertedAmount().compareTo(principal) != 0) {
+        if (result == null || result.productCode() != application.productCode()) {
             throw systemStateConflict();
         }
+        result.exposureEffect().ifPresent(effect -> {
+            BigDecimal principal = contract.financialTerms().approvedPrincipal();
+            if (!effect.movementId().equals(movementId)
+                    || effect.convertedAmount().compareTo(principal) != 0) {
+                throw systemStateConflict();
+            }
+        });
     }
 
     private void publishAudit(

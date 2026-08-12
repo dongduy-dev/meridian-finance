@@ -605,7 +605,13 @@ totalRepaymentAmount = approvedPrincipal + totalInterest
 
 The immutable offer contains one provisional repayment item per approved term month and no calendar due dates. Principal and total interest are each divided into equal whole-VND base portions; any remainder is assigned only to the final item. Every item has zero fee, and item totals must reconcile exactly to the offer principal, interest, fee, and total repayment.
 
+An accepted UCL offer is the exact financial authority for its operational contract. Contract preparation copies the accepted principal, term, pricing method, monthly rate, fee, repayment method, totals, and provisional items without repricing or recomputation. It captures the Customer's current eligible primary active bank account through the common purpose-protected contract destination mechanism. A contract may be regenerated only for `DISBURSEMENT_ACCOUNT_REFRESH`; regeneration supersedes the prior version, preserves every financial term and item, captures the newly eligible destination, and requires fresh Customer acknowledgment.
+
+UCL contract readiness requires the accepted offer, acknowledgment of the exact current contract, processing-ready documents, no active correction, an active Customer, a valid captured destination, and the application-owned UCL verification in `VERIFIED`. UCL readiness and activation do not read, reserve, convert, release, or create Salary Advance limit or movement evidence. Readiness confirmation moves the contract to `READY_FOR_DISBURSEMENT` and the application to `DISBURSEMENT_PENDING` without activating a LoanAccount.
+
 At later manual disbursement, the controlled `firstRepaymentDate` must be after the disbursement value date and no later than one calendar month after it. The first installment uses that date. Later installments use its day-of-month as the monthly anchor; when a month does not contain that day, its final calendar day applies.
+
+Manual-disbursement confirmation atomically creates the UCL LoanAccount, immutable disbursement evidence, one authoritative final monthly schedule, initial installment progress and histories, and the `DISBURSED` application transition. The final schedule copies the contract amounts and item sequence exactly and adds only the controlled calendar dates. UCL activation has no product-exposure effect.
 
 For example, a January 30 first repayment date produces January 30, February 28 or 29, March 30, April 30, and the same anchored sequence thereafter.
 

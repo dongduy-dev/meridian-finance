@@ -56,7 +56,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     @Test
     void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
-        assertEquals("40", latestVersion(SCHEMA));
+        assertEquals("41", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 

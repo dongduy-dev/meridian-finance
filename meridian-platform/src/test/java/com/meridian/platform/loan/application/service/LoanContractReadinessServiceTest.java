@@ -34,6 +34,7 @@ class LoanContractReadinessServiceTest {
     @Mock ContractBankAccountPort bankAccounts;
     @Mock DisbursementBankAccountProtector protector;
     @Mock SalaryAdvanceVerificationRepository verifications;
+    @Mock UnsecuredConsumerLoanVerificationRepository uclVerifications;
     @Mock SalaryAdvanceLimitRepository limits;
     @Mock SalaryAdvanceLimitMovementRepository movements;
     @Mock LoanApplicationStatusTransitionRecorder transitionRecorder;
@@ -43,7 +44,8 @@ class LoanContractReadinessServiceTest {
 
     @BeforeEach void setUp() {
         service = new LoanContractReadinessService(applications, offers, contracts, corrections, documents,
-                bankAccounts, protector, verifications, limits, movements, transitionRecorder, audit, users,
+                bankAccounts, protector, verifications, uclVerifications, limits, movements,
+                transitionRecorder, audit, users,
                 Clock.fixed(Instant.parse("2026-07-23T00:00:00Z"), ZoneOffset.UTC));
     }
 
@@ -65,34 +67,60 @@ class LoanContractReadinessServiceTest {
         verify(contracts, times(1)).save(any());
     }
 
-    @Test void uclPreparationFailsBeforeOfferContractDestinationOrSalarySpecificWork() {
-        Fixture f = fixture();
-        LoanApplication uclApplication = new LoanApplication(
-                f.application.id(),
-                f.application.customerId(),
-                f.application.loanProductId(),
-                "UCL-1",
-                ProductCode.UNSECURED_CONSUMER_LOAN,
-                ProductType.UNSECURED,
-                LoanApplicationStatus.CONTRACT_PENDING,
-                money(5_000_000),
-                6,
-                f.application.submittedAt()
-        );
+    @Test void uclPreparationCopiesAcceptedOfferWithoutSalaryExposureWork() {
+        UclFixture f = uclFixture();
         when(users.currentUser()).thenReturn(staff());
         when(contracts.findByPreparationRequestId(any())).thenReturn(Optional.empty());
-        when(applications.findByIdForUpdate(uclApplication.id())).thenReturn(Optional.of(uclApplication));
+        when(applications.findByIdForUpdate(f.application.id())).thenReturn(Optional.of(f.application));
+        when(offers.findByLoanApplicationIdForUpdate(f.application.id())).thenReturn(Optional.of(f.offer));
+        when(contracts.findCurrentByApplicationIdForUpdate(f.application.id())).thenReturn(Optional.empty());
+        when(corrections.findActiveRequestByApplicationIdForUpdate(f.application.id()))
+                .thenReturn(Optional.empty());
+        when(documents.isProcessingReady(f.application.id())).thenReturn(true);
+        when(uclVerifications.findByLoanApplicationId(f.application.id()))
+                .thenReturn(Optional.of(f.verification));
+        when(bankAccounts.capturePrimaryActive(f.application.customerId())).thenReturn(f.sensitive);
+        when(protector.protect(any(byte[].class), any())).thenReturn(
+                new ProtectedBankAccountEnvelope(
+                        "AES-256-GCM", "v1", new byte[12], new byte[]{1},
+                        "DISBURSEMENT_ACCOUNT_V1"
+                )
+        );
+        when(contracts.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        LoanContract prepared = service.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), f.application.id(), 0, null
+        ));
+
+        assertEquals(f.offer.financialTerms(), prepared.financialTerms());
+        assertEquals(RepaymentMethod.MONTHLY_INSTALLMENT,
+                prepared.financialTerms().repaymentMethod());
+        assertEquals(f.offer.repaymentItems().size(), prepared.repaymentItems().size());
+        assertTrue(f.sensitive.cleared());
+        verifyNoInteractions(verifications, limits, movements);
+    }
+
+    @Test void uclPreparationRejectsInvalidVerificationBeforeSensitiveCapture() {
+        UclFixture f = uclFixture();
+        when(users.currentUser()).thenReturn(staff());
+        when(contracts.findByPreparationRequestId(any())).thenReturn(Optional.empty());
+        when(applications.findByIdForUpdate(f.application.id())).thenReturn(Optional.of(f.application));
+        when(offers.findByLoanApplicationIdForUpdate(f.application.id())).thenReturn(Optional.of(f.offer));
+        when(contracts.findCurrentByApplicationIdForUpdate(f.application.id())).thenReturn(Optional.empty());
+        when(corrections.findActiveRequestByApplicationIdForUpdate(f.application.id()))
+                .thenReturn(Optional.empty());
+        when(documents.isProcessingReady(f.application.id())).thenReturn(true);
+        when(uclVerifications.findByLoanApplicationId(f.application.id())).thenReturn(Optional.empty());
 
         BusinessStateConflictException error = assertThrows(
                 BusinessStateConflictException.class,
                 () -> service.prepare(new PrepareLoanContractUseCase.Command(
-                        UUID.randomUUID(), uclApplication.id(), 0, null
+                        UUID.randomUUID(), f.application.id(), 0, null
                 ))
         );
 
-        assertEquals("UCL_CONTRACT_EXECUTION_NOT_READY", error.getErrorCode());
-        verifyNoInteractions(offers, corrections, documents, bankAccounts, protector,
-                verifications, limits, movements, transitionRecorder, audit);
+        assertEquals("UCL_VERIFICATION_INVALID", error.getErrorCode());
+        verifyNoInteractions(bankAccounts, protector, verifications, limits, movements);
         verify(contracts, never()).save(any());
     }
 
@@ -219,6 +247,34 @@ class LoanContractReadinessServiceTest {
         assertFalse(snapshot.blockers().contains(ContractReadinessBlockerCode.CONTRACT_VERSION_STALE));
         verify(bankAccounts).inspectCaptured(f.application.customerId(), f.accountId);
         verify(bankAccounts, never()).inspectCapturedForUpdate(any(), any());
+    }
+
+    @Test void uclReadinessRequiresVerifiedEvidenceWithoutSalaryReservationAccess() {
+        UclFixture f = uclFixture();
+        LoanContract acknowledged = uclContract(f, LoanContractStatus.ACKNOWLEDGED);
+        when(users.currentUser()).thenReturn(staff());
+        when(applications.findById(f.application.id())).thenReturn(Optional.of(f.application));
+        when(offers.findByLoanApplicationId(f.application.id())).thenReturn(Optional.of(f.offer));
+        when(contracts.findCurrentByApplicationId(f.application.id()))
+                .thenReturn(Optional.of(acknowledged));
+        when(documents.isProcessingReady(f.application.id())).thenReturn(true);
+        when(corrections.existsActiveRequestByApplicationId(f.application.id())).thenReturn(false);
+        when(bankAccounts.inspectCaptured(f.application.customerId(), f.accountId))
+                .thenReturn(new ContractBankAccountPort.ContractBankAccountState(true, true, true));
+        when(uclVerifications.findByLoanApplicationId(f.application.id()))
+                .thenReturn(Optional.of(f.verification));
+
+        QueryContractReadinessUseCase.Snapshot ready = service.query(f.application.id(), 1);
+
+        assertTrue(ready.ready());
+        assertTrue(ready.blockers().isEmpty());
+        verifyNoInteractions(verifications, limits, movements);
+
+        reset(uclVerifications);
+        when(uclVerifications.findByLoanApplicationId(f.application.id())).thenReturn(Optional.empty());
+        QueryContractReadinessUseCase.Snapshot blocked = service.query(f.application.id(), 1);
+        assertFalse(blocked.ready());
+        assertTrue(blocked.blockers().contains(ContractReadinessBlockerCode.UCL_VERIFICATION_INVALID));
     }
 
     @Test void activeCorrectionBlocksPreparationBeforeCustomerOrReservationChecks() {
@@ -483,8 +539,75 @@ class LoanContractReadinessServiceTest {
     }
     private static ApprovedOfferFinancialTerms terms() { return new ApprovedOfferFinancialTerms(money(1000), 1,
             InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL, new BigDecimal("0.100000"), money(100), money(0), money(1100), RepaymentMethod.ON_SALARY_DATE); }
+    private static UclFixture uclFixture() {
+        UUID customerId = UUID.randomUUID();
+        UUID applicationId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
+        java.time.LocalDateTime now = java.time.LocalDateTime.of(2026, 7, 22, 23, 0);
+        LoanApplication application = new LoanApplication(
+                applicationId, customerId, UUID.randomUUID(), "UCL-1",
+                ProductCode.UNSECURED_CONSUMER_LOAN, ProductType.UNSECURED,
+                LoanApplicationStatus.CONTRACT_PENDING, money(3_000_000), 3, now.minusDays(5)
+        );
+        ApprovedOfferFinancialTerms terms = new ApprovedOfferFinancialTerms(
+                money(3_000_000), 3, InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL,
+                new BigDecimal("0.018000"), money(162_000), money(0), money(3_162_000),
+                RepaymentMethod.MONTHLY_INSTALLMENT
+        );
+        List<ProvisionalRepaymentItem> items = java.util.stream.IntStream.rangeClosed(1, 3)
+                .mapToObj(number -> new ProvisionalRepaymentItem(
+                        UUID.randomUUID(), number, money(1_000_000), money(54_000),
+                        money(0), money(1_054_000)
+                ))
+                .toList();
+        ApprovedOffer offer = new ApprovedOffer(
+                UUID.randomUUID(), applicationId, UUID.randomUUID(), ApprovedOfferStatus.ACCEPTED,
+                terms, items, now.minusDays(2), now.plusDays(5), now.minusDays(1), null, null
+        );
+        UnsecuredConsumerLoanVerification verification = new UnsecuredConsumerLoanVerification(
+                UUID.randomUUID(), applicationId, ProductVerificationResult.VERIFIED,
+                now.minusDays(4), UUID.randomUUID(), now.minusDays(3),
+                "Verified UCL evidence."
+        );
+        SensitiveDisbursementBankAccountDetails sensitive =
+                new SensitiveDisbursementBankAccountDetails(
+                        customerId, accountId, "VCB", "Vietcombank", "MERIDIAN CUSTOMER",
+                        "7890", new byte[]{1, 2, 3, 4, 5, 6}
+                );
+        return new UclFixture(application, offer, verification, accountId, sensitive);
+    }
+    private static LoanContract uclContract(UclFixture f, LoanContractStatus status) {
+        java.time.LocalDateTime preparedAt = java.time.LocalDateTime.of(2026, 7, 22, 23, 0);
+        List<LoanContractRepaymentItem> items = f.offer.repaymentItems().stream()
+                .map(item -> new LoanContractRepaymentItem(
+                        UUID.randomUUID(), item.id(), item.installmentNumber(), item.principalDue(),
+                        item.interestDue(), item.feeDue(), item.totalDue()
+                ))
+                .toList();
+        LoanContract prepared = LoanContract.prepared(
+                UUID.randomUUID(), f.application.id(), f.offer.id(), "MCT-UCL-1", 1,
+                f.offer.financialTerms(), items,
+                new ProtectedDisbursementBankAccount(
+                        f.application.customerId(), f.accountId, "VCB", "Vietcombank",
+                        "MERIDIAN CUSTOMER", "7890", true, true, preparedAt,
+                        "AES-256-GCM", "v1", new byte[12], new byte[]{1},
+                        "DISBURSEMENT_ACCOUNT_V1"
+                ),
+                UUID.randomUUID(), null, null, UUID.randomUUID(), preparedAt, null
+        );
+        return status == LoanContractStatus.ACKNOWLEDGED
+                ? prepared.acknowledge(UUID.randomUUID(), UUID.randomUUID(), preparedAt.plusMinutes(1))
+                : prepared;
+    }
     private static BigDecimal money(long amount) { return BigDecimal.valueOf(amount).setScale(2); }
     private record Fixture(LoanApplication application, ApprovedOffer offer, SalaryAdvanceLimit limit,
                            SalaryAdvanceVerification verification, UUID accountId,
                            SensitiveDisbursementBankAccountDetails sensitive) {}
+    private record UclFixture(
+            LoanApplication application,
+            ApprovedOffer offer,
+            UnsecuredConsumerLoanVerification verification,
+            UUID accountId,
+            SensitiveDisbursementBankAccountDetails sensitive
+    ) {}
 }

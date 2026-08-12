@@ -105,6 +105,28 @@ class FinalRepaymentScheduleGeneratorTest {
     }
 
     @Test
+    void monthlyInstallmentUclScheduleClampsFebruaryAndRestoresTheAnchor() {
+        LoanContract contract = readyContract(3, RepaymentMethod.MONTHLY_INSTALLMENT);
+
+        RepaymentSchedule schedule = generate(
+                contract,
+                LocalDate.of(2026, 1, 30),
+                LocalDate.of(2026, 1, 31)
+        );
+
+        assertEquals(
+                List.of(
+                        LocalDate.of(2026, 1, 31),
+                        LocalDate.of(2026, 2, 28),
+                        LocalDate.of(2026, 3, 31)
+                ),
+                schedule.items().stream().map(item -> item.dueDate()).toList()
+        );
+        assertEquals(RepaymentMethod.MONTHLY_INSTALLMENT,
+                contract.financialTerms().repaymentMethod());
+    }
+
+    @Test
     void enforcesOneCalendarMonthFirstRepaymentBoundary() {
         LoanContract contract = readyContract(1);
 
@@ -170,6 +192,10 @@ class FinalRepaymentScheduleGeneratorTest {
     }
 
     private static LoanContract readyContract(int term) {
+        return readyContract(term, RepaymentMethod.ON_SALARY_DATE);
+    }
+
+    private static LoanContract readyContract(int term, RepaymentMethod repaymentMethod) {
         List<LoanContractRepaymentItem> items = IntStream.rangeClosed(1, term)
                 .mapToObj(installment -> new LoanContractRepaymentItem(
                         UUID.randomUUID(),
@@ -189,7 +215,7 @@ class FinalRepaymentScheduleGeneratorTest {
                 money(100L * term),
                 money(0),
                 money(1_100L * term),
-                RepaymentMethod.ON_SALARY_DATE
+                repaymentMethod
         );
         LocalDateTime preparedAt = LocalDateTime.of(2026, 7, 26, 8, 0);
         LoanContract prepared = LoanContract.prepared(
