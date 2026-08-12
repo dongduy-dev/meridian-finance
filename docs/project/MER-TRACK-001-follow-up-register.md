@@ -828,7 +828,7 @@ Type: Deferred feature
 
 Priority: P1
 
-Status: Complete
+Status: Done
 
 Blocks current checkpoint: No
 
