@@ -256,7 +256,7 @@ class CloseLoanAccountPostgreSqlIntegrationTest {
         Activated exposureConflict = activate("EXPOSURE");
         repayFully(exposureConflict);
         doReturn(List.of()).when(target(movements))
-                .findByLoanApplicationIdAndMovementType(any(), any());
+                .findByLoanApplicationIdAndMovementTypeForUpdate(any(), any());
         assertStateConflict(exposureConflict);
         reset(target(movements));
 

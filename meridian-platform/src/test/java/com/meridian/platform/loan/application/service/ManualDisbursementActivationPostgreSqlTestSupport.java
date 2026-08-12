@@ -47,6 +47,8 @@ final class ManualDisbursementActivationPostgreSqlTestSupport {
                     ? UUID.randomUUID() : null;
             UUID linkId = productCode == ProductCode.SALARY_ADVANCE
                     ? UUID.randomUUID() : null;
+            String repaymentMethod = productCode == ProductCode.UNSECURED_CONSUMER_LOAN
+                    ? "MONTHLY_INSTALLMENT" : "ON_SALARY_DATE";
             String token = customerId.toString().replace("-", "")
                     .substring(0, 12).toUpperCase();
 
@@ -113,8 +115,9 @@ final class ManualDisbursementActivationPostgreSqlTestSupport {
                             + "flat_monthly_interest_rate,total_interest,fee_amount,"
                             + "total_repayment_amount,repayment_method,generated_at,expires_at,accepted_at) "
                             + "values (?,?,?,'ACCEPTED',1000,2,'FLAT_ORIGINAL_PRINCIPAL',"
-                            + "0.05,100,0,1100,'ON_SALARY_DATE',?,?,?)",
+                            + "0.05,100,0,1100,?,?,?,?)",
                     approvedOfferId, applicationId, policyId,
+                    repaymentMethod,
                     NOW.minusDays(2), NOW.minusDays(1), NOW.minusDays(1)
             );
             UUID firstOfferItemId = UUID.randomUUID();
@@ -141,14 +144,14 @@ final class ManualDisbursementActivationPostgreSqlTestSupport {
                             + "acknowledged_by_user_id,acknowledged_at,confirmation_request_id,"
                             + "confirmed_by_user_id,confirmed_at) "
                             + "values (?,?,?, ?,1,?,1000,2,'FLAT_ORIGINAL_PRINCIPAL',0.05,"
-                            + "100,0,1100,'ON_SALARY_DATE',?,?,'VCB','Meridian Test Bank',"
+                            + "100,0,1100,?,?,?,'VCB','Meridian Test Bank',"
                             + "'MERIDIAN CUSTOMER','7890',true,true,?,'AES-256-GCM','v1',"
                             + "decode('000000000000000000000000','hex'),decode('01','hex'),"
                             + "'DISBURSEMENT_ACCOUNT_V1',?,?,?, ?,?,?, ?,?,?)",
                     contractId, applicationId, approvedOfferId,
                     "MCT-I3-" + token,
                     ready ? "READY_FOR_DISBURSEMENT" : "ACKNOWLEDGED",
-                    customerId, bankAccountId, NOW.minusHours(2),
+                    repaymentMethod, customerId, bankAccountId, NOW.minusHours(2),
                     UUID.randomUUID(), ACCOUNTING_USER_ID, NOW.minusHours(2),
                     UUID.randomUUID(), customerUserId, NOW.minusMinutes(90),
                     ready ? UUID.randomUUID() : null,
@@ -191,6 +194,16 @@ final class ManualDisbursementActivationPostgreSqlTestSupport {
                         UUID.randomUUID(), applicationId, customerId, linkId, limitId,
                         UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                         NOW.minusDays(10)
+                );
+            } else if (productCode == ProductCode.UNSECURED_CONSUMER_LOAN) {
+                jdbc.update(
+                        "insert into unsecured_consumer_loan_verifications "
+                                + "(id,loan_application_id,product_verification_result,created_at,"
+                                + "reviewed_by_user_id,reviewed_at,assessment_note) "
+                                + "values (?,?,'VERIFIED',?,?,?,?)",
+                        UUID.randomUUID(), applicationId, NOW.minusDays(10),
+                        ACCOUNTING_USER_ID, NOW.minusDays(5),
+                        "Verified UCL activation test evidence."
                 );
             }
             return new Fixture(

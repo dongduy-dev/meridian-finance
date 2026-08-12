@@ -159,20 +159,20 @@ class SalaryAdvanceRepaymentPolicyTest {
 
     @Test
     @MockitoSettings(strictness = Strictness.LENIENT)
-    void resolverRejectsUclAndCollateralWithoutProductPlaceholders() {
+    void resolverSupportsSalaryAndUclWhileCollateralFailsClosed() {
         LoanProductRepaymentPolicyResolver resolver =
-                new LoanProductRepaymentPolicyResolver(List.of(policy));
+                new LoanProductRepaymentPolicyResolver(List.of(
+                        policy, new UnsecuredConsumerLoanRepaymentPolicy()
+                ));
 
-        for (ProductCode productCode : List.of(
-                ProductCode.UNSECURED_CONSUMER_LOAN,
-                ProductCode.COLLATERAL_LOAN
-        )) {
-            BusinessRuleViolationException exception = assertThrows(
-                    BusinessRuleViolationException.class,
-                    () -> resolver.resolve(productCode)
-            );
-            assertEquals("PRODUCT_REPAYMENT_NOT_SUPPORTED", exception.getErrorCode());
-        }
+        assertEquals(policy, resolver.resolve(ProductCode.SALARY_ADVANCE));
+        assertEquals(ProductCode.UNSECURED_CONSUMER_LOAN,
+                resolver.resolve(ProductCode.UNSECURED_CONSUMER_LOAN).supportedProduct());
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> resolver.resolve(ProductCode.COLLATERAL_LOAN)
+        );
+        assertEquals("PRODUCT_REPAYMENT_NOT_SUPPORTED", exception.getErrorCode());
     }
     private void stubEvidence(
             SalaryAdvanceLimit limit,

@@ -131,7 +131,7 @@ class ApproveLoanSettlementPostgreSqlIntegrationTest {
         assertEquals(LoanAccountStatus.SETTLED, first.accountBalance().status());
         assertEquals(0, first.accountBalance().totalOutstanding().signum());
         assertEquals(0, principalOutstanding.compareTo(
-                first.principalAllocatedAndReleased()
+                first.principalReleased()
         ));
         assertEquals("APPROVED_SETTLEMENT", text(
                 "select transaction_type from repayment_transactions where id=?",

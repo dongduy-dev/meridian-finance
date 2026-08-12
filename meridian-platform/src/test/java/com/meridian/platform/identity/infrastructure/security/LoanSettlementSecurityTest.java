@@ -143,7 +143,7 @@ class LoanSettlementSecurityTest {
         BigDecimal zero = money("0");
         return new ApproveLoanSettlementUseCase.Result(
                 APPLICATION_ID, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                money("1230000"), date, approvedAt, money("1200000"),
+                money("1230000"), date, approvedAt, money("1200000"), money("1200000"),
                 new ApproveLoanSettlementUseCase.AccountBalance(
                         money("1200000"), money("30000"), zero, money("1230000"),
                         zero, zero, zero, zero, date, approvedAt, date,

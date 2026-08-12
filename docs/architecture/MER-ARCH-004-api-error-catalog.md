@@ -221,7 +221,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 404 | `REPAYMENT_SCHEDULE_NOT_FOUND` | Repayment schedule not found | Complete LoanAccount activation so the final repayment schedule exists |
 | 422 | `SETTLEMENT_AMOUNT_INVALID` | Settlement amount is invalid | Submit a positive whole-VND amount equal to the locked current contractual outstanding |
 | 422 | `SETTLEMENT_VALUE_DATE_INVALID` | Settlement value date is invalid | Use a date from the disbursement value date through the current UTC business date |
-| 409 | `SETTLEMENT_NOT_ALLOWED` | Settlement is not allowed | Use an `ACTIVE` or `OVERDUE` Salary Advance LoanAccount with positive contractual outstanding |
+| 409 | `SETTLEMENT_NOT_ALLOWED` | Settlement is not allowed | Use an `ACTIVE` or `OVERDUE` LoanAccount for an executable servicing product with positive contractual outstanding |
 | 409 | `LOAN_ACCOUNT_CLOSURE_NOT_ALLOWED` | Loan Account closure is not allowed | Close only a financially reconciled `SETTLED` LoanAccount |
 
 ---

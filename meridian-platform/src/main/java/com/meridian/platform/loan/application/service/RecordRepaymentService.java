@@ -142,6 +142,7 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
         if (application.status() != LoanApplicationStatus.DISBURSED) {
             throw repaymentNotAllowed();
         }
+        LoanProductRepaymentPolicy policy = policies.resolve(application.productCode());
         LoanAccount account = accounts
                 .findByLoanApplicationIdForUpdate(application.id())
                 .orElseThrow(RecordRepaymentService::stateConflict);
@@ -211,7 +212,6 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
             ));
         }
 
-        LoanProductRepaymentPolicy policy = policies.resolve(application.productCode());
         BigDecimal principalReleased = policy.releasePrincipal(
                 new LoanProductRepaymentPolicy.PrincipalReleaseCommand(
                         application, updatedAccount, transactionId, allocations, recordedAt
@@ -248,7 +248,8 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
         validateOutcome(transaction, outcome);
         policies.resolve(application.productCode()).validateCompletedRelease(
                 new LoanProductRepaymentPolicy.CompletedReleaseCommand(
-                        application, account, transaction.id(), outcome.principalReleased()
+                        application, account, transaction.id(), transaction.allocations(),
+                        outcome.principalReleased()
                 )
         );
         validateReplayEvidence(transaction, outcome);
@@ -403,10 +404,6 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
             RepaymentTransaction transaction,
             RepaymentOperationOutcome outcome
     ) {
-        BigDecimal principal = transaction.allocations().stream()
-                .filter(item -> item.component().name().equals("PRINCIPAL"))
-                .map(RepaymentAllocation::amount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
         if (!transaction.id().equals(outcome.repaymentTransactionId())
                 || !transaction.loanApplicationId().equals(outcome.loanApplicationId())
                 || !transaction.loanAccountId().equals(outcome.loanAccountId())
@@ -414,8 +411,7 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
                 || transaction.receivedAmount().compareTo(outcome.receivedAmount()) != 0
                 || !transaction.paymentValueDate().equals(outcome.paymentValueDate())
                 || !ServicingEvidenceTimestamp.same(
-                transaction.recordedAt(), outcome.recordedAt())
-                || principal.compareTo(outcome.principalReleased()) != 0) {
+                transaction.recordedAt(), outcome.recordedAt())) {
             throw stateConflict();
         }
     }
@@ -479,6 +475,10 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
                 }).toList();
         List<InstallmentProgress> progress = outcome.installments().stream()
                 .map(item -> toProgress(item, scheduleItems)).toList();
+        BigDecimal principalAllocated = transaction.allocations().stream()
+                .filter(item -> item.component().name().equals("PRINCIPAL"))
+                .map(RepaymentAllocation::amount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         RepaymentBalance balance = outcome.accountBalance();
         AccountBalance accountBalance = new AccountBalance(
                 balance.principalPaid(), balance.interestPaid(), balance.feePaid(),
@@ -492,7 +492,8 @@ public class RecordRepaymentService implements RecordRepaymentUseCase {
                 outcome.loanApplicationId(), outcome.loanAccountId(),
                 transaction.id(), outcome.repaymentScheduleId(),
                 outcome.receivedAmount(), outcome.paymentValueDate(), outcome.recordedAt(),
-                allocations, progress, accountBalance, outcome.principalReleased(), replay
+                allocations, progress, accountBalance, principalAllocated,
+                outcome.principalReleased(), replay
         );
     }
 

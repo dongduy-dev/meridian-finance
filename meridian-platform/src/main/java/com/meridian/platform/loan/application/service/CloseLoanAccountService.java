@@ -12,7 +12,6 @@ import com.meridian.platform.loan.application.port.out.RepaymentOperationOutcome
 import com.meridian.platform.loan.application.port.out.RepaymentOperationOutcomeRepository;
 import com.meridian.platform.loan.application.port.out.RepaymentScheduleRepository;
 import com.meridian.platform.loan.application.port.out.RepaymentTransactionRepository;
-import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.domain.model.ApprovedLoanSettlement;
 import com.meridian.platform.loan.domain.model.LoanAccount;
 import com.meridian.platform.loan.domain.model.LoanAccountClosure;
@@ -21,7 +20,6 @@ import com.meridian.platform.loan.domain.model.LoanAccountStatus;
 import com.meridian.platform.loan.domain.model.LoanAccountStatusTransition;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
-import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.RepaymentAllocationComponent;
 import com.meridian.platform.loan.domain.model.RepaymentBalance;
 import com.meridian.platform.loan.domain.model.RepaymentInstallmentProgress;
@@ -30,8 +28,6 @@ import com.meridian.platform.loan.domain.model.RepaymentSchedule;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
 import com.meridian.platform.loan.domain.model.RepaymentTransaction;
 import com.meridian.platform.loan.domain.model.RepaymentTransactionType;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovement;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvidenceReader;
@@ -70,7 +66,7 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
     private final RepaymentTransactionRepository transactions;
     private final RepaymentOperationOutcomeRepository outcomes;
     private final ApprovedLoanSettlementRepository settlements;
-    private final SalaryAdvanceLimitMovementRepository movements;
+    private final LoanProductRepaymentPolicyResolver repaymentPolicies;
     private final CurrentUserProvider currentUsers;
     private final BusinessAuditPublisher auditPublisher;
     private final BusinessAuditEvidenceReader auditEvidence;
@@ -86,7 +82,7 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
             RepaymentTransactionRepository transactions,
             RepaymentOperationOutcomeRepository outcomes,
             ApprovedLoanSettlementRepository settlements,
-            SalaryAdvanceLimitMovementRepository movements,
+            LoanProductRepaymentPolicyResolver repaymentPolicies,
             CurrentUserProvider currentUsers,
             BusinessAuditPublisher auditPublisher,
             BusinessAuditEvidenceReader auditEvidence,
@@ -101,7 +97,7 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
         this.transactions = transactions;
         this.outcomes = outcomes;
         this.settlements = settlements;
-        this.movements = movements;
+        this.repaymentPolicies = repaymentPolicies;
         this.currentUsers = currentUsers;
         this.auditPublisher = auditPublisher;
         this.auditEvidence = auditEvidence;
@@ -131,6 +127,9 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
                         "LOAN_APPLICATION_NOT_FOUND",
                         "Loan Application was not found."
                 ));
+        LoanProductRepaymentPolicy repaymentPolicy = repaymentPolicies.resolve(
+                application.productCode()
+        );
         validateApplication(application);
         LoanAccount account = accounts
                 .findByLoanApplicationIdForUpdate(application.id())
@@ -152,7 +151,8 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
                 account,
                 schedule,
                 progress,
-                null
+                null,
+                repaymentPolicy
         );
 
         LocalDateTime closedAt = ServicingEvidenceTimestamp.normalizeForPersistence(
@@ -198,6 +198,9 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
         LoanApplication application = applications
                 .findByIdForUpdate(closure.loanApplicationId())
                 .orElseThrow(CloseLoanAccountService::stateConflict);
+        LoanProductRepaymentPolicy repaymentPolicy = repaymentPolicies.resolve(
+                application.productCode()
+        );
         validateApplication(application);
         LoanAccount account = accounts
                 .findByLoanApplicationIdForUpdate(application.id())
@@ -217,7 +220,8 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
                 account,
                 schedule,
                 progress,
-                closure
+                closure,
+                repaymentPolicy
         );
         validateClosureEvidence(closure, account);
         return result(closure, true);
@@ -245,7 +249,8 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
             LoanAccount account,
             RepaymentSchedule schedule,
             List<RepaymentInstallmentProgress> progress,
-            LoanAccountClosure closure
+            LoanAccountClosure closure,
+            LoanProductRepaymentPolicy repaymentPolicy
     ) {
         validateSchedule(application, account, schedule);
         Map<UUID, RepaymentInstallmentProgress> currentProgress =
@@ -272,7 +277,13 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
                 transaction,
                 outcome
         );
-        validateSalaryAdvanceExposure(application, account);
+        repaymentPolicy.validateReleaseSemantics(
+                new LoanProductRepaymentPolicy.ReleaseValidationCommand(
+                        application, account, transaction.id(),
+                        transaction.allocations(), outcome.principalReleased()
+                )
+        );
+        validateCompletedPayoff(application, account, repaymentPolicy);
     }
 
     private static void validateSchedule(
@@ -413,11 +424,6 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
                 == LoanAccountServicingAction.APPROVED_SETTLEMENT
                 ? RepaymentTransactionType.APPROVED_SETTLEMENT
                 : RepaymentTransactionType.REPAYMENT;
-        BigDecimal principalAllocated = transaction.allocations().stream()
-                .filter(item -> item.component()
-                == RepaymentAllocationComponent.PRINCIPAL)
-                .map(item -> item.amount())
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
         if (transaction.transactionType() != expectedType
                 || !transaction.id().equals(settledTransition.operationId())
                 || !transaction.loanApplicationId().equals(application.id())
@@ -439,7 +445,6 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
                 transaction.paymentValueDate())
                 || !ServicingEvidenceTimestamp.same(
                 outcome.recordedAt(), transaction.recordedAt())
-                || outcome.principalReleased().compareTo(principalAllocated) != 0
                 || !sameBalance(outcome.accountBalance(),
                 account.repaymentBalance())
                 || outcome.installments().size() != currentProgress.size()) {
@@ -487,35 +492,17 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
         }
     }
 
-    private void validateSalaryAdvanceExposure(
+    private void validateCompletedPayoff(
             LoanApplication application,
-            LoanAccount account
+            LoanAccount account,
+            LoanProductRepaymentPolicy repaymentPolicy
     ) {
-        List<SalaryAdvanceLimitMovement> conversions = movements
-                .findByLoanApplicationIdAndMovementType(
-                        application.id(),
-                        SalaryAdvanceLimitMovementType.DISBURSED_TO_USED
-                );
-        List<SalaryAdvanceLimitMovement> releases = movements
-                .findByLoanApplicationIdAndMovementType(
-                        application.id(),
-                        SalaryAdvanceLimitMovementType.REPAID_RELEASED
-                );
-        if (conversions.size() != 1
-                || !conversions.getFirst().loanAccountId().equals(account.id())
-                || conversions.getFirst().amount().compareTo(
-                account.approvedPrincipal()) != 0) {
-            throw stateConflict();
-        }
-        BigDecimal released = BigDecimal.ZERO;
-        for (SalaryAdvanceLimitMovement movement : releases) {
-            if (!movement.loanAccountId().equals(account.id())
-                    || movement.repaymentTransactionId() == null) {
+        List<LoanProductRepaymentPolicy.ReleaseEvidence> releaseEvidence =
+                transactions.findByLoanAccountId(account.id()).stream().map(transaction -> {
+            if (!transaction.loanApplicationId().equals(application.id())
+                    || !transaction.loanAccountId().equals(account.id())) {
                 throw stateConflict();
             }
-            RepaymentTransaction transaction = transactions
-                    .findById(movement.repaymentTransactionId())
-                    .orElseThrow(CloseLoanAccountService::stateConflict);
             RepaymentOperationOutcome outcome = outcomes
                     .findByRepaymentTransactionId(transaction.id())
                     .orElseThrow(CloseLoanAccountService::stateConflict);
@@ -524,17 +511,21 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
                     == RepaymentAllocationComponent.PRINCIPAL)
                     .map(item -> item.amount())
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            if (!transaction.loanApplicationId().equals(application.id())
-                    || !transaction.loanAccountId().equals(account.id())
-                    || movement.amount().compareTo(principal) != 0
-                    || outcome.principalReleased().compareTo(principal) != 0) {
-                throw stateConflict();
-            }
-            released = released.add(movement.amount());
-        }
-        if (released.compareTo(account.approvedPrincipal()) != 0) {
-            throw stateConflict();
-        }
+            repaymentPolicy.validateReleaseSemantics(
+                    new LoanProductRepaymentPolicy.ReleaseValidationCommand(
+                            application, account, transaction.id(),
+                            transaction.allocations(), outcome.principalReleased()
+                    )
+            );
+            return new LoanProductRepaymentPolicy.ReleaseEvidence(
+                    transaction.id(), principal, outcome.principalReleased()
+            );
+        }).toList();
+        repaymentPolicy.validateCompletedPayoff(
+                new LoanProductRepaymentPolicy.CompletedPayoffCommand(
+                        application, account, releaseEvidence
+                )
+        );
     }
 
     private void validateClosureEvidence(
@@ -595,8 +586,7 @@ public class CloseLoanAccountService implements CloseLoanAccountUseCase {
     }
 
     private static void validateApplication(LoanApplication application) {
-        if (application.status() != LoanApplicationStatus.DISBURSED
-                || application.productCode() != ProductCode.SALARY_ADVANCE) {
+        if (application.status() != LoanApplicationStatus.DISBURSED) {
             throw closureNotAllowed();
         }
     }

@@ -120,7 +120,7 @@ class RecordRepaymentPostgreSqlIntegrationTest {
         RecordRepaymentUseCase.Result first = repayments.record(command);
 
         assertFalse(first.idempotentReplay());
-        assertEquals(money("100"), first.principalAllocatedAndReleased());
+        assertEquals(money("100"), first.principalReleased());
         assertEquals(RepaymentAllocationComponent.PRINCIPAL,
                 first.allocations().getLast().component());
         assertEquals(0, usedBefore.subtract(money("100")).compareTo(amount(
@@ -617,8 +617,8 @@ class RecordRepaymentPostgreSqlIntegrationTest {
                     "select total_paid from loan_accounts where id = ?",
                     activation.loanAccountId()
             )));
-            BigDecimal released = firstResult.principalAllocatedAndReleased()
-                    .add(secondResult.principalAllocatedAndReleased());
+            BigDecimal released = firstResult.principalReleased()
+                    .add(secondResult.principalReleased());
             assertEquals(0, usedBefore.subtract(released).compareTo(amount(
                     "select used_amount from salary_advance_limits where id = ?",
                     fixture.limitId()
@@ -909,13 +909,13 @@ class RecordRepaymentPostgreSqlIntegrationTest {
                     winnerAccountId
             )));
             assertEquals(0, winnerUsedBefore.subtract(
-                    winner.principalAllocatedAndReleased()
+                    winner.principalReleased()
             ).compareTo(amount(
                     "select used_amount from salary_advance_limits where id = ?",
                     winnerFixture.limitId()
             )));
             assertEquals(0, winnerAvailableBefore.add(
-                    winner.principalAllocatedAndReleased()
+                    winner.principalReleased()
             ).compareTo(amount(
                     "select available_amount from salary_advance_limits where id = ?",
                     winnerFixture.limitId()

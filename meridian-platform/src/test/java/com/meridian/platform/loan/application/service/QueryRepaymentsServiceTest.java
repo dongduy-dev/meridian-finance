@@ -9,9 +9,18 @@ import com.meridian.platform.loan.application.port.out.RepaymentTransactionRepos
 import com.meridian.platform.loan.domain.model.LoanAccount;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.RepaymentSchedule;
+import com.meridian.platform.loan.domain.model.RepaymentScheduleItem;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
 import com.meridian.platform.loan.domain.model.RepaymentTransaction;
+import com.meridian.platform.loan.domain.model.RepaymentAllocation;
+import com.meridian.platform.loan.domain.model.RepaymentAllocationComponent;
+import com.meridian.platform.loan.domain.model.RepaymentBalance;
+import com.meridian.platform.loan.domain.model.RepaymentInstallmentProgress;
+import com.meridian.platform.loan.domain.model.RepaymentInstallmentStatus;
+import com.meridian.platform.loan.domain.model.LoanAccountStatus;
+import com.meridian.platform.loan.application.port.out.RepaymentOperationOutcome;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
@@ -28,6 +37,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,6 +56,8 @@ class QueryRepaymentsServiceTest {
     @Mock RepaymentScheduleRepository schedules;
     @Mock RepaymentTransactionRepository transactions;
     @Mock RepaymentOperationOutcomeRepository outcomes;
+    @Mock LoanProductRepaymentPolicyResolver repaymentPolicies;
+    @Mock LoanProductRepaymentPolicy repaymentPolicy;
     @Mock CurrentUserProvider currentUserProvider;
 
     private QueryRepaymentsService service;
@@ -56,7 +70,7 @@ class QueryRepaymentsServiceTest {
     @BeforeEach
     void setUp() {
         service = new QueryRepaymentsService(applications, accounts, schedules,
-                transactions, outcomes, currentUserProvider);
+                transactions, outcomes, repaymentPolicies, currentUserProvider);
         applicationId = UUID.randomUUID();
         customerId = UUID.randomUUID();
         application = mock(LoanApplication.class);
@@ -65,6 +79,9 @@ class QueryRepaymentsServiceTest {
         when(application.id()).thenReturn(applicationId);
         when(application.customerId()).thenReturn(customerId);
         when(application.status()).thenReturn(LoanApplicationStatus.DISBURSED);
+        when(application.productCode()).thenReturn(ProductCode.SALARY_ADVANCE);
+        when(repaymentPolicies.resolve(ProductCode.SALARY_ADVANCE))
+                .thenReturn(repaymentPolicy);
         UUID accountId = UUID.randomUUID();
         UUID contractId = UUID.randomUUID();
         UUID scheduleId = UUID.randomUUID();
@@ -135,6 +152,66 @@ class QueryRepaymentsServiceTest {
     }
 
     @Test
+    void uclReadReportsAllocatedPrincipalAndZeroExposureRelease() {
+        arrangeStaff();
+        arrangeTuple();
+        when(application.productCode()).thenReturn(ProductCode.UNSECURED_CONSUMER_LOAN);
+        when(repaymentPolicies.resolve(ProductCode.UNSECURED_CONSUMER_LOAN))
+                .thenReturn(new UnsecuredConsumerLoanRepaymentPolicy());
+        UUID transactionId = UUID.randomUUID();
+        LocalDate valueDate = LocalDate.of(2026, 8, 12);
+        LocalDateTime recordedAt = LocalDateTime.of(2026, 8, 12, 10, 0);
+        UUID currentAccountId = account.id();
+        UUID currentScheduleId = schedule.id();
+        UUID scheduleItemId = UUID.randomUUID();
+        RepaymentScheduleItem scheduleItem = mock(RepaymentScheduleItem.class);
+        when(scheduleItem.id()).thenReturn(scheduleItemId);
+        when(scheduleItem.installmentNumber()).thenReturn(1);
+        when(scheduleItem.dueDate()).thenReturn(valueDate.plusMonths(1));
+        when(schedule.items()).thenReturn(List.of(scheduleItem));
+        RepaymentAllocation allocation = new RepaymentAllocation(
+                UUID.randomUUID(), transactionId, 1, scheduleItemId,
+                RepaymentAllocationComponent.PRINCIPAL, money("1000000")
+        );
+        RepaymentTransaction transaction = mock(RepaymentTransaction.class);
+        when(transaction.id()).thenReturn(transactionId);
+        when(transaction.loanApplicationId()).thenReturn(applicationId);
+        when(transaction.loanAccountId()).thenReturn(currentAccountId);
+        when(transaction.repaymentScheduleId()).thenReturn(currentScheduleId);
+        when(transaction.receivedAmount()).thenReturn(money("1000000"));
+        when(transaction.paymentValueDate()).thenReturn(valueDate);
+        when(transaction.recordedAt()).thenReturn(recordedAt);
+        when(transaction.allocations()).thenReturn(List.of(allocation));
+        RepaymentBalance balance = mock(RepaymentBalance.class);
+        RepaymentInstallmentProgress progress = mock(RepaymentInstallmentProgress.class);
+        when(progress.repaymentScheduleItemId()).thenReturn(scheduleItemId);
+        when(progress.repaymentScheduleId()).thenReturn(currentScheduleId);
+        when(progress.loanAccountId()).thenReturn(currentAccountId);
+        when(progress.installmentNumber()).thenReturn(1);
+        when(progress.status()).thenReturn(RepaymentInstallmentStatus.PARTIALLY_PAID);
+        RepaymentOperationOutcome outcome = new RepaymentOperationOutcome(
+                transactionId, applicationId, currentAccountId, currentScheduleId,
+                money("1000000"), valueDate, recordedAt, balance,
+                LoanAccountStatus.ACTIVE, false, BigDecimal.ZERO,
+                List.of(new RepaymentOperationOutcome.InstallmentOutcome(
+                        progress, RepaymentInstallmentStatus.NOT_DUE, true
+                ))
+        );
+        when(transactions.findPageByLoanAccountId(account.id(), 0, 20))
+                .thenReturn(new RepaymentTransactionRepository.Page(
+                        0, 20, 1, 1, List.of(transaction)
+                ));
+        when(outcomes.findByRepaymentTransactionId(transactionId))
+                .thenReturn(Optional.of(outcome));
+
+        QueryRepaymentsUseCase.Item item = service.query(applicationId, 0, 20)
+                .items().getFirst();
+
+        assertEquals(0, item.principalAllocated().compareTo(money("1000000")));
+        assertEquals(0, item.principalReleased().compareTo(BigDecimal.ZERO));
+    }
+
+    @Test
     void invalidPaginationIsRejectedBeforeRepositoryAccess() {
         assertThrows(IllegalArgumentException.class,
                 () -> service.query(applicationId, -1, 20));
@@ -159,5 +236,9 @@ class QueryRepaymentsServiceTest {
     private static AuthenticatedUser customer(UUID id) {
         return new AuthenticatedUser(UUID.randomUUID(), "customer@meridian.test",
                 "CUSTOMER", id, Set.of("CUSTOMER"), Set.of("loan:read:own"));
+    }
+
+    private static BigDecimal money(String value) {
+        return new BigDecimal(value).setScale(2);
     }
 }

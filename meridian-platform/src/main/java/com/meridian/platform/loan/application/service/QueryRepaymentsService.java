@@ -43,6 +43,7 @@ public class QueryRepaymentsService implements QueryRepaymentsUseCase {
     private final RepaymentScheduleRepository schedules;
     private final RepaymentTransactionRepository transactions;
     private final RepaymentOperationOutcomeRepository outcomes;
+    private final LoanProductRepaymentPolicyResolver repaymentPolicies;
     private final CurrentUserProvider currentUserProvider;
 
     public QueryRepaymentsService(
@@ -51,6 +52,7 @@ public class QueryRepaymentsService implements QueryRepaymentsUseCase {
             RepaymentScheduleRepository schedules,
             RepaymentTransactionRepository transactions,
             RepaymentOperationOutcomeRepository outcomes,
+            LoanProductRepaymentPolicyResolver repaymentPolicies,
             CurrentUserProvider currentUserProvider
     ) {
         this.applications = applications;
@@ -58,6 +60,7 @@ public class QueryRepaymentsService implements QueryRepaymentsUseCase {
         this.schedules = schedules;
         this.transactions = transactions;
         this.outcomes = outcomes;
+        this.repaymentPolicies = repaymentPolicies;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -73,6 +76,9 @@ public class QueryRepaymentsService implements QueryRepaymentsUseCase {
         LoanApplication application = applications.findById(loanApplicationId)
                 .orElseThrow(() -> applicationNotFound(actor));
         authorize(actor, application);
+        LoanProductRepaymentPolicy repaymentPolicy = repaymentPolicies.resolve(
+                application.productCode()
+        );
 
         LoanAccount account = accounts.findByLoanApplicationId(application.id())
                 .orElseThrow(QueryRepaymentsService::loanAccountNotFound);
@@ -83,7 +89,9 @@ public class QueryRepaymentsService implements QueryRepaymentsUseCase {
         RepaymentTransactionRepository.Page selected = transactions
                 .findPageByLoanAccountId(account.id(), page, size);
         List<Item> items = selected.transactions().stream()
-                .map(transaction -> mapItem(actor, application, account, schedule, transaction))
+                .map(transaction -> mapItem(
+                        actor, application, account, schedule, transaction, repaymentPolicy
+                ))
                 .toList();
         return new PageResult(selected.page(), selected.size(), selected.totalElements(),
                 selected.totalPages(), items);
@@ -94,7 +102,8 @@ public class QueryRepaymentsService implements QueryRepaymentsUseCase {
             LoanApplication application,
             LoanAccount account,
             RepaymentSchedule schedule,
-            RepaymentTransaction transaction
+            RepaymentTransaction transaction,
+            LoanProductRepaymentPolicy repaymentPolicy
     ) {
         RepaymentOperationOutcome outcome = outcomes
                 .findByRepaymentTransactionId(transaction.id())
@@ -113,9 +122,12 @@ public class QueryRepaymentsService implements QueryRepaymentsUseCase {
                     .filter(item -> item.component() == RepaymentAllocationComponent.PRINCIPAL)
                     .map(RepaymentAllocation::amount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            if (principalAllocated.compareTo(outcome.principalReleased()) != 0) {
-                throw stateConflict();
-            }
+            repaymentPolicy.validateReleaseSemantics(
+                    new LoanProductRepaymentPolicy.ReleaseValidationCommand(
+                            application, account, transaction.id(),
+                            transaction.allocations(), outcome.principalReleased()
+                    )
+            );
             return new Item(transaction.id(), outcome.receivedAmount(),
                     outcome.paymentValueDate(), outcome.recordedAt(), principalAllocated,
                     outcome.principalReleased(), outcome.accountStatus(),
