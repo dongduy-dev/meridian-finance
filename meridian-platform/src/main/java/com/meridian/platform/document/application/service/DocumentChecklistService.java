@@ -190,6 +190,23 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
     }
 
     @Override
+    public CurrentDocumentVersionSnapshot requireCurrentVersionSnapshot(
+            UUID loanApplicationId,
+            UUID checklistItemId,
+            UUID expectedVersionId
+    ) {
+        DocumentChecklistItem item = requireOwnedItem(loanApplicationId, checklistItemId);
+        UUID currentVersionId = requireCurrentVersion(loanApplicationId, checklistItemId);
+        if (!currentVersionId.equals(expectedVersionId)) {
+            throw new BusinessStateConflictException(
+                    "STALE_DOCUMENT_VERSION",
+                    "The expected document version is no longer current."
+            );
+        }
+        return new CurrentDocumentVersionSnapshot(item.documentType(), currentVersionId);
+    }
+
+    @Override
     public boolean hasCurrentVersionDifferentFrom(UUID checklistItemId, UUID baselineVersionId) {
         return documentRepository.findDocumentByChecklistItemId(checklistItemId)
                 .map(document -> document.currentVersionId() != null

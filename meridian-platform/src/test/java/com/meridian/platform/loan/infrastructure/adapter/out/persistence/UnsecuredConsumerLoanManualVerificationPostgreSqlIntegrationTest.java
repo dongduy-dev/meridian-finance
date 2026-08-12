@@ -2,10 +2,15 @@ package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.MeridianPlatformApplication;
 import com.meridian.platform.approval.application.dto.ApprovalDecisionRequest;
+import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
+import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
 import com.meridian.platform.approval.application.dto.ReviewRecommendationRequest;
 import com.meridian.platform.approval.application.port.in.SubmitApprovalDecisionUseCase;
 import com.meridian.platform.approval.application.port.in.SubmitReviewRecommendationUseCase;
 import com.meridian.platform.approval.domain.model.ApprovalDecisionAction;
+import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
+import com.meridian.platform.approval.domain.model.CorrectionScope;
 import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
 import com.meridian.platform.customer.application.dto.AddCustomerBankAccountRequest;
 import com.meridian.platform.customer.application.port.in.ManageOwnCustomerBankAccountUseCase;
@@ -15,8 +20,13 @@ import com.meridian.platform.document.application.dto.UploadDocumentCommand;
 import com.meridian.platform.document.application.port.in.ReviewDocumentUseCase;
 import com.meridian.platform.document.application.port.in.UploadDocumentUseCase;
 import com.meridian.platform.document.domain.model.DocumentReviewOutcome;
+import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.document.domain.model.DocumentUploaderActorType;
 import com.meridian.platform.loan.application.dto.CompleteUnsecuredConsumerLoanVerificationRequest;
+import com.meridian.platform.loan.application.dto.CompleteCorrectionTaskRequest;
+import com.meridian.platform.loan.application.dto.CorrectionResubmissionRequest;
+import com.meridian.platform.loan.application.dto.CustomerCorrectionTaskDto;
+import com.meridian.platform.loan.application.dto.StaffCorrectionTaskDto;
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionResult;
 import com.meridian.platform.loan.application.dto.ApprovedOfferDto;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicationDto;
@@ -26,11 +36,17 @@ import com.meridian.platform.loan.application.port.in.AcknowledgeLoanContractUse
 import com.meridian.platform.loan.application.port.in.ConfirmContractReadinessUseCase;
 import com.meridian.platform.loan.application.port.in.ConfirmManualDisbursementUseCase;
 import com.meridian.platform.loan.application.port.in.CloseLoanAccountUseCase;
+import com.meridian.platform.loan.application.port.in.CancelLoanApplicationUseCase;
+import com.meridian.platform.loan.application.port.in.CompleteOwnCorrectionTaskUseCase;
+import com.meridian.platform.loan.application.port.in.CompleteStaffCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.ManageUnsecuredConsumerLoanVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.PrepareLoanContractUseCase;
 import com.meridian.platform.loan.application.port.in.QueryApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.QueryContractReadinessUseCase;
+import com.meridian.platform.loan.application.port.in.QueryOwnCorrectionTasksUseCase;
 import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
+import com.meridian.platform.loan.application.port.in.ResubmitOwnCorrectionUseCase;
+import com.meridian.platform.loan.application.port.in.ResubmitStaffCorrectionUseCase;
 import com.meridian.platform.loan.application.port.in.RecordRepaymentUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.in.StartUnsecuredConsumerLoanApplicationUseCase;
@@ -40,6 +56,7 @@ import com.meridian.platform.loan.domain.model.LoanContract;
 import com.meridian.platform.loan.domain.model.LoanContractStatus;
 import com.meridian.platform.loan.domain.model.ContractSupersessionReason;
 import com.meridian.platform.loan.domain.model.RepaymentMethod;
+import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanManualVerificationOutcome;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
@@ -133,6 +150,12 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     @Autowired private ConfirmManualDisbursementUseCase confirmManualDisbursementUseCase;
     @Autowired private RecordRepaymentUseCase recordRepaymentUseCase;
     @Autowired private CloseLoanAccountUseCase closeLoanAccountUseCase;
+    @Autowired private QueryOwnCorrectionTasksUseCase correctionTaskQuery;
+    @Autowired private CompleteOwnCorrectionTaskUseCase correctionTaskCompletion;
+    @Autowired private ResubmitOwnCorrectionUseCase correctionResubmission;
+    @Autowired private CompleteStaffCorrectionTaskUseCase staffTaskCompletion;
+    @Autowired private ResubmitStaffCorrectionUseCase staffCorrectionResubmission;
+    @Autowired private CancelLoanApplicationUseCase cancellationUseCase;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private ThreadLocalCurrentUserProvider currentUserProvider;
     @MockitoSpyBean private BusinessAuditPublisher auditPublisher;
@@ -652,7 +675,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 outcomes.stream().filter(outcome -> !outcome.successful())
                         .map(CommandOutcome::failure).findFirst().orElseThrow()
         );
-        assertEquals("PRODUCT_VERIFICATION_COMPLETION_NOT_ALLOWED", failure.getErrorCode());
+        assertEquals("PRODUCT_VERIFICATION_NOT_PENDING", failure.getErrorCode());
         assertEquals("SUBMITTED", status(applicationId));
         assertEquals("VERIFIED", text("SELECT product_verification_result "
                 + "FROM unsecured_consumer_loan_verifications WHERE loan_application_id = ?", applicationId));
@@ -736,7 +759,473 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     }
 
     @Test
-    void v39PreservesPendingRowsRejectsPartialEvidenceAndRemainsForwardCompatible() {
+    void concurrentMoreInformationCompletionsCreateOneCorrectionRequestAndTask() throws Exception {
+        UUID applicationId = originateAndMakeProcessingReady();
+        CorrectionEvidence evidence = correctionEvidence(applicationId);
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<CommandOutcome> outcomes;
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<CommandOutcome> first = executor.submit(() -> completeVerificationAfter(
+                    applicationId,
+                    LOAN_OFFICER_USER_ID,
+                    moreInformationRequest(evidence, "First concurrent correction assessment."),
+                    ready,
+                    start
+            ));
+            Future<CommandOutcome> second = executor.submit(() -> completeVerificationAfter(
+                    applicationId,
+                    SECOND_STAFF_USER_ID,
+                    moreInformationRequest(evidence, "Second concurrent correction assessment."),
+                    ready,
+                    start
+            ));
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            outcomes = List.of(first.get(20, TimeUnit.SECONDS), second.get(20, TimeUnit.SECONDS));
+        }
+
+        assertEquals(1, outcomes.stream().filter(CommandOutcome::successful).count());
+        assertEquals("RETURNED_FOR_REVISION", status(applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_correction_requests "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_correction_tasks task "
+                + "JOIN loan_correction_requests correction ON correction.id = task.correction_request_id "
+                + "WHERE correction.loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND action = 'COMPLETE_PRODUCT_VERIFICATION'",
+                applicationId));
+        assertEquals(1, count("SELECT count(*) FROM audit_events "
+                + "WHERE action = 'CORRECTION_REQUEST_CREATED' "
+                + "AND payload ->> 'loanApplicationId' = ?", applicationId.toString()));
+    }
+
+    @Test
+    void concurrentUclResubmissionsCreateAtMostOneNextVerificationCycle() throws Exception {
+        UUID applicationId = prepareReadyCorrection();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<CommandOutcome> outcomes;
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<CommandOutcome> first = executor.submit(() -> resubmitAfter(
+                    applicationId, UUID.randomUUID(), ready, start
+            ));
+            Future<CommandOutcome> second = executor.submit(() -> resubmitAfter(
+                    applicationId, UUID.randomUUID(), ready, start
+            ));
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            outcomes = List.of(first.get(20, TimeUnit.SECONDS), second.get(20, TimeUnit.SECONDS));
+        }
+
+        assertEquals(1, outcomes.stream().filter(CommandOutcome::successful).count());
+        assertEquals("SUBMITTED", status(applicationId));
+        assertEquals(2, count("SELECT count(*) FROM unsecured_consumer_loan_verifications "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_correction_requests "
+                + "WHERE loan_application_id = ? AND status = 'RESUBMITTED'", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND action = 'RESUBMIT_CORRECTION'", applicationId));
+    }
+
+    @Test
+    void uclCancellationAndResubmissionRaceHasOneWinningOutcome() throws Exception {
+        UUID applicationId = prepareReadyCorrection();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        CommandOutcome cancellation;
+        CommandOutcome resubmission;
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<CommandOutcome> cancelFuture = executor.submit(() -> cancelAfter(
+                    applicationId, UUID.randomUUID(), ready, start
+            ));
+            Future<CommandOutcome> resubmitFuture = executor.submit(() -> resubmitAfter(
+                    applicationId, UUID.randomUUID(), ready, start
+            ));
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            cancellation = cancelFuture.get(20, TimeUnit.SECONDS);
+            resubmission = resubmitFuture.get(20, TimeUnit.SECONDS);
+        }
+
+        assertEquals(1, List.of(cancellation, resubmission).stream()
+                .filter(CommandOutcome::successful).count());
+        assertTrue(Set.of("CANCELLED", "SUBMITTED").contains(status(applicationId)));
+        assertTrue(count("SELECT count(*) FROM unsecured_consumer_loan_verifications "
+                + "WHERE loan_application_id = ?", applicationId) <= 2);
+        assertTrue(count("SELECT count(*) FROM loan_application_cancellations "
+                + "WHERE loan_application_id = ?", applicationId) <= 1);
+        assertEquals(0, count("SELECT count(*) FROM salary_advance_limit_movements "
+                + "WHERE loan_application_id = ?", applicationId));
+    }
+
+    @Test
+    void failedVerificationIsDurableTerminalEvidenceWithoutCorrection() {
+        UUID applicationId = originateAndMakeProcessingReady();
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+
+        UnsecuredConsumerLoanVerificationDto failed = verificationUseCase.completeManualVerification(
+                applicationId,
+                new CompleteUnsecuredConsumerLoanVerificationRequest(
+                        UnsecuredConsumerLoanManualVerificationOutcome.FAILED,
+                        "The submitted identity and employment evidence could not be verified.",
+                        null,
+                        null
+                )
+        );
+
+        assertEquals("VERIFICATION_FAILED", failed.status());
+        assertEquals("FAILED", failed.productVerificationResult());
+        assertEquals(0, count("SELECT count(*) FROM loan_correction_requests "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM unsecured_consumer_loan_verifications "
+                + "WHERE loan_application_id = ? AND product_verification_result = 'FAILED' "
+                + "AND reviewed_by_user_id = ? AND assessment_note IS NOT NULL",
+                applicationId, LOAN_OFFICER_USER_ID));
+        BusinessRuleViolationException reviewFailure = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> reviewStartUseCase.startReview(applicationId)
+        );
+        assertEquals("PRODUCT_VERIFICATION_FAILED", reviewFailure.getErrorCode());
+        assertThrows(DataAccessException.class, () -> jdbcTemplate.update(
+                "UPDATE unsecured_consumer_loan_verifications SET assessment_note = 'Mutated' "
+                        + "WHERE loan_application_id = ?",
+                applicationId
+        ));
+    }
+
+    @Test
+    void moreInformationCorrectionRoundTripCreatesLatestReverificationAndOffer() {
+        UUID applicationId = originateAndMakeProcessingReady();
+        CorrectionEvidence evidence = correctionEvidence(applicationId);
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+
+        UnsecuredConsumerLoanVerificationDto moreInformation = verificationUseCase
+                .completeManualVerification(
+                        applicationId,
+                        moreInformationRequest(evidence, "Replace the selected UCL evidence.")
+                );
+
+        assertEquals("RETURNED_FOR_REVISION", moreInformation.status());
+        assertEquals("REQUIRES_MORE_INFORMATION", moreInformation.productVerificationResult());
+        assertEquals(1, count("SELECT count(*) FROM loan_correction_requests "
+                + "WHERE loan_application_id = ? AND source_action = 'COMPLETE_PRODUCT_VERIFICATION' "
+                + "AND status = 'OPEN'", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_correction_tasks task "
+                + "JOIN loan_correction_requests correction ON correction.id = task.correction_request_id "
+                + "WHERE correction.loan_application_id = ? AND task.document_type = ?",
+                applicationId, evidence.documentType().name()));
+
+        useCustomer();
+        CustomerCorrectionTaskDto task = onlyCustomerTask(applicationId);
+        DocumentVersionDto replacement = upload(
+                applicationId,
+                task.checklistItemId(),
+                evidence.documentVersionId(),
+                "ucl-replacement.pdf"
+        );
+        correctionTaskCompletion.complete(
+                applicationId,
+                task.correctionTaskId(),
+                new CompleteCorrectionTaskRequest(UUID.randomUUID())
+        );
+
+        useLoanOfficer();
+        documentReviewUseCase.review(new ReviewDocumentCommand(
+                applicationId,
+                task.checklistItemId(),
+                replacement.documentVersionId(),
+                UUID.randomUUID(),
+                DocumentReviewOutcome.ACCEPT_DOCUMENT,
+                null,
+                "Restricted UCL replacement acceptance note.",
+                LOAN_OFFICER_USER_ID,
+                false
+        ));
+
+        useCustomer();
+        assertEquals("SUBMITTED", correctionResubmission.resubmit(
+                applicationId,
+                new CorrectionResubmissionRequest(UUID.randomUUID())
+        ).loanApplicationStatus());
+        assertEquals(2, count("SELECT count(*) FROM unsecured_consumer_loan_verifications "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals("PENDING_MANUAL_REVIEW", text(
+                "SELECT product_verification_result FROM unsecured_consumer_loan_verifications "
+                        + "WHERE loan_application_id = ? ORDER BY verification_sequence DESC LIMIT 1",
+                applicationId
+        ));
+        assertEquals(2, count("SELECT max(verification_sequence) "
+                + "FROM unsecured_consumer_loan_verifications WHERE loan_application_id = ?",
+                applicationId));
+
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+        verificationUseCase.completeManualVerification(
+                applicationId,
+                new CompleteUnsecuredConsumerLoanVerificationRequest(
+                        "Replacement evidence is now consistent."
+                )
+        );
+        assertEquals("UNDER_REVIEW", reviewStartUseCase.startReview(applicationId).status());
+        recommendationUseCase.submitReviewRecommendation(
+                applicationId,
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.RECOMMEND_APPROVAL,
+                        null,
+                        null
+                )
+        );
+        assertEquals("APPROVAL_PENDING", status(applicationId));
+        useApprover();
+        decisionUseCase.submitApprovalDecision(
+                applicationId,
+                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+        );
+        assertEquals("CUSTOMER_ACCEPTANCE_PENDING", status(applicationId));
+        assertEquals(1, count("SELECT count(*) FROM approved_offers "
+                + "WHERE loan_application_id = ?", applicationId));
+    }
+
+    @Test
+    void loanOfficerUclCorrectionPreservesOldCycleAndRequiresReverification() {
+        UUID applicationId = originateAndMakeProcessingReady();
+        CorrectionEvidence evidence = correctionEvidence(applicationId);
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+        verificationUseCase.completeManualVerification(
+                applicationId,
+                new CompleteUnsecuredConsumerLoanVerificationRequest("Initial evidence is verified.")
+        );
+        reviewStartUseCase.startReview(applicationId);
+        UUID firstCycle = uuid("SELECT id FROM loan_application_review_cycles "
+                + "WHERE loan_application_id = ? AND status = 'ACTIVE'", applicationId);
+        recommendationUseCase.submitReviewRecommendation(
+                applicationId,
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION,
+                        null,
+                        "Restricted Loan Officer correction note.",
+                        firstCycle,
+                        CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                        replacementPlan(evidence)
+                )
+        );
+        assertEquals("RETURNED_FOR_REVISION", status(applicationId));
+        assertEquals("CORRECTION_REQUIRED", text(
+                "SELECT status FROM loan_application_review_cycles WHERE id = ?",
+                firstCycle
+        ));
+
+        completeCustomerReplacement(applicationId, evidence, "ucl-review-correction.pdf");
+        useCustomer();
+        correctionResubmission.resubmit(
+                applicationId,
+                new CorrectionResubmissionRequest(UUID.randomUUID())
+        );
+        assertEquals("SUBMITTED", status(applicationId));
+        assertEquals("CORRECTED", text(
+                "SELECT status FROM loan_application_review_cycles WHERE id = ?",
+                firstCycle
+        ));
+        assertEquals(2, count("SELECT count(*) FROM unsecured_consumer_loan_verifications "
+                + "WHERE loan_application_id = ?", applicationId));
+
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+        verificationUseCase.completeManualVerification(
+                applicationId,
+                new CompleteUnsecuredConsumerLoanVerificationRequest("Corrected evidence is verified.")
+        );
+        reviewStartUseCase.startReview(applicationId);
+        UUID secondCycle = uuid("SELECT id FROM loan_application_review_cycles "
+                + "WHERE loan_application_id = ? AND status = 'ACTIVE'", applicationId);
+        assertFalse(firstCycle.equals(secondCycle));
+        assertEquals(2, count("SELECT count(*) FROM loan_application_review_cycles "
+                + "WHERE loan_application_id = ?", applicationId));
+        recommendationUseCase.submitReviewRecommendation(
+                applicationId,
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.RECOMMEND_APPROVAL,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                )
+        );
+        assertEquals("APPROVAL_PENDING", status(applicationId));
+    }
+
+    @Test
+    void approverMixedUclCorrectionReturnsThroughVerificationAndNewReview() {
+        UUID applicationId = originateToApprovalPending();
+        CorrectionEvidence evidence = correctionEvidence(applicationId);
+        UUID firstCycle = uuid("SELECT id FROM loan_application_review_cycles "
+                + "WHERE loan_application_id = ?", applicationId);
+        useApprover();
+        decisionUseCase.submitApprovalDecision(
+                applicationId,
+                new ApprovalDecisionRequest(
+                        ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
+                        null,
+                        "Restricted Approver correction note.",
+                        firstCycle,
+                        CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                        mixedReplacementAndReviewPlan(evidence)
+                )
+        );
+        assertEquals("RETURNED_FOR_REVISION", status(applicationId));
+        assertEquals(2, count("SELECT count(*) FROM loan_correction_tasks task "
+                + "JOIN loan_correction_requests correction ON correction.id = task.correction_request_id "
+                + "WHERE correction.loan_application_id = ?", applicationId));
+
+        useCustomer();
+        CustomerCorrectionTaskDto customerTask = onlyCustomerTask(applicationId);
+        DocumentVersionDto replacement = upload(
+                applicationId,
+                customerTask.checklistItemId(),
+                evidence.documentVersionId(),
+                "ucl-approval-correction.pdf"
+        );
+        correctionTaskCompletion.complete(
+                applicationId,
+                customerTask.correctionTaskId(),
+                new CompleteCorrectionTaskRequest(UUID.randomUUID())
+        );
+        useLoanOfficer();
+        documentReviewUseCase.review(new ReviewDocumentCommand(
+                applicationId,
+                customerTask.checklistItemId(),
+                replacement.documentVersionId(),
+                UUID.randomUUID(),
+                DocumentReviewOutcome.ACCEPT_DOCUMENT,
+                null,
+                "Restricted approval-correction acceptance.",
+                LOAN_OFFICER_USER_ID,
+                false
+        ));
+        UUID staffTaskId = uuid("SELECT task.id FROM loan_correction_tasks task "
+                + "JOIN loan_correction_requests correction ON correction.id = task.correction_request_id "
+                + "WHERE correction.loan_application_id = ? "
+                + "AND task.responsible_party = 'STAFF'", applicationId);
+        useBackOfficeStaff();
+        StaffCorrectionTaskDto completedStaffTask = staffTaskCompletion.complete(
+                staffTaskId,
+                new CompleteCorrectionTaskRequest(UUID.randomUUID())
+        );
+        assertEquals("COMPLETED", completedStaffTask.status());
+        assertEquals("SUBMITTED", staffCorrectionResubmission.resubmitAsStaff(
+                applicationId,
+                new CorrectionResubmissionRequest(UUID.randomUUID())
+        ).loanApplicationStatus());
+
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+        verificationUseCase.completeManualVerification(
+                applicationId,
+                new CompleteUnsecuredConsumerLoanVerificationRequest(
+                        "Approver-requested correction is verified."
+                )
+        );
+        reviewStartUseCase.startReview(applicationId);
+        recommendationUseCase.submitReviewRecommendation(
+                applicationId,
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.RECOMMEND_APPROVAL,
+                        null,
+                        null
+                )
+        );
+        assertEquals("APPROVAL_PENDING", status(applicationId));
+        assertEquals(2, count("SELECT count(*) FROM loan_application_review_cycles "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals(2, count("SELECT count(*) FROM unsecured_consumer_loan_verifications "
+                + "WHERE loan_application_id = ?", applicationId));
+    }
+
+    @Test
+    void uclReturnedCorrectionCancellationHasNoSalaryEffectAndReplaysExactly() {
+        UUID applicationId = originateAndMakeProcessingReady();
+        CorrectionEvidence evidence = correctionEvidence(applicationId);
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+        verificationUseCase.completeManualVerification(
+                applicationId,
+                moreInformationRequest(evidence, "Cancellation-path replacement request.")
+        );
+
+        useCustomer();
+        UUID requestId = UUID.randomUUID();
+        CancelLoanApplicationUseCase.Result cancelled = cancellationUseCase.cancel(
+                new CancelLoanApplicationUseCase.Command(requestId, applicationId)
+        );
+        CancelLoanApplicationUseCase.Result replay = cancellationUseCase.cancel(
+                new CancelLoanApplicationUseCase.Command(requestId, applicationId)
+        );
+
+        assertEquals("CANCELLED", status(applicationId));
+        assertFalse(cancelled.idempotentReplay());
+        assertTrue(replay.idempotentReplay());
+        assertEquals(1, count("SELECT count(*) FROM loan_application_cancellations "
+                + "WHERE loan_application_id = ? AND reservation_release_movement_id IS NULL",
+                applicationId));
+        assertEquals("CANCELLED", text("SELECT status FROM loan_correction_requests "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals(0, count("SELECT count(*) FROM salary_advance_limit_movements "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND action = 'CANCEL_APPLICATION'", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM audit_events "
+                + "WHERE action = 'LOAN_APPLICATION_CANCELLED' "
+                + "AND payload ->> 'loanApplicationId' = ?", applicationId.toString()));
+    }
+
+    @Test
+    void failedMoreInformationCompletionRollsBackCorrectionAndDecisionEvidence() {
+        UUID applicationId = originateAndMakeProcessingReady();
+        CorrectionEvidence evidence = correctionEvidence(applicationId);
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+        doThrow(new IllegalStateException("simulated completion audit failure"))
+                .when(auditPublisher)
+                .publish(argThat(this::containsCompletionAudit));
+
+        assertThrows(IllegalStateException.class, () -> verificationUseCase.completeManualVerification(
+                applicationId,
+                moreInformationRequest(evidence, "Rollback this correction request.")
+        ));
+
+        assertEquals("VERIFICATION_PENDING", status(applicationId));
+        assertEquals("PENDING_MANUAL_REVIEW", text(
+                "SELECT product_verification_result FROM unsecured_consumer_loan_verifications "
+                        + "WHERE loan_application_id = ?",
+                applicationId
+        ));
+        assertEquals(0, count("SELECT count(*) FROM loan_correction_requests "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals(0, count("SELECT count(*) FROM loan_correction_tasks task "
+                + "JOIN loan_correction_requests correction ON correction.id = task.correction_request_id "
+                + "WHERE correction.loan_application_id = ?", applicationId));
+        assertEquals(0, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND action = 'COMPLETE_PRODUCT_VERIFICATION'",
+                applicationId));
+        assertEquals(0, count("SELECT count(*) FROM audit_events "
+                + "WHERE payload ->> 'loanApplicationId' = ? "
+                + "AND action IN ('CORRECTION_REQUEST_CREATED', "
+                + "'UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED')",
+                applicationId.toString()));
+    }
+
+    @Test
+    void v43PreservesPendingRowsRejectsPartialOrUnevidencedTerminalRows() {
         UnsecuredConsumerLoanApplicationDto application = submissionUseCase
                 .startUnsecuredConsumerLoanApplication(
                         new UnsecuredConsumerLoanApplicationRequest(new BigDecimal("5000000"), 6)
@@ -760,7 +1249,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 application.loanApplicationId()
         ));
 
-        assertEquals(1, jdbcTemplate.update(
+        assertThrows(DataAccessException.class, () -> jdbcTemplate.update(
                 "UPDATE unsecured_consumer_loan_verifications SET product_verification_result = 'FAILED' "
                         + "WHERE loan_application_id = ?",
                 application.loanApplicationId()
@@ -883,18 +1372,132 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     }
 
     private DocumentVersionDto upload(UUID applicationId, UUID checklistItemId) {
+        return upload(applicationId, checklistItemId, null, "ucl-evidence.pdf");
+    }
+
+    private DocumentVersionDto upload(
+            UUID applicationId,
+            UUID checklistItemId,
+            UUID replacesVersionId,
+            String filename
+    ) {
         return uploadUseCase.upload(new UploadDocumentCommand(
                 applicationId,
                 checklistItemId,
                 UUID.randomUUID(),
-                null,
-                "ucl-evidence.pdf",
+                replacesVersionId,
+                filename,
                 "application/pdf",
                 new ByteArrayInputStream(PDF),
                 DocumentUploaderActorType.CUSTOMER,
                 fixture.customerUserId(),
                 fixture.customerId()
         ));
+    }
+
+    private CorrectionEvidence correctionEvidence(UUID applicationId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT item.id, document.current_version_id, item.document_type "
+                        + "FROM document_checklist_items item "
+                        + "JOIN document_checklists checklist ON checklist.id = item.checklist_id "
+                        + "JOIN documents document ON document.checklist_item_id = item.id "
+                        + "WHERE checklist.loan_application_id = ? "
+                        + "ORDER BY item.document_type LIMIT 1",
+                (resultSet, rowNumber) -> new CorrectionEvidence(
+                        resultSet.getObject("id", UUID.class),
+                        resultSet.getObject("current_version_id", UUID.class),
+                        DocumentType.valueOf(resultSet.getString("document_type"))
+                ),
+                applicationId
+        );
+    }
+
+    private CompleteUnsecuredConsumerLoanVerificationRequest moreInformationRequest(
+            CorrectionEvidence evidence,
+            String assessmentNote
+    ) {
+        return new CompleteUnsecuredConsumerLoanVerificationRequest(
+                UnsecuredConsumerLoanManualVerificationOutcome.REQUIRES_MORE_INFORMATION,
+                assessmentNote,
+                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                replacementPlan(evidence)
+        );
+    }
+
+    private CorrectionPlanRequest replacementPlan(CorrectionEvidence evidence) {
+        return new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+                CorrectionScope.DOCUMENT_REPLACEMENT,
+                CorrectionResponsibility.CUSTOMER,
+                evidence.documentType(),
+                false,
+                evidence.checklistItemId(),
+                evidence.documentVersionId(),
+                "Replace this UCL evidence with a clearer current version.",
+                null
+        )));
+    }
+
+    private CorrectionPlanRequest mixedReplacementAndReviewPlan(CorrectionEvidence evidence) {
+        return new CorrectionPlanRequest(List.of(
+                new CorrectionTaskRequest(
+                        CorrectionScope.DOCUMENT_REPLACEMENT,
+                        CorrectionResponsibility.CUSTOMER,
+                        evidence.documentType(),
+                        false,
+                        evidence.checklistItemId(),
+                        evidence.documentVersionId(),
+                        "Replace this UCL evidence with a clearer current version.",
+                        null
+                ),
+                new CorrectionTaskRequest(
+                        CorrectionScope.DOCUMENT_REVIEW,
+                        CorrectionResponsibility.STAFF,
+                        evidence.documentType(),
+                        false,
+                        evidence.checklistItemId(),
+                        evidence.documentVersionId(),
+                        null,
+                        "Independently review the replacement UCL evidence."
+                )
+        ));
+    }
+
+    private void completeCustomerReplacement(
+            UUID applicationId,
+            CorrectionEvidence evidence,
+            String filename
+    ) {
+        useCustomer();
+        CustomerCorrectionTaskDto task = onlyCustomerTask(applicationId);
+        DocumentVersionDto replacement = upload(
+                applicationId,
+                task.checklistItemId(),
+                evidence.documentVersionId(),
+                filename
+        );
+        correctionTaskCompletion.complete(
+                applicationId,
+                task.correctionTaskId(),
+                new CompleteCorrectionTaskRequest(UUID.randomUUID())
+        );
+        useLoanOfficer();
+        documentReviewUseCase.review(new ReviewDocumentCommand(
+                applicationId,
+                task.checklistItemId(),
+                replacement.documentVersionId(),
+                UUID.randomUUID(),
+                DocumentReviewOutcome.ACCEPT_DOCUMENT,
+                null,
+                "Restricted UCL correction acceptance.",
+                LOAN_OFFICER_USER_ID,
+                false
+        ));
+    }
+
+    private CustomerCorrectionTaskDto onlyCustomerTask(UUID applicationId) {
+        List<CustomerCorrectionTaskDto> tasks = correctionTaskQuery.findOwnTasks(applicationId);
+        assertEquals(1, tasks.size());
+        return tasks.getFirst();
     }
 
     private CommandOutcome startVerificationAfter(
@@ -918,6 +1521,45 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         return afterBarrier(ready, start, () -> verificationUseCase.completeManualVerification(
                 applicationId,
                 new CompleteUnsecuredConsumerLoanVerificationRequest(note)
+        ));
+    }
+
+    private CommandOutcome completeVerificationAfter(
+            UUID applicationId,
+            UUID actorId,
+            CompleteUnsecuredConsumerLoanVerificationRequest request,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
+        useStaff(actorId);
+        return afterBarrier(ready, start, () -> verificationUseCase.completeManualVerification(
+                applicationId,
+                request
+        ));
+    }
+
+    private CommandOutcome resubmitAfter(
+            UUID applicationId,
+            UUID requestId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
+        useCustomer();
+        return afterBarrier(ready, start, () -> correctionResubmission.resubmit(
+                applicationId,
+                new CorrectionResubmissionRequest(requestId)
+        ));
+    }
+
+    private CommandOutcome cancelAfter(
+            UUID applicationId,
+            UUID requestId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
+        useCustomer();
+        return afterBarrier(ready, start, () -> cancellationUseCase.cancel(
+                new CancelLoanApplicationUseCase.Command(requestId, applicationId)
         ));
     }
 
@@ -1032,7 +1674,14 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 "CUSTOMER",
                 fixture.customerId(),
                 Set.of("CUSTOMER"),
-                Set.of("loan:submit", "document:upload:own", "loan:read:own", "loan:offer:respond:own")
+                Set.of(
+                        "loan:submit",
+                        "document:upload:own",
+                        "loan:read:own",
+                        "loan:offer:respond:own",
+                        "loan:correction:own",
+                        "loan:cancel:own"
+                )
         ));
     }
 
@@ -1059,6 +1708,17 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 null,
                 Set.of("ACCOUNTING_OFFICER"),
                 Set.of("loan:contract:prepare", "repayment:update", "loan:account:close")
+        ));
+    }
+
+    private void useBackOfficeStaff() {
+        currentUserProvider.use(new AuthenticatedUser(
+                SECOND_STAFF_USER_ID,
+                "back-office@meridian.local",
+                "STAFF",
+                null,
+                Set.of("BACK_OFFICE_ADMIN"),
+                Set.of("loan:correction:staff", "document:review")
         ));
     }
 
@@ -1106,6 +1766,51 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     }
 
     private record UploadedEvidence(UUID checklistItemId, DocumentVersionDto version) {
+    }
+
+    private UUID prepareReadyCorrection() {
+        UUID applicationId = originateAndMakeProcessingReady();
+        CorrectionEvidence evidence = correctionEvidence(applicationId);
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+        verificationUseCase.completeManualVerification(
+                applicationId,
+                moreInformationRequest(evidence, "Prepare a correction for a race test.")
+        );
+
+        useCustomer();
+        CustomerCorrectionTaskDto task = onlyCustomerTask(applicationId);
+        DocumentVersionDto replacement = upload(
+                applicationId,
+                task.checklistItemId(),
+                evidence.documentVersionId(),
+                "ucl-race-replacement.pdf"
+        );
+        correctionTaskCompletion.complete(
+                applicationId,
+                task.correctionTaskId(),
+                new CompleteCorrectionTaskRequest(UUID.randomUUID())
+        );
+        useLoanOfficer();
+        documentReviewUseCase.review(new ReviewDocumentCommand(
+                applicationId,
+                task.checklistItemId(),
+                replacement.documentVersionId(),
+                UUID.randomUUID(),
+                DocumentReviewOutcome.ACCEPT_DOCUMENT,
+                null,
+                "Restricted race-test replacement acceptance.",
+                LOAN_OFFICER_USER_ID,
+                false
+        ));
+        return applicationId;
+    }
+
+    private record CorrectionEvidence(
+            UUID checklistItemId,
+            UUID documentVersionId,
+            DocumentType documentType
+    ) {
     }
 
     private record AcceptedUcl(UUID applicationId, ApprovedOfferDto offer) {

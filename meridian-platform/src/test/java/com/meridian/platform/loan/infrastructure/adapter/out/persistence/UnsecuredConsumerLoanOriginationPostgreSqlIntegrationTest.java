@@ -296,8 +296,15 @@ class UnsecuredConsumerLoanOriginationPostgreSqlIntegrationTest {
         }
 
         @Override
-        public Optional<UnsecuredConsumerLoanVerification> findByLoanApplicationId(UUID loanApplicationId) {
-            return delegate.findByLoanApplicationId(loanApplicationId);
+        public Optional<UnsecuredConsumerLoanVerification> findLatestByLoanApplicationId(UUID loanApplicationId) {
+            return delegate.findLatestByLoanApplicationId(loanApplicationId);
+        }
+
+        @Override
+        public Optional<UnsecuredConsumerLoanVerification> findLatestByLoanApplicationIdForUpdate(
+                UUID loanApplicationId
+        ) {
+            return delegate.findLatestByLoanApplicationIdForUpdate(loanApplicationId);
         }
     }
 }

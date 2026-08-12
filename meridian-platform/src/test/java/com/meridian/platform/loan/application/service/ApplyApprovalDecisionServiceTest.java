@@ -1,5 +1,11 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
+import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
+import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
+import com.meridian.platform.approval.domain.model.CorrectionScope;
+import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.loan.application.dto.ApplyApprovalDecisionCommand;
 import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
@@ -76,6 +82,7 @@ class ApplyApprovalDecisionServiceTest {
     private FakeSalaryAdvanceLimitMovementRepository movementRepository;
     private FakeLoanApplicationStatusTransitionRepository transitionRepository;
     private FakeBusinessAuditPublisher auditPublisher;
+    private CustomerCorrectionWorkflowService correctionWorkflowService;
     private ApplyApprovalDecisionService service;
 
     @BeforeEach
@@ -97,6 +104,7 @@ class ApplyApprovalDecisionServiceTest {
         movementRepository = new FakeSalaryAdvanceLimitMovementRepository();
         transitionRepository = new FakeLoanApplicationStatusTransitionRepository();
         auditPublisher = new FakeBusinessAuditPublisher();
+        correctionWorkflowService = org.mockito.Mockito.mock(CustomerCorrectionWorkflowService.class);
         SalaryAdvanceReservationReleaseService releaseService = new SalaryAdvanceReservationReleaseService(
                 verificationRepository,
                 limitRepository,
@@ -106,6 +114,7 @@ class ApplyApprovalDecisionServiceTest {
         service = new ApplyApprovalDecisionService(
                 loanApplicationRepository,
                 reviewCycleRepository,
+                correctionWorkflowService,
                 approvedOfferRepository,
                 offerPolicyRepository,
                 unsecuredConsumerLoanOfferPolicyRepository,
@@ -246,20 +255,25 @@ class ApplyApprovalDecisionServiceTest {
     }
 
     @Test
-    void uclCorrectionDecisionFailsClosed() {
+    void uclCorrectionDecisionUsesSharedWorkflow() {
         loanApplicationRepository.application = uclApplication(LoanApplicationStatus.APPROVAL_PENDING);
 
-        BusinessStateConflictException exception = assertThrows(
-                BusinessStateConflictException.class,
-                () -> service.applyApprovalDecision(
-                        command(LoanApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION)
-                )
+        LoanApplicationReviewDto result = service.applyApprovalDecision(
+                command(LoanApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION)
         );
 
-        assertEquals("UCL_CORRECTION_NOT_READY", exception.getErrorCode());
-        assertNull(loanApplicationRepository.savedApplication);
+        assertEquals("RETURNED_FOR_REVISION", result.status());
+        assertEquals(LoanApplicationStatus.RETURNED_FOR_REVISION,
+                loanApplicationRepository.savedApplication.status());
         assertNull(approvedOfferRepository.savedOffer);
-        assertTrue(transitionRepository.savedTransitions.isEmpty());
+        org.mockito.Mockito.verify(correctionWorkflowService).createFromDecision(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("REQUEST_CUSTOMER_OR_STAFF_CORRECTION"),
+                org.mockito.ArgumentMatchers.eq(CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
+        );
     }
 
     @Test
@@ -369,16 +383,33 @@ class ApplyApprovalDecisionServiceTest {
             LoanApprovalDecisionAction action,
             BusinessOperationContext operationContext
     ) {
+        boolean correction = action == LoanApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION;
         return new ApplyApprovalDecisionCommand(
                 LOAN_APPLICATION_ID,
                 DECISION_ID,
+                correction ? UUID.fromString("abababab-abab-abab-abab-abababababab") : null,
                 RECOMMENDATION_ID,
                 APPROVER_USER_ID,
                 action,
                 action == LoanApprovalDecisionAction.REJECT ? "Business-facing reason" : null,
+                correction ? CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED : null,
+                correction ? uclCorrectionPlan() : null,
                 DECIDED_AT,
                 operationContext
         );
+    }
+
+    private static CorrectionPlanRequest uclCorrectionPlan() {
+        return new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+                CorrectionScope.DOCUMENT_REPLACEMENT,
+                CorrectionResponsibility.CUSTOMER,
+                DocumentType.INCOME_PROOF,
+                false,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "Replace the income proof.",
+                null
+        )));
     }
 
     private LoanApplication loanApplication(LoanApplicationStatus status) {

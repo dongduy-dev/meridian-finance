@@ -809,17 +809,18 @@ Still deferred:
 - Broader read models for Unsecured Consumer Loan and Collateral Loan.
 
 Cancellation note:
-V37 completes the narrow v0.1.0 Customer-owned command from
-`RETURNED_FOR_REVISION` to `CANCELLED`, including terminal correction state, exact
-reservation release, history, audit, request idempotency, and cancellation-versus-
-resubmission concurrency. Customer cancellation from other states, Staff or
-administrative cancellation, product-generic/UCL/Collateral policy, richer reasons,
-and operational tooling remain deferred.
+The narrow Customer-owned command from `RETURNED_FOR_REVISION` to `CANCELLED`
+supports Salary Advance and UCL, including terminal correction state, history,
+audit, request idempotency, and cancellation-versus-resubmission concurrency.
+Salary Advance releases its reservation exactly once; UCL creates no exposure
+effect. Customer cancellation from other states, Staff or administrative
+cancellation, Collateral policy, richer reasons, and operational tooling remain
+deferred.
 
 Suggested future branch name:
 `feature/lending-workflow-read-projections`
 
-### MER-FU-038 - Complete remaining UCL negative and termination flows
+### MER-FU-038 - Complete UCL negative and termination flows
 
 Area: Loan / Document / Approval
 
@@ -827,19 +828,27 @@ Type: Deferred feature
 
 Priority: P1
 
-Status: Open
+Status: Done
 
 Blocks current checkpoint: No
 
-Problem:
-The executable positive UCL lifecycle reaches manual-disbursement activation, an authoritative final monthly schedule, ordinary and administrative payoff, and administrative LoanAccount closure while the LoanApplication remains `DISBURSED`. Negative verification, correction, cancellation, and the outstanding-debt origination policy remain deferred.
+Outcome:
+The approved UCL MVP backend lifecycle is executable from origination through
+positive or negative verification, structured correction and re-verification,
+review, approval, offer handling, correction cancellation, contract, activation,
+servicing, settlement, and closure. Product-scoped outstanding debt blocks new UCL
+origination and correction resubmission while contractual outstanding remains
+positive in `ACTIVE` or `OVERDUE`.
 
 Completed:
 
 - Authenticated Customer-owned UCL origination.
 - Required income-proof, bank-statement, and employment-proof checklist creation.
 - Initial `PENDING_MANUAL_REVIEW` product-verification persistence.
-- Document-readiness-gated manual verification start and positive `VERIFIED` completion with authoritative Staff actor, time, and restricted assessment evidence.
+- Document-readiness-gated manual verification start and `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION` completion with authoritative Staff actor, time, and restricted assessment evidence.
+- Immutable sequenced UCL verification cycles, with the latest cycle authoritative and re-verification linked to its source correction.
+- Structured UCL correction from verification, Loan Officer review, or Approver review over application-owned income, bank-statement, and employment evidence.
+- Customer, Staff, and mixed task completion and resubmission, with amount and term immutable and a fresh verification required before review.
 - Verified-only entry into common Loan Officer review and approval or rejection recommendation through `APPROVAL_PENDING`.
 - Common Approver rejection and return-to-review decisions for UCL.
 - Exact-request UCL approval under the active 1.8% flat monthly policy.
@@ -855,24 +864,19 @@ Completed:
 - Date-driven `ACTIVE <-> OVERDUE` evaluation and repayment cure.
 - Ordinary contractual payoff and exact Administrative Full-Balance Settlement to `SETTLED`.
 - Separate Accounting closure to `CLOSED`, with zero UCL product-exposure release and no Salary Advance movement.
-- Fail-closed UCL correction and Collateral Loan contract-execution guards.
+- Customer-owned UCL cancellation from `RETURNED_FOR_REVISION`, with exact replay and no product-exposure effect.
+- Product-scoped outstanding-debt protection for UCL origination and resubmission, with zero-outstanding `SETTLED` or `CLOSED` accounts permitted and inconsistent state failing closed.
+- Fail-closed Collateral Loan contract-execution guards.
 
 Still deferred:
 
-- `FAILED` and `REQUIRES_MORE_INFORMATION` verification commands.
-- Correction and resubmission.
-- Outstanding UCL debt policy.
-- UCL cancellation.
-
-Recommendation:
-Define the remaining negative-verification, recovery, correction, cancellation, and
-outstanding-debt origination rules before extending the executable UCL workflow.
-
-Suggested future branch name:
-`feature/ucl-negative-verification-correction`
+- Customer cancellation from wider application states.
+- Staff and administrative cancellation.
+- Automated credit-bureau, income-verification, scoring, and bank-statement parsing.
+- Payment-provider integration, reversal/refund, discounted settlement, collections, and ledger capabilities.
 
 ## Recommended Next Roadmap
 
 1. Define reversal/refund, suspense/unapplied cash, waiver/write-off, discounted settlement, reconciliation, ledger, and collections rules before selecting another financial-servicing continuation.
-2. Continue UCL with negative verification, correction, cancellation, and outstanding-debt origination rules; add Collateral origination, activation, and servicing only when its product rules are approved.
+2. Add Collateral origination, activation, and servicing only when its product rules are approved.
 3. Complete production document storage, malware-scanning, retention, and operational hardening before deployment.

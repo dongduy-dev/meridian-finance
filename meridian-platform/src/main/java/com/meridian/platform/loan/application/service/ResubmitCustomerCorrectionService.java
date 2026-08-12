@@ -11,11 +11,13 @@ import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanProductRepository;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
+import com.meridian.platform.loan.application.port.out.OutstandingLoanAccountQuery;
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityAssessment;
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityPort;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
+import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
@@ -27,12 +29,15 @@ import com.meridian.platform.loan.domain.model.LoanCorrectionTask;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus;
 import com.meridian.platform.loan.domain.model.LoanProduct;
 import com.meridian.platform.loan.domain.model.ProductCode;
+import com.meridian.platform.loan.domain.model.ProductVerificationResult;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimit;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
+import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanVerification;
 import com.meridian.platform.loan.domain.model.VerifiedPartnerEmployeeLinkSnapshot;
 import com.meridian.platform.loan.domain.service.SalaryAdvanceApplicationPolicy;
+import com.meridian.platform.loan.domain.service.UnsecuredConsumerLoanApplicationPolicy;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -53,26 +58,35 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
-public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionUseCase, ResubmitStaffCorrectionUseCase {
+public class ResubmitCustomerCorrectionService
+        implements ResubmitOwnCorrectionUseCase, ResubmitStaffCorrectionUseCase {
+
     private final LoanApplicationRepository applicationRepository;
     private final LoanCorrectionRepository correctionRepository;
     private final LoanReviewCycleRepository reviewCycleRepository;
     private final LoanDocumentChecklistPort documentChecklistPort;
     private final CustomerReadinessPort customerReadinessPort;
     private final LoanProductRepository productRepository;
+    private final OutstandingLoanAccountQuery outstandingLoanAccounts;
     private final PartnerEligibilityPort partnerEligibilityPort;
     private final SalaryAdvanceLimitRepository limitRepository;
     private final SalaryAdvanceLimitMovementRepository movementRepository;
-    private final SalaryAdvanceVerificationRepository verificationRepository;
+    private final SalaryAdvanceVerificationRepository salaryVerificationRepository;
+    private final UnsecuredConsumerLoanVerificationRepository uclVerificationRepository;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
     private final BusinessAuditPublisher auditPublisher;
     private final CurrentUserProvider currentUserProvider;
     private final Clock clock;
-    private final SalaryAdvanceApplicationPolicy applicationPolicy = new SalaryAdvanceApplicationPolicy();
+    private final SalaryAdvanceApplicationPolicy salaryAdvancePolicy =
+            new SalaryAdvanceApplicationPolicy();
+    private final UnsecuredConsumerLoanApplicationPolicy uclPolicy =
+            new UnsecuredConsumerLoanApplicationPolicy();
 
     public ResubmitCustomerCorrectionService(
             LoanApplicationRepository applicationRepository,
@@ -81,10 +95,12 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
             LoanDocumentChecklistPort documentChecklistPort,
             CustomerReadinessPort customerReadinessPort,
             LoanProductRepository productRepository,
+            OutstandingLoanAccountQuery outstandingLoanAccounts,
             PartnerEligibilityPort partnerEligibilityPort,
             SalaryAdvanceLimitRepository limitRepository,
             SalaryAdvanceLimitMovementRepository movementRepository,
-            SalaryAdvanceVerificationRepository verificationRepository,
+            SalaryAdvanceVerificationRepository salaryVerificationRepository,
+            UnsecuredConsumerLoanVerificationRepository uclVerificationRepository,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
             BusinessAuditPublisher auditPublisher,
             CurrentUserProvider currentUserProvider,
@@ -96,10 +112,12 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
         this.documentChecklistPort = documentChecklistPort;
         this.customerReadinessPort = customerReadinessPort;
         this.productRepository = productRepository;
+        this.outstandingLoanAccounts = outstandingLoanAccounts;
         this.partnerEligibilityPort = partnerEligibilityPort;
         this.limitRepository = limitRepository;
         this.movementRepository = movementRepository;
-        this.verificationRepository = verificationRepository;
+        this.salaryVerificationRepository = salaryVerificationRepository;
+        this.uclVerificationRepository = uclVerificationRepository;
         this.transitionRecorder = transitionRecorder;
         this.auditPublisher = auditPublisher;
         this.currentUserProvider = currentUserProvider;
@@ -129,30 +147,46 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
             CorrectionResubmissionRequest command,
             ResubmissionActor actor
     ) {
+        Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
+        Objects.requireNonNull(command, "command must not be null");
+        Objects.requireNonNull(command.resubmissionRequestId(), "resubmissionRequestId must not be null");
+
         AuthenticatedUser user = currentUserProvider.currentUser();
         UUID authenticatedCustomerId = actor == ResubmissionActor.CUSTOMER
                 ? user.requireCustomerId() : null;
         if (actor == ResubmissionActor.STAFF && !user.hasPermission("loan:correction:staff")) {
             throw new AuthorizationException(
-                    "CORRECTION_RESUBMISSION_DENIED", "Staff correction permission is required.");
+                    "CORRECTION_RESUBMISSION_DENIED",
+                    "Staff correction permission is required."
+            );
         }
         LocalDateTime now = LocalDateTime.now(clock);
-        BusinessOperationContext operation = BusinessOperationContext.user(UUID.randomUUID(), user.userId(), now);
+        BusinessOperationContext operation = BusinessOperationContext.user(
+                UUID.randomUUID(),
+                user.userId(),
+                now
+        );
 
         applicationRepository.acquireWorkflowLock(loanApplicationId);
         LoanApplication application = applicationRepository.findByIdForUpdate(loanApplicationId)
                 .orElseThrow(() -> new EntityNotFoundException(
-                        "LOAN_APPLICATION_NOT_FOUND", "Loan Application was not found."));
+                        "LOAN_APPLICATION_NOT_FOUND",
+                        "Loan Application was not found."
+                ));
         if (actor == ResubmissionActor.CUSTOMER
                 && !application.customerId().equals(authenticatedCustomerId)) {
             throw new AuthorizationException(
-                    "CORRECTION_ACCESS_DENIED", "Customer cannot resubmit another Loan Application.");
+                    "CORRECTION_ACCESS_DENIED",
+                    "Customer cannot resubmit another Loan Application."
+            );
         }
-        UUID customerId = application.customerId();
 
-        LoanCorrectionRequest latest = correctionRepository.findLatestRequestByApplicationId(loanApplicationId)
+        LoanCorrectionRequest latest = correctionRepository
+                .findLatestRequestByApplicationId(loanApplicationId)
                 .orElseThrow(() -> new EntityNotFoundException(
-                        "CORRECTION_REQUEST_NOT_FOUND", "Correction request was not found."));
+                        "CORRECTION_REQUEST_NOT_FOUND",
+                        "Correction request was not found."
+                ));
         if (latest.status() == LoanCorrectionRequestStatus.RESUBMITTED) {
             List<LoanCorrectionTask> completedTasks =
                     correctionRepository.findTasksByRequestIdForUpdate(latest.id());
@@ -161,107 +195,230 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
                 return toDto(latest, application);
             }
             throw new BusinessStateConflictException(
-                    "CORRECTION_ALREADY_RESUBMITTED", "Correction request was already resubmitted.");
+                    "CORRECTION_ALREADY_RESUBMITTED",
+                    "Correction request was already resubmitted."
+            );
         }
 
         LoanCorrectionRequest request = correctionRepository
                 .findActiveRequestByApplicationIdForUpdate(loanApplicationId)
                 .orElseThrow(() -> new BusinessStateConflictException(
-                        "CORRECTION_REQUEST_CONFLICT", "No active correction request is available."));
-        List<LoanCorrectionTask> tasks = correctionRepository.findTasksByRequestIdForUpdate(request.id());
+                        "CORRECTION_REQUEST_CONFLICT",
+                        "No active correction request is available."
+                ));
+        List<LoanCorrectionTask> tasks = correctionRepository
+                .findTasksByRequestIdForUpdate(request.id());
         validateResubmitter(actor, tasks);
         if (tasks.stream().anyMatch(task -> task.status() != LoanCorrectionTaskStatus.COMPLETED)) {
             throw new BusinessStateConflictException(
-                    "CORRECTION_TASKS_INCOMPLETE", "Every correction task must be complete before resubmission.");
+                    "CORRECTION_TASKS_INCOMPLETE",
+                    "Every correction task must be complete before resubmission."
+            );
         }
         request = request.markReady(tasks, now);
 
-        validateCustomerReadiness(customerId);
-        LoanProduct product = productRepository.findByProductCode(ProductCode.SALARY_ADVANCE)
+        validateCustomerReadiness(application.customerId());
+        LoanProduct product = productRepository.findByProductCode(application.productCode())
                 .orElseThrow(() -> new EntityNotFoundException(
-                        "PRODUCT_NOT_FOUND", "Salary Advance product was not found."));
-        applicationPolicy.validateProduct(product);
-        applicationPolicy.validateRequestedAmount(product, application.requestedAmount());
-        applicationPolicy.validateRequestedTerm(application.requestedTermMonths());
+                        "PRODUCT_NOT_FOUND",
+                        "Loan product was not found."
+                ));
+        validateProduct(application, product);
 
-        applicationRepository.acquireCustomerProductLock(customerId, ProductCode.SALARY_ADVANCE);
-        assertNoOtherBlockingApplication(application);
-
-        SalaryAdvanceVerification previousVerification = verificationRepository
-                .findByLoanApplicationId(loanApplicationId)
-                .orElseThrow(() -> new BusinessStateConflictException(
-                        "SALARY_ADVANCE_VERIFICATION_REQUIRED", "Existing Salary Advance verification was not found."));
-        VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot = requireEligiblePartnerEmployeeLink(
-                customerId,
-                previousVerification.customerPartnerEmployeeLinkId()
+        applicationRepository.acquireCustomerProductLock(
+                application.customerId(),
+                application.productCode()
         );
-
-        limitRepository.acquireCustomerLinkLock(customerId, partnerSnapshot.customerPartnerEmployeeLinkId());
         assertNoOtherBlockingApplication(application);
-        SalaryAdvanceLimit limit = limitRepository
-                .findByCustomerIdAndCustomerPartnerEmployeeLinkIdForUpdate(
-                        customerId, partnerSnapshot.customerPartnerEmployeeLinkId())
-                .orElseThrow(() -> new BusinessStateConflictException(
-                        "SALARY_ADVANCE_LIMIT_UNAVAILABLE", "Salary Advance limit was not found."));
-        validateReservation(application, limit);
-        BigDecimal effectiveLimit = applicationPolicy.calculateEffectiveTotalLimit(product, partnerSnapshot);
-        SalaryAdvanceVerification revalidation = SalaryAdvanceVerification.revalidated(
-                UUID.randomUUID(), previousVerification.verificationSequence() + 1, request.id(),
-                application, limit, effectiveLimit, partnerSnapshot, now
-        );
 
         LoanDocumentChecklistPort.ChecklistReadinessSnapshot documentReadiness =
                 documentChecklistPort.readiness(loanApplicationId);
         if (!documentReadiness.uploadComplete()) {
             throw new BusinessStateConflictException(
-                    "CORRECTION_DOCUMENTS_INCOMPLETE", "Required correction document uploads are incomplete.");
+                    "CORRECTION_DOCUMENTS_INCOMPLETE",
+                    "Required correction document uploads are incomplete."
+            );
         }
-        int nextReviewCycleNumber = reviewCycleRepository.nextCycleNumber(loanApplicationId);
-        boolean hasPriorReviewCycle = nextReviewCycleNumber > 1;
-        LoanApplicationStatus target = hasPriorReviewCycle && documentReadiness.processingReady()
-                ? LoanApplicationStatus.UNDER_REVIEW : LoanApplicationStatus.SUBMITTED;
 
+        ProductResubmission productResubmission = switch (application.productCode()) {
+            case SALARY_ADVANCE -> prepareSalaryAdvanceResubmission(
+                    application,
+                    request,
+                    product,
+                    documentReadiness,
+                    now
+            );
+            case UNSECURED_CONSUMER_LOAN -> prepareUclResubmission(
+                    application,
+                    request,
+                    now
+            );
+            case COLLATERAL_LOAN -> throw new BusinessStateConflictException(
+                    "CORRECTION_RESUBMISSION_NOT_ALLOWED",
+                    "Collateral Loan correction resubmission is not supported."
+            );
+        };
+
+        int nextReviewCycleNumber = reviewCycleRepository.nextCycleNumber(loanApplicationId);
         if (request.sourceReviewCycleId() != null) {
             LoanApplicationReviewCycle sourceCycle = reviewCycleRepository
                     .findByIdForUpdate(request.sourceReviewCycleId())
                     .orElseThrow(() -> new BusinessStateConflictException(
-                            "REVIEW_CYCLE_CONFLICT", "Correction source review cycle was not found."));
+                            "REVIEW_CYCLE_CONFLICT",
+                            "Correction source review cycle was not found."
+                    ));
             reviewCycleRepository.save(sourceCycle.corrected(now));
         }
-        if (target == LoanApplicationStatus.UNDER_REVIEW) {
+        if (productResubmission.targetStatus() == LoanApplicationStatus.UNDER_REVIEW) {
             reviewCycleRepository.save(LoanApplicationReviewCycle.active(
-                    UUID.randomUUID(), loanApplicationId, nextReviewCycleNumber, now
+                    UUID.randomUUID(),
+                    loanApplicationId,
+                    nextReviewCycleNumber,
+                    now
             ));
         }
 
-        verificationRepository.save(revalidation);
-        LoanApplicationTransitionResult transition = application.resubmitCorrection(target);
+        LoanApplicationTransitionResult transition = application.resubmitCorrection(
+                productResubmission.targetStatus()
+        );
         LoanApplication savedApplication = applicationRepository.save(transition.loanApplication());
         LoanCorrectionRequest resubmitted = correctionRepository.saveRequest(
-                request.resubmit(command.resubmissionRequestId(), now));
+                request.resubmit(command.resubmissionRequestId(), now)
+        );
         transitionRecorder.record(operation, transition.facts(), null);
-        auditPublisher.publish(new BusinessAuditEvent(operation, List.of(
-                new BusinessAuditEntry(
-                        BusinessAuditAction.SALARY_ADVANCE_REVALIDATED,
-                        BusinessAuditEntityType.SALARY_ADVANCE_VERIFICATION,
-                        revalidation.id(),
-                        BusinessAuditPayload.builder()
-                                .put(BusinessAuditPayloadKey.LOAN_APPLICATION_ID, loanApplicationId)
-                                .put(BusinessAuditPayloadKey.CORRECTION_REQUEST_ID, request.id())
-                                .build()
-                ),
-                new BusinessAuditEntry(
-                        BusinessAuditAction.CORRECTION_RESUBMITTED,
-                        BusinessAuditEntityType.LOAN_CORRECTION_REQUEST,
-                        request.id(),
-                        BusinessAuditPayload.builder()
-                                .put(BusinessAuditPayloadKey.LOAN_APPLICATION_ID, loanApplicationId)
-                                .put(BusinessAuditPayloadKey.CORRECTION_REQUEST_ID, request.id())
-                                .put(BusinessAuditPayloadKey.RESUBMISSION_TARGET_STATUS, target)
-                                .build()
-                )
-        )));
+
+        List<BusinessAuditEntry> auditEntries = new ArrayList<>(productResubmission.auditEntries());
+        auditEntries.add(new BusinessAuditEntry(
+                BusinessAuditAction.CORRECTION_RESUBMITTED,
+                BusinessAuditEntityType.LOAN_CORRECTION_REQUEST,
+                request.id(),
+                BusinessAuditPayload.builder()
+                        .put(BusinessAuditPayloadKey.LOAN_APPLICATION_ID, loanApplicationId)
+                        .put(BusinessAuditPayloadKey.CORRECTION_REQUEST_ID, request.id())
+                        .put(
+                                BusinessAuditPayloadKey.RESUBMISSION_TARGET_STATUS,
+                                productResubmission.targetStatus()
+                        )
+                        .build()
+        ));
+        auditPublisher.publish(new BusinessAuditEvent(operation, auditEntries));
         return toDto(resubmitted, savedApplication);
+    }
+
+    private ProductResubmission prepareSalaryAdvanceResubmission(
+            LoanApplication application,
+            LoanCorrectionRequest request,
+            LoanProduct product,
+            LoanDocumentChecklistPort.ChecklistReadinessSnapshot documentReadiness,
+            LocalDateTime now
+    ) {
+        SalaryAdvanceVerification previousVerification = salaryVerificationRepository
+                .findByLoanApplicationId(application.id())
+                .orElseThrow(() -> new BusinessStateConflictException(
+                        "SALARY_ADVANCE_VERIFICATION_REQUIRED",
+                        "Existing Salary Advance verification was not found."
+                ));
+        VerifiedPartnerEmployeeLinkSnapshot partnerSnapshot = requireEligiblePartnerEmployeeLink(
+                application.customerId(),
+                previousVerification.customerPartnerEmployeeLinkId()
+        );
+
+        limitRepository.acquireCustomerLinkLock(
+                application.customerId(),
+                partnerSnapshot.customerPartnerEmployeeLinkId()
+        );
+        assertNoOtherBlockingApplication(application);
+        assertNoOutstandingLoanAccountExists(application.customerId(), application.productCode());
+        SalaryAdvanceLimit limit = limitRepository
+                .findByCustomerIdAndCustomerPartnerEmployeeLinkIdForUpdate(
+                        application.customerId(),
+                        partnerSnapshot.customerPartnerEmployeeLinkId()
+                )
+                .orElseThrow(() -> new BusinessStateConflictException(
+                        "SALARY_ADVANCE_LIMIT_UNAVAILABLE",
+                        "Salary Advance limit was not found."
+                ));
+        validateReservation(application, limit);
+        BigDecimal effectiveLimit = salaryAdvancePolicy.calculateEffectiveTotalLimit(
+                product,
+                partnerSnapshot
+        );
+        SalaryAdvanceVerification revalidation = SalaryAdvanceVerification.revalidated(
+                UUID.randomUUID(),
+                previousVerification.verificationSequence() + 1,
+                request.id(),
+                application,
+                limit,
+                effectiveLimit,
+                partnerSnapshot,
+                now
+        );
+        salaryVerificationRepository.save(revalidation);
+
+        boolean hasPriorReviewCycle = reviewCycleRepository.nextCycleNumber(application.id()) > 1;
+        LoanApplicationStatus target = hasPriorReviewCycle && documentReadiness.processingReady()
+                ? LoanApplicationStatus.UNDER_REVIEW
+                : LoanApplicationStatus.SUBMITTED;
+        BusinessAuditEntry revalidationAudit = new BusinessAuditEntry(
+                BusinessAuditAction.SALARY_ADVANCE_REVALIDATED,
+                BusinessAuditEntityType.SALARY_ADVANCE_VERIFICATION,
+                revalidation.id(),
+                BusinessAuditPayload.builder()
+                        .put(BusinessAuditPayloadKey.LOAN_APPLICATION_ID, application.id())
+                        .put(BusinessAuditPayloadKey.CORRECTION_REQUEST_ID, request.id())
+                        .build()
+        );
+        return new ProductResubmission(target, List.of(revalidationAudit));
+    }
+
+    private ProductResubmission prepareUclResubmission(
+            LoanApplication application,
+            LoanCorrectionRequest request,
+            LocalDateTime now
+    ) {
+        assertNoOutstandingLoanAccountExists(application.customerId(), application.productCode());
+        UnsecuredConsumerLoanVerification latestVerification = uclVerificationRepository
+                .findLatestByLoanApplicationIdForUpdate(application.id())
+                .orElseThrow(() -> new BusinessStateConflictException(
+                        "UCL_VERIFICATION_REQUIRED",
+                        "Unsecured Consumer Loan verification evidence is required."
+                ));
+        if (latestVerification.productVerificationResult() == ProductVerificationResult.FAILED) {
+            throw new BusinessStateConflictException(
+                    "CORRECTION_RESUBMISSION_NOT_ALLOWED",
+                    "A failed Unsecured Consumer Loan application cannot be resubmitted."
+            );
+        }
+        if (latestVerification.productVerificationResult()
+                != ProductVerificationResult.PENDING_MANUAL_REVIEW) {
+            uclVerificationRepository.save(UnsecuredConsumerLoanVerification.pendingReverification(
+                    UUID.randomUUID(),
+                    application.id(),
+                    latestVerification.verificationSequence() + 1,
+                    request.id(),
+                    now
+            ));
+        }
+        return new ProductResubmission(LoanApplicationStatus.SUBMITTED, List.of());
+    }
+
+    private void validateProduct(LoanApplication application, LoanProduct product) {
+        switch (application.productCode()) {
+            case SALARY_ADVANCE -> {
+                salaryAdvancePolicy.validateProduct(product);
+                salaryAdvancePolicy.validateRequestedAmount(product, application.requestedAmount());
+                salaryAdvancePolicy.validateRequestedTerm(application.requestedTermMonths());
+            }
+            case UNSECURED_CONSUMER_LOAN -> {
+                uclPolicy.validateProduct(product);
+                uclPolicy.validateRequestedAmount(application.requestedAmount());
+                uclPolicy.validateRequestedTerm(application.requestedTermMonths());
+            }
+            case COLLATERAL_LOAN -> throw new BusinessStateConflictException(
+                    "CORRECTION_RESUBMISSION_NOT_ALLOWED",
+                    "Collateral Loan correction resubmission is not supported."
+            );
+        }
     }
 
     private void validateResubmitter(
@@ -269,9 +426,11 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
             List<LoanCorrectionTask> tasks
     ) {
         boolean hasCustomerTasks = tasks.stream().anyMatch(
-                task -> task.responsibleParty() == LoanCorrectionResponsibility.CUSTOMER);
+                task -> task.responsibleParty() == LoanCorrectionResponsibility.CUSTOMER
+        );
         boolean hasStaffTasks = tasks.stream().anyMatch(
-                task -> task.responsibleParty() == LoanCorrectionResponsibility.STAFF);
+                task -> task.responsibleParty() == LoanCorrectionResponsibility.STAFF
+        );
         if (tasks.isEmpty()
                 || (actor == ResubmissionActor.CUSTOMER && hasStaffTasks)
                 || (actor == ResubmissionActor.STAFF && !hasStaffTasks)) {
@@ -285,20 +444,29 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
     }
 
     private void validateCustomerReadiness(UUID customerId) {
-        CustomerReadinessSnapshot readiness = customerReadinessPort.findReadinessByCustomerId(customerId)
+        CustomerReadinessSnapshot readiness = customerReadinessPort
+                .findReadinessByCustomerId(customerId)
                 .orElseThrow(() -> new EntityNotFoundException(
-                        "CUSTOMER_NOT_FOUND", "Customer was not found."));
+                        "CUSTOMER_NOT_FOUND",
+                        "Customer was not found."
+                ));
         if (!readiness.active()) {
             throw new BusinessStateConflictException(
-                    "CUSTOMER_NOT_ACTIVE", "Customer must remain active for correction resubmission.");
+                    "CUSTOMER_NOT_ACTIVE",
+                    "Customer must remain active for correction resubmission."
+            );
         }
         if (!readiness.profileComplete()) {
             throw new BusinessRuleViolationException(
-                    "PROFILE_INCOMPLETE", "Customer profile must be complete for correction resubmission.");
+                    "PROFILE_INCOMPLETE",
+                    "Customer profile must be complete for correction resubmission."
+            );
         }
         if (!readiness.hasPrimaryActiveBankAccount()) {
             throw new BusinessRuleViolationException(
-                    "PRIMARY_BANK_ACCOUNT_REQUIRED", "A primary active bank account is required.");
+                    "PRIMARY_BANK_ACCOUNT_REQUIRED",
+                    "A primary active bank account is required."
+            );
         }
     }
 
@@ -325,10 +493,41 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
 
     private void assertNoOtherBlockingApplication(LoanApplication application) {
         if (applicationRepository.existsByCustomerIdAndProductCodeAndStatusInExcludingApplication(
-                application.customerId(), application.productCode(),
-                LoanApplicationStatus.blockingStatuses(), application.id())) {
+                application.customerId(),
+                application.productCode(),
+                LoanApplicationStatus.blockingStatuses(),
+                application.id()
+        )) {
+            String productName = application.productCode() == ProductCode.SALARY_ADVANCE
+                    ? "Salary Advance" : "Unsecured Consumer Loan";
             throw new BusinessStateConflictException(
-                    "BLOCKING_APPLICATION_EXISTS", "Another blocking Salary Advance application exists.");
+                    "BLOCKING_APPLICATION_EXISTS",
+                    "Another blocking " + productName + " application exists."
+            );
+        }
+    }
+
+    private void assertNoOutstandingLoanAccountExists(
+            UUID customerId,
+            ProductCode productCode
+    ) {
+        OutstandingLoanAccountQuery.GuardResult result = outstandingLoanAccounts.inspect(
+                customerId,
+                productCode
+        );
+        String productName = productCode == ProductCode.SALARY_ADVANCE
+                ? "Salary Advance" : "Unsecured Consumer Loan";
+        if (result == OutstandingLoanAccountQuery.GuardResult.INCONSISTENT) {
+            throw new BusinessStateConflictException(
+                    "SYSTEM_STATE_CONFLICT",
+                    productName + " LoanAccount evidence is inconsistent."
+            );
+        }
+        if (result == OutstandingLoanAccountQuery.GuardResult.OUTSTANDING_EXISTS) {
+            throw new BusinessStateConflictException(
+                    "OUTSTANDING_LOAN_ACCOUNT_EXISTS",
+                    "A prior " + productName + " must be fully repaid before resubmission."
+            );
         }
     }
 
@@ -336,9 +535,13 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
         if (limit.status() != SalaryAdvanceLimitStatus.ACTIVE
                 || limit.reservedAmount().compareTo(application.requestedAmount()) < 0
                 || !movementRepository.existsByLoanApplicationIdAndMovementType(
-                        application.id(), SalaryAdvanceLimitMovementType.RESERVED)
+                        application.id(),
+                        SalaryAdvanceLimitMovementType.RESERVED
+                )
                 || movementRepository.existsByLoanApplicationIdAndMovementType(
-                        application.id(), SalaryAdvanceLimitMovementType.RESERVATION_RELEASED)) {
+                        application.id(),
+                        SalaryAdvanceLimitMovementType.RESERVATION_RELEASED
+                )) {
             throw new BusinessStateConflictException(
                     "SALARY_ADVANCE_RESERVATION_INVALID",
                     "Existing Salary Advance reservation is not valid for resubmission."
@@ -351,12 +554,22 @@ public class ResubmitCustomerCorrectionService implements ResubmitOwnCorrectionU
             LoanApplication application
     ) {
         return new CorrectionResubmissionDto(
-                request.id(), application.id(), application.status().name(),
-                request.resubmissionRequestId(), request.resubmittedAt()
+                request.id(),
+                application.id(),
+                application.status().name(),
+                request.resubmissionRequestId(),
+                request.resubmittedAt()
         );
     }
 
+    private record ProductResubmission(
+            LoanApplicationStatus targetStatus,
+            List<BusinessAuditEntry> auditEntries
+    ) {
+    }
+
     private enum ResubmissionActor {
-        CUSTOMER, STAFF
+        CUSTOMER,
+        STAFF
     }
 }

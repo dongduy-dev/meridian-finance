@@ -299,7 +299,7 @@ Each submitted application records a formal product-verification result.
 
 `VERIFIED` permits progression. `FAILED` records an unsuccessful check. `PENDING_MANUAL_REVIEW` waits for an authorized decision. `REQUIRES_MORE_INFORMATION` requires a correction path and is not an approval outcome.
 
-For Unsecured Consumer Loan, `VERIFIED` means that an authorized Staff reviewer completed the manual evidence-consistency and basic repayment-capacity assessment. It is not credit approval. The verification records the authoritative Staff actor, completion time, and restricted internal assessment evidence. The same Loan Officer may perform this verification and later record the review recommendation; maker-checker separation remains between that recommendation and the Approver's final decision.
+For Unsecured Consumer Loan, an authorized Staff reviewer records exactly one of `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION`, together with the authoritative Staff actor, completion time, and restricted internal assessment evidence. `VERIFIED` means that manual evidence-consistency and basic repayment-capacity assessment is complete; it is not credit approval. `FAILED` moves the application to `VERIFICATION_FAILED` and is unsuccessful for that application. `REQUIRES_MORE_INFORMATION` atomically returns the application for a structured correction. The latest verification cycle is authoritative. Correction after a completed verification preserves that cycle as immutable evidence and creates a new `PENDING_MANUAL_REVIEW` cycle linked to the resubmitted correction. The same Loan Officer may verify and later record the review recommendation; maker-checker separation remains between that recommendation and the Approver's final decision.
 
 ### 6.4 Document Review and Correction
 
@@ -322,9 +322,9 @@ When evidence is missing or requires correction, the application uses:
 
 Every correction task has one owner: Customer or Staff. Mixed correction plans use separate tasks. Restricted Staff notes must not appear in Customer instructions. A Staff actor who requested a Staff correction must not complete that task.
 
-Task completion requires the requested evidence. Customer-only corrections are resubmitted by the Customer owner. Staff-only and mixed corrections are resubmitted by authorized Staff.
+Task completion requires the requested evidence. Customer-only corrections are resubmitted by the Customer owner. Staff-only and mixed corrections are resubmitted by authorized Staff. For UCL, verification, Loan Officer review, and Approver review may each produce a permitted structured correction over `INCOME_PROOF`, `BANK_STATEMENT`, or `EMPLOYMENT_PROOF`. Requested amount and term remain immutable, and correction resubmission returns to `SUBMITTED` for a fresh product-verification cycle before another review begins.
 
-An authenticated Customer owner may instead terminate a Salary Advance application while it is `RETURNED_FOR_REVISION`. This narrow cancellation ends the active correction request, changes the application to `CANCELLED`, and releases the existing pre-disbursement reservation exactly once in the same transaction. It does not require current Partner eligibility because abandonment must remain possible when correction re-verification cannot succeed. Cancellation from other states and Staff or administrative cancellation remain future policies.
+An authenticated Customer owner may instead terminate a Salary Advance or UCL application while it is `RETURNED_FOR_REVISION`. This narrow cancellation ends the active correction request and changes the application to `CANCELLED`. Salary Advance releases the existing pre-disbursement reservation exactly once in the same transaction; UCL creates no product-exposure effect. It does not require current Partner eligibility because abandonment must remain possible when correction re-verification cannot succeed. Cancellation from other states and Staff or administrative cancellation remain future policies.
 
 Resubmission revalidates every affected business condition and routes the application to the earliest stage that still requires work. Salary Advance amount and term remain immutable through correction, and the existing reservation is preserved unless a defined terminal or release rule applies.
 
@@ -588,6 +588,10 @@ Unsecured Consumer Loan is a streamlined document-based product. It requires inc
 
 Required evidence is defined in Section 11.3. Loan purpose may be an optional product-policy field or document.
 
+A Customer cannot create or resubmit a UCL while another UCL LoanAccount has positive contractual outstanding in `ACTIVE` or `OVERDUE`. Product-scoped `SETTLED` and `CLOSED` accounts with zero outstanding do not block, and unrelated Salary Advance accounts do not satisfy the UCL guard. Inconsistent account state fails closed.
+
+A Customer may cancel an owned UCL only from `RETURNED_FOR_REVISION`. Cancellation terminalizes the active correction and application without creating, releasing, converting, or otherwise changing product exposure. Salary Advance cancellation retains its exact reservation-release behavior.
+
 #### UCL financial policy
 
 UCL uses exact-request approval. The approved principal and term equal the submitted requested amount and term; the Approver cannot create a counteroffer or edit either value. Supported terms are exactly 3, 6, 9, and 12 months.
@@ -607,7 +611,7 @@ The immutable offer contains one provisional repayment item per approved term mo
 
 An accepted UCL offer is the exact financial authority for its operational contract. Contract preparation copies the accepted principal, term, pricing method, monthly rate, fee, repayment method, totals, and provisional items without repricing or recomputation. It captures the Customer's current eligible primary active bank account through the common purpose-protected contract destination mechanism. A contract may be regenerated only for `DISBURSEMENT_ACCOUNT_REFRESH`; regeneration supersedes the prior version, preserves every financial term and item, captures the newly eligible destination, and requires fresh Customer acknowledgment.
 
-UCL contract readiness requires the accepted offer, acknowledgment of the exact current contract, processing-ready documents, no active correction, an active Customer, a valid captured destination, and the application-owned UCL verification in `VERIFIED`. UCL readiness and activation do not read, reserve, convert, release, or create Salary Advance limit or movement evidence. Readiness confirmation moves the contract to `READY_FOR_DISBURSEMENT` and the application to `DISBURSEMENT_PENDING` without activating a LoanAccount.
+UCL contract readiness requires the accepted offer, acknowledgment of the exact current contract, processing-ready documents, no active correction, an active Customer, a valid captured destination, and the authoritative latest application-owned UCL verification cycle in `VERIFIED`. UCL readiness and activation do not read, reserve, convert, release, or create Salary Advance limit or movement evidence. Readiness confirmation moves the contract to `READY_FOR_DISBURSEMENT` and the application to `DISBURSEMENT_PENDING` without activating a LoanAccount.
 
 At later manual disbursement, the controlled `firstRepaymentDate` must be after the disbursement value date and no later than one calendar month after it. The first installment uses that date. Later installments use its day-of-month as the monthly anchor; when a month does not contain that day, its final calendar day applies.
 
@@ -625,11 +629,11 @@ End-to-end workflow:
 4. Customer uploads the required income and employment evidence.
 5. System validates Customer readiness, product rules, requested amount and term, required fields, checklist upload completeness, and blocking applications.
 6. Customer submits the application.
-7. System records `VERIFIED`, `FAILED`, `PENDING_MANUAL_REVIEW`, or `REQUIRES_MORE_INFORMATION` according to the product policy.
-8. An authorized Staff reviewer records the manual verification outcome, authoritative actor and time, and restricted internal assessment evidence for income and employment consistency and basic repayment capacity. A `VERIFIED` outcome permits review entry but is not credit approval.
-9. Document replacement and correction follow Section 6.4.
-10. The Loan Officer records a recommendation or correction outcome.
-11. The Approver records the independent decision.
+7. System records an initial `PENDING_MANUAL_REVIEW` verification cycle.
+8. An authorized Staff reviewer records `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION`, authoritative actor and time, and restricted internal assessment evidence for income and employment consistency and basic repayment capacity. A `VERIFIED` outcome permits review entry but is not credit approval; `FAILED` ends the application as `VERIFICATION_FAILED`; `REQUIRES_MORE_INFORMATION` creates a structured correction atomically.
+9. Document replacement and correction follow Section 6.4. Resubmission after completed verification creates a linked pending cycle and requires re-verification before review. The Customer may instead cancel an owned application from `RETURNED_FOR_REVISION` without an exposure effect.
+10. The Loan Officer records a recommendation or permitted Customer or Staff correction outcome.
+11. The Approver records the independent decision or a permitted mixed Customer/Staff correction outcome.
 12. Approval generates one immutable offer under the configured UCL pricing and repayment policy.
 13. Customer accepts, declines, or allows the offer to expire.
 14. Accounting prepares the operational contract and Customer acknowledges the current version.
@@ -778,7 +782,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | FR-SA-007 | The system shall reserve limit at successful submission, release it exactly once on defined pre-disbursement outcomes, convert it to used exposure at disbursement, and release used exposure through allocated principal or another approved policy. |
 | FR-SA-008 | The system shall refresh employee links and Salary Advance limit when eligible Partner Employee data changes. |
 | FR-SA-009 | The system shall record one Salary Advance verification snapshot for each submitted Salary Advance application. |
-| FR-UCL-001 | The system shall support Unsecured Consumer Loan submission, income and employment evidence, manual repayment-capacity review, approval, offer response, contract readiness, disbursement, activation, repayment, settlement, and closure. |
+| FR-UCL-001 | The system shall support Unsecured Consumer Loan submission, income and employment evidence, positive and negative manual verification, structured correction and re-verification, review, approval, offer response, correction cancellation, contract readiness, disbursement, activation, repayment, settlement, closure, and product-scoped outstanding-debt protection. |
 | FR-CL-001 | The system shall support Collateral Loan submission, structured collateral facts, ownership evidence, manual assessment, approval, offer response, contract readiness, disbursement, activation, repayment, settlement, and closure. |
 | FR-DOC-001 | The system shall let Customers and authorized Staff upload and retrieve purpose-authorized documents associated with Customer, application, collateral, contract, or disbursement requirements. |
 | FR-DOC-002 | The system shall calculate upload completeness separately from processing readiness and document-review outcomes. |

@@ -198,9 +198,10 @@ final class ManualDisbursementActivationPostgreSqlTestSupport {
             } else if (productCode == ProductCode.UNSECURED_CONSUMER_LOAN) {
                 jdbc.update(
                         "insert into unsecured_consumer_loan_verifications "
-                                + "(id,loan_application_id,product_verification_result,created_at,"
+                                + "(id,loan_application_id,verification_sequence,"
+                                + "source_correction_request_id,product_verification_result,created_at,"
                                 + "reviewed_by_user_id,reviewed_at,assessment_note) "
-                                + "values (?,?,'VERIFIED',?,?,?,?)",
+                                + "values (?,?,1,NULL,'VERIFIED',?,?,?,?)",
                         UUID.randomUUID(), applicationId, NOW.minusDays(10),
                         ACCOUNTING_USER_ID, NOW.minusDays(5),
                         "Verified UCL activation test evidence."

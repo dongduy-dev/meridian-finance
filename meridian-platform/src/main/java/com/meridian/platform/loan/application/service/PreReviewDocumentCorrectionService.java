@@ -13,6 +13,7 @@ import com.meridian.platform.loan.domain.model.LoanCorrectionResponsibility;
 import com.meridian.platform.loan.domain.model.LoanCorrectionScope;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTask;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus;
+import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -27,9 +28,16 @@ import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
+import java.util.Set;
 
 @Service
 public class PreReviewDocumentCorrectionService {
+    private static final Set<DocumentType> UCL_DOCUMENT_TYPES = Set.of(
+            DocumentType.INCOME_PROOF,
+            DocumentType.BANK_STATEMENT,
+            DocumentType.EMPLOYMENT_PROOF
+    );
+
     private final LoanApplicationRepository applicationRepository;
     private final LoanCorrectionRepository correctionRepository;
     private final LoanDocumentChecklistPort documentChecklistPort;
@@ -67,8 +75,16 @@ public class PreReviewDocumentCorrectionService {
             throw new BusinessRuleViolationException(
                     "INVALID_CORRECTION_PLAN", "Customer replacement instruction is required.");
         }
-        documentChecklistPort.requireCurrentVersion(
-                loanApplicationId, checklistItemId, baselineVersionId);
+        LoanDocumentChecklistPort.CurrentDocumentVersionSnapshot document =
+                documentChecklistPort.requireCurrentVersionSnapshot(
+                        loanApplicationId,
+                        checklistItemId,
+                        baselineVersionId
+                );
+        LoanApplication application = applicationRepository.findByIdForUpdate(loanApplicationId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "LOAN_APPLICATION_NOT_FOUND", "Loan Application was not found."));
+        requireProductDocumentCompatibility(application.productCode(), document.documentType());
         var activeRequest = correctionRepository.findActiveRequestByApplicationIdForUpdate(loanApplicationId);
         if (activeRequest.isPresent()) {
             LoanCorrectionRequest request = activeRequest.get();
@@ -86,15 +102,12 @@ public class PreReviewDocumentCorrectionService {
             correctionRepository.saveTask(new LoanCorrectionTask(
                     UUID.randomUUID(), request.id(), correctionRepository.nextTaskSequence(request.id()),
                     LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionScope.DOCUMENT_REPLACEMENT,
-                    DocumentType.RECENT_PAYSLIP, false, checklistItemId, baselineVersionId,
+                    document.documentType(), false, checklistItemId, baselineVersionId,
                     instruction, null, LoanCorrectionTaskStatus.OPEN, null, null, null,
                     operation.occurredAt()
             ));
             return;
         }
-        LoanApplication application = applicationRepository.findByIdForUpdate(loanApplicationId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "LOAN_APPLICATION_NOT_FOUND", "Loan Application was not found."));
         LoanApplicationTransitionResult transition = application.requestDocumentReplacementCorrection();
 
         LoanCorrectionRequest request = correctionRepository.saveRequest(new LoanCorrectionRequest(
@@ -104,7 +117,7 @@ public class PreReviewDocumentCorrectionService {
         ));
         correctionRepository.saveTask(new LoanCorrectionTask(
                 UUID.randomUUID(), request.id(), 1, LoanCorrectionResponsibility.CUSTOMER,
-                LoanCorrectionScope.DOCUMENT_REPLACEMENT, DocumentType.RECENT_PAYSLIP,
+                LoanCorrectionScope.DOCUMENT_REPLACEMENT, document.documentType(),
                 false, checklistItemId, baselineVersionId, instruction, null,
                 LoanCorrectionTaskStatus.OPEN, null, null, null, operation.occurredAt()
         ));
@@ -120,5 +133,22 @@ public class PreReviewDocumentCorrectionService {
                         .put(BusinessAuditPayloadKey.CORRECTION_REASON_CODE, reasonCode)
                         .build()
         )));
+    }
+
+    private void requireProductDocumentCompatibility(
+            ProductCode productCode,
+            DocumentType documentType
+    ) {
+        boolean valid = switch (productCode) {
+            case SALARY_ADVANCE -> documentType == DocumentType.RECENT_PAYSLIP;
+            case UNSECURED_CONSUMER_LOAN -> UCL_DOCUMENT_TYPES.contains(documentType);
+            case COLLATERAL_LOAN -> false;
+        };
+        if (!valid) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_CORRECTION_PLAN",
+                    "Document replacement is not valid for the Loan Application product."
+            );
+        }
     }
 }

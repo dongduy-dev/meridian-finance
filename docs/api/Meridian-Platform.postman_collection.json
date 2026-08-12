@@ -1,7 +1,7 @@
 {
     "info":  {
                  "name":  "Meridian Platform API - Full Current Endpoint Test Collection",
-                 "description":  "JWT/RBAC Postman collection for all currently implemented Meridian backend endpoints.\n\nRecommended run order:\n1. Run the Auth folder to capture role-specific Bearer tokens.\n2. Run Public and Partner Admin requests.\n3. Run Customer Profile and Bank Accounts, then Customer Employee Verification, then Salary Advance Application.\n4. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n5. For UCL, prepare and accept the required evidence, enable uclOfferScenarioEnabled, then run the UCL verification-through-offer requests in order.\n\nThe Salary Advance and UCL happy paths are duplicate-sensitive because the authenticated demo customer can have only one active application per product. Run them on a fresh local database, or reset test data before repeating a full happy-path flow.",
+                 "description":  "JWT/RBAC Postman collection for all currently implemented Meridian backend endpoints.\n\nRecommended run order:\n1. Run the Auth folder to capture role-specific Bearer tokens.\n2. Run Public and Partner Admin requests.\n3. Run Customer Profile and Bank Accounts, then Customer Employee Verification, then Salary Advance Application.\n4. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n5. For UCL, prepare and accept the required evidence, enable uclOfferScenarioEnabled, then run the UCL verification-through-offer requests in order. Separate prepared fixture variables enable FAILED, REQUIRES_MORE_INFORMATION, correction/re-verification, cancellation, and outstanding-debt examples.\n\nThe Salary Advance and UCL happy paths are duplicate-sensitive because the authenticated demo customer can have only one active application per product. Run them on a fresh local database, or reset test data before repeating a full happy-path flow.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "auth":  {
@@ -152,6 +152,45 @@
                          "value":  "false",
                          "type":  "string",
                          "description":  "Set true after all required UCL uploads have been accepted and the application is SUBMITTED to run the prepared verification-through-offer scenario."
+                     },
+                     {
+                         "key":  "uclFailedVerificationApplicationId",
+                         "value":  "",
+                         "type":  "string",
+                         "description":  "A prepared UCL application in VERIFICATION_PENDING for the FAILED example."
+                     },
+                     {
+                         "key":  "uclMoreInformationApplicationId",
+                         "value":  "",
+                         "type":  "string",
+                         "description":  "A prepared UCL application in VERIFICATION_PENDING for correction and re-verification examples."
+                     },
+                     {
+                         "key":  "uclCorrectionChecklistItemId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "uclCorrectionBaselineVersionId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "uclCorrectionTaskId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "uclCancellationApplicationId",
+                         "value":  "",
+                         "type":  "string",
+                         "description":  "A separate Customer-owned UCL application in RETURNED_FOR_REVISION."
+                     },
+                     {
+                         "key":  "uclOutstandingDebtScenarioEnabled",
+                         "value":  "false",
+                         "type":  "string",
+                         "description":  "Set true only when the authenticated Customer has a UCL LoanAccount with positive outstanding in ACTIVE or OVERDUE."
                      },
                      {
                          "key":  "applicationNumber",
@@ -2258,13 +2297,49 @@
                                   },
                                   {
                                       "name":  "POST complete UCL manual verification as VERIFIED",
-                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/unsecured-consumer-loan-verification/complete","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Completes only the positive manual-verification path. The restricted assessment note and Staff identity are not returned.","body":{"mode":"raw","raw":"{\n  \"assessmentNote\": \"Income and employment evidence are consistent for Loan Officer review.\"\n}","options":{"raw":{"language":"json"}}}},
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/unsecured-consumer-loan-verification/complete","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Completes the positive manual-verification path. The restricted assessment note and Staff identity are not returned.","body":{"mode":"raw","raw":"{\n  \"outcome\": \"VERIFIED\",\n  \"assessmentNote\": \"Income and employment evidence are consistent for Loan Officer review.\"\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
                                       "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclOfferScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Positive verification completed safely\", () => { pm.expect(json.status).to.eql(\"SUBMITTED\"); pm.expect(json.productVerificationResult).to.eql(\"VERIFIED\"); pm.expect(json.reviewedAt).to.be.a(\"string\"); pm.expect(json).not.to.have.property(\"reviewedByUserId\"); pm.expect(json).not.to.have.property(\"assessmentNote\"); });"]}}]
                                   },
                                   {
+                                      "name":  "POST complete prepared UCL verification as FAILED",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclFailedVerificationApplicationId}}/unsecured-consumer-loan-verification/complete","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Prepared negative example. FAILED is terminal for this application and creates no correction.","body":{"mode":"raw","raw":"{\n  \"outcome\": \"FAILED\",\n  \"assessmentNote\": \"Submitted income evidence cannot support the requested obligation.\"\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"uclFailedVerificationApplicationId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"UCL verification failed terminally\", () => { pm.expect(json.status).to.eql(\"VERIFICATION_FAILED\"); pm.expect(json.productVerificationResult).to.eql(\"FAILED\"); });"]}}]
+                                  },
+                                  {
+                                      "name":  "POST complete prepared UCL verification as REQUIRES_MORE_INFORMATION",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclMoreInformationApplicationId}}/unsecured-consumer-loan-verification/complete","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Prepared correction example. Completion and structured correction creation are atomic.","body":{"mode":"raw","raw":"{\n  \"outcome\": \"REQUIRES_MORE_INFORMATION\",\n  \"assessmentNote\": \"The current bank statement is unreadable.\",\n  \"reasonCode\": \"DOCUMENT_REPLACEMENT_REQUIRED\",\n  \"correctionPlan\": {\n    \"tasks\": [{\n      \"scope\": \"DOCUMENT_REPLACEMENT\",\n      \"responsibleParty\": \"CUSTOMER\",\n      \"documentType\": \"BANK_STATEMENT\",\n      \"createChecklistItem\": false,\n      \"checklistItemId\": \"{{uclCorrectionChecklistItemId}}\",\n      \"baselineDocumentVersionId\": \"{{uclCorrectionBaselineVersionId}}\",\n      \"customerInstruction\": \"Upload a readable replacement bank statement.\",\n      \"staffInstruction\": null\n    }]\n  }\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"uclMoreInformationApplicationId\") || !pm.collectionVariables.get(\"uclCorrectionChecklistItemId\") || !pm.collectionVariables.get(\"uclCorrectionBaselineVersionId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"UCL correction was requested\", () => { pm.expect(json.status).to.eql(\"RETURNED_FOR_REVISION\"); pm.expect(json.productVerificationResult).to.eql(\"REQUIRES_MORE_INFORMATION\"); });"]}}]
+                                  },
+                                  {
+                                      "name":  "POST complete prepared UCL Customer correction task",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclMoreInformationApplicationId}}/corrections/tasks/{{uclCorrectionTaskId}}/complete","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Run after uploading a replacement version for the prepared BANK_STATEMENT checklist item.","body":{"mode":"raw","raw":"{\n  \"completionRequestId\": \"{{$guid}}\"\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"uclMoreInformationApplicationId\") || !pm.collectionVariables.get(\"uclCorrectionTaskId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"UCL Customer task is complete\", () => pm.expect(pm.response.json().status).to.eql(\"COMPLETED\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "POST resubmit prepared corrected UCL for re-verification",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclMoreInformationApplicationId}}/corrections/resubmit","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Run after completing the prepared Customer task and accepting its replacement evidence. Resubmission creates the next pending verification cycle and returns to SUBMITTED.","body":{"mode":"raw","raw":"{\n  \"resubmissionRequestId\": \"{{$guid}}\"\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"uclMoreInformationApplicationId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"Corrected UCL requires re-verification\", () => pm.expect(pm.response.json().status).to.eql(\"SUBMITTED\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "POST cancel prepared returned UCL correction",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclCancellationApplicationId}}/cancel","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Cancels a separate owned UCL returned correction with no Salary Advance exposure effect.","body":{"mode":"raw","raw":"{\n  \"requestId\": \"{{$guid}}\"\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"uclCancellationApplicationId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Returned UCL was cancelled\", () => { pm.expect(json.status).to.eql(\"CANCELLED\"); pm.expect(json.idempotentReplay).to.eql(false); });"]}}]
+                                  },
+                                  {
+                                      "name":  "POST Unsecured Consumer Loan application - outstanding debt rejection",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/unsecured-consumer-loan","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Prepared negative example for a Customer with positive UCL contractual outstanding in ACTIVE or OVERDUE.","body":{"mode":"raw","raw":"{\n  \"requestedAmount\": 5000000,\n  \"requestedTermMonths\": 6\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclOutstandingDebtScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.test(\"Outstanding UCL debt blocks origination\", () => pm.expect(pm.response.json().errorCode).to.eql(\"OUTSTANDING_LOAN_ACCOUNT_EXISTS\"));"]}}]
+                                  },
+                                  {
                                       "name":  "POST start UCL review after verification",
-                                      "request":  {"method":"POST","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/review/start","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Starts the common Loan Officer review only after authoritative UCL verification is VERIFIED."},
+                                      "request":  {"method":"POST","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/review/start","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Starts the common Loan Officer review only after the authoritative latest UCL verification cycle is VERIFIED."},
                                       "response":  [],
                                       "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclOfferScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"UCL entered common review\", () => pm.expect(pm.response.json().status).to.eql(\"UNDER_REVIEW\"));"]}}]
                                   },

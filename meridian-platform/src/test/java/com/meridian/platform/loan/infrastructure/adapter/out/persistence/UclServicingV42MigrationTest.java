@@ -45,16 +45,21 @@ class UclServicingV42MigrationTest {
     }
 
     @Test
-    void currentSchemaEndsWithExactV42FunctionDefinitions() throws IOException {
+    void currentSchemaPreservesExactV42FunctionDefinitions() throws IOException {
         String migration = Files.readString(MIGRATION)
                 .replace("\r\n", "\n").strip();
         String snapshot = Files.readString(CURRENT_SCHEMA)
                 .replace("\r\n", "\n");
         String marker = "-- Make the current repayment, outcome, and closure reconciliation";
         int v42Start = snapshot.lastIndexOf(marker);
+        int v43Start = snapshot.indexOf(
+                "-- UCL verification cycles, correction integrity, and product-aware cancellation evidence",
+                v42Start
+        );
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V42"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V43"));
         assertTrue(v42Start >= 0);
-        assertEquals(migration, snapshot.substring(v42Start).strip());
+        assertTrue(v43Start > v42Start);
+        assertEquals(migration, snapshot.substring(v42Start, v43Start).strip());
     }
 }

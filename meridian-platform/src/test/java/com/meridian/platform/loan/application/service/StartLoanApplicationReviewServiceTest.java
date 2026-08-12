@@ -107,7 +107,7 @@ class StartLoanApplicationReviewServiceTest {
     void pendingUclVerificationCannotStartReview() {
         LoanApplication application = uclApplication(LoanApplicationStatus.SUBMITTED);
         when(applicationRepository.findByIdForUpdate(applicationId)).thenReturn(Optional.of(application));
-        when(uclVerificationRepository.findByLoanApplicationId(applicationId))
+        when(uclVerificationRepository.findLatestByLoanApplicationId(applicationId))
                 .thenReturn(Optional.of(pendingUclVerification(application)));
 
         BusinessRuleViolationException exception = assertThrows(
@@ -123,7 +123,7 @@ class StartLoanApplicationReviewServiceTest {
     void missingUclVerificationCannotStartReview() {
         LoanApplication application = uclApplication(LoanApplicationStatus.SUBMITTED);
         when(applicationRepository.findByIdForUpdate(applicationId)).thenReturn(Optional.of(application));
-        when(uclVerificationRepository.findByLoanApplicationId(applicationId)).thenReturn(Optional.empty());
+        when(uclVerificationRepository.findLatestByLoanApplicationId(applicationId)).thenReturn(Optional.empty());
 
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,
@@ -138,7 +138,7 @@ class StartLoanApplicationReviewServiceTest {
     void verificationPendingUclCannotStartReview() {
         LoanApplication application = uclApplication(LoanApplicationStatus.VERIFICATION_PENDING);
         when(applicationRepository.findByIdForUpdate(applicationId)).thenReturn(Optional.of(application));
-        when(uclVerificationRepository.findByLoanApplicationId(applicationId))
+        when(uclVerificationRepository.findLatestByLoanApplicationId(applicationId))
                 .thenReturn(Optional.of(pendingUclVerification(application)));
 
         BusinessRuleViolationException exception = assertThrows(
@@ -156,7 +156,7 @@ class StartLoanApplicationReviewServiceTest {
         UnsecuredConsumerLoanVerification verified = pendingUclVerification(application)
                 .completeManualReview(UUID.randomUUID(), LocalDateTime.of(2026, 7, 19, 7, 30), "Verified evidence.");
         when(applicationRepository.findByIdForUpdate(applicationId)).thenReturn(Optional.of(application));
-        when(uclVerificationRepository.findByLoanApplicationId(applicationId)).thenReturn(Optional.of(verified));
+        when(uclVerificationRepository.findLatestByLoanApplicationId(applicationId)).thenReturn(Optional.of(verified));
         when(documentChecklistPort.isProcessingReady(applicationId)).thenReturn(true);
         when(applicationRepository.save(org.mockito.ArgumentMatchers.any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));

@@ -77,7 +77,7 @@ class LoanContractReadinessServiceTest {
         when(corrections.findActiveRequestByApplicationIdForUpdate(f.application.id()))
                 .thenReturn(Optional.empty());
         when(documents.isProcessingReady(f.application.id())).thenReturn(true);
-        when(uclVerifications.findByLoanApplicationId(f.application.id()))
+        when(uclVerifications.findLatestByLoanApplicationId(f.application.id()))
                 .thenReturn(Optional.of(f.verification));
         when(bankAccounts.capturePrimaryActive(f.application.customerId())).thenReturn(f.sensitive);
         when(protector.protect(any(byte[].class), any())).thenReturn(
@@ -110,7 +110,7 @@ class LoanContractReadinessServiceTest {
         when(corrections.findActiveRequestByApplicationIdForUpdate(f.application.id()))
                 .thenReturn(Optional.empty());
         when(documents.isProcessingReady(f.application.id())).thenReturn(true);
-        when(uclVerifications.findByLoanApplicationId(f.application.id())).thenReturn(Optional.empty());
+        when(uclVerifications.findLatestByLoanApplicationId(f.application.id())).thenReturn(Optional.empty());
 
         BusinessStateConflictException error = assertThrows(
                 BusinessStateConflictException.class,
@@ -261,7 +261,7 @@ class LoanContractReadinessServiceTest {
         when(corrections.existsActiveRequestByApplicationId(f.application.id())).thenReturn(false);
         when(bankAccounts.inspectCaptured(f.application.customerId(), f.accountId))
                 .thenReturn(new ContractBankAccountPort.ContractBankAccountState(true, true, true));
-        when(uclVerifications.findByLoanApplicationId(f.application.id()))
+        when(uclVerifications.findLatestByLoanApplicationId(f.application.id()))
                 .thenReturn(Optional.of(f.verification));
 
         QueryContractReadinessUseCase.Snapshot ready = service.query(f.application.id(), 1);
@@ -271,7 +271,7 @@ class LoanContractReadinessServiceTest {
         verifyNoInteractions(verifications, limits, movements);
 
         reset(uclVerifications);
-        when(uclVerifications.findByLoanApplicationId(f.application.id())).thenReturn(Optional.empty());
+        when(uclVerifications.findLatestByLoanApplicationId(f.application.id())).thenReturn(Optional.empty());
         QueryContractReadinessUseCase.Snapshot blocked = service.query(f.application.id(), 1);
         assertFalse(blocked.ready());
         assertTrue(blocked.blockers().contains(ContractReadinessBlockerCode.UCL_VERIFICATION_INVALID));

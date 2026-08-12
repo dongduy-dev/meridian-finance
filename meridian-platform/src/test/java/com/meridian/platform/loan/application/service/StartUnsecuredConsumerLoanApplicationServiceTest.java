@@ -8,6 +8,7 @@ import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanProductRepository;
+import com.meridian.platform.loan.application.port.out.OutstandingLoanAccountQuery;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
@@ -44,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -69,6 +71,7 @@ class StartUnsecuredConsumerLoanApplicationServiceTest {
     @Mock private LoanDocumentChecklistPort checklists;
     @Mock private UnsecuredConsumerLoanVerificationRepository verifications;
     @Mock private CustomerReadinessPort readiness;
+    @Mock private OutstandingLoanAccountQuery outstandingLoanAccounts;
     @Mock private CurrentUserProvider currentUserProvider;
     @Mock private LoanApplicationStatusTransitionRecorder transitionRecorder;
     @Mock private BusinessAuditPublisher auditPublisher;
@@ -83,6 +86,7 @@ class StartUnsecuredConsumerLoanApplicationServiceTest {
                 checklists,
                 verifications,
                 readiness,
+                outstandingLoanAccounts,
                 new LoanMapper(),
                 currentUserProvider,
                 transitionRecorder,
@@ -93,6 +97,8 @@ class StartUnsecuredConsumerLoanApplicationServiceTest {
                 USER_ID, "customer@meridian.local", "CUSTOMER", CUSTOMER_ID,
                 Set.of("CUSTOMER"), Set.of("loan:submit")
         ));
+        lenient().when(outstandingLoanAccounts.inspect(CUSTOMER_ID, ProductCode.UNSECURED_CONSUMER_LOAN))
+                .thenReturn(OutstandingLoanAccountQuery.GuardResult.CLEAR);
     }
 
     @Test
@@ -184,6 +190,29 @@ class StartUnsecuredConsumerLoanApplicationServiceTest {
         assertEquals("BLOCKING_APPLICATION_EXISTS", assertThrows(
                 BusinessStateConflictException.class, () -> service.startUnsecuredConsumerLoanApplication(request())
         ).getErrorCode());
+        verify(checklists, never()).createSubmissionChecklist(any(), any(), any());
+        verifyNoInteractions(verifications);
+    }
+
+    @Test
+    void blocksOutstandingUclAndFailsClosedForInconsistentAccountEvidence() {
+        arrangeReadyCustomerAndProduct();
+        when(outstandingLoanAccounts.inspect(CUSTOMER_ID, ProductCode.UNSECURED_CONSUMER_LOAN))
+                .thenReturn(OutstandingLoanAccountQuery.GuardResult.OUTSTANDING_EXISTS);
+
+        BusinessStateConflictException outstanding = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.startUnsecuredConsumerLoanApplication(request())
+        );
+        assertEquals("OUTSTANDING_LOAN_ACCOUNT_EXISTS", outstanding.getErrorCode());
+
+        when(outstandingLoanAccounts.inspect(CUSTOMER_ID, ProductCode.UNSECURED_CONSUMER_LOAN))
+                .thenReturn(OutstandingLoanAccountQuery.GuardResult.INCONSISTENT);
+        BusinessStateConflictException inconsistent = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.startUnsecuredConsumerLoanApplication(request())
+        );
+        assertEquals("SYSTEM_STATE_CONFLICT", inconsistent.getErrorCode());
         verify(checklists, never()).createSubmissionChecklist(any(), any(), any());
         verifyNoInteractions(verifications);
     }

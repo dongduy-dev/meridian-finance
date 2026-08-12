@@ -12,6 +12,7 @@ import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
 import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanVerification;
+import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanManualVerificationOutcome;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -38,6 +39,7 @@ public class ManageUnsecuredConsumerLoanVerificationService
     private final LoanApplicationRepository applicationRepository;
     private final UnsecuredConsumerLoanVerificationRepository verificationRepository;
     private final LoanDocumentChecklistPort documentChecklistPort;
+    private final CustomerCorrectionWorkflowService correctionWorkflowService;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
     private final BusinessAuditPublisher auditPublisher;
     private final CurrentUserProvider currentUserProvider;
@@ -47,6 +49,7 @@ public class ManageUnsecuredConsumerLoanVerificationService
             LoanApplicationRepository applicationRepository,
             UnsecuredConsumerLoanVerificationRepository verificationRepository,
             LoanDocumentChecklistPort documentChecklistPort,
+            CustomerCorrectionWorkflowService correctionWorkflowService,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
             BusinessAuditPublisher auditPublisher,
             CurrentUserProvider currentUserProvider,
@@ -55,6 +58,7 @@ public class ManageUnsecuredConsumerLoanVerificationService
         this.applicationRepository = applicationRepository;
         this.verificationRepository = verificationRepository;
         this.documentChecklistPort = documentChecklistPort;
+        this.correctionWorkflowService = correctionWorkflowService;
         this.transitionRecorder = transitionRecorder;
         this.auditPublisher = auditPublisher;
         this.currentUserProvider = currentUserProvider;
@@ -71,7 +75,7 @@ public class ManageUnsecuredConsumerLoanVerificationService
         LoanApplication application = requireApplicationForUpdate(loanApplicationId);
         requireUnsecuredConsumerLoan(application);
         LoanApplicationTransitionResult transition = application.startProductVerification();
-        UnsecuredConsumerLoanVerification verification = requireVerification(loanApplicationId);
+        UnsecuredConsumerLoanVerification verification = requireVerificationForUpdate(loanApplicationId);
         if (verification.productVerificationResult() != ProductVerificationResult.PENDING_MANUAL_REVIEW) {
             throw new BusinessStateConflictException(
                     "PRODUCT_VERIFICATION_NOT_PENDING",
@@ -98,19 +102,32 @@ public class ManageUnsecuredConsumerLoanVerificationService
     ) {
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
         Objects.requireNonNull(request, "request must not be null");
+        validateCompletionRequest(request);
         BusinessOperationContext operationContext = currentOperation();
 
         applicationRepository.acquireWorkflowLock(loanApplicationId);
         LoanApplication application = requireApplicationForUpdate(loanApplicationId);
         requireUnsecuredConsumerLoan(application);
-        LoanApplicationTransitionResult transition = application.completeProductVerification();
-        UnsecuredConsumerLoanVerification completedVerification = requireVerification(loanApplicationId)
+        UnsecuredConsumerLoanVerification completedVerification = requireVerificationForUpdate(loanApplicationId)
                 .completeManualReview(
+                        request.outcome(),
                         operationContext.actorUserId(),
                         operationContext.occurredAt(),
                         request.assessmentNote()
                 );
+        LoanApplicationTransitionResult transition = application.completeProductVerification(
+                completedVerification.productVerificationResult()
+        );
         requireProcessingReady(loanApplicationId);
+
+        if (request.outcome() == UnsecuredConsumerLoanManualVerificationOutcome.REQUIRES_MORE_INFORMATION) {
+            correctionWorkflowService.createFromProductVerification(
+                    application,
+                    request.reasonCode(),
+                    request.correctionPlan(),
+                    operationContext
+            );
+        }
 
         UnsecuredConsumerLoanVerification savedVerification = verificationRepository.save(completedVerification);
         LoanApplication savedApplication = applicationRepository.save(transition.loanApplication());
@@ -140,12 +157,41 @@ public class ManageUnsecuredConsumerLoanVerificationService
                 ));
     }
 
-    private UnsecuredConsumerLoanVerification requireVerification(UUID loanApplicationId) {
-        return verificationRepository.findByLoanApplicationId(loanApplicationId)
+    private UnsecuredConsumerLoanVerification requireVerificationForUpdate(UUID loanApplicationId) {
+        return verificationRepository.findLatestByLoanApplicationIdForUpdate(loanApplicationId)
                 .orElseThrow(() -> new BusinessStateConflictException(
                         "UCL_VERIFICATION_REQUIRED",
                         "Unsecured Consumer Loan verification evidence is required."
                 ));
+    }
+
+    private void validateCompletionRequest(
+            CompleteUnsecuredConsumerLoanVerificationRequest request
+    ) {
+        if (request.outcome() == null) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_UCL_VERIFICATION_OUTCOME",
+                    "A supported manual verification outcome is required."
+            );
+        }
+        boolean hasReason = request.reasonCode() != null;
+        boolean hasPlan = request.correctionPlan() != null;
+        if (request.outcome()
+                == UnsecuredConsumerLoanManualVerificationOutcome.REQUIRES_MORE_INFORMATION) {
+            if (!hasReason || !hasPlan) {
+                throw new BusinessRuleViolationException(
+                        "INVALID_CORRECTION_PLAN",
+                        "More-information verification requires a controlled reason and correction plan."
+                );
+            }
+            return;
+        }
+        if (hasReason || hasPlan) {
+            throw new BusinessRuleViolationException(
+                    "INVALID_CORRECTION_PLAN",
+                    "Correction fields are allowed only for a more-information verification outcome."
+            );
+        }
     }
 
     private void requireUnsecuredConsumerLoan(LoanApplication application) {

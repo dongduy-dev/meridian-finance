@@ -50,7 +50,7 @@ class UnsecuredConsumerLoanActivationPolicyTest {
     @Test
     void validatesVerifiedUclActivationWithoutExposureEffect() {
         Fixture fixture = fixture();
-        when(verifications.findByLoanApplicationId(fixture.application.id()))
+        when(verifications.findLatestByLoanApplicationId(fixture.application.id()))
                 .thenReturn(Optional.of(fixture.verification));
 
         LoanProductActivationPolicy.ProductActivationResult result =
@@ -64,7 +64,7 @@ class UnsecuredConsumerLoanActivationPolicyTest {
     @Test
     void rejectsMissingOrNonVerifiedEvidenceBeforeActivation() {
         Fixture fixture = fixture();
-        when(verifications.findByLoanApplicationId(fixture.application.id()))
+        when(verifications.findLatestByLoanApplicationId(fixture.application.id()))
                 .thenReturn(Optional.empty());
 
         BusinessStateConflictException missing = assertThrows(
@@ -78,7 +78,7 @@ class UnsecuredConsumerLoanActivationPolicyTest {
                 ProductVerificationResult.PENDING_MANUAL_REVIEW, NOW.minusDays(2),
                 null, null, null
         );
-        when(verifications.findByLoanApplicationId(fixture.application.id()))
+        when(verifications.findLatestByLoanApplicationId(fixture.application.id()))
                 .thenReturn(Optional.of(pending));
         BusinessStateConflictException pendingFailure = assertThrows(
                 BusinessStateConflictException.class,
@@ -124,7 +124,7 @@ class UnsecuredConsumerLoanActivationPolicyTest {
     @Test
     void completedReplayFailsClosedWhenVerificationEvidenceIsMissing() {
         Fixture fixture = fixture();
-        when(verifications.findByLoanApplicationId(fixture.application.id()))
+        when(verifications.findLatestByLoanApplicationId(fixture.application.id()))
                 .thenReturn(Optional.empty());
 
         assertSystemConflict(() -> policy.validateCompletedActivation(

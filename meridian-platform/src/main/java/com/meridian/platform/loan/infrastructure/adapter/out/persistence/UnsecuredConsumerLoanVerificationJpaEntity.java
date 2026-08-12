@@ -23,6 +23,12 @@ public class UnsecuredConsumerLoanVerificationJpaEntity {
     @Column(name = "loan_application_id", nullable = false)
     private UUID loanApplicationId;
 
+    @Column(name = "verification_sequence", nullable = false)
+    private int verificationSequence;
+
+    @Column(name = "source_correction_request_id")
+    private UUID sourceCorrectionRequestId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "product_verification_result", nullable = false)
     private ProductVerificationResult productVerificationResult;
@@ -45,6 +51,8 @@ public class UnsecuredConsumerLoanVerificationJpaEntity {
     public UnsecuredConsumerLoanVerificationJpaEntity(UnsecuredConsumerLoanVerification verification) {
         this.id = verification.id();
         this.loanApplicationId = verification.loanApplicationId();
+        this.verificationSequence = verification.verificationSequence();
+        this.sourceCorrectionRequestId = verification.sourceCorrectionRequestId();
         this.productVerificationResult = verification.productVerificationResult();
         this.createdAt = verification.createdAt();
         this.reviewedByUserId = verification.reviewedByUserId();
@@ -56,6 +64,8 @@ public class UnsecuredConsumerLoanVerificationJpaEntity {
         return new UnsecuredConsumerLoanVerification(
                 id,
                 loanApplicationId,
+                verificationSequence,
+                sourceCorrectionRequestId,
                 productVerificationResult,
                 createdAt,
                 reviewedByUserId,

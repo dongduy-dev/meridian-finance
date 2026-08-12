@@ -40,6 +40,14 @@ public interface LoanDocumentChecklistPort {
         throw new UnsupportedOperationException("Document version proof is not supported.");
     }
 
+    default CurrentDocumentVersionSnapshot requireCurrentVersionSnapshot(
+            UUID loanApplicationId,
+            UUID checklistItemId,
+            UUID expectedVersionId
+    ) {
+        throw new UnsupportedOperationException("Document version details are not supported.");
+    }
+
     default boolean hasCurrentVersionDifferentFrom(UUID checklistItemId, UUID baselineVersionId) {
         throw new UnsupportedOperationException("Document replacement proof is not supported.");
     }
@@ -64,5 +72,11 @@ public interface LoanDocumentChecklistPort {
     }
 
     record ChecklistReadinessSnapshot(boolean uploadComplete, boolean processingReady) {
+    }
+
+    record CurrentDocumentVersionSnapshot(
+            DocumentType documentType,
+            UUID documentVersionId
+    ) {
     }
 }
