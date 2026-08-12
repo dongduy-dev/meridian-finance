@@ -68,7 +68,8 @@ public interface ApproveLoanSettlementUseCase {
             BigDecimal settlementAmount,
             LocalDate paymentValueDate,
             LocalDateTime approvedAt,
-            BigDecimal principalAllocatedAndReleased,
+            BigDecimal principalAllocated,
+            BigDecimal principalReleased,
             AccountBalance accountBalance,
             boolean idempotentReplay
     ) {
@@ -80,7 +81,8 @@ public interface ApproveLoanSettlementUseCase {
             Objects.requireNonNull(settlementAmount);
             Objects.requireNonNull(paymentValueDate);
             Objects.requireNonNull(approvedAt);
-            Objects.requireNonNull(principalAllocatedAndReleased);
+            Objects.requireNonNull(principalAllocated);
+            Objects.requireNonNull(principalReleased);
             Objects.requireNonNull(accountBalance);
         }
 

@@ -73,7 +73,8 @@ public interface RecordRepaymentUseCase {
             List<Allocation> allocations,
             List<InstallmentProgress> installmentProgress,
             AccountBalance accountBalance,
-            BigDecimal principalAllocatedAndReleased,
+            BigDecimal principalAllocated,
+            BigDecimal principalReleased,
             boolean idempotentReplay
     ) {
         public Result {
@@ -87,7 +88,8 @@ public interface RecordRepaymentUseCase {
             allocations = List.copyOf(allocations);
             installmentProgress = List.copyOf(installmentProgress);
             Objects.requireNonNull(accountBalance);
-            Objects.requireNonNull(principalAllocatedAndReleased);
+            Objects.requireNonNull(principalAllocated);
+            Objects.requireNonNull(principalReleased);
         }
 
         @Override

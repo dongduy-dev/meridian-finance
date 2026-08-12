@@ -374,7 +374,7 @@ Request and workflow advisory locks use separate categories. Identical request r
 | `GET /api/v1/loan-applications/{id}/loan-account` | `loan:read:own` or `loan:read` | Returns the activated account, masked contract destination, final schedule, and persisted servicing progress. |
 | `POST /api/v1/loan-applications/{id}/repayments` | `repayment:update` | Serializes request and payment-reference identity, locks authoritative aggregates, applies allocation and exposure effects, and records history and audit in one transaction. |
 | `GET /api/v1/loan-applications/{id}/repayments` | `loan:read:own` or `loan:read` | Reads immutable repayment and allocation evidence under a consistent read transaction. |
-| `POST /api/v1/loan-applications/{id}/settlements` | `loan:settlement:approve` plus Approver role | Applies an exact full-outstanding payment, releases allocated Salary Advance principal, and records immutable settlement, payment, history, and audit evidence. |
+| `POST /api/v1/loan-applications/{id}/settlements` | `loan:settlement:approve` plus Approver role | Applies an exact full-outstanding payment, applies product-specific exposure semantics, and records immutable settlement, payment, history, and audit evidence. |
 | `POST /api/v1/loan-applications/{id}/loan-account/closure` | `loan:account:close` plus Accounting Officer role | Verifies settled financial provenance and changes only administrative account status, closure evidence, history, and audit. |
 
 Customer ownership concealment belongs in the application service. A Customer receives the same not-found behavior for a missing, foreign-owned, or not-yet-activated account.
@@ -389,9 +389,9 @@ Read operations must not:
 
 The repayment and settlement controllers forward external payment references without canonicalizing them. The Loan application services own normalization, operation-specific idempotency, and duplicate-reference handling. The canonical external payment reference remains internal financial evidence and is excluded from ordinary responses, logs, audit payloads, and errors.
 
-Administrative Full-Balance Settlement is a Loan-owned payment operation even though its actor is an Approver. It starts from `ACTIVE` or `OVERDUE`, requires the caller's expected amount to equal locked total outstanding, applies the repayment allocator and servicing calculator, releases only allocated principal through the Salary Advance repayment policy, and commits `SETTLED` with immutable settlement, payment, outcome, history, and audit evidence.
+Administrative Full-Balance Settlement is a Loan-owned payment operation even though its actor is an Approver. It starts from `ACTIVE` or `OVERDUE`, requires the caller's expected amount to equal locked total outstanding, applies the repayment allocator and servicing calculator, and commits `SETTLED` with immutable settlement, payment, outcome, history, and audit evidence. The selected repayment policy releases allocated principal exactly for Salary Advance and requires zero product-exposure release for UCL.
 
-Administrative closure starts only from a fully reconciled `SETTLED` account. It accepts contractual-payoff provenance or approved-settlement provenance, verifies final progress, exposure release, status history, and durable evidence, then records `SETTLED -> CLOSED`. It does not acquire Salary Advance limit locks because it performs no financial or exposure mutation.
+Administrative closure starts only from a fully reconciled `SETTLED` account. It accepts contractual-payoff provenance or approved-settlement provenance, verifies final progress, product-specific exposure semantics, status history, and durable evidence, then records `SETTLED -> CLOSED`. It does not acquire Salary Advance limit locks because it performs no financial or exposure mutation.
 
 ### Mutation Lock Order
 
@@ -400,10 +400,10 @@ Existing application and account mutations use this global order:
 1. operation-specific request advisory lock;
 2. LoanApplication workflow advisory lock;
 3. LoanApplication, LoanAccount, final-schedule, and servicing-progress row locks in operation-specific order;
-4. Salary Advance Customer-and-employee-link advisory lock;
-5. Salary Advance limit and movement rows.
+4. product-specific exposure locks when required;
+5. Salary Advance Customer-and-employee-link, limit, and movement rows when the selected policy mutates Salary Advance exposure.
 
-Activation, repayment, and settlement must not acquire the Customer-and-employee-link lock before the LoanApplication workflow lock. Settlement follows request lock, workflow lock, application/account/schedule/progress row locks, payment validation, Customer-and-employee-link lock, then Salary Advance limit and movement locks. Canonical external payment-reference uniqueness is enforced by the payment insert and its database constraint; a conflict is resolved without exposing the reference. Closure stops after workflow, application/account, and settlement-evidence verification because it does not mutate exposure. Submission and standalone limit refresh retain their Customer/product or Customer/employee-link to limit order and do not acquire an existing application workflow or account lock.
+Activation, repayment, and settlement must not acquire product-specific exposure locks before the LoanApplication workflow lock. Salary Advance settlement follows request lock, workflow lock, application/account/schedule/progress row locks, payment validation, Customer-and-employee-link lock, then limit and movement locks. UCL uses the same common financial locks but acquires no Salary Advance exposure lock or row. Canonical external payment-reference uniqueness is enforced by the payment insert and its database constraint; a conflict is resolved without exposing the reference. Closure stops after workflow, application/account, and settlement-evidence verification because it does not mutate exposure. Submission and standalone limit refresh retain their Customer/product or Customer/employee-link to limit order and do not acquire an existing application workflow or account lock.
 
 ---
 

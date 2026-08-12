@@ -19,7 +19,9 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -46,6 +48,8 @@ public class SalaryAdvanceRepaymentPolicy implements LoanProductRepaymentPolicy 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public BigDecimal releasePrincipal(PrincipalReleaseCommand command) {
+        validateIdentity(command.application(), command.account());
+        validateAllocationIdentity(command.repaymentTransactionId(), command.allocations());
         Context context = lockAndValidate(command.application(), command.account());
         BigDecimal principal = principal(command.allocations());
         List<SalaryAdvanceLimitMovement> releases = releases(command.application().id());
@@ -79,8 +83,21 @@ public class SalaryAdvanceRepaymentPolicy implements LoanProductRepaymentPolicy 
     }
 
     @Override
+    public void validateReleaseSemantics(ReleaseValidationCommand command) {
+        validateIdentity(command.application(), command.account());
+        validateAllocationIdentity(command.repaymentTransactionId(), command.allocations());
+        if (principal(command.allocations()).compareTo(command.principalReleased()) != 0) {
+            throw conflict();
+        }
+    }
+
+    @Override
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public void validateCompletedRelease(CompletedReleaseCommand command) {
+        validateReleaseSemantics(new ReleaseValidationCommand(
+                command.application(), command.account(), command.repaymentTransactionId(),
+                command.allocations(), command.expectedPrincipalReleased()
+        ));
         Context context = lockAndValidate(command.application(), command.account());
         List<SalaryAdvanceLimitMovement> releases = releases(command.application().id());
         BigDecimal converted = conversionAmount(
@@ -108,12 +125,56 @@ public class SalaryAdvanceRepaymentPolicy implements LoanProductRepaymentPolicy 
         }
     }
 
-    private Context lockAndValidate(LoanApplication application, LoanAccount account) {
-        if (application.productCode() != ProductCode.SALARY_ADVANCE
-                || !application.id().equals(account.loanApplicationId())
-                || !application.customerId().equals(account.customerId())) {
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public void validateCompletedPayoff(CompletedPayoffCommand command) {
+        Context context = lockAndValidate(command.application(), command.account());
+        List<SalaryAdvanceLimitMovement> releases = releases(command.application().id());
+        BigDecimal converted = conversionAmount(
+                command.application(), command.account(), context.limit()
+        );
+        validateExposure(context, command.account(), releases);
+
+        Map<UUID, SalaryAdvanceLimitMovement> releaseByTransaction =
+                new LinkedHashMap<>();
+        BigDecimal totalReleased = BigDecimal.ZERO;
+        for (SalaryAdvanceLimitMovement release : releases) {
+            if (release.repaymentTransactionId() == null
+                    || releaseByTransaction.put(
+                    release.repaymentTransactionId(), release) != null) {
+                throw conflict();
+            }
+            totalReleased = totalReleased.add(release.amount());
+        }
+
+        BigDecimal totalAllocated = BigDecimal.ZERO;
+        for (ReleaseEvidence evidence : command.releases()) {
+            if (evidence.principalAllocated().compareTo(
+                    evidence.principalReleased()) != 0) {
+                throw conflict();
+            }
+            SalaryAdvanceLimitMovement release = releaseByTransaction.remove(
+                    evidence.repaymentTransactionId()
+            );
+            if (evidence.principalAllocated().signum() == 0) {
+                if (release != null) {
+                    throw conflict();
+                }
+            } else if (release == null || release.amount().compareTo(
+                    evidence.principalAllocated()) != 0) {
+                throw conflict();
+            }
+            totalAllocated = totalAllocated.add(evidence.principalAllocated());
+        }
+        if (!releaseByTransaction.isEmpty()
+                || totalAllocated.compareTo(converted) != 0
+                || totalReleased.compareTo(converted) != 0) {
             throw conflict();
         }
+    }
+
+    private Context lockAndValidate(LoanApplication application, LoanAccount account) {
+        validateIdentity(application, account);
         SalaryAdvanceVerification verification = verifications
                 .findByLoanApplicationIdForUpdate(application.id())
                 .orElseThrow(SalaryAdvanceRepaymentPolicy::conflict);
@@ -189,6 +250,27 @@ public class SalaryAdvanceRepaymentPolicy implements LoanProductRepaymentPolicy 
                 .filter(item -> item.component() == RepaymentAllocationComponent.PRINCIPAL)
                 .map(RepaymentAllocation::amount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private static void validateIdentity(
+            LoanApplication application,
+            LoanAccount account
+    ) {
+        if (application.productCode() != ProductCode.SALARY_ADVANCE
+                || !application.id().equals(account.loanApplicationId())
+                || !application.customerId().equals(account.customerId())) {
+            throw conflict();
+        }
+    }
+
+    private static void validateAllocationIdentity(
+            UUID transactionId,
+            List<RepaymentAllocation> allocations
+    ) {
+        if (allocations.stream().anyMatch(allocation ->
+                !transactionId.equals(allocation.repaymentTransactionId()))) {
+            throw conflict();
+        }
     }
 
     private static BusinessStateConflictException conflict() {

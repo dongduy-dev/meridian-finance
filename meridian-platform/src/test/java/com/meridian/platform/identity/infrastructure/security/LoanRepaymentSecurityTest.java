@@ -204,7 +204,7 @@ class LoanRepaymentSecurityTest {
                 new RecordRepaymentUseCase.AccountBalance(
                         money(100), money(0), money(0), money(100), money(900), money(0),
                         money(0), money(900), date, recordedAt, date,
-                        LoanAccountStatus.ACTIVE), money(100), false);
+                        LoanAccountStatus.ACTIVE), money(100), money(100), false);
     }
 
     private static BigDecimal money(long value) {

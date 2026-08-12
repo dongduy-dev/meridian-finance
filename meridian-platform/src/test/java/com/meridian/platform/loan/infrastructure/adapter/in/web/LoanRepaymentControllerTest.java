@@ -88,6 +88,18 @@ class LoanRepaymentControllerTest {
     }
 
     @Test
+    void preservesUclContractualPrincipalAndZeroExposureRelease() throws Exception {
+        useCases.zeroPrincipalRelease = true;
+
+        mockMvc.perform(post("/api/v1/loan-applications/{id}/repayments", APPLICATION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.principalAllocated").value(100))
+                .andExpect(jsonPath("$.principalReleased").value(0));
+    }
+
+    @Test
     void mapsDefaultAndExplicitHistoryPagination() throws Exception {
         mockMvc.perform(get("/api/v1/loan-applications/{id}/repayments", APPLICATION_ID))
                 .andExpect(status().isOk())
@@ -139,6 +151,7 @@ class LoanRepaymentControllerTest {
     private final class StubUseCases implements RecordRepaymentUseCase, QueryRepaymentsUseCase {
         private Command recordCommand;
         private boolean replay;
+        private boolean zeroPrincipalRelease;
         private int page;
         private int size;
         private RuntimeException failure;
@@ -149,14 +162,14 @@ class LoanRepaymentControllerTest {
             if (failure != null) {
                 throw failure;
             }
-            return repaymentResult(replay);
+            return repaymentResult(replay, zeroPrincipalRelease);
         }
 
         @Override
         public PageResult query(UUID loanApplicationId, int requestedPage, int requestedSize) {
             page = requestedPage;
             size = requestedSize;
-            RecordRepaymentUseCase.Result result = repaymentResult(false);
+            RecordRepaymentUseCase.Result result = repaymentResult(false, false);
             return new PageResult(page, size, 1, 1, List.of(new Item(
                     result.repaymentTransactionId(), result.receivedAmount(),
                     result.paymentValueDate(), result.recordedAt(), money(100), money(100),
@@ -165,7 +178,10 @@ class LoanRepaymentControllerTest {
         }
     }
 
-    private static RecordRepaymentUseCase.Result repaymentResult(boolean replay) {
+    private static RecordRepaymentUseCase.Result repaymentResult(
+            boolean replay,
+            boolean zeroPrincipalRelease
+    ) {
         UUID itemId = UUID.fromString("50000000-0000-0000-0000-000000000001");
         LocalDate date = LocalDate.of(2026, 8, 1);
         LocalDateTime recordedAt = LocalDateTime.of(2026, 8, 1, 10, 0);
@@ -181,7 +197,8 @@ class LoanRepaymentControllerTest {
                 APPLICATION_ID, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 money(100), date, recordedAt, List.of(new RecordRepaymentUseCase.Allocation(
                 1, itemId, 1, RepaymentAllocationComponent.PRINCIPAL, money(100))),
-                List.of(progress), balance, money(100), replay);
+                List.of(progress), balance, money(100),
+                zeroPrincipalRelease ? money(0) : money(100), replay);
     }
 
     private static BigDecimal money(long value) {

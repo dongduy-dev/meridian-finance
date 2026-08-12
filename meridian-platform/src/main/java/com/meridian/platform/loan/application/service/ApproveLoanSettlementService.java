@@ -22,7 +22,6 @@ import com.meridian.platform.loan.domain.model.LoanAccountStatusTransition;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ManualDisbursement;
-import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.RepaymentAllocation;
 import com.meridian.platform.loan.domain.model.RepaymentAllocationComponent;
 import com.meridian.platform.loan.domain.model.RepaymentBalance;
@@ -158,6 +157,9 @@ public class ApproveLoanSettlementService implements ApproveLoanSettlementUseCas
                         "LOAN_APPLICATION_NOT_FOUND",
                         "Loan Application was not found."
                 ));
+        LoanProductRepaymentPolicy policy = repaymentPolicies.resolve(
+                application.productCode()
+        );
         validateApplication(application);
         LoanAccount account = accounts
                 .findByLoanApplicationIdForUpdate(application.id())
@@ -253,9 +255,6 @@ public class ApproveLoanSettlementService implements ApproveLoanSettlementUseCas
                 approvedAt
         ));
 
-        LoanProductRepaymentPolicy policy = repaymentPolicies.resolve(
-                application.productCode()
-        );
         BigDecimal principalReleased = policy.releasePrincipal(
                 new LoanProductRepaymentPolicy.PrincipalReleaseCommand(
                         application,
@@ -304,6 +303,9 @@ public class ApproveLoanSettlementService implements ApproveLoanSettlementUseCas
         LoanApplication application = applications
                 .findByIdForUpdate(transaction.loanApplicationId())
                 .orElseThrow(ApproveLoanSettlementService::stateConflict);
+        LoanProductRepaymentPolicy policy = repaymentPolicies.resolve(
+                application.productCode()
+        );
         validateApplication(application);
         LoanAccount account = accounts
                 .findByLoanApplicationIdForUpdate(application.id())
@@ -321,11 +323,12 @@ public class ApproveLoanSettlementService implements ApproveLoanSettlementUseCas
                 .findByRepaymentTransactionId(transaction.id())
                 .orElseThrow(ApproveLoanSettlementService::stateConflict);
         validateOutcome(settlement, transaction, outcome);
-        repaymentPolicies.resolve(application.productCode()).validateCompletedRelease(
+        policy.validateCompletedRelease(
                 new LoanProductRepaymentPolicy.CompletedReleaseCommand(
                         application,
                         account,
                         transaction.id(),
+                        transaction.allocations(),
                         outcome.principalReleased()
                 )
         );
@@ -550,7 +553,6 @@ public class ApproveLoanSettlementService implements ApproveLoanSettlementUseCas
                 || !ServicingEvidenceTimestamp.same(
                 transaction.recordedAt(), outcome.recordedAt())
                 || settlement.settlementAmount().compareTo(outcome.receivedAmount()) != 0
-                || principal.compareTo(outcome.principalReleased()) != 0
                 || outcome.accountStatus() != LoanAccountStatus.SETTLED
                 || !outcome.accountStatusChanged()
                 || outcome.accountBalance().totalOutstanding().signum() != 0) {
@@ -559,8 +561,7 @@ public class ApproveLoanSettlementService implements ApproveLoanSettlementUseCas
     }
 
     private static void validateApplication(LoanApplication application) {
-        if (application.status() != LoanApplicationStatus.DISBURSED
-                || application.productCode() != ProductCode.SALARY_ADVANCE) {
+        if (application.status() != LoanApplicationStatus.DISBURSED) {
             throw settlementNotAllowed();
         }
     }
@@ -656,6 +657,10 @@ public class ApproveLoanSettlementService implements ApproveLoanSettlementUseCas
             boolean replay
     ) {
         RepaymentBalance balance = outcome.accountBalance();
+        BigDecimal principalAllocated = transaction.allocations().stream()
+                .filter(item -> item.component() == RepaymentAllocationComponent.PRINCIPAL)
+                .map(RepaymentAllocation::amount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         return new Result(
                 outcome.loanApplicationId(),
                 outcome.loanAccountId(),
@@ -664,6 +669,7 @@ public class ApproveLoanSettlementService implements ApproveLoanSettlementUseCas
                 outcome.receivedAmount(),
                 outcome.paymentValueDate(),
                 outcome.recordedAt(),
+                principalAllocated,
                 outcome.principalReleased(),
                 new AccountBalance(
                         balance.principalPaid(),

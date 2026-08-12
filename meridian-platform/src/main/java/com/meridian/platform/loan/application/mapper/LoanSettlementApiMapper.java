@@ -17,8 +17,8 @@ public class LoanSettlementApiMapper {
                 result.settlementAmount(),
                 result.paymentValueDate(),
                 result.approvedAt(),
-                result.principalAllocatedAndReleased(),
-                result.principalAllocatedAndReleased(),
+                result.principalAllocated(),
+                result.principalReleased(),
                 balance.status().name(),
                 new ApprovedLoanSettlementDto.AccountBalanceDto(
                         balance.principalPaid(),

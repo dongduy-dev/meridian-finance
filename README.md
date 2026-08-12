@@ -110,7 +110,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 ### Core Platform
 - **Loan Application Lifecycle** — State machine–driven origination through disbursement, followed by LoanAccount servicing after activation
 - **Salary Advance Workflow** — Employer-linked salary advance with Partner Company, Partner Employee, and eligibility verification support
-- **Unsecured Consumer Loan Workflow** — Customer-owned origination, required evidence, positive manual verification, common review and approval, executable flat-rate pricing, immutable offers, operational contracts, readiness, and manual-disbursement activation
+- **Unsecured Consumer Loan Workflow** — Customer-owned origination, required evidence, positive manual verification, common review and approval, executable flat-rate pricing, immutable offers, operational contracts, activation, repayment, overdue servicing, settlement, and closure
 - **Controlled Review & Approval Workflow** — Loan-owned review and correction lifecycle with immutable Loan Officer recommendations, independent Approver decisions, customer acceptance, and maker-checker controls
 - **Operational Contract Readiness** — Immutable accepted-term and repayment snapshots, protected destination capture, Customer acknowledgment, structured blockers, controlled destination refresh, and Accounting confirmation
 - **Manual Disbursement Activation** - Idempotent Accounting confirmation creates an active LoanAccount and final dated schedule atomically, with Salary Advance exposure conversion only for Salary Advance
@@ -205,9 +205,10 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - [x] Unsecured Consumer Loan positive manual verification and review/recommendation integration through `APPROVAL_PENDING`
 - [x] Unsecured Consumer Loan exact-request pricing, approval, immutable offer generation, expiry, Customer acceptance, and decline
 - [x] Unsecured Consumer Loan operational contract, acknowledgment, readiness, manual disbursement, LoanAccount activation, and final monthly schedule
-- [ ] Remaining Unsecured Consumer Loan negative verification, correction/resubmission, repayment/servicing, settlement, closure, outstanding-debt policy, and cancellation
+- [x] Unsecured Consumer Loan partial and early repayment, overdue evaluation and cure, contractual payoff, exact full-balance administrative settlement, and administrative closure
+- [ ] Remaining Unsecured Consumer Loan negative verification, correction/resubmission, outstanding-debt policy, and cancellation
 - [ ] Streamlined Collateral Loan origination, review, approval, contract, and activation workflow
-- [ ] UCL repayment/servicing execution and Collateral Loan repayment/servicing policy and execution
+- [ ] Collateral Loan repayment/servicing policy and execution
 - [x] JWT authentication and permission-based RBAC
 - [x] Idempotent critical workflow operations
 - [x] Flyway migrations, Spring Modulith structure, event-publication persistence, and architecture verification

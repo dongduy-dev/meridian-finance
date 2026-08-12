@@ -160,7 +160,7 @@ The contractual destination-reveal operation is the sole v1 JSON endpoint permit
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/disbursement-destination/reveal` | `loan:disburse` | Reveal the full immutable ready-contract destination. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/disbursements` | `loan:disburse` | Confirm an external transfer and activate the LoanAccount. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/loan-account` | `loan:read:own` or `loan:read` | Return originated terms, final schedule, and servicing state. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/repayments` | `repayment:update` | Record or replay a manual Salary Advance repayment. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/repayments` | `repayment:update` | Record or replay a manual Salary Advance or UCL repayment. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read:own` or `loan:read` | Return immutable paged repayment history. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/settlements` | `loan:settlement:approve` plus Approver role | Approve and apply an Administrative Full-Balance Settlement. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/loan-account/closure` | `loan:account:close` plus Accounting Officer role | Close an eligible settled LoanAccount administratively. |
@@ -692,7 +692,7 @@ For Customers, missing, foreign-owned, and unavailable accounts all return `404 
 
 ## 8. Repayment
 
-Repayment APIs support serviceable Salary Advance LoanAccounts.
+Repayment APIs support serviceable Salary Advance and UCL LoanAccounts. Collateral Loan remains unsupported.
 
 ### 8.1 Record or replay repayment
 
@@ -712,10 +712,12 @@ Rules visible to clients:
 - component order is fee, interest, then principal;
 - payment cannot exceed total outstanding;
 - value date cannot precede disbursement or exceed the current business date;
-- only principal allocation releases Salary Advance used exposure;
+- `principalAllocated` reports contractual principal satisfied by the payment;
+- `principalReleased` reports product exposure released: it equals allocated principal for Salary Advance and is zero for UCL;
+- UCL repayment never creates or mutates Salary Advance limit or movement evidence;
 - exact contractual payoff produces `SETTLED`.
 
-The response includes safe transaction/account IDs, amount/value date, recording time, ordered allocations, principal released, installment outcomes, resulting account status/balances, and `idempotentReplay`. It excludes the external reference, request UUID, actor, Customer, employee-link, limit, bank, audit, history, and internal operation evidence.
+The response includes safe transaction/account IDs, amount/value date, recording time, ordered allocations, `principalAllocated`, `principalReleased`, installment outcomes, resulting account status/balances, and `idempotentReplay`. It excludes the external reference, request UUID, actor, Customer, employee-link, limit, bank, audit, history, and internal operation evidence.
 
 An identical replay returns the original result even if later servicing state differs.
 
@@ -751,7 +753,7 @@ Content-Type: application/json
 }
 ```
 
-The caller must be an Approver with `loan:settlement:approve`. The account must be `ACTIVE` or `OVERDUE`, and `expectedSettlementAmount` must equal locked current total outstanding. Meridian records an `APPROVED_SETTLEMENT` payment transaction, applies oldest-installment and fee-interest-principal allocation, releases only allocated Salary Advance principal, and returns a `SETTLED` result. Discounted, concessionary, waiver, forgiveness, and write-off outcomes are not accepted.
+The caller must be an Approver with `loan:settlement:approve`. The Salary Advance or UCL account must be `ACTIVE` or `OVERDUE`, and `expectedSettlementAmount` must equal locked current total outstanding. Meridian records an `APPROVED_SETTLEMENT` payment transaction, applies oldest-installment and fee-interest-principal allocation, applies the product-specific exposure result, and returns a `SETTLED` result. Salary Advance releases allocated principal exactly; UCL reports zero principal released and creates no Salary Advance movement. Discounted, concessionary, waiver, forgiveness, and write-off outcomes are not accepted.
 
 The response contains safe application/account/payment/schedule identifiers, amount and value date, approval time, principal allocated and released, resulting balances/status, and `idempotentReplay`. It excludes the request UUID, canonical external payment reference, actor and Customer identities, settlement evidence identity, limit/movement identities, audit/history identities, and internal reconciliation evidence.
 
@@ -771,7 +773,7 @@ Content-Type: application/json
 }
 ```
 
-The caller must be an Accounting Officer with `loan:account:close`. Closure requires a fully reconciled `SETTLED` LoanAccount produced by ordinary contractual payoff or Administrative Full-Balance Settlement. It records a separate `SETTLED -> CLOSED` administrative result and does not change payments, allocations, balances, the final schedule, installment progress, Salary Advance exposure, or LoanApplication state.
+The caller must be an Accounting Officer with `loan:account:close`. Closure supports a fully reconciled Salary Advance or UCL `SETTLED` LoanAccount produced by ordinary contractual payoff or Administrative Full-Balance Settlement. It records a separate `SETTLED -> CLOSED` administrative result and does not change payments, allocations, balances, the final schedule, installment progress, product exposure, or LoanApplication state.
 
 The response contains only application/account identity, `CLOSED`, closure time, and `idempotentReplay`. It excludes request, closure-evidence, actor, payment, limit/movement, audit/history, and internal reconciliation identities. An identical replay returns the original closure result. A different request after closure or an attempt before `SETTLED` returns `409 LOAN_ACCOUNT_CLOSURE_NOT_ALLOWED`; conflicting reuse of the same request UUID returns `409 IDEMPOTENCY_KEY_REUSED`; inconsistent evidence returns safe `409 SYSTEM_STATE_CONFLICT`; missing permission or business role returns `403`.
 
@@ -785,7 +787,7 @@ Collection:
 docs/api/Meridian-Platform.postman_collection.json
 ```
 
-It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, optional returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows.
+It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, optional returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. The UCL servicing folder uses the same product-generic endpoints for representative repayment, history, overdue-state read, full-balance settlement, and closure scenarios.
 
 Complex correction scenarios require prepared application, review-cycle, checklist, and version variables. The optional cancellation folder requires `returnedCancellationScenarioEnabled=true` and a separate Customer-owned `cancellationLoanApplicationId` in `RETURNED_FOR_REVISION`; it confirms the command, exact replay, and terminal application GET without exposing internal evidence IDs. Seed fixtures and scenario-specific IDs belong to the collection or its environment, not this API contract.
 

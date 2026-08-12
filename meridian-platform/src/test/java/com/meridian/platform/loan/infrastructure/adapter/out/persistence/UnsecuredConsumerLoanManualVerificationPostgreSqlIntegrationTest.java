@@ -25,11 +25,13 @@ import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanVerificat
 import com.meridian.platform.loan.application.port.in.AcknowledgeLoanContractUseCase;
 import com.meridian.platform.loan.application.port.in.ConfirmContractReadinessUseCase;
 import com.meridian.platform.loan.application.port.in.ConfirmManualDisbursementUseCase;
+import com.meridian.platform.loan.application.port.in.CloseLoanAccountUseCase;
 import com.meridian.platform.loan.application.port.in.ManageUnsecuredConsumerLoanVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.PrepareLoanContractUseCase;
 import com.meridian.platform.loan.application.port.in.QueryApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.QueryContractReadinessUseCase;
 import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
+import com.meridian.platform.loan.application.port.in.RecordRepaymentUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.in.StartUnsecuredConsumerLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
@@ -129,6 +131,8 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     @Autowired private QueryContractReadinessUseCase queryContractReadinessUseCase;
     @Autowired private ConfirmContractReadinessUseCase confirmContractReadinessUseCase;
     @Autowired private ConfirmManualDisbursementUseCase confirmManualDisbursementUseCase;
+    @Autowired private RecordRepaymentUseCase recordRepaymentUseCase;
+    @Autowired private CloseLoanAccountUseCase closeLoanAccountUseCase;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private ThreadLocalCurrentUserProvider currentUserProvider;
     @MockitoSpyBean private BusinessAuditPublisher auditPublisher;
@@ -359,6 +363,24 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 )
         );
         assertEquals("IDEMPOTENCY_KEY_REUSED", contradictoryReplay.getErrorCode());
+
+        useAccounting();
+        RecordRepaymentUseCase.Result payoff = recordRepaymentUseCase.record(
+                new RecordRepaymentUseCase.Command(
+                        UUID.randomUUID(), applicationId,
+                        "UCL-FULL-LIFECYCLE-PAYOFF-" + applicationId,
+                        offer.totalRepaymentAmount(), valueDate
+                )
+        );
+        assertEquals("SETTLED", payoff.accountBalance().status().name());
+        assertEquals(0, payoff.principalReleased().compareTo(BigDecimal.ZERO));
+        CloseLoanAccountUseCase.Result closed = closeLoanAccountUseCase.close(
+                new CloseLoanAccountUseCase.Command(UUID.randomUUID(), applicationId)
+        );
+        assertEquals("CLOSED", closed.resultingStatus().name());
+        assertEquals("DISBURSED", status(applicationId));
+        assertEquals(0, count("SELECT count(*) FROM salary_advance_limit_movements "
+                + "WHERE loan_application_id = ?", applicationId));
         verifyNoInteractions(salaryAdvanceVerificationRepository, salaryAdvanceLimitMovementRepository);
     }
 
@@ -1036,7 +1058,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 "STAFF",
                 null,
                 Set.of("ACCOUNTING_OFFICER"),
-                Set.of("loan:contract:prepare")
+                Set.of("loan:contract:prepare", "repayment:update", "loan:account:close")
         ));
     }
 

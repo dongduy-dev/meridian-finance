@@ -170,7 +170,7 @@ Problem:
 The logical ERD used conceptual names and target fields that could be mistaken for the current physical schema.
 
 Resolution:
-`MER-DB-001` now labels Sections 1-13 as a logical/current-plus-target model, maps conceptual disbursement and repayment names to the current V41 physical structures, and identifies deferred `product_details`, refresh-token, Collateral, and OCR structures. Flyway history and `MER-DB-CURRENT-SCHEMA.sql` remain the physical authorities.
+`MER-DB-001` now labels Sections 1-13 as a logical/current-plus-target model, maps conceptual disbursement and repayment names to the current V42 physical structures, and identifies deferred `product_details`, refresh-token, Collateral, and OCR structures. Flyway history and `MER-DB-CURRENT-SCHEMA.sql` remain the physical authorities.
 
 ### MER-FU-008 - Replace hardcoded Salary Advance salary cap/policy terms with policy config
 
@@ -248,13 +248,13 @@ Status: Done
 Blocks next major feature: No
 
 Completion:
-The authoritative final repayment schedule is immutable obligation evidence. The executable Salary Advance slice includes manual repayment posting, deterministic allocation, paid/outstanding tracking, exact principal used-exposure release, contractual payoff to `SETTLED`, date-driven overdue evaluation, ACTIVE/OVERDUE history and audit, outstanding-account submission blocking, secured servicing reads, payment-backed Administrative Full-Balance Settlement, and separate administrative closure to `CLOSED`.
+The authoritative final repayment schedule is immutable obligation evidence. Salary Advance and UCL support manual repayment posting, deterministic allocation, paid/outstanding tracking, contractual payoff to `SETTLED`, date-driven overdue evaluation, secured servicing reads, payment-backed Administrative Full-Balance Settlement, and separate administrative closure to `CLOSED`. Salary Advance alone performs exact principal used-exposure release; UCL reports zero product exposure release and creates no Salary Advance movement.
 
 Evidence:
-V32-V35 provide repayment, durable outcome, exposure-release, history, audit, and overdue-candidate foundations. V36 distinguishes settlement payment transactions, adds immutable approved-settlement and closure evidence, permissions, lifecycle vocabulary, and reciprocal deferred reconciliation. The APIs preserve scheduled obligations separately from payment/allocation evidence and enforce ownership, role, and permission boundaries. Salary Advance is the only executable servicing product; no UCL or Collateral servicing placeholders exist.
+V32-V35 provide repayment, durable outcome, exposure-release, history, audit, and overdue-candidate foundations. V36 distinguishes settlement payment transactions, adds immutable approved-settlement and closure evidence, permissions, lifecycle vocabulary, and reciprocal deferred reconciliation. V42 makes the existing reconciliation functions product-aware so Salary Advance preserves exact release semantics and UCL enforces zero exposure release. The APIs preserve scheduled obligations separately from payment/allocation evidence and enforce ownership, role, and permission boundaries.
 
 Deferred boundary:
-Discounted or negotiated settlement, concession, reversal, refund, waiver, write-off, suspense/unapplied cash, payment/bank integration, reconciliation, ledger, collections, notifications, and UCL/Collateral servicing remain separate future capabilities. Administrative Full-Balance Settlement and LoanAccount closure are complete only for the approved Salary Advance MVP semantics.
+Discounted or negotiated settlement, concession, reversal, refund, waiver, write-off, suspense/unapplied cash, payment/bank integration, reconciliation, ledger, collections, notifications, and Collateral servicing remain separate future capabilities. Administrative Full-Balance Settlement and LoanAccount closure are complete for the approved Salary Advance and UCL semantics.
 
 ### MER-FU-012 - Implement document checklist and manual document review foundation
 
@@ -312,7 +312,7 @@ Problem:
 Flyway migrations are growing and current schema is harder to inspect from migrations alone.
 
 Recommendation:
-`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V41. This file is documentation only and must not be placed in the Flyway migration folder.
+`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V42. This file is documentation only and must not be placed in the Flyway migration folder.
 
 ### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
 
@@ -819,9 +819,9 @@ and operational tooling remain deferred.
 Suggested future branch name:
 `feature/lending-workflow-read-projections`
 
-### MER-FU-038 - Complete the UCL lifecycle after approved-offer response
+### MER-FU-038 - Complete remaining UCL negative and termination flows
 
-Area: Loan / Document / Approval / Servicing
+Area: Loan / Document / Approval
 
 Type: Deferred feature
 
@@ -832,7 +832,7 @@ Status: Open
 Blocks current checkpoint: No
 
 Problem:
-The executable positive UCL lifecycle reaches manual-disbursement activation, an active LoanAccount, an authoritative final monthly schedule, and `DISBURSED`. Negative verification, correction, cancellation, outstanding-debt policy, and post-activation servicing remain deferred.
+The executable positive UCL lifecycle reaches manual-disbursement activation, an authoritative final monthly schedule, ordinary and administrative payoff, and administrative LoanAccount closure while the LoanApplication remains `DISBURSED`. Negative verification, correction, cancellation, and the outstanding-debt origination policy remain deferred.
 
 Completed:
 
@@ -850,21 +850,23 @@ Completed:
 - Product-aware readiness that requires application-owned `VERIFIED` UCL evidence and never reads or mutates Salary Advance reservation or exposure state.
 - Idempotent and concurrency-safe manual disbursement that creates the active LoanAccount, immutable transfer evidence, exact final monthly schedule, progress, histories, transition, and audit atomically.
 - Truthful product activation results with no synthetic UCL limit, movement, or exposure evidence.
-- UCL early-payment and non-discounted full-balance settlement business semantics; executable servicing remains deferred.
+- Partial and early repayment without repricing, rebate, schedule regeneration, or due-date mutation.
+- Deterministic oldest-installment and `FEE -> INTEREST -> PRINCIPAL` allocation, whole-operation overpayment rejection, and immutable servicing reads.
+- Date-driven `ACTIVE <-> OVERDUE` evaluation and repayment cure.
+- Ordinary contractual payoff and exact Administrative Full-Balance Settlement to `SETTLED`.
+- Separate Accounting closure to `CLOSED`, with zero UCL product-exposure release and no Salary Advance movement.
 - Fail-closed UCL correction and Collateral Loan contract-execution guards.
 
 Still deferred:
 
 - `FAILED` and `REQUIRES_MORE_INFORMATION` verification commands.
 - Correction and resubmission.
-- Repayment, settlement, and closure.
 - Outstanding UCL debt policy.
 - UCL cancellation.
 
 Recommendation:
-Define the remaining recovery and servicing slices from approved UCL rules. Do not
-reuse Salary Advance exposure or servicing rules unless an approved UCL rule requires
-an equivalent.
+Define the remaining negative-verification, recovery, correction, cancellation, and
+outstanding-debt origination rules before extending the executable UCL workflow.
 
 Suggested future branch name:
 `feature/ucl-negative-verification-correction`
@@ -872,5 +874,5 @@ Suggested future branch name:
 ## Recommended Next Roadmap
 
 1. Define reversal/refund, suspense/unapplied cash, waiver/write-off, discounted settlement, reconciliation, ledger, and collections rules before selecting another financial-servicing continuation.
-2. Continue UCL with negative verification, correction, cancellation, outstanding-debt, and post-activation servicing rules; add Collateral origination, activation, and servicing only when its product rules are approved.
+2. Continue UCL with negative verification, correction, cancellation, and outstanding-debt origination rules; add Collateral origination, activation, and servicing only when its product rules are approved.
 3. Complete production document storage, malware-scanning, retention, and operational hardening before deployment.

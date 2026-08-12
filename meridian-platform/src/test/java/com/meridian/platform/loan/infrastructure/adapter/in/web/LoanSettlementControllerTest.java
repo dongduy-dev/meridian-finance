@@ -65,6 +65,8 @@ class LoanSettlementControllerTest {
                 .andExpect(jsonPath("$.loanApplicationId")
                         .value(APPLICATION_ID.toString()))
                 .andExpect(jsonPath("$.settlementAmount").value(1230000))
+                .andExpect(jsonPath("$.principalAllocated").value(1200000))
+                .andExpect(jsonPath("$.principalReleased").value(1200000))
                 .andExpect(jsonPath("$.resultingLoanAccountStatus").value("SETTLED"))
                 .andExpect(jsonPath("$.accountBalance.totalOutstanding").value(0))
                 .andExpect(jsonPath("$.idempotentReplay").value(false))
@@ -110,6 +112,21 @@ class LoanSettlementControllerTest {
         assertFalse(response.contains(secretReference));
     }
 
+    @Test
+    void preservesUclContractualPrincipalAndZeroExposureRelease() throws Exception {
+        useCase.zeroPrincipalRelease = true;
+
+        mockMvc.perform(post(
+                        "/api/v1/loan-applications/{id}/settlements",
+                        APPLICATION_ID
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.principalAllocated").value(1200000))
+                .andExpect(jsonPath("$.principalReleased").value(0));
+    }
+
     private static String validBody() {
         return """
                 {
@@ -121,7 +138,10 @@ class LoanSettlementControllerTest {
                 """;
     }
 
-    private static ApproveLoanSettlementUseCase.Result result(boolean replay) {
+    private static ApproveLoanSettlementUseCase.Result result(
+            boolean replay,
+            boolean zeroPrincipalRelease
+    ) {
         LocalDate date = LocalDate.of(2026, 9, 1);
         LocalDateTime approvedAt = LocalDateTime.of(2026, 9, 1, 10, 0);
         return new ApproveLoanSettlementUseCase.Result(
@@ -133,6 +153,7 @@ class LoanSettlementControllerTest {
                 date,
                 approvedAt,
                 money("1200000"),
+                zeroPrincipalRelease ? money("0") : money("1200000"),
                 new ApproveLoanSettlementUseCase.AccountBalance(
                         money("1200000"), money("30000"), money("0"),
                         money("1230000"), money("0"), money("0"), money("0"),
@@ -151,6 +172,7 @@ class LoanSettlementControllerTest {
             implements ApproveLoanSettlementUseCase {
         private Command command;
         private RuntimeException failure;
+        private boolean zeroPrincipalRelease;
 
         @Override
         public Result approve(Command submitted) {
@@ -158,7 +180,7 @@ class LoanSettlementControllerTest {
             if (failure != null) {
                 throw failure;
             }
-            return result(false);
+            return result(false, zeroPrincipalRelease);
         }
     }
 }

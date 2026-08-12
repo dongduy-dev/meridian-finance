@@ -335,7 +335,7 @@ class OverdueEvaluationPostgreSqlIntegrationTest {
             assertEquals(expectedStatus, text(
                     "select status from loan_accounts where id=?", activated.accountId()));
             assertEquals(0, expectedRelease.compareTo(
-                    repaymentResult.principalAllocatedAndReleased()));
+                    repaymentResult.principalReleased()));
             assertEquals(0, new BigDecimal(amount).compareTo(money(
                     "select sum(amount) from repayment_allocations "
                             + "where repayment_transaction_id=?",
@@ -470,8 +470,7 @@ class OverdueEvaluationPostgreSqlIntegrationTest {
         assertEquals(original.allocations(), replay.allocations());
         assertEquals(original.installmentProgress(), replay.installmentProgress());
         assertEquals(original.accountBalance(), replay.accountBalance());
-        assertEquals(original.principalAllocatedAndReleased(),
-                replay.principalAllocatedAndReleased());
+        assertEquals(original.principalReleased(), replay.principalReleased());
         assertEquals(transactionsBefore, count(
                 "select count(*) from repayment_transactions where loan_account_id=?",
                 activated.accountId()));

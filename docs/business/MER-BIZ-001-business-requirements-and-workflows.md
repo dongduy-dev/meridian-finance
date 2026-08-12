@@ -433,7 +433,7 @@ Repayment follows these rules:
 - never rewrite earlier allocations or servicing history;
 - prevent duplicate payment evidence from producing duplicate allocations or financial effects.
 
-Only principal allocated by an actual Salary Advance payment releases used exposure, by exactly the allocated principal amount. This rule applies to ordinary repayment and Administrative Full-Balance Settlement; fee and interest allocations release none.
+`principalAllocated` is the contractual principal satisfied by a payment. `principalReleased` is the product-exposure amount released by that allocation. For Salary Advance, allocated principal releases used exposure by the exact allocated amount. UCL has no product-exposure model, so its principal release is always zero and repayment creates no Salary Advance movement. Fee and interest allocations never release exposure.
 
 An installment is:
 
@@ -450,11 +450,11 @@ A LoanAccount is:
 - `SETTLED` after full contractual repayment or Administrative Full-Balance Settlement;
 - `CLOSED` only after an eligible settled account completes administrative closure.
 
-Full contractual payoff must atomically settle the account and release any remaining Salary Advance principal exposure required by policy.
+Full contractual payoff must atomically settle the account and complete the product-specific exposure result. Salary Advance must release its allocated principal exactly; UCL must retain zero product exposure and create no Salary Advance movement.
 
-Administrative Full-Balance Settlement is an exceptional Loan-owned servicing operation performed by an authorized Approver. It records an actual payment equal to the complete current contractual outstanding, applies the same deterministic allocation rules as repayment, preserves `paid + outstanding = originated` for every component, releases only allocated Salary Advance principal, and moves an `ACTIVE` or `OVERDUE` LoanAccount to `SETTLED`. It is not a discounted settlement, concession, waiver, forgiveness, write-off, negotiation, or debt adjustment.
+Administrative Full-Balance Settlement is an exceptional Loan-owned servicing operation performed by an authorized Approver. It records an actual payment equal to the complete current contractual outstanding, applies the same deterministic allocation rules as repayment, preserves `paid + outstanding = originated` for every component, applies the product-specific exposure result, and moves an `ACTIVE` or `OVERDUE` LoanAccount to `SETTLED`. It is not a discounted settlement, concession, waiver, forgiveness, write-off, negotiation, or debt adjustment.
 
-Administrative closure is a separate Loan-owned operation performed by an authorized Accounting Officer. A `SETTLED` LoanAccount is immediately eligible when contractual outstanding is zero, installment progress is fully paid, financial-settlement provenance and status history are consistent, and Salary Advance principal exposure is fully released. Closure changes the account to `CLOSED` and records closure/history/audit evidence; it does not change the final schedule, payment evidence, allocations, balances, installment progress, Salary Advance exposure, or LoanApplication state. Either ordinary contractual payoff or Administrative Full-Balance Settlement may provide the financial-settlement provenance.
+Administrative closure is a separate Loan-owned operation performed by an authorized Accounting Officer. A `SETTLED` LoanAccount is immediately eligible when contractual outstanding is zero, installment progress is fully paid, financial-settlement provenance and status history are consistent, and product-specific exposure evidence is reconciled. Closure changes the account to `CLOSED` and records closure/history/audit evidence; it does not change the final schedule, payment evidence, allocations, balances, installment progress, product exposure, or LoanApplication state. Either ordinary contractual payoff or Administrative Full-Balance Settlement may provide the financial-settlement provenance.
 
 A matching `ACTIVE` or `OVERDUE` Salary Advance LoanAccount with positive contractual outstanding blocks a new Salary Advance submission. Increased available limit or stale overdue evaluation does not bypass this guard.
 
@@ -615,7 +615,7 @@ Manual-disbursement confirmation atomically creates the UCL LoanAccount, immutab
 
 For example, a January 30 first repayment date produces January 30, February 28 or 29, March 30, April 30, and the same anchored sequence thereafter.
 
-Early or partial payment does not reprice the loan, rebate future interest, regenerate the schedule, mutate contractual due dates, or reduce contractual interest. Allocation follows the common `FEE → INTEREST → PRINCIPAL` order. Full contractual payoff requires the complete contractual outstanding. Administrative Full-Balance Settlement, when UCL servicing becomes executable, must be backed by payment of that complete outstanding and is not a discount, concession, forgiveness, waiver, or repricing event.
+Early or partial payment does not reprice the loan, rebate future interest, regenerate the schedule, mutate contractual due dates, or reduce contractual interest. Allocation follows the common `FEE → INTEREST → PRINCIPAL` order. Date-driven evaluation moves a UCL LoanAccount between `ACTIVE` and `OVERDUE`, and payment may cure an overdue account. Full contractual payoff requires the complete contractual outstanding and moves the account to `SETTLED`. Administrative Full-Balance Settlement is backed by payment of that exact complete outstanding and is not a discount, concession, forgiveness, waiver, or repricing event. UCL repayment and settlement report contractual principal allocation while releasing zero product exposure and creating no Salary Advance movement. A fully reconciled `SETTLED` account may then be closed administratively without changing the `DISBURSED` LoanApplication.
 
 End-to-end workflow:
 
@@ -870,6 +870,8 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-062 | Identical repayment replay returns the original result; reused request or payment identity with different content is a conflict. |
 | BR-063 | Full contractual payoff atomically settles the LoanAccount and completes the required product-specific principal-exposure release. |
 | BR-064 | Read operations do not evaluate overdue state, alter servicing results, or publish new business evidence. |
+| BR-065 | UCL repayment and settlement may allocate contractual principal but release zero product exposure and create no Salary Advance movement. |
+| BR-066 | UCL supports date-driven `ACTIVE` and `OVERDUE` servicing, exact contractual payoff or full-balance administrative settlement to `SETTLED`, and separate administrative closure to `CLOSED`. |
 
 ---
 

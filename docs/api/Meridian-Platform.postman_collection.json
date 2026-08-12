@@ -501,11 +501,74 @@
                          "value":  "2026-08-10",
                          "type":  "default"
                      },
-                     {
-                         "key":  "settlementExternalReference",
-                         "value":  "MERIDIAN-SETTLEMENT-000001",
-                         "type":  "default"
-                     }
+                      {
+                          "key":  "settlementExternalReference",
+                          "value":  "MERIDIAN-SETTLEMENT-000001",
+                          "type":  "default"
+                      },
+                      {
+                          "key":  "uclServicingLoanApplicationId",
+                          "value":  "",
+                          "type":  "default",
+                          "description":  "A DISBURSED UCL application with a serviceable LoanAccount for representative repayment and history requests."
+                      },
+                      {
+                          "key":  "uclOverdueLoanApplicationId",
+                          "value":  "",
+                          "type":  "default",
+                          "description":  "A DISBURSED UCL application whose LoanAccount has already been evaluated to OVERDUE."
+                      },
+                      {
+                          "key":  "uclSettlementLoanApplicationId",
+                          "value":  "",
+                          "type":  "default",
+                          "description":  "A separate DISBURSED UCL application with an ACTIVE or OVERDUE LoanAccount for exact settlement and closure."
+                      },
+                      {
+                          "key":  "uclRepaymentRequestId",
+                          "value":  "70000000-0000-0000-0000-000000000001",
+                          "type":  "default"
+                      },
+                      {
+                          "key":  "uclRepaymentExternalReference",
+                          "value":  "MERIDIAN-UCL-PAY-000001",
+                          "type":  "default"
+                      },
+                      {
+                          "key":  "uclRepaymentAmount",
+                          "value":  500000,
+                          "type":  "default"
+                      },
+                      {
+                          "key":  "uclRepaymentValueDate",
+                          "value":  "2026-08-10",
+                          "type":  "default"
+                      },
+                      {
+                          "key":  "uclSettlementRequestId",
+                          "value":  "70000000-0000-0000-0000-000000000002",
+                          "type":  "default"
+                      },
+                      {
+                          "key":  "uclSettlementExternalReference",
+                          "value":  "MERIDIAN-UCL-SETTLEMENT-000001",
+                          "type":  "default"
+                      },
+                      {
+                          "key":  "uclSettlementPaymentValueDate",
+                          "value":  "2026-08-10",
+                          "type":  "default"
+                      },
+                      {
+                          "key":  "uclSettlementExpectedAmount",
+                          "value":  0,
+                          "type":  "default"
+                      },
+                      {
+                          "key":  "uclClosureRequestId",
+                          "value":  "70000000-0000-0000-0000-000000000003",
+                          "type":  "default"
+                      }
                  ],
     "item":  [
                  {
@@ -823,9 +886,90 @@
                                                                                     "});"
                                                                                 ]
                                                                    }
-                                                    }
-                                                ]
-                                  }
+                  },
+                  {
+                      "name":  "13 Unsecured Consumer Loan Servicing",
+                      "description":  "Uses the existing product-generic servicing endpoints. Configure the three UCL application variables with prepared fixtures, then run this folder in order. Overdue evaluation is an internal scheduled operation, so the overdue read uses a fixture already evaluated to OVERDUE.",
+                      "item":  [
+                                   {
+                                       "name":  "Record UCL repayment",
+                                       "request":  {
+                                                       "method":  "POST",
+                                                       "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                       "url":  "{{baseUrl}}/api/v1/loan-applications/{{uclServicingLoanApplicationId}}/repayments",
+                                                       "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},
+                                                       "description":  "Records a partial or early UCL repayment without repricing or a product-exposure release.",
+                                                       "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{uclRepaymentRequestId}}\",\n  \"externalPaymentReference\": \"{{uclRepaymentExternalReference}}\",\n  \"amount\": {{uclRepaymentAmount}},\n  \"paymentValueDate\": \"{{uclRepaymentValueDate}}\"\n}","options":{"raw":{"language":"json"}}}
+                                                   },
+                                       "response":  [],
+                                       "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["const fresh = () => pm.variables.replaceIn(\"{{$guid}}\");","const runId = fresh().replace(/-/g, \"\").toUpperCase();","pm.collectionVariables.set(\"uclRepaymentRequestId\", fresh());","pm.collectionVariables.set(\"uclRepaymentExternalReference\", `MER-UCL-PAY-${runId}`);"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"UCL distinguishes allocation from exposure release\", () => { pm.expect(json.principalAllocated).to.be.a(\"number\"); pm.expect(json.principalReleased).to.eql(0); });","pm.test(\"Result contains servicing evidence\", () => { pm.expect(json.allocations).to.be.an(\"array\").that.is.not.empty; pm.expect(json.affectedInstallments).to.be.an(\"array\").that.is.not.empty; });"]}}]
+                                   },
+                                   {
+                                       "name":  "Read UCL repayment history",
+                                       "request":  {
+                                                       "method":  "GET",
+                                                       "header":  [],
+                                                       "url":  "{{baseUrl}}/api/v1/loan-applications/{{uclServicingLoanApplicationId}}/repayments?page=0&size=20",
+                                                       "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},
+                                                       "description":  "Reads immutable UCL repayment and allocation evidence without evaluating overdue state."
+                                                   },
+                                       "response":  [],
+                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"History contains UCL repayment\", () => pm.expect(json.items).to.be.an(\"array\").that.is.not.empty);","pm.test(\"UCL history reports zero product exposure release\", () => json.items.forEach(item => pm.expect(item.principalReleased).to.eql(0)));"]}}]
+                                   },
+                                   {
+                                       "name":  "Read evaluated UCL overdue state",
+                                       "request":  {
+                                                       "method":  "GET",
+                                                       "header":  [],
+                                                       "url":  "{{baseUrl}}/api/v1/loan-applications/{{uclOverdueLoanApplicationId}}/loan-account",
+                                                       "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},
+                                                       "description":  "Reads a UCL LoanAccount after date-driven overdue evaluation; the read itself is non-mutating."
+                                                   },
+                                       "response":  [],
+                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"Account is overdue\", () => pm.expect(pm.response.json().status).to.eql(\"OVERDUE\"));"]}}]
+                                   },
+                                   {
+                                       "name":  "Initialize UCL settlement amount",
+                                       "request":  {
+                                                       "method":  "GET",
+                                                       "header":  [],
+                                                       "url":  "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/loan-account",
+                                                       "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},
+                                                       "description":  "Reads locked-input truth for the separate UCL settlement and closure scenario."
+                                                   },
+                                       "response":  [],
+                                       "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["const fresh = () => pm.variables.replaceIn(\"{{$guid}}\");","const runId = fresh().replace(/-/g, \"\").toUpperCase();","pm.collectionVariables.set(\"uclSettlementRequestId\", fresh());","pm.collectionVariables.set(\"uclClosureRequestId\", fresh());","pm.collectionVariables.set(\"uclSettlementExternalReference\", `MER-UCL-SET-${runId}`);"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"UCL account is serviceable\", () => pm.expect([\"ACTIVE\",\"OVERDUE\"]).to.include(json.status));","pm.collectionVariables.set(\"uclSettlementExpectedAmount\", json.servicing.totalOutstanding);"]}}]
+                                   },
+                                   {
+                                       "name":  "Apply UCL Administrative Full-Balance Settlement",
+                                       "request":  {
+                                                       "method":  "POST",
+                                                       "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                       "url":  "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/settlements",
+                                                       "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},
+                                                       "description":  "Records exact complete UCL outstanding as payment-backed settlement with zero product-exposure release.",
+                                                       "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{uclSettlementRequestId}}\",\n  \"expectedSettlementAmount\": {{uclSettlementExpectedAmount}},\n  \"paymentValueDate\": \"{{uclSettlementPaymentValueDate}}\",\n  \"externalPaymentReference\": \"{{uclSettlementExternalReference}}\"\n}","options":{"raw":{"language":"json"}}}
+                                                   },
+                                       "response":  [],
+                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"UCL settlement is exact and final\", () => { pm.expect(json.resultingLoanAccountStatus).to.eql(\"SETTLED\"); pm.expect(json.accountBalance.totalOutstanding).to.eql(0); pm.expect(json.principalAllocated).to.be.above(0); pm.expect(json.principalReleased).to.eql(0); });"]}}]
+                                   },
+                                   {
+                                       "name":  "Close settled UCL LoanAccount",
+                                       "request":  {
+                                                       "method":  "POST",
+                                                       "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                       "url":  "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/loan-account/closure",
+                                                       "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},
+                                                       "description":  "Performs the separate administrative UCL SETTLED-to-CLOSED transition.",
+                                                       "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{uclClosureRequestId}}\"\n}","options":{"raw":{"language":"json"}}}
+                                                   },
+                                       "response":  [],
+                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"UCL account is closed\", () => { pm.expect(json.resultingStatus).to.eql(\"CLOSED\"); pm.expect(json.idempotentReplay).to.eql(false); });"]}}]
+                                   }
+                               ]
+                  }
+              ]
+}
                               ]
                  },
                  {

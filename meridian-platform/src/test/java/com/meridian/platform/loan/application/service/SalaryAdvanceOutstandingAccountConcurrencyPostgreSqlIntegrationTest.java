@@ -158,7 +158,7 @@ class SalaryAdvanceOutstandingAccountConcurrencyPostgreSqlIntegrationTest {
                         "PARTIAL-GUARD-" + UUID.randomUUID(), money("100"),
                         LocalDate.of(2026, 8, 29)));
         assertEquals(0, money("50").compareTo(
-                repayment.principalAllocatedAndReleased()));
+                repayment.principalReleased()));
         assertEquals(0, availableBefore.add(money("50")).compareTo(
                 jdbc.queryForObject("select available_amount from salary_advance_limits "
                                 + "where id=?", BigDecimal.class,
