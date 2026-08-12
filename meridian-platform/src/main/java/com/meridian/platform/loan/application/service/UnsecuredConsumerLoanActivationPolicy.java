@@ -56,7 +56,7 @@ public class UnsecuredConsumerLoanActivationPolicy implements LoanProductActivat
 
     private void requireVerified(LoanApplication application, boolean completed) {
         UnsecuredConsumerLoanVerification verification = verifications
-                .findByLoanApplicationId(application.id())
+                .findLatestByLoanApplicationId(application.id())
                 .orElseThrow(() -> completed ? completedStateConflict() : invalidVerification());
         if (!verification.loanApplicationId().equals(application.id())
                 || verification.productVerificationResult() != ProductVerificationResult.VERIFIED) {

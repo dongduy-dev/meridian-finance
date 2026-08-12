@@ -53,6 +53,20 @@ class UnsecuredConsumerLoanVerificationTest {
     }
 
     @Test
+    void manualCompletionRejectsNoteLongerThanTwoThousandCharacters() {
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> pendingVerification().completeManualReview(
+                        REVIEWER_ID,
+                        CREATED_AT.plusHours(1),
+                        "x".repeat(2001)
+                )
+        );
+
+        assertEquals("UCL_VERIFICATION_ASSESSMENT_REQUIRED", exception.getErrorCode());
+    }
+
+    @Test
     void completedVerificationCannotBeCompletedAgain() {
         UnsecuredConsumerLoanVerification completed = pendingVerification()
                 .completeManualReview(REVIEWER_ID, CREATED_AT.plusHours(1), "Evidence is consistent.");
@@ -79,24 +93,69 @@ class UnsecuredConsumerLoanVerificationTest {
     }
 
     @Test
-    void futureNegativeOutcomeMayRemainWithoutDecisionEvidenceButCannotBePartial() {
-        UnsecuredConsumerLoanVerification failed = new UnsecuredConsumerLoanVerification(
-                VERIFICATION_ID,
-                APPLICATION_ID,
+    void allTerminalOutcomesRequireCompleteDecisionEvidence() {
+        for (ProductVerificationResult result : java.util.List.of(
+                ProductVerificationResult.VERIFIED,
                 ProductVerificationResult.FAILED,
-                CREATED_AT,
-                null,
-                null,
-                null
-        );
-
-        assertEquals(ProductVerificationResult.FAILED, failed.productVerificationResult());
+                ProductVerificationResult.REQUIRES_MORE_INFORMATION
+        )) {
+            assertThrows(IllegalArgumentException.class, () -> new UnsecuredConsumerLoanVerification(
+                    VERIFICATION_ID,
+                    APPLICATION_ID,
+                    result,
+                    CREATED_AT,
+                    null,
+                    null,
+                    null
+            ));
+        }
         assertThrows(IllegalArgumentException.class, () -> new UnsecuredConsumerLoanVerification(
                 VERIFICATION_ID,
                 APPLICATION_ID,
                 ProductVerificationResult.REQUIRES_MORE_INFORMATION,
                 CREATED_AT,
                 REVIEWER_ID,
+                null,
+                null
+        ));
+    }
+
+    @Test
+    void manualCompletionMapsEverySupportedOutcome() {
+        for (UnsecuredConsumerLoanManualVerificationOutcome outcome
+                : UnsecuredConsumerLoanManualVerificationOutcome.values()) {
+            UnsecuredConsumerLoanVerification completed = pendingVerification().completeManualReview(
+                    outcome,
+                    REVIEWER_ID,
+                    CREATED_AT.plusHours(1),
+                    "Authoritative assessment."
+            );
+            assertEquals(ProductVerificationResult.valueOf(outcome.name()),
+                    completed.productVerificationResult());
+        }
+    }
+
+    @Test
+    void reverificationRequiresPositiveLaterSequenceAndSourceCorrection() {
+        UUID correctionRequestId = UUID.randomUUID();
+        UnsecuredConsumerLoanVerification next = UnsecuredConsumerLoanVerification.pendingReverification(
+                UUID.randomUUID(),
+                APPLICATION_ID,
+                2,
+                correctionRequestId,
+                CREATED_AT.plusDays(1)
+        );
+
+        assertEquals(2, next.verificationSequence());
+        assertEquals(correctionRequestId, next.sourceCorrectionRequestId());
+        assertThrows(IllegalArgumentException.class, () -> new UnsecuredConsumerLoanVerification(
+                UUID.randomUUID(),
+                APPLICATION_ID,
+                2,
+                null,
+                ProductVerificationResult.PENDING_MANUAL_REVIEW,
+                CREATED_AT,
+                null,
                 null,
                 null
         ));

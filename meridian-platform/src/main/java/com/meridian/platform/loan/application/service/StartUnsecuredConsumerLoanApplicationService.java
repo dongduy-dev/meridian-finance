@@ -9,6 +9,7 @@ import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanProductRepository;
+import com.meridian.platform.loan.application.port.out.OutstandingLoanAccountQuery;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
@@ -48,6 +49,7 @@ public class StartUnsecuredConsumerLoanApplicationService
     private final LoanDocumentChecklistPort documentChecklistPort;
     private final UnsecuredConsumerLoanVerificationRepository verificationRepository;
     private final CustomerReadinessPort customerReadinessPort;
+    private final OutstandingLoanAccountQuery outstandingLoanAccounts;
     private final LoanMapper loanMapper;
     private final CurrentUserProvider currentUserProvider;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
@@ -62,6 +64,7 @@ public class StartUnsecuredConsumerLoanApplicationService
             LoanDocumentChecklistPort documentChecklistPort,
             UnsecuredConsumerLoanVerificationRepository verificationRepository,
             CustomerReadinessPort customerReadinessPort,
+            OutstandingLoanAccountQuery outstandingLoanAccounts,
             LoanMapper loanMapper,
             CurrentUserProvider currentUserProvider,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
@@ -73,6 +76,7 @@ public class StartUnsecuredConsumerLoanApplicationService
         this.documentChecklistPort = documentChecklistPort;
         this.verificationRepository = verificationRepository;
         this.customerReadinessPort = customerReadinessPort;
+        this.outstandingLoanAccounts = outstandingLoanAccounts;
         this.loanMapper = loanMapper;
         this.currentUserProvider = currentUserProvider;
         this.transitionRecorder = transitionRecorder;
@@ -110,6 +114,7 @@ public class StartUnsecuredConsumerLoanApplicationService
 
         loanApplicationRepository.acquireCustomerProductLock(customerId, product.productCode());
         assertNoBlockingApplicationExists(customerId);
+        assertNoOutstandingLoanAccountExists(customerId);
 
         LoanDocumentChecklistPort.SubmissionChecklistInitialState checklistInitialState =
                 documentChecklistPort.resolveSubmissionInitialState(product.productCode());
@@ -187,6 +192,25 @@ public class StartUnsecuredConsumerLoanApplicationService
             throw new BusinessStateConflictException(
                     "BLOCKING_APPLICATION_EXISTS",
                     "A blocking Unsecured Consumer Loan application already exists for this customer."
+            );
+        }
+    }
+
+    private void assertNoOutstandingLoanAccountExists(UUID customerId) {
+        OutstandingLoanAccountQuery.GuardResult result = outstandingLoanAccounts.inspect(
+                customerId,
+                ProductCode.UNSECURED_CONSUMER_LOAN
+        );
+        if (result == OutstandingLoanAccountQuery.GuardResult.INCONSISTENT) {
+            throw new BusinessStateConflictException(
+                    "SYSTEM_STATE_CONFLICT",
+                    "Unsecured Consumer Loan LoanAccount evidence is inconsistent."
+            );
+        }
+        if (result == OutstandingLoanAccountQuery.GuardResult.OUTSTANDING_EXISTS) {
+            throw new BusinessStateConflictException(
+                    "OUTSTANDING_LOAN_ACCOUNT_EXISTS",
+                    "A prior Unsecured Consumer Loan must be fully repaid before another application."
             );
         }
     }

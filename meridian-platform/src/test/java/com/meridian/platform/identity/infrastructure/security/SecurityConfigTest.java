@@ -522,6 +522,7 @@ class SecurityConfigTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
+                                  "outcome": "VERIFIED",
                                   "assessmentNote": "Evidence is consistent."
                                 }
                                 """)
@@ -543,6 +544,7 @@ class SecurityConfigTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
+                                  "outcome": "VERIFIED",
                                   "assessmentNote": "Evidence is consistent."
                                 }
                                 """)

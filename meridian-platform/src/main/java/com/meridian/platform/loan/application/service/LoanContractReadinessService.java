@@ -333,7 +333,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
 
     private ContractReadinessBlockerCode uclVerificationBlocker(LoanApplication application) {
         UnsecuredConsumerLoanVerification verification = uclVerifications
-                .findByLoanApplicationId(application.id())
+                .findLatestByLoanApplicationId(application.id())
                 .orElse(null);
         if (verification == null
                 || !verification.loanApplicationId().equals(application.id())

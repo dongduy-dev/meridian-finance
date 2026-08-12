@@ -1,5 +1,11 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
+import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
+import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
+import com.meridian.platform.approval.domain.model.CorrectionScope;
+import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.loan.application.dto.CompleteUnsecuredConsumerLoanVerificationRequest;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanVerificationDto;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
@@ -11,6 +17,7 @@ import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
 import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanVerification;
+import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanManualVerificationOutcome;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
@@ -26,6 +33,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -47,6 +55,7 @@ class ManageUnsecuredConsumerLoanVerificationServiceTest {
     private LoanApplicationRepository applicationRepository;
     private UnsecuredConsumerLoanVerificationRepository verificationRepository;
     private LoanDocumentChecklistPort documentChecklistPort;
+    private CustomerCorrectionWorkflowService correctionWorkflowService;
     private LoanApplicationStatusTransitionRecorder transitionRecorder;
     private BusinessAuditPublisher auditPublisher;
     private ManageUnsecuredConsumerLoanVerificationService service;
@@ -56,6 +65,7 @@ class ManageUnsecuredConsumerLoanVerificationServiceTest {
         applicationRepository = mock(LoanApplicationRepository.class);
         verificationRepository = mock(UnsecuredConsumerLoanVerificationRepository.class);
         documentChecklistPort = mock(LoanDocumentChecklistPort.class);
+        correctionWorkflowService = mock(CustomerCorrectionWorkflowService.class);
         transitionRecorder = mock(LoanApplicationStatusTransitionRecorder.class);
         auditPublisher = mock(BusinessAuditPublisher.class);
         CurrentUserProvider currentUserProvider = mock(CurrentUserProvider.class);
@@ -70,7 +80,7 @@ class ManageUnsecuredConsumerLoanVerificationServiceTest {
         when(applicationRepository.findByIdForUpdate(APPLICATION_ID))
                 .thenReturn(Optional.of(application(LoanApplicationStatus.SUBMITTED)));
         when(applicationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(verificationRepository.findByLoanApplicationId(APPLICATION_ID))
+        when(verificationRepository.findLatestByLoanApplicationIdForUpdate(APPLICATION_ID))
                 .thenReturn(Optional.of(pendingVerification()));
         when(verificationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(documentChecklistPort.isProcessingReady(APPLICATION_ID)).thenReturn(true);
@@ -79,6 +89,7 @@ class ManageUnsecuredConsumerLoanVerificationServiceTest {
                 applicationRepository,
                 verificationRepository,
                 documentChecklistPort,
+                correctionWorkflowService,
                 transitionRecorder,
                 auditPublisher,
                 currentUserProvider,
@@ -128,7 +139,7 @@ class ManageUnsecuredConsumerLoanVerificationServiceTest {
 
     @Test
     void rejectsStartWithoutUclVerificationEvidence() {
-        when(verificationRepository.findByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.empty());
+        when(verificationRepository.findLatestByLoanApplicationIdForUpdate(APPLICATION_ID)).thenReturn(Optional.empty());
 
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,
@@ -173,6 +184,96 @@ class ManageUnsecuredConsumerLoanVerificationServiceTest {
         assertEquals("Evidence is consistent.", verificationCaptor.getValue().assessmentNote());
         verify(transitionRecorder).record(any(), any(), org.mockito.ArgumentMatchers.isNull());
         verify(auditPublisher).publish(any());
+    }
+
+    @Test
+    void failedVerificationIsTerminalWithoutCreatingCorrection() {
+        when(applicationRepository.findByIdForUpdate(APPLICATION_ID))
+                .thenReturn(Optional.of(application(LoanApplicationStatus.VERIFICATION_PENDING)));
+
+        UnsecuredConsumerLoanVerificationDto result = service.completeManualVerification(
+                APPLICATION_ID,
+                new CompleteUnsecuredConsumerLoanVerificationRequest(
+                        UnsecuredConsumerLoanManualVerificationOutcome.FAILED,
+                        "Identity and employment evidence could not be verified.",
+                        null,
+                        null
+                )
+        );
+
+        assertEquals("VERIFICATION_FAILED", result.status());
+        assertEquals("FAILED", result.productVerificationResult());
+        verify(correctionWorkflowService, never()).createFromProductVerification(
+                any(), any(), any(), any()
+        );
+    }
+
+    @Test
+    void moreInformationCreatesCorrectionAndReturnsApplicationForRevision() {
+        when(applicationRepository.findByIdForUpdate(APPLICATION_ID))
+                .thenReturn(Optional.of(application(LoanApplicationStatus.VERIFICATION_PENDING)));
+        CorrectionPlanRequest plan = uclReplacementPlan();
+
+        UnsecuredConsumerLoanVerificationDto result = service.completeManualVerification(
+                APPLICATION_ID,
+                new CompleteUnsecuredConsumerLoanVerificationRequest(
+                        UnsecuredConsumerLoanManualVerificationOutcome.REQUIRES_MORE_INFORMATION,
+                        "The income evidence must be replaced.",
+                        CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                        plan
+                )
+        );
+
+        assertEquals("RETURNED_FOR_REVISION", result.status());
+        assertEquals("REQUIRES_MORE_INFORMATION", result.productVerificationResult());
+        verify(correctionWorkflowService).createFromProductVerification(
+                any(),
+                org.mockito.ArgumentMatchers.eq(CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED),
+                org.mockito.ArgumentMatchers.same(plan),
+                any()
+        );
+    }
+
+    @Test
+    void moreInformationRequiresCorrectionReasonAndPlan() {
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.completeManualVerification(
+                        APPLICATION_ID,
+                        new CompleteUnsecuredConsumerLoanVerificationRequest(
+                                UnsecuredConsumerLoanManualVerificationOutcome.REQUIRES_MORE_INFORMATION,
+                                "More evidence is required.",
+                                null,
+                                null
+                        )
+                )
+        );
+
+        assertEquals("INVALID_CORRECTION_PLAN", exception.getErrorCode());
+        verify(applicationRepository, never()).acquireWorkflowLock(any());
+    }
+
+    @Test
+    void terminalOutcomeRejectsCorrectionFields() {
+        for (UnsecuredConsumerLoanManualVerificationOutcome outcome : List.of(
+                UnsecuredConsumerLoanManualVerificationOutcome.VERIFIED,
+                UnsecuredConsumerLoanManualVerificationOutcome.FAILED
+        )) {
+            BusinessRuleViolationException exception = assertThrows(
+                    BusinessRuleViolationException.class,
+                    () -> service.completeManualVerification(
+                            APPLICATION_ID,
+                            new CompleteUnsecuredConsumerLoanVerificationRequest(
+                                    outcome,
+                                    "Terminal assessment.",
+                                    CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                                    uclReplacementPlan()
+                            )
+                    )
+            );
+            assertEquals("INVALID_CORRECTION_PLAN", exception.getErrorCode());
+        }
+        verify(applicationRepository, never()).acquireWorkflowLock(any());
     }
 
     @Test
@@ -230,7 +331,7 @@ class ManageUnsecuredConsumerLoanVerificationServiceTest {
     void duplicateCompletionCannotProduceAnotherDecision() {
         when(applicationRepository.findByIdForUpdate(APPLICATION_ID))
                 .thenReturn(Optional.of(application(LoanApplicationStatus.VERIFICATION_PENDING)));
-        when(verificationRepository.findByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.of(
+        when(verificationRepository.findLatestByLoanApplicationIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(
                 pendingVerification().completeManualReview(REVIEWER_ID, NOW.minusMinutes(1), "First decision.")
         ));
 
@@ -284,5 +385,18 @@ class ManageUnsecuredConsumerLoanVerificationServiceTest {
                 application(LoanApplicationStatus.SUBMITTED),
                 NOW.minusDays(1)
         );
+    }
+
+    private CorrectionPlanRequest uclReplacementPlan() {
+        return new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+                CorrectionScope.DOCUMENT_REPLACEMENT,
+                CorrectionResponsibility.CUSTOMER,
+                DocumentType.INCOME_PROOF,
+                false,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "Replace the income proof.",
+                null
+        )));
     }
 }

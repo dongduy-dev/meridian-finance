@@ -112,14 +112,29 @@ public record LoanApplication(
     }
 
     public LoanApplicationTransitionResult completeProductVerification() {
+        return completeProductVerification(ProductVerificationResult.VERIFIED);
+    }
+
+    public LoanApplicationTransitionResult completeProductVerification(
+            ProductVerificationResult verificationResult
+    ) {
+        Objects.requireNonNull(verificationResult, "verificationResult must not be null");
         if (status != LoanApplicationStatus.VERIFICATION_PENDING) {
             throw new BusinessStateConflictException(
                     "PRODUCT_VERIFICATION_COMPLETION_NOT_ALLOWED",
                     "Product verification can only complete while verification is pending."
             );
         }
+        LoanApplicationStatus targetStatus = switch (verificationResult) {
+            case VERIFIED -> LoanApplicationStatus.SUBMITTED;
+            case FAILED -> LoanApplicationStatus.VERIFICATION_FAILED;
+            case REQUIRES_MORE_INFORMATION -> LoanApplicationStatus.RETURNED_FOR_REVISION;
+            case PENDING_MANUAL_REVIEW -> throw new IllegalArgumentException(
+                    "Pending manual review is not a verification completion outcome."
+            );
+        };
         return transitionTo(
-                LoanApplicationStatus.SUBMITTED,
+                targetStatus,
                 LoanApplicationTransitionAction.COMPLETE_PRODUCT_VERIFICATION
         );
     }

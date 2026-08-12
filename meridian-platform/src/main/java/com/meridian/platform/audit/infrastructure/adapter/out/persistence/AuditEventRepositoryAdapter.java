@@ -61,4 +61,13 @@ public class AuditEventRepositoryAdapter
                         entityId
                 );
     }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public long countMatchingOperationAction(
+            UUID operationId,
+            BusinessAuditAction action
+    ) {
+        return jpaAuditEventRepository.countByOperationIdAndAction(operationId, action);
+    }
 }

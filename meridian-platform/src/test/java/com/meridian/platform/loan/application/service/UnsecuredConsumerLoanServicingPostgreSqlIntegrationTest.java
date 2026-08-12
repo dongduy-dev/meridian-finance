@@ -7,6 +7,7 @@ import com.meridian.platform.loan.application.port.in.EvaluateLoanAccountOverdue
 import com.meridian.platform.loan.application.port.in.QueryRepaymentsUseCase;
 import com.meridian.platform.loan.application.port.in.RecordRepaymentUseCase;
 import com.meridian.platform.loan.application.port.out.OverdueEvaluationCandidateQuery;
+import com.meridian.platform.loan.application.port.out.OutstandingLoanAccountQuery;
 import com.meridian.platform.loan.domain.model.LoanAccountStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -77,6 +78,7 @@ class UnsecuredConsumerLoanServicingPostgreSqlIntegrationTest {
     @Autowired QueryRepaymentsUseCase repaymentQueries;
     @Autowired EvaluateLoanAccountOverdueUseCase overdueEvaluator;
     @Autowired OverdueEvaluationCandidateQuery overdueCandidates;
+    @Autowired OutstandingLoanAccountQuery outstandingAccounts;
     @Autowired ApproveLoanSettlementUseCase settlements;
     @Autowired CloseLoanAccountUseCase closures;
     @Autowired JdbcTemplate jdbc;
@@ -198,6 +200,77 @@ class UnsecuredConsumerLoanServicingPostgreSqlIntegrationTest {
                 activated.accountId()
         ));
         assertEquals(0, salaryMovements(activated.applicationId()));
+    }
+
+    @Test
+    void outstandingGuardIsProductScopedAndClearsOnlyAtZeroOutstandingSettlementOrClosure() {
+        Activated ucl = activateUcl();
+        UUID customerId = jdbc.queryForObject(
+                "select customer_id from loan_applications where id = ?",
+                UUID.class,
+                ucl.applicationId()
+        );
+
+        assertEquals(
+                OutstandingLoanAccountQuery.GuardResult.OUTSTANDING_EXISTS,
+                outstandingAccounts.inspect(customerId, ProductCode.UNSECURED_CONSUMER_LOAN)
+        );
+        assertEquals(
+                OutstandingLoanAccountQuery.GuardResult.CLEAR,
+                outstandingAccounts.inspect(customerId, ProductCode.SALARY_ADVANCE)
+        );
+
+        LocalDate overdueDate = FIRST_REPAYMENT_DATE.plusDays(1);
+        overdueEvaluator.evaluate(new EvaluateLoanAccountOverdueUseCase.Command(
+                ucl.applicationId(),
+                ucl.accountId(),
+                overdueDate,
+                overdueDate.atStartOfDay()
+        ));
+        assertEquals(
+                OutstandingLoanAccountQuery.GuardResult.OUTSTANDING_EXISTS,
+                outstandingAccounts.inspect(customerId, ProductCode.UNSECURED_CONSUMER_LOAN)
+        );
+        clock.set(overdueDate.atTime(10, 0).toInstant(ZoneOffset.UTC));
+
+        accountingActor();
+        RecordRepaymentUseCase.Result payoff = repayments.record(repaymentCommand(
+                ucl,
+                UUID.randomUUID(),
+                "UCL-GUARD-PAYOFF-" + ucl.token(),
+                "1100",
+                VALUE_DATE
+        ));
+        assertEquals(LoanAccountStatus.SETTLED, payoff.accountBalance().status());
+        assertEquals(
+                OutstandingLoanAccountQuery.GuardResult.CLEAR,
+                outstandingAccounts.inspect(customerId, ProductCode.UNSECURED_CONSUMER_LOAN)
+        );
+
+        closures.close(new CloseLoanAccountUseCase.Command(UUID.randomUUID(), ucl.applicationId()));
+        assertEquals(
+                OutstandingLoanAccountQuery.GuardResult.CLEAR,
+                outstandingAccounts.inspect(customerId, ProductCode.UNSECURED_CONSUMER_LOAN)
+        );
+
+        accountingActor();
+        var salaryFixture = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        disbursements.confirm(support.command(
+                salaryFixture,
+                UUID.randomUUID(),
+                "SA-PRODUCT-ISOLATION-" + salaryFixture.token()
+        ));
+        assertEquals(
+                OutstandingLoanAccountQuery.GuardResult.OUTSTANDING_EXISTS,
+                outstandingAccounts.inspect(salaryFixture.customerId(), ProductCode.SALARY_ADVANCE)
+        );
+        assertEquals(
+                OutstandingLoanAccountQuery.GuardResult.CLEAR,
+                outstandingAccounts.inspect(
+                        salaryFixture.customerId(),
+                        ProductCode.UNSECURED_CONSUMER_LOAN
+                )
+        );
     }
 
     @Test

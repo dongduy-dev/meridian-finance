@@ -90,6 +90,16 @@ class CorrectionPlanPolicyTest {
                 "Customer instruction",
                 "Staff-only instruction"
         ))));
+        assertInvalid(new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+                CorrectionScope.DOCUMENT_REVIEW,
+                CorrectionResponsibility.STAFF,
+                DocumentType.INCOME_PROOF,
+                false,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "Customer-only instruction",
+                null
+        ))));
     }
 
     @Test

@@ -74,6 +74,26 @@ class LoanApplicationTest {
     }
 
     @Test
+    void negativeProductVerificationOutcomesUseExplicitTerminalAndRecoveryStates() {
+        LoanApplication pending = loanApplication(LoanApplicationStatus.VERIFICATION_PENDING);
+
+        assertEquals(
+                LoanApplicationStatus.VERIFICATION_FAILED,
+                pending.completeProductVerification(ProductVerificationResult.FAILED)
+                        .loanApplication().status()
+        );
+        assertEquals(
+                LoanApplicationStatus.RETURNED_FOR_REVISION,
+                pending.completeProductVerification(ProductVerificationResult.REQUIRES_MORE_INFORMATION)
+                        .loanApplication().status()
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> pending.completeProductVerification(ProductVerificationResult.PENDING_MANUAL_REVIEW)
+        );
+    }
+
+    @Test
     void productVerificationTransitionsRejectWrongStatuses() {
         BusinessStateConflictException startFailure = assertThrows(
                 BusinessStateConflictException.class,

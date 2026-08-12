@@ -25,8 +25,16 @@ public class UnsecuredConsumerLoanVerificationRepositoryAdapter
     }
 
     @Override
-    public Optional<UnsecuredConsumerLoanVerification> findByLoanApplicationId(UUID loanApplicationId) {
-        return repository.findByLoanApplicationId(loanApplicationId)
+    public Optional<UnsecuredConsumerLoanVerification> findLatestByLoanApplicationId(UUID loanApplicationId) {
+        return repository.findFirstByLoanApplicationIdOrderByVerificationSequenceDesc(loanApplicationId)
+                .map(UnsecuredConsumerLoanVerificationJpaEntity::toDomain);
+    }
+
+    @Override
+    public Optional<UnsecuredConsumerLoanVerification> findLatestByLoanApplicationIdForUpdate(
+            UUID loanApplicationId
+    ) {
+        return repository.findLatestForUpdate(loanApplicationId)
                 .map(UnsecuredConsumerLoanVerificationJpaEntity::toDomain);
     }
 }

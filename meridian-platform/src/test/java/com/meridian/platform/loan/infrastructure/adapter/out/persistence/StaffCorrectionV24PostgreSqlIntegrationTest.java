@@ -34,7 +34,7 @@ class StaffCorrectionV24PostgreSqlIntegrationTest {
     }
 
     @Test
-    void cleanMigrationReachesV24WithExactRoleGrantsAndStaffScopeConstraint() {
+    void currentMigrationPreservesV24RoleGrantsAndProductAwareTaskConstraints() {
         assertEquals(1, jdbcTemplate.queryForObject(
                 "select count(*) from " + SCHEMA
                         + ".flyway_schema_history where success and version = '24'",
@@ -61,7 +61,21 @@ class StaffCorrectionV24PostgreSqlIntegrationTest {
         assertTrue(definition.contains("responsible_party"));
         assertTrue(definition.contains("CUSTOMER"));
         assertTrue(definition.contains("STAFF"));
-        assertTrue(definition.contains("RECENT_PAYSLIP"));
+
+        String documentTypes = jdbcTemplate.queryForObject(
+                """
+                select pg_get_constraintdef(oid)
+                from pg_constraint
+                where conname = 'chk_loan_correction_tasks_document_type'
+                  and conrelid = (? || '.loan_correction_tasks')::regclass
+                """,
+                String.class,
+                SCHEMA
+        );
+        assertTrue(documentTypes.contains("RECENT_PAYSLIP"));
+        assertTrue(documentTypes.contains("INCOME_PROOF"));
+        assertTrue(documentTypes.contains("BANK_STATEMENT"));
+        assertTrue(documentTypes.contains("EMPLOYMENT_PROOF"));
     }
 
     private int roleGrantCount(String roleCode, String permissionCode) {

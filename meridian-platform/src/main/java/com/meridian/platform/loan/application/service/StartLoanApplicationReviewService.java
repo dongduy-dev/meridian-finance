@@ -138,7 +138,7 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
         }
 
         UnsecuredConsumerLoanVerification verification = uclVerificationRepository
-                .findByLoanApplicationId(loanApplication.id())
+                .findLatestByLoanApplicationId(loanApplication.id())
                 .orElseThrow(() -> new BusinessStateConflictException(
                         "UCL_VERIFICATION_REQUIRED",
                         "Unsecured Consumer Loan verification evidence is required before review."

@@ -78,7 +78,7 @@ Customer-owned read APIs may return the same generic `404` for a nonexistent res
 | Document review/waiver/replacement decision | `reviewRequestId` | Returns the recorded immutable review outcome; conflicting logical content is rejected. |
 | Correction task completion | `completionRequestId` | Returns the completed task without a second completion effect. |
 | Correction resubmission | `resubmissionRequestId` | Returns the consumed resubmission result without another verification or transition. |
-| Customer correction cancellation | `requestId` | Returns the durable cancellation result without another terminal transition, reservation release, movement, history entry, or audit event. |
+| Customer correction cancellation | `requestId` | Returns the durable cancellation result without another terminal transition, product-specific exposure effect, history entry, or audit event. |
 | Contract preparation/regeneration | `preparationRequestId` | Returns the same prepared contract version. |
 | Contract acknowledgment | `acknowledgmentRequestId` | Returns the same acknowledgment result for the exact version. |
 | Readiness confirmation | `confirmationRequestId` | Returns the same confirmed-readiness result without another transition. |
@@ -126,9 +126,9 @@ The contractual destination-reveal operation is the sole v1 JSON endpoint permit
 | POST | `/api/v1/loan-applications/salary-advance` | `loan:submit` | Submit a Salary Advance application and reserve eligible limit. |
 | POST | `/api/v1/loan-applications/unsecured-consumer-loan` | Customer with `loan:submit` | Submit an Unsecured Consumer Loan application for manual verification and required evidence collection. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}` | Customer `loan:read:own` or Staff `loan:read` | Return a safe durable LoanApplication status projection. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/cancel` | Customer with `loan:cancel:own` | Cancel an owned Salary Advance only from `RETURNED_FOR_REVISION` and release its reservation exactly once. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start` | Staff with `loan:review` | Start positive-path manual UCL verification after document processing readiness. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete` | Staff with `loan:review` | Complete positive-path manual UCL verification as `VERIFIED`. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/cancel` | Customer with `loan:cancel:own` | Cancel an owned Salary Advance or UCL from `RETURNED_FOR_REVISION`; Salary Advance releases its reservation exactly once, while UCL has no exposure effect. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start` | Staff with `loan:review` | Start manual UCL verification after document processing readiness. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete` | Staff with `loan:review` | Complete manual UCL verification as `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION`. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review/start` | `loan:review` | Start Loan Officer review. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review-recommendations` | `approval:recommend` | Record a Loan Officer recommendation. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approval-decisions` | `approval:decide` | Record an Approver decision. |
@@ -308,14 +308,14 @@ The API derives Customer identity from the Bearer token and does not accept `cus
 
 Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `status`, `requestedAmount`, `requestedTermMonths`, `productVerificationResult`, and `submittedAt`. Loan records the application in `DOCUMENTS_PENDING`, stores `PENDING_MANUAL_REVIEW` as its product-verification result, and creates required `INCOME_PROOF`, `BANK_STATEMENT`, and `EMPLOYMENT_PROOF` checklist items.
 
-The endpoint stops at origination and evidence setup. Separate Staff commands perform positive manual verification and review entry. UCL approval then generates an immutable exact-request offer under the active UCL policy, and the generic Customer offer endpoints support read, accept, decline, and expiry. An accepted offer can proceed through operational contract preparation, acknowledgment, readiness, manual disbursement, LoanAccount activation, and final monthly schedule creation. Negative-verification outcomes, correction, cancellation, and post-activation servicing are not executable.
+The endpoint stops at origination and evidence setup. It rejects a Customer who already has another UCL LoanAccount with positive contractual outstanding in `ACTIVE` or `OVERDUE` using `409 OUTSTANDING_LOAN_ACCOUNT_EXISTS`; zero-outstanding `SETTLED` or `CLOSED` UCL accounts do not block, unrelated Salary Advance accounts are ignored, and inconsistent account state returns safe `409 SYSTEM_STATE_CONFLICT`. Separate Staff commands perform manual verification and review entry. The full UCL lifecycle then supports structured correction and re-verification, approval and immutable exact-request offer handling, correction cancellation, operational contracts, activation, and servicing through settlement and closure.
 
 Important errors:
 
 | Status | Code |
 |---|---|
 | `404` | `CUSTOMER_NOT_FOUND` or `PRODUCT_NOT_FOUND` |
-| `409` | `CUSTOMER_NOT_ACTIVE` or `BLOCKING_APPLICATION_EXISTS` |
+| `409` | `CUSTOMER_NOT_ACTIVE`, `BLOCKING_APPLICATION_EXISTS`, `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, or `SYSTEM_STATE_CONFLICT` |
 | `422` | `PROFILE_INCOMPLETE`, `PRIMARY_BANK_ACCOUNT_REQUIRED`, `PRODUCT_INACTIVE`, `PRODUCT_POLICY_INVALID`, `INVALID_PRODUCT_AMOUNT`, or `INVALID_PRODUCT_TERM` |
 
 ### 4.5 Start UCL manual verification
@@ -345,15 +345,40 @@ Important errors include `UCL_VERIFICATION_NOT_APPLICABLE`, `UCL_VERIFICATION_RE
 POST /api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete
 ```
 
-The request contains only a required restricted assessment note:
+The request contains a required outcome and restricted assessment note. `reasonCode` and `correctionPlan` are absent for `VERIFIED` and `FAILED`:
 
 ```json
 {
+  "outcome": "VERIFIED",
   "assessmentNote": "Income and employment evidence are consistent for Loan Officer review."
 }
 ```
 
-Unknown properties and blank or over-2,000-character notes return `400 VALIDATION_FAILED`. The application must be in `VERIFICATION_PENDING`, the existing result must remain `PENDING_MANUAL_REVIEW`, and documents must still be processing-ready. Success stores `VERIFIED` with the authenticated Staff actor, one sampled UTC completion time, and the restricted note; moves the application back to `SUBMITTED`; and records history and audit atomically. The response does not expose the Staff actor or assessment note:
+`REQUIRES_MORE_INFORMATION` requires a controlled reason and a valid UCL correction plan. For example:
+
+```json
+{
+  "outcome": "REQUIRES_MORE_INFORMATION",
+  "assessmentNote": "The current bank statement is unreadable and cannot support assessment.",
+  "reasonCode": "DOCUMENT_REPLACEMENT_REQUIRED",
+  "correctionPlan": {
+    "tasks": [
+      {
+        "scope": "DOCUMENT_REPLACEMENT",
+        "responsibleParty": "CUSTOMER",
+        "documentType": "BANK_STATEMENT",
+        "createChecklistItem": false,
+        "checklistItemId": "UUID",
+        "baselineDocumentVersionId": "UUID",
+        "customerInstruction": "Upload a readable replacement bank statement.",
+        "staffInstruction": null
+      }
+    ]
+  }
+}
+```
+
+Unknown properties, a missing outcome, and blank or over-2,000-character notes return `400 VALIDATION_FAILED`. The application must be in `VERIFICATION_PENDING`, the latest result must remain `PENDING_MANUAL_REVIEW`, and documents must still be processing-ready. Completion stores the outcome with the authenticated Staff actor, one sampled UTC completion time, and the restricted note. `VERIFIED` moves the application to `SUBMITTED`; `FAILED` moves it to terminal `VERIFICATION_FAILED`; `REQUIRES_MORE_INFORMATION` atomically moves it to `RETURNED_FOR_REVISION` and creates the correction request and tasks. The response does not expose the Staff actor or assessment note:
 
 ```json
 {
@@ -364,7 +389,7 @@ Unknown properties and blank or over-2,000-character notes return `400 VALIDATIO
 }
 ```
 
-This command implements only the positive `VERIFIED` outcome. `FAILED` and `REQUIRES_MORE_INFORMATION` remain non-executable.
+For a `FAILED` request, use `"outcome": "FAILED"` with no reason or plan. Supplying correction fields for `VERIFIED` or `FAILED`, omitting them for `REQUIRES_MORE_INFORMATION`, using `RECENT_PAYSLIP`, or targeting a stale or foreign UCL document yields the applicable validation or state-conflict error without partial effects.
 
 Important errors include `UCL_VERIFICATION_NOT_APPLICABLE`, `UCL_VERIFICATION_REQUIRED`, `UCL_VERIFICATION_DOCUMENTS_NOT_READY`, `PRODUCT_VERIFICATION_NOT_PENDING`, `PRODUCT_VERIFICATION_COMPLETION_NOT_ALLOWED`, and `UCL_VERIFICATION_ASSESSMENT_REQUIRED`.
 
@@ -403,7 +428,7 @@ Normal recommendation:
 
 Rejection requires a nonblank `reason`. Revision actions require `expectedReviewCycleId`, a controlled `reasonCode`, and one to ten tasks.
 
-For UCL, only `RECOMMEND_APPROVAL` and `RECOMMEND_REJECTION` are executable. UCL Customer or Staff correction recommendations return `409 UCL_CORRECTION_NOT_READY` before any correction request or task is created.
+For UCL, positive and rejection recommendations and the structured Customer or Staff correction actions are executable. UCL correction tasks may replace or review only application-owned current `INCOME_PROOF`, `BANK_STATEMENT`, or `EMPLOYMENT_PROOF` evidence. They cannot create a Salary-specific `RECENT_PAYSLIP` task or change requested amount or term.
 
 Representative Customer task:
 
@@ -452,7 +477,7 @@ Supported actions:
 
 The Approver must differ from the Loan Officer who submitted the applicable recommendation. Mixed corrections use separate Customer and Staff tasks.
 
-For UCL, `APPROVE` atomically records the decision, generates one immutable exact-request offer with `FLAT_ORIGINAL_PRINCIPAL` pricing and `MONTHLY_INSTALLMENT` items, and finishes in `CUSTOMER_ACCEPTANCE_PENDING`. `REJECT` and `RETURN_TO_LOAN_OFFICER_REVIEW` remain available common decisions. Structured correction returns `409 UCL_CORRECTION_NOT_READY` before durable decision, transition, correction, or offer effects.
+For UCL, `APPROVE` atomically records the decision, generates one immutable exact-request offer with `FLAT_ORIGINAL_PRINCIPAL` pricing and `MONTHLY_INSTALLMENT` items, and finishes in `CUSTOMER_ACCEPTANCE_PENDING`. `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and structured mixed Customer/Staff correction remain available common decisions under the UCL document restrictions.
 
 Important errors include `MAKER_CHECKER_VIOLATION`, `STALE_REVIEW_CYCLE`, and controlled reason/plan validation errors.
 
@@ -475,6 +500,9 @@ Client-visible rules:
 - a task cannot complete before its required upload or review proof exists;
 - the Staff member who created the correction request cannot complete its Staff tasks;
 - a mixed request cannot be resubmitted after only Customer work is complete;
+- UCL resubmission preserves completed verification evidence, returns the application to `SUBMITTED`, and creates the next linked `PENDING_MANUAL_REVIEW` verification cycle; an untouched pending pre-review cycle is reused;
+- review cannot restart until the authoritative latest UCL verification cycle is `VERIFIED`;
+- UCL resubmission rechecks product-scoped outstanding debt and does not invoke Salary Advance eligibility, limit, reservation, movement, or revalidation behavior;
 - identical requests replay safely;
 - a different request after completion or resubmission conflicts.
 
@@ -496,7 +524,7 @@ This narrow command requires an authenticated Customer with `loan:cancel:own`, d
 
 The only allowed source status is `RETURNED_FOR_REVISION`. A new request against any other status, including an application already cancelled by another request, returns `409 LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED`. An exact replay of the successful request UUID returns the original `CANCELLED` result with `idempotentReplay = true`.
 
-Success atomically marks the active correction request `CANCELLED`, changes the LoanApplication to `CANCELLED`, releases the application’s repository-derived Salary Advance reservation back to available exposure, writes exactly one `RESERVATION_RELEASED` movement, and records immutable history and audit evidence. Cancellation does not run Partner freshness or re-verification; stale or otherwise unusable Partner evidence cannot prevent abandonment. Cancellation changes neither used exposure nor LoanAccount or repayment state.
+Success atomically marks the active correction request `CANCELLED`, changes the LoanApplication to `CANCELLED`, and records immutable history and audit evidence. For Salary Advance it also releases the repository-derived reservation exactly once and writes one `RESERVATION_RELEASED` movement. For UCL it stores no release reference and creates no Salary Advance limit, movement, reservation, conversion, or release effect. Cancellation does not run Partner freshness or re-verification and changes neither LoanAccount nor repayment state.
 
 ### 5.5 Document upload and review
 
@@ -787,7 +815,7 @@ Collection:
 docs/api/Meridian-Platform.postman_collection.json
 ```
 
-It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, optional returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. The UCL servicing folder uses the same product-generic endpoints for representative repayment, history, overdue-state read, full-balance settlement, and closure scenarios.
+It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. UCL scenarios include all three verification outcomes, correction and re-verification, cancellation, outstanding-debt rejection, and product-generic servicing through closure.
 
 Complex correction scenarios require prepared application, review-cycle, checklist, and version variables. The optional cancellation folder requires `returnedCancellationScenarioEnabled=true` and a separate Customer-owned `cancellationLoanApplicationId` in `RETURNED_FOR_REVISION`; it confirms the command, exact replay, and terminal application GET without exposing internal evidence IDs. Seed fixtures and scenario-specific IDs belong to the collection or its environment, not this API contract.
 

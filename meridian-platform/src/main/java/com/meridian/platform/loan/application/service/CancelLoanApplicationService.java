@@ -114,7 +114,7 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
         if (cancellations.findByLoanApplicationId(application.id()).isPresent()) {
             throw cancellationNotAllowed();
         }
-        if (application.productCode() != ProductCode.SALARY_ADVANCE) {
+        if (application.productCode() == ProductCode.COLLATERAL_LOAN) {
             throw cancellationNotAllowed();
         }
 
@@ -122,19 +122,6 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
         LoanCorrectionRequest correction = corrections
                 .findActiveRequestByApplicationIdForUpdate(application.id())
                 .orElseThrow(CancelLoanApplicationService::stateConflict);
-
-        applications.acquireCustomerProductLock(application.customerId(), application.productCode());
-        SalaryAdvanceVerification verification = verifications
-                .findByLoanApplicationId(application.id())
-                .orElseThrow(CancelLoanApplicationService::stateConflict);
-        if (!verification.customerId().equals(application.customerId())) {
-            throw stateConflict();
-        }
-        limits.acquireCustomerLinkLock(
-                application.customerId(),
-                verification.customerPartnerEmployeeLinkId()
-        );
-        validateReservationEvidence(application, verification);
 
         LocalDateTime cancelledAt = ServicingEvidenceTimestamp.normalizeForPersistence(
                 LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)
@@ -145,16 +132,10 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
                 actor.userId(),
                 cancelledAt
         );
-        SalaryAdvanceLimitMovement releaseMovement = reservationReleases
-                .releaseReservationOnce(
-                        application,
-                        operation,
-                        ReservationReleaseTrigger.CUSTOMER_CANCELLATION
-                )
-                .orElseThrow(CancelLoanApplicationService::stateConflict);
-        if (releaseMovement.amount().compareTo(application.requestedAmount()) != 0) {
-            throw stateConflict();
-        }
+        SalaryAdvanceLimitMovement releaseMovement = application.productCode()
+                == ProductCode.SALARY_ADVANCE
+                ? releaseSalaryAdvanceReservation(application, operation)
+                : requireNoUclSalaryMovement(application);
 
         LoanApplication cancelledApplication = applications.save(transition.loanApplication());
         LoanCorrectionRequest cancelledCorrection = corrections.saveRequest(
@@ -163,15 +144,25 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
         transitionRecorder.record(operation, transition.facts(), "CUSTOMER_CANCELLATION");
         publishCancellationAudit(operation, application, cancelledCorrection);
 
-        LoanApplicationCancellation cancellation = LoanApplicationCancellation.recorded(
-                cancellationId,
-                cancelledApplication,
-                cancelledCorrection,
-                releaseMovement,
-                command.requestId(),
-                actor.userId(),
-                cancelledAt
-        );
+        LoanApplicationCancellation cancellation = application.productCode()
+                == ProductCode.SALARY_ADVANCE
+                ? LoanApplicationCancellation.recorded(
+                        cancellationId,
+                        cancelledApplication,
+                        cancelledCorrection,
+                        releaseMovement,
+                        command.requestId(),
+                        actor.userId(),
+                        cancelledAt
+                )
+                : LoanApplicationCancellation.recordedWithoutExposureEffect(
+                        cancellationId,
+                        cancelledApplication,
+                        cancelledCorrection,
+                        command.requestId(),
+                        actor.userId(),
+                        cancelledAt
+                );
         if (!cancellations.saveIfAbsent(cancellation)) {
             throw stateConflict();
         }
@@ -188,17 +179,13 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
         LoanCorrectionRequest correction = corrections
                 .findRequestById(cancellation.correctionRequestId())
                 .orElseThrow(CancelLoanApplicationService::stateConflict);
-        List<SalaryAdvanceLimitMovement> releases = movements
-                .findByLoanApplicationIdAndMovementType(
-                        application.id(),
-                        SalaryAdvanceLimitMovementType.RESERVATION_RELEASED
-                );
+        boolean productEvidenceValid = application.productCode() == ProductCode.SALARY_ADVANCE
+                ? hasValidSalaryAdvanceReplayEvidence(application, cancellation)
+                : hasValidUclReplayEvidence(application, cancellation);
         if (correction.status() != LoanCorrectionRequestStatus.CANCELLED
                 || !correction.loanApplicationId().equals(application.id())
                 || !cancellation.cancelledAt().equals(correction.cancelledAt())
-                || releases.size() != 1
-                || !releases.getFirst().id().equals(cancellation.reservationReleaseMovementId())
-                || releases.getFirst().amount().compareTo(application.requestedAmount()) != 0
+                || !productEvidenceValid
                 || transitionEvidence.countMatching(
                         application.id(),
                         LoanApplicationStatus.RETURNED_FOR_REVISION,
@@ -211,15 +198,95 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
                         BusinessAuditEntityType.LOAN_APPLICATION,
                         application.id()
                 ) != 1
-                || auditEvidence.countMatchingOperation(
+        ) {
+            throw stateConflict();
+        }
+        return result(cancellation, true);
+    }
+
+    private SalaryAdvanceLimitMovement releaseSalaryAdvanceReservation(
+            LoanApplication application,
+            BusinessOperationContext operation
+    ) {
+        applications.acquireCustomerProductLock(application.customerId(), application.productCode());
+        SalaryAdvanceVerification verification = verifications
+                .findByLoanApplicationId(application.id())
+                .orElseThrow(CancelLoanApplicationService::stateConflict);
+        if (!verification.customerId().equals(application.customerId())) {
+            throw stateConflict();
+        }
+        limits.acquireCustomerLinkLock(
+                application.customerId(),
+                verification.customerPartnerEmployeeLinkId()
+        );
+        validateReservationEvidence(application, verification);
+        SalaryAdvanceLimitMovement releaseMovement = reservationReleases
+                .releaseReservationOnce(
+                        application,
+                        operation,
+                        ReservationReleaseTrigger.CUSTOMER_CANCELLATION
+                )
+                .orElseThrow(CancelLoanApplicationService::stateConflict);
+        if (releaseMovement.amount().compareTo(application.requestedAmount()) != 0) {
+            throw stateConflict();
+        }
+        return releaseMovement;
+    }
+
+    private SalaryAdvanceLimitMovement requireNoUclSalaryMovement(LoanApplication application) {
+        if (!movements.findByLoanApplicationIdAndMovementType(
+                application.id(),
+                SalaryAdvanceLimitMovementType.RESERVED
+        ).isEmpty() || !movements.findByLoanApplicationIdAndMovementType(
+                application.id(),
+                SalaryAdvanceLimitMovementType.RESERVATION_RELEASED
+        ).isEmpty()) {
+            throw stateConflict();
+        }
+        return null;
+    }
+
+    private boolean hasValidSalaryAdvanceReplayEvidence(
+            LoanApplication application,
+            LoanApplicationCancellation cancellation
+    ) {
+        if (cancellation.reservationReleaseMovementId() == null) {
+            return false;
+        }
+        List<SalaryAdvanceLimitMovement> releases = movements
+                .findByLoanApplicationIdAndMovementType(
+                        application.id(),
+                        SalaryAdvanceLimitMovementType.RESERVATION_RELEASED
+                );
+        return releases.size() == 1
+                && releases.getFirst().id().equals(cancellation.reservationReleaseMovementId())
+                && releases.getFirst().amount().compareTo(application.requestedAmount()) == 0
+                && auditEvidence.countMatchingOperation(
                         cancellation.id(),
                         BusinessAuditAction.RESERVATION_RELEASED,
                         BusinessAuditEntityType.SALARY_ADVANCE_LIMIT_MOVEMENT,
                         cancellation.reservationReleaseMovementId()
-                ) != 1) {
-            throw stateConflict();
-        }
-        return result(cancellation, true);
+                ) == 1;
+    }
+
+    private boolean hasValidUclReplayEvidence(
+            LoanApplication application,
+            LoanApplicationCancellation cancellation
+    ) {
+        return application.productCode() == ProductCode.UNSECURED_CONSUMER_LOAN
+                && cancellation.reservationReleaseMovementId() == null
+                && movements.findByLoanApplicationIdAndMovementType(
+                        application.id(),
+                        SalaryAdvanceLimitMovementType.RESERVED
+                ).isEmpty()
+                && movements.findByLoanApplicationIdAndMovementType(
+                        application.id(),
+                        SalaryAdvanceLimitMovementType.RESERVATION_RELEASED
+                ).isEmpty()
+                && auditEvidence.countMatchingOperationAction(
+                        cancellation.id(),
+                        BusinessAuditAction.RESERVATION_RELEASED
+                ) == 0;
     }
 
     private void validateReservationEvidence(

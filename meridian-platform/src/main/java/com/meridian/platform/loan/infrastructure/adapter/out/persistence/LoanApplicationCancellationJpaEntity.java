@@ -23,7 +23,7 @@ public class LoanApplicationCancellationJpaEntity {
     @Column(name = "correction_request_id", nullable = false, updatable = false)
     private UUID correctionRequestId;
 
-    @Column(name = "reservation_release_movement_id", nullable = false, updatable = false)
+    @Column(name = "reservation_release_movement_id", updatable = false)
     private UUID reservationReleaseMovementId;
 
     @Column(name = "request_id", nullable = false, updatable = false)

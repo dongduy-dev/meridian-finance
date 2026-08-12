@@ -79,22 +79,6 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         this.businessAuditPublisher = businessAuditPublisher;
     }
 
-    ApplyApprovalDecisionService(
-            LoanApplicationRepository loanApplicationRepository,
-            LoanReviewCycleRepository reviewCycleRepository,
-            ApprovedOfferRepository approvedOfferRepository,
-            SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository,
-            UnsecuredConsumerLoanOfferPolicyRepository unsecuredConsumerLoanOfferPolicyRepository,
-            SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService,
-            LoanApplicationStatusTransitionRecorder transitionRecorder,
-            BusinessAuditPublisher businessAuditPublisher
-    ) {
-        this(loanApplicationRepository, reviewCycleRepository, null, approvedOfferRepository,
-                salaryAdvanceOfferPolicyRepository, unsecuredConsumerLoanOfferPolicyRepository,
-                salaryAdvanceReservationReleaseService,
-                transitionRecorder, businessAuditPublisher);
-    }
-
     @Override
     @Transactional
     public LoanApplicationReviewDto applyApprovalDecision(ApplyApprovalDecisionCommand command) {
@@ -124,7 +108,6 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
                     "STALE_REVIEW_CYCLE", "The decision review cycle is no longer active.");
         }
 
-        requireExecutableUclDecision(loanApplication, command.action());
         LoanApplicationTransitionResult decisionTransition = loanApplication.applyApprovalDecision(command.action());
         LoanApplication transitionedApplication = decisionTransition.loanApplication();
         List<LoanApplicationTransitionFact> transitionFacts = new ArrayList<>(decisionTransition.facts());
@@ -210,21 +193,6 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         return (loanApplication.productCode() == ProductCode.SALARY_ADVANCE
                 || loanApplication.productCode() == ProductCode.UNSECURED_CONSUMER_LOAN)
                 && action == LoanApprovalDecisionAction.APPROVE;
-    }
-
-    private void requireExecutableUclDecision(
-            LoanApplication loanApplication,
-            LoanApprovalDecisionAction action
-    ) {
-        if (loanApplication.productCode() != ProductCode.UNSECURED_CONSUMER_LOAN) {
-            return;
-        }
-        if (action == LoanApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION) {
-            throw new BusinessStateConflictException(
-                    "UCL_CORRECTION_NOT_READY",
-                    "Unsecured Consumer Loan correction execution is not available."
-            );
-        }
     }
 
     private ApprovedOffer generateSalaryAdvanceOffer(

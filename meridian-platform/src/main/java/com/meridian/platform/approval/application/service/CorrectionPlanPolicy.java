@@ -70,7 +70,7 @@ public class CorrectionPlanPolicy {
         validateInstruction(task);
         switch (task.scope()) {
             case SUPPORTING_DOCUMENT_UPLOAD -> {
-                if (task.documentType() != DocumentType.RECENT_PAYSLIP
+                if (task.documentType() == null
                         || !task.createChecklistItem()
                         || task.checklistItemId() != null
                         || task.baselineDocumentVersionId() != null) {
@@ -79,7 +79,7 @@ public class CorrectionPlanPolicy {
             }
             case DOCUMENT_REPLACEMENT -> {
                 if (task.responsibleParty() != CorrectionResponsibility.CUSTOMER
-                        || task.documentType() != DocumentType.RECENT_PAYSLIP
+                        || task.documentType() == null
                         || task.createChecklistItem()
                         || task.checklistItemId() == null
                         || task.baselineDocumentVersionId() == null) {
@@ -88,7 +88,7 @@ public class CorrectionPlanPolicy {
             }
             case DOCUMENT_REVIEW -> {
                 if (task.responsibleParty() != CorrectionResponsibility.STAFF
-                        || task.documentType() != DocumentType.RECENT_PAYSLIP
+                        || task.documentType() == null
                         || task.createChecklistItem()
                         || task.checklistItemId() == null
                         || task.baselineDocumentVersionId() == null) {

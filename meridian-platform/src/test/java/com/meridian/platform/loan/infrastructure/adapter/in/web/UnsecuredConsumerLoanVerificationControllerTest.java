@@ -56,6 +56,7 @@ class UnsecuredConsumerLoanVerificationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
+                                  "outcome": "VERIFIED",
                                   "assessmentNote": "Income and employment evidence are consistent."
                                 }
                                 """))
@@ -76,6 +77,7 @@ class UnsecuredConsumerLoanVerificationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
+                                  "outcome": "VERIFIED",
                                   "assessmentNote": "   "
                                 }
                                 """))
@@ -92,10 +94,63 @@ class UnsecuredConsumerLoanVerificationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
+                                  "outcome": "VERIFIED",
                                   "assessmentNote": "Evidence is consistent.",
                                   "result": "FAILED"
                                 }
                                 """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void rejectsMissingOutcome() throws Exception {
+        mockMvc.perform(post(
+                        "/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete",
+                        APPLICATION_ID
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "assessmentNote": "Evidence is consistent."
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void rejectsPendingManualReviewAsACompletionOutcome() throws Exception {
+        mockMvc.perform(post(
+                        "/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete",
+                        APPLICATION_ID
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "outcome": "PENDING_MANUAL_REVIEW",
+                                  "assessmentNote": "This is not a terminal decision."
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void rejectsAssessmentNoteLongerThanTwoThousandCharacters() throws Exception {
+        String note = "x".repeat(2001);
+
+        mockMvc.perform(post(
+                        "/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete",
+                        APPLICATION_ID
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "outcome": "VERIFIED",
+                                  "assessmentNote": "%s"
+                                }
+                                """.formatted(note)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
     }

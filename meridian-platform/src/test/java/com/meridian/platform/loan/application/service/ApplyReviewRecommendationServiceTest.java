@@ -1,6 +1,12 @@
 package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.dto.ApplyReviewRecommendationCommand;
+import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
+import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
+import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
+import com.meridian.platform.approval.domain.model.CorrectionScope;
+import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
@@ -99,7 +105,7 @@ class ApplyReviewRecommendationServiceTest {
     }
 
     @Test
-    void uclCorrectionRecommendationsFailClosed() {
+    void uclCorrectionRecommendationsUseSharedWorkflow() {
         for (LoanReviewRecommendationAction action : List.of(
                 LoanReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION,
                 LoanReviewRecommendationAction.REQUEST_STAFF_CORRECTION
@@ -107,15 +113,20 @@ class ApplyReviewRecommendationServiceTest {
             loanApplicationRepository.application = uclApplication();
             loanApplicationRepository.savedApplication = null;
 
-            BusinessStateConflictException exception = assertThrows(
-                    BusinessStateConflictException.class,
-                    () -> service.applyReviewRecommendation(command(action, validContext()))
-            );
+            service.applyReviewRecommendation(command(action, validContext()));
 
-            assertEquals("UCL_CORRECTION_NOT_READY", exception.getErrorCode());
-            assertNull(loanApplicationRepository.savedApplication);
-            org.mockito.Mockito.verifyNoInteractions(correctionWorkflowService);
+            assertEquals(LoanApplicationStatus.RETURNED_FOR_REVISION,
+                    loanApplicationRepository.savedApplication.status());
         }
+        org.mockito.Mockito.verify(correctionWorkflowService, org.mockito.Mockito.times(2))
+                .createFromRecommendation(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.eq(CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()
+                );
     }
 
     @Test
@@ -188,11 +199,29 @@ class ApplyReviewRecommendationServiceTest {
                 LOAN_OFFICER_USER_ID,
                 action,
                 null,
-                null,
-                null,
+                isCorrection(action) ? CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED : null,
+                isCorrection(action) ? uclCorrectionPlan() : null,
                 RECOMMENDED_AT,
                 operationContext
         );
+    }
+
+    private static boolean isCorrection(LoanReviewRecommendationAction action) {
+        return action == LoanReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION
+                || action == LoanReviewRecommendationAction.REQUEST_STAFF_CORRECTION;
+    }
+
+    private static CorrectionPlanRequest uclCorrectionPlan() {
+        return new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+                CorrectionScope.DOCUMENT_REPLACEMENT,
+                CorrectionResponsibility.CUSTOMER,
+                DocumentType.INCOME_PROOF,
+                false,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "Replace the income proof.",
+                null
+        )));
     }
 
     private BusinessOperationContext validContext() {

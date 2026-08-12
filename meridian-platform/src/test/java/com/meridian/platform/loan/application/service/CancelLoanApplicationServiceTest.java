@@ -276,6 +276,81 @@ class CancelLoanApplicationServiceTest {
         verify(auditPublisher, never()).publish(any());
     }
 
+    @Test
+    void uclCancellationPersistsNoSalaryReleaseEvidenceOrEffect() {
+        UUID requestId = UUID.randomUUID();
+        LoanApplication application = uclApplication(
+                CUSTOMER_ID,
+                LoanApplicationStatus.RETURNED_FOR_REVISION
+        );
+        LoanCorrectionRequest correction = uclCorrection(LoanCorrectionRequestStatus.OPEN, null);
+        when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(application));
+        when(cancellations.findByRequestId(requestId)).thenReturn(Optional.empty());
+        when(cancellations.findByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.empty());
+        when(corrections.findActiveRequestByApplicationIdForUpdate(APPLICATION_ID))
+                .thenReturn(Optional.of(correction));
+        when(applications.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(corrections.saveRequest(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(cancellations.saveIfAbsent(any())).thenReturn(true);
+
+        CancelLoanApplicationUseCase.Result result = service.cancel(
+                new CancelLoanApplicationUseCase.Command(requestId, APPLICATION_ID)
+        );
+
+        assertEquals(LoanApplicationStatus.CANCELLED, result.resultingStatus());
+        ArgumentCaptor<LoanApplicationCancellation> evidence =
+                ArgumentCaptor.forClass(LoanApplicationCancellation.class);
+        verify(cancellations).saveIfAbsent(evidence.capture());
+        assertEquals(null, evidence.getValue().reservationReleaseMovementId());
+        verify(reservationReleases, never()).releaseReservationOnce(any(), any(), any());
+        verify(verifications, never()).findByLoanApplicationId(any());
+        verify(limits, never()).acquireCustomerLinkLock(any(), any());
+    }
+
+    @Test
+    void exactUclCancellationReplayRequiresZeroSalaryEvidence() {
+        UUID requestId = UUID.randomUUID();
+        UUID cancellationId = UUID.randomUUID();
+        LoanApplication application = uclApplication(CUSTOMER_ID, LoanApplicationStatus.CANCELLED);
+        LoanApplicationCancellation cancellation = new LoanApplicationCancellation(
+                cancellationId,
+                APPLICATION_ID,
+                CORRECTION_ID,
+                null,
+                requestId,
+                USER_ID,
+                NOW
+        );
+        when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(application));
+        when(cancellations.findByRequestId(requestId)).thenReturn(Optional.of(cancellation));
+        when(corrections.findRequestById(CORRECTION_ID)).thenReturn(Optional.of(
+                uclCorrection(LoanCorrectionRequestStatus.CANCELLED, NOW)
+        ));
+        when(transitionEvidence.countMatching(
+                APPLICATION_ID,
+                LoanApplicationStatus.RETURNED_FOR_REVISION,
+                LoanApplicationStatus.CANCELLED,
+                LoanApplicationTransitionAction.CANCEL_APPLICATION
+        )).thenReturn(1L);
+        when(auditEvidence.countMatchingOperation(
+                cancellationId,
+                BusinessAuditAction.LOAN_APPLICATION_CANCELLED,
+                BusinessAuditEntityType.LOAN_APPLICATION,
+                APPLICATION_ID
+        )).thenReturn(1L);
+
+        CancelLoanApplicationUseCase.Result result = service.cancel(
+                new CancelLoanApplicationUseCase.Command(requestId, APPLICATION_ID)
+        );
+
+        assertEquals(true, result.idempotentReplay());
+        verify(auditEvidence).countMatchingOperationAction(
+                cancellationId,
+                BusinessAuditAction.RESERVATION_RELEASED
+        );
+        verify(reservationReleases, never()).releaseReservationOnce(any(), any(), any());
+    }
+
     private void stubNewCancellation(
             LoanApplication application,
             LoanCorrectionRequest correction,
@@ -331,6 +406,24 @@ class CancelLoanApplicationServiceTest {
         );
     }
 
+    private static LoanApplication uclApplication(
+            UUID customerId,
+            LoanApplicationStatus status
+    ) {
+        return new LoanApplication(
+                APPLICATION_ID,
+                customerId,
+                UUID.randomUUID(),
+                "UCL-20260810-000001",
+                ProductCode.UNSECURED_CONSUMER_LOAN,
+                ProductType.UNSECURED,
+                status,
+                new BigDecimal("5000000.00"),
+                6,
+                NOW.minusDays(2)
+        );
+    }
+
     private static LoanCorrectionRequest correction(
             LoanCorrectionRequestStatus status,
             LocalDateTime cancelledAt
@@ -341,6 +434,26 @@ class CancelLoanApplicationServiceTest {
                 UUID.randomUUID(),
                 "RETURN_TO_CUSTOMER_REVISION",
                 CorrectionReasonCode.RECENT_PAYSLIP_REQUIRED,
+                UUID.randomUUID(),
+                status,
+                null,
+                NOW.minusDays(1),
+                null,
+                null,
+                cancelledAt
+        );
+    }
+
+    private static LoanCorrectionRequest uclCorrection(
+            LoanCorrectionRequestStatus status,
+            LocalDateTime cancelledAt
+    ) {
+        return new LoanCorrectionRequest(
+                CORRECTION_ID,
+                APPLICATION_ID,
+                null,
+                "COMPLETE_PRODUCT_VERIFICATION",
+                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                 UUID.randomUUID(),
                 status,
                 null,

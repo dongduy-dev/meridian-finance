@@ -20,11 +20,40 @@ public record LoanApplicationCancellation(
         Objects.requireNonNull(id, "id must not be null");
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
         Objects.requireNonNull(correctionRequestId, "correctionRequestId must not be null");
-        Objects.requireNonNull(reservationReleaseMovementId,
-                "reservationReleaseMovementId must not be null");
         Objects.requireNonNull(requestId, "requestId must not be null");
         Objects.requireNonNull(cancelledByUserId, "cancelledByUserId must not be null");
         Objects.requireNonNull(cancelledAt, "cancelledAt must not be null");
+    }
+
+    public static LoanApplicationCancellation recordedWithoutExposureEffect(
+            UUID id,
+            LoanApplication cancelledApplication,
+            LoanCorrectionRequest cancelledCorrection,
+            UUID requestId,
+            UUID cancelledByUserId,
+            LocalDateTime cancelledAt
+    ) {
+        Objects.requireNonNull(cancelledApplication, "cancelledApplication must not be null");
+        Objects.requireNonNull(cancelledCorrection, "cancelledCorrection must not be null");
+        if (cancelledApplication.status() != LoanApplicationStatus.CANCELLED
+                || cancelledApplication.productCode() != ProductCode.UNSECURED_CONSUMER_LOAN
+                || cancelledCorrection.status() != LoanCorrectionRequestStatus.CANCELLED
+                || !cancelledCorrection.loanApplicationId().equals(cancelledApplication.id())
+                || !cancelledAt.equals(cancelledCorrection.cancelledAt())) {
+            throw new BusinessRuleViolationException(
+                    "LOAN_APPLICATION_CANCELLATION_EVIDENCE_INVALID",
+                    "UCL cancellation evidence requires a terminal correction and no exposure effect."
+            );
+        }
+        return new LoanApplicationCancellation(
+                Objects.requireNonNull(id, "id must not be null"),
+                cancelledApplication.id(),
+                cancelledCorrection.id(),
+                null,
+                Objects.requireNonNull(requestId, "requestId must not be null"),
+                Objects.requireNonNull(cancelledByUserId, "cancelledByUserId must not be null"),
+                cancelledAt
+        );
     }
 
     public static LoanApplicationCancellation recorded(
