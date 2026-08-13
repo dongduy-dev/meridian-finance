@@ -185,6 +185,7 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
     private void assertThroughV31ActionsAccepted(String schema) {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
             if (action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
+                    && action != BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED
                     && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED
                     && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED
                     && action != BusinessAuditAction.LOAN_APPLICATION_CANCELLED
@@ -211,6 +212,7 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
     private void assertAllKnownActionsAccepted(String schema) {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
             if (action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
+                    || action == BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED
                     || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED
                     || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED
                     || action == BusinessAuditAction.LOAN_APPLICATION_CANCELLED
@@ -220,6 +222,10 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
             }
             insertAuditEvent(schema, action.name());
         }
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema,
+                BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED.name()
+        ));
         assertThrows(DataAccessException.class,
                 () -> insertAuditEvent(schema, "UNKNOWN_AUDIT_ACTION"));
     }

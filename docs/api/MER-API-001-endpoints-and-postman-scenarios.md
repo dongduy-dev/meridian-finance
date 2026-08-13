@@ -125,6 +125,7 @@ The contractual destination-reveal operation is the sole v1 JSON endpoint permit
 | GET | `/api/v1/loan-products/salary-advance/readiness` | Customer with `loan:submit` | Return the authenticated Customer's advisory Salary Advance eligibility and safe limit view. |
 | POST | `/api/v1/loan-applications/salary-advance` | `loan:submit` | Submit a Salary Advance application and reserve eligible limit. |
 | POST | `/api/v1/loan-applications/unsecured-consumer-loan` | Customer with `loan:submit` | Submit an Unsecured Consumer Loan application for manual verification and required evidence collection. |
+| POST | `/api/v1/loan-applications/collateral-loan` | Customer with `loan:submit` | Submit a Collateral Loan application with one structured asset and required ownership-evidence collection. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}` | Customer `loan:read:own` or Staff `loan:read` | Return a safe durable LoanApplication status projection. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/cancel` | Customer with `loan:cancel:own` | Cancel an owned Salary Advance or UCL from `RETURNED_FOR_REVISION`; Salary Advance releases its reservation exactly once, while UCL has no exposure effect. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start` | Staff with `loan:review` | Start manual UCL verification after document processing readiness. |
@@ -238,7 +239,7 @@ Responses exclude salary, limit values, employee code, identity evidence, and ra
 
 ---
 
-## 4. Salary Advance and UCL Origination
+## 4. Salary Advance, UCL, and Collateral Loan Origination
 
 ### 4.1 Salary Advance readiness
 
@@ -318,7 +319,46 @@ Important errors:
 | `409` | `CUSTOMER_NOT_ACTIVE`, `BLOCKING_APPLICATION_EXISTS`, `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, or `SYSTEM_STATE_CONFLICT` |
 | `422` | `PROFILE_INCOMPLETE`, `PRIMARY_BANK_ACCOUNT_REQUIRED`, `PRODUCT_INACTIVE`, `PRODUCT_POLICY_INVALID`, `INVALID_PRODUCT_AMOUNT`, or `INVALID_PRODUCT_TERM` |
 
-### 4.5 Start UCL manual verification
+### 4.5 Submit Collateral Loan application
+
+```text
+POST /api/v1/loan-applications/collateral-loan
+```
+
+The authenticated Customer supplies the requested terms and exactly one structured Collateral asset:
+
+```json
+{
+  "requestedAmount": 25000000,
+  "requestedTermMonths": 12,
+  "collateral": {
+    "type": "MOTORBIKE",
+    "description": "2024 Honda motorbike",
+    "estimatedValue": 35000000,
+    "ownershipStatus": "Customer-provided ownership statement",
+    "conditionNote": "Normal used condition"
+  }
+}
+```
+
+The API derives Customer identity from the Bearer token and rejects unknown top-level or Collateral fields. The Customer must be active, have a complete required profile and a primary active bank account, and hold `loan:submit`. The active catalog product must be `COLLATERAL_LOAN` / `SECURED`. The requested amount must be whole VND and within the current active product minimum and maximum. Supported terms are exactly 6, 12, 18, and 24 months. `estimatedValue` must be positive whole VND, but CP1 performs no loan-to-value calculation or comparison between requested and estimated values. `description`, `ownershipStatus`, and `conditionNote` are required nonblank Customer-submitted text, normalized by trimming before storage, and limited to 500, 200, and 500 characters respectively.
+
+Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `status`, `requestedAmount`, `requestedTermMonths`, `collateralType`, `productVerificationResult`, `evidenceRequirements`, and `submittedAt`. Each safe evidence requirement contains `checklistItemId`, `documentType`, and `requirementStatus`. CP1 returns one required `COLLATERAL_OWNERSHIP_EVIDENCE` item, allowing the Customer to call the existing document-version upload endpoint without exposing document contents or internal review evidence.
+
+The application starts in `DOCUMENTS_PENDING` with application-owned `PENDING_MANUAL_REVIEW` Collateral verification. Uploading the required evidence through the existing Document workflow can complete generic upload readiness and advance the application to `SUBMITTED`; it does not complete Collateral verification or permit review. While verification remains pending, review, recommendation, and approval fail closed. An unexpectedly missing Collateral verification record fails with `409 COLLATERAL_VERIFICATION_REQUIRED`.
+
+CP1 serializes submissions by Customer and product and rejects an existing blocking Collateral application. It deliberately does not impose an outstanding Collateral LoanAccount rule, compare requested amount to estimated value, or create Salary Advance reservation, Partner, or exposure effects. It does not implement manual assessment, correction, review, approval, offers, pricing, contract, activation, LoanAccount, schedules, or servicing. The documented Collateral rate remains non-executable pending the business decisions in `MER-BIZ-001` Section 13.4.
+
+Important errors:
+
+| Status | Code |
+|---|---|
+| `400` | `VALIDATION_FAILED` for malformed input, unknown fields, unsupported Collateral type, or Bean Validation failure |
+| `404` | `CUSTOMER_NOT_FOUND` or `PRODUCT_NOT_FOUND` |
+| `409` | `CUSTOMER_NOT_ACTIVE`, `BLOCKING_APPLICATION_EXISTS`, `COLLATERAL_VERIFICATION_REQUIRED`, or `SYSTEM_STATE_CONFLICT` |
+| `422` | `PROFILE_INCOMPLETE`, `PRIMARY_BANK_ACCOUNT_REQUIRED`, `PRODUCT_INACTIVE`, `PRODUCT_POLICY_INVALID`, `INVALID_PRODUCT_AMOUNT`, `INVALID_PRODUCT_TERM`, `INVALID_COLLATERAL_DETAILS`, or `PRODUCT_VERIFICATION_PENDING` |
+
+### 4.6 Start UCL manual verification
 
 ```text
 POST /api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start
@@ -339,7 +379,7 @@ Representative response:
 
 Important errors include `UCL_VERIFICATION_NOT_APPLICABLE`, `UCL_VERIFICATION_REQUIRED`, `UCL_VERIFICATION_DOCUMENTS_NOT_READY`, `PRODUCT_VERIFICATION_NOT_PENDING`, and `PRODUCT_VERIFICATION_START_NOT_ALLOWED`.
 
-### 4.6 Complete UCL manual verification
+### 4.7 Complete UCL manual verification
 
 ```text
 POST /api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete
@@ -393,7 +433,7 @@ For a `FAILED` request, use `"outcome": "FAILED"` with no reason or plan. Supply
 
 Important errors include `UCL_VERIFICATION_NOT_APPLICABLE`, `UCL_VERIFICATION_REQUIRED`, `UCL_VERIFICATION_DOCUMENTS_NOT_READY`, `PRODUCT_VERIFICATION_NOT_PENDING`, `PRODUCT_VERIFICATION_COMPLETION_NOT_ALLOWED`, and `UCL_VERIFICATION_ASSESSMENT_REQUIRED`.
 
-### 4.7 Start review
+### 4.8 Start review
 
 ```text
 POST /api/v1/loan-applications/{loanApplicationId}/review/start
@@ -402,6 +442,8 @@ POST /api/v1/loan-applications/{loanApplicationId}/review/start
 No body is required. The reviewer is derived from the Bearer token.
 
 For UCL, review start additionally requires the authoritative verification result to be `VERIFIED`. Missing, pending, `FAILED`, and `REQUIRES_MORE_INFORMATION` records fail closed. The same Loan Officer may complete UCL manual verification and start review; the existing maker-checker rule still requires a different Approver for the final decision.
+
+For Collateral Loan CP1, review always remains closed: the expected application-owned verification is `PENDING_MANUAL_REVIEW`, which returns `422 PRODUCT_VERIFICATION_PENDING`. Missing verification returns `409 COLLATERAL_VERIFICATION_REQUIRED`. Recommendation and approval commands apply the same guard before creating or mutating review/approval evidence, so synthetic or inconsistent Collateral states cannot bypass the pending-verification boundary.
 
 ---
 

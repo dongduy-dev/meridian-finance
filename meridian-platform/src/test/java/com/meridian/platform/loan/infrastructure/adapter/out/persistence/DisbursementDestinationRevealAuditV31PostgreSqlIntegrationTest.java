@@ -56,7 +56,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     @Test
     void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
-        assertEquals("43", latestVersion(SCHEMA));
+        assertEquals("44", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -199,6 +199,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
             if (action != BusinessAuditAction
                     .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED
                     && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
+                    && action != BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED
                     && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED
                     && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED
                     && action != BusinessAuditAction.LOAN_APPLICATION_CANCELLED
@@ -214,6 +215,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
     private void assertThroughV31ActionsAccepted(String schema) {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
             if (action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
+                    && action != BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED
                     && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED
                     && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED
                     && action != BusinessAuditAction.LOAN_APPLICATION_CANCELLED
@@ -224,6 +226,10 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                 insertAuditEvent(schema, action.name());
             }
         }
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema,
+                BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED.name()
+        ));
     }
 
     private void assertV32ActionsRejected(String schema) {

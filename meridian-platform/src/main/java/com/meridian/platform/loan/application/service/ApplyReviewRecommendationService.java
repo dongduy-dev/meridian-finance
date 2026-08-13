@@ -27,19 +27,22 @@ public class ApplyReviewRecommendationService implements ApplyReviewRecommendati
     private final LoanReviewCycleRepository reviewCycleRepository;
     private final CustomerCorrectionWorkflowService customerCorrectionWorkflowService;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
+    private final CollateralLoanReviewGate collateralLoanReviewGate;
 
     public ApplyReviewRecommendationService(
             LoanApplicationRepository loanApplicationRepository,
             LoanDocumentChecklistPort documentChecklistPort,
             LoanReviewCycleRepository reviewCycleRepository,
             CustomerCorrectionWorkflowService customerCorrectionWorkflowService,
-            LoanApplicationStatusTransitionRecorder transitionRecorder
+            LoanApplicationStatusTransitionRecorder transitionRecorder,
+            CollateralLoanReviewGate collateralLoanReviewGate
     ) {
         this.loanApplicationRepository = loanApplicationRepository;
         this.documentChecklistPort = documentChecklistPort;
         this.reviewCycleRepository = reviewCycleRepository;
         this.customerCorrectionWorkflowService = customerCorrectionWorkflowService;
         this.transitionRecorder = transitionRecorder;
+        this.collateralLoanReviewGate = collateralLoanReviewGate;
     }
 
     @Override
@@ -61,6 +64,8 @@ public class ApplyReviewRecommendationService implements ApplyReviewRecommendati
                         "LOAN_APPLICATION_NOT_FOUND",
                         "Loan application was not found."
                 ));
+
+        collateralLoanReviewGate.requireProgressionAllowed(loanApplication);
 
         LoanApplicationReviewCycle activeCycle = reviewCycleRepository
                 .findActiveByLoanApplicationIdForUpdate(command.loanApplicationId())

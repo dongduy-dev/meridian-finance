@@ -207,7 +207,8 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - [x] Unsecured Consumer Loan operational contract, acknowledgment, readiness, manual disbursement, LoanAccount activation, and final monthly schedule
 - [x] Unsecured Consumer Loan partial and early repayment, overdue evaluation and cure, contractual payoff, exact full-balance administrative settlement, and administrative closure
 - [x] Unsecured Consumer Loan correction cancellation and product-scoped outstanding-debt origination protection
-- [ ] Streamlined Collateral Loan origination, review, approval, contract, and activation workflow
+- [x] Collateral Loan origination, structured facts, required ownership-evidence checklist, and pending manual-verification foundation
+- [ ] Collateral Loan manual verification, correction, review, approval, offer, contract, and activation workflow
 - [ ] Collateral Loan repayment/servicing policy and execution
 - [x] JWT authentication and permission-based RBAC
 - [x] Idempotent critical workflow operations

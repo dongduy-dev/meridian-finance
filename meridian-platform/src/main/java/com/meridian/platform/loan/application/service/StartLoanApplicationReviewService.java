@@ -36,6 +36,7 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
     private final LoanApplicationRepository loanApplicationRepository;
     private final LoanDocumentChecklistPort documentChecklistPort;
     private final UnsecuredConsumerLoanVerificationRepository uclVerificationRepository;
+    private final CollateralLoanReviewGate collateralLoanReviewGate;
     private final LoanReviewCycleRepository reviewCycleRepository;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
     private final BusinessAuditPublisher businessAuditPublisher;
@@ -46,6 +47,7 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
             LoanApplicationRepository loanApplicationRepository,
             LoanDocumentChecklistPort documentChecklistPort,
             UnsecuredConsumerLoanVerificationRepository uclVerificationRepository,
+            CollateralLoanReviewGate collateralLoanReviewGate,
             LoanReviewCycleRepository reviewCycleRepository,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
             BusinessAuditPublisher businessAuditPublisher,
@@ -55,6 +57,7 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
         this.loanApplicationRepository = loanApplicationRepository;
         this.documentChecklistPort = documentChecklistPort;
         this.uclVerificationRepository = uclVerificationRepository;
+        this.collateralLoanReviewGate = collateralLoanReviewGate;
         this.reviewCycleRepository = reviewCycleRepository;
         this.transitionRecorder = transitionRecorder;
         this.businessAuditPublisher = businessAuditPublisher;
@@ -133,6 +136,7 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
     }
 
     private void requireProductReadyForReview(LoanApplication loanApplication) {
+        collateralLoanReviewGate.requireProgressionAllowed(loanApplication);
         if (loanApplication.productCode() != ProductCode.UNSECURED_CONSUMER_LOAN) {
             return;
         }

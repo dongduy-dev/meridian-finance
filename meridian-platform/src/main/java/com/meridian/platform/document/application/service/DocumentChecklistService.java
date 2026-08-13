@@ -34,6 +34,7 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
     private final DocumentRepository documentRepository;
     private final SalaryAdvanceDocumentChecklistResolver salaryAdvanceChecklistResolver;
     private final UnsecuredConsumerLoanDocumentChecklistResolver unsecuredConsumerLoanChecklistResolver;
+    private final CollateralLoanDocumentChecklistResolver collateralLoanChecklistResolver;
     private final BusinessAuditPublisher businessAuditPublisher;
 
     public DocumentChecklistService(
@@ -41,12 +42,14 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
             DocumentRepository documentRepository,
             SalaryAdvanceDocumentChecklistResolver salaryAdvanceChecklistResolver,
             UnsecuredConsumerLoanDocumentChecklistResolver unsecuredConsumerLoanChecklistResolver,
+            CollateralLoanDocumentChecklistResolver collateralLoanChecklistResolver,
             BusinessAuditPublisher businessAuditPublisher
     ) {
         this.checklistRepository = checklistRepository;
         this.documentRepository = documentRepository;
         this.salaryAdvanceChecklistResolver = salaryAdvanceChecklistResolver;
         this.unsecuredConsumerLoanChecklistResolver = unsecuredConsumerLoanChecklistResolver;
+        this.collateralLoanChecklistResolver = collateralLoanChecklistResolver;
         this.businessAuditPublisher = businessAuditPublisher;
     }
 
@@ -61,7 +64,7 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
     }
 
     @Override
-    public void createSubmissionChecklist(
+    public SubmissionChecklistSnapshot createSubmissionChecklist(
             UUID loanApplicationId,
             ProductCode productCode,
             BusinessOperationContext operationContext
@@ -95,6 +98,13 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
                                 .build()
                 )
         ));
+        return new SubmissionChecklistSnapshot(saved.items().stream()
+                .map(item -> new SubmissionChecklistItemSnapshot(
+                        item.id(),
+                        item.documentType(),
+                        item.requirementStatus()
+                ))
+                .toList());
     }
 
     @Override
@@ -282,7 +292,8 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
             case SALARY_ADVANCE -> salaryAdvanceChecklistResolver.resolve(checklistId, productCode, createdAt);
             case UNSECURED_CONSUMER_LOAN ->
                     unsecuredConsumerLoanChecklistResolver.resolve(checklistId, productCode, createdAt);
-            default -> throw new IllegalArgumentException("Unsupported document checklist product.");
+            case COLLATERAL_LOAN ->
+                    collateralLoanChecklistResolver.resolve(checklistId, productCode, createdAt);
         };
     }
 }

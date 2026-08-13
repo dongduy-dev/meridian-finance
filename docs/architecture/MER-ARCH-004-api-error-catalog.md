@@ -65,6 +65,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 422 | `PRODUCT_POLICY_INVALID` | Product policy invalid | Correct the product policy configuration before accepting applications |
 | 422 | `INVALID_PRODUCT_TERM` | Invalid product term | Select a term allowed by the product policy |
 | 422 | `INVALID_PRODUCT_AMOUNT` | Invalid product amount | Use an amount within the product and policy limits |
+| 422 | `INVALID_COLLATERAL_DETAILS` | Invalid Collateral details | Supply complete Collateral facts within technical limits and use a positive whole-VND estimated value |
 | 409 | `BLOCKING_APPLICATION_EXISTS` | Blocking application exists | Wait for the existing application for this product to reach a terminal status |
 | 409 | `INVALID_APPLICATION_STATUS` | Invalid application status | Refresh the application and retry only from an allowed status |
 | 422 | `INVALID_STATUS_TRANSITION` | Invalid status transition | Use a transition allowed by the LoanApplication lifecycle |
@@ -79,6 +80,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 409 | `UCL_VERIFICATION_REQUIRED` | UCL verification record required | Repair the missing application-owned verification state before review progression |
 | 409 | `UCL_VERIFICATION_DOCUMENTS_NOT_READY` | UCL verification documents not ready | Accept or validly waive all required evidence before starting or completing verification |
 | 422 | `UCL_VERIFICATION_ASSESSMENT_REQUIRED` | UCL verification assessment required | Supply a nonblank restricted assessment note no longer than 2,000 characters |
+| 409 | `COLLATERAL_VERIFICATION_REQUIRED` | Collateral Loan verification record required | Repair the missing application-owned verification state before review progression |
 
 ---
 
