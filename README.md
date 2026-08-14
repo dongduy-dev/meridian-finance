@@ -332,4 +332,4 @@ Not every module contains every package shown above. Full, Moderate, and Simplif
 
 ## License
 
-*TBD*
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
