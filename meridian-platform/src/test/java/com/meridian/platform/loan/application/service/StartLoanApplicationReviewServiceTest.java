@@ -1,9 +1,11 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.port.out.CollateralLoanVerificationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
+import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
@@ -39,6 +41,7 @@ class StartLoanApplicationReviewServiceTest {
     private LoanApplicationRepository applicationRepository;
     private LoanDocumentChecklistPort documentChecklistPort;
     private UnsecuredConsumerLoanVerificationRepository uclVerificationRepository;
+    private CollateralLoanVerificationRepository collateralVerificationRepository;
     private LoanReviewCycleRepository reviewCycleRepository;
     private LoanApplicationStatusTransitionRecorder transitionRecorder;
     private BusinessAuditPublisher auditPublisher;
@@ -49,6 +52,7 @@ class StartLoanApplicationReviewServiceTest {
         applicationRepository = mock(LoanApplicationRepository.class);
         documentChecklistPort = mock(LoanDocumentChecklistPort.class);
         uclVerificationRepository = mock(UnsecuredConsumerLoanVerificationRepository.class);
+        collateralVerificationRepository = mock(CollateralLoanVerificationRepository.class);
         reviewCycleRepository = mock(LoanReviewCycleRepository.class);
         transitionRecorder = mock(LoanApplicationStatusTransitionRecorder.class);
         auditPublisher = mock(BusinessAuditPublisher.class);
@@ -68,6 +72,7 @@ class StartLoanApplicationReviewServiceTest {
                 applicationRepository,
                 documentChecklistPort,
                 uclVerificationRepository,
+                new CollateralLoanReviewGate(collateralVerificationRepository),
                 reviewCycleRepository,
                 transitionRecorder,
                 auditPublisher,
@@ -116,6 +121,41 @@ class StartLoanApplicationReviewServiceTest {
         );
 
         assertEquals("PRODUCT_VERIFICATION_PENDING", exception.getErrorCode());
+        verify(applicationRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void pendingCollateralVerificationCannotStartReview() {
+        LoanApplication application = collateralApplication(LoanApplicationStatus.SUBMITTED);
+        when(applicationRepository.findByIdForUpdate(applicationId)).thenReturn(Optional.of(application));
+        when(collateralVerificationRepository.findByLoanApplicationId(applicationId))
+                .thenReturn(Optional.of(CollateralLoanVerification.pendingManualReview(
+                        UUID.randomUUID(), application, LocalDateTime.of(2026, 7, 19, 7, 0)
+                )));
+
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.startReview(applicationId)
+        );
+
+        assertEquals("PRODUCT_VERIFICATION_PENDING", exception.getErrorCode());
+        verify(applicationRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(documentChecklistPort, never()).isProcessingReady(applicationId);
+    }
+
+    @Test
+    void missingCollateralVerificationFailsClosedBeforeReview() {
+        when(applicationRepository.findByIdForUpdate(applicationId))
+                .thenReturn(Optional.of(collateralApplication(LoanApplicationStatus.SUBMITTED)));
+        when(collateralVerificationRepository.findByLoanApplicationId(applicationId))
+                .thenReturn(Optional.empty());
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.startReview(applicationId)
+        );
+
+        assertEquals("COLLATERAL_VERIFICATION_REQUIRED", exception.getErrorCode());
         verify(applicationRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 
@@ -190,6 +230,21 @@ class StartLoanApplicationReviewServiceTest {
                 status,
                 BigDecimal.valueOf(5_000_000).setScale(2),
                 6,
+                LocalDateTime.of(2026, 7, 19, 7, 0)
+        );
+    }
+
+    private LoanApplication collateralApplication(LoanApplicationStatus status) {
+        return new LoanApplication(
+                applicationId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "CL-20260719-000001",
+                ProductCode.COLLATERAL_LOAN,
+                ProductType.SECURED,
+                status,
+                BigDecimal.valueOf(25_000_000).setScale(2),
+                12,
                 LocalDateTime.of(2026, 7, 19, 7, 0)
         );
     }

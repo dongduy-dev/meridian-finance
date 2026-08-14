@@ -2400,6 +2400,29 @@
                               ]
                  },
                  {
+                     "name":  "05B Loan Application - Collateral Loan CP1",
+                     "item":  [
+                                  {
+                                      "name":  "POST Collateral Loan application - happy path",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/collateral-loan","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Creates one structured Collateral asset, one required ownership-evidence checklist item, and pending manual-verification evidence. Customer identity comes from the Bearer token. Use the returned checklist item with the existing document-version upload endpoint.","body":{"mode":"raw","raw":"{\n  \"requestedAmount\": 25000000,\n  \"requestedTermMonths\": 12,\n  \"collateral\": {\n    \"type\": \"MOTORBIKE\",\n    \"description\": \"2024 Honda motorbike\",\n    \"estimatedValue\": 35000000,\n    \"ownershipStatus\": \"Customer-provided ownership statement\",\n    \"conditionNote\": \"Normal used condition\"\n  }\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","const json = pm.response.json();","pm.test(\"Collateral CP1 foundation is returned\", () => { pm.expect(json.productCode).to.eql(\"COLLATERAL_LOAN\"); pm.expect(json.productType).to.eql(\"SECURED\"); pm.expect(json.status).to.eql(\"DOCUMENTS_PENDING\"); pm.expect(json.collateralType).to.eql(\"MOTORBIKE\"); pm.expect(json.productVerificationResult).to.eql(\"PENDING_MANUAL_REVIEW\"); pm.expect(json.evidenceRequirements).to.have.length(1); pm.expect(json.evidenceRequirements[0].documentType).to.eql(\"COLLATERAL_OWNERSHIP_EVIDENCE\"); pm.expect(json.evidenceRequirements[0].requirementStatus).to.eql(\"REQUIRED\"); });","pm.test(\"Response excludes Customer and internal evidence\", () => { [\"customerId\",\"collateralId\",\"verificationId\",\"auditId\"].forEach(key => pm.expect(json).not.to.have.property(key)); });","pm.collectionVariables.set(\"collateralLoanApplicationId\", json.loanApplicationId);","pm.collectionVariables.set(\"collateralOwnershipChecklistItemId\", json.evidenceRequirements[0].checklistItemId);"]}}]
+                                  },
+                                  {
+                                      "name":  "POST Collateral Loan application - duplicate blocking check",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/collateral-loan","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Run after the happy path to verify the Customer/product blocking invariant. CP1 does not add an outstanding Collateral LoanAccount guard.","body":{"mode":"raw","raw":"{\n  \"requestedAmount\": 25000000,\n  \"requestedTermMonths\": 12,\n  \"collateral\": {\n    \"type\": \"CAR\",\n    \"description\": \"Second submitted asset\",\n    \"estimatedValue\": 50000000,\n    \"ownershipStatus\": \"Customer-provided ownership statement\",\n    \"conditionNote\": \"Normal used condition\"\n  }\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.test(\"Duplicate application is blocked\", () => pm.expect(pm.response.json().errorCode).to.eql(\"BLOCKING_APPLICATION_EXISTS\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "POST start Collateral review - pending verification rejection",
+                                      "request":  {"method":"POST","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/review/start","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"CP1 deliberately keeps Collateral review closed until manual verification is implemented."},
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 422\", () => pm.response.to.have.status(422));","pm.test(\"Collateral verification remains pending\", () => pm.expect(pm.response.json().errorCode).to.eql(\"PRODUCT_VERIFICATION_PENDING\"));"]}}]
+                                  }
+                              ]
+                 },
+                 {
                      "name":  "06 Loan Officer Review and Recommendation",
                      "item":  [
                                   {

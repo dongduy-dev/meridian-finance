@@ -58,7 +58,7 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
 
     @Test
     void installedLatestRetainsEveryKnownAuditActionAndRejectsUnknownAction() {
-        assertEquals("43", latestVersion(SCHEMA));
+        assertEquals("44", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -243,6 +243,7 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
             if (action == BusinessAuditAction
                     .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED
                     || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
+                    || action == BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED
                     || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED
                     || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED
                     || action == BusinessAuditAction.LOAN_APPLICATION_CANCELLED
@@ -254,6 +255,10 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
             }
             insertAuditEvent(schema, action.name());
         }
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema,
+                BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED.name()
+        ));
         assertThrows(DataAccessException.class, () ->
                 insertAuditEvent(schema, "UNKNOWN_AUDIT_ACTION")
         );

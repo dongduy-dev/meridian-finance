@@ -57,7 +57,7 @@ class UclServicingV42MigrationTest {
                 v42Start
         );
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V43"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V44"));
         assertTrue(v42Start >= 0);
         assertTrue(v43Start > v42Start);
         assertEquals(migration, snapshot.substring(v42Start, v43Start).strip());

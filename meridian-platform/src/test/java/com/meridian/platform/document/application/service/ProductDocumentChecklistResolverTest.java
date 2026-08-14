@@ -20,6 +20,8 @@ class ProductDocumentChecklistResolverTest {
             new SalaryAdvanceDocumentChecklistResolver();
     private final UnsecuredConsumerLoanDocumentChecklistResolver uclResolver =
             new UnsecuredConsumerLoanDocumentChecklistResolver();
+    private final CollateralLoanDocumentChecklistResolver collateralResolver =
+            new CollateralLoanDocumentChecklistResolver();
 
     @Test
     void resolvesThreeRequiredUclEvidenceCategories() {
@@ -48,12 +50,26 @@ class ProductDocumentChecklistResolverTest {
     }
 
     @Test
+    void resolvesOneRequiredCollateralOwnershipEvidenceItem() {
+        List<DocumentChecklistItem> items = collateralResolver.resolve(
+                UUID.randomUUID(), ProductCode.COLLATERAL_LOAN, LocalDateTime.MIN
+        );
+
+        assertEquals(1, items.size());
+        assertEquals(DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE, items.getFirst().documentType());
+        assertEquals(DocumentRequirementStatus.REQUIRED, items.getFirst().requirementStatus());
+    }
+
+    @Test
     void resolversRejectUnsupportedProducts() {
         assertThrows(IllegalArgumentException.class, () -> salaryResolver.resolve(
                 UUID.randomUUID(), ProductCode.UNSECURED_CONSUMER_LOAN, LocalDateTime.MIN
         ));
         assertThrows(IllegalArgumentException.class, () -> uclResolver.resolve(
                 UUID.randomUUID(), ProductCode.COLLATERAL_LOAN, LocalDateTime.MIN
+        ));
+        assertThrows(IllegalArgumentException.class, () -> collateralResolver.resolve(
+                UUID.randomUUID(), ProductCode.UNSECURED_CONSUMER_LOAN, LocalDateTime.MIN
         ));
     }
 }

@@ -584,12 +584,13 @@ class StartSalaryAdvanceApplicationServiceTest {
         }
 
         @Override
-        public void createSubmissionChecklist(
+        public SubmissionChecklistSnapshot createSubmissionChecklist(
                 UUID loanApplicationId,
                 ProductCode productCode,
                 com.meridian.platform.shared.application.operation.BusinessOperationContext operationContext
         ) {
             checklistCreated = true;
+            return new SubmissionChecklistSnapshot(List.of());
         }
 
         @Override

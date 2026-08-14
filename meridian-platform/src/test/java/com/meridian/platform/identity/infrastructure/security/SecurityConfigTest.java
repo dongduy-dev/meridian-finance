@@ -30,9 +30,11 @@ import com.meridian.platform.loan.application.port.in.QueryApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.QueryLoanProductUseCase;
 import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
+import com.meridian.platform.loan.application.port.in.StartCollateralLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicationUseCase;
 import com.meridian.platform.loan.application.port.in.StartUnsecuredConsumerLoanApplicationUseCase;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.ApprovedOfferController;
+import com.meridian.platform.loan.infrastructure.adapter.in.web.CollateralLoanApplicationController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanApplicationReviewController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanProductController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.SalaryAdvanceLoanApplicationController;
@@ -79,6 +81,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         AuthController.class,
         LoanProductController.class,
         SalaryAdvanceLoanApplicationController.class,
+        CollateralLoanApplicationController.class,
         UnsecuredConsumerLoanApplicationController.class,
         UnsecuredConsumerLoanVerificationController.class,
         LoanApplicationReviewController.class,
@@ -126,6 +129,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private StartUnsecuredConsumerLoanApplicationUseCase startUnsecuredConsumerLoanApplicationUseCase;
+
+    @MockitoBean
+    private StartCollateralLoanApplicationUseCase startCollateralLoanApplicationUseCase;
 
     @MockitoBean
     private ManageUnsecuredConsumerLoanVerificationUseCase manageUnsecuredConsumerLoanVerificationUseCase;
@@ -469,6 +475,38 @@ class SecurityConfigTest {
                         .with(user("customer")
                                 .authorities(new SimpleGrantedAuthority("loan:submit"))))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void enforcesLoanSubmitPermissionForCollateralLoanSubmission() throws Exception {
+        String request = """
+                {
+                  "requestedAmount": 25000000,
+                  "requestedTermMonths": 12,
+                  "collateral": {
+                    "type": "MOTORBIKE",
+                    "description": "2024 Honda motorbike",
+                    "estimatedValue": 35000000,
+                    "ownershipStatus": "Customer-provided ownership statement",
+                    "conditionNote": "Normal used condition"
+                  }
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/loan-applications/collateral-loan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request)
+                        .with(user("customer")
+                                .authorities(new SimpleGrantedAuthority("loan:submit"))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/v1/loan-applications/collateral-loan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request)
+                        .with(user("customer")
+                                .authorities(new SimpleGrantedAuthority("loan:read:own"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
     }
 
     @Test

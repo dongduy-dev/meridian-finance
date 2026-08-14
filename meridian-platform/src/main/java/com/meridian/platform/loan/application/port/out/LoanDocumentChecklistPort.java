@@ -1,16 +1,18 @@
 package com.meridian.platform.loan.application.port.out;
 
 import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.document.domain.model.DocumentRequirementStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface LoanDocumentChecklistPort {
 
     SubmissionChecklistInitialState resolveSubmissionInitialState(ProductCode productCode);
 
-    void createSubmissionChecklist(
+    SubmissionChecklistSnapshot createSubmissionChecklist(
             UUID loanApplicationId,
             ProductCode productCode,
             BusinessOperationContext operationContext
@@ -69,6 +71,19 @@ public interface LoanDocumentChecklistPort {
     }
 
     record SubmissionChecklistInitialState(boolean uploadComplete) {
+    }
+
+    record SubmissionChecklistSnapshot(List<SubmissionChecklistItemSnapshot> items) {
+        public SubmissionChecklistSnapshot {
+            items = List.copyOf(items);
+        }
+    }
+
+    record SubmissionChecklistItemSnapshot(
+            UUID checklistItemId,
+            DocumentType documentType,
+            DocumentRequirementStatus requirementStatus
+    ) {
     }
 
     record ChecklistReadinessSnapshot(boolean uploadComplete, boolean processingReady) {

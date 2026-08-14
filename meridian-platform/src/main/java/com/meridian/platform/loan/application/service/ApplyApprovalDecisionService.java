@@ -52,6 +52,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
     private final SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
     private final BusinessAuditPublisher businessAuditPublisher;
+    private final CollateralLoanReviewGate collateralLoanReviewGate;
     private final SalaryAdvanceOfferCalculator salaryAdvanceOfferCalculator = new SalaryAdvanceOfferCalculator();
     private final UnsecuredConsumerLoanOfferCalculator unsecuredConsumerLoanOfferCalculator =
             new UnsecuredConsumerLoanOfferCalculator();
@@ -66,7 +67,8 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
             UnsecuredConsumerLoanOfferPolicyRepository unsecuredConsumerLoanOfferPolicyRepository,
             SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
-            BusinessAuditPublisher businessAuditPublisher
+            BusinessAuditPublisher businessAuditPublisher,
+            CollateralLoanReviewGate collateralLoanReviewGate
     ) {
         this.loanApplicationRepository = loanApplicationRepository;
         this.reviewCycleRepository = reviewCycleRepository;
@@ -77,6 +79,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         this.salaryAdvanceReservationReleaseService = salaryAdvanceReservationReleaseService;
         this.transitionRecorder = transitionRecorder;
         this.businessAuditPublisher = businessAuditPublisher;
+        this.collateralLoanReviewGate = collateralLoanReviewGate;
     }
 
     @Override
@@ -98,6 +101,8 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
                         "LOAN_APPLICATION_NOT_FOUND",
                         "Loan application was not found."
                 ));
+
+        collateralLoanReviewGate.requireProgressionAllowed(loanApplication);
 
         LoanApplicationReviewCycle activeCycle = reviewCycleRepository
                 .findActiveByLoanApplicationIdForUpdate(command.loanApplicationId())

@@ -7,11 +7,13 @@ import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
 import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
 import com.meridian.platform.approval.domain.model.CorrectionScope;
 import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.application.port.out.CollateralLoanVerificationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
+import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
@@ -35,6 +37,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ApplyReviewRecommendationServiceTest {
 
@@ -49,6 +52,7 @@ class ApplyReviewRecommendationServiceTest {
     private ReadyDocumentChecklistPort documentChecklistPort;
     private LoanReviewCycleRepository reviewCycleRepository;
     private CustomerCorrectionWorkflowService correctionWorkflowService;
+    private CollateralLoanVerificationRepository collateralVerificationRepository;
     private FakeLoanApplicationStatusTransitionRepository transitionRepository;
     private ApplyReviewRecommendationService service;
 
@@ -61,13 +65,15 @@ class ApplyReviewRecommendationServiceTest {
                 .thenReturn(Optional.of(LoanApplicationReviewCycle.active(
                         REVIEW_CYCLE_ID, LOAN_APPLICATION_ID, 1, RECOMMENDED_AT.minusHours(1))));
         correctionWorkflowService = org.mockito.Mockito.mock(CustomerCorrectionWorkflowService.class);
+        collateralVerificationRepository = org.mockito.Mockito.mock(CollateralLoanVerificationRepository.class);
         transitionRepository = new FakeLoanApplicationStatusTransitionRepository();
         service = new ApplyReviewRecommendationService(
                 loanApplicationRepository,
                 documentChecklistPort,
                 reviewCycleRepository,
                 correctionWorkflowService,
-                new LoanApplicationStatusTransitionRecorder(transitionRepository)
+                new LoanApplicationStatusTransitionRecorder(transitionRepository),
+                new CollateralLoanReviewGate(collateralVerificationRepository)
         );
     }
 
@@ -102,6 +108,40 @@ class ApplyReviewRecommendationServiceTest {
         ));
 
         assertEquals(LoanApplicationStatus.APPROVAL_PENDING, loanApplicationRepository.savedApplication.status());
+    }
+
+    @Test
+    void pendingCollateralVerificationBlocksSyntheticRecommendationWithoutMutation() {
+        loanApplicationRepository.application = collateralApplication();
+        org.mockito.Mockito.when(collateralVerificationRepository.findByLoanApplicationId(LOAN_APPLICATION_ID))
+                .thenReturn(Optional.of(CollateralLoanVerification.pendingManualReview(
+                        UUID.randomUUID(), loanApplicationRepository.application, RECOMMENDED_AT.minusDays(1)
+                )));
+
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.applyReviewRecommendation(command(validContext()))
+        );
+
+        assertEquals("PRODUCT_VERIFICATION_PENDING", exception.getErrorCode());
+        assertNull(loanApplicationRepository.savedApplication);
+        assertTrue(transitionRepository.savedTransitions.isEmpty());
+    }
+
+    @Test
+    void missingCollateralVerificationFailsClosedBeforeRecommendation() {
+        loanApplicationRepository.application = collateralApplication();
+        org.mockito.Mockito.when(collateralVerificationRepository.findByLoanApplicationId(LOAN_APPLICATION_ID))
+                .thenReturn(Optional.empty());
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.applyReviewRecommendation(command(validContext()))
+        );
+
+        assertEquals("COLLATERAL_VERIFICATION_REQUIRED", exception.getErrorCode());
+        assertNull(loanApplicationRepository.savedApplication);
+        assertTrue(transitionRepository.savedTransitions.isEmpty());
     }
 
     @Test
@@ -263,6 +303,22 @@ class ApplyReviewRecommendationServiceTest {
         );
     }
 
+    private static LoanApplication collateralApplication() {
+        LoanApplication salaryAdvance = loanApplication();
+        return new LoanApplication(
+                salaryAdvance.id(),
+                salaryAdvance.customerId(),
+                salaryAdvance.loanProductId(),
+                "CL-20260630-000001",
+                ProductCode.COLLATERAL_LOAN,
+                ProductType.SECURED,
+                LoanApplicationStatus.UNDER_REVIEW,
+                BigDecimal.valueOf(25_000_000).setScale(2),
+                12,
+                salaryAdvance.submittedAt()
+        );
+    }
+
     private static class ReadyDocumentChecklistPort implements LoanDocumentChecklistPort {
 
         private boolean processingReady = true;
@@ -273,11 +329,12 @@ class ApplyReviewRecommendationServiceTest {
         }
 
         @Override
-        public void createSubmissionChecklist(
+        public SubmissionChecklistSnapshot createSubmissionChecklist(
                 UUID loanApplicationId,
                 ProductCode productCode,
                 BusinessOperationContext operationContext
         ) {
+            return new SubmissionChecklistSnapshot(List.of());
         }
 
         @Override

@@ -44,13 +44,15 @@ class UclCorrectionSafetyV43MigrationTest {
     }
 
     @Test
-    void currentSchemaEndsWithExactV43Definition() throws IOException {
+    void currentSchemaPreservesExactV43DefinitionBeforeV44() throws IOException {
         String migration = Files.readString(MIGRATION)
                 .replace("\r\n", "\n").strip();
         String snapshot = Files.readString(CURRENT_SCHEMA)
                 .replace("\r\n", "\n").strip();
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V43"));
-        assertTrue(snapshot.endsWith(migration));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V44"));
+        assertTrue(snapshot.contains(
+                migration + "\n\n-- V44 Collateral Loan origination and ownership-evidence foundation"
+        ));
     }
 }

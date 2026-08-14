@@ -1,8 +1,13 @@
 package com.meridian.platform.loan.application.mapper;
 
+import com.meridian.platform.loan.application.dto.CollateralLoanApplicationDto;
 import com.meridian.platform.loan.application.dto.LoanProductDto;
 import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationDto;
+import com.meridian.platform.loan.application.dto.SubmissionEvidenceRequirementDto;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicationDto;
+import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
+import com.meridian.platform.loan.domain.model.Collateral;
+import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanProduct;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceApplicationCreationResult;
@@ -59,6 +64,33 @@ public class LoanMapper {
                 application.requestedAmount(),
                 application.requestedTermMonths(),
                 verification.productVerificationResult().name(),
+                application.submittedAt()
+        );
+    }
+
+    public CollateralLoanApplicationDto toCollateralLoanApplicationDto(
+            LoanApplication application,
+            Collateral collateral,
+            CollateralLoanVerification verification,
+            LoanDocumentChecklistPort.SubmissionChecklistSnapshot checklist
+    ) {
+        return new CollateralLoanApplicationDto(
+                application.id(),
+                application.applicationNumber(),
+                application.productCode().name(),
+                application.productType().name(),
+                application.status().name(),
+                application.requestedAmount(),
+                application.requestedTermMonths(),
+                collateral.collateralType().name(),
+                verification.productVerificationResult().name(),
+                checklist.items().stream()
+                        .map(item -> new SubmissionEvidenceRequirementDto(
+                                item.checklistItemId(),
+                                item.documentType().name(),
+                                item.requirementStatus().name()
+                        ))
+                        .toList(),
                 application.submittedAt()
         );
     }

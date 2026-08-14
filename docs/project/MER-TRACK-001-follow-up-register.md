@@ -875,8 +875,44 @@ Still deferred:
 - Automated credit-bureau, income-verification, scoring, and bank-statement parsing.
 - Payment-provider integration, reversal/refund, discounted settlement, collections, and ledger capabilities.
 
+### MER-FU-039 - Complete Collateral Loan beyond origination and evidence foundation
+
+Area: Loan / Document / Approval / Servicing
+
+Type: Deferred feature
+
+Priority: P1
+
+Status: Deferred
+
+Blocks current checkpoint: No
+
+Completed in Collateral Loan CP1:
+
+- Authenticated Customer-owned origination for the active `COLLATERAL_LOAN` / `SECURED` product.
+- Customer readiness, current product amount bounds, whole-VND amount, and exact 6/12/18/24-month term validation.
+- One API-submitted Loan-owned Collateral fact record, with a physical model that permits later multi-asset extension.
+- Required Document-owned `COLLATERAL_OWNERSHIP_EVIDENCE` checklist evidence and a safe returned checklist-item identifier for the existing upload flow.
+- Initial `DOCUMENTS_PENDING` application state and application-owned `PENDING_MANUAL_REVIEW` Collateral verification.
+- Customer/product submission serialization, blocking-application protection, transactional history, and PII-safe audit.
+- Fail-closed review, recommendation, and approval defenses while Collateral verification and offer execution remain unsupported.
+
+Still deferred:
+
+- Manual Collateral assessment and terminal verification outcomes.
+- Correction, re-verification, actual Loan Officer review/recommendation, and Approver decision.
+- Approved-offer generation, Customer offer handling, contract, activation, and LoanAccount creation.
+- Pricing, interest and fee calculation, installment allocation, schedules, and every unresolved decision in `MER-BIZ-001` Section 13.4, including the non-executable 1.5% catalog target.
+- Collateral repayment, overdue behavior, settlement, closure, and every servicing/exposure policy.
+- LTV, automated valuation, custody, registry, insurance, enforcement, repossession, liquidation, OCR, and external valuation integration.
+- Supporting-photo policy and any rule for multiple Collateral assets through the API.
+- Any product-scoped outstanding Collateral LoanAccount restriction; no such business rule is currently approved.
+
+Suggested future branch name:
+`feature/collateral-manual-verification`
+
 ## Recommended Next Roadmap
 
 1. Define reversal/refund, suspense/unapplied cash, waiver/write-off, discounted settlement, reconciliation, ledger, and collections rules before selecting another financial-servicing continuation.
-2. Add Collateral origination, activation, and servicing only when its product rules are approved.
+2. Add Collateral manual verification and correction next; do not enable offer execution, activation, or servicing until its financial and operational product rules are approved.
 3. Complete production document storage, malware-scanning, retention, and operational hardening before deployment.
