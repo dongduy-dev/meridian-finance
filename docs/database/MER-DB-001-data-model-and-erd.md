@@ -21,7 +21,7 @@ The model supports the MVP lending workflow for:
 
 The MVP uses one PostgreSQL database. Tables are logically owned by modules, but Meridian does not use a database-per-service design.
 
-> **Model authority and state:** Sections 1-13 are a high-level logical/current-plus-target model; names in the ERD are not an exact physical-schema inventory. Executable Flyway migrations are authoritative for deployed structure, and `MER-DB-CURRENT-SCHEMA.sql` is the current human-readable V1-V44 snapshot. The current physical model has no `refresh_tokens` or OCR tables. It includes one or more Loan-owned `collaterals` fact rows per application at the database level, a CP1-unique application-owned pending `collateral_loan_verifications` row, and Document-owned `COLLATERAL_OWNERSHIP_EVIDENCE` checklist evidence. It also includes sequenced application-owned `unsecured_consumer_loan_verifications` rows for immutable UCL product-verification cycles and authoritative manual-review evidence, UCL-specific document categories, executable UCL default pricing and terms, immutable UCL approved-offer and operational-contract snapshots, and final UCL monthly schedules created during manual-disbursement activation. The platform uses `manual_disbursements` rather than the conceptual `disbursement_records`, and servicing uses `repayment_schedule_items`, typed `repayment_transactions`, `repayment_allocations`, `repayment_installment_progress`, `repayment_operation_outcomes`, immutable approved-settlement and closure evidence, LoanAccount/installment status-transition tables, and product-aware exposure reconciliation rather than a single `repayment_records` table.
+> **Model authority and state:** Sections 1-13 are a high-level logical/current-plus-target model; names in the ERD are not an exact physical-schema inventory. Executable Flyway migrations are authoritative for deployed structure, and `MER-DB-CURRENT-SCHEMA.sql` is the current human-readable V1-V45 snapshot. The current physical model has no `refresh_tokens` or OCR tables. It includes one or more Loan-owned `collaterals` fact rows per application at the database level, sequenced immutable application-owned `collateral_loan_verifications` cycles with source-correction and restricted completion evidence, and Document-owned `COLLATERAL_OWNERSHIP_EVIDENCE` checklist evidence. It also includes sequenced application-owned `unsecured_consumer_loan_verifications` rows for immutable UCL product-verification cycles and authoritative manual-review evidence, UCL-specific document categories, executable UCL default pricing and terms, immutable UCL approved-offer and operational-contract snapshots, and final UCL monthly schedules created during manual-disbursement activation. The platform uses `manual_disbursements` rather than the conceptual `disbursement_records`, and servicing uses `repayment_schedule_items`, typed `repayment_transactions`, `repayment_allocations`, `repayment_installment_progress`, `repayment_operation_outcomes`, immutable approved-settlement and closure evidence, LoanAccount/installment status-transition tables, and product-aware exposure reconciliation rather than a single `repayment_records` table.
 
 ## 3. Database Design Principles
 
@@ -334,8 +334,13 @@ erDiagram
     collateral_loan_verifications {
         uuid id PK
         uuid loan_application_id FK
+        integer verification_sequence
+        uuid source_correction_request_id FK
         string product_verification_result
         datetime created_at
+        uuid reviewed_by_user_id FK
+        datetime reviewed_at
+        string assessment_note
     }
 
     document_checklists {
@@ -483,7 +488,7 @@ erDiagram
     loan_products ||--o{ loan_applications : selected_for
     loan_applications ||--o{ salary_advance_verifications : records
     loan_applications ||--o{ unsecured_consumer_loan_verifications : records
-    loan_applications ||--o| collateral_loan_verifications : records
+    loan_applications ||--o{ collateral_loan_verifications : records
     loan_applications ||--o{ salary_advance_limit_movements : may_reserve_or_release
     loan_applications ||--o| approved_offers : produces
     approved_offers ||--o{ approved_offer_repayment_items : contains
@@ -579,7 +584,7 @@ Logical tables:
 - `approved_loan_settlements` - one immutable Administrative Full-Balance Settlement identity linked to its authoritative payment transaction.
 - `loan_account_closures` - one immutable administrative closure identity for a financially reconciled settled LoanAccount.
 - `collaterals` - Loan-owned structured Customer-submitted Collateral facts. CP1 creates one row through the origination API, while the physical schema deliberately permits later multi-asset evolution.
-- `collateral_loan_verifications` - one application-owned CP1 verification row constrained to `PENDING_MANUAL_REVIEW`; terminal decisions, reviewer evidence, correction, and re-verification are not implemented.
+- `collateral_loan_verifications` - sequenced application-owned Collateral verification cycles, initialized pending at origination or correction resubmission, with immutable terminal outcome, authoritative reviewer/time, restricted assessment note, and source-correction evidence.
 
 `salary_advance_limits` answers: "How much Salary Advance limit does this customer currently have available?" It tracks total, used, reserved, and available amounts as ongoing lending state. It is recalculated when partner employee data changes and adjusted when applications reserve/release limit, disbursements convert reserved amount to used amount, and repayments release used amount.
 
@@ -589,7 +594,9 @@ Logical tables:
 
 `unsecured_consumer_loan_verifications` records immutable numbered product-verification cycles for a UCL application. The `(loan_application_id, verification_sequence)` tuple is unique, sequences are positive, and the highest sequence is authoritative. `PENDING_MANUAL_REVIEW` carries no decision evidence. Each terminal `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION` outcome requires `reviewed_by_user_id`, `reviewed_at`, and a nonblank `assessment_note`; the review time cannot precede row creation. A cycle may change exactly once from pending to a terminal outcome, after which its identity and evidence are immutable. A later cycle is linked by `source_correction_request_id` to a completed earlier cycle's resubmitted correction for the same application.
 
-`collaterals` contains the structured facts owned by Loan: type, description, Customer-estimated value, Customer-submitted ownership status, condition note, and creation time. The estimate supports future manual assessment only; CP1 does not persist or calculate loan-to-value. `collateral_loan_verifications` establishes the initial application-owned pending state without reviewer, decision, correction, or pricing evidence.
+`collaterals` contains the structured facts owned by Loan: type, description, Customer-estimated value, Customer-submitted ownership status, condition note, and creation time. The estimate supports manual assessment only; no loan-to-value is persisted or calculated. The public correction workflow does not version or modify these submitted facts.
+
+`collateral_loan_verifications` follows the established numbered-cycle model. The `(loan_application_id, verification_sequence)` tuple is unique; sequence 1 has no source correction, and each later cycle has one unique `source_correction_request_id` for the same application. Pending rows carry no completion evidence. Terminal `VERIFIED`, `FAILED`, and `REQUIRES_MORE_INFORMATION` rows require reviewer, review time, and a nonblank assessment note; Loan trims the note before persistence. Review time cannot precede creation. A pending row may complete exactly once; completed rows and all cycle identity fields are immutable. A deferred source-reconciliation trigger requires the immediately preceding cycle to be completed and the source correction to be resubmitted before the later cycle's creation time.
 
 Collateral ownership evidence remains Document-owned. The required `COLLATERAL_OWNERSHIP_EVIDENCE` checklist item, uploaded document, immutable versions, and review or waiver state are associated with the same `loan_application` through the Document checklist/evidence workflow. This preserves the business binding between a Collateral application and its ownership evidence without a physical Loan-to-Document foreign key such as `collaterals.ownership_document_id`. A future assessment slice may snapshot safe evidence identifiers through a narrow cross-module contract if an approved exact-binding rule requires it.
 
@@ -647,7 +654,7 @@ OCR belongs under Document Management. It is planned for Phase 2 and remains ass
 - One Salary Advance `loan_applications` record may have one `salary_advance_verifications` snapshot that records the employee link, employee source reference, and limit values used for that application.
 - One Unsecured Consumer Loan `loan_applications` record has one or more sequenced `unsecured_consumer_loan_verifications` rows; the latest row is authoritative and earlier completed cycles remain immutable evidence.
 - One `salary_advance_limits` record may have many `salary_advance_limit_movements` explaining reservation, release, disbursement, repayment, refresh, suspension, or disablement changes. Movement references to `loan_applications` and `loan_accounts` are optional logical references based on movement type.
-- One Collateral Loan `loan_applications` record has one or more `collaterals` rows at the physical-model level; CP1 origination creates exactly one. It also has one CP1 `collateral_loan_verifications` row constrained to `PENDING_MANUAL_REVIEW`.
+- One Collateral Loan `loan_applications` record has one or more `collaterals` rows at the physical-model level; the public origination endpoint creates exactly one, and verification fails safely if that API invariant is violated. It has one or more numbered `collateral_loan_verifications` rows; the latest cycle is authoritative and earlier completed cycles remain immutable evidence.
 - A Collateral Loan application is associated with its required ownership evidence through its Document-owned submission checklist and `COLLATERAL_OWNERSHIP_EVIDENCE` item, not through a direct Loan-to-Document foreign key.
 - One approved `loan_applications` record may produce one `approved_offers` record, and each approved offer contains one `approved_offer_repayment_items` row per approved term month.
 - One accepted Salary Advance or UCL application may produce versioned `loan_contracts`; each version copies the accepted offer terms and repayment items and captures one purpose-protected disbursement destination.
@@ -868,7 +875,7 @@ V29 allowlists `MANUAL_DISBURSEMENT_CONFIRMED` for the atomic activation audit. 
 
 V41 preserves every existing `loan_contracts` financial and whole-VND invariant while permitting both executable repayment methods: Salary Advance `ON_SALARY_DATE` and UCL `MONTHLY_INSTALLMENT`. The common activation tables and reconciliation constraints require no product-specific UCL schema or exposure artifact. UCL activation uses the existing account, disbursement, final schedule, progress, history, application-transition, and audit structures without a Salary Advance reserved-to-used movement.
 
-The V29, V31, V37, V43, and V44 migrations preflight the exact prior state they replace or extend. They reject missing, extra, weakened, repeated, or incompatible constraint state before mutation. `MER-DB-CURRENT-SCHEMA.sql` reflects the stable V1-V44 physical result, including Collateral CP1 origination/evidence structures, sequenced UCL verification and source-correction evidence, executable UCL offer and contract repayment-method support, product-aware servicing reconciliation, and product-aware returned-correction cancellation; migration preflight machinery is intentionally kept only in executable Flyway history.
+The V29, V31, V37, V43, V44, and V45 migrations preflight the prior state they replace or extend. They reject missing, repeated, or incompatible constraint state before mutation. `MER-DB-CURRENT-SCHEMA.sql` reflects the stable V1-V45 physical result, including Collateral origination and sequenced manual-verification/correction structures, sequenced UCL verification and source-correction evidence, executable UCL offer and contract repayment-method support, product-aware servicing reconciliation, and product-aware returned-correction cancellation; migration preflight machinery is intentionally kept only in executable Flyway history.
 
 ## 17. Repayment, settlement, and closure servicing model
 
@@ -887,3 +894,9 @@ V44 adds Loan-owned `collaterals` and `collateral_loan_verifications` tables. Co
 The verification table permits one row per application during CP1 and constrains its result to `PENDING_MANUAL_REVIEW`. It contains no reviewer, decision, assessment, correction, sequence, pricing, or valuation fields. Application review, recommendation, and approval remain fail-closed until a later checkpoint introduces an approved terminal verification lifecycle.
 
 V44 also extends the existing Document checklist type constraint with required `COLLATERAL_OWNERSHIP_EVIDENCE` and extends the business-audit action constraint with `COLLATERAL_LOAN_APPLICATION_SUBMITTED`. Ownership evidence remains associated through the application-scoped Document checklist and upload/version/review workflow. No `ownership_document_id` or other physical cross-module Loan-to-Document foreign key is introduced.
+
+## 19. Collateral Loan manual verification and correction safety (V45)
+
+V45 evolves the existing verification table in place. It backfills CP1 rows as sequence 1, replaces application-wide uniqueness with `(loan_application_id, verification_sequence)`, adds unique same-application source-correction linkage, and adds reviewer, completion-time, and restricted assessment-note fields. Checks distinguish evidence-free pending rows from fully evidenced terminal outcomes and preserve review chronology. Trigger protection permits the single pending-to-terminal completion update, rejects deletion or later mutation, and defers later-cycle source reconciliation until transaction commit.
+
+The migration extends correction-task document vocabulary with `COLLATERAL_OWNERSHIP_EVIDENCE` and narrows the product/document trigger so Collateral accepts only `DOCUMENT_REPLACEMENT` or `DOCUMENT_REVIEW` against an existing matching checklist item. It does not add Collateral pricing, loan-to-value, asset versioning, a valuation table, or a Loan-to-Document foreign key. `COLLATERAL_LOAN_VERIFICATION_STARTED` and `COLLATERAL_LOAN_VERIFICATION_COMPLETED` are added to the audit-action whitelist.

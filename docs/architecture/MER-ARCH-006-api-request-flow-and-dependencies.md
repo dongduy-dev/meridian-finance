@@ -290,17 +290,26 @@ flowchart LR
 
 Customer correction endpoints derive the exact owner from `CurrentUserProvider`. Staff queue, task completion, upload, content-read, review, waiver, and resubmission endpoints require their narrow permissions. Application services recheck task ownership and maker-checker constraints.
 
+### Collateral Verification and Approval Stop
+
+Collateral manual-verification start and completion use the existing LoanApplication workflow serialization. Each command acquires the workflow lock, locks the application, and locks the authoritative latest `collateral_loan_verifications` row before it persists verification, status-history, correction, or audit effects. Start is a normal `SUBMITTED -> VERIFICATION_PENDING` transition: one concurrent request succeeds and later requests fail rather than replaying a successful response.
+
+Completion carries `expectedVerificationId`. After locking the latest row, Loan rejects a mismatched identifier as stale before completing evidence. A successful command changes a pending cycle exactly once and atomically persists the terminal result, LoanApplication transition, history, audit, and any `REQUIRES_MORE_INFORMATION` correction. Document readiness is checked again inside the command. The database makes completed cycles immutable and reconciles each later cycle with the preceding completed cycle and its resubmitted source correction.
+
+The latest `VERIFIED` cycle opens only Loan Officer review/recommendation. Approval remains a separate synchronous guard: a Collateral ApprovalDecision may be written by Approval before Loan handles the event, but the unsupported-product exception rolls the shared transaction back so no ApprovalDecision, audit, review-cycle mutation, Loan transition, correction, or ApprovedOffer remains durable.
+
 ### Correction Locking and Idempotency
 
 1. Document replacement locks the Loan workflow, then the checklist item and logical document. It appends a version only when the expected current-version identifier still matches.
 2. Manual review targets one immutable document version and rejects a stale review target.
 3. Task completion locks the task and correction request. An identical completion is replay; different content after completion is a conflict.
-4. Resubmission locks the Loan workflow first, followed by correction rows, Document readiness, Customer-and-product scope, and the Salary Advance limit.
+4. Resubmission locks the Loan workflow first, followed by correction rows, Document readiness, and Customer-and-product scope. Salary Advance then locks its product exposure state; UCL and Collateral do not acquire Salary Advance limit or movement locks.
 5. Salary Advance resubmission rechecks Partner-owned current-month freshness; stale evidence rejects the operation before a new verification or workflow effect and preserves the existing reservation.
 6. One resubmission request is consumed exactly once.
-7. Customer cancellation first serializes the request UUID, then locks the Loan workflow, application, and active correction request. Salary Advance additionally locks Customer-and-product scope, latest verification context, Customer-link scope, reservation movements, and the Salary Advance limit before recording its exact release. UCL proves that no Salary reservation or release evidence exists and records no exposure effect. Both products terminalize the correction and application and record history, audit, and immutable cancellation evidence.
-8. Cancellation intentionally does not recheck Partner freshness: a Customer must be able to abandon a returned correction after its Partner evidence becomes stale. Resubmission and cancellation share the workflow/application/correction lock order, so a PostgreSQL race permits exactly one operation to win.
-9. Failure in synchronous Approval-to-Loan coordination or any cancellation evidence write rolls back the entire transaction.
+7. Collateral resubmission preserves the completed cycle and structured facts, returns the application to `SUBMITTED`, and creates one next pending cycle linked to the resubmitted correction. Concurrent resubmission permits one transition/cycle; a delayed completion carrying the prior cycle ID fails stale.
+8. Customer cancellation first serializes the request UUID, then locks the Loan workflow, application, and active correction request. Salary Advance additionally locks Customer-and-product scope, latest verification context, Customer-link scope, reservation movements, and the Salary Advance limit before recording its exact release. UCL proves that no Salary reservation or release evidence exists and records no exposure effect. Both products terminalize the correction and application and record history, audit, and immutable cancellation evidence.
+9. Cancellation intentionally does not recheck Partner freshness: a Customer must be able to abandon a returned correction after its Partner evidence becomes stale. Resubmission and cancellation share the workflow/application/correction lock order, so a PostgreSQL race permits exactly one operation to win.
+10. Failure in synchronous Approval-to-Loan coordination or any cancellation evidence write rolls back the entire transaction.
 
 ---
 

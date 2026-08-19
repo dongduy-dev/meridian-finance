@@ -442,6 +442,11 @@ class CollateralLoanOriginationPostgreSqlIntegrationTest {
             }
             return delegate.save(collateral);
         }
+
+        @Override
+        public java.util.List<Collateral> findByLoanApplicationId(UUID loanApplicationId) {
+            return delegate.findByLoanApplicationId(loanApplicationId);
+        }
     }
 
     static class FailingChecklistPort implements LoanDocumentChecklistPort {
@@ -492,8 +497,15 @@ class CollateralLoanOriginationPostgreSqlIntegrationTest {
         }
 
         @Override
-        public Optional<CollateralLoanVerification> findByLoanApplicationId(UUID loanApplicationId) {
-            return delegate.findByLoanApplicationId(loanApplicationId);
+        public Optional<CollateralLoanVerification> findLatestByLoanApplicationId(UUID loanApplicationId) {
+            return delegate.findLatestByLoanApplicationId(loanApplicationId);
+        }
+
+        @Override
+        public Optional<CollateralLoanVerification> findLatestByLoanApplicationIdForUpdate(
+                UUID loanApplicationId
+        ) {
+            return delegate.findLatestByLoanApplicationIdForUpdate(loanApplicationId);
         }
     }
 

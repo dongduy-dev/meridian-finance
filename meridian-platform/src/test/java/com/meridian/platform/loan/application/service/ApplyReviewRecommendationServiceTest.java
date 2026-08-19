@@ -14,6 +14,7 @@ import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTran
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
+import com.meridian.platform.loan.domain.model.CollateralLoanManualVerificationOutcome;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
@@ -142,6 +143,49 @@ class ApplyReviewRecommendationServiceTest {
         assertEquals("COLLATERAL_VERIFICATION_REQUIRED", exception.getErrorCode());
         assertNull(loanApplicationRepository.savedApplication);
         assertTrue(transitionRepository.savedTransitions.isEmpty());
+    }
+
+    @Test
+    void verifiedCollateralRecommendationReachesApprovalPending() {
+        loanApplicationRepository.application = collateralApplication();
+        org.mockito.Mockito.when(collateralVerificationRepository.findByLoanApplicationId(LOAN_APPLICATION_ID))
+                .thenReturn(Optional.of(verifiedCollateral()));
+
+        service.applyReviewRecommendation(command(validContext()));
+
+        assertEquals(LoanApplicationStatus.APPROVAL_PENDING,
+                loanApplicationRepository.savedApplication.status());
+    }
+
+    @Test
+    void verifiedCollateralRecommendationCorrectionReturnsForRevision() {
+        loanApplicationRepository.application = collateralApplication();
+        org.mockito.Mockito.when(collateralVerificationRepository.findByLoanApplicationId(LOAN_APPLICATION_ID))
+                .thenReturn(Optional.of(verifiedCollateral()));
+
+        service.applyReviewRecommendation(new ApplyReviewRecommendationCommand(
+                LOAN_APPLICATION_ID,
+                RECOMMENDATION_ID,
+                REVIEW_CYCLE_ID,
+                LOAN_OFFICER_USER_ID,
+                LoanReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION,
+                null,
+                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                collateralCorrectionPlan(),
+                RECOMMENDED_AT,
+                validContext()
+        ));
+
+        assertEquals(LoanApplicationStatus.RETURNED_FOR_REVISION,
+                loanApplicationRepository.savedApplication.status());
+        org.mockito.Mockito.verify(correctionWorkflowService).createFromRecommendation(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
+        );
     }
 
     @Test
@@ -316,6 +360,31 @@ class ApplyReviewRecommendationServiceTest {
                 BigDecimal.valueOf(25_000_000).setScale(2),
                 12,
                 salaryAdvance.submittedAt()
+        );
+    }
+
+    private static CorrectionPlanRequest collateralCorrectionPlan() {
+        return new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+                CorrectionScope.DOCUMENT_REPLACEMENT,
+                CorrectionResponsibility.CUSTOMER,
+                DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                false,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "Replace the ownership evidence.",
+                null
+        )));
+    }
+
+    private static CollateralLoanVerification verifiedCollateral() {
+        LoanApplication application = collateralApplication();
+        return CollateralLoanVerification.pendingManualReview(
+                UUID.randomUUID(), application, RECOMMENDED_AT.minusDays(1)
+        ).completeManualReview(
+                CollateralLoanManualVerificationOutcome.VERIFIED,
+                UUID.randomUUID(),
+                RECOMMENDED_AT.minusHours(1),
+                "Ownership evidence is sufficient."
         );
     }
 

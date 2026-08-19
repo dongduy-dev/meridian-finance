@@ -125,7 +125,7 @@ class ApplyApprovalDecisionServiceTest {
                 releaseService,
                 new LoanApplicationStatusTransitionRecorder(transitionRepository),
                 auditPublisher,
-                new CollateralLoanReviewGate(collateralVerificationRepository)
+                new CollateralLoanApprovalExecutionGuard()
         );
     }
 
@@ -210,39 +210,54 @@ class ApplyApprovalDecisionServiceTest {
     }
 
     @Test
-    void pendingCollateralVerificationBlocksSyntheticApprovalWithoutMutation() {
+    void collateralApprovalExecutionIsUnsupportedRegardlessOfVerificationState() {
         loanApplicationRepository.application = collateralApplication(LoanApplicationStatus.APPROVAL_PENDING);
-        org.mockito.Mockito.when(collateralVerificationRepository.findByLoanApplicationId(LOAN_APPLICATION_ID))
-                .thenReturn(Optional.of(CollateralLoanVerification.pendingManualReview(
-                        UUID.randomUUID(), loanApplicationRepository.application, DECIDED_AT.minusDays(1)
-                )));
-
-        BusinessRuleViolationException exception = assertThrows(
-                BusinessRuleViolationException.class,
-                () -> service.applyApprovalDecision(command(LoanApprovalDecisionAction.APPROVE))
-        );
-
-        assertEquals("PRODUCT_VERIFICATION_PENDING", exception.getErrorCode());
-        assertNull(loanApplicationRepository.savedApplication);
-        assertNull(approvedOfferRepository.savedOffer);
-        assertTrue(transitionRepository.savedTransitions.isEmpty());
-    }
-
-    @Test
-    void missingCollateralVerificationFailsClosedBeforeApproval() {
-        loanApplicationRepository.application = collateralApplication(LoanApplicationStatus.APPROVAL_PENDING);
-        org.mockito.Mockito.when(collateralVerificationRepository.findByLoanApplicationId(LOAN_APPLICATION_ID))
-                .thenReturn(Optional.empty());
 
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,
                 () -> service.applyApprovalDecision(command(LoanApprovalDecisionAction.APPROVE))
         );
 
-        assertEquals("COLLATERAL_VERIFICATION_REQUIRED", exception.getErrorCode());
+        assertEquals("PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED", exception.getErrorCode());
         assertNull(loanApplicationRepository.savedApplication);
         assertNull(approvedOfferRepository.savedOffer);
         assertTrue(transitionRepository.savedTransitions.isEmpty());
+    }
+
+    @Test
+    void collateralApprovalExecutionDoesNotDependOnVerificationLookup() {
+        loanApplicationRepository.application = collateralApplication(LoanApplicationStatus.APPROVAL_PENDING);
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.applyApprovalDecision(command(LoanApprovalDecisionAction.APPROVE))
+        );
+
+        assertEquals("PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED", exception.getErrorCode());
+        assertNull(loanApplicationRepository.savedApplication);
+        assertNull(approvedOfferRepository.savedOffer);
+        assertTrue(transitionRepository.savedTransitions.isEmpty());
+    }
+
+    @Test
+    void everyCollateralApprovalActionFailsBeforeDecisionEffects() {
+        for (LoanApprovalDecisionAction action : LoanApprovalDecisionAction.values()) {
+            loanApplicationRepository.application = collateralApplication(LoanApplicationStatus.APPROVAL_PENDING);
+            loanApplicationRepository.savedApplication = null;
+
+            BusinessStateConflictException exception = assertThrows(
+                    BusinessStateConflictException.class,
+                    () -> service.applyApprovalDecision(command(action))
+            );
+
+            assertEquals("PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED", exception.getErrorCode());
+            assertNull(loanApplicationRepository.savedApplication);
+            assertNull(approvedOfferRepository.savedOffer);
+            assertTrue(transitionRepository.savedTransitions.isEmpty());
+        }
+        org.mockito.Mockito.verify(reviewCycleRepository, org.mockito.Mockito.never())
+                .save(org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verifyNoInteractions(correctionWorkflowService);
     }
 
     @Test

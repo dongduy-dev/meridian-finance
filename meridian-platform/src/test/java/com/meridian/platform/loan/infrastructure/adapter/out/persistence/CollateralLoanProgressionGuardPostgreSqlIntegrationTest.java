@@ -20,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -110,8 +111,8 @@ class CollateralLoanProgressionGuardPostgreSqlIntegrationTest {
 
         jdbcTemplate.update("UPDATE loan_applications SET status = 'APPROVAL_PENDING' WHERE id = ?", applicationId);
         LocalDateTime decisionTime = LocalDateTime.parse("2026-08-13T10:30:00");
-        assertEquals("PRODUCT_VERIFICATION_PENDING", assertThrows(
-                BusinessRuleViolationException.class,
+        assertEquals("PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED", assertThrows(
+                BusinessStateConflictException.class,
                 () -> applyApproval.applyApprovalDecision(new ApplyApprovalDecisionCommand(
                         applicationId,
                         UUID.randomUUID(),
@@ -130,24 +131,19 @@ class CollateralLoanProgressionGuardPostgreSqlIntegrationTest {
     }
 
     @Test
-    void missingVerificationFailsClosedWithoutReviewMutation() {
+    void verificationCycleCannotBeDeletedToBypassReviewGate() {
         CollateralLoanApplicationDto application = origination.startCollateralLoanApplication(request());
-        jdbcTemplate.update(
-                "DELETE FROM collateral_loan_verifications WHERE loan_application_id = ?",
+        assertThrows(
+                DataAccessException.class,
+                () -> jdbcTemplate.update(
+                        "DELETE FROM collateral_loan_verifications WHERE loan_application_id = ?",
+                        application.loanApplicationId()
+                )
+        );
+        assertEquals(1, count(
+                "SELECT count(*) FROM collateral_loan_verifications WHERE loan_application_id = ?",
                 application.loanApplicationId()
-        );
-        jdbcTemplate.update(
-                "UPDATE loan_applications SET status = 'SUBMITTED' WHERE id = ?",
-                application.loanApplicationId()
-        );
-
-        BusinessStateConflictException exception = assertThrows(
-                BusinessStateConflictException.class,
-                () -> startReview.startReview(application.loanApplicationId())
-        );
-
-        assertEquals("COLLATERAL_VERIFICATION_REQUIRED", exception.getErrorCode());
-        assertStatusAndNoDownstreamEffects(application.loanApplicationId(), "SUBMITTED");
+        ));
     }
 
     private void assertStatusAndNoDownstreamEffects(UUID applicationId, String expectedStatus) {

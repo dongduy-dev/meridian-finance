@@ -80,7 +80,11 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 409 | `UCL_VERIFICATION_REQUIRED` | UCL verification record required | Repair the missing application-owned verification state before review progression |
 | 409 | `UCL_VERIFICATION_DOCUMENTS_NOT_READY` | UCL verification documents not ready | Accept or validly waive all required evidence before starting or completing verification |
 | 422 | `UCL_VERIFICATION_ASSESSMENT_REQUIRED` | UCL verification assessment required | Supply a nonblank restricted assessment note no longer than 2,000 characters |
+| 422 | `COLLATERAL_VERIFICATION_NOT_APPLICABLE` | Collateral Loan verification not applicable | Use the command only for a `COLLATERAL_LOAN` / `SECURED` application |
 | 409 | `COLLATERAL_VERIFICATION_REQUIRED` | Collateral Loan verification record required | Repair the missing application-owned verification state before review progression |
+| 409 | `COLLATERAL_VERIFICATION_DOCUMENTS_NOT_READY` | Collateral Loan verification documents not ready | Accept or validly waive the required ownership evidence before starting or completing verification |
+| 422 | `COLLATERAL_VERIFICATION_ASSESSMENT_REQUIRED` | Collateral Loan verification assessment required | Supply a nonblank restricted assessment note no longer than 2,000 characters |
+| 409 | `STALE_COLLATERAL_VERIFICATION` | Expected Collateral Loan verification is stale | Refresh the application and complete only the authoritative latest numbered cycle |
 
 ---
 
@@ -124,6 +128,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 409 | `DECISION_ALREADY_SUBMITTED` | Decision already submitted | Refresh the approval record; the decision is immutable once recorded |
 | 409 | `MAKER_CHECKER_VIOLATION` | Maker-checker violation | Use a different authorized user for the final Approver decision |
 | 422 | `REVIEW_RECOMMENDATION_REQUIRED` | Review recommendation required | Record the Loan Officer recommendation before the final decision |
+| 409 | `PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED` | Product approval execution unsupported | Do not submit an Approver action for Collateral Loan; retain the application at `APPROVAL_PENDING` |
 
 ---
 

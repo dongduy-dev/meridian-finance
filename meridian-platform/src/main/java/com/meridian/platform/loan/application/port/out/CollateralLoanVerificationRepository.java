@@ -9,5 +9,13 @@ public interface CollateralLoanVerificationRepository {
 
     CollateralLoanVerification save(CollateralLoanVerification verification);
 
-    Optional<CollateralLoanVerification> findByLoanApplicationId(UUID loanApplicationId);
+    Optional<CollateralLoanVerification> findLatestByLoanApplicationId(UUID loanApplicationId);
+
+    Optional<CollateralLoanVerification> findLatestByLoanApplicationIdForUpdate(
+            UUID loanApplicationId
+    );
+
+    default Optional<CollateralLoanVerification> findByLoanApplicationId(UUID loanApplicationId) {
+        return findLatestByLoanApplicationId(loanApplicationId);
+    }
 }

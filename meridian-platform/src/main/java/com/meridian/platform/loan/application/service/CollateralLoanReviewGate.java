@@ -30,15 +30,21 @@ public class CollateralLoanReviewGate {
                         "Collateral Loan verification evidence is required before review progression."
                 ));
 
-        if (verification.productVerificationResult() == ProductVerificationResult.PENDING_MANUAL_REVIEW) {
-            throw new BusinessRuleViolationException(
+        switch (verification.productVerificationResult()) {
+            case VERIFIED -> {
+            }
+            case PENDING_MANUAL_REVIEW -> throw new BusinessRuleViolationException(
                     "PRODUCT_VERIFICATION_PENDING",
                     "Collateral Loan verification must complete before review progression."
             );
+            case FAILED -> throw new BusinessRuleViolationException(
+                    "PRODUCT_VERIFICATION_FAILED",
+                    "Collateral Loan verification failed."
+            );
+            case REQUIRES_MORE_INFORMATION -> throw new BusinessRuleViolationException(
+                    "PRODUCT_VERIFICATION_REQUIRES_MORE_INFORMATION",
+                    "Collateral Loan verification requires more information."
+            );
         }
-        throw new BusinessStateConflictException(
-                "SYSTEM_STATE_CONFLICT",
-                "Collateral Loan verification contains a result unsupported by the current checkpoint."
-        );
     }
 }

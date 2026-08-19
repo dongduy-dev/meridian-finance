@@ -6,6 +6,8 @@ import com.meridian.platform.loan.application.dto.CorrectionResubmissionDto;
 import com.meridian.platform.loan.application.dto.CorrectionResubmissionRequest;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot;
+import com.meridian.platform.loan.application.port.out.CollateralLoanVerificationRepository;
+import com.meridian.platform.loan.application.port.out.CollateralRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
@@ -18,6 +20,10 @@ import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitReposit
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.domain.model.Collateral;
+import com.meridian.platform.loan.domain.model.CollateralLoanManualVerificationOutcome;
+import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
+import com.meridian.platform.loan.domain.model.CollateralType;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus;
@@ -82,6 +88,8 @@ class ResubmitCustomerCorrectionServiceTest {
     @Mock private SalaryAdvanceLimitMovementRepository salaryMovements;
     @Mock private SalaryAdvanceVerificationRepository salaryVerifications;
     @Mock private UnsecuredConsumerLoanVerificationRepository uclVerifications;
+    @Mock private CollateralLoanVerificationRepository collateralVerifications;
+    @Mock private CollateralRepository collaterals;
     @Mock private LoanApplicationStatusTransitionRecorder transitions;
     @Mock private BusinessAuditPublisher audits;
     @Mock private CurrentUserProvider currentUser;
@@ -107,6 +115,8 @@ class ResubmitCustomerCorrectionServiceTest {
                 salaryMovements,
                 salaryVerifications,
                 uclVerifications,
+                collateralVerifications,
+                collaterals,
                 transitions,
                 audits,
                 currentUser,
@@ -130,11 +140,11 @@ class ResubmitCustomerCorrectionServiceTest {
         when(readiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
                 new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "UNVERIFIED")
         ));
-        when(products.findByProductCode(ProductCode.UNSECURED_CONSUMER_LOAN))
+        lenient().when(products.findByProductCode(ProductCode.UNSECURED_CONSUMER_LOAN))
                 .thenReturn(Optional.of(product()));
         when(documents.readiness(APPLICATION_ID))
                 .thenReturn(new LoanDocumentChecklistPort.ChecklistReadinessSnapshot(true, true));
-        when(outstandingAccounts.inspect(CUSTOMER_ID, ProductCode.UNSECURED_CONSUMER_LOAN))
+        lenient().when(outstandingAccounts.inspect(CUSTOMER_ID, ProductCode.UNSECURED_CONSUMER_LOAN))
                 .thenReturn(OutstandingLoanAccountQuery.GuardResult.CLEAR);
         lenient().when(applications.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(corrections.saveRequest(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -225,6 +235,50 @@ class ResubmitCustomerCorrectionServiceTest {
         verify(applications, never()).save(any());
     }
 
+    @Test
+    void collateralResubmissionCreatesLinkedCycleWithoutOutstandingOrSalaryEffects() {
+        LoanApplication collateralApplication = collateralApplication();
+        CollateralLoanVerification completed = CollateralLoanVerification.pendingManualReview(
+                UUID.randomUUID(),
+                collateralApplication,
+                NOW.minusDays(1)
+        ).completeManualReview(
+                CollateralLoanManualVerificationOutcome.REQUIRES_MORE_INFORMATION,
+                UUID.randomUUID(),
+                NOW.minusHours(1),
+                "Replace the ownership evidence."
+        );
+        when(applications.findByIdForUpdate(APPLICATION_ID))
+                .thenReturn(Optional.of(collateralApplication));
+        when(products.findByProductCode(ProductCode.COLLATERAL_LOAN))
+                .thenReturn(Optional.of(collateralProduct(collateralApplication.loanProductId())));
+        when(collaterals.findByLoanApplicationId(APPLICATION_ID)).thenReturn(List.of(new Collateral(
+                UUID.randomUUID(), APPLICATION_ID, CollateralType.CAR,
+                "Customer vehicle", new BigDecimal("25000000"),
+                "Customer-owned", "Operational condition", NOW.minusDays(2)
+        )));
+        when(collateralVerifications.findLatestByLoanApplicationIdForUpdate(APPLICATION_ID))
+                .thenReturn(Optional.of(completed));
+        when(collateralVerifications.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CorrectionResubmissionDto result = service.resubmit(
+                APPLICATION_ID,
+                new CorrectionResubmissionRequest(RESUBMISSION_ID)
+        );
+
+        assertEquals("SUBMITTED", result.loanApplicationStatus());
+        ArgumentCaptor<CollateralLoanVerification> nextCycle =
+                ArgumentCaptor.forClass(CollateralLoanVerification.class);
+        verify(collateralVerifications).save(nextCycle.capture());
+        assertEquals(2, nextCycle.getValue().verificationSequence());
+        assertEquals(CORRECTION_ID, nextCycle.getValue().sourceCorrectionRequestId());
+        assertEquals("PENDING_MANUAL_REVIEW",
+                nextCycle.getValue().productVerificationResult().name());
+        verifyNoInteractions(outstandingAccounts, partnerEligibility, salaryLimits,
+                salaryMovements, salaryVerifications);
+        verify(reviewCycles, never()).save(any());
+    }
+
     private LoanApplication application() {
         return new LoanApplication(
                 APPLICATION_ID,
@@ -250,6 +304,34 @@ class ResubmitCustomerCorrectionServiceTest {
                 true,
                 new BigDecimal("2000000.00"),
                 new BigDecimal("50000000.00")
+        );
+    }
+
+    private LoanApplication collateralApplication() {
+        return new LoanApplication(
+                APPLICATION_ID,
+                CUSTOMER_ID,
+                UUID.randomUUID(),
+                "CL-20260812-000001",
+                ProductCode.COLLATERAL_LOAN,
+                ProductType.SECURED,
+                LoanApplicationStatus.RETURNED_FOR_REVISION,
+                new BigDecimal("15000000.00"),
+                12,
+                NOW.minusDays(2)
+        );
+    }
+
+    private LoanProduct collateralProduct(UUID productId) {
+        return new LoanProduct(
+                productId,
+                ProductCode.COLLATERAL_LOAN,
+                ProductType.SECURED,
+                "Collateral Loan",
+                null,
+                true,
+                new BigDecimal("5000000.00"),
+                new BigDecimal("200000000.00")
         );
     }
 

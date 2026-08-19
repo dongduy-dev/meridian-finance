@@ -142,7 +142,7 @@ public class PreReviewDocumentCorrectionService {
         boolean valid = switch (productCode) {
             case SALARY_ADVANCE -> documentType == DocumentType.RECENT_PAYSLIP;
             case UNSECURED_CONSUMER_LOAN -> UCL_DOCUMENT_TYPES.contains(documentType);
-            case COLLATERAL_LOAN -> false;
+            case COLLATERAL_LOAN -> documentType == DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE;
         };
         if (!valid) {
             throw new BusinessRuleViolationException(

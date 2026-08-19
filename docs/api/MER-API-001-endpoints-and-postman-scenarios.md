@@ -130,6 +130,8 @@ The contractual destination-reveal operation is the sole v1 JSON endpoint permit
 | POST | `/api/v1/loan-applications/{loanApplicationId}/cancel` | Customer with `loan:cancel:own` | Cancel an owned Salary Advance or UCL from `RETURNED_FOR_REVISION`; Salary Advance releases its reservation exactly once, while UCL has no exposure effect. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start` | Staff with `loan:review` | Start manual UCL verification after document processing readiness. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete` | Staff with `loan:review` | Complete manual UCL verification as `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION`. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/collateral-loan-verification/start` | Staff with `loan:review` | Start manual Collateral verification and return the restricted assessment snapshot after document processing readiness. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/collateral-loan-verification/complete` | Staff with `loan:review` | Complete the exact authoritative Collateral verification cycle as `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION`. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review/start` | `loan:review` | Start Loan Officer review. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/review-recommendations` | `approval:recommend` | Record a Loan Officer recommendation. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approval-decisions` | `approval:decide` | Record an Approver decision. |
@@ -345,9 +347,9 @@ The API derives Customer identity from the Bearer token and rejects unknown top-
 
 Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `status`, `requestedAmount`, `requestedTermMonths`, `collateralType`, `productVerificationResult`, `evidenceRequirements`, and `submittedAt`. Each safe evidence requirement contains `checklistItemId`, `documentType`, and `requirementStatus`. CP1 returns one required `COLLATERAL_OWNERSHIP_EVIDENCE` item, allowing the Customer to call the existing document-version upload endpoint without exposing document contents or internal review evidence.
 
-The application starts in `DOCUMENTS_PENDING` with application-owned `PENDING_MANUAL_REVIEW` Collateral verification. Uploading the required evidence through the existing Document workflow can complete generic upload readiness and advance the application to `SUBMITTED`; it does not complete Collateral verification or permit review. While verification remains pending, review, recommendation, and approval fail closed. An unexpectedly missing Collateral verification record fails with `409 COLLATERAL_VERIFICATION_REQUIRED`.
+The application starts in `DOCUMENTS_PENDING` with application-owned sequence-1 `PENDING_MANUAL_REVIEW` Collateral verification. Uploading the required evidence through the existing Document workflow can complete generic upload readiness and advance the application to `SUBMITTED`; it does not complete Collateral verification or permit review. The Staff verification commands in Sections 4.8-4.9 make the terminal decision. Only the authoritative latest `VERIFIED` cycle permits review and recommendation through `APPROVAL_PENDING`; executable Collateral approval remains unsupported.
 
-CP1 serializes submissions by Customer and product and rejects an existing blocking Collateral application. It deliberately does not impose an outstanding Collateral LoanAccount rule, compare requested amount to estimated value, or create Salary Advance reservation, Partner, or exposure effects. It does not implement manual assessment, correction, review, approval, offers, pricing, contract, activation, LoanAccount, schedules, or servicing. The documented Collateral rate remains non-executable pending the business decisions in `MER-BIZ-001` Section 13.4.
+Collateral submission serializes by Customer and product and rejects an existing blocking Collateral application. It deliberately does not impose an outstanding Collateral LoanAccount rule, compare requested amount to estimated value, or create Salary Advance reservation, Partner, or exposure effects. Structured Collateral facts and requested terms are immutable after submission. Approval, offers, pricing, contracts, activation, LoanAccounts, schedules, and servicing remain unsupported. The documented Collateral rate remains non-executable pending the business decisions in `MER-BIZ-001` Section 13.4.
 
 Important errors:
 
@@ -433,7 +435,82 @@ For a `FAILED` request, use `"outcome": "FAILED"` with no reason or plan. Supply
 
 Important errors include `UCL_VERIFICATION_NOT_APPLICABLE`, `UCL_VERIFICATION_REQUIRED`, `UCL_VERIFICATION_DOCUMENTS_NOT_READY`, `PRODUCT_VERIFICATION_NOT_PENDING`, `PRODUCT_VERIFICATION_COMPLETION_NOT_ALLOWED`, and `UCL_VERIFICATION_ASSESSMENT_REQUIRED`.
 
-### 4.8 Start review
+### 4.8 Start Collateral Loan manual verification
+
+```text
+POST /api/v1/loan-applications/{loanApplicationId}/collateral-loan-verification/start
+```
+
+No body is required. The authenticated Staff actor must hold `loan:review`. The application must be `COLLATERAL_LOAN` / `SECURED`, be in `SUBMITTED`, have an authoritative latest `PENDING_MANUAL_REVIEW` cycle, have processing-ready required ownership evidence, and have exactly one submitted Collateral fact row for the current public-API invariant. Success is not replay-safe: it atomically moves the application to `VERIFICATION_PENDING` and records one transition and PII-safe audit event. A repeated or concurrent losing start returns the normal lifecycle conflict.
+
+The general LoanApplication status projection intentionally excludes product evidence. The start response is therefore the smallest authorized Staff assessment surface and returns the exact verification ID plus the submitted facts needed for manual assessment:
+
+```json
+{
+  "verificationId": "UUID",
+  "loanApplicationId": "UUID",
+  "status": "VERIFICATION_PENDING",
+  "productVerificationResult": "PENDING_MANUAL_REVIEW",
+  "collateral": {
+    "collateralType": "MOTORBIKE",
+    "description": "2024 Honda motorbike",
+    "estimatedValue": 35000000,
+    "ownershipStatus": "Customer-provided ownership statement",
+    "conditionNote": "Normal used condition"
+  }
+}
+```
+
+Important errors include `COLLATERAL_VERIFICATION_NOT_APPLICABLE`, `COLLATERAL_VERIFICATION_REQUIRED`, `COLLATERAL_VERIFICATION_DOCUMENTS_NOT_READY`, `PRODUCT_VERIFICATION_NOT_PENDING`, `PRODUCT_VERIFICATION_START_NOT_ALLOWED`, and `SYSTEM_STATE_CONFLICT`.
+
+### 4.9 Complete Collateral Loan manual verification
+
+```text
+POST /api/v1/loan-applications/{loanApplicationId}/collateral-loan-verification/complete
+```
+
+The body identifies the exact cycle that Staff assessed. For `VERIFIED` or `FAILED`, correction fields must be absent:
+
+```json
+{
+  "expectedVerificationId": "UUID",
+  "outcome": "VERIFIED",
+  "assessmentNote": "Ownership evidence and submitted Collateral facts are sufficient for Loan Officer review."
+}
+```
+
+`REQUIRES_MORE_INFORMATION` requires a controlled reason and a document-only correction plan over the existing ownership-evidence item:
+
+```json
+{
+  "expectedVerificationId": "UUID",
+  "outcome": "REQUIRES_MORE_INFORMATION",
+  "assessmentNote": "The ownership evidence is unreadable and must be replaced.",
+  "reasonCode": "DOCUMENT_REPLACEMENT_REQUIRED",
+  "correctionPlan": {
+    "tasks": [
+      {
+        "scope": "DOCUMENT_REPLACEMENT",
+        "responsibleParty": "CUSTOMER",
+        "documentType": "COLLATERAL_OWNERSHIP_EVIDENCE",
+        "createChecklistItem": false,
+        "checklistItemId": "UUID",
+        "baselineDocumentVersionId": "UUID",
+        "customerInstruction": "Upload a readable replacement ownership document.",
+        "staffInstruction": null
+      }
+    ]
+  }
+}
+```
+
+The note is trimmed, required, restricted, and limited to 2,000 characters. The API serializes completion against the authoritative latest cycle, rechecks document readiness, and completes a pending cycle exactly once. A mismatched `expectedVerificationId` returns `409 STALE_COLLATERAL_VERIFICATION`. `VERIFIED` returns the application to `SUBMITTED`; `FAILED` moves it to `VERIFICATION_FAILED` without a correction; `REQUIRES_MORE_INFORMATION` atomically moves it to `RETURNED_FOR_REVISION` and creates the correction request/tasks.
+
+The safe response contains verification/application identity, application status, product-verification result, and completion time. It excludes reviewer identity, assessment note, correction internals, audit identity, and submitted Collateral facts. Unknown properties or an invalid body return `400 VALIDATION_FAILED`.
+
+Important errors include `COLLATERAL_VERIFICATION_NOT_APPLICABLE`, `COLLATERAL_VERIFICATION_REQUIRED`, `COLLATERAL_VERIFICATION_DOCUMENTS_NOT_READY`, `COLLATERAL_VERIFICATION_ASSESSMENT_REQUIRED`, `STALE_COLLATERAL_VERIFICATION`, `PRODUCT_VERIFICATION_NOT_PENDING`, `PRODUCT_VERIFICATION_COMPLETION_NOT_ALLOWED`, and `INVALID_CORRECTION_PLAN`.
+
+### 4.10 Start review
 
 ```text
 POST /api/v1/loan-applications/{loanApplicationId}/review/start
@@ -443,7 +520,7 @@ No body is required. The reviewer is derived from the Bearer token.
 
 For UCL, review start additionally requires the authoritative verification result to be `VERIFIED`. Missing, pending, `FAILED`, and `REQUIRES_MORE_INFORMATION` records fail closed. The same Loan Officer may complete UCL manual verification and start review; the existing maker-checker rule still requires a different Approver for the final decision.
 
-For Collateral Loan CP1, review always remains closed: the expected application-owned verification is `PENDING_MANUAL_REVIEW`, which returns `422 PRODUCT_VERIFICATION_PENDING`. Missing verification returns `409 COLLATERAL_VERIFICATION_REQUIRED`. Recommendation and approval commands apply the same guard before creating or mutating review/approval evidence, so synthetic or inconsistent Collateral states cannot bypass the pending-verification boundary.
+For Collateral Loan, review start requires the authoritative latest numbered verification cycle to be `VERIFIED`. Missing, pending, `FAILED`, and `REQUIRES_MORE_INFORMATION` evidence fails closed. The same Loan Officer may complete manual verification and later start review or recommend; maker-checker still requires a different Approver from the recommending Loan Officer.
 
 ---
 
@@ -471,6 +548,8 @@ Normal recommendation:
 Rejection requires a nonblank `reason`. Revision actions require `expectedReviewCycleId`, a controlled `reasonCode`, and one to ten tasks.
 
 For UCL, positive and rejection recommendations and the structured Customer or Staff correction actions are executable. UCL correction tasks may replace or review only application-owned current `INCOME_PROOF`, `BANK_STATEMENT`, or `EMPLOYMENT_PROOF` evidence. They cannot create a Salary-specific `RECENT_PAYSLIP` task or change requested amount or term.
+
+For Collateral Loan, a latest `VERIFIED` cycle permits normal approval/rejection recommendation. Revision recommendations may create only Customer `DOCUMENT_REPLACEMENT` or Staff `DOCUMENT_REVIEW` tasks for the existing current `COLLATERAL_OWNERSHIP_EVIDENCE` item. They cannot add checklist items, upload supporting documents, or change requested terms or submitted Collateral facts. Resubmission must return through manual verification before another review.
 
 Representative Customer task:
 
@@ -521,6 +600,8 @@ The Approver must differ from the Loan Officer who submitted the applicable reco
 
 For UCL, `APPROVE` atomically records the decision, generates one immutable exact-request offer with `FLAT_ORIGINAL_PRINCIPAL` pricing and `MONTHLY_INSTALLMENT` items, and finishes in `CUSTOMER_ACCEPTANCE_PENDING`. `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and structured mixed Customer/Staff correction remain available common decisions under the UCL document restrictions.
 
+For Collateral Loan at `APPROVAL_PENDING`, every Approver action returns `409 PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED`. No ApprovalDecision, Loan status, review-cycle, correction, history, audit, or ApprovedOffer effect becomes durable. `MER-ARCH-006-api-request-flow-and-dependencies.md` defines the synchronous coordination and rollback boundary.
+
 Important errors include `MAKER_CHECKER_VIOLATION`, `STALE_REVIEW_CYCLE`, and controlled reason/plan validation errors.
 
 ### 5.3 Task completion and resubmission
@@ -545,6 +626,8 @@ Client-visible rules:
 - UCL resubmission preserves completed verification evidence, returns the application to `SUBMITTED`, and creates the next linked `PENDING_MANUAL_REVIEW` verification cycle; an untouched pending pre-review cycle is reused;
 - review cannot restart until the authoritative latest UCL verification cycle is `VERIFIED`;
 - UCL resubmission rechecks product-scoped outstanding debt and does not invoke Salary Advance eligibility, limit, reservation, movement, or revalidation behavior;
+- Collateral resubmission preserves completed cycles, preserves submitted Collateral facts, returns to `SUBMITTED`, and creates exactly one next pending cycle linked to the resubmitted correction; it has no outstanding-LoanAccount guard or Salary Advance effect;
+- Collateral replacement/review is limited to the existing ownership-evidence checklist item, and review cannot restart until the new authoritative cycle is `VERIFIED`;
 - identical requests replay safely;
 - a different request after completion or resubmission conflicts.
 
@@ -857,7 +940,7 @@ Collection:
 docs/api/Meridian-Platform.postman_collection.json
 ```
 
-It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. UCL scenarios include all three verification outcomes, correction and re-verification, cancellation, outstanding-debt rejection, and product-generic servicing through closure.
+It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. UCL scenarios include all three verification outcomes, correction and re-verification, cancellation, outstanding-debt rejection, and product-generic servicing through closure. The Collateral CP2 folder covers the prepared ownership-evidence path from exact-cycle manual verification through Loan Officer recommendation to the explicit approval-execution stop.
 
 Complex correction scenarios require prepared application, review-cycle, checklist, and version variables. The optional cancellation folder requires `returnedCancellationScenarioEnabled=true` and a separate Customer-owned `cancellationLoanApplicationId` in `RETURNED_FOR_REVISION`; it confirms the command, exact replay, and terminal application GET without exposing internal evidence IDs. Seed fixtures and scenario-specific IDs belong to the collection or its environment, not this API contract.
 

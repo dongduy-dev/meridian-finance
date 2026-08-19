@@ -221,7 +221,7 @@ MVP collateral information includes:
 - description;
 - estimated value;
 - ownership status;
-- ownership-document reference;
+- ownership evidence;
 - condition note;
 - manual assessment note.
 
@@ -301,6 +301,8 @@ Each submitted application records a formal product-verification result.
 
 For Unsecured Consumer Loan, an authorized Staff reviewer records exactly one of `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION`, together with the authoritative Staff actor, completion time, and restricted internal assessment evidence. `VERIFIED` means that manual evidence-consistency and basic repayment-capacity assessment is complete; it is not credit approval. `FAILED` moves the application to `VERIFICATION_FAILED` and is unsuccessful for that application. `REQUIRES_MORE_INFORMATION` atomically returns the application for a structured correction. The latest verification cycle is authoritative. Correction after a completed verification preserves that cycle as immutable evidence and creates a new `PENDING_MANUAL_REVIEW` cycle linked to the resubmitted correction. The same Loan Officer may verify and later record the review recommendation; maker-checker separation remains between that recommendation and the Approver's final decision.
 
+For Collateral Loan, an authorized Staff reviewer records the same three outcomes against the submitted Collateral facts and processing-ready ownership evidence. The restricted assessment note is required for every outcome. `VERIFIED` means only that the evidence is sufficient for Loan Officer review; it is not credit approval. `FAILED` moves the application to `VERIFICATION_FAILED`. The application cannot be reopened after `FAILED`. `REQUIRES_MORE_INFORMATION` creates a document-only correction. Completed numbered cycles are immutable, the latest cycle is authoritative, and every resubmitted correction creates a linked pending cycle that must be completed before review can restart. The Staff actor who verifies may also perform the later Loan Officer review and recommendation; Approver maker-checker remains measured against the recommending Loan Officer.
+
 ### 6.4 Document Review and Correction
 
 Upload completeness is satisfied when every required checklist item has a current upload or an authorized non-upload outcome. Processing readiness requires every required item to be accepted or waived, while non-required items remain outside the readiness obligation.
@@ -323,6 +325,8 @@ When evidence is missing or requires correction, the application uses:
 Every correction task has one owner: Customer or Staff. Mixed correction plans use separate tasks. Restricted Staff notes must not appear in Customer instructions. A Staff actor who requested a Staff correction must not complete that task.
 
 Task completion requires the requested evidence. Customer-only corrections are resubmitted by the Customer owner. Staff-only and mixed corrections are resubmitted by authorized Staff. For UCL, verification, Loan Officer review, and Approver review may each produce a permitted structured correction over `INCOME_PROOF`, `BANK_STATEMENT`, or `EMPLOYMENT_PROOF`. Requested amount and term remain immutable, and correction resubmission returns to `SUBMITTED` for a fresh product-verification cycle before another review begins.
+
+For Collateral Loan, verification or Loan Officer review may require only replacement or Staff review of the existing `COLLATERAL_OWNERSHIP_EVIDENCE` checklist item. The submitted Collateral type, description, estimated value, ownership status, condition note, requested amount, and requested term remain immutable. Correction cannot create another Collateral asset or supporting checklist item. Resubmission returns to `SUBMITTED` and requires a new linked manual-verification cycle before Loan Officer review.
 
 An authenticated Customer owner may instead terminate a Salary Advance or UCL application while it is `RETURNED_FOR_REVISION`. This narrow cancellation ends the active correction request and changes the application to `CANCELLED`. Salary Advance releases the existing pre-disbursement reservation exactly once in the same transaction; UCL creates no product-exposure effect. It does not require current Partner eligibility because abandonment must remain possible when correction re-verification cannot succeed. Cancellation from other states and Staff or administrative cancellation remain future policies.
 
@@ -362,6 +366,8 @@ MVP approval is exact-request approval:
 Correction decisions require a controlled reason. When both Customer and Staff must act, the correction plan uses separate single-owner tasks. Rejection and return outcomes preserve the Approver's reason. The decision, resulting LoanApplication transition, correction plan or approved terms where applicable, and audit evidence form one business outcome.
 
 Approval and approved-offer generation must complete as one controlled operation. The application must not remain permanently `APPROVED` without Customer-visible approved terms.
+
+Collateral approval requires the approved financial and operational rules in Section 13.4. When those rules are absent, every Collateral approval action must fail without persisting an ApprovalDecision, Loan transition, correction, offer, audit, or review-cycle mutation.
 
 ### 6.7 Approved Offer and Customer Response
 
@@ -654,23 +660,24 @@ End-to-end workflow:
 2. Customer selects an active Collateral Loan product.
 3. Customer enters requested amount and term.
 4. Customer records collateral type, description, estimated value, ownership status, and condition information.
-5. Customer uploads ownership and supporting evidence.
+5. Customer uploads the required ownership evidence.
 6. System validates Customer readiness, product rules, requested amount and term, required collateral facts, checklist upload completeness, and blocking applications.
 7. Customer submits the application.
-8. System records the product-verification result.
-9. An authorized reviewer assesses collateral ownership, condition, supporting evidence, and valuation notes.
-10. Document replacement and correction follow Section 6.4.
-11. The Loan Officer records a recommendation or correction outcome.
-12. The Approver records the independent decision.
-13. Approval generates one immutable offer under the configured Collateral Loan pricing and repayment policy.
-14. Customer accepts, declines, or allows the offer to expire.
-15. Accounting prepares the operational contract and Customer acknowledges the current version.
-16. Accounting confirms document, Customer, destination, and product readiness.
-17. Accounting performs and confirms the external transfer.
-18. System creates the LoanAccount and final schedule and moves the application to `DISBURSED`.
-19. Repayment, overdue state, settlement, and closure follow Section 6.10.
+8. System records the initial numbered `PENDING_MANUAL_REVIEW` verification cycle.
+9. After required ownership evidence is processing-ready, an authorized Staff reviewer records `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION` with a restricted assessment note. Verification is not credit approval.
+10. `REQUIRES_MORE_INFORMATION` permits only replacement or Staff review of the existing ownership-evidence item. Resubmission preserves the completed cycle, returns the application to `SUBMITTED`, and creates a linked pending cycle for re-verification. Submitted structured Collateral facts and requested terms are not editable.
+11. Only the authoritative latest `VERIFIED` cycle permits Loan Officer review. The Loan Officer records a recommendation or a permitted document-only correction outcome; any correction must return through re-verification.
+12. The application enters `APPROVAL_PENDING` after a valid Loan Officer recommendation.
+13. The Approver records an independent decision only when Section 13.4 defines executable financial and operational rules. Without those rules, the application remains `APPROVAL_PENDING`.
+14. After a valid approval decision, Loan generates one immutable offer under the configured Collateral Loan pricing and repayment policy.
+15. Customer accepts, declines, or allows the offer to expire.
+16. Accounting prepares the operational contract and Customer acknowledges the current version.
+17. Accounting confirms document, Customer, destination, and product readiness.
+18. Accounting performs and confirms the external transfer.
+19. System creates the LoanAccount and final schedule and moves the application to `DISBURSED`.
+20. Repayment, overdue state, settlement, and closure follow Section 6.10.
 
-The Collateral Loan MVP excludes automated valuation, automated loan-to-value decisions, collateral custody, notarization, asset-registry integration, insurance integration, repossession, liquidation, and legal enforcement.
+The Collateral Loan MVP excludes post-submission structured-fact editing, supporting-photo expansion, multiple assets through the public API, automated valuation, automated loan-to-value decisions, collateral custody, notarization, asset-registry integration, insurance integration, repossession, liquidation, and legal enforcement.
 
 ---
 
@@ -830,6 +837,10 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-020 | Unsecured Consumer Loan requires income and employment evidence and does not require collateral. |
 | BR-020A | Unsecured Consumer Loan `VERIFIED` records completed manual evidence and basic repayment-capacity verification, not credit approval. The same Loan Officer may verify and recommend; the Approver remains a separate actor. |
 | BR-021 | Collateral Loan requires structured collateral facts and ownership or supporting evidence. |
+| BR-021A | Collateral Loan `VERIFIED` records completed manual assessment sufficient for Loan Officer review and is not credit approval; the same Loan Officer may verify and recommend. |
+| BR-021B | Completed Collateral verification cycles are immutable, the latest numbered cycle is authoritative, and a document correction must create a linked pending cycle and be re-verified before review. |
+| BR-021C | Collateral correction may replace or review only the existing ownership-evidence checklist item; submitted structured Collateral facts and requested terms are not editable in the MVP workflow. |
+| BR-021D | Collateral `FAILED` is an unsuccessful application outcome and is not reopened; correctable evidence issues use `REQUIRES_MORE_INFORMATION`. |
 | BR-022 | Collateral estimated value is advisory in the MVP and does not create an automated loan-to-value decision. |
 | BR-023 | Upload completeness, manual document review and processing readiness, and product verification are separate controls. |
 | BR-024 | Product policy defines which checklist items must be upload-complete before submission. |
@@ -953,7 +964,7 @@ sum(item.totalDue) = totalRepaymentAmount
 |---|---|
 | `SALARY_ADVANCE` | Profile identity evidence when not already satisfied; destination proof when policy requires it; correction evidence such as a recent payslip when requested; otherwise Customer upload may be `NOT_REQUIRED` |
 | `UNSECURED_CONSUMER_LOAN` | Identity evidence, proof of income, payslip or salary statement, bank statement, and labor contract or employment confirmation |
-| `COLLATERAL_LOAN` | Identity evidence, collateral ownership evidence, supporting photos or description attachment where required, and destination proof when policy requires it |
+| `COLLATERAL_LOAN` | Required collateral ownership evidence; supporting photos or additional supporting documents require an explicit product-policy decision |
 
 Product policy determines which evidence must exist before submission and which may be introduced through correction.
 
@@ -964,7 +975,7 @@ Product policy determines which evidence must exist before submission and which 
 | Supported types | `MOTORBIKE`, `CAR`, `ELECTRONICS`, `PROPERTY_DOCUMENT`, `OTHER` |
 | Estimated value | Informational for manual assessment |
 | Automated loan-to-value validation | Not enforced |
-| Decision model | Manual Loan Officer assessment with independent approval |
+| Decision model | Manual verification followed by Loan Officer review and independent approval; approval execution requires the financial and operational rules in Section 13.4 |
 | Collateral review note | Required |
 
 ### 11.5 Offer Validity

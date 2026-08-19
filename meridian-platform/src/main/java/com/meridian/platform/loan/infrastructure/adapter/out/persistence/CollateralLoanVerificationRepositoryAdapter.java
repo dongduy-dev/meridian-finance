@@ -25,8 +25,16 @@ public class CollateralLoanVerificationRepositoryAdapter
     }
 
     @Override
-    public Optional<CollateralLoanVerification> findByLoanApplicationId(UUID loanApplicationId) {
-        return repository.findByLoanApplicationId(loanApplicationId)
+    public Optional<CollateralLoanVerification> findLatestByLoanApplicationId(UUID loanApplicationId) {
+        return repository.findFirstByLoanApplicationIdOrderByVerificationSequenceDesc(loanApplicationId)
+                .map(CollateralLoanVerificationJpaEntity::toDomain);
+    }
+
+    @Override
+    public Optional<CollateralLoanVerification> findLatestByLoanApplicationIdForUpdate(
+            UUID loanApplicationId
+    ) {
+        return repository.findLatestForUpdate(loanApplicationId)
                 .map(CollateralLoanVerificationJpaEntity::toDomain);
     }
 }

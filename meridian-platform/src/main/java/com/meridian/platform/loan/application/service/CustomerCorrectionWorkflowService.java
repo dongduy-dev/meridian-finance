@@ -191,8 +191,10 @@ public class CustomerCorrectionWorkflowService {
                     reasonCode,
                     plan
             );
-            case COLLATERAL_LOAN -> throw invalidPlan(
-                    "Collateral Loan correction execution is not supported."
+            case COLLATERAL_LOAN -> validateCollateralLoanPlan(
+                    application,
+                    reasonCode,
+                    plan
             );
         }
     }
@@ -229,6 +231,40 @@ public class CustomerCorrectionWorkflowService {
                     );
             if (document.documentType() != task.documentType()) {
                 throw invalidPlan("Correction document type does not match the checklist item.");
+            }
+        }
+    }
+
+    private void validateCollateralLoanPlan(
+            LoanApplication application,
+            CorrectionReasonCode reasonCode,
+            CorrectionPlanRequest plan
+    ) {
+        if (reasonCode != CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED
+                && reasonCode != CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED) {
+            throw invalidPlan(
+                    "Collateral Loan correction requires a document replacement or review reason."
+            );
+        }
+        UUID checklistItemId = plan.tasks().getFirst().checklistItemId();
+        for (CorrectionTaskRequest task : plan.tasks()) {
+            if (task.documentType() != DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE
+                    || task.scope()
+                    == com.meridian.platform.approval.domain.model.CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD
+                    || task.createChecklistItem()
+                    || !checklistItemId.equals(task.checklistItemId())) {
+                throw invalidPlan(
+                        "Collateral Loan corrections require replacement or review of the existing ownership evidence."
+                );
+            }
+            LoanDocumentChecklistPort.CurrentDocumentVersionSnapshot document =
+                    documentChecklistPort.requireCurrentVersionSnapshot(
+                            application.id(),
+                            task.checklistItemId(),
+                            task.baselineDocumentVersionId()
+                    );
+            if (document.documentType() != DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE) {
+                throw invalidPlan("Correction document type does not match the ownership checklist item.");
             }
         }
     }
