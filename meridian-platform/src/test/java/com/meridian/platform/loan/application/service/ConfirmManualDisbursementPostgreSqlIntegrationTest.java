@@ -507,13 +507,16 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
     }
 
     @Test
-    void unsupportedProductAndReleasedReservationRollbackEveryGenericWrite() {
-        var unsupported = support.createFixture(true, ProductCode.COLLATERAL_LOAN);
-        var unsupportedFailure = assertThrows(BusinessRuleViolationException.class, () ->
+    void collateralVerificationFailureAndReleasedReservationRollbackEveryGenericWrite() {
+        var invalidCollateral = support.createFixtureWithoutProductVerification(
+                true, ProductCode.COLLATERAL_LOAN
+        );
+        var invalidCollateralFailure = assertThrows(BusinessStateConflictException.class, () ->
                 disbursements.confirm(support.command(
-                        unsupported, UUID.randomUUID(), "COLLATERAL-" + unsupported.token())));
-        assertEquals("PRODUCT_ACTIVATION_NOT_SUPPORTED", unsupportedFailure.getErrorCode());
-        support.assertNoActivation(unsupported);
+                        invalidCollateral, UUID.randomUUID(),
+                        "COLLATERAL-" + invalidCollateral.token())));
+        assertEquals("COLLATERAL_VERIFICATION_INVALID", invalidCollateralFailure.getErrorCode());
+        support.assertNoActivation(invalidCollateral);
 
         var released = support.createFixture(true, ProductCode.SALARY_ADVANCE);
         transactions.executeWithoutResult(status -> {

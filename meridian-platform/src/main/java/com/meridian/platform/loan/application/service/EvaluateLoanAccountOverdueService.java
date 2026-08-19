@@ -45,6 +45,7 @@ public class EvaluateLoanAccountOverdueService
     private final RepaymentInstallmentProgressRepository progressRepository;
     private final RepaymentInstallmentStatusTransitionRepository installmentHistory;
     private final LoanAccountStatusTransitionRepository accountHistory;
+    private final LoanProductRepaymentPolicyResolver repaymentPolicies;
     private final BusinessAuditPublisher auditPublisher;
     private final OverdueServicingCalculator calculator = new OverdueServicingCalculator();
 
@@ -55,6 +56,7 @@ public class EvaluateLoanAccountOverdueService
             RepaymentInstallmentProgressRepository progressRepository,
             RepaymentInstallmentStatusTransitionRepository installmentHistory,
             LoanAccountStatusTransitionRepository accountHistory,
+            LoanProductRepaymentPolicyResolver repaymentPolicies,
             BusinessAuditPublisher auditPublisher
     ) {
         this.applications = applications;
@@ -63,6 +65,7 @@ public class EvaluateLoanAccountOverdueService
         this.progressRepository = progressRepository;
         this.installmentHistory = installmentHistory;
         this.accountHistory = accountHistory;
+        this.repaymentPolicies = repaymentPolicies;
         this.auditPublisher = auditPublisher;
     }
 
@@ -76,6 +79,7 @@ public class EvaluateLoanAccountOverdueService
         if (application.status() != LoanApplicationStatus.DISBURSED) {
             throw conflict();
         }
+        repaymentPolicies.resolve(application.productCode());
         LoanAccount account = accounts
                 .findByLoanApplicationIdForUpdate(application.id())
                 .orElseThrow(EvaluateLoanAccountOverdueService::conflict);

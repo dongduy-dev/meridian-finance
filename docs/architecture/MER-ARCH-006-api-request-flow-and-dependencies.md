@@ -298,7 +298,7 @@ Completion carries `expectedVerificationId`. After locking the latest row, Loan 
 
 The latest `VERIFIED` cycle opens Loan Officer review and recommendation and must remain authoritative when an Approver acts. Approval writes the immutable decision before Loan handles the synchronous outcome in the same transaction. Loan rechecks the latest Collateral verification under the workflow/application lock. Missing or non-verified evidence, invalid or missing pricing policy, an invalid term, or a later mandatory write failure rolls back the ApprovalDecision together with every Loan transition, review-cycle, correction, audit, and ApprovedOffer effect.
 
-`APPROVE` loads the active Collateral default policy and creates one exact-request immutable offer plus its reconciled provisional monthly items before reaching `CUSTOMER_ACCEPTANCE_PENDING`. The other three actions use the common reject, return, or document-only correction paths and create no offer. Competing decisions serialize to one authoritative outcome, and Collateral paths acquire no Salary Advance exposure locks or create Salary Advance movements. Customer offer responses then use the common ApprovedOffer lock and terminal-action semantics; acceptance stops at `CONTRACT_PENDING` because Collateral contract preparation remains fail-closed.
+`APPROVE` loads the active Collateral default policy and creates one exact-request immutable offer plus its reconciled provisional monthly items before reaching `CUSTOMER_ACCEPTANCE_PENDING`. The other three actions use the common reject, return, or document-only correction paths and create no offer. Competing decisions serialize to one authoritative outcome, and Collateral paths acquire no Salary Advance exposure locks or create Salary Advance movements. Customer offer responses then use the common ApprovedOffer lock and terminal-action semantics; acceptance reaches `CONTRACT_PENDING` and opens the common operational-contract flow.
 
 ### Correction Locking and Idempotency
 
@@ -323,7 +323,7 @@ sequenceDiagram
     participant L as Loan
     participant D as Document
     participant C as Customer boundary
-    participant S as Salary Advance state
+    participant P as Product evidence
     participant U as Customer
 
     A->>L: Prepare current contract
@@ -337,13 +337,15 @@ sequenceDiagram
     A->>L: Confirm readiness
     L->>D: Recheck processing readiness in transaction
     L->>C: Lock and inspect captured source account
-    L->>S: Lock and validate unreleased reservation
+    L->>P: Validate reservation or latest verification
     L->>L: Mark contract READY and application DISBURSEMENT_PENDING
 ```
 
 The advisory readiness query uses non-locking reads and does not persist a readiness Boolean. Confirmation acquires the workflow locks and recomputes every blocker before changing state.
 
 Loan stores a protected contract-bound destination snapshot. Normal contract responses expose only the masked destination. Full destination data is available only through the dedicated audited reveal flow.
+
+Salary Advance validates its exact unreleased reservation. UCL and Collateral Loan require the authoritative latest application-owned verification to be `VERIFIED`; contract preparation performs this product-evidence validation before reading or protecting bank-account data. Collateral contract versions copy the accepted offer's 1.5% monthly flat-rate terms and provisional items exactly. Destination refresh supersedes the prior version without repricing and requires fresh Customer acknowledgment. UCL and Collateral paths do not acquire Salary Advance exposure locks or create Salary Advance movements.
 
 ---
 
@@ -376,6 +378,8 @@ The disbursement command carries caller-supplied request identity and external t
 
 Request and workflow advisory locks use separate categories. Identical request replay returns the original outcome without new writes. Reusing the request identity with different content returns an idempotency conflict.
 
+The product activation policy revalidates the authoritative product evidence for both first execution and completed replay. Collateral activation requires the latest verification to remain `VERIFIED`, creates the common active LoanAccount and exact final dated monthly schedule, and reports zero product exposure without touching Salary Advance state.
+
 ---
 
 ## 10. LoanAccount Servicing Flows
@@ -389,6 +393,8 @@ Request and workflow advisory locks use separate categories. Identical request r
 | `POST /api/v1/loan-applications/{id}/loan-account/closure` | `loan:account:close` plus Accounting Officer role | Verifies settled financial provenance and changes only administrative account status, closure evidence, history, and audit. |
 
 Customer ownership concealment belongs in the application service. A Customer receives the same not-found behavior for a missing, foreign-owned, or not-yet-activated account.
+
+Activated Collateral LoanAccounts participate in the common safe read. Repayment, overdue mutation, settlement, and closure commands remain unavailable until a Collateral repayment policy is implemented.
 
 Read operations must not:
 
@@ -414,13 +420,13 @@ Existing application and account mutations use this global order:
 4. product-specific exposure locks when required;
 5. Salary Advance Customer-and-employee-link, limit, and movement rows when the selected policy mutates Salary Advance exposure.
 
-Activation, repayment, and settlement must not acquire product-specific exposure locks before the LoanApplication workflow lock. Salary Advance settlement follows request lock, workflow lock, application/account/schedule/progress row locks, payment validation, Customer-and-employee-link lock, then limit and movement locks. UCL uses the same common financial locks but acquires no Salary Advance exposure lock or row. Canonical external payment-reference uniqueness is enforced by the payment insert and its database constraint; a conflict is resolved without exposing the reference. Closure stops after workflow, application/account, and settlement-evidence verification because it does not mutate exposure. Submission and standalone limit refresh retain their Customer/product or Customer/employee-link to limit order and do not acquire an existing application workflow or account lock.
+Activation, repayment, and settlement must not acquire product-specific exposure locks before the LoanApplication workflow lock. Salary Advance settlement follows request lock, workflow lock, application/account/schedule/progress row locks, payment validation, Customer-and-employee-link lock, then limit and movement locks. UCL uses the same common financial locks but acquires no Salary Advance exposure lock or row. Collateral activation likewise creates no Salary Advance exposure effect, while its servicing commands fail before financial mutation because no repayment policy is registered. Canonical external payment-reference uniqueness is enforced by the payment insert and its database constraint; a conflict is resolved without exposing the reference. Closure stops after workflow, application/account, and settlement-evidence verification because it does not mutate exposure. Submission and standalone limit refresh retain their Customer/product or Customer/employee-link to limit order and do not acquire an existing application workflow or account lock.
 
 ---
 
 ## 11. Overdue Evaluation
 
-The overdue batch samples the injected clock once and derives one UTC business date. It selects stale `ACTIVE` or `OVERDUE` accounts with positive outstanding balances in deterministic evaluation-date and LoanAccount-ID order.
+The overdue batch samples the injected clock once and derives one UTC business date. It selects stale `ACTIVE` or `OVERDUE` accounts with positive outstanding balances for the authoritative Salary Advance and UCL product allow-list, in deterministic evaluation-date and LoanAccount-ID order. Activated Collateral accounts are excluded.
 
 Each candidate runs in its own transaction and follows:
 
@@ -433,6 +439,8 @@ LoanApplication workflow lock
 ```
 
 A previous evaluation date is a state conflict. Repeating the same date is a no-op. A later date advances only the persisted evaluation and derived status. An open account with zero outstanding balance is a system-state conflict.
+
+The direct evaluator validates the application is `DISBURSED` and then resolves the product repayment policy before loading and mutating servicing state. A direct Collateral evaluation therefore returns `PRODUCT_REPAYMENT_NOT_SUPPORTED` without changing the account, progress, history, or audit evidence.
 
 One overdue-evaluation operation identifier groups installment changes produced by the same evaluation. A real `ACTIVE` to `OVERDUE` or `OVERDUE` to `ACTIVE` account transition records account history and one `LOAN_ACCOUNT_STATUS_CHANGED` audit event. Date-only or installment-only advancement does not create a top-level account-status audit.
 
