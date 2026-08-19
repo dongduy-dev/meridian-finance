@@ -504,7 +504,7 @@ The body identifies the exact cycle that Staff assessed. For `VERIFIED` or `FAIL
 }
 ```
 
-The note is trimmed, required, restricted, and limited to 2,000 characters. The service locks the workflow and authoritative latest cycle, compares `expectedVerificationId`, rechecks document readiness, and completes a pending cycle exactly once. A delayed request for an earlier cycle returns `409 STALE_COLLATERAL_VERIFICATION`. `VERIFIED` returns the application to `SUBMITTED`; `FAILED` moves it to `VERIFICATION_FAILED` without a correction; `REQUIRES_MORE_INFORMATION` atomically moves it to `RETURNED_FOR_REVISION` and creates the correction request/tasks.
+The note is trimmed, required, restricted, and limited to 2,000 characters. The API serializes completion against the authoritative latest cycle, rechecks document readiness, and completes a pending cycle exactly once. A mismatched `expectedVerificationId` returns `409 STALE_COLLATERAL_VERIFICATION`. `VERIFIED` returns the application to `SUBMITTED`; `FAILED` moves it to `VERIFICATION_FAILED` without a correction; `REQUIRES_MORE_INFORMATION` atomically moves it to `RETURNED_FOR_REVISION` and creates the correction request/tasks.
 
 The safe response contains verification/application identity, application status, product-verification result, and completion time. It excludes reviewer identity, assessment note, correction internals, audit identity, and submitted Collateral facts. Unknown properties or an invalid body return `400 VALIDATION_FAILED`.
 
@@ -600,7 +600,7 @@ The Approver must differ from the Loan Officer who submitted the applicable reco
 
 For UCL, `APPROVE` atomically records the decision, generates one immutable exact-request offer with `FLAT_ORIGINAL_PRINCIPAL` pricing and `MONTHLY_INSTALLMENT` items, and finishes in `CUSTOMER_ACCEPTANCE_PENDING`. `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and structured mixed Customer/Staff correction remain available common decisions under the UCL document restrictions.
 
-For Collateral Loan at `APPROVAL_PENDING`, every Approver action currently returns `409 PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED`. The synchronous Approval-to-Loan transaction rolls back the attempted ApprovalDecision and audit before any Loan status, review cycle, correction, history, or ApprovedOffer effect becomes durable.
+For Collateral Loan at `APPROVAL_PENDING`, every Approver action returns `409 PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED`. No ApprovalDecision, Loan status, review-cycle, correction, history, audit, or ApprovedOffer effect becomes durable. `MER-ARCH-006-api-request-flow-and-dependencies.md` defines the synchronous coordination and rollback boundary.
 
 Important errors include `MAKER_CHECKER_VIOLATION`, `STALE_REVIEW_CYCLE`, and controlled reason/plan validation errors.
 

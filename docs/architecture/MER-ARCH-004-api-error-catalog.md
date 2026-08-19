@@ -128,7 +128,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 409 | `DECISION_ALREADY_SUBMITTED` | Decision already submitted | Refresh the approval record; the decision is immutable once recorded |
 | 409 | `MAKER_CHECKER_VIOLATION` | Maker-checker violation | Use a different authorized user for the final Approver decision |
 | 422 | `REVIEW_RECOMMENDATION_REQUIRED` | Review recommendation required | Record the Loan Officer recommendation before the final decision |
-| 409 | `PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED` | Product approval execution unsupported | Leave the Collateral application at `APPROVAL_PENDING` until executable product approval is implemented |
+| 409 | `PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED` | Product approval execution unsupported | Do not submit an Approver action for Collateral Loan; retain the application at `APPROVAL_PENDING` |
 
 ---
 
