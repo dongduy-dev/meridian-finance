@@ -43,7 +43,7 @@ class CollateralManualVerificationV45PostgreSqlIntegrationTest {
 
             migrate(schema, null);
 
-            assertEquals("46", latestVersion(schema));
+            assertEquals("47", latestVersion(schema));
             assertEquals(1, jdbc.queryForObject(
                     "select verification_sequence from " + schema
                             + ".collateral_loan_verifications where id = ?",
@@ -141,7 +141,7 @@ class CollateralManualVerificationV45PostgreSqlIntegrationTest {
             migrate(schema, null);
             MigrateResult replay = migrate(schema, null);
 
-            assertEquals("46", latestVersion(schema));
+            assertEquals("47", latestVersion(schema));
             assertEquals(0, replay.migrationsExecuted);
             assertCurrentShape(schema);
         } finally {

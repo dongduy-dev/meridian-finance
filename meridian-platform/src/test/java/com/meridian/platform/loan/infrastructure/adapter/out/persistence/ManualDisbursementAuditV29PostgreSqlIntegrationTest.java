@@ -58,7 +58,7 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
 
     @Test
     void installedLatestRetainsEveryKnownAuditActionAndRejectsUnknownAction() {
-        assertEquals("46", latestVersion(SCHEMA));
+        assertEquals("47", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 

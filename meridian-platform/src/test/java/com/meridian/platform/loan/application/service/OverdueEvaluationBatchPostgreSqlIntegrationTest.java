@@ -159,12 +159,12 @@ class OverdueEvaluationBatchPostgreSqlIntegrationTest {
     }
 
     @Test
-    void candidateQueryAllowsServiceableProductsAndExcludesActiveCollateral() {
+    void candidateQueryAllowsEveryExecutableRepaymentProduct() {
         Activated salaryAdvance = activate("ALLOW-SALARY", ProductCode.SALARY_ADVANCE);
         Activated unsecuredConsumerLoan = activate(
                 "ALLOW-UCL", ProductCode.UNSECURED_CONSUMER_LOAN
         );
-        Activated collateralLoan = activate("EXCLUDE-COLLATERAL", ProductCode.COLLATERAL_LOAN);
+        Activated collateralLoan = activate("ALLOW-COLLATERAL", ProductCode.COLLATERAL_LOAN);
 
         List<UUID> selected = candidates.findCandidates(TARGET, 100).stream()
                 .map(OverdueEvaluationCandidateQuery.Candidate::loanAccountId)
@@ -172,7 +172,7 @@ class OverdueEvaluationBatchPostgreSqlIntegrationTest {
 
         assertTrue(selected.contains(salaryAdvance.accountId()));
         assertTrue(selected.contains(unsecuredConsumerLoan.accountId()));
-        assertFalse(selected.contains(collateralLoan.accountId()));
+        assertTrue(selected.contains(collateralLoan.accountId()));
     }
 
     private void proveCandidateMatrix() {

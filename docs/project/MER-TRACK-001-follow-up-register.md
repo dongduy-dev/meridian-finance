@@ -248,13 +248,13 @@ Status: Done
 Blocks next major feature: No
 
 Completion:
-The authoritative final repayment schedule is immutable obligation evidence. Salary Advance and UCL support manual repayment posting, deterministic allocation, paid/outstanding tracking, contractual payoff to `SETTLED`, date-driven overdue evaluation, secured servicing reads, payment-backed Administrative Full-Balance Settlement, and separate administrative closure to `CLOSED`. Salary Advance alone performs exact principal used-exposure release; UCL reports zero product exposure release and creates no Salary Advance movement.
+The authoritative final repayment schedule is immutable obligation evidence. Salary Advance, UCL, and Collateral Loan support manual repayment posting, deterministic allocation, paid/outstanding tracking, contractual payoff to `SETTLED`, date-driven overdue evaluation, secured servicing reads, payment-backed Administrative Full-Balance Settlement, and separate administrative closure to `CLOSED`. Salary Advance alone performs exact principal used-exposure release; UCL and Collateral report zero product exposure release and create no Salary Advance movement.
 
 Evidence:
-V32-V35 provide repayment, durable outcome, exposure-release, history, audit, and overdue-candidate foundations. V36 distinguishes settlement payment transactions, adds immutable approved-settlement and closure evidence, permissions, lifecycle vocabulary, and reciprocal deferred reconciliation. V42 makes the existing reconciliation functions product-aware so Salary Advance preserves exact release semantics and UCL enforces zero exposure release. The APIs preserve scheduled obligations separately from payment/allocation evidence and enforce ownership, role, and permission boundaries.
+V32-V35 provide repayment, durable outcome, exposure-release, history, audit, and overdue-candidate foundations. V36 distinguishes settlement payment transactions, adds immutable approved-settlement and closure evidence, permissions, lifecycle vocabulary, and reciprocal deferred reconciliation. V42 makes the existing reconciliation functions product-aware so Salary Advance preserves exact release semantics and UCL enforces zero exposure release; V47 extends that explicit zero-exposure behavior to Collateral. The APIs preserve scheduled obligations separately from payment/allocation evidence and enforce ownership, role, and permission boundaries.
 
 Deferred boundary:
-Discounted or negotiated settlement, concession, reversal, refund, waiver, write-off, suspense/unapplied cash, payment/bank integration, reconciliation, ledger, collections, notifications, and Collateral servicing remain separate future capabilities. Administrative Full-Balance Settlement and LoanAccount closure are complete for the approved Salary Advance and UCL semantics.
+Discounted or negotiated settlement, concession, reversal, refund, waiver, write-off, suspense/unapplied cash, payment/bank integration, reconciliation, ledger, collections, and notifications remain separate future capabilities. Administrative Full-Balance Settlement and LoanAccount closure are complete for the approved Salary Advance, UCL, and Collateral semantics.
 
 ### MER-FU-012 - Implement document checklist and manual document review foundation
 
@@ -882,11 +882,11 @@ Type: Deferred feature
 
 Priority: P1
 
-Status: Deferred
+Status: Done
 
 Blocks current checkpoint: No
 
-Completed in Collateral Loan CP1-CP4:
+Completed in Collateral Loan CP1-CP5:
 
 - Authenticated Customer-owned origination for the active `COLLATERAL_LOAN` / `SECURED` product.
 - Customer readiness, current product amount bounds, whole-VND amount, and exact 6/12/18/24-month term validation.
@@ -904,18 +904,17 @@ Completed in Collateral Loan CP1-CP4:
 - Operational contract preparation that requires latest `VERIFIED` Collateral evidence before protected destination capture and copies accepted financial terms and items exactly.
 - Customer acknowledgment, product-aware readiness, controlled destination refresh, and audited destination reveal through the common contract controls.
 - Idempotent manual-disbursement activation into `DISBURSED` and an `ACTIVE` LoanAccount with an exact final dated monthly schedule and zero Salary Advance exposure effect.
-- Activated LoanAccount reads, overdue-batch exclusion, and direct overdue/repayment-policy rejection without Collateral servicing mutation.
-- PostgreSQL-backed migration, policy constraints, rollback, competing-decision, duplicate-offer, ownership, lifecycle, contract, activation, replay, and schedule proof through LoanAccount creation.
+- Activated LoanAccount reads plus partial and early repayment with deterministic common allocation, durable outcomes, replay, history, and ownership concealment.
+- Date-driven overdue selection, `ACTIVE -> OVERDUE` evaluation, same-date no-op, later evaluation, and payment-driven cure using the common scheduler and servicing calculation.
+- Ordinary contractual payoff and exact Administrative Full-Balance Settlement to `SETTLED`, followed by separate Accounting closure to `CLOSED`.
+- Zero Collateral product-exposure release and no Salary Advance limit/movement, Partner, or post-activation verification dependency.
+- PostgreSQL-backed migration, policy constraints, rollback, concurrency, replay, ownership, lifecycle, contract, activation, repayment, overdue, settlement, closure, and reconciliation proof through terminal LoanAccount state.
 
 Still deferred:
 
-- Executable Collateral repayment, overdue evaluation/cure, contractual payoff, Administrative Full-Balance Settlement, and closure using the approved common controls and zero Salary Advance exposure semantics.
 - LTV, automated valuation, custody, registry, insurance, enforcement, repossession, liquidation, OCR, and external valuation integration.
 - Supporting-photo policy and any rule for multiple Collateral assets through the API.
 - Any product-scoped outstanding Collateral LoanAccount restriction; no such business rule is currently approved.
-
-Suggested future branch name:
-`feature/collateral-servicing`
 
 ### MER-FU-040 - Add exact verification identity to UCL completion
 
@@ -962,5 +961,5 @@ Suggested future branch name:
 ## Recommended Next Roadmap
 
 1. Define reversal/refund, suspense/unapplied cash, waiver/write-off, discounted settlement, reconciliation, ledger, and collections rules before selecting another financial-servicing continuation.
-2. Define and implement Collateral repayment, overdue, settlement, and closure behavior while preserving the current servicing-policy fail-closed boundary until that complete slice is ready.
+2. Select the next approved product or operational checkpoint without expanding Collateral into unapproved valuation, custody, enforcement, or outstanding-debt rules.
 3. Complete production document storage, malware-scanning, retention, and operational hardening before deployment.

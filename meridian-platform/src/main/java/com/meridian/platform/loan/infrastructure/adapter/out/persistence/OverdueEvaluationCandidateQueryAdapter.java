@@ -32,7 +32,9 @@ public class OverdueEvaluationCandidateQueryAdapter
                 FROM loan_accounts account
                 JOIN loan_applications application
                   ON application.id = account.loan_application_id
-                WHERE application.product_code IN ('SALARY_ADVANCE', 'UNSECURED_CONSUMER_LOAN')
+                WHERE application.product_code IN (
+                    'SALARY_ADVANCE', 'UNSECURED_CONSUMER_LOAN', 'COLLATERAL_LOAN'
+                )
                   AND account.status IN ('ACTIVE', 'OVERDUE')
                   AND account.total_outstanding > 0
                   AND account.servicing_evaluation_date < ?
