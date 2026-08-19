@@ -1,7 +1,7 @@
 {
     "info":  {
                  "name":  "Meridian Platform API - Full Current Endpoint Test Collection",
-                 "description":  "JWT/RBAC Postman collection for all currently implemented Meridian backend endpoints.\n\nRecommended run order:\n1. Run the Auth folder to capture role-specific Bearer tokens.\n2. Run Public and Partner Admin requests.\n3. Run Customer Profile and Bank Accounts, then Customer Employee Verification, then Salary Advance Application.\n4. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n5. For UCL, prepare and accept the required evidence, enable uclOfferScenarioEnabled, then run the UCL verification-through-offer requests in order. Separate prepared fixture variables enable FAILED, REQUIRES_MORE_INFORMATION, correction/re-verification, cancellation, and outstanding-debt examples.\n6. For Collateral Loan, originate the application, use the returned ownership checklist item with the common upload/review/completion requests, enable collateralVerificationScenarioEnabled, then run the CP2 sequence through APPROVAL_PENDING and its expected fail-closed approval response.\n\nThe Salary Advance, UCL, and Collateral happy paths are duplicate-sensitive because the authenticated demo customer can have only one active application per product. Run them on a fresh local database, or reset test data before repeating a full happy-path flow.",
+                 "description":  "JWT/RBAC Postman collection for all currently implemented Meridian backend endpoints.\n\nRecommended run order:\n1. Run the Auth folder to capture role-specific Bearer tokens.\n2. Run Public and Partner Admin requests.\n3. Run Customer Profile and Bank Accounts, then Customer Employee Verification, then Salary Advance Application.\n4. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n5. For UCL, prepare and accept the required evidence, enable uclOfferScenarioEnabled, then run the UCL verification-through-offer requests in order. Separate prepared fixture variables enable FAILED, REQUIRES_MORE_INFORMATION, correction/re-verification, cancellation, and outstanding-debt examples.\n6. For Collateral Loan, originate the application, use the returned ownership checklist item with the common upload/review/completion requests, enable collateralVerificationScenarioEnabled, then run the CP3 sequence through approval, exact offer assertions, Customer response, and the expected fail-closed contract boundary. Separate prepared fixture variables exercise the other Approver and offer-terminal outcomes.\n\nThe Salary Advance, UCL, and Collateral happy paths are duplicate-sensitive because the authenticated demo customer can have only one active application per product. Run them on a fresh local database, or reset test data before repeating a full happy-path flow.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "auth":  {
@@ -171,7 +171,52 @@
                          "key":  "collateralVerificationScenarioEnabled",
                          "value":  "false",
                          "type":  "string",
-                         "description":  "Set true after the required Collateral ownership evidence is accepted and the application is SUBMITTED to run CP2 through APPROVAL_PENDING."
+                         "description":  "Set true after the required Collateral ownership evidence is accepted and the application is SUBMITTED to run CP3 through approved-offer acceptance and the contract stop."
+                     },
+                     {
+                         "key":  "collateralRejectApplicationId",
+                         "value":  "",
+                         "type":  "string",
+                         "description":  "A separate verified Collateral application in APPROVAL_PENDING for the REJECT example."
+                     },
+                     {
+                         "key":  "collateralReturnApplicationId",
+                         "value":  "",
+                         "type":  "string",
+                         "description":  "A separate verified Collateral application in APPROVAL_PENDING for the return-to-review example."
+                     },
+                     {
+                         "key":  "collateralCorrectionApplicationId",
+                         "value":  "",
+                         "type":  "string",
+                         "description":  "A separate verified Collateral application in APPROVAL_PENDING for the document-only correction example."
+                     },
+                     {
+                         "key":  "collateralCorrectionReviewCycleId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "collateralCorrectionChecklistItemId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "collateralCorrectionBaselineVersionId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "collateralDeclineApplicationId",
+                         "value":  "",
+                         "type":  "string",
+                         "description":  "A separate Customer-owned Collateral application in CUSTOMER_ACCEPTANCE_PENDING for decline and replay."
+                     },
+                     {
+                         "key":  "collateralExpiredOfferApplicationId",
+                         "value":  "",
+                         "type":  "string",
+                         "description":  "A separate Customer-owned Collateral application whose pending offer is already past expiresAt."
                      },
                      {
                          "key":  "uclOfferScenarioEnabled",
@@ -2426,7 +2471,7 @@
                               ]
                  },
                  {
-                     "name":  "05B Loan Application - Collateral Loan CP1 and CP2",
+                     "name":  "05B Loan Application - Collateral Loan CP1 through CP3",
                      "item":  [
                                   {
                                       "name":  "POST Collateral Loan application - happy path",
@@ -2460,15 +2505,93 @@
                                   },
                                   {
                                       "name":  "POST recommend Collateral approval",
-                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/review-recommendations","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Records the common positive recommendation and moves the Collateral application to the CP2 terminal boundary, APPROVAL_PENDING.","body":{"mode":"raw","raw":"{\n  \"action\": \"RECOMMEND_APPROVAL\",\n  \"reason\": \"Manual collateral verification and document review are complete.\",\n  \"internalNotes\": \"Prepared Collateral CP2 positive-path scenario.\"\n}","options":{"raw":{"language":"json"}}}},
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/review-recommendations","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Records the common positive recommendation and moves the verified Collateral application to APPROVAL_PENDING.","body":{"mode":"raw","raw":"{\n  \"action\": \"RECOMMEND_APPROVAL\",\n  \"reason\": \"Manual collateral verification and document review are complete.\",\n  \"internalNotes\": \"Prepared Collateral CP3 positive-path scenario.\"\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
                                       "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Recommendation belongs to the Collateral application\", () => pm.expect(pm.response.json().loanApplicationId).to.eql(pm.collectionVariables.get(\"collateralLoanApplicationId\")));"]}}]
                                   },
                                   {
-                                      "name":  "POST approve Collateral - expected fail-closed boundary",
-                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"CP2 deliberately stops at APPROVAL_PENDING. Every Collateral Approver action rolls back without durable decision, transition, audit, correction, or offer evidence.","body":{"mode":"raw","raw":"{\n  \"action\": \"APPROVE\",\n  \"reason\": null,\n  \"internalNotes\": null\n}","options":{"raw":{"language":"json"}}}},
+                                      "name":  "POST approve Collateral and generate exact-request offer",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Atomically records the Collateral approval and creates one exact-request 1.5% flat monthly offer with no Salary Advance exposure effect.","body":{"mode":"raw","raw":"{\n  \"action\": \"APPROVE\",\n  \"reason\": null,\n  \"internalNotes\": null\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
-                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.test(\"Collateral approval remains unsupported\", () => pm.expect(pm.response.json().errorCode).to.eql(\"PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED\"));"]}}]
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Approval decision belongs to the Collateral application\", () => pm.expect(pm.response.json().loanApplicationId).to.eql(pm.collectionVariables.get(\"collateralLoanApplicationId\")));"]}}]
+                                  },
+                                  {
+                                      "name":  "GET Collateral approved offer - exact immutable terms",
+                                      "request":  {"method":"GET","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/approved-offer","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Reads the immutable Collateral offer without applying expiry or changing application state."},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Collateral financial policy snapshot is exact\", () => { pm.expect(json.status).to.eql(\"PENDING\"); pm.expect(json.approvedPrincipal).to.eql(25000000); pm.expect(json.approvedTermMonths).to.eql(12); pm.expect(json.interestCalculationMethod).to.eql(\"FLAT_ORIGINAL_PRINCIPAL\"); pm.expect(json.flatMonthlyInterestRate).to.eql(0.015); pm.expect(json.totalInterest).to.eql(4500000); pm.expect(json.feeAmount).to.eql(0); pm.expect(json.totalRepaymentAmount).to.eql(29500000); pm.expect(json.repaymentMethod).to.eql(\"MONTHLY_INSTALLMENT\"); pm.expect(json.repaymentItems).to.have.length(12); });","pm.test(\"Provisional items are undated and reconcile exactly\", () => { const principal = json.repaymentItems.reduce((sum, item) => sum + Number(item.principalDue), 0); const interest = json.repaymentItems.reduce((sum, item) => sum + Number(item.interestDue), 0); const fees = json.repaymentItems.reduce((sum, item) => sum + Number(item.feeDue), 0); const total = json.repaymentItems.reduce((sum, item) => sum + Number(item.totalDue), 0); pm.expect(principal).to.eql(25000000); pm.expect(interest).to.eql(4500000); pm.expect(fees).to.eql(0); pm.expect(total).to.eql(29500000); json.repaymentItems.forEach(item => pm.expect(item).not.to.have.property(\"dueDate\")); });","pm.collectionVariables.set(\"collateralOfferFinancialSnapshot\", JSON.stringify({ principal: json.approvedPrincipal, term: json.approvedTermMonths, rate: json.flatMonthlyInterestRate, interest: json.totalInterest, fee: json.feeAmount, total: json.totalRepaymentAmount, items: json.repaymentItems }));"]}}]
+                                  },
+                                  {
+                                      "name":  "GET Collateral approved offer - reject foreign Customer",
+                                      "request":  {"method":"GET","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/approved-offer","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{otherCustomerAccessToken}}","type":"string"}]},"description":"Confirms that another authenticated Customer cannot read the Collateral offer."},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\" || !pm.collectionVariables.get(\"otherCustomerAccessToken\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 403\", () => pm.response.to.have.status(403));","pm.test(\"Foreign ownership is rejected safely\", () => pm.expect(pm.response.json().errorCode).to.eql(\"ACCESS_DENIED\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "POST accept Collateral approved offer",
+                                      "request":  {"method":"POST","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/approved-offer/accept","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Accepts the pending Collateral offer and moves the application to CONTRACT_PENDING without Salary Advance exposure effects."},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"Collateral offer is accepted\", () => pm.expect(pm.response.json().status).to.eql(\"ACCEPTED\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "POST replay Collateral offer acceptance",
+                                      "request":  {"method":"POST","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/approved-offer/accept","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"An identical accepted terminal action returns the existing accepted offer without another transition or audit effect."},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"Accepted replay is stable\", () => pm.expect(pm.response.json().status).to.eql(\"ACCEPTED\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "GET accepted Collateral offer - terms unchanged",
+                                      "request":  {"method":"GET","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/approved-offer","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Confirms that Customer acceptance changes only offer lifecycle evidence, not financial terms or provisional items."},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Accepted offer retains the financial snapshot\", () => { pm.expect(json.status).to.eql(\"ACCEPTED\"); const current = JSON.stringify({ principal: json.approvedPrincipal, term: json.approvedTermMonths, rate: json.flatMonthlyInterestRate, interest: json.totalInterest, fee: json.feeAmount, total: json.totalRepaymentAmount, items: json.repaymentItems }); pm.expect(current).to.eql(pm.collectionVariables.get(\"collateralOfferFinancialSnapshot\")); });"]}}]
+                                  },
+                                  {
+                                      "name":  "POST decline accepted Collateral offer - conflict",
+                                      "request":  {"method":"POST","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/approved-offer/decline","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"A contradictory terminal action cannot replace the accepted outcome."},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.test(\"Contradictory response is rejected\", () => pm.expect(pm.response.json().errorCode).to.eql(\"OFFER_ACTION_CONFLICT\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "POST prepare Collateral contract - expected fail-closed boundary",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/contracts","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},"description":"CP3 stops at CONTRACT_PENDING. Contract preparation remains unsupported and must create no contract or downstream effect.","body":{"mode":"raw","raw":"{\n  \"preparationRequestId\": \"{{$guid}}\",\n  \"expectedCurrentContractVersion\": 0,\n  \"supersessionReasonCode\": null\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.test(\"Collateral contract execution remains unsupported\", () => pm.expect(pm.response.json().errorCode).to.eql(\"PRODUCT_CONTRACT_EXECUTION_UNSUPPORTED\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "POST reject prepared Collateral application",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralRejectApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Prepared independent REJECT action. It creates no ApprovedOffer or Salary Advance effect.","body":{"mode":"raw","raw":"{\n  \"action\": \"REJECT\",\n  \"reason\": \"The verified application is not approved under manual credit review.\",\n  \"internalNotes\": null\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"collateralRejectApplicationId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Collateral rejection is recorded\", () => { const json = pm.response.json(); pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"collateralRejectApplicationId\")); pm.expect(json.action).to.eql(\"REJECT\"); });"]}}]
+                                  },
+                                  {
+                                      "name":  "POST return prepared Collateral application to review",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralReturnApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Prepared independent RETURN_TO_LOAN_OFFICER_REVIEW action using the common review-cycle semantics.","body":{"mode":"raw","raw":"{\n  \"action\": \"RETURN_TO_LOAN_OFFICER_REVIEW\",\n  \"reason\": \"The recommendation requires additional Loan Officer analysis.\",\n  \"internalNotes\": null\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"collateralReturnApplicationId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Collateral return is recorded\", () => pm.expect(pm.response.json().action).to.eql(\"RETURN_TO_LOAN_OFFICER_REVIEW\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "POST request prepared Collateral document correction",
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralCorrectionApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Prepared independent correction action limited to replacement of the existing ownership-evidence item. It cannot change submitted Collateral facts or requested terms.","body":{"mode":"raw","raw":"{\n  \"action\": \"REQUEST_CUSTOMER_OR_STAFF_CORRECTION\",\n  \"reason\": \"The ownership evidence must be replaced before another review cycle.\",\n  \"internalNotes\": null,\n  \"expectedReviewCycleId\": \"{{collateralCorrectionReviewCycleId}}\",\n  \"reasonCode\": \"DOCUMENT_REPLACEMENT_REQUIRED\",\n  \"correctionPlan\": {\n    \"tasks\": [{\n      \"scope\": \"DOCUMENT_REPLACEMENT\",\n      \"responsibleParty\": \"CUSTOMER\",\n      \"documentType\": \"COLLATERAL_OWNERSHIP_EVIDENCE\",\n      \"createChecklistItem\": false,\n      \"checklistItemId\": \"{{collateralCorrectionChecklistItemId}}\",\n      \"baselineDocumentVersionId\": \"{{collateralCorrectionBaselineVersionId}}\",\n      \"customerInstruction\": \"Upload a clear current replacement for the ownership evidence.\",\n      \"staffInstruction\": null\n    }]\n  }\n}","options":{"raw":{"language":"json"}}}},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"collateralCorrectionApplicationId\") || !pm.collectionVariables.get(\"collateralCorrectionReviewCycleId\") || !pm.collectionVariables.get(\"collateralCorrectionChecklistItemId\") || !pm.collectionVariables.get(\"collateralCorrectionBaselineVersionId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Collateral correction is recorded\", () => pm.expect(pm.response.json().action).to.eql(\"REQUEST_CUSTOMER_OR_STAFF_CORRECTION\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "POST decline prepared Collateral offer",
+                                      "request":  {"method":"POST","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralDeclineApplicationId}}/approved-offer/decline","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Declines a separate pending Collateral offer without a Salary Advance release or exposure movement."},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"collateralDeclineApplicationId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"Collateral offer is declined\", () => pm.expect(pm.response.json().status).to.eql(\"DECLINED\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "POST replay prepared Collateral offer decline",
+                                      "request":  {"method":"POST","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralDeclineApplicationId}}/approved-offer/decline","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"An identical declined terminal action returns the existing result without another effect."},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"collateralDeclineApplicationId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"Declined replay is stable\", () => pm.expect(pm.response.json().status).to.eql(\"DECLINED\"));"]}}]
+                                  },
+                                  {
+                                      "name":  "POST accept expired prepared Collateral offer",
+                                      "request":  {"method":"POST","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralExpiredOfferApplicationId}}/approved-offer/accept","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"A guarded Customer action detects a past-due pending Collateral offer, commits the common expiry outcome once, and returns the stable error without a Salary Advance release effect."},
+                                      "response":  [],
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"collateralExpiredOfferApplicationId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.test(\"Expired Collateral offer cannot be accepted\", () => pm.expect(pm.response.json().errorCode).to.eql(\"OFFER_EXPIRED\"));"]}}]
                                   }
                               ]
                  },

@@ -68,7 +68,7 @@ The MVP excludes real financial and payroll integrations, production compliance 
 
 ### 3.5 Architecture Boundary
 
-Meridian is delivered as a modular-monolith backend with one database and multiple frontends. Business ownership and context collaboration are defined in `MER-ARCH-001`; source structure and dependencies are defined in `MER-ARCH-002` and `MER-ARCH-003`. This document does not duplicate package trees or Java dependency rules.
+Meridian is delivered as a modular-monolith backend with one database and multiple frontends. Business ownership and context collaboration are defined in `MER-ARCH-001`; source structure and dependencies are defined in `MER-ARCH-002` and `MER-ARCH-003`.
 
 ---
 
@@ -367,7 +367,7 @@ Correction decisions require a controlled reason. When both Customer and Staff m
 
 Approval and approved-offer generation must complete as one controlled operation. The application must not remain permanently `APPROVED` without Customer-visible approved terms.
 
-Collateral approval requires the approved financial and operational rules in Section 13.4. When those rules are absent, every Collateral approval action must fail without persisting an ApprovalDecision, Loan transition, correction, offer, audit, or review-cycle mutation.
+For Collateral Loan, the authoritative latest manual-verification cycle must remain `VERIFIED` when the Approver acts. All four common actions are available. `APPROVE` generates the exact-request offer defined in Section 11.4; `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` use the common lifecycle and reason requirements without creating an offer.
 
 ### 6.7 Approved Offer and Customer Response
 
@@ -668,7 +668,7 @@ End-to-end workflow:
 10. `REQUIRES_MORE_INFORMATION` permits only replacement or Staff review of the existing ownership-evidence item. Resubmission preserves the completed cycle, returns the application to `SUBMITTED`, and creates a linked pending cycle for re-verification. Submitted structured Collateral facts and requested terms are not editable.
 11. Only the authoritative latest `VERIFIED` cycle permits Loan Officer review. The Loan Officer records a recommendation or a permitted document-only correction outcome; any correction must return through re-verification.
 12. The application enters `APPROVAL_PENDING` after a valid Loan Officer recommendation.
-13. The Approver records an independent decision only when Section 13.4 defines executable financial and operational rules. Without those rules, the application remains `APPROVAL_PENDING`.
+13. The Approver records an independent decision while the authoritative latest Collateral verification remains `VERIFIED`.
 14. After a valid approval decision, Loan generates one immutable offer under the configured Collateral Loan pricing and repayment policy.
 15. Customer accepts, declines, or allows the offer to expire.
 16. Accounting prepares the operational contract and Customer acknowledges the current version.
@@ -841,6 +841,10 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-021B | Completed Collateral verification cycles are immutable, the latest numbered cycle is authoritative, and a document correction must create a linked pending cycle and be re-verified before review. |
 | BR-021C | Collateral correction may replace or review only the existing ownership-evidence checklist item; submitted structured Collateral facts and requested terms are not editable in the MVP workflow. |
 | BR-021D | Collateral `FAILED` is an unsuccessful application outcome and is not reopened; correctable evidence issues use `REQUIRES_MORE_INFORMATION`. |
+| BR-021E | A Collateral Approver action requires the authoritative latest manual-verification cycle to remain `VERIFIED`; all four common Approver actions are available, and only `APPROVE` creates an offer. |
+| BR-021F | Collateral approval preserves the submitted requested amount and term, applies 1.5% monthly flat original-principal interest, charges zero fee, rounds total interest once to whole VND using `HALF_UP`, and creates one reconciled provisional monthly item per approved month. |
+| BR-021G | A Collateral offer contains no due dates; later schedule construction requires a first repayment date after the disbursement value date and no later than one calendar month after it, followed by monthly anchoring with final-calendar-day clipping. |
+| BR-021H | Collateral early or partial payment does not reprice, rebate, or mutate contractual obligations; payoff and Administrative Full-Balance Settlement require the exact complete contractual outstanding, and activation and closure use the common controls. |
 | BR-022 | Collateral estimated value is advisory in the MVP and does not create an automated loan-to-value decision. |
 | BR-023 | Upload completeness, manual document review and processing readiness, and product verification are separate controls. |
 | BR-024 | Product policy defines which checklist items must be upload-complete before submission. |
@@ -904,7 +908,7 @@ These values define Meridian's portfolio and test configuration. They do not rep
 
 For Salary Advance, the term is both the approved month count and the number of provisional repayment items.
 
-The UCL rate and installment rules are executable business policy as defined in Section 7.2. The Collateral Loan rate remains a configuration target pending the decisions identified in Section 13.4.
+The UCL and Collateral Loan rates and installment rules are executable business policies as defined in Sections 7.2 and 11.4.
 
 ### 11.2 Salary Advance Policy Values
 
@@ -975,8 +979,31 @@ Product policy determines which evidence must exist before submission and which 
 | Supported types | `MOTORBIKE`, `CAR`, `ELECTRONICS`, `PROPERTY_DOCUMENT`, `OTHER` |
 | Estimated value | Informational for manual assessment |
 | Automated loan-to-value validation | Not enforced |
-| Decision model | Manual verification followed by Loan Officer review and independent approval; approval execution requires the financial and operational rules in Section 13.4 |
+| Decision model | Manual verification followed by Loan Officer review and independent approval; the latest Collateral verification must remain `VERIFIED` when the Approver acts |
 | Collateral review note | Required |
+| Approval basis | Exact submitted requested amount and term; no counteroffer or loan-to-value adjustment |
+| Interest method | Flat interest on original principal |
+| Monthly interest rate | 1.5% (`0.015000`) |
+| Fee | 0 VND |
+| Repayment method | Monthly installment |
+| Offer validity | 7 calendar days |
+
+Collateral Loan pricing:
+
+```text
+approvedPrincipal = submitted requested amount
+approvedTermMonths = submitted requested term
+unroundedTotalInterest = approvedPrincipal × 0.015 × approvedTermMonths
+totalInterest = round(unroundedTotalInterest, whole VND, HALF_UP)
+feeAmount = 0 VND
+totalRepaymentAmount = approvedPrincipal + totalInterest
+```
+
+The immutable offer contains one provisional repayment item per approved term month and no calendar due dates. Principal and total interest are each divided into equal whole-VND base portions; any remainder is assigned only to the final item. Every item has zero fee, and the items reconcile exactly to the offer totals.
+
+At later manual disbursement, the controlled first repayment date must be after the disbursement value date and no later than one calendar month after it. The first installment uses that date. Later installments use its day-of-month as the monthly anchor, with final-calendar-day clipping when a month does not contain that day.
+
+Early or partial payment does not reprice the loan, rebate future interest, regenerate the schedule, mutate contractual due dates, or reduce contractual interest. Full contractual payoff and Administrative Full-Balance Settlement require the exact complete contractual outstanding. Collateral Loan introduces no product-specific activation or closure control beyond the common lifecycle.
 
 ### 11.5 Offer Validity
 
@@ -1065,22 +1092,13 @@ OCR remains advisory to Document review. Notification remains observational and 
 - full mobile delivery;
 - savings, entrusted, corporate, or other non-lending products.
 
-### 13.4 Business Decisions Required Before Collateral Loan Offer Execution
+### 13.4 Approved Collateral Loan Financial and Operational Decisions
 
-The Collateral Loan workflow and seed configuration are defined, but Meridian does not invent unsupported pricing details. These are MVP-completion dependencies, not post-MVP enhancements.
+The Collateral Loan MVP uses the exact-request pricing and provisional monthly-installment policy in Section 11.4. The 1.5% value is a monthly decimal rate applied to original principal for every approved month. Total interest is rounded once to whole VND using `HALF_UP`; installment allocation does not independently recalculate interest. Fees are zero, and only final-item residual allocation is permitted.
 
-Before Collateral Loan generates an approved offer, its policy must define:
+The offer remains provisional and undated. Exact due dates are created only during the later disbursement workflow from a controlled first repayment date within the approved value-date window. Early payment does not change pricing or contractual obligations, and settlement requires the exact contractual outstanding. Collateral Loan uses the common activation and closure controls without an additional collateral-specific blocker.
 
-- interest-calculation method;
-- rate interpretation and rounding;
-- fee policy;
-- principal, interest, and fee allocation across installments;
-- exact due-date construction;
-- early-payment effect;
-- settlement effect;
-- any collateral-specific activation or closure requirement.
-
-Until those rules are approved, the Collateral Loan catalog rate remains a configuration target rather than a complete executable financial formula. UCL financial policy is defined in Section 7.2.
+These decisions do not introduce automated loan-to-value assessment, a counteroffer, discounted settlement, custody, valuation, enforcement, or another Collateral asset. Those capabilities remain outside the MVP boundary unless separately approved.
 
 ### 13.5 Post-MVP Product Extensions
 

@@ -33,6 +33,17 @@ public interface JpaLoanProductPolicyRepository extends JpaRepository<LoanProduc
     Optional<LoanProductPolicyJpaEntity> findActiveUnsecuredConsumerLoanDefaultPolicy();
 
     @Query(value = """
+            SELECT policy.*
+            FROM loan_product_policies policy
+            JOIN loan_products product
+                ON product.id = policy.loan_product_id
+            WHERE product.product_code = 'COLLATERAL_LOAN'
+              AND policy.policy_code = 'DEFAULT_POLICY'
+              AND policy.active = TRUE
+            """, nativeQuery = true)
+    Optional<LoanProductPolicyJpaEntity> findActiveCollateralLoanDefaultPolicy();
+
+    @Query(value = """
             SELECT term_months
             FROM loan_product_policy_terms
             WHERE loan_product_policy_id = :policyId

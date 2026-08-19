@@ -57,7 +57,7 @@ class CollateralLoanOriginationV44MigrationTest {
     void currentSchemaSnapshotDeclaresV44WithoutCrossModuleDocumentForeignKey() throws IOException {
         String snapshot = Files.readString(CURRENT_SCHEMA);
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V45"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V46"));
         assertTrue(snapshot.contains("CREATE TABLE collaterals"));
         assertTrue(snapshot.contains("CREATE TABLE collateral_loan_verifications"));
         assertTrue(snapshot.contains("'COLLATERAL_OWNERSHIP_EVIDENCE'"));
