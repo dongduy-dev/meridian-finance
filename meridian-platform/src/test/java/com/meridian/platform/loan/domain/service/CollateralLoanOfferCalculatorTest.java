@@ -137,6 +137,36 @@ class CollateralLoanOfferCalculatorTest {
         assertEquals("INVALID_PRODUCT_TERM", exception.getErrorCode());
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {0, -1})
+    void rejectsNonPositiveOfferValidity(int validityDays) {
+        assertInvalidPolicy(
+                InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL,
+                new BigDecimal("0.015000"),
+                money(0),
+                RepaymentMethod.MONTHLY_INSTALLMENT,
+                validityDays,
+                Set.of(6, 12, 18, 24)
+        );
+    }
+
+    @Test
+    void usesPositiveNonDefaultConfiguredOfferValidity() {
+        CollateralLoanOfferPolicy policy = policy(30);
+
+        ApprovedOffer offer = calculator.generate(
+                UUID.randomUUID(),
+                APPLICATION_ID,
+                policy,
+                money(5_000_000),
+                12,
+                GENERATED_AT
+        );
+
+        assertEquals(30, policy.offerValidityDays());
+        assertEquals(GENERATED_AT.plusDays(30), offer.expiresAt());
+    }
+
     @Test
     void rejectsInvalidPolicyVariants() {
         assertInvalidPolicy(
@@ -168,14 +198,6 @@ class CollateralLoanOfferCalculatorTest {
                 new BigDecimal("0.015000"),
                 money(0),
                 RepaymentMethod.MONTHLY_INSTALLMENT,
-                8,
-                Set.of(6, 12, 18, 24)
-        );
-        assertInvalidPolicy(
-                InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL,
-                new BigDecimal("0.015000"),
-                money(0),
-                RepaymentMethod.MONTHLY_INSTALLMENT,
                 7,
                 Set.of(6, 12, 18)
         );
@@ -193,13 +215,17 @@ class CollateralLoanOfferCalculatorTest {
     }
 
     private CollateralLoanOfferPolicy policy() {
+        return policy(7);
+    }
+
+    private CollateralLoanOfferPolicy policy(int validityDays) {
         return new CollateralLoanOfferPolicy(
                 POLICY_ID,
                 InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL,
                 new BigDecimal("0.015000"),
                 money(0),
                 RepaymentMethod.MONTHLY_INSTALLMENT,
-                7,
+                validityDays,
                 Set.of(6, 12, 18, 24)
         );
     }

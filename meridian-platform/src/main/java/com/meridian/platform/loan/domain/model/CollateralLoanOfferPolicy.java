@@ -46,8 +46,8 @@ public record CollateralLoanOfferPolicy(
         if (repaymentMethod != RepaymentMethod.MONTHLY_INSTALLMENT) {
             throw invalidPolicy("Collateral Loan repayment method must be MONTHLY_INSTALLMENT.");
         }
-        if (offerValidityDays != 7) {
-            throw invalidPolicy("Collateral Loan offer validity must be seven calendar days.");
+        if (offerValidityDays <= 0) {
+            throw invalidPolicy("Collateral Loan offer validity must be positive.");
         }
         if (!allowedTermsMonths.equals(REQUIRED_TERMS)) {
             throw invalidPolicy("Collateral Loan policy must allow exactly 6, 12, 18, and 24 month terms.");
