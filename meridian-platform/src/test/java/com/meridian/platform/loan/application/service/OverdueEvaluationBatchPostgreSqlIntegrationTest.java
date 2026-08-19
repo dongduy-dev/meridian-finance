@@ -158,6 +158,23 @@ class OverdueEvaluationBatchPostgreSqlIntegrationTest {
         assertEquals(List.of("NOT_DUE", "NOT_DUE"), statuses(failed.accountId()));
     }
 
+    @Test
+    void candidateQueryAllowsServiceableProductsAndExcludesActiveCollateral() {
+        Activated salaryAdvance = activate("ALLOW-SALARY", ProductCode.SALARY_ADVANCE);
+        Activated unsecuredConsumerLoan = activate(
+                "ALLOW-UCL", ProductCode.UNSECURED_CONSUMER_LOAN
+        );
+        Activated collateralLoan = activate("EXCLUDE-COLLATERAL", ProductCode.COLLATERAL_LOAN);
+
+        List<UUID> selected = candidates.findCandidates(TARGET, 100).stream()
+                .map(OverdueEvaluationCandidateQuery.Candidate::loanAccountId)
+                .toList();
+
+        assertTrue(selected.contains(salaryAdvance.accountId()));
+        assertTrue(selected.contains(unsecuredConsumerLoan.accountId()));
+        assertFalse(selected.contains(collateralLoan.accountId()));
+    }
+
     private void proveCandidateMatrix() {
         Activated activeOne = activate("ACTIVE-ONE");
         Activated activeTwo = activate("ACTIVE-TWO");
@@ -219,7 +236,11 @@ class OverdueEvaluationBatchPostgreSqlIntegrationTest {
     }
 
     private Activated activate(String token) {
-        var fixture = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        return activate(token, ProductCode.SALARY_ADVANCE);
+    }
+
+    private Activated activate(String token, ProductCode productCode) {
+        var fixture = support.createFixture(true, productCode);
         var result = disbursements.confirm(support.command(
                 fixture, UUID.randomUUID(), "BATCH-" + token + "-" + fixture.token()));
         reset(auditPublisher);

@@ -17,10 +17,12 @@ class LoanProductActivationPolicyResolverTest {
         LoanProductActivationPolicy salaryAdvance = policy(ProductCode.SALARY_ADVANCE);
         LoanProductActivationPolicy unsecuredConsumerLoan =
                 policy(ProductCode.UNSECURED_CONSUMER_LOAN);
+        LoanProductActivationPolicy collateralLoan = policy(ProductCode.COLLATERAL_LOAN);
         LoanProductActivationPolicyResolver resolver =
                 new LoanProductActivationPolicyResolver(List.of(
                         salaryAdvance,
-                        unsecuredConsumerLoan
+                        unsecuredConsumerLoan,
+                        collateralLoan
                 ));
 
         assertSame(salaryAdvance, resolver.resolve(ProductCode.SALARY_ADVANCE));
@@ -28,6 +30,7 @@ class LoanProductActivationPolicyResolverTest {
                 unsecuredConsumerLoan,
                 resolver.resolve(ProductCode.UNSECURED_CONSUMER_LOAN)
         );
+        assertSame(collateralLoan, resolver.resolve(ProductCode.COLLATERAL_LOAN));
     }
 
     @Test

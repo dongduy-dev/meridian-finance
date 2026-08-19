@@ -13,6 +13,7 @@ import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -177,6 +178,71 @@ class OverdueEvaluationPostgreSqlIntegrationTest {
         List<OverdueEvaluationCandidateQuery.Candidate> remaining = candidates.findCandidates(target, 10);
         assertFalse(remaining.stream().anyMatch(candidate ->
                 candidate.loanAccountId().equals(chosen.loanAccountId())));
+    }
+
+    @Test
+    void directCollateralEvaluationFailsClosedWithoutMutatingServicingEvidence() {
+        var activated = activate(ProductCode.COLLATERAL_LOAN);
+        UUID accountId = activated.accountId();
+        java.util.Map<String, Object> accountBefore = jdbc.queryForMap(
+                "select status,servicing_evaluation_date,updated_at from loan_accounts where id=?",
+                accountId
+        );
+        List<java.util.Map<String, Object>> progressBefore = jdbc.queryForList(
+                "select installment_number,status,servicing_evaluation_date,updated_at "
+                        + "from repayment_installment_progress where loan_account_id=? "
+                        + "order by installment_number",
+                accountId
+        );
+        int installmentHistoryBefore = count(
+                "select count(*) from repayment_installment_status_transitions history "
+                        + "join repayment_installment_progress progress on "
+                        + "progress.repayment_schedule_item_id=history.repayment_schedule_item_id "
+                        + "where progress.loan_account_id=?",
+                accountId
+        );
+        int accountHistoryBefore = count(
+                "select count(*) from loan_account_status_transitions where loan_account_id=?",
+                accountId
+        );
+        int auditBefore = count(
+                "select count(*) from audit_events where entity_type='LOAN_ACCOUNT' and entity_id=?",
+                accountId
+        );
+
+        BusinessRuleViolationException failure = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> evaluate(
+                        activated.applicationId(), accountId, LocalDate.of(2026, 8, 29)
+                )
+        );
+
+        assertEquals("PRODUCT_REPAYMENT_NOT_SUPPORTED", failure.getErrorCode());
+        assertEquals(accountBefore, jdbc.queryForMap(
+                "select status,servicing_evaluation_date,updated_at from loan_accounts where id=?",
+                accountId
+        ));
+        assertEquals(progressBefore, jdbc.queryForList(
+                "select installment_number,status,servicing_evaluation_date,updated_at "
+                        + "from repayment_installment_progress where loan_account_id=? "
+                        + "order by installment_number",
+                accountId
+        ));
+        assertEquals(installmentHistoryBefore, count(
+                "select count(*) from repayment_installment_status_transitions history "
+                        + "join repayment_installment_progress progress on "
+                        + "progress.repayment_schedule_item_id=history.repayment_schedule_item_id "
+                        + "where progress.loan_account_id=?",
+                accountId
+        ));
+        assertEquals(accountHistoryBefore, count(
+                "select count(*) from loan_account_status_transitions where loan_account_id=?",
+                accountId
+        ));
+        assertEquals(auditBefore, count(
+                "select count(*) from audit_events where entity_type='LOAN_ACCOUNT' and entity_id=?",
+                accountId
+        ));
     }
 
     @Test
@@ -505,7 +571,11 @@ class OverdueEvaluationPostgreSqlIntegrationTest {
     }
 
     private Activated activate() {
-        var fixture = support.createFixture(true, ProductCode.SALARY_ADVANCE);
+        return activate(ProductCode.SALARY_ADVANCE);
+    }
+
+    private Activated activate(ProductCode productCode) {
+        var fixture = support.createFixture(true, productCode);
         var activation = disbursements.confirm(support.command(
                 fixture, UUID.randomUUID(), "OVERDUE-" + fixture.token()));
         reset(auditPublisher, progressRepository, installmentHistory, accountRepository,

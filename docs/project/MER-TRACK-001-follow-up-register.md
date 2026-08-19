@@ -866,7 +866,6 @@ Completed:
 - Separate Accounting closure to `CLOSED`, with zero UCL product-exposure release and no Salary Advance movement.
 - Customer-owned UCL cancellation from `RETURNED_FOR_REVISION`, with exact replay and no product-exposure effect.
 - Product-scoped outstanding-debt protection for UCL origination and resubmission, with zero-outstanding `SETTLED` or `CLOSED` accounts permitted and inconsistent state failing closed.
-- Fail-closed Collateral Loan contract-execution guards.
 
 Still deferred:
 
@@ -875,7 +874,7 @@ Still deferred:
 - Automated credit-bureau, income-verification, scoring, and bank-statement parsing.
 - Payment-provider integration, reversal/refund, discounted settlement, collections, and ledger capabilities.
 
-### MER-FU-039 - Complete Collateral Loan beyond approved-offer response
+### MER-FU-039 - Complete Collateral Loan servicing
 
 Area: Loan / Document / Approval / Servicing
 
@@ -887,7 +886,7 @@ Status: Deferred
 
 Blocks current checkpoint: No
 
-Completed in Collateral Loan CP1-CP3:
+Completed in Collateral Loan CP1-CP4:
 
 - Authenticated Customer-owned origination for the active `COLLATERAL_LOAN` / `SECURED` product.
 - Customer readiness, current product amount bounds, whole-VND amount, and exact 6/12/18/24-month term validation.
@@ -901,19 +900,22 @@ Completed in Collateral Loan CP1-CP3:
 - Latest-verified gating for all four common Approver actions, including document-only correction and independent maker-checker enforcement.
 - Exact-request pricing at 1.5% monthly flat original-principal interest, zero fee, whole-VND `HALF_UP` total-interest rounding, and seven-calendar-day offer validity.
 - Immutable common ApprovedOffer snapshots with one reconciled undated monthly-installment item per approved month for exact 6/12/18/24-month terms.
-- Generic Customer offer read, expiry, accept, and decline behavior; acceptance stops at `CONTRACT_PENDING`, and Collateral creates no Salary Advance exposure effect.
-- PostgreSQL-backed migration, policy constraints, rollback, competing-decision, duplicate-offer, ownership, and lifecycle proof through offer response.
+- Generic Customer offer read, expiry, accept, and decline behavior; acceptance reaches `CONTRACT_PENDING`, and Collateral creates no Salary Advance exposure effect.
+- Operational contract preparation that requires latest `VERIFIED` Collateral evidence before protected destination capture and copies accepted financial terms and items exactly.
+- Customer acknowledgment, product-aware readiness, controlled destination refresh, and audited destination reveal through the common contract controls.
+- Idempotent manual-disbursement activation into `DISBURSED` and an `ACTIVE` LoanAccount with an exact final dated monthly schedule and zero Salary Advance exposure effect.
+- Activated LoanAccount reads, overdue-batch exclusion, and direct overdue/repayment-policy rejection without Collateral servicing mutation.
+- PostgreSQL-backed migration, policy constraints, rollback, competing-decision, duplicate-offer, ownership, lifecycle, contract, activation, replay, and schedule proof through LoanAccount creation.
 
 Still deferred:
 
-- Operational contract preparation, protected destination capture, Customer acknowledgment, readiness, manual disbursement, LoanAccount activation, and final dated schedule construction.
 - Executable Collateral repayment, overdue evaluation/cure, contractual payoff, Administrative Full-Balance Settlement, and closure using the approved common controls and zero Salary Advance exposure semantics.
 - LTV, automated valuation, custody, registry, insurance, enforcement, repossession, liquidation, OCR, and external valuation integration.
 - Supporting-photo policy and any rule for multiple Collateral assets through the API.
 - Any product-scoped outstanding Collateral LoanAccount restriction; no such business rule is currently approved.
 
 Suggested future branch name:
-`feature/collateral-contract-activation`
+`feature/collateral-servicing`
 
 ### MER-FU-040 - Add exact verification identity to UCL completion
 
@@ -960,5 +962,5 @@ Suggested future branch name:
 ## Recommended Next Roadmap
 
 1. Define reversal/refund, suspense/unapplied cash, waiver/write-off, discounted settlement, reconciliation, ledger, and collections rules before selecting another financial-servicing continuation.
-2. Implement Collateral operational contract, activation, and final dated schedule from the accepted CP3 offer while preserving the current fail-closed boundary until that complete slice is ready.
+2. Define and implement Collateral repayment, overdue, settlement, and closure behavior while preserving the current servicing-policy fail-closed boundary until that complete slice is ready.
 3. Complete production document storage, malware-scanning, retention, and operational hardening before deployment.

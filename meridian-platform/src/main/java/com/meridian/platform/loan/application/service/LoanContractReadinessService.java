@@ -33,6 +33,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
     private final DisbursementBankAccountProtector accountProtector;
     private final SalaryAdvanceVerificationRepository verifications;
     private final UnsecuredConsumerLoanVerificationRepository uclVerifications;
+    private final CollateralLoanVerificationRepository collateralVerifications;
     private final SalaryAdvanceLimitRepository limits;
     private final SalaryAdvanceLimitMovementRepository movements;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
@@ -47,6 +48,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
             DisbursementBankAccountProtector accountProtector,
             SalaryAdvanceVerificationRepository verifications,
             UnsecuredConsumerLoanVerificationRepository uclVerifications,
+            CollateralLoanVerificationRepository collateralVerifications,
             SalaryAdvanceLimitRepository limits,
             SalaryAdvanceLimitMovementRepository movements,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
@@ -56,6 +58,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
         this.corrections = corrections; this.documents = documents; this.bankAccounts = bankAccounts;
         this.accountProtector = accountProtector; this.verifications = verifications; this.limits = limits;
         this.uclVerifications = uclVerifications;
+        this.collateralVerifications = collateralVerifications;
         this.movements = movements; this.transitionRecorder = transitionRecorder;
         this.auditPublisher = auditPublisher; this.currentUserProvider = currentUserProvider; this.clock = clock;
     }
@@ -76,7 +79,6 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
         LoanApplication application = lockApplication(command.loanApplicationId());
         requireAccounting(actor);
         requireContractPending(application);
-        requireExecutableContractPreparation(application);
         ApprovedOffer offer = lockAcceptedOffer(application.id());
         LoanContract current = contracts.findCurrentByApplicationIdForUpdate(application.id()).orElse(null);
         validatePreparationVersion(command, current);
@@ -309,12 +311,13 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
     }
 
     private void requirePreCaptureProductEvidence(LoanApplication application) {
-        if (application.productCode() == ProductCode.UNSECURED_CONSUMER_LOAN
-                && uclVerificationBlocker(application) != null) {
-            throw conflict(
-                    ContractReadinessBlockerCode.UCL_VERIFICATION_INVALID.name(),
-                    "Unsecured Consumer Loan verification is not valid for contract preparation."
-            );
+        ContractReadinessBlockerCode blocker = switch (application.productCode()) {
+            case SALARY_ADVANCE -> null;
+            case UNSECURED_CONSUMER_LOAN -> uclVerificationBlocker(application);
+            case COLLATERAL_LOAN -> collateralVerificationBlocker(application);
+        };
+        if (blocker != null) {
+            throw conflict(blocker.name(), "Product verification is not valid for contract preparation.");
         }
     }
 
@@ -326,8 +329,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
         return switch (application.productCode()) {
             case SALARY_ADVANCE -> reservationBlocker(application, approvedPrincipal, lock);
             case UNSECURED_CONSUMER_LOAN -> uclVerificationBlocker(application);
-            case COLLATERAL_LOAN ->
-                    ContractReadinessBlockerCode.PRODUCT_CONTRACT_EXECUTION_UNSUPPORTED;
+            case COLLATERAL_LOAN -> collateralVerificationBlocker(application);
         };
     }
 
@@ -339,6 +341,20 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
                 || !verification.loanApplicationId().equals(application.id())
                 || verification.productVerificationResult() != ProductVerificationResult.VERIFIED) {
             return ContractReadinessBlockerCode.UCL_VERIFICATION_INVALID;
+        }
+        return null;
+    }
+
+    private ContractReadinessBlockerCode collateralVerificationBlocker(
+            LoanApplication application
+    ) {
+        CollateralLoanVerification verification = collateralVerifications
+                .findLatestByLoanApplicationId(application.id())
+                .orElse(null);
+        if (verification == null
+                || !verification.loanApplicationId().equals(application.id())
+                || verification.productVerificationResult() != ProductVerificationResult.VERIFIED) {
+            return ContractReadinessBlockerCode.COLLATERAL_VERIFICATION_INVALID;
         }
         return null;
     }
@@ -393,14 +409,6 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
     private static void requireContractPending(LoanApplication application) {
         if (application.status() != LoanApplicationStatus.CONTRACT_PENDING)
             throw conflict("INVALID_APPLICATION_STATE", "Loan application is not contract-pending.");
-    }
-    private void requireExecutableContractPreparation(LoanApplication application) {
-        if (application.productCode() == ProductCode.COLLATERAL_LOAN) {
-            throw conflict(
-                    ContractReadinessBlockerCode.PRODUCT_CONTRACT_EXECUTION_UNSUPPORTED.name(),
-                    "Loan product contract execution is not supported."
-            );
-        }
     }
     private static void validatePreparationVersion(PrepareLoanContractUseCase.Command command, LoanContract current) {
         int actual = current == null ? 0 : current.contractVersion();

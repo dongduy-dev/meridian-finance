@@ -34,6 +34,18 @@ final class ManualDisbursementActivationPostgreSqlTestSupport {
     }
 
     Fixture createFixture(boolean ready, ProductCode productCode) {
+        return createFixture(ready, productCode, true);
+    }
+
+    Fixture createFixtureWithoutProductVerification(boolean ready, ProductCode productCode) {
+        return createFixture(ready, productCode, false);
+    }
+
+    private Fixture createFixture(
+            boolean ready,
+            ProductCode productCode,
+            boolean includeProductVerification
+    ) {
         return transactions.execute(status -> {
             UUID customerId = UUID.randomUUID();
             UUID customerUserId = UUID.randomUUID();
@@ -47,8 +59,8 @@ final class ManualDisbursementActivationPostgreSqlTestSupport {
                     ? UUID.randomUUID() : null;
             UUID linkId = productCode == ProductCode.SALARY_ADVANCE
                     ? UUID.randomUUID() : null;
-            String repaymentMethod = productCode == ProductCode.UNSECURED_CONSUMER_LOAN
-                    ? "MONTHLY_INSTALLMENT" : "ON_SALARY_DATE";
+            String repaymentMethod = productCode == ProductCode.SALARY_ADVANCE
+                    ? "ON_SALARY_DATE" : "MONTHLY_INSTALLMENT";
             String token = customerId.toString().replace("-", "")
                     .substring(0, 12).toUpperCase();
 
@@ -195,7 +207,8 @@ final class ManualDisbursementActivationPostgreSqlTestSupport {
                         UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                         NOW.minusDays(10)
                 );
-            } else if (productCode == ProductCode.UNSECURED_CONSUMER_LOAN) {
+            } else if (includeProductVerification
+                    && productCode == ProductCode.UNSECURED_CONSUMER_LOAN) {
                 jdbc.update(
                         "insert into unsecured_consumer_loan_verifications "
                                 + "(id,loan_application_id,verification_sequence,"
@@ -205,6 +218,18 @@ final class ManualDisbursementActivationPostgreSqlTestSupport {
                         UUID.randomUUID(), applicationId, NOW.minusDays(10),
                         ACCOUNTING_USER_ID, NOW.minusDays(5),
                         "Verified UCL activation test evidence."
+                );
+            } else if (includeProductVerification
+                    && productCode == ProductCode.COLLATERAL_LOAN) {
+                jdbc.update(
+                        "insert into collateral_loan_verifications "
+                                + "(id,loan_application_id,verification_sequence,"
+                                + "source_correction_request_id,product_verification_result,created_at,"
+                                + "reviewed_by_user_id,reviewed_at,assessment_note) "
+                                + "values (?,?,1,NULL,'VERIFIED',?,?,?,?)",
+                        UUID.randomUUID(), applicationId, NOW.minusDays(10),
+                        ACCOUNTING_USER_ID, NOW.minusDays(5),
+                        "Verified Collateral activation test evidence."
                 );
             }
             return new Fixture(

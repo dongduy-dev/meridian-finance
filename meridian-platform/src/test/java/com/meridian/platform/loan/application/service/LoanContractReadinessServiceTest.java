@@ -35,6 +35,7 @@ class LoanContractReadinessServiceTest {
     @Mock DisbursementBankAccountProtector protector;
     @Mock SalaryAdvanceVerificationRepository verifications;
     @Mock UnsecuredConsumerLoanVerificationRepository uclVerifications;
+    @Mock CollateralLoanVerificationRepository collateralVerifications;
     @Mock SalaryAdvanceLimitRepository limits;
     @Mock SalaryAdvanceLimitMovementRepository movements;
     @Mock LoanApplicationStatusTransitionRecorder transitionRecorder;
@@ -44,7 +45,8 @@ class LoanContractReadinessServiceTest {
 
     @BeforeEach void setUp() {
         service = new LoanContractReadinessService(applications, offers, contracts, corrections, documents,
-                bankAccounts, protector, verifications, uclVerifications, limits, movements,
+                bankAccounts, protector, verifications, uclVerifications, collateralVerifications,
+                limits, movements,
                 transitionRecorder, audit, users,
                 Clock.fixed(Instant.parse("2026-07-23T00:00:00Z"), ZoneOffset.UTC));
     }
@@ -121,6 +123,69 @@ class LoanContractReadinessServiceTest {
 
         assertEquals("UCL_VERIFICATION_INVALID", error.getErrorCode());
         verifyNoInteractions(bankAccounts, protector, verifications, limits, movements);
+        verify(contracts, never()).save(any());
+    }
+
+    @Test void collateralPreparationCopiesAcceptedOfferWithoutSalaryExposureWork() {
+        CollateralFixture f = collateralFixture();
+        stubCollateralPreparation(f);
+        when(collateralVerifications.findLatestByLoanApplicationId(f.application.id()))
+                .thenReturn(Optional.of(f.verification));
+        when(contracts.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        LoanContract prepared = service.prepare(new PrepareLoanContractUseCase.Command(
+                UUID.randomUUID(), f.application.id(), 0, null
+        ));
+
+        assertEquals(f.offer.financialTerms(), prepared.financialTerms());
+        assertEquals(new BigDecimal("0.015000"),
+                prepared.financialTerms().flatMonthlyInterestRate());
+        assertEquals(f.offer.repaymentItems().size(), prepared.repaymentItems().size());
+        assertEquals(
+                f.offer.repaymentItems().stream()
+                        .map(item -> List.of(
+                                item.principalDue(), item.interestDue(), item.feeDue(), item.totalDue()
+                        ))
+                        .toList(),
+                prepared.repaymentItems().stream()
+                        .map(item -> List.of(
+                                item.principalDue(), item.interestDue(), item.feeDue(), item.totalDue()
+                        ))
+                        .toList()
+        );
+        assertTrue(f.sensitive.cleared());
+        verifyNoInteractions(verifications, uclVerifications, limits, movements);
+    }
+
+    @Test void collateralPreparationRejectsEveryInvalidVerificationBeforeSensitiveCapture() {
+        CollateralFixture f = collateralFixture();
+        stubCollateralPreparationWithoutVerification(f);
+        List<Optional<CollateralLoanVerification>> invalid = List.of(
+                Optional.empty(),
+                Optional.of(collateralVerification(
+                        f.application.id(), ProductVerificationResult.PENDING_MANUAL_REVIEW
+                )),
+                Optional.of(collateralVerification(
+                        f.application.id(), ProductVerificationResult.FAILED
+                )),
+                Optional.of(collateralVerification(
+                        f.application.id(), ProductVerificationResult.REQUIRES_MORE_INFORMATION
+                ))
+        );
+
+        for (Optional<CollateralLoanVerification> verification : invalid) {
+            when(collateralVerifications.findLatestByLoanApplicationId(f.application.id()))
+                    .thenReturn(verification);
+            BusinessStateConflictException error = assertThrows(
+                    BusinessStateConflictException.class,
+                    () -> service.prepare(new PrepareLoanContractUseCase.Command(
+                            UUID.randomUUID(), f.application.id(), 0, null
+                    ))
+            );
+            assertEquals("COLLATERAL_VERIFICATION_INVALID", error.getErrorCode());
+        }
+
+        verifyNoInteractions(bankAccounts, protector, verifications, uclVerifications, limits, movements);
         verify(contracts, never()).save(any());
     }
 
@@ -275,6 +340,37 @@ class LoanContractReadinessServiceTest {
         QueryContractReadinessUseCase.Snapshot blocked = service.query(f.application.id(), 1);
         assertFalse(blocked.ready());
         assertTrue(blocked.blockers().contains(ContractReadinessBlockerCode.UCL_VERIFICATION_INVALID));
+    }
+
+    @Test void collateralReadinessRequiresVerifiedEvidenceWithoutSalaryReservationAccess() {
+        CollateralFixture f = collateralFixture();
+        LoanContract acknowledged = collateralContract(f, LoanContractStatus.ACKNOWLEDGED);
+        when(users.currentUser()).thenReturn(staff());
+        when(applications.findById(f.application.id())).thenReturn(Optional.of(f.application));
+        when(offers.findByLoanApplicationId(f.application.id())).thenReturn(Optional.of(f.offer));
+        when(contracts.findCurrentByApplicationId(f.application.id()))
+                .thenReturn(Optional.of(acknowledged));
+        when(documents.isProcessingReady(f.application.id())).thenReturn(true);
+        when(corrections.existsActiveRequestByApplicationId(f.application.id())).thenReturn(false);
+        when(bankAccounts.inspectCaptured(f.application.customerId(), f.accountId))
+                .thenReturn(new ContractBankAccountPort.ContractBankAccountState(true, true, true));
+        when(collateralVerifications.findLatestByLoanApplicationId(f.application.id()))
+                .thenReturn(Optional.of(f.verification));
+
+        QueryContractReadinessUseCase.Snapshot ready = service.query(f.application.id(), 1);
+
+        assertTrue(ready.ready());
+        assertTrue(ready.blockers().isEmpty());
+        verifyNoInteractions(verifications, uclVerifications, limits, movements);
+
+        reset(collateralVerifications);
+        when(collateralVerifications.findLatestByLoanApplicationId(f.application.id()))
+                .thenReturn(Optional.empty());
+        QueryContractReadinessUseCase.Snapshot blocked = service.query(f.application.id(), 1);
+        assertFalse(blocked.ready());
+        assertTrue(blocked.blockers().contains(
+                ContractReadinessBlockerCode.COLLATERAL_VERIFICATION_INVALID
+        ));
     }
 
     @Test void activeCorrectionBlocksPreparationBeforeCustomerOrReservationChecks() {
@@ -487,6 +583,28 @@ class LoanContractReadinessServiceTest {
         when(movements.calculateOutstandingReservedAmount(f.limit.id())).thenReturn(money(1000));
     }
 
+    private void stubCollateralPreparation(CollateralFixture f) {
+        stubCollateralPreparationWithoutVerification(f);
+        when(bankAccounts.capturePrimaryActive(f.application.customerId())).thenReturn(f.sensitive);
+        when(protector.protect(any(byte[].class), any())).thenReturn(
+                new ProtectedBankAccountEnvelope(
+                        "AES-256-GCM", "v1", new byte[12], new byte[]{1},
+                        "DISBURSEMENT_ACCOUNT_V1"
+                )
+        );
+    }
+
+    private void stubCollateralPreparationWithoutVerification(CollateralFixture f) {
+        when(users.currentUser()).thenReturn(staff());
+        when(contracts.findByPreparationRequestId(any())).thenReturn(Optional.empty());
+        when(applications.findByIdForUpdate(f.application.id())).thenReturn(Optional.of(f.application));
+        when(offers.findByLoanApplicationIdForUpdate(f.application.id())).thenReturn(Optional.of(f.offer));
+        when(contracts.findCurrentByApplicationIdForUpdate(f.application.id())).thenReturn(Optional.empty());
+        when(corrections.findActiveRequestByApplicationIdForUpdate(f.application.id()))
+                .thenReturn(Optional.empty());
+        when(documents.isProcessingReady(f.application.id())).thenReturn(true);
+    }
+
     private static AuthenticatedUser staff() {
         return new AuthenticatedUser(UUID.randomUUID(), "accounting@meridian.test", "STAFF", null,
                 Set.of("ACCOUNTING_OFFICER"), Set.of());
@@ -599,6 +717,92 @@ class LoanContractReadinessServiceTest {
                 ? prepared.acknowledge(UUID.randomUUID(), UUID.randomUUID(), preparedAt.plusMinutes(1))
                 : prepared;
     }
+
+    private static CollateralFixture collateralFixture() {
+        UUID customerId = UUID.randomUUID();
+        UUID applicationId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
+        java.time.LocalDateTime now = java.time.LocalDateTime.of(2026, 8, 19, 9, 0);
+        LoanApplication application = new LoanApplication(
+                applicationId, customerId, UUID.randomUUID(), "COLLATERAL-CONTRACT-1",
+                ProductCode.COLLATERAL_LOAN, ProductType.SECURED,
+                LoanApplicationStatus.CONTRACT_PENDING, money(25_000_000), 6,
+                now.minusDays(10)
+        );
+        ApprovedOfferFinancialTerms terms = new ApprovedOfferFinancialTerms(
+                money(25_000_000), 6, InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL,
+                new BigDecimal("0.015000"), money(2_250_000), money(0), money(27_250_000),
+                RepaymentMethod.MONTHLY_INSTALLMENT
+        );
+        List<ProvisionalRepaymentItem> items = java.util.stream.IntStream.rangeClosed(1, 6)
+                .mapToObj(number -> new ProvisionalRepaymentItem(
+                        UUID.randomUUID(), number,
+                        number == 6 ? money(4_166_665) : money(4_166_667),
+                        money(375_000), money(0),
+                        number == 6 ? money(4_541_665) : money(4_541_667)
+                ))
+                .toList();
+        ApprovedOffer offer = new ApprovedOffer(
+                UUID.randomUUID(), applicationId, UUID.randomUUID(), ApprovedOfferStatus.ACCEPTED,
+                terms, items, now.minusDays(3), now.plusDays(4), now.minusDays(1), null, null
+        );
+        CollateralLoanVerification verification = collateralVerification(
+                applicationId, ProductVerificationResult.VERIFIED
+        );
+        SensitiveDisbursementBankAccountDetails sensitive =
+                new SensitiveDisbursementBankAccountDetails(
+                        customerId, accountId, "TEST", "Test Bank", "COLLATERAL CUSTOMER",
+                        "5678", new byte[]{1, 2, 3, 4, 5, 6}
+                );
+        return new CollateralFixture(
+                application, offer, verification, accountId, sensitive
+        );
+    }
+
+    private static CollateralLoanVerification collateralVerification(
+            UUID applicationId,
+            ProductVerificationResult result
+    ) {
+        java.time.LocalDateTime createdAt = java.time.LocalDateTime.of(2026, 8, 12, 9, 0);
+        if (result == ProductVerificationResult.PENDING_MANUAL_REVIEW) {
+            return new CollateralLoanVerification(
+                    UUID.randomUUID(), applicationId, result, createdAt
+            );
+        }
+        return new CollateralLoanVerification(
+                UUID.randomUUID(), applicationId, 1, null, result, createdAt,
+                UUID.randomUUID(), createdAt.plusHours(1), "Reviewed Collateral evidence."
+        );
+    }
+
+    private static LoanContract collateralContract(
+            CollateralFixture f,
+            LoanContractStatus status
+    ) {
+        java.time.LocalDateTime preparedAt = java.time.LocalDateTime.of(2026, 8, 18, 9, 0);
+        List<LoanContractRepaymentItem> items = f.offer.repaymentItems().stream()
+                .map(item -> new LoanContractRepaymentItem(
+                        UUID.randomUUID(), item.id(), item.installmentNumber(),
+                        item.principalDue(), item.interestDue(), item.feeDue(), item.totalDue()
+                ))
+                .toList();
+        LoanContract prepared = LoanContract.prepared(
+                UUID.randomUUID(), f.application.id(), f.offer.id(), "MCT-COLLATERAL-1", 1,
+                f.offer.financialTerms(), items,
+                new ProtectedDisbursementBankAccount(
+                        f.application.customerId(), f.accountId, "TEST", "Test Bank",
+                        "COLLATERAL CUSTOMER", "5678", true, true, preparedAt,
+                        "AES-256-GCM", "v1", new byte[12], new byte[]{1},
+                        "DISBURSEMENT_ACCOUNT_V1"
+                ),
+                UUID.randomUUID(), null, null, UUID.randomUUID(), preparedAt, null
+        );
+        return status == LoanContractStatus.ACKNOWLEDGED
+                ? prepared.acknowledge(
+                        UUID.randomUUID(), UUID.randomUUID(), preparedAt.plusMinutes(1)
+                )
+                : prepared;
+    }
     private static BigDecimal money(long amount) { return BigDecimal.valueOf(amount).setScale(2); }
     private record Fixture(LoanApplication application, ApprovedOffer offer, SalaryAdvanceLimit limit,
                            SalaryAdvanceVerification verification, UUID accountId,
@@ -607,6 +811,13 @@ class LoanContractReadinessServiceTest {
             LoanApplication application,
             ApprovedOffer offer,
             UnsecuredConsumerLoanVerification verification,
+            UUID accountId,
+            SensitiveDisbursementBankAccountDetails sensitive
+    ) {}
+    private record CollateralFixture(
+            LoanApplication application,
+            ApprovedOffer offer,
+            CollateralLoanVerification verification,
             UUID accountId,
             SensitiveDisbursementBankAccountDetails sensitive
     ) {}

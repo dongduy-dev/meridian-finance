@@ -28,12 +28,15 @@ public class OverdueEvaluationCandidateQueryAdapter
         }
         return jdbc.query(
                 """
-                SELECT loan_application_id, id
-                FROM loan_accounts
-                WHERE status IN ('ACTIVE', 'OVERDUE')
-                  AND total_outstanding > 0
-                  AND servicing_evaluation_date < ?
-                ORDER BY servicing_evaluation_date, id
+                SELECT account.loan_application_id, account.id
+                FROM loan_accounts account
+                JOIN loan_applications application
+                  ON application.id = account.loan_application_id
+                WHERE application.product_code IN ('SALARY_ADVANCE', 'UNSECURED_CONSUMER_LOAN')
+                  AND account.status IN ('ACTIVE', 'OVERDUE')
+                  AND account.total_outstanding > 0
+                  AND account.servicing_evaluation_date < ?
+                ORDER BY account.servicing_evaluation_date, account.id
                 LIMIT ?
                 """,
                 (resultSet, rowNumber) -> new Candidate(

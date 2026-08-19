@@ -349,7 +349,7 @@ Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `pr
 
 The application starts in `DOCUMENTS_PENDING` with application-owned sequence-1 `PENDING_MANUAL_REVIEW` Collateral verification. Uploading the required evidence through the existing Document workflow can complete generic upload readiness and advance the application to `SUBMITTED`; it does not complete Collateral verification or permit review. The Staff verification commands in Sections 4.8-4.9 make the terminal decision. Only the authoritative latest `VERIFIED` cycle permits review, recommendation, and an Approver action.
 
-Collateral submission serializes by Customer and product and rejects an existing blocking Collateral application. It deliberately does not impose an outstanding Collateral LoanAccount rule, compare requested amount to estimated value, or create Salary Advance reservation, Partner, or exposure effects. Structured Collateral facts and requested terms are immutable after submission. Approval, pricing, offer generation, expiry, acceptance, and decline are executable; contract preparation, activation, LoanAccounts, final schedules, and servicing remain unsupported.
+Collateral submission serializes by Customer and product and rejects an existing blocking Collateral application. It deliberately does not impose an outstanding Collateral LoanAccount rule, compare requested amount to estimated value, or create Salary Advance reservation, Partner, or exposure effects. Structured Collateral facts and requested terms are immutable after submission. Approval, pricing, offer response, operational contract preparation, manual-disbursement activation, LoanAccount creation, and final schedule construction are executable. Repayment, overdue servicing, settlement, and closure remain unsupported for Collateral Loan.
 
 Important errors:
 
@@ -691,7 +691,7 @@ Safe offer data includes approved principal and term, pricing method, flat month
 
 `GET` is read-only. A missing application or offer returns its stable not-found code; a foreign-owned application returns `403 ACCESS_DENIED`. Acceptance moves an eligible Salary Advance, UCL, or Collateral Loan application to `CONTRACT_PENDING`. Decline or first discovery of pending expiry applies the terminal outcome exactly once. Salary Advance reservation release runs only for Salary Advance; UCL and Collateral Loan create no Salary Advance limit, movement, reservation, conversion, or release effect. An identical Customer response is replay-safe, while a contradictory terminal action returns a conflict.
 
-For Collateral Loan, the safe response preserves the submitted requested principal and term and reports `FLAT_ORIGINAL_PRINCIPAL`, `flatMonthlyInterestRate = 0.015000`, zero fee, `MONTHLY_INSTALLMENT`, and the reconciled provisional items. It contains no final repayment dates. Acceptance stops at `CONTRACT_PENDING`; the contract endpoint remains fail-closed as described in Section 6.2.
+For Collateral Loan, the safe response preserves the submitted requested principal and term and reports `FLAT_ORIGINAL_PRINCIPAL`, `flatMonthlyInterestRate = 0.015000`, zero fee, `MONTHLY_INSTALLMENT`, and the reconciled provisional items. It contains no final repayment dates. Acceptance moves the application to `CONTRACT_PENDING`, where the common operational-contract flow in Section 6.2 begins.
 
 Important conflicts: `OFFER_EXPIRED` and `OFFER_ACTION_CONFLICT`.
 
@@ -717,9 +717,9 @@ Regeneration:
 }
 ```
 
-Regeneration preserves accepted terms and repayment items, supersedes the prior version, refreshes the eligible destination, and requires fresh Customer acknowledgment. Contract preparation is executable for Salary Advance and UCL. A UCL contract copies the accepted offer's exact financial terms and monthly repayment items, requires application-owned `VERIFIED` UCL evidence, captures the eligible destination through the common protected mechanism, and never reads or mutates Salary Advance verification, limit, or movement state. Collateral Loan contract execution remains unsupported.
+Regeneration preserves accepted terms and repayment items, supersedes the prior version, refreshes the eligible destination, and requires fresh Customer acknowledgment. Contract preparation is executable for Salary Advance, UCL, and Collateral Loan. UCL and Collateral contracts copy the accepted offer's exact financial terms and monthly repayment items, require the authoritative latest application-owned product verification to be `VERIFIED`, capture the eligible destination through the common protected mechanism, and never read or mutate Salary Advance verification, limit, or movement state. Product-verification validation occurs before protected bank-account capture.
 
-Important errors: `APPROVED_OFFER_NOT_FOUND`, `OFFER_NOT_ACCEPTED`, `UCL_VERIFICATION_INVALID`, `PRODUCT_CONTRACT_EXECUTION_UNSUPPORTED`, `CONTRACT_VERSION_STALE`, `CONTRACT_REGENERATION_NOT_ALLOWED`, and `IDEMPOTENCY_KEY_REUSED`.
+Important errors: `APPROVED_OFFER_NOT_FOUND`, `OFFER_NOT_ACCEPTED`, `UCL_VERIFICATION_INVALID`, `COLLATERAL_VERIFICATION_INVALID`, `CONTRACT_VERSION_STALE`, `CONTRACT_REGENERATION_NOT_ALLOWED`, and `IDEMPOTENCY_KEY_REUSED`.
 
 ### 6.3 Read and acknowledge contract
 
@@ -770,9 +770,9 @@ Confirmation:
 
 Success moves the contract to `READY_FOR_DISBURSEMENT` and the application to `DISBURSEMENT_PENDING`; it does not perform a transfer or activate a LoanAccount.
 
-Stable blockers include `DOCUMENTS_NOT_PROCESSING_READY`, `ACTIVE_CORRECTION_REQUEST`, `CUSTOMER_INACTIVE`, `CAPTURED_ACCOUNT_MISSING`, `CAPTURED_ACCOUNT_INACTIVE`, `SALARY_ADVANCE_RESERVATION_INVALID`, `SALARY_ADVANCE_RESERVATION_RELEASED`, `UCL_VERIFICATION_INVALID`, `PRODUCT_CONTRACT_EXECUTION_UNSUPPORTED`, `READINESS_ALREADY_CONFIRMED`, and `CONTRACT_VERSION_STALE`.
+Stable blockers include `DOCUMENTS_NOT_PROCESSING_READY`, `ACTIVE_CORRECTION_REQUEST`, `CUSTOMER_INACTIVE`, `CAPTURED_ACCOUNT_MISSING`, `CAPTURED_ACCOUNT_INACTIVE`, `SALARY_ADVANCE_RESERVATION_INVALID`, `SALARY_ADVANCE_RESERVATION_RELEASED`, `UCL_VERIFICATION_INVALID`, `COLLATERAL_VERIFICATION_INVALID`, `READINESS_ALREADY_CONFIRMED`, and `CONTRACT_VERSION_STALE`.
 
-Product readiness is explicit: Salary Advance requires its exact unreleased reservation, while UCL requires application-owned `VERIFIED` evidence and has no Salary Advance reservation or exposure effect. Collateral Loan fails closed as unsupported.
+Product readiness is explicit: Salary Advance requires its exact unreleased reservation. UCL and Collateral Loan require authoritative latest application-owned `VERIFIED` evidence and have no Salary Advance reservation or exposure effect.
 
 ---
 
@@ -816,7 +816,7 @@ The body cannot supply Customer, product, destination, amount, pricing, term, li
 
 The external reference is normalized, retained as protected evidence, and never returned. Success returns safe application/account/disbursement/schedule identifiers, amount and dates, activation time, final schedule, and `idempotentReplay`.
 
-Salary Advance activation converts the exact reserved principal to used exposure. UCL activation creates the same common account, disbursement, final-schedule, progress, history, transition, and audit evidence without creating or mutating any Salary Advance exposure artifact. Its final `MONTHLY_INSTALLMENT` schedule copies the contract amounts and item order exactly and applies the controlled first repayment date plus monthly anchor.
+Salary Advance activation converts the exact reserved principal to used exposure. UCL and Collateral Loan activation create the same common account, disbursement, final-schedule, progress, history, transition, and audit evidence without creating or mutating any Salary Advance exposure artifact. Their final `MONTHLY_INSTALLMENT` schedules copy the contract amounts and item order exactly and apply the controlled first repayment date plus monthly anchor.
 
 Important errors:
 
@@ -842,6 +842,8 @@ The response contains:
 | Installment servicing | paid/outstanding components, derived status, evaluation date, last payment dates |
 
 The read does not decrypt the destination or perform allocation, overdue evaluation, mutation, audit, or history writes.
+
+An activated Collateral LoanAccount is available through this read contract even though Collateral repayment and overdue servicing remain unsupported.
 
 For Customers, missing, foreign-owned, and unavailable accounts all return `404 LOAN_ACCOUNT_NOT_FOUND`.
 
@@ -944,7 +946,7 @@ Collection:
 docs/api/Meridian-Platform.postman_collection.json
 ```
 
-It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. UCL scenarios include all three verification outcomes, correction and re-verification, cancellation, outstanding-debt rejection, and product-generic servicing through closure. The Collateral folder covers prepared ownership evidence, exact-cycle manual verification, Loan Officer recommendation, all four Approver actions, exact offer assertions, Customer acceptance/decline, ownership concealment, and the explicit contract-execution stop.
+It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. UCL scenarios include all three verification outcomes, correction and re-verification, cancellation, outstanding-debt rejection, and product-generic servicing through closure. The Collateral folder covers prepared ownership evidence, exact-cycle manual verification, Loan Officer recommendation, all four Approver actions, exact offer assertions, Customer acceptance/decline, protected contract preparation, acknowledgment, readiness, destination reveal, activation replay, final schedule reads, ownership concealment, and the explicit repayment-policy stop.
 
 Complex correction scenarios require prepared application, review-cycle, checklist, and version variables. The optional cancellation folder requires `returnedCancellationScenarioEnabled=true` and a separate Customer-owned `cancellationLoanApplicationId` in `RETURNED_FOR_REVISION`; it confirms the command, exact replay, and terminal application GET without exposing internal evidence IDs. Seed fixtures and scenario-specific IDs belong to the collection or its environment, not this API contract.
 

@@ -11,7 +11,6 @@ import com.meridian.platform.loan.application.dto.CollateralDetailsRequest;
 import com.meridian.platform.loan.application.dto.CollateralLoanApplicationDto;
 import com.meridian.platform.loan.application.dto.CollateralLoanApplicationRequest;
 import com.meridian.platform.loan.application.port.in.StartCollateralLoanApplicationUseCase;
-import com.meridian.platform.loan.application.port.in.PrepareLoanContractUseCase;
 import com.meridian.platform.loan.application.port.in.QueryApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
 import com.meridian.platform.loan.application.service.ApplyApprovalDecisionService;
@@ -81,7 +80,6 @@ class CollateralLoanProgressionGuardPostgreSqlIntegrationTest {
     @Autowired private SubmitApprovalDecisionUseCase submitApprovalDecision;
     @Autowired private QueryApprovedOfferUseCase queryApprovedOffer;
     @Autowired private RespondToApprovedOfferUseCase respondToApprovedOffer;
-    @Autowired private PrepareLoanContractUseCase prepareLoanContract;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private CollateralLoanOriginationPostgreSqlIntegrationTest.MutableCurrentUserProvider currentUser;
 
@@ -211,14 +209,6 @@ class CollateralLoanProgressionGuardPostgreSqlIntegrationTest {
         assertEquals("OFFER_ACTION_CONFLICT", assertThrows(
                 BusinessStateConflictException.class,
                 () -> respondToApprovedOffer.declineOffer(applicationId)
-        ).getErrorCode());
-
-        currentUser.useAccountingOfficer(UUID.randomUUID());
-        assertEquals("PRODUCT_CONTRACT_EXECUTION_UNSUPPORTED", assertThrows(
-                BusinessStateConflictException.class,
-                () -> prepareLoanContract.prepare(new PrepareLoanContractUseCase.Command(
-                        UUID.randomUUID(), applicationId, 0, null
-                ))
         ).getErrorCode());
     }
 
