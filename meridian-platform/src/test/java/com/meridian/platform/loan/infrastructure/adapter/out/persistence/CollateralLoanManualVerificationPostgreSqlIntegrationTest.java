@@ -48,6 +48,8 @@ import com.meridian.platform.shared.domain.exception.BusinessStateConflictExcept
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -147,8 +149,9 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
         currentUserProvider.clear();
     }
 
-    @Test
-    void verifiedCollateralReachesApprovalPendingButEveryApprovalActionRollsBack() {
+    @ParameterizedTest
+    @EnumSource(ApprovalDecisionAction.class)
+    void verifiedCollateralExecutesEveryApprovalAction(ApprovalDecisionAction action) {
         ReadyApplication ready = originateAndMakeProcessingReady();
         useLoanOfficer();
         CollateralLoanVerificationStartDto started = verificationUseCase.startManualVerification(
@@ -169,30 +172,33 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
         assertEquals("APPROVAL_PENDING", status(ready.applicationId()));
         UUID reviewCycleId = uuid("SELECT id FROM loan_application_review_cycles "
                 + "WHERE loan_application_id = ?", ready.applicationId());
-        int transitionCount = count("SELECT count(*) FROM loan_application_status_transitions "
-                + "WHERE loan_application_id = ?", ready.applicationId());
-        int auditCount = count("SELECT count(*) FROM audit_events WHERE payload ->> 'loanApplicationId' = ?",
-                ready.applicationId().toString());
-
         useApprover();
-        for (ApprovalDecisionRequest request : approvalRequests(reviewCycleId, ready)) {
-            BusinessStateConflictException failure = assertThrows(
-                    BusinessStateConflictException.class,
-                    () -> decisionUseCase.submitApprovalDecision(ready.applicationId(), request)
-            );
-            assertEquals("PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED", failure.getErrorCode());
-            assertEquals("APPROVAL_PENDING", status(ready.applicationId()));
-            assertEquals(0, count("SELECT count(*) FROM approval_decisions WHERE loan_application_id = ?",
-                    ready.applicationId()));
-            assertEquals(0, count("SELECT count(*) FROM approved_offers WHERE loan_application_id = ?",
-                    ready.applicationId()));
-            assertEquals("ACTIVE", text("SELECT status FROM loan_application_review_cycles "
-                    + "WHERE id = ?", reviewCycleId));
-            assertEquals(transitionCount, count("SELECT count(*) FROM loan_application_status_transitions "
-                    + "WHERE loan_application_id = ?", ready.applicationId()));
-            assertEquals(auditCount, count("SELECT count(*) FROM audit_events "
-                    + "WHERE payload ->> 'loanApplicationId' = ?", ready.applicationId().toString()));
-        }
+        decisionUseCase.submitApprovalDecision(
+                ready.applicationId(),
+                approvalRequest(action, reviewCycleId, ready)
+        );
+
+        String expectedStatus = switch (action) {
+            case APPROVE -> "CUSTOMER_ACCEPTANCE_PENDING";
+            case REJECT -> "REJECTED";
+            case RETURN_TO_LOAN_OFFICER_REVIEW -> "RETURNED_TO_REVIEW";
+            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION -> "RETURNED_FOR_REVISION";
+        };
+        assertEquals(expectedStatus, status(ready.applicationId()));
+        assertEquals(1, count("SELECT count(*) FROM approval_decisions WHERE loan_application_id = ?",
+                ready.applicationId()));
+        assertEquals(action == ApprovalDecisionAction.APPROVE ? 1 : 0,
+                count("SELECT count(*) FROM approved_offers WHERE loan_application_id = ?",
+                        ready.applicationId()));
+        String expectedCycleStatus = switch (action) {
+            case APPROVE, REJECT -> "COMPLETED";
+            case RETURN_TO_LOAN_OFFICER_REVIEW -> "SUPERSEDED";
+            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION -> "CORRECTION_REQUIRED";
+        };
+        assertEquals(expectedCycleStatus, text("SELECT status FROM loan_application_review_cycles "
+                + "WHERE id = ?", reviewCycleId));
+        assertEquals(0, count("SELECT count(*) FROM salary_advance_limit_movements "
+                + "WHERE loan_application_id = ?", ready.applicationId()));
     }
 
     @Test
@@ -496,24 +502,28 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
         ));
     }
 
-    private List<ApprovalDecisionRequest> approvalRequests(UUID reviewCycleId, ReadyApplication ready) {
-        return List.of(
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null),
-                new ApprovalDecisionRequest(ApprovalDecisionAction.REJECT, "Not approved.", null),
-                new ApprovalDecisionRequest(
+    private ApprovalDecisionRequest approvalRequest(
+            ApprovalDecisionAction action,
+            UUID reviewCycleId,
+            ReadyApplication ready
+    ) {
+        return switch (action) {
+            case APPROVE -> new ApprovalDecisionRequest(action, null, null);
+            case REJECT -> new ApprovalDecisionRequest(action, "Not approved.", null);
+            case RETURN_TO_LOAN_OFFICER_REVIEW -> new ApprovalDecisionRequest(
                         ApprovalDecisionAction.RETURN_TO_LOAN_OFFICER_REVIEW,
                         "Return for further Loan Officer review.",
                         null
-                ),
-                new ApprovalDecisionRequest(
+                );
+            case REQUEST_CUSTOMER_OR_STAFF_CORRECTION -> new ApprovalDecisionRequest(
                         ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
                         null,
                         null,
                         reviewCycleId,
                         CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                         mixedCorrectionPlan(ready)
-                )
-        );
+                );
+        };
     }
 
     private void startVerification(UUID applicationId, UUID actorId) {

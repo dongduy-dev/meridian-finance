@@ -8,8 +8,9 @@ import com.meridian.platform.approval.domain.model.CorrectionScope;
 import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.loan.application.dto.ApplyApprovalDecisionCommand;
 import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
-import com.meridian.platform.loan.application.port.out.CollateralLoanVerificationRepository;
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
+import com.meridian.platform.loan.application.port.out.CollateralLoanOfferPolicyRepository;
+import com.meridian.platform.loan.application.port.out.CollateralLoanVerificationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
@@ -19,6 +20,8 @@ import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyR
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanOfferPolicyRepository;
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
+import com.meridian.platform.loan.domain.model.CollateralLoanManualVerificationOutcome;
+import com.meridian.platform.loan.domain.model.CollateralLoanOfferPolicy;
 import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
 import com.meridian.platform.loan.domain.model.InterestCalculationMethod;
 import com.meridian.platform.loan.domain.model.LoanApplication;
@@ -72,6 +75,7 @@ class ApplyApprovalDecisionServiceTest {
     private static final UUID LIMIT_ID = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
     private static final UUID POLICY_ID = UUID.fromString("12121212-1212-1212-1212-121212121212");
     private static final UUID UCL_POLICY_ID = UUID.fromString("13131313-1313-1313-1313-131313131313");
+    private static final UUID COLLATERAL_POLICY_ID = UUID.fromString("14141414-1414-1414-1414-141414141414");
     private static final LocalDateTime DECIDED_AT = LocalDateTime.of(2026, 7, 6, 9, 30);
 
     private FakeLoanApplicationRepository loanApplicationRepository;
@@ -79,6 +83,7 @@ class ApplyApprovalDecisionServiceTest {
     private FakeApprovedOfferRepository approvedOfferRepository;
     private FakeSalaryAdvanceOfferPolicyRepository offerPolicyRepository;
     private FakeUnsecuredConsumerLoanOfferPolicyRepository unsecuredConsumerLoanOfferPolicyRepository;
+    private FakeCollateralLoanOfferPolicyRepository collateralLoanOfferPolicyRepository;
     private FakeSalaryAdvanceVerificationRepository verificationRepository;
     private FakeSalaryAdvanceLimitRepository limitRepository;
     private FakeSalaryAdvanceLimitMovementRepository movementRepository;
@@ -102,6 +107,7 @@ class ApplyApprovalDecisionServiceTest {
         approvedOfferRepository = new FakeApprovedOfferRepository();
         offerPolicyRepository = new FakeSalaryAdvanceOfferPolicyRepository();
         unsecuredConsumerLoanOfferPolicyRepository = new FakeUnsecuredConsumerLoanOfferPolicyRepository();
+        collateralLoanOfferPolicyRepository = new FakeCollateralLoanOfferPolicyRepository();
         verificationRepository = new FakeSalaryAdvanceVerificationRepository();
         limitRepository = new FakeSalaryAdvanceLimitRepository();
         movementRepository = new FakeSalaryAdvanceLimitMovementRepository();
@@ -109,6 +115,8 @@ class ApplyApprovalDecisionServiceTest {
         auditPublisher = new FakeBusinessAuditPublisher();
         correctionWorkflowService = org.mockito.Mockito.mock(CustomerCorrectionWorkflowService.class);
         collateralVerificationRepository = org.mockito.Mockito.mock(CollateralLoanVerificationRepository.class);
+        org.mockito.Mockito.when(collateralVerificationRepository.findByLoanApplicationId(LOAN_APPLICATION_ID))
+                .thenReturn(Optional.of(collateralVerification(CollateralLoanManualVerificationOutcome.VERIFIED)));
         SalaryAdvanceReservationReleaseService releaseService = new SalaryAdvanceReservationReleaseService(
                 verificationRepository,
                 limitRepository,
@@ -122,10 +130,13 @@ class ApplyApprovalDecisionServiceTest {
                 approvedOfferRepository,
                 offerPolicyRepository,
                 unsecuredConsumerLoanOfferPolicyRepository,
+                collateralLoanOfferPolicyRepository,
                 releaseService,
                 new LoanApplicationStatusTransitionRecorder(transitionRepository),
                 auditPublisher,
-                new CollateralLoanApprovalExecutionGuard()
+                new CollateralLoanApprovalExecutionGuard(
+                        new CollateralLoanReviewGate(collateralVerificationRepository)
+                )
         );
     }
 
@@ -210,54 +221,115 @@ class ApplyApprovalDecisionServiceTest {
     }
 
     @Test
-    void collateralApprovalExecutionIsUnsupportedRegardlessOfVerificationState() {
+    void collateralApprovalGeneratesExactMonthlyInstallmentOffer() {
         loanApplicationRepository.application = collateralApplication(LoanApplicationStatus.APPROVAL_PENDING);
+
+        LoanApplicationReviewDto result = service.applyApprovalDecision(
+                command(LoanApprovalDecisionAction.APPROVE)
+        );
+
+        assertEquals("CUSTOMER_ACCEPTANCE_PENDING", result.status());
+        assertEquals(LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING,
+                loanApplicationRepository.savedApplication.status());
+        assertNotNull(approvedOfferRepository.savedOffer);
+        assertEquals(COLLATERAL_POLICY_ID, approvedOfferRepository.savedOffer.sourceLoanProductPolicyId());
+        assertEquals(limit(25_000_000), approvedOfferRepository.savedOffer.financialTerms().approvedPrincipal());
+        assertEquals(12, approvedOfferRepository.savedOffer.financialTerms().approvedTermMonths());
+        assertEquals(new BigDecimal("0.015000"),
+                approvedOfferRepository.savedOffer.financialTerms().flatMonthlyInterestRate());
+        assertEquals(limit(4_500_000), approvedOfferRepository.savedOffer.financialTerms().totalInterest());
+        assertEquals(limit(29_500_000),
+                approvedOfferRepository.savedOffer.financialTerms().totalRepaymentAmount());
+        assertEquals(12, approvedOfferRepository.savedOffer.repaymentItems().size());
+        assertEquals(DECIDED_AT.plusDays(7), approvedOfferRepository.savedOffer.expiresAt());
+        assertTrue(movementRepository.savedMovements.isEmpty());
+        assertNull(limitRepository.savedLimit);
+    }
+
+    @Test
+    void collateralApprovalFailsClosedWhenLatestVerificationIsMissing() {
+        loanApplicationRepository.application = collateralApplication(LoanApplicationStatus.APPROVAL_PENDING);
+        org.mockito.Mockito.when(collateralVerificationRepository.findByLoanApplicationId(LOAN_APPLICATION_ID))
+                .thenReturn(Optional.empty());
 
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,
                 () -> service.applyApprovalDecision(command(LoanApprovalDecisionAction.APPROVE))
         );
 
-        assertEquals("PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED", exception.getErrorCode());
+        assertEquals("COLLATERAL_VERIFICATION_REQUIRED", exception.getErrorCode());
         assertNull(loanApplicationRepository.savedApplication);
         assertNull(approvedOfferRepository.savedOffer);
         assertTrue(transitionRepository.savedTransitions.isEmpty());
     }
 
     @Test
-    void collateralApprovalExecutionDoesNotDependOnVerificationLookup() {
+    void collateralApprovalFailsClosedForEveryNonVerifiedResult() {
         loanApplicationRepository.application = collateralApplication(LoanApplicationStatus.APPROVAL_PENDING);
 
-        BusinessStateConflictException exception = assertThrows(
-                BusinessStateConflictException.class,
+        assertCollateralVerificationBlocked(
+                CollateralLoanManualVerificationOutcome.FAILED,
+                "PRODUCT_VERIFICATION_FAILED"
+        );
+        assertCollateralVerificationBlocked(
+                CollateralLoanManualVerificationOutcome.REQUIRES_MORE_INFORMATION,
+                "PRODUCT_VERIFICATION_REQUIRES_MORE_INFORMATION"
+        );
+        org.mockito.Mockito.when(collateralVerificationRepository.findByLoanApplicationId(LOAN_APPLICATION_ID))
+                .thenReturn(Optional.of(collateralPendingVerification()));
+        BusinessRuleViolationException pending = assertThrows(
+                BusinessRuleViolationException.class,
                 () -> service.applyApprovalDecision(command(LoanApprovalDecisionAction.APPROVE))
         );
-
-        assertEquals("PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED", exception.getErrorCode());
-        assertNull(loanApplicationRepository.savedApplication);
-        assertNull(approvedOfferRepository.savedOffer);
-        assertTrue(transitionRepository.savedTransitions.isEmpty());
+        assertEquals("PRODUCT_VERIFICATION_PENDING", pending.getErrorCode());
     }
 
     @Test
-    void everyCollateralApprovalActionFailsBeforeDecisionEffects() {
-        for (LoanApprovalDecisionAction action : LoanApprovalDecisionAction.values()) {
-            loanApplicationRepository.application = collateralApplication(LoanApplicationStatus.APPROVAL_PENDING);
-            loanApplicationRepository.savedApplication = null;
+    void collateralRejectionCreatesNoOfferOrSalaryAdvanceEffect() {
+        loanApplicationRepository.application = collateralApplication(LoanApplicationStatus.APPROVAL_PENDING);
 
-            BusinessStateConflictException exception = assertThrows(
-                    BusinessStateConflictException.class,
-                    () -> service.applyApprovalDecision(command(action))
-            );
+        LoanApplicationReviewDto result = service.applyApprovalDecision(
+                command(LoanApprovalDecisionAction.REJECT)
+        );
 
-            assertEquals("PRODUCT_APPROVAL_EXECUTION_UNSUPPORTED", exception.getErrorCode());
-            assertNull(loanApplicationRepository.savedApplication);
-            assertNull(approvedOfferRepository.savedOffer);
-            assertTrue(transitionRepository.savedTransitions.isEmpty());
-        }
-        org.mockito.Mockito.verify(reviewCycleRepository, org.mockito.Mockito.never())
+        assertEquals("REJECTED", result.status());
+        assertNull(approvedOfferRepository.savedOffer);
+        assertTrue(movementRepository.savedMovements.isEmpty());
+        assertNull(limitRepository.savedLimit);
+    }
+
+    @Test
+    void collateralReturnToReviewUsesCommonCycleSemantics() {
+        loanApplicationRepository.application = collateralApplication(LoanApplicationStatus.APPROVAL_PENDING);
+
+        LoanApplicationReviewDto result = service.applyApprovalDecision(
+                command(LoanApprovalDecisionAction.RETURN_TO_LOAN_OFFICER_REVIEW)
+        );
+
+        assertEquals("RETURNED_TO_REVIEW", result.status());
+        assertNull(approvedOfferRepository.savedOffer);
+        org.mockito.Mockito.verify(reviewCycleRepository, org.mockito.Mockito.times(2))
                 .save(org.mockito.ArgumentMatchers.any());
-        org.mockito.Mockito.verifyNoInteractions(correctionWorkflowService);
+    }
+
+    @Test
+    void collateralCorrectionUsesExistingDocumentOnlyWorkflow() {
+        loanApplicationRepository.application = collateralApplication(LoanApplicationStatus.APPROVAL_PENDING);
+
+        LoanApplicationReviewDto result = service.applyApprovalDecision(
+                command(LoanApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION)
+        );
+
+        assertEquals("RETURNED_FOR_REVISION", result.status());
+        assertNull(approvedOfferRepository.savedOffer);
+        org.mockito.Mockito.verify(correctionWorkflowService).createFromDecision(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("REQUEST_CUSTOMER_OR_STAFF_CORRECTION"),
+                org.mockito.ArgumentMatchers.eq(CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
+        );
     }
 
     @Test
@@ -307,6 +379,22 @@ class ApplyApprovalDecisionServiceTest {
         assertNull(loanApplicationRepository.savedApplication);
         assertNull(approvedOfferRepository.savedOffer);
         assertTrue(transitionRepository.savedTransitions.isEmpty());
+        assertTrue(movementRepository.savedMovements.isEmpty());
+    }
+
+    @Test
+    void collateralApprovalRollsBackWhenActivePolicyIsMissing() {
+        loanApplicationRepository.application = collateralApplication(LoanApplicationStatus.APPROVAL_PENDING);
+        collateralLoanOfferPolicyRepository.policy = Optional.empty();
+
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.applyApprovalDecision(command(LoanApprovalDecisionAction.APPROVE))
+        );
+
+        assertEquals("PRODUCT_POLICY_INVALID", exception.getErrorCode());
+        assertNull(approvedOfferRepository.savedOffer);
+        assertNull(loanApplicationRepository.savedApplication);
         assertTrue(movementRepository.savedMovements.isEmpty());
     }
 
@@ -449,10 +537,16 @@ class ApplyApprovalDecisionServiceTest {
                 action,
                 action == LoanApprovalDecisionAction.REJECT ? "Business-facing reason" : null,
                 correction ? CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED : null,
-                correction ? uclCorrectionPlan() : null,
+                correction ? correctionPlan() : null,
                 DECIDED_AT,
                 operationContext
         );
+    }
+
+    private CorrectionPlanRequest correctionPlan() {
+        return loanApplicationRepository.application.productCode() == ProductCode.COLLATERAL_LOAN
+                ? collateralCorrectionPlan()
+                : uclCorrectionPlan();
     }
 
     private static CorrectionPlanRequest uclCorrectionPlan() {
@@ -466,6 +560,31 @@ class ApplyApprovalDecisionServiceTest {
                 "Replace the income proof.",
                 null
         )));
+    }
+
+    private static CorrectionPlanRequest collateralCorrectionPlan() {
+        return new CorrectionPlanRequest(List.of(
+                new CorrectionTaskRequest(
+                        CorrectionScope.DOCUMENT_REPLACEMENT,
+                        CorrectionResponsibility.CUSTOMER,
+                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        false,
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        "Replace the ownership evidence.",
+                        null
+                ),
+                new CorrectionTaskRequest(
+                        CorrectionScope.DOCUMENT_REVIEW,
+                        CorrectionResponsibility.STAFF,
+                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        false,
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        "Review the replacement ownership evidence.",
+                        null
+                )
+        ));
     }
 
     private LoanApplication loanApplication(LoanApplicationStatus status) {
@@ -513,6 +632,38 @@ class ApplyApprovalDecisionServiceTest {
                 12,
                 salaryAdvance.submittedAt()
         );
+    }
+
+    private CollateralLoanVerification collateralPendingVerification() {
+        return CollateralLoanVerification.pendingManualReview(
+                UUID.randomUUID(),
+                collateralApplication(LoanApplicationStatus.APPROVAL_PENDING),
+                DECIDED_AT.minusHours(2)
+        );
+    }
+
+    private CollateralLoanVerification collateralVerification(
+            CollateralLoanManualVerificationOutcome outcome
+    ) {
+        return collateralPendingVerification().completeManualReview(
+                outcome,
+                UUID.randomUUID(),
+                DECIDED_AT.minusHours(1),
+                "Assessment."
+        );
+    }
+
+    private void assertCollateralVerificationBlocked(
+            CollateralLoanManualVerificationOutcome outcome,
+            String expectedErrorCode
+    ) {
+        org.mockito.Mockito.when(collateralVerificationRepository.findByLoanApplicationId(LOAN_APPLICATION_ID))
+                .thenReturn(Optional.of(collateralVerification(outcome)));
+        BusinessRuleViolationException exception = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.applyApprovalDecision(command(LoanApprovalDecisionAction.APPROVE))
+        );
+        assertEquals(expectedErrorCode, exception.getErrorCode());
     }
 
     private BigDecimal limit(long value) {
@@ -627,6 +778,27 @@ class ApplyApprovalDecisionServiceTest {
 
         @Override
         public Optional<UnsecuredConsumerLoanOfferPolicy> findActiveDefaultPolicy() {
+            return policy;
+        }
+    }
+
+    private static class FakeCollateralLoanOfferPolicyRepository
+            implements CollateralLoanOfferPolicyRepository {
+
+        private Optional<CollateralLoanOfferPolicy> policy = Optional.of(
+                new CollateralLoanOfferPolicy(
+                        COLLATERAL_POLICY_ID,
+                        InterestCalculationMethod.FLAT_ORIGINAL_PRINCIPAL,
+                        new BigDecimal("0.015000"),
+                        BigDecimal.ZERO.setScale(2),
+                        RepaymentMethod.MONTHLY_INSTALLMENT,
+                        7,
+                        Set.of(6, 12, 18, 24)
+                )
+        );
+
+        @Override
+        public Optional<CollateralLoanOfferPolicy> findActiveDefaultPolicy() {
             return policy;
         }
     }

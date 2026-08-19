@@ -421,6 +421,17 @@ class CollateralLoanOriginationPostgreSqlIntegrationTest {
             ));
         }
 
+        void useAccountingOfficer(UUID currentUserId) {
+            currentUser.set(new AuthenticatedUser(
+                    currentUserId,
+                    "collateral-accounting-test@meridian.test",
+                    "ACCOUNTING_OFFICER",
+                    null,
+                    Set.of("ACCOUNTING_OFFICER"),
+                    Set.of("loan:contract:prepare")
+            ));
+        }
+
         @Override
         public AuthenticatedUser currentUser() {
             return currentUser.get();

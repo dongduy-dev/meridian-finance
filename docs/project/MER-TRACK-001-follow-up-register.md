@@ -875,7 +875,7 @@ Still deferred:
 - Automated credit-bureau, income-verification, scoring, and bank-statement parsing.
 - Payment-provider integration, reversal/refund, discounted settlement, collections, and ledger capabilities.
 
-### MER-FU-039 - Complete Collateral Loan beyond manual verification and review recommendation
+### MER-FU-039 - Complete Collateral Loan beyond approved-offer response
 
 Area: Loan / Document / Approval / Servicing
 
@@ -887,7 +887,7 @@ Status: Deferred
 
 Blocks current checkpoint: No
 
-Completed in Collateral Loan CP1 and CP2:
+Completed in Collateral Loan CP1-CP3:
 
 - Authenticated Customer-owned origination for the active `COLLATERAL_LOAN` / `SECURED` product.
 - Customer readiness, current product amount bounds, whole-VND amount, and exact 6/12/18/24-month term validation.
@@ -898,21 +898,22 @@ Completed in Collateral Loan CP1 and CP2:
 - Explicit start and exact-ID completion of immutable, numbered manual-verification cycles with `VERIFIED`, terminal `FAILED`, and `REQUIRES_MORE_INFORMATION` outcomes.
 - Document-only Customer replacement or Staff review correction for the existing `COLLATERAL_OWNERSHIP_EVIDENCE` item, followed by concurrency-safe resubmission into one linked next verification cycle.
 - Common Loan Officer review and recommendation through `APPROVAL_PENDING` only after the authoritative latest Collateral verification is `VERIFIED`.
-- Fail-closed Approver actions: every Collateral approval decision remains unsupported and rolls back without decision, transition, audit, or offer evidence.
-- PostgreSQL-backed migration, immutability, reconciliation, rollback, and concurrency proof for the CP2 workflow.
+- Latest-verified gating for all four common Approver actions, including document-only correction and independent maker-checker enforcement.
+- Exact-request pricing at 1.5% monthly flat original-principal interest, zero fee, whole-VND `HALF_UP` total-interest rounding, and seven-calendar-day offer validity.
+- Immutable common ApprovedOffer snapshots with one reconciled undated monthly-installment item per approved month for exact 6/12/18/24-month terms.
+- Generic Customer offer read, expiry, accept, and decline behavior; acceptance stops at `CONTRACT_PENDING`, and Collateral creates no Salary Advance exposure effect.
+- PostgreSQL-backed migration, policy constraints, rollback, competing-decision, duplicate-offer, ownership, and lifecycle proof through offer response.
 
 Still deferred:
 
-- Approver decision and approved-offer generation; no Collateral approval action is executable yet.
-- Customer offer handling, contract, activation, and LoanAccount creation.
-- Pricing, interest and fee calculation, installment allocation, schedules, and every unresolved decision in `MER-BIZ-001` Section 13.4, including the non-executable 1.5% catalog target.
-- Collateral repayment, overdue behavior, settlement, closure, and every servicing/exposure policy.
+- Operational contract preparation, protected destination capture, Customer acknowledgment, readiness, manual disbursement, LoanAccount activation, and final dated schedule construction.
+- Executable Collateral repayment, overdue evaluation/cure, contractual payoff, Administrative Full-Balance Settlement, and closure using the approved common controls and zero Salary Advance exposure semantics.
 - LTV, automated valuation, custody, registry, insurance, enforcement, repossession, liquidation, OCR, and external valuation integration.
 - Supporting-photo policy and any rule for multiple Collateral assets through the API.
 - Any product-scoped outstanding Collateral LoanAccount restriction; no such business rule is currently approved.
 
 Suggested future branch name:
-`feature/collateral-approval-pricing`
+`feature/collateral-contract-activation`
 
 ### MER-FU-040 - Add exact verification identity to UCL completion
 
@@ -935,8 +936,29 @@ Add the exact expected verification-cycle identifier to the UCL completion reque
 Suggested future branch name:
 `fix/ucl-exact-verification-completion`
 
+### MER-FU-041 - Harden ApprovedOffer financial immutability at the database boundary
+
+Area: Loan / Database
+
+Type: Persistence hardening
+
+Priority: P2
+
+Status: Deferred
+
+Blocks current checkpoint: No
+
+Problem:
+The Loan domain treats generated ApprovedOffer financial terms and provisional repayment items as immutable, and current commands do not expose a mutation path. PostgreSQL enforces uniqueness, whole-VND values, arithmetic reconciliation, and valid status timestamps, but it does not independently reject a direct update to common financial snapshot columns or repayment-item amounts.
+
+Recommended resolution:
+Design one product-neutral migration that preserves the allowed pending-to-terminal offer status/timestamp transitions while rejecting changes to financial terms, policy identity, generation/expiry evidence, and existing repayment-item identity or amounts. Preflight current constraint/trigger state, prove clean migration and upgrade behavior on PostgreSQL, and regression-test Salary Advance, UCL, and Collateral offer response and expiry before enabling the guard.
+
+Suggested future branch name:
+`fix/approved-offer-db-immutability`
+
 ## Recommended Next Roadmap
 
 1. Define reversal/refund, suspense/unapplied cash, waiver/write-off, discounted settlement, reconciliation, ledger, and collections rules before selecting another financial-servicing continuation.
-2. Resolve the Collateral pricing, repayment, and operational decisions in `MER-BIZ-001` Section 13.4 before implementing Approver decisions or offer execution; keep activation and servicing fail-closed until their rules are approved.
+2. Implement Collateral operational contract, activation, and final dated schedule from the accepted CP3 offer while preserving the current fail-closed boundary until that complete slice is ready.
 3. Complete production document storage, malware-scanning, retention, and operational hardening before deployment.

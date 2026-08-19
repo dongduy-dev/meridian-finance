@@ -120,6 +120,30 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
         assertEquals(1, countRows("review_recommendations", "id", recommendationId));
     }
 
+    @Test
+    void collateralApprovalAndOfferRollBackWhenMandatoryTransitionHistoryPersistenceFails() {
+        UUID loanApplicationId = insertApprovalPendingCollateralApplication();
+        UUID recommendationId = insertReviewRecommendation(loanApplicationId);
+        insertTransitionOverflowSeed(loanApplicationId);
+        authenticateApprover();
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> submitApprovalDecisionService.submitApprovalDecision(
+                        loanApplicationId,
+                        new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                )
+        );
+        assertTrue(containsMessage(exception, "sequenceNumber exceeds smallint range."));
+
+        assertEquals(0, countRows("approval_decisions", "loan_application_id", loanApplicationId));
+        assertEquals("APPROVAL_PENDING", currentStatus(loanApplicationId));
+        assertEquals(0, countRows("approved_offers", "loan_application_id", loanApplicationId));
+        assertEquals(1, countRows("loan_application_status_transitions", "loan_application_id", loanApplicationId));
+        assertEquals(0, countAllRows("audit_events"));
+        assertEquals(1, countRows("review_recommendations", "id", recommendationId));
+    }
+
     @ParameterizedTest
     @EnumSource(
             value = ReviewRecommendationAction.class,
@@ -294,6 +318,50 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
                 NOW.minusDays(1)
         );
         insertActiveReviewCycle(id);
+        return id;
+    }
+
+    private UUID insertApprovalPendingCollateralApplication() {
+        UUID id = UUID.randomUUID();
+        UUID customerId = insertCustomer();
+        jdbcTemplate.update(
+                """
+                        insert into %s.loan_applications (
+                            id,
+                            customer_id,
+                            loan_product_id,
+                            application_number,
+                            product_code,
+                            product_type,
+                            status,
+                            requested_amount,
+                            requested_term_months,
+                            submitted_at
+                        ) values (?, ?, ?, ?, 'COLLATERAL_LOAN', 'SECURED',
+                                  'APPROVAL_PENDING', ?, 12, ?)
+                        """.formatted(TEST_SCHEMA),
+                id,
+                customerId,
+                collateralLoanProductId(),
+                "CL-ROLLBACK-" + id,
+                BigDecimal.valueOf(12_000_000).setScale(2),
+                NOW.minusDays(1)
+        );
+        insertActiveReviewCycle(id);
+        jdbcTemplate.update(
+                """
+                        insert into %s.collateral_loan_verifications (
+                            id, loan_application_id, verification_sequence,
+                            product_verification_result, created_at,
+                            reviewed_by_user_id, reviewed_at, assessment_note
+                        ) values (?, ?, 1, 'VERIFIED', ?, ?, ?, 'Verified ownership evidence.')
+                        """.formatted(TEST_SCHEMA),
+                UUID.randomUUID(),
+                id,
+                NOW.minusHours(3),
+                LOAN_OFFICER_USER_ID,
+                NOW.minusHours(2)
+        );
         return id;
     }
 
@@ -484,6 +552,14 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
         return jdbcTemplate.queryForObject(
                 "select id from " + table("loan_products")
                         + " where product_code = 'UNSECURED_CONSUMER_LOAN'",
+                UUID.class
+        );
+    }
+
+    private UUID collateralLoanProductId() {
+        return jdbcTemplate.queryForObject(
+                "select id from " + table("loan_products")
+                        + " where product_code = 'COLLATERAL_LOAN'",
                 UUID.class
         );
     }

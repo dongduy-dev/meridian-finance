@@ -4,11 +4,13 @@ import com.meridian.platform.loan.application.dto.ApplyApprovalDecisionCommand;
 import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.in.ApplyApprovalDecisionUseCase;
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
+import com.meridian.platform.loan.application.port.out.CollateralLoanOfferPolicyRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyRepository;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanOfferPolicyRepository;
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
+import com.meridian.platform.loan.domain.model.CollateralLoanOfferPolicy;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionFact;
@@ -18,6 +20,7 @@ import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ReservationReleaseTrigger;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
 import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanOfferPolicy;
+import com.meridian.platform.loan.domain.service.CollateralLoanOfferCalculator;
 import com.meridian.platform.loan.domain.service.SalaryAdvanceOfferCalculator;
 import com.meridian.platform.loan.domain.service.UnsecuredConsumerLoanOfferCalculator;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
@@ -49,6 +52,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
     private final ApprovedOfferRepository approvedOfferRepository;
     private final SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository;
     private final UnsecuredConsumerLoanOfferPolicyRepository unsecuredConsumerLoanOfferPolicyRepository;
+    private final CollateralLoanOfferPolicyRepository collateralLoanOfferPolicyRepository;
     private final SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
     private final BusinessAuditPublisher businessAuditPublisher;
@@ -56,6 +60,8 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
     private final SalaryAdvanceOfferCalculator salaryAdvanceOfferCalculator = new SalaryAdvanceOfferCalculator();
     private final UnsecuredConsumerLoanOfferCalculator unsecuredConsumerLoanOfferCalculator =
             new UnsecuredConsumerLoanOfferCalculator();
+    private final CollateralLoanOfferCalculator collateralLoanOfferCalculator =
+            new CollateralLoanOfferCalculator();
 
     @Autowired
     public ApplyApprovalDecisionService(
@@ -65,6 +71,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
             ApprovedOfferRepository approvedOfferRepository,
             SalaryAdvanceOfferPolicyRepository salaryAdvanceOfferPolicyRepository,
             UnsecuredConsumerLoanOfferPolicyRepository unsecuredConsumerLoanOfferPolicyRepository,
+            CollateralLoanOfferPolicyRepository collateralLoanOfferPolicyRepository,
             SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
             BusinessAuditPublisher businessAuditPublisher,
@@ -76,6 +83,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         this.approvedOfferRepository = approvedOfferRepository;
         this.salaryAdvanceOfferPolicyRepository = salaryAdvanceOfferPolicyRepository;
         this.unsecuredConsumerLoanOfferPolicyRepository = unsecuredConsumerLoanOfferPolicyRepository;
+        this.collateralLoanOfferPolicyRepository = collateralLoanOfferPolicyRepository;
         this.salaryAdvanceReservationReleaseService = salaryAdvanceReservationReleaseService;
         this.transitionRecorder = transitionRecorder;
         this.businessAuditPublisher = businessAuditPublisher;
@@ -196,7 +204,8 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
             LoanApprovalDecisionAction action
     ) {
         return (loanApplication.productCode() == ProductCode.SALARY_ADVANCE
-                || loanApplication.productCode() == ProductCode.UNSECURED_CONSUMER_LOAN)
+                || loanApplication.productCode() == ProductCode.UNSECURED_CONSUMER_LOAN
+                || loanApplication.productCode() == ProductCode.COLLATERAL_LOAN)
                 && action == LoanApprovalDecisionAction.APPROVE;
     }
 
@@ -227,10 +236,29 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         return switch (loanApplication.productCode()) {
             case SALARY_ADVANCE -> generateSalaryAdvanceOffer(loanApplication, command);
             case UNSECURED_CONSUMER_LOAN -> generateUnsecuredConsumerLoanOffer(loanApplication, command);
-            case COLLATERAL_LOAN -> throw new IllegalStateException(
-                    "Collateral Loan cannot enter executable approved-offer generation."
-            );
+            case COLLATERAL_LOAN -> generateCollateralLoanOffer(loanApplication, command);
         };
+    }
+
+    private ApprovedOffer generateCollateralLoanOffer(
+            LoanApplication loanApplication,
+            ApplyApprovalDecisionCommand command
+    ) {
+        CollateralLoanOfferPolicy policy = collateralLoanOfferPolicyRepository
+                .findActiveDefaultPolicy()
+                .orElseThrow(() -> new BusinessRuleViolationException(
+                        "PRODUCT_POLICY_INVALID",
+                        "Collateral Loan active default offer policy was not found."
+                ));
+
+        return collateralLoanOfferCalculator.generate(
+                UUID.randomUUID(),
+                loanApplication.id(),
+                policy,
+                loanApplication.requestedAmount(),
+                loanApplication.requestedTermMonths(),
+                command.operationContext().occurredAt()
+        );
     }
 
     private ApprovedOffer generateUnsecuredConsumerLoanOffer(
