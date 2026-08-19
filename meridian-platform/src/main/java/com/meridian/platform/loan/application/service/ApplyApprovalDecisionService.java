@@ -52,7 +52,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
     private final SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
     private final BusinessAuditPublisher businessAuditPublisher;
-    private final CollateralLoanReviewGate collateralLoanReviewGate;
+    private final CollateralLoanApprovalExecutionGuard collateralLoanApprovalExecutionGuard;
     private final SalaryAdvanceOfferCalculator salaryAdvanceOfferCalculator = new SalaryAdvanceOfferCalculator();
     private final UnsecuredConsumerLoanOfferCalculator unsecuredConsumerLoanOfferCalculator =
             new UnsecuredConsumerLoanOfferCalculator();
@@ -68,7 +68,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
             SalaryAdvanceReservationReleaseService salaryAdvanceReservationReleaseService,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
             BusinessAuditPublisher businessAuditPublisher,
-            CollateralLoanReviewGate collateralLoanReviewGate
+            CollateralLoanApprovalExecutionGuard collateralLoanApprovalExecutionGuard
     ) {
         this.loanApplicationRepository = loanApplicationRepository;
         this.reviewCycleRepository = reviewCycleRepository;
@@ -79,7 +79,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
         this.salaryAdvanceReservationReleaseService = salaryAdvanceReservationReleaseService;
         this.transitionRecorder = transitionRecorder;
         this.businessAuditPublisher = businessAuditPublisher;
-        this.collateralLoanReviewGate = collateralLoanReviewGate;
+        this.collateralLoanApprovalExecutionGuard = collateralLoanApprovalExecutionGuard;
     }
 
     @Override
@@ -102,7 +102,7 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
                         "Loan application was not found."
                 ));
 
-        collateralLoanReviewGate.requireProgressionAllowed(loanApplication);
+        collateralLoanApprovalExecutionGuard.requireExecutionSupported(loanApplication);
 
         LoanApplicationReviewCycle activeCycle = reviewCycleRepository
                 .findActiveByLoanApplicationIdForUpdate(command.loanApplicationId())

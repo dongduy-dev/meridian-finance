@@ -875,7 +875,7 @@ Still deferred:
 - Automated credit-bureau, income-verification, scoring, and bank-statement parsing.
 - Payment-provider integration, reversal/refund, discounted settlement, collections, and ledger capabilities.
 
-### MER-FU-039 - Complete Collateral Loan beyond origination and evidence foundation
+### MER-FU-039 - Complete Collateral Loan beyond manual verification and review recommendation
 
 Area: Loan / Document / Approval / Servicing
 
@@ -887,21 +887,24 @@ Status: Deferred
 
 Blocks current checkpoint: No
 
-Completed in Collateral Loan CP1:
+Completed in Collateral Loan CP1 and CP2:
 
 - Authenticated Customer-owned origination for the active `COLLATERAL_LOAN` / `SECURED` product.
 - Customer readiness, current product amount bounds, whole-VND amount, and exact 6/12/18/24-month term validation.
 - One API-submitted Loan-owned Collateral fact record, with a physical model that permits later multi-asset extension.
 - Required Document-owned `COLLATERAL_OWNERSHIP_EVIDENCE` checklist evidence and a safe returned checklist-item identifier for the existing upload flow.
-- Initial `DOCUMENTS_PENDING` application state and application-owned `PENDING_MANUAL_REVIEW` Collateral verification.
+- Initial `DOCUMENTS_PENDING` application state and application-owned sequence-1 `PENDING_MANUAL_REVIEW` Collateral verification.
 - Customer/product submission serialization, blocking-application protection, transactional history, and PII-safe audit.
-- Fail-closed review, recommendation, and approval defenses while Collateral verification and offer execution remain unsupported.
+- Explicit start and exact-ID completion of immutable, numbered manual-verification cycles with `VERIFIED`, terminal `FAILED`, and `REQUIRES_MORE_INFORMATION` outcomes.
+- Document-only Customer replacement or Staff review correction for the existing `COLLATERAL_OWNERSHIP_EVIDENCE` item, followed by concurrency-safe resubmission into one linked next verification cycle.
+- Common Loan Officer review and recommendation through `APPROVAL_PENDING` only after the authoritative latest Collateral verification is `VERIFIED`.
+- Fail-closed Approver actions: every Collateral approval decision remains unsupported and rolls back without decision, transition, audit, or offer evidence.
+- PostgreSQL-backed migration, immutability, reconciliation, rollback, and concurrency proof for the CP2 workflow.
 
 Still deferred:
 
-- Manual Collateral assessment and terminal verification outcomes.
-- Correction, re-verification, actual Loan Officer review/recommendation, and Approver decision.
-- Approved-offer generation, Customer offer handling, contract, activation, and LoanAccount creation.
+- Approver decision and approved-offer generation; no Collateral approval action is executable yet.
+- Customer offer handling, contract, activation, and LoanAccount creation.
 - Pricing, interest and fee calculation, installment allocation, schedules, and every unresolved decision in `MER-BIZ-001` Section 13.4, including the non-executable 1.5% catalog target.
 - Collateral repayment, overdue behavior, settlement, closure, and every servicing/exposure policy.
 - LTV, automated valuation, custody, registry, insurance, enforcement, repossession, liquidation, OCR, and external valuation integration.
@@ -909,10 +912,31 @@ Still deferred:
 - Any product-scoped outstanding Collateral LoanAccount restriction; no such business rule is currently approved.
 
 Suggested future branch name:
-`feature/collateral-manual-verification`
+`feature/collateral-approval-pricing`
+
+### MER-FU-040 - Add exact verification identity to UCL completion
+
+Area: Loan / API
+
+Type: Workflow hardening
+
+Priority: P2
+
+Status: Deferred
+
+Blocks current checkpoint: No
+
+Problem:
+Collateral Loan CP2 requires `expectedVerificationId` on manual-verification completion so a stale Staff client cannot complete a superseded cycle. The older UCL completion contract identifies only the application and still relies on latest-cycle locking and state checks.
+
+Recommended resolution:
+Add the exact expected verification-cycle identifier to the UCL completion request and validate it against the locked authoritative latest cycle. Preserve current UCL outcomes, correction behavior, response safety, and concurrency guarantees, and update its API/Postman/tests as one backward-compatibility decision.
+
+Suggested future branch name:
+`fix/ucl-exact-verification-completion`
 
 ## Recommended Next Roadmap
 
 1. Define reversal/refund, suspense/unapplied cash, waiver/write-off, discounted settlement, reconciliation, ledger, and collections rules before selecting another financial-servicing continuation.
-2. Add Collateral manual verification and correction next; do not enable offer execution, activation, or servicing until its financial and operational product rules are approved.
+2. Resolve the Collateral pricing, repayment, and operational decisions in `MER-BIZ-001` Section 13.4 before implementing Approver decisions or offer execution; keep activation and servicing fail-closed until their rules are approved.
 3. Complete production document storage, malware-scanning, retention, and operational hardening before deployment.

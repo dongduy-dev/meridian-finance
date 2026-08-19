@@ -23,8 +23,12 @@ import com.meridian.platform.identity.infrastructure.adapter.in.web.AuthControll
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionOutcome;
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionResult;
 import com.meridian.platform.loan.application.dto.ApprovedOfferDto;
+import com.meridian.platform.loan.application.dto.CollateralAssessmentSnapshotDto;
+import com.meridian.platform.loan.application.dto.CollateralLoanVerificationDto;
+import com.meridian.platform.loan.application.dto.CollateralLoanVerificationStartDto;
 import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanVerificationDto;
+import com.meridian.platform.loan.application.port.in.ManageCollateralLoanVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.ManageUnsecuredConsumerLoanVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.QueryApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.QueryLoanProductUseCase;
@@ -35,6 +39,7 @@ import com.meridian.platform.loan.application.port.in.StartSalaryAdvanceApplicat
 import com.meridian.platform.loan.application.port.in.StartUnsecuredConsumerLoanApplicationUseCase;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.ApprovedOfferController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.CollateralLoanApplicationController;
+import com.meridian.platform.loan.infrastructure.adapter.in.web.CollateralLoanVerificationController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanApplicationReviewController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanProductController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.SalaryAdvanceLoanApplicationController;
@@ -60,6 +65,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -82,6 +88,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         LoanProductController.class,
         SalaryAdvanceLoanApplicationController.class,
         CollateralLoanApplicationController.class,
+        CollateralLoanVerificationController.class,
         UnsecuredConsumerLoanApplicationController.class,
         UnsecuredConsumerLoanVerificationController.class,
         LoanApplicationReviewController.class,
@@ -135,6 +142,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private ManageUnsecuredConsumerLoanVerificationUseCase manageUnsecuredConsumerLoanVerificationUseCase;
+
+    @MockitoBean
+    private ManageCollateralLoanVerificationUseCase manageCollateralLoanVerificationUseCase;
 
     @MockitoBean
     private StartLoanApplicationReviewUseCase startLoanApplicationReviewUseCase;
@@ -587,6 +597,85 @@ class SecurityConfigTest {
                                 }
                                 """)
                         .with(user("approver").authorities(new SimpleGrantedAuthority("approval:decide"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    void allowsOnlyLoanReviewAuthorityForCollateralManualVerificationCommands() throws Exception {
+        UUID verificationId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        when(manageCollateralLoanVerificationUseCase.startManualVerification(LOAN_APPLICATION_ID))
+                .thenReturn(new CollateralLoanVerificationStartDto(
+                        verificationId,
+                        LOAN_APPLICATION_ID,
+                        "VERIFICATION_PENDING",
+                        "PENDING_MANUAL_REVIEW",
+                        new CollateralAssessmentSnapshotDto(
+                                "CAR",
+                                "Customer vehicle",
+                                new BigDecimal("25000000"),
+                                "Customer-owned",
+                                "Operational condition"
+                        )
+                ));
+        when(manageCollateralLoanVerificationUseCase.completeManualVerification(any(), any()))
+                .thenReturn(new CollateralLoanVerificationDto(
+                        verificationId,
+                        LOAN_APPLICATION_ID,
+                        "SUBMITTED",
+                        "VERIFIED",
+                        LocalDateTime.now()
+                ));
+
+        String path = "/api/v1/loan-applications/{loanApplicationId}/collateral-loan-verification/start";
+        mockMvc.perform(post(path, LOAN_APPLICATION_ID)
+                        .with(user("loan-officer")
+                                .authorities(new SimpleGrantedAuthority("loan:review"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verificationId").value(verificationId.toString()));
+
+        String completionBody = """
+                {
+                  "expectedVerificationId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                  "outcome": "VERIFIED",
+                  "assessmentNote": "Ownership evidence is consistent."
+                }
+                """;
+        mockMvc.perform(post(
+                        "/api/v1/loan-applications/{loanApplicationId}/collateral-loan-verification/complete",
+                        LOAN_APPLICATION_ID
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(completionBody)
+                        .with(user("loan-officer")
+                                .authorities(new SimpleGrantedAuthority("loan:review"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUBMITTED"));
+
+        mockMvc.perform(post(path, LOAN_APPLICATION_ID))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
+
+        mockMvc.perform(post(path, LOAN_APPLICATION_ID)
+                        .with(user("customer")
+                                .authorities(new SimpleGrantedAuthority("loan:submit"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        mockMvc.perform(post(path, LOAN_APPLICATION_ID)
+                        .with(user("staff")
+                                .authorities(new SimpleGrantedAuthority("loan:read"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+
+        mockMvc.perform(post(
+                        "/api/v1/loan-applications/{loanApplicationId}/collateral-loan-verification/complete",
+                        LOAN_APPLICATION_ID
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(completionBody)
+                        .with(user("approver")
+                                .authorities(new SimpleGrantedAuthority("approval:decide"))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
     }

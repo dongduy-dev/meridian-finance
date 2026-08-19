@@ -111,6 +111,7 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - **Loan Application Lifecycle** — State machine–driven origination through disbursement, followed by LoanAccount servicing after activation
 - **Salary Advance Workflow** — Employer-linked salary advance with Partner Company, Partner Employee, and eligibility verification support
 - **Unsecured Consumer Loan Workflow** — Customer-owned origination, required evidence, positive and negative manual verification, structured correction and re-verification, review and approval, executable flat-rate pricing, correction cancellation, outstanding-debt protection, immutable offers, operational contracts, activation, repayment, overdue servicing, settlement, and closure
+- **Collateral Loan Verification Workflow** — Customer-owned origination, immutable submitted asset facts, ownership evidence, numbered manual-verification cycles, document-only correction and re-verification, and verified-only Loan Officer review through `APPROVAL_PENDING`
 - **Controlled Review & Approval Workflow** — Loan-owned review and correction lifecycle with immutable Loan Officer recommendations, independent Approver decisions, customer acceptance, and maker-checker controls
 - **Operational Contract Readiness** — Immutable accepted-term and repayment snapshots, protected destination capture, Customer acknowledgment, structured blockers, controlled destination refresh, and Accounting confirmation
 - **Manual Disbursement Activation** - Idempotent Accounting confirmation creates an active LoanAccount and final dated schedule atomically, with Salary Advance exposure conversion only for Salary Advance
@@ -208,7 +209,8 @@ Built with Java, Spring Boot, PostgreSQL, and React, Meridian adopts Domain-Driv
 - [x] Unsecured Consumer Loan partial and early repayment, overdue evaluation and cure, contractual payoff, exact full-balance administrative settlement, and administrative closure
 - [x] Unsecured Consumer Loan correction cancellation and product-scoped outstanding-debt origination protection
 - [x] Collateral Loan origination, structured facts, required ownership-evidence checklist, and pending manual-verification foundation
-- [ ] Collateral Loan manual verification, correction, review, approval, offer, contract, and activation workflow
+- [x] Collateral Loan manual verification, document-only correction, re-verification, and review/recommendation through `APPROVAL_PENDING`
+- [ ] Collateral Loan approval, pricing, offer, contract, and activation workflow
 - [ ] Collateral Loan repayment/servicing policy and execution
 - [x] JWT authentication and permission-based RBAC
 - [x] Idempotent critical workflow operations

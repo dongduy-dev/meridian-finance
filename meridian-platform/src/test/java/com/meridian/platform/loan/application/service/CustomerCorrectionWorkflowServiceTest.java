@@ -210,13 +210,150 @@ class CustomerCorrectionWorkflowServiceTest {
     }
 
     @Test
-    void collateralCorrectionRemainsUnsupported() {
+    void collateralSupportsExistingOwnershipReplacement() {
+        stubCollateralDocument();
+
+        LoanCorrectionRequest request = service.createFromProductVerification(
+                application(ProductCode.COLLATERAL_LOAN),
+                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                replacementPlan(DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE),
+                operation()
+        );
+
+        assertEquals(LoanCorrectionRequestStatus.OPEN, request.status());
+        ArgumentCaptor<LoanCorrectionTask> task = ArgumentCaptor.forClass(LoanCorrectionTask.class);
+        verify(corrections).saveTask(task.capture());
+        assertEquals(com.meridian.platform.loan.domain.model.LoanCorrectionScope.DOCUMENT_REPLACEMENT,
+                task.getValue().scope());
+    }
+
+    @Test
+    void collateralSupportsStaffReviewAndMixedPlanForSameOwnershipItem() {
+        stubCollateralDocument();
+        CorrectionPlanRequest mixed = new CorrectionPlanRequest(List.of(
+                replacementPlan(DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE).tasks().getFirst(),
+                new CorrectionTaskRequest(
+                        CorrectionScope.DOCUMENT_REVIEW,
+                        CorrectionResponsibility.STAFF,
+                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        false,
+                        ITEM_ID,
+                        VERSION_ID,
+                        null,
+                        "Review the corrected ownership evidence."
+                )
+        ));
+
+        service.createFromProductVerification(
+                application(ProductCode.COLLATERAL_LOAN),
+                CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED,
+                mixed,
+                operation()
+        );
+
+        ArgumentCaptor<LoanCorrectionTask> tasks = ArgumentCaptor.forClass(LoanCorrectionTask.class);
+        verify(corrections, org.mockito.Mockito.times(2)).saveTask(tasks.capture());
+        assertEquals(List.of(
+                        com.meridian.platform.loan.domain.model.LoanCorrectionScope.DOCUMENT_REPLACEMENT,
+                        com.meridian.platform.loan.domain.model.LoanCorrectionScope.DOCUMENT_REVIEW
+                ),
+                tasks.getAllValues().stream().map(LoanCorrectionTask::scope).toList());
+    }
+
+    @Test
+    void collateralRejectsOtherEvidenceSupportingCreationTermsAndSecondChecklistItem() {
+        stubCollateralDocument();
         assertInvalid(() -> service.createFromProductVerification(
                 application(ProductCode.COLLATERAL_LOAN),
                 CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                 replacementPlan(DocumentType.INCOME_PROOF),
                 operation()
         ));
+
+        CorrectionPlanRequest supporting = new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+                CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
+                CorrectionResponsibility.CUSTOMER,
+                DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                true,
+                null,
+                null,
+                "Upload another document.",
+                null
+        )));
+        assertInvalid(() -> service.createFromProductVerification(
+                application(ProductCode.COLLATERAL_LOAN),
+                CorrectionReasonCode.SUPPORTING_DOCUMENT_REQUIRED,
+                supporting,
+                operation()
+        ));
+
+        CorrectionPlanRequest terms = new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+                CorrectionScope.APPLICATION_TERMS,
+                CorrectionResponsibility.CUSTOMER,
+                null,
+                false,
+                null,
+                null,
+                "Change the estimated value.",
+                null
+        )));
+        BusinessRuleViolationException termsError = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.createFromProductVerification(
+                        application(ProductCode.COLLATERAL_LOAN),
+                        CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                        terms,
+                        operation()
+                )
+        );
+        assertEquals("CORRECTION_FIELD_NOT_ALLOWED", termsError.getErrorCode());
+
+        CorrectionPlanRequest twoItems = new CorrectionPlanRequest(List.of(
+                replacementPlan(DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE).tasks().getFirst(),
+                new CorrectionTaskRequest(
+                        CorrectionScope.DOCUMENT_REVIEW,
+                        CorrectionResponsibility.STAFF,
+                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        false,
+                        UUID.randomUUID(),
+                        VERSION_ID,
+                        null,
+                        "Review another item."
+                )
+        ));
+        assertInvalid(() -> service.createFromProductVerification(
+                application(ProductCode.COLLATERAL_LOAN),
+                CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED,
+                twoItems,
+                operation()
+        ));
+    }
+
+    @Test
+    void collateralPreservesForeignAndStaleDocumentErrors() {
+        when(documents.requireCurrentVersionSnapshot(APPLICATION_ID, ITEM_ID, VERSION_ID))
+                .thenThrow(new BusinessStateConflictException(
+                        "DOCUMENT_CHECKLIST_ITEM_MISMATCH",
+                        "Document checklist item does not belong to the Loan Application."
+                ))
+                .thenThrow(new BusinessStateConflictException(
+                        "STALE_DOCUMENT_VERSION",
+                        "The expected document version is no longer current."
+                ));
+
+        for (String errorCode : List.of("DOCUMENT_CHECKLIST_ITEM_MISMATCH", "STALE_DOCUMENT_VERSION")) {
+            BusinessStateConflictException exception = assertThrows(
+                    BusinessStateConflictException.class,
+                    () -> service.createFromProductVerification(
+                            application(ProductCode.COLLATERAL_LOAN),
+                            CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                            replacementPlan(DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE),
+                            operation()
+                    )
+            );
+            assertEquals(errorCode, exception.getErrorCode());
+        }
+        verify(corrections, never()).saveRequest(any());
     }
 
     private void assertInvalid(Runnable operation) {
@@ -238,6 +375,14 @@ class CustomerCorrectionWorkflowServiceTest {
                 "Replace the document.",
                 null
         )));
+    }
+
+    private void stubCollateralDocument() {
+        when(documents.requireCurrentVersionSnapshot(APPLICATION_ID, ITEM_ID, VERSION_ID))
+                .thenReturn(new LoanDocumentChecklistPort.CurrentDocumentVersionSnapshot(
+                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        VERSION_ID
+                ));
     }
 
     private LoanApplication application(ProductCode productCode) {

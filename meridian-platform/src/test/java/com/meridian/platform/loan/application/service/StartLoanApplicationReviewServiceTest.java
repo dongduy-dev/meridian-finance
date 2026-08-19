@@ -6,6 +6,7 @@ import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
 import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
+import com.meridian.platform.loan.domain.model.CollateralLoanManualVerificationOutcome;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
@@ -197,6 +198,27 @@ class StartLoanApplicationReviewServiceTest {
                 .completeManualReview(UUID.randomUUID(), LocalDateTime.of(2026, 7, 19, 7, 30), "Verified evidence.");
         when(applicationRepository.findByIdForUpdate(applicationId)).thenReturn(Optional.of(application));
         when(uclVerificationRepository.findLatestByLoanApplicationId(applicationId)).thenReturn(Optional.of(verified));
+        when(documentChecklistPort.isProcessingReady(applicationId)).thenReturn(true);
+        when(applicationRepository.save(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertEquals("UNDER_REVIEW", service.startReview(applicationId).status());
+    }
+
+    @Test
+    void verifiedCollateralCanStartCommonLoanOfficerReview() {
+        LoanApplication application = collateralApplication(LoanApplicationStatus.SUBMITTED);
+        CollateralLoanVerification verified = CollateralLoanVerification.pendingManualReview(
+                UUID.randomUUID(), application, LocalDateTime.of(2026, 7, 19, 7, 0)
+        ).completeManualReview(
+                CollateralLoanManualVerificationOutcome.VERIFIED,
+                UUID.randomUUID(),
+                LocalDateTime.of(2026, 7, 19, 7, 30),
+                "Ownership evidence is sufficient."
+        );
+        when(applicationRepository.findByIdForUpdate(applicationId)).thenReturn(Optional.of(application));
+        when(collateralVerificationRepository.findByLoanApplicationId(applicationId))
+                .thenReturn(Optional.of(verified));
         when(documentChecklistPort.isProcessingReady(applicationId)).thenReturn(true);
         when(applicationRepository.save(org.mockito.ArgumentMatchers.any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));

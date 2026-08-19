@@ -188,6 +188,8 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED
                     && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED
                     && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED
+                    && action != BusinessAuditAction.COLLATERAL_LOAN_VERIFICATION_STARTED
+                    && action != BusinessAuditAction.COLLATERAL_LOAN_VERIFICATION_COMPLETED
                     && action != BusinessAuditAction.LOAN_APPLICATION_CANCELLED
                     && action != BusinessAuditAction.REPAYMENT_RECORDED
                     && action != BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED
@@ -215,6 +217,8 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                     || action == BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED
                     || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED
                     || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED
+                    || action == BusinessAuditAction.COLLATERAL_LOAN_VERIFICATION_STARTED
+                    || action == BusinessAuditAction.COLLATERAL_LOAN_VERIFICATION_COMPLETED
                     || action == BusinessAuditAction.LOAN_APPLICATION_CANCELLED
                     || action == BusinessAuditAction.LOAN_SETTLEMENT_APPROVED
                     || action == BusinessAuditAction.LOAN_ACCOUNT_CLOSED) {

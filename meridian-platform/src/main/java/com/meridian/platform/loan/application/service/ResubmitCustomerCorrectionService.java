@@ -6,6 +6,8 @@ import com.meridian.platform.loan.application.port.in.ResubmitOwnCorrectionUseCa
 import com.meridian.platform.loan.application.port.in.ResubmitStaffCorrectionUseCase;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot;
+import com.meridian.platform.loan.application.port.out.CollateralLoanVerificationRepository;
+import com.meridian.platform.loan.application.port.out.CollateralRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
@@ -19,6 +21,7 @@ import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitReposit
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
@@ -37,6 +40,7 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
 import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanVerification;
 import com.meridian.platform.loan.domain.model.VerifiedPartnerEmployeeLinkSnapshot;
 import com.meridian.platform.loan.domain.service.SalaryAdvanceApplicationPolicy;
+import com.meridian.platform.loan.domain.service.CollateralLoanApplicationPolicy;
 import com.meridian.platform.loan.domain.service.UnsecuredConsumerLoanApplicationPolicy;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
@@ -79,6 +83,8 @@ public class ResubmitCustomerCorrectionService
     private final SalaryAdvanceLimitMovementRepository movementRepository;
     private final SalaryAdvanceVerificationRepository salaryVerificationRepository;
     private final UnsecuredConsumerLoanVerificationRepository uclVerificationRepository;
+    private final CollateralLoanVerificationRepository collateralVerificationRepository;
+    private final CollateralRepository collateralRepository;
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
     private final BusinessAuditPublisher auditPublisher;
     private final CurrentUserProvider currentUserProvider;
@@ -87,6 +93,8 @@ public class ResubmitCustomerCorrectionService
             new SalaryAdvanceApplicationPolicy();
     private final UnsecuredConsumerLoanApplicationPolicy uclPolicy =
             new UnsecuredConsumerLoanApplicationPolicy();
+    private final CollateralLoanApplicationPolicy collateralPolicy =
+            new CollateralLoanApplicationPolicy();
 
     public ResubmitCustomerCorrectionService(
             LoanApplicationRepository applicationRepository,
@@ -101,6 +109,8 @@ public class ResubmitCustomerCorrectionService
             SalaryAdvanceLimitMovementRepository movementRepository,
             SalaryAdvanceVerificationRepository salaryVerificationRepository,
             UnsecuredConsumerLoanVerificationRepository uclVerificationRepository,
+            CollateralLoanVerificationRepository collateralVerificationRepository,
+            CollateralRepository collateralRepository,
             LoanApplicationStatusTransitionRecorder transitionRecorder,
             BusinessAuditPublisher auditPublisher,
             CurrentUserProvider currentUserProvider,
@@ -118,6 +128,8 @@ public class ResubmitCustomerCorrectionService
         this.movementRepository = movementRepository;
         this.salaryVerificationRepository = salaryVerificationRepository;
         this.uclVerificationRepository = uclVerificationRepository;
+        this.collateralVerificationRepository = collateralVerificationRepository;
+        this.collateralRepository = collateralRepository;
         this.transitionRecorder = transitionRecorder;
         this.auditPublisher = auditPublisher;
         this.currentUserProvider = currentUserProvider;
@@ -253,9 +265,10 @@ public class ResubmitCustomerCorrectionService
                     request,
                     now
             );
-            case COLLATERAL_LOAN -> throw new BusinessStateConflictException(
-                    "CORRECTION_RESUBMISSION_NOT_ALLOWED",
-                    "Collateral Loan correction resubmission is not supported."
+            case COLLATERAL_LOAN -> prepareCollateralResubmission(
+                    application,
+                    request,
+                    now
             );
         };
 
@@ -402,6 +415,42 @@ public class ResubmitCustomerCorrectionService
         return new ProductResubmission(LoanApplicationStatus.SUBMITTED, List.of());
     }
 
+    private ProductResubmission prepareCollateralResubmission(
+            LoanApplication application,
+            LoanCorrectionRequest request,
+            LocalDateTime now
+    ) {
+        if (collateralRepository.findByLoanApplicationId(application.id()).size() != 1) {
+            throw new BusinessStateConflictException(
+                    "SYSTEM_STATE_CONFLICT",
+                    "Collateral Loan application evidence is inconsistent."
+            );
+        }
+        CollateralLoanVerification latestVerification = collateralVerificationRepository
+                .findLatestByLoanApplicationIdForUpdate(application.id())
+                .orElseThrow(() -> new BusinessStateConflictException(
+                        "COLLATERAL_VERIFICATION_REQUIRED",
+                        "Collateral Loan verification evidence is required."
+                ));
+        if (latestVerification.productVerificationResult() == ProductVerificationResult.FAILED) {
+            throw new BusinessStateConflictException(
+                    "CORRECTION_RESUBMISSION_NOT_ALLOWED",
+                    "A failed Collateral Loan application cannot be resubmitted."
+            );
+        }
+        if (latestVerification.productVerificationResult()
+                != ProductVerificationResult.PENDING_MANUAL_REVIEW) {
+            collateralVerificationRepository.save(CollateralLoanVerification.pendingReverification(
+                    UUID.randomUUID(),
+                    application.id(),
+                    latestVerification.verificationSequence() + 1,
+                    request.id(),
+                    now
+            ));
+        }
+        return new ProductResubmission(LoanApplicationStatus.SUBMITTED, List.of());
+    }
+
     private void validateProduct(LoanApplication application, LoanProduct product) {
         switch (application.productCode()) {
             case SALARY_ADVANCE -> {
@@ -414,10 +463,11 @@ public class ResubmitCustomerCorrectionService
                 uclPolicy.validateRequestedAmount(application.requestedAmount());
                 uclPolicy.validateRequestedTerm(application.requestedTermMonths());
             }
-            case COLLATERAL_LOAN -> throw new BusinessStateConflictException(
-                    "CORRECTION_RESUBMISSION_NOT_ALLOWED",
-                    "Collateral Loan correction resubmission is not supported."
-            );
+            case COLLATERAL_LOAN -> {
+                collateralPolicy.validateProduct(product);
+                collateralPolicy.validateRequestedAmount(product, application.requestedAmount());
+                collateralPolicy.validateRequestedTerm(application.requestedTermMonths());
+            }
         }
     }
 
