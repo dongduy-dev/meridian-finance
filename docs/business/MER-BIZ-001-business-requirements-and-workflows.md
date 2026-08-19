@@ -68,7 +68,7 @@ The MVP excludes real financial and payroll integrations, production compliance 
 
 ### 3.5 Architecture Boundary
 
-Meridian is delivered as a modular-monolith backend with one database and multiple frontends. Business ownership and context collaboration are defined in `MER-ARCH-001`; source structure and dependencies are defined in `MER-ARCH-002` and `MER-ARCH-003`. This document does not duplicate package trees or Java dependency rules.
+Meridian is delivered as a modular-monolith backend with one database and multiple frontends. Business ownership and context collaboration are defined in `MER-ARCH-001`; source structure and dependencies are defined in `MER-ARCH-002` and `MER-ARCH-003`.
 
 ---
 
