@@ -189,7 +189,7 @@ All three products use Meridian's common application, approval, contract, activa
 - [x] UCL lifecycle through evidence, verification and correction, approval, exact-request pricing, activation, servicing, closure, product-scoped outstanding protection, and zero Salary Advance exposure
 - [x] Collateral Loan lifecycle through structured facts, ownership evidence, numbered verification, document-only correction, exact-request pricing, activation, servicing, closure, and zero Salary Advance exposure
 - [x] JWT/RBAC, command-specific idempotency, transactional and concurrency controls, Flyway/PostgreSQL persistence, Spring Modulith event publication, and GitHub Actions verification
-- [ ] Startup replay and recovery for incomplete event publications
+- [x] Startup replay and recovery for incomplete event publications
 - [ ] Application containerization and a complete local Compose environment; PostgreSQL Compose support exists
 - [ ] Structured JSON logging with request and business correlation
 
