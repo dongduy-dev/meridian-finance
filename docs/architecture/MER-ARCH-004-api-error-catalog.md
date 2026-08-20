@@ -40,13 +40,10 @@ Reserved codes are listed separately. They do not become part of an executable A
 |---|---|---|---|
 | 404 | `CUSTOMER_NOT_FOUND` | Customer not found | Verify the requested Customer ID |
 | 409 | `CUSTOMER_NOT_ACTIVE` | Customer not active | Restore the Customer to `ACTIVE` before using customer-owned lending flows |
-| 409 | `DUPLICATE_NATIONAL_ID` | Duplicate national ID | Use the existing Customer record or correct the National ID |
-| 409 | `DUPLICATE_PHONE_NUMBER` | Duplicate phone number | Use the existing Customer record or correct the phone number |
 | 409 | `IDENTITY_REFERENCE_IMMUTABLE` | Identity reference immutable | Do not change the identity reference after the profile first becomes complete |
 | 409 | `IDENTITY_REFERENCE_ALREADY_IN_USE` | Identity reference already in use | Use an identity reference that does not belong to another Customer |
 | 422 | `PROFILE_INCOMPLETE` | Customer profile incomplete | Complete the required identity, contact, residential, employment, and consent fields |
 | 422 | `PRIMARY_BANK_ACCOUNT_REQUIRED` | Primary bank account required | Add or select a primary active bank account |
-| 422 | `CUSTOMER_VERIFICATION_REQUIRED` | Customer verification required | Complete the configured Customer verification step |
 | 409 | `BANK_ACCOUNT_UPDATE_NOT_ALLOWED` | Bank account update not allowed | Refresh the application state; bank-account changes are blocked in this status |
 | 404 | `BANK_ACCOUNT_NOT_FOUND` | Bank account not found | Verify that the bank account belongs to the authenticated Customer |
 | 409 | `DUPLICATE_BANK_ACCOUNT` | Duplicate bank account | Use the existing active bank account |
@@ -67,11 +64,10 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 422 | `INVALID_PRODUCT_AMOUNT` | Invalid product amount | Use an amount within the product and policy limits |
 | 422 | `INVALID_COLLATERAL_DETAILS` | Invalid Collateral details | Supply complete Collateral facts within technical limits and use a positive whole-VND estimated value |
 | 409 | `BLOCKING_APPLICATION_EXISTS` | Blocking application exists | Wait for the existing application for this product to reach a terminal status |
+| 409 | `OUTSTANDING_LOAN_ACCOUNT_EXISTS` | Outstanding loan account exists | Fully repay the product-matching `ACTIVE` or `OVERDUE` LoanAccount. A zero-outstanding `SETTLED` account clears this guard for products that define it |
 | 409 | `INVALID_APPLICATION_STATUS` | Invalid application status | Refresh the application and retry only from an allowed status |
-| 422 | `INVALID_STATUS_TRANSITION` | Invalid status transition | Use a transition allowed by the LoanApplication lifecycle |
-| 409 | `APPLICATION_ALREADY_TERMINAL` | Loan application already terminal | No further normal workflow action is allowed |
 | 422 | `PRODUCT_VERIFICATION_PENDING` | Product verification pending | Complete or wait for product-specific verification |
-| 422 | `PRODUCT_VERIFICATION_FAILED` | Product verification failed | Correct the product information or follow the configured review path |
+| 422 | `PRODUCT_VERIFICATION_FAILED` | Product verification failed | No normal retry is available for a terminal failed verification; use only a separately approved product workflow if one exists |
 | 422 | `PRODUCT_VERIFICATION_REQUIRES_MORE_INFORMATION` | Product verification requires more information | Complete the requested Customer or Staff correction |
 | 409 | `PRODUCT_VERIFICATION_START_NOT_ALLOWED` | Product verification start not allowed | Start verification only from an eligible submitted application |
 | 409 | `PRODUCT_VERIFICATION_COMPLETION_NOT_ALLOWED` | Product verification completion not allowed | Complete verification only while the application is verification-pending |
@@ -94,14 +90,9 @@ Reserved codes are listed separately. They do not become part of an executable A
 |---|---|---|---|
 | 404 | `PARTNER_COMPANY_NOT_FOUND` | Partner company not found | Verify the Partner Company ID |
 | 422 | `PARTNER_COMPANY_INACTIVE` | Partner company inactive | Use an active Partner Company |
-| 404 | `EMPLOYEE_NOT_FOUND` | Partner employee not found | Verify the employee details or use the authorized manual-review path |
 | 422 | `EMPLOYEE_INACTIVE` | Partner employee inactive | Use an active Partner Employee record |
 | 422 | `EMPLOYEE_NOT_VERIFIED` | Customer employee status not verified | Complete Salary Advance employee verification before creating an application |
 | 422 | `SALARY_ADVANCE_ELIGIBILITY_DATA_STALE` | Salary Advance eligibility data stale | Refresh the Partner Employee data before eligibility or limit use |
-| 409 | `EMPLOYEE_DUPLICATE_UNRESOLVED` | Duplicate partner employee unresolved | Resolve the duplicate employee records before verification |
-| 422 | `EMPLOYEE_VERIFICATION_REQUIRES_REVIEW` | Employee verification requires review | Send the case through authorized manual review with supporting evidence |
-| 404 | `PARTNER_EMPLOYEE_IMPORT_BATCH_NOT_FOUND` | Partner employee import batch not found | Verify the import batch ID |
-| 422 | `PARTNER_EMPLOYEE_IMPORT_INVALID` | Partner employee import invalid | Correct the invalid rows and import the batch again |
 
 ---
 
@@ -111,9 +102,6 @@ Reserved codes are listed separately. They do not become part of an executable A
 |---|---|---|---|
 | 422 | `SALARY_ADVANCE_LIMIT_UNAVAILABLE` | Salary Advance limit unavailable | Verify employee eligibility and refresh the limit |
 | 422 | `INSUFFICIENT_AVAILABLE_LIMIT` | Insufficient available Salary Advance limit | Reduce the requested amount to the available limit |
-| 409 | `SALARY_ADVANCE_LIMIT_SUSPENDED` | Salary Advance limit suspended | Resolve the stale data, manual review, or operational hold |
-| 409 | `SALARY_ADVANCE_LIMIT_DISABLED` | Salary Advance limit disabled | The Customer is not eligible for a normal Salary Advance application |
-| 409 | `OUTSTANDING_LOAN_ACCOUNT_EXISTS` | Outstanding Salary Advance loan account exists | Fully repay the matching `ACTIVE` or `OVERDUE` LoanAccount. A zero-outstanding `SETTLED` account clears this guard |
 | 409 | `SALARY_ADVANCE_RESERVATION_INVALID` | Salary Advance reservation invalid | Reconcile the reservation before correction resubmission, readiness confirmation, or disbursement |
 | 409 | `SALARY_ADVANCE_RESERVATION_RELEASED` | Salary Advance reservation released | Do not continue readiness or activation after the reservation has been released |
 
@@ -123,9 +111,6 @@ Reserved codes are listed separately. They do not become part of an executable A
 
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
-| 404 | `APPROVAL_REQUEST_NOT_FOUND` | Approval request not found | Verify the approval ID |
-| 422 | `APPROVAL_REQUIRED` | Approval required | Record the Approver decision before the next workflow step |
-| 409 | `DECISION_ALREADY_SUBMITTED` | Decision already submitted | Refresh the approval record; the decision is immutable once recorded |
 | 409 | `MAKER_CHECKER_VIOLATION` | Maker-checker violation | Use a different authorized user for the final Approver decision |
 | 422 | `REVIEW_RECOMMENDATION_REQUIRED` | Review recommendation required | Record the Loan Officer recommendation before the final decision |
 
@@ -161,14 +146,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
 | 404 | `DOCUMENT_NOT_FOUND` | Document not found | Verify the document ID |
-| 415 | `FILE_TYPE_NOT_ALLOWED` | File type not allowed | Upload a supported format such as PDF, JPG, or PNG |
-| 413 | `FILE_TOO_LARGE` | File too large | Upload a file within the configured size limit |
-| 422 | `DOCUMENT_REQUIRED` | Required document missing | Upload the required document or use an authorized `NOT_REQUIRED` or `WAIVED` outcome |
-| 422 | `DOCUMENT_NOT_READY` | Document checklist not ready | Complete the required uploads and manual review |
-| 422 | `DOCUMENT_REJECTED` | Document rejected | Upload a corrected replacement document |
-| 422 | `DOCUMENT_EXPIRED` | Document expired | Upload a valid replacement document |
 | 409 | `DOCUMENT_REPLACEMENT_REQUIRED` | Document replacement required | Replace the rejected or expired document |
-| 409 | `DOCUMENT_ALREADY_ACCEPTED` | Document already accepted | Use an authorized correction flow before replacing an accepted document |
 | 503 | `DOCUMENT_STORAGE_UNAVAILABLE` | Document storage unavailable | Retry later or contact support if the failure persists |
 | 403 | `DOCUMENT_ACCESS_DENIED` | Document access denied | Use the exact Customer owner or an authorized Staff actor |
 | 403 | `DOCUMENT_UPLOAD_DENIED` | Document upload not authorized | Upload through the open correction task for this checklist item |
@@ -203,27 +181,22 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 422 | `OFFER_NOT_ACCEPTED` | Offer not accepted | The Customer must accept the offer before contract preparation or disbursement |
 | 409 | `UCL_VERIFICATION_INVALID` | UCL verification is invalid for contract execution | Complete the authoritative latest application-owned UCL verification cycle positively before contract preparation or readiness confirmation |
 | 409 | `COLLATERAL_VERIFICATION_INVALID` | Collateral Loan verification is invalid for contract execution | Complete the authoritative latest application-owned Collateral verification cycle positively before contract preparation or readiness confirmation |
-| 422 | `CONTRACT_DOCUMENTS_NOT_READY` | Contract documents not ready | Complete the required contract or disbursement documents |
-| 422 | `DISBURSEMENT_NOT_READY` | Disbursement not ready | Complete approval, Customer acceptance, document readiness, and destination requirements |
 | 409 | `DISBURSEMENT_ALREADY_COMPLETED` | Disbursement already completed | Refresh the application; disbursement can be confirmed only once |
 | 409 | `DUPLICATE_TRANSFER_REFERENCE` | Transfer evidence already recorded | Reconcile the existing transfer without exposing the conflicting reference |
 | 422 | `DISBURSEMENT_VALUE_DATE_INVALID` | Disbursement value date is invalid | Use a date from final readiness through the current UTC business date |
 | 422 | `FIRST_REPAYMENT_DATE_INVALID` | First repayment date is invalid | Use a date after the value date and no later than one calendar month after it |
-| 422 | `PRODUCT_ACTIVATION_NOT_SUPPORTED` | Product activation is not executable | The selected product does not have an executable activation policy |
+| 422 | `PRODUCT_ACTIVATION_NOT_SUPPORTED` | Loan product activation is not supported | The selected product has no supported activation policy |
 | 403 | `DISBURSEMENT_DESTINATION_ACCESS_DENIED` | Destination access denied | Use an authenticated Staff principal with `loan:disburse` |
 | 409 | `DISBURSEMENT_DESTINATION_REVEAL_NOT_ALLOWED` | Destination reveal is not allowed | Reveal only the current ready contract while the application is `DISBURSEMENT_PENDING` |
 | 409 | `DISBURSEMENT_DESTINATION_UNAVAILABLE` | Protected destination is unavailable | Refresh the contract state or escalate for secure evidence reconciliation |
 | 404 | `LOAN_ACCOUNT_NOT_FOUND` | Loan Account not found | Staff: verify that activation completed. Customer responses also conceal missing, foreign-owned, and not-yet-activated accounts |
 | 403 | `LOAN_APPLICATION_ACCESS_DENIED` | Loan Application access denied | Use `loan:read:own` for an owned application or `loan:read` for authorized Staff access |
-| 409 | `LOAN_ACCOUNT_NOT_ACTIVE` | Loan account not active | Activate the LoanAccount through disbursement confirmation before repayment |
 | 422 | `REPAYMENT_VALUE_DATE_INVALID` | Repayment value date is invalid | Use a date from the disbursement value date through the current UTC business date |
 | 422 | `REPAYMENT_EXCEEDS_OUTSTANDING` | Repayment exceeds contractual outstanding | Submit an amount no greater than the current contractual outstanding balance |
-| 422 | `PRODUCT_REPAYMENT_NOT_SUPPORTED` | Product repayment is not executable | The selected product does not have an executable repayment policy |
+| 422 | `PRODUCT_REPAYMENT_NOT_SUPPORTED` | Loan product repayment is not supported | The selected product has no supported repayment policy |
 | 409 | `DUPLICATE_PAYMENT_REFERENCE` | Payment evidence already recorded | Reconcile the existing payment without exposing the conflicting reference |
 | 422 | `REPAYMENT_AMOUNT_INVALID` | Repayment amount is invalid | Submit a positive whole-VND repayment amount |
 | 409 | `REPAYMENT_NOT_ALLOWED` | Repayment is not allowed | Use an `ACTIVE` or `OVERDUE` account with positive contractual outstanding debt |
-| 422 | `REPAYMENT_RECORD_INVALID` | Repayment record invalid | Correct the amount, value date, status, or outstanding-balance data |
-| 404 | `REPAYMENT_SCHEDULE_NOT_FOUND` | Repayment schedule not found | Complete LoanAccount activation so the final repayment schedule exists |
 | 422 | `SETTLEMENT_AMOUNT_INVALID` | Settlement amount is invalid | Submit a positive whole-VND amount equal to the locked current contractual outstanding |
 | 422 | `SETTLEMENT_VALUE_DATE_INVALID` | Settlement value date is invalid | Use a date from the disbursement value date through the current UTC business date |
 | 409 | `SETTLEMENT_NOT_ALLOWED` | Settlement is not allowed | Use an `ACTIVE` or `OVERDUE` LoanAccount for an executable servicing product with positive contractual outstanding |
@@ -233,10 +206,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 
 ## 11. Audit & Compliance Controls
 
-| HTTP Status | Error Code | Message | Resolution |
-|---|---|---|---|
-| 409 | `AUDIT_RECORD_IMMUTABLE` | Audit record immutable | Do not modify an audit event or status-history record |
-| 503 | `AUDIT_TRAIL_UNAVAILABLE` | Audit trail unavailable | Retry or escalate; the business action requires a durable audit record |
+Executable source does not define an Audit-specific caller-facing error code. Planned Audit vocabulary remains in Section 14 rather than implying an active Audit API contract.
 
 ---
 
@@ -245,11 +215,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
 | 400 | `VALIDATION_FAILED` | Input validation failed | Correct the field errors in the response payload |
-| 400 | `NATIONAL_ID_FORMAT_INVALID` | National ID format invalid | Use exactly 9 digits for CMND or 12 digits for CCCD |
-| 400 | `PHONE_NUMBER_FORMAT_INVALID` | Phone number format invalid | Use a valid Vietnamese phone number |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | Request ID reused for different content | Replay the original logical content or use a new request ID |
-| 422 | `IDEMPOTENCY_PAYLOAD_MISMATCH` | Idempotency payload mismatch | Replay the original request body or use a new idempotency key |
-| 409 | `IDEMPOTENCY_PREVIOUS_SERVER_ERROR` | Previous idempotent request failed | Verify the prior operation before retrying with the same key |
 
 ---
 
@@ -258,15 +224,93 @@ Reserved codes are listed separately. They do not become part of an executable A
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
 | 409 | `SYSTEM_STATE_CONFLICT` | System state conflict | Refresh the resource. Escalate if workflow, account, schedule, reservation, or exposure evidence remains inconsistent |
-| 500 | `INTERNAL_SERVER_ERROR` | Internal server error | Retry later or contact support if the error persists |
-| 503 | `SERVICE_TEMPORARILY_UNAVAILABLE` | Service temporarily unavailable | Retry later |
-| 429 | `RATE_LIMIT_EXCEEDED` | Rate limit exceeded | Wait before retrying |
 
 ---
 
 ## 14. Reserved Error Codes
 
 These codes describe planned contract vocabulary. They are not active workflow errors until the owning capability is delivered and verified.
+
+### Customer Validation and Identity Uniqueness
+
+| HTTP Status | Error Code | Message | Intended caller resolution |
+|---|---|---|---|
+| 409 | `DUPLICATE_NATIONAL_ID` | Duplicate national ID | Use the existing Customer record or correct the National ID |
+| 409 | `DUPLICATE_PHONE_NUMBER` | Duplicate phone number | Use the existing Customer record or correct the phone number |
+| 422 | `CUSTOMER_VERIFICATION_REQUIRED` | Customer verification required | Complete the configured Customer verification step |
+| 400 | `NATIONAL_ID_FORMAT_INVALID` | National ID format invalid | Use exactly 9 digits for CMND or 12 digits for CCCD |
+| 400 | `PHONE_NUMBER_FORMAT_INVALID` | Phone number format invalid | Use a valid Vietnamese phone number |
+
+### Loan Application State
+
+| HTTP Status | Error Code | Message | Intended caller resolution |
+|---|---|---|---|
+| 422 | `INVALID_STATUS_TRANSITION` | Invalid status transition | Use a transition allowed by the LoanApplication lifecycle |
+| 409 | `APPLICATION_ALREADY_TERMINAL` | Loan application already terminal | No further normal workflow action is allowed |
+
+### Partner Import and Manual Matching
+
+| HTTP Status | Error Code | Message | Intended caller resolution |
+|---|---|---|---|
+| 404 | `EMPLOYEE_NOT_FOUND` | Partner employee not found | Verify the employee details or use the authorized manual-review path |
+| 409 | `EMPLOYEE_DUPLICATE_UNRESOLVED` | Duplicate partner employee unresolved | Resolve the duplicate employee records before verification |
+| 422 | `EMPLOYEE_VERIFICATION_REQUIRES_REVIEW` | Employee verification requires review | Send the case through authorized manual review with supporting evidence |
+| 404 | `PARTNER_EMPLOYEE_IMPORT_BATCH_NOT_FOUND` | Partner employee import batch not found | Verify the import batch ID |
+| 422 | `PARTNER_EMPLOYEE_IMPORT_INVALID` | Partner employee import invalid | Correct the invalid rows and import the batch again |
+
+### Salary Advance Limit States
+
+| HTTP Status | Error Code | Message | Intended caller resolution |
+|---|---|---|---|
+| 409 | `SALARY_ADVANCE_LIMIT_SUSPENDED` | Salary Advance limit suspended | Resolve the stale data, manual review, or operational hold |
+| 409 | `SALARY_ADVANCE_LIMIT_DISABLED` | Salary Advance limit disabled | The Customer is not eligible for a normal Salary Advance application |
+
+### Approval Workflow
+
+| HTTP Status | Error Code | Message | Intended caller resolution |
+|---|---|---|---|
+| 404 | `APPROVAL_REQUEST_NOT_FOUND` | Approval request not found | Verify the approval ID |
+| 422 | `APPROVAL_REQUIRED` | Approval required | Record the Approver decision before the next workflow step |
+| 409 | `DECISION_ALREADY_SUBMITTED` | Decision already submitted | Refresh the approval record; the decision is immutable once recorded |
+
+### Document Upload and Review
+
+| HTTP Status | Error Code | Message | Intended caller resolution |
+|---|---|---|---|
+| 415 | `FILE_TYPE_NOT_ALLOWED` | File type not allowed | Upload a supported format such as PDF, JPG, or PNG |
+| 413 | `FILE_TOO_LARGE` | File too large | Upload a file within the configured size limit |
+| 422 | `DOCUMENT_REQUIRED` | Required document missing | Upload the required document or use an authorized `NOT_REQUIRED` or `WAIVED` outcome |
+| 422 | `DOCUMENT_NOT_READY` | Document checklist not ready | Complete the required uploads and manual review |
+| 422 | `DOCUMENT_REJECTED` | Document rejected | Upload a corrected replacement document |
+| 422 | `DOCUMENT_EXPIRED` | Document expired | Upload a valid replacement document |
+| 409 | `DOCUMENT_ALREADY_ACCEPTED` | Document already accepted | Use an authorized correction flow before replacing an accepted document |
+
+### Contract, Disbursement, and Servicing
+
+| HTTP Status | Error Code | Message | Intended caller resolution |
+|---|---|---|---|
+| 422 | `CONTRACT_DOCUMENTS_NOT_READY` | Contract documents not ready | Complete the required contract or disbursement documents |
+| 422 | `DISBURSEMENT_NOT_READY` | Disbursement not ready | Complete approval, Customer acceptance, document readiness, and destination requirements |
+| 409 | `LOAN_ACCOUNT_NOT_ACTIVE` | Loan account not active | Activate the LoanAccount through disbursement confirmation before repayment |
+| 422 | `REPAYMENT_RECORD_INVALID` | Repayment record invalid | Correct the amount, value date, status, or outstanding-balance data |
+| 404 | `REPAYMENT_SCHEDULE_NOT_FOUND` | Repayment schedule not found | Complete LoanAccount activation so the final repayment schedule exists |
+
+### Audit and Platform Controls
+
+| HTTP Status | Error Code | Message | Intended caller resolution |
+|---|---|---|---|
+| 409 | `AUDIT_RECORD_IMMUTABLE` | Audit record immutable | Do not modify an audit event or status-history record |
+| 503 | `AUDIT_TRAIL_UNAVAILABLE` | Audit trail unavailable | Retry or escalate; the business action requires a durable audit record |
+| 500 | `INTERNAL_SERVER_ERROR` | Internal server error | Retry later or contact support if the error persists |
+| 503 | `SERVICE_TEMPORARILY_UNAVAILABLE` | Service temporarily unavailable | Retry later |
+| 429 | `RATE_LIMIT_EXCEEDED` | Rate limit exceeded | Wait before retrying |
+
+### Generic Idempotency
+
+| HTTP Status | Error Code | Message | Intended caller resolution |
+|---|---|---|---|
+| 422 | `IDEMPOTENCY_PAYLOAD_MISMATCH` | Idempotency payload mismatch | Replay the original request body or use a new idempotency key |
+| 409 | `IDEMPOTENCY_PREVIOUS_SERVER_ERROR` | Previous idempotent request failed | Verify the prior operation before retrying with the same key |
 
 ### Identity and Session Management
 

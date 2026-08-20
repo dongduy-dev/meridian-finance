@@ -117,16 +117,16 @@ Loan may reference that relationship by identifier and consume eligibility facts
 
 ## 4. Loan Core / Lending Lifecycle — Core Domain
 
-Loan Core owns the lending lifecycle from product eligibility and application submission through disbursement, servicing, settlement, and closure.
+Loan Core owns the lending lifecycle from product eligibility and application submission through disbursement, servicing, contractual payoff or Administrative Full-Balance Settlement, and administrative closure.
 
 Salary Advance, Unsecured Consumer Loan, and Collateral Loan are product behaviors inside Loan Core rather than separate top-level bounded contexts. Product policies specialize behavior that differs by product while preserving the common lending lifecycle.
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Loan product definitions and policy configuration; `LoanApplication` lifecycle; product-specific application data, eligibility, and verification snapshots; Salary Advance limit and exposure; review-cycle and correction workflow state; approved offers; operational contracts and readiness; disbursement evidence; `LoanAccount` activation; final repayment schedules; repayment transactions and allocations; overdue servicing; settlement; administrative closure; and application, account, and installment histories. |
-| **Owns** | `LoanProduct`, product-policy configuration, `LoanApplication`, product-specific application details, product verification snapshots, `SalaryAdvanceLimit` and limit movements, review cycles, correction requests and tasks, approved offers, operational loan contracts, immutable contract-bound destinations, disbursement evidence, `LoanAccount`, final repayment schedules, repayment transactions, allocations, servicing progress, settlement and closure evidence, and lifecycle histories. Product-specific application details include income and employment facts for Unsecured Consumer Loan and structured collateral, ownership, and valuation facts for Collateral Loan. |
-| **Public Capabilities** | Query products and eligibility; create or save drafts; submit applications; query application state and Salary Advance limits; start Loan Officer review; manage correction workflows and resubmit completed corrections; apply recommendation and approval outcomes; view and respond to offers; prepare and acknowledge contracts; confirm contract readiness; record manual disbursement; query LoanAccounts and schedules; record and query repayments; evaluate overdue state; settle and close eligible accounts. |
-| **Publishes** | Representative events include application submitted, verification recorded, limit reserved or released, review started, correction requested, recommendation applied, application approved or rejected, offer generated or resolved, contract prepared or acknowledged, readiness confirmed, loan disbursed, repayment recorded, account status changed, account settled, and account closed. |
+| **Responsibilities** | Loan product definitions and policy configuration; `LoanApplication` lifecycle; product-specific application data, eligibility, and verification snapshots; Salary Advance limit and exposure; review-cycle and correction workflow state; approved offers; operational contracts and readiness; disbursement evidence; `LoanAccount` activation; final repayment schedules; repayment transactions and allocations; overdue servicing; contractual payoff; Administrative Full-Balance Settlement; administrative closure; and application, account, and installment histories. |
+| **Owns** | `LoanProduct`, product-policy configuration, `LoanApplication`, product-specific application details, product verification snapshots, `SalaryAdvanceLimit` and limit movements, review cycles, correction requests and tasks, approved offers, operational loan contracts, immutable contract-bound destinations, disbursement evidence, `LoanAccount`, final repayment schedules, repayment transactions, allocations, servicing progress, contractual-payoff evidence, Administrative Full-Balance Settlement evidence, administrative-closure evidence, and lifecycle histories. Product-specific application details include one Collateral Loan asset's type, description, estimated value, ownership status, and condition facts. |
+| **Public Capabilities** | Query products and eligibility; create or save drafts; submit applications; query application state and Salary Advance limits; start Loan Officer review; manage correction workflows and resubmit completed corrections; apply recommendation and approval outcomes; view and respond to offers; prepare and acknowledge contracts; confirm contract readiness; record manual disbursement; query LoanAccounts and schedules; record and query repayments; evaluate overdue state; perform contractual payoff or Administrative Full-Balance Settlement; and close eligible settled accounts administratively. |
+| **Publishes** | Representative events include application submitted, verification recorded, limit reserved or released, review started, correction requested, recommendation applied, application approved or rejected, offer generated or resolved, contract prepared or acknowledged, readiness confirmed, loan disbursed, repayment recorded, account status changed, account settled by contractual payoff or Administrative Full-Balance Settlement, and account closed administratively. |
 | **Consumes** | Customer readiness and eligible bank-account facts; Partner employee-link and eligibility facts; Document checklist and processing-readiness facts; Approval recommendation and decision outcomes; authenticated actor and authorization facts. |
 | **Must Not Own** | User credentials, Customer source profile or bank-account aggregates, Partner Employee source records, document binaries or document-review decisions, or Approval's immutable recommendation and decision records. |
 
@@ -134,7 +134,7 @@ Salary Advance, Unsecured Consumer Loan, and Collateral Loan are product behavio
 
 `LoanApplication` governs origination from draft or submission through verification, document readiness, controlled review, approval, Customer acceptance, contract readiness, disbursement, and pre-disbursement terminal outcomes.
 
-After disbursement, `LoanAccount` becomes the authoritative servicing aggregate. It moves among `ACTIVE`, `OVERDUE`, `SETTLED`, and `CLOSED` according to repayment, settlement, overdue, and administrative-closure policies.
+After disbursement, `LoanAccount` becomes the authoritative servicing aggregate. It moves among `ACTIVE`, `OVERDUE`, `SETTLED`, and `CLOSED` according to repayment, overdue, contractual-payoff, Administrative Full-Balance Settlement, and administrative-closure policies.
 
 `LoanApplication` status must not become the source of truth for post-disbursement balances or servicing state.
 
@@ -142,7 +142,7 @@ After disbursement, `LoanAccount` becomes the authoritative servicing aggregate.
 
 Loan owns the structured lending facts needed to evaluate and service a product.
 
-Document Management owns uploaded supporting files, document versions, and document-review decisions. A supporting document may evidence a Loan-owned fact, but file ownership does not transfer the underlying income, employment, collateral, ownership, valuation, or other lending concept to Document Management.
+Document Management owns uploaded supporting files, document versions, and document-review decisions. For Collateral Loan, Document owns the required ownership-evidence file and its review state, while Loan owns the submitted ownership status and other structured Collateral facts. A supporting document may evidence a Loan-owned fact without transferring that lending concept to Document Management.
 
 ### Salary Advance Ownership
 
@@ -177,7 +177,7 @@ Loan's common lifecycle remains generic. Product policies own only behavior that
 - activation effects;
 - exposure reservation and release;
 - collateral-specific controls;
-- settlement and closure effects.
+- contractual-payoff, Administrative Full-Balance Settlement, and administrative-closure effects.
 
 A product policy must not bypass common lifecycle, security, audit, document-readiness, or maker-checker controls.
 
@@ -208,7 +208,7 @@ A recommendation or decision must not directly mutate Loan-owned persistence.
 |---|---|
 | **Responsibilities** | Application checklists, checklist items, document upload and storage, logical documents, immutable document versions, current-version selection, metadata, authorized content access, manual review, replacement, waiver, expiration, and processing readiness. |
 | **Owns** | Application document checklists, checklist items, logical documents, immutable versions, storage references, review decisions, review status, replacement and waiver evidence, and document-processing results. |
-| **Public Capabilities** | Create and query checklists; upload and retrieve authorized document content; review a document version; accept, reject, waive, or request replacement; query upload completeness and processing readiness; provide narrow readiness facts to Loan. |
+| **Public Capabilities** | Create and query checklists; upload and retrieve authorized document content; review a document version; accept, waive, or request replacement; query upload completeness and processing readiness; provide narrow readiness facts to Loan. |
 | **Publishes** | Representative events include document uploaded, version superseded, document reviewed, replacement requested, checklist upload-complete, and checklist processing-ready. |
 | **Consumes** | `LoanApplication` ownership and workflow facts, correction-task proof, and authenticated Customer or Staff authorization facts. |
 | **Must Not Own** | `LoanApplication` status, review cycles, correction requests or tasks, product eligibility, approval decisions, contract readiness, lending exposure, or the structured lending facts merely evidenced by uploaded documents. |
@@ -281,7 +281,7 @@ A notification failure must not rewrite or reverse the business outcome that tri
 | Approved offers and Customer response state | Loan Core |
 | Operational contracts and contract-bound destinations | Loan Core |
 | Contract readiness and disbursement evidence | Loan Core |
-| LoanAccounts, schedules, repayments, overdue state, settlement, closure | Loan Core |
+| LoanAccounts, schedules, repayments, overdue state, contractual payoff, Administrative Full-Balance Settlement, administrative closure | Loan Core |
 | Checklists, document versions, review decisions, readiness | Document Management |
 | OCR jobs and extracted document evidence | Document Management |
 | Immutable cross-cutting audit evidence | Audit & Compliance Controls |
@@ -296,7 +296,7 @@ This section defines collaboration at the bounded-context level. `MER-ARCH-003-d
 | Collaboration | Rule | Boundary |
 |---|---|---|
 | **Synchronous application contracts** | A context may query immediate authentication, authorization, ownership, readiness, eligibility, or other purpose-limited facts through another context's public application contract. | The caller must not mutate the provider's aggregates or use its repositories, persistence entities, or internal services. |
-| **Business events** | A context may publish a state-change fact for another context to process independently. Consumers handle delivery idempotently and preserve the publisher's authority over the originating state. | A consumer projection must not become the publishing context's source of truth. |
+| **Business events** | A context may publish a state-change fact for another context. Transaction-participating consumers preserve the originating outcome's atomicity; durable asynchronous consumers handle delivery idempotently. Both preserve the publisher's authority over the originating state. | A consumer projection must not become the publishing context's source of truth. |
 | **References and data** | Contexts exchange stable identifiers and the minimum immutable facts required by the collaboration. | They must not exchange cross-context aggregate object graphs or unrestricted sensitive evidence. |
 | **Persistence authority** | Each context owns its aggregates, repositories, and tables. | Contexts must not share aggregate ownership, create cross-context JPA relationships, perform direct cross-context joins, or use another context's persistence as their own model. |
 | **Reliability** | Transaction-participating collaboration or durable asynchronous delivery must define atomicity, retry, idempotency, ordering, reconciliation, and replay behavior required by the business outcome. | Business-critical coordination must not rely on fire-and-forget delivery without defined failure and recovery semantics. |

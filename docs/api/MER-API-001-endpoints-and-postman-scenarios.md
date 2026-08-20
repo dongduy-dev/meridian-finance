@@ -17,7 +17,7 @@ It does not define bounded-context ownership, Java controller structure, persist
 - Document content: streamed attachment
 - UUIDs use canonical UUID text.
 - Dates use `YYYY-MM-DD`; timestamps use ISO-8601 UTC representations.
-- Salary Advance monetary inputs must represent whole VND. `3000000`, `3000000.0`, and `3000000.00` are valid; fractional VND is rejected.
+- Customer-supplied loan and servicing amounts must represent whole VND. This includes requested principal, Collateral estimated value, repayment amount, and expected settlement amount. `3000000`, `3000000.0`, and `3000000.00` are valid; fractional VND is rejected.
 
 ### 1.2 Authentication and authorization
 
@@ -26,6 +26,7 @@ Public endpoints:
 - `GET /api/v1/health`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/loan-products`
+- `GET /api/v1/loan-products/{productCode}`
 
 All other endpoints require:
 
@@ -91,7 +92,9 @@ An identical logical replay returns the original result without another business
 
 ### 1.6 Sensitive-data boundary
 
-Ordinary JSON responses must not expose passwords, tokens, unrestricted identity evidence, full bank-account numbers, cryptographic envelope fields, document storage metadata, restricted Staff notes, external transfer/payment references, or internal audit/history identifiers.
+Outside the login response, JSON responses do not expose passwords or access tokens. Public and Customer-facing responses must not expose unrestricted identity evidence, Partner salary evidence, full bank-account numbers, cryptographic envelope fields, document storage metadata, restricted Staff notes, external transfer/payment references, or internal audit/history identifiers.
+
+Authorized Staff endpoints return only the restricted operational fields defined for their contracts. Partner employee reads may return employment and salary evidence to callers with `partner:read`; recommendation and decision responses may return their own actor and internal-note fields to the authorized Staff caller. Product-verification completion responses never return the reviewer or restricted assessment note.
 
 The contractual destination-reveal operation is the sole v1 JSON endpoint permitted to return the full immutable disbursement account number.
 
@@ -106,6 +109,7 @@ The contractual destination-reveal operation is the sole v1 JSON endpoint permit
 | GET | `/api/v1/health` | Public | Return versioned health status. |
 | POST | `/api/v1/auth/login` | Public | Authenticate and return Bearer-token actor facts. |
 | GET | `/api/v1/loan-products` | Public | List active loan products. |
+| GET | `/api/v1/loan-products/{productCode}` | Public | Return one active loan product by code. |
 | GET | `/api/v1/customers/me` | `customer:profile:read:own` | Return the authenticated Customer’s safe profile-readiness view. |
 | PUT | `/api/v1/customers/me/profile` | `customer:profile:write:own` | Create or update the authenticated Customer profile. |
 | GET | `/api/v1/customers/me/bank-accounts` | `customer:bank-account:read:own` | List masked owned bank accounts. |
@@ -163,7 +167,7 @@ The contractual destination-reveal operation is the sole v1 JSON endpoint permit
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/disbursement-destination/reveal` | `loan:disburse` | Reveal the full immutable ready-contract destination. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/disbursements` | `loan:disburse` | Confirm an external transfer and activate the LoanAccount. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/loan-account` | `loan:read:own` or `loan:read` | Return originated terms, final schedule, and servicing state. |
-| POST | `/api/v1/loan-applications/{loanApplicationId}/repayments` | `repayment:update` | Record or replay a manual Salary Advance or UCL repayment. |
+| POST | `/api/v1/loan-applications/{loanApplicationId}/repayments` | `repayment:update` | Record or replay a manual Salary Advance, UCL, or Collateral Loan repayment. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read:own` or `loan:read` | Return immutable paged repayment history. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/settlements` | `loan:settlement:approve` plus Approver role | Approve and apply an Administrative Full-Balance Settlement. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/loan-account/closure` | `loan:account:close` plus Accounting Officer role | Close an eligible settled LoanAccount administratively. |
@@ -195,7 +199,18 @@ Successful response fields:
 
 `customerId` may be `null` for Staff principals.
 
-### 3.2 Customer profile
+### 3.2 Loan-product catalogue
+
+```text
+GET /api/v1/loan-products
+GET /api/v1/loan-products/{productCode}
+```
+
+Both reads are public. The collection read returns active products; the item read normalizes the supplied code and returns only an active matching product. Each product contains `productCode`, `productType`, `name`, `description`, `active`, `minAmount`, and `maxAmount`.
+
+An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A recognized code with no active product returns `404 PRODUCT_NOT_FOUND`.
+
+### 3.3 Customer profile
 
 ```json
 {
@@ -210,9 +225,9 @@ Successful response fields:
 }
 ```
 
-`identityReference` is accepted only on profile update and is never returned. Duplicate normalized evidence owned by another Customer returns `409 IDENTITY_REFERENCE_ALREADY_IN_USE`.
+The safe Customer response contains `customerId`, `customerNumber`, Customer `status`, `verificationStatus`, `profileCompletionStatus`, `primaryActiveBankAccountPresent`, and the profile fields shown above except `identityReference`. Duplicate normalized identity evidence owned by another Customer returns `409 IDENTITY_REFERENCE_ALREADY_IN_USE` without echoing the submitted value.
 
-### 3.3 Add bank account
+### 3.4 Customer bank accounts
 
 ```json
 {
@@ -223,9 +238,13 @@ Successful response fields:
 }
 ```
 
-The account number is normalized by removing spaces and hyphens, must contain at least six normalized characters, and is returned only as a masked value plus last-four representation.
+The account number is normalized by removing spaces and hyphens and must contain at least six normalized characters. List, add, make-primary, and deactivate responses contain the account ID, bank code/name, account-holder name, masked account number, last four characters, status, primary flag, and lifecycle timestamps. They never return the full account number, ciphertext, fingerprint, or protection metadata.
 
-### 3.4 Employee verification
+### 3.5 Partner staff reads
+
+The Partner Company, employee, and import-batch reads require `partner:read`. Partner Company responses include the configured Salary Advance policy limit. Partner Employee responses include employee code, identity reference, salary amount, Salary Advance limit, employment status, active state, company identity, and import-batch identity. These are restricted Staff contracts and must not be reused as Customer response shapes. Import-batch responses contain company identity, effective month, status, and valid/invalid row counts.
+
+### 3.6 Employee verification
 
 ```json
 {
@@ -265,7 +284,7 @@ An authenticated Customer with `loan:read:own` may read only their own applicati
 
 The response contains only `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `requestedAmount`, `requestedTermMonths`, `status`, and `submittedAt`. It excludes Customer, employee-link, limit, verification, review-cycle, actor, audit/history, payment, and banking evidence. This is a durable status projection for reconnect/resume flows, not a next-action engine, command recommendation, history API, or Staff work queue.
 
-`CANCELLED` is executable in v0.1.0 only through the Customer-owned correction-abandonment command described in Section 5.4. Broader Customer cancellation from other states and every Staff or administrative cancellation policy remain deferred.
+The Customer-owned correction-abandonment command in Section 5.4 is the only v1 command that produces `CANCELLED`. The route does not accept cancellation from another state or a Staff or administrative cancellation.
 
 ### 4.3 Submit application
 
@@ -280,6 +299,8 @@ The response contains only `loanApplicationId`, `applicationNumber`, `productCod
 Success returns `201 Created`.
 
 The authenticated Customer must satisfy Customer readiness, Partner eligibility, product, amount, term, document, blocking-application, outstanding-debt, and available-limit requirements.
+
+The response contains the application identity and number, authenticated `customerId`, product code/type, status, requested terms, reusable employee-link ID, product-verification result, total/used/reserved/available limit snapshots, and submission time. It excludes employee code, identity evidence, salary, Partner import-batch identity, bank-account data, and internal history/audit evidence.
 
 Important errors:
 
@@ -343,9 +364,9 @@ The authenticated Customer supplies the requested terms and exactly one structur
 }
 ```
 
-The API derives Customer identity from the Bearer token and rejects unknown top-level or Collateral fields. The Customer must be active, have a complete required profile and a primary active bank account, and hold `loan:submit`. The active catalog product must be `COLLATERAL_LOAN` / `SECURED`. The requested amount must be whole VND and within the current active product minimum and maximum. Supported terms are exactly 6, 12, 18, and 24 months. `estimatedValue` must be positive whole VND, but CP1 performs no loan-to-value calculation or comparison between requested and estimated values. `description`, `ownershipStatus`, and `conditionNote` are required nonblank Customer-submitted text, normalized by trimming before storage, and limited to 500, 200, and 500 characters respectively.
+The API derives Customer identity from the Bearer token and rejects unknown top-level or Collateral fields. The Customer must be active, have a complete required profile and a primary active bank account, and hold `loan:submit`. The active catalog product must be `COLLATERAL_LOAN` / `SECURED`. The requested amount must be whole VND and within the current active product minimum and maximum. Supported terms are exactly 6, 12, 18, and 24 months. `estimatedValue` must be positive whole VND, but the endpoint performs no loan-to-value calculation or comparison between requested and estimated values. `description`, `ownershipStatus`, and `conditionNote` are required nonblank Customer-submitted text, normalized by trimming before storage, and limited to 500, 200, and 500 characters respectively.
 
-Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `status`, `requestedAmount`, `requestedTermMonths`, `collateralType`, `productVerificationResult`, `evidenceRequirements`, and `submittedAt`. Each safe evidence requirement contains `checklistItemId`, `documentType`, and `requirementStatus`. CP1 returns one required `COLLATERAL_OWNERSHIP_EVIDENCE` item, allowing the Customer to call the existing document-version upload endpoint without exposing document contents or internal review evidence.
+Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `status`, `requestedAmount`, `requestedTermMonths`, `collateralType`, `productVerificationResult`, `evidenceRequirements`, and `submittedAt`. Each safe evidence requirement contains `checklistItemId`, `documentType`, and `requirementStatus`. The response returns one required `COLLATERAL_OWNERSHIP_EVIDENCE` item, allowing the Customer to call the existing document-version upload endpoint without exposing document contents or internal review evidence.
 
 The application starts in `DOCUMENTS_PENDING` with application-owned sequence-1 `PENDING_MANUAL_REVIEW` Collateral verification. Uploading the required evidence through the existing Document workflow can complete generic upload readiness and advance the application to `SUBMITTED`; it does not complete Collateral verification or permit review. The Staff verification commands in Sections 4.8-4.9 make the terminal decision. Only the authoritative latest `VERIFIED` cycle permits review, recommendation, and an Approver action.
 
@@ -579,6 +600,8 @@ Representative Customer task:
 
 Staff tasks use `responsibleParty = STAFF` with `SUPPORTING_DOCUMENT_UPLOAD` or `DOCUMENT_REVIEW`.
 
+Success returns `201 Created` with recommendation, application, review-cycle, and Loan Officer identities; action, reason, reason code, restricted internal notes, and submission time. This Staff-only response is not part of any Customer read contract.
+
 ### 5.2 Approval decision
 
 Supported actions:
@@ -597,6 +620,8 @@ Supported actions:
 ```
 
 The Approver must differ from the Loan Officer who submitted the applicable recommendation. Mixed corrections use separate Customer and Staff tasks.
+
+Success returns `201 Created` with decision, application, recommendation, and Approver identities; action, reason, reason code, restricted internal notes, and decision time. This Staff-only response is not exposed through Customer application, offer, contract, or LoanAccount reads.
 
 For UCL, `APPROVE` atomically records the decision, generates one immutable exact-request offer with `FLAT_ORIGINAL_PRINCIPAL` pricing and `MONTHLY_INSTALLMENT` items, and finishes in `CUSTOMER_ACCEPTANCE_PENDING`. `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and structured mixed Customer/Staff correction remain available common decisions under the UCL document restrictions.
 

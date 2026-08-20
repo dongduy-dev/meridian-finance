@@ -57,9 +57,9 @@ com.meridian.platform/
 | `identity` | Users, authentication, authorization, roles, permissions, sessions, and security implementation |
 | `customer` | Customer aggregate, profile, verification state, bank accounts, and sensitive Customer data |
 | `partner` | Partner Companies, Partner Employees, imports, employment verification, and reusable employee links |
-| `loan` | Products, applications, limits, review cycles, offers, contracts, activation, servicing, repayment, settlement, and closure |
+| `loan` | Products, applications, limits, review cycles, offers, contracts, activation, servicing, repayment, contractual payoff, Administrative Full-Balance Settlement, and administrative closure |
 | `approval` | Loan Officer recommendations, Approver decisions, maker-checker controls, and decision records |
-| `document` | Checklists, document versions, review decisions, storage, readiness, and backend OCR integration |
+| `document` | Checklists, document versions, review decisions, storage, readiness, and the backend OCR boundary |
 | `audit` | Append-only cross-cutting business audit records |
 | `notification` | Templates, delivery requests, channels, attempts, and delivery status |
 
@@ -131,7 +131,7 @@ Domain code remains pure Java. Application code must not depend on infrastructur
 | Identity & Access | Full | Authentication, authorization, token/session boundaries, persistence, and security adapters |
 | Customer | Moderate | Aggregate behavior, profile and bank-account services, sensitive-data boundaries, and narrow public contracts |
 | Partner | Moderate | Company and employee data, imports, verification, reusable links, and Customer/Loan collaboration |
-| Document | Moderate | Checklists, versions, review, storage, readiness, and OCR integration |
+| Document | Moderate | Checklists, versions, review, storage, readiness, and the OCR integration boundary |
 | Audit | Simplified | Event intake, append-only persistence, and authorized queries |
 | Notification | Simplified | Event intake, templates, provider ports, delivery attempts, and status |
 
@@ -149,13 +149,13 @@ These examples show placement, not a required file inventory. The Java source tr
 | Identity | `User`, `JwtAuthenticationFilter`, `JwtTokenService`, `SpringSecurityCurrentUserProvider`, `SecurityConfig` |
 | Customer | `Customer`, `CustomerProfile`, `CustomerBankAccount`, `ContractBankAccountUseCase` |
 | Partner | `PartnerCompany`, `PartnerEmployee`, `PartnerEmployeeImportBatch`, `CustomerPartnerEmployeeLink`, `VerifyPartnerEmployeeService` |
-| Loan | `LoanApplication`, `SalaryAdvanceLimit`, `SalaryAdvanceVerification`, `ApprovedOffer`, `LoanContract`, `LoanAccount`, `ManualDisbursement`, `RepaymentSchedule` |
+| Loan | `LoanApplication`, `SalaryAdvanceLimit`, `SalaryAdvanceVerification`, `UnsecuredConsumerLoanVerification`, `Collateral`, `CollateralLoanVerification`, `ApprovedOffer`, `LoanContract`, `LoanAccount`, `ManualDisbursement`, `RepaymentSchedule` |
 | Approval | `ReviewRecommendation`, `ApprovalDecision`, `SubmitApprovalDecisionService` |
 | Document | `DocumentChecklist`, `DocumentChecklistItem`, logical document/version models, review decisions, `DocumentChecklistService` |
 | Audit | `AuditEvent`, `RecordAuditEventsUseCase`, `RecordAuditEventsService`, `BusinessAuditEventListener` |
 | Notification | `Notification`, `NotificationTemplate`, delivery request/status types, sender ports |
 
-Representative Loan application services include `StartSalaryAdvanceApplicationService`, `ApplyApprovalDecisionService`, `LoanContractReadinessService`, `ConfirmManualDisbursementService`, and `RecordRepaymentService`.
+Representative Loan application services include `StartSalaryAdvanceApplicationService`, `StartUnsecuredConsumerLoanApplicationService`, `StartCollateralLoanApplicationService`, `ApplyApprovalDecisionService`, `LoanContractReadinessService`, `ConfirmManualDisbursementService`, and `RecordRepaymentService`.
 
 ---
 
@@ -179,7 +179,7 @@ Cross-context access uses narrow application contracts and infrastructure adapte
 
 ### Loan
 
-Loan owns origination, review cycles, corrections, offers, contracts, activation, LoanAccount servicing, repayment, overdue evaluation, settlement, and closure.
+Loan owns origination, review cycles, corrections, offers, contracts, activation, LoanAccount servicing, repayment, overdue evaluation, contractual payoff, Administrative Full-Balance Settlement, and administrative closure.
 
 Loan infrastructure may use boundary-specific adapter packages:
 
@@ -239,9 +239,9 @@ Product policies may specialize:
 - activation;
 - collateral controls;
 - repayment effects;
-- settlement and closure.
+- contractual-payoff, Administrative Full-Balance Settlement, and administrative-closure effects.
 
-Activation, repayment, settlement, and closure remain Loan lifecycle capabilities within `loan`.
+Activation, repayment including contractual payoff, Administrative Full-Balance Settlement, and administrative closure remain Loan lifecycle capabilities within `loan`.
 
 ---
 
@@ -272,9 +272,11 @@ This pattern applies when:
 
 A boundary adapter may translate identifiers and immutable contract records. It must not expose another context's repositories, JPA entities, internal services, or aggregate object graphs.
 
-### 8.2 Asynchronous Events
+### 8.2 Published Events and Inbound Event Adapters
 
 A module that consumes a published business event handles it through `infrastructure.adapter.in.event` and enters its own application layer through an explicit contract.
+
+Event intake is structurally different from a synchronous output-port call. Delivery may participate in the publisher's transaction or use durable asynchronous processing; `MER-ARCH-003-dependency-rules.md` owns those reliability choices and `MER-ARCH-006-api-request-flow-and-dependencies.md` documents representative runtime sequences.
 
 Audit and Notification consume business events through inbound event adapters. They do not use the synchronous output-port pattern for event delivery.
 
