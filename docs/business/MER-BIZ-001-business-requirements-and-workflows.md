@@ -547,6 +547,8 @@ Limit behavior:
 
 Each submitted application records the employee-link, limit identity, limit values, and verification result used at submission.
 
+The common blocking-application rule applies. Separately, a matching `ACTIVE` or `OVERDUE` Salary Advance `LoanAccount` with positive contractual outstanding blocks new Salary Advance submission. See `BR-004` and `BR-012`.
+
 #### End-to-End Salary Advance Workflow
 
 1. Back-Office Admin configures an active Partner Company.
@@ -592,7 +594,7 @@ Unsecured Consumer Loan is a streamlined document-based product. It requires inc
 
 Required evidence is defined in Section 11.3. Loan purpose may be an optional product-policy field or document.
 
-A Customer cannot create or resubmit a UCL while another UCL LoanAccount has positive contractual outstanding in `ACTIVE` or `OVERDUE`. Product-scoped `SETTLED` and `CLOSED` accounts with zero outstanding do not block, and unrelated Salary Advance accounts do not satisfy the UCL guard. Inconsistent account state fails closed.
+The common blocking-application rule applies. Separately, a matching `ACTIVE` or `OVERDUE` UCL `LoanAccount` with positive contractual outstanding blocks new UCL creation or correction resubmission. Product-matching `SETTLED` or `CLOSED` accounts with zero outstanding do not block, unrelated products do not satisfy the UCL outstanding-account guard, and inconsistent account/status/outstanding evidence fails closed. See `BR-004` and `BR-020B`.
 
 A Customer may cancel an owned UCL only from `RETURNED_FOR_REVISION`. Cancellation terminalizes the active correction and application without creating, releasing, converting, or otherwise changing product exposure. Salary Advance cancellation retains its exact reservation-release behavior.
 
@@ -652,7 +654,7 @@ The UCL MVP excludes credit-bureau integration, automated income verification, b
 
 Collateral Loan is a streamlined secured product based on one Customer-submitted structured Collateral fact, required ownership evidence, and manual assessment.
 
-The common blocking-application rule applies, but an existing Collateral LoanAccount does not create an additional product-specific origination restriction. Collateral origination, activation, and servicing are independent of Salary Advance limit and exposure; no Collateral action creates a Salary Advance limit or movement effect.
+The common blocking-application rule applies, but an existing Collateral LoanAccount does not create an additional product-specific origination restriction. See `BR-004` and `BR-021I`. Collateral origination, activation, and servicing are independent of Salary Advance limit and exposure; no Collateral action creates a Salary Advance limit or movement effect.
 
 End-to-end workflow:
 
@@ -838,6 +840,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-019 | Salary Advance used exposure is released only for principal allocated by an actual ordinary repayment or Administrative Full-Balance Settlement payment and by exactly that amount; fee and interest allocations release none. Any non-payment release requires an explicitly approved future product rule. |
 | BR-020 | Unsecured Consumer Loan requires income and employment evidence and does not require collateral. |
 | BR-020A | Unsecured Consumer Loan `VERIFIED` records completed manual evidence and basic repayment-capacity verification, not credit approval. The same Loan Officer may verify and recommend; the Approver remains a separate actor. |
+| BR-020B | The common `BR-004` blocking-application rule applies to UCL. Separately, a matching `ACTIVE` or `OVERDUE` UCL `LoanAccount` with positive contractual outstanding blocks new UCL creation or correction resubmission; product-matching `SETTLED` or `CLOSED` accounts with zero outstanding do not block, unrelated products do not satisfy the UCL outstanding-account guard, and inconsistent account/status/outstanding evidence fails closed. |
 | BR-021 | Collateral Loan requires one structured Collateral fact and the existing required ownership-evidence checklist item. |
 | BR-021A | Collateral Loan `VERIFIED` records completed manual assessment sufficient for Loan Officer review and is not credit approval; the same Loan Officer may verify and recommend. |
 | BR-021B | Completed Collateral verification cycles are immutable, the latest numbered cycle is authoritative, and a document correction must create a linked pending cycle and be re-verified before review. |
@@ -847,6 +850,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-021F | Collateral approval preserves the submitted requested amount and term, applies 1.5% monthly flat original-principal interest, charges zero fee, rounds total interest once to whole VND using `HALF_UP`, and creates one reconciled provisional monthly item per approved month. |
 | BR-021G | A Collateral offer contains no due dates; later schedule construction requires a first repayment date after the disbursement value date and no later than one calendar month after it, followed by monthly anchoring with final-calendar-day clipping. |
 | BR-021H | Collateral activation, early or partial repayment, contractual payoff, Administrative Full-Balance Settlement, and administrative closure use the common controls, release zero product exposure, and create no Salary Advance movement; early or partial payment does not reprice, rebate, or mutate contractual obligations, and both payoff paths require the exact complete contractual outstanding. |
+| BR-021I | The common `BR-004` blocking-application rule applies to Collateral Loan; an existing Collateral `LoanAccount` creates no additional product-specific origination restriction. |
 | BR-022 | Collateral estimated value is advisory in the MVP and does not create an automated loan-to-value decision. |
 | BR-023 | Upload completeness, manual document review and processing readiness, and product verification are separate controls. |
 | BR-024 | Product policy defines which checklist items must be upload-complete before submission. |
