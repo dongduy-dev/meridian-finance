@@ -214,7 +214,7 @@ Detailed HTTP disclosure, sensitive-value handling, and request-specific securit
 
 ## 8. Architecture Rule Catalogue
 
-| Rule ID | Normative rule | Preferred enforcement |
+| Rule ID | Normative rule | Intended enforcement |
 |---|---|---|
 | `LAYER-DOMAIN-001` | Domain must not depend on Spring, JPA, application, or infrastructure | ArchUnit |
 | `LAYER-APPLICATION-001` | Application must not depend on infrastructure | ArchUnit |
@@ -234,6 +234,8 @@ Detailed HTTP disclosure, sensitive-value handling, and request-specific securit
 ## 9. Enforcement and Evolution
 
 Mechanically checkable rules belong in `ArchitectureRulesTest` or focused architecture-test classes and run in the normal Maven verification lifecycle.
+
+The executable architecture-test baseline is narrower than the rule catalogue. `ArchitectureRulesTest` proves domain isolation from Spring, JPA, application and infrastructure; application isolation from infrastructure; domain and application isolation from concrete security/JWT implementation; and `shared` independence from feature modules. Repository dependencies on Spring Modulith do not by themselves enforce named interfaces, legal module dependencies, or cycle rules. Every other catalogue entry remains normative but relies on focused tests or code review until an executable rule proves it.
 
 | Mechanism | Responsibility |
 |---|---|

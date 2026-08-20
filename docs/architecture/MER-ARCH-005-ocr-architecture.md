@@ -46,7 +46,7 @@ Document Management
 └── OCR-assisted processing
 ```
 
-The Spring Boot backend remains Meridian's public entry point and system of record. The Python OCR service performs model execution as an external processing component within the Document boundary.
+The Spring Boot backend remains Meridian's public application and document-workflow boundary. Document-owned persistence remains authoritative for OCR jobs, results, review state, and readiness; the Python OCR service performs model execution as a purpose-limited processing component within that boundary.
 
 ```text
 Document application
@@ -80,7 +80,7 @@ OCR output is advisory evidence. Authorized Document review remains authoritativ
 
 ```mermaid
 flowchart LR
-    Client[React client]
+    Client[Client]
     API[Spring Boot API]
     Document[Document Management]
     DB[(PostgreSQL)]
@@ -131,7 +131,7 @@ These dispositions describe OCR evidence handling. They do not replace document-
 
 ```mermaid
 sequenceDiagram
-    participant Client as React client
+    participant Client as Client
     participant API as Spring Boot API
     participant Document as Document Management
     participant DB as PostgreSQL
