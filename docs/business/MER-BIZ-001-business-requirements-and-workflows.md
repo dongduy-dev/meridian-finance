@@ -229,6 +229,10 @@ Supported collateral types are `MOTORBIKE`, `CAR`, `ELECTRONICS`, `PROPERTY_DOCU
 
 Estimated value supports manual assessment. It does not trigger an automated loan-to-value decision in the MVP.
 
+### 5.9 Customer Profile and Bank Account
+
+Customer owns the mutable source profile and bank-account data. Sensitive identity and bank-account values must remain protected. The Customer identity reference becomes immutable after the profile first becomes complete. Bank-account identity is replaced rather than edited in place. Permitted changes are audited and must not rewrite historical contract or disbursement evidence.
+
 ---
 
 ## 6. Common Loan Lifecycle and Workflow Controls
@@ -248,34 +252,28 @@ All products use the same lifecycle authority but may enter document and verific
 | Disbursement and activation | External transfer evidence creates the LoanAccount and final schedule |
 | Servicing | Repayment, overdue state, contractual payoff, Administrative Full-Balance Settlement, and administrative closure are tracked |
 
-### 6.1 Customer and Product Readiness
+### 6.1 Pre-Submission Readiness and Guards
 
-Before submission, the Customer must have the profile, consent, and bank-account facts required by the selected product.
+**Customer readiness.** Before submission, the Customer must be active, the required profile must be complete, required consent must be satisfied, and the selected product's bank-account readiness requirement must be satisfied. Customer profile completeness and bank-account readiness are separate controls.
 
-Customer profile completeness and bank-account readiness are separate. Salary Advance requires:
+Submission evaluates the Customer's current authoritative profile and eligible bank-account facts. Section 5.9 defines Customer source-data ownership and mutation rules.
 
-- an active Customer;
-- a complete profile;
-- one primary active bank account;
-- an active verified employee link;
-- a valid and sufficient Salary Advance limit.
-
-A separate generic Customer-verification status is not required for Salary Advance unless the Customer policy later introduces it. Employee eligibility remains a Partner and Salary Advance control.
-
-Sensitive identity and bank-account values must be protected. Identity reference becomes immutable after the profile first becomes complete. Bank-account identity is replaced rather than edited in place. Permitted changes are audited and must not rewrite historical contract or disbursement facts.
-
-Common submission checks include:
+**Common submission guards.** Before submission, Loan validates:
 
 - active Customer and complete required profile;
 - active product;
 - valid requested amount and term;
 - required product-specific facts;
 - submission-level document requirements;
-- no blocking application for the same product;
-- product-specific eligibility and verification;
-- concurrency and exposure guards.
+- no blocking non-terminal `LoanApplication` for the same product, as defined by `BR-004`;
+- product-specific prerequisites required before submission;
+- applicable concurrency guards and product-specific exposure or financial guards.
 
-A Customer may retain multiple drafts but may have only one blocking non-terminal application for the same product.
+A Customer may retain multiple drafts. In the product workflows, the `common blocking-application rule` refers only to the same-product `LoanApplication` restriction defined by `BR-004`, not to every common submission guard.
+
+**Product-specific pre-submission requirements.** Salary Advance requires an active verified Customer–Partner Employee link, current and eligible Partner evidence, and a valid and sufficient Salary Advance limit. Employee eligibility is a Partner and Salary Advance prerequisite, not a universal Customer-verification requirement. A separate generic Customer-verification status is not required for Salary Advance unless the Customer policy later introduces it. Section 6.2 defines the application verification snapshot recorded when Salary Advance submission succeeds.
+
+UCL and Collateral do not require completion of their application-specific manual verification before submission. Successful submission creates the pending manual-verification cycle; Section 6.3 defines the later verification lifecycle.
 
 ### 6.2 Draft and Submission
 
@@ -1031,7 +1029,7 @@ Viewing an offer remains read-only and does not expire it, transition the applic
 
 ## 12. Business Quality Requirements
 
-Sections 5 through 8 define the business concepts and evidence required by Meridian. `MER-DB-001` owns the logical and physical record inventory; the architecture documents own context placement and communication.
+Sections 5 through 8 define Meridian's business concepts and required evidence. `MER-DB-001` owns the high-level logical data model; Flyway owns the executable physical schema, `MER-DB-CURRENT-SCHEMA.sql` is its current human-readable snapshot, and the architecture documents own context placement and communication.
 
 | Category | Requirement |
 |---|---|
