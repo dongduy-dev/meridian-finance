@@ -6,10 +6,10 @@ This file tracks known Meridian gaps, deferred work, risks, docs/code mismatches
 
 ## Priority Guide
 
-* P0: must fix before next major feature / urgent patch on main.
-* P1: fix before next major workflow milestone.
-* P2: planned future module/slice.
-* P3: documentation or nice-to-have.
+* P0: urgent integrity or security defect to resolve before further major work.
+* P1: resolve before the next major workflow or deployment milestone.
+* P2: planned hardening or future capability.
+* P3: low-risk documentation or nice-to-have work.
 
 ## Status Guide
 
@@ -19,7 +19,7 @@ This file tracks known Meridian gaps, deferred work, risks, docs/code mismatches
 * Deferred
 * Accepted Risk
 
-## Open Items
+## Follow-up Items
 
 ### MER-FU-001 - Lock down sensitive Partner and Salary Advance endpoints
 
@@ -31,7 +31,7 @@ Priority: P0
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Problem:
 Sensitive Partner employee and Salary Advance application endpoints were public through SecurityConfig permitAll rules.
@@ -58,7 +58,7 @@ Priority: P0
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Problem:
 Partner employee API responses exposed employee code, identity reference, salary, and limit data while the endpoint was public.
@@ -82,7 +82,7 @@ Priority: P0
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Problem:
 Employee verification checked partner company existence but not active status.
@@ -103,7 +103,7 @@ Priority: P1
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Problem:
 Salary Advance application and employee verification requests accepted customerId from the caller.
@@ -123,7 +123,7 @@ Priority: P1
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Problem:
 Security and controller coverage was thin.
@@ -143,16 +143,13 @@ Priority: P1
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Problem:
 API docs did not list implemented employee verification and Salary Advance application endpoints.
 
 Resolution:
-`docs/architecture/MER-ARCH-006-api-request-flow-and-dependencies.md` now documents method, path, current security posture, request/response shape, and safe PII behavior for:
-
-* `POST /api/v1/partner-companies/{partnerCompanyId}/employee-verifications`
-* `POST /api/v1/loan-applications/salary-advance`
+`MER-API-001` now owns the maintained HTTP contract and scenario view, including protected employee verification and Salary Advance origination. `MER-ARCH-006` owns the corresponding request, dependency, transaction, and communication-flow architecture.
 
 ### MER-FU-007 - Align ERD terminology drift
 
@@ -164,13 +161,13 @@ Priority: P2
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Problem:
 The logical ERD used conceptual names and target fields that could be mistaken for the current physical schema.
 
 Resolution:
-`MER-DB-001` now labels Sections 1-13 as a logical/current-plus-target model, maps conceptual disbursement and repayment names to the current V42 physical structures, and identifies deferred `product_details`, refresh-token, Collateral, and OCR structures. Flyway history and `MER-DB-CURRENT-SCHEMA.sql` remain the physical authorities.
+`MER-DB-001` now presents Meridian's durable high-level logical data model and ERD without claiming physical-schema authority. Flyway owns executable schema evolution, and `MER-DB-CURRENT-SCHEMA.sql` is the checked-in human-readable current physical-schema snapshot. The aligned database documentation reflects the implemented product boundary through V47 without turning the logical model into migration history.
 
 ### MER-FU-008 - Replace hardcoded Salary Advance salary cap/policy terms with policy config
 
@@ -182,7 +179,7 @@ Priority: P2
 
 Status: Open
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Problem:
 Salary Advance policy currently uses hardcoded salary cap and term values instead of parsed product policy configuration.
@@ -200,7 +197,7 @@ Priority: P2
 
 Status: Open
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Problem:
 Document review queues, immutable version decisions, waivers/replacements, and Customer/Staff/mixed correction workflows are implemented. A dedicated Partner eligibility manual-review queue and authoritative outcome workflow for ambiguous employee matching are not implemented.
@@ -218,22 +215,10 @@ Priority: P2
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
-Problem:
-Application creation, review/recommendation, approval, accepted offers, document/correction readiness, immutable operational contract readiness, and Salary Advance manual-disbursement activation now exist. Confirmation atomically creates the LoanAccount/final schedule, converts reserved exposure to used exposure, transitions to `DISBURSED`, and records audit/history. The secured confirmation, pre-confirmation destination reveal, and owned/staff account query APIs are complete.
-
-Recommendation:
-Continue implementation in vertical slices:
-
-1. Loan officer review/recommendation. Done.
-2. Approval decision. Done.
-3. Salary Advance approved offer and customer acceptance. Done.
-4. Document/correction readiness through `MER-FU-012` and `MER-FU-031`. Done in V22-V24.
-5. Contract readiness and `CONTRACT_PENDING → DISBURSEMENT_PENDING`. Done in V25-V26.
-6. Manual disbursement confirmation and LoanAccount activation. Done in V28-V31.
-7. Salary Advance repayment, overdue servicing, contractual payoff, Administrative Full-Balance Settlement, and administrative LoanAccount closure. Done through V36.
-8. Customer-owned cancellation of a returned Salary Advance correction with exact reservation release. Done in V37.
+Resolution:
+The Salary Advance workflow now includes Loan Officer review, independent approval, immutable offer and Customer response, document/correction readiness, operational contract readiness, manual disbursement and activation, servicing through contractual payoff, Administrative Full-Balance Settlement and administrative closure, and returned-correction cancellation. Activation atomically creates the LoanAccount and final schedule, converts reserved exposure to used exposure, transitions the application to `DISBURSED`, and records required history and audit evidence.
 
 ### MER-FU-011 - Implement repayment tracking
 
@@ -245,7 +230,7 @@ Priority: P2
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Completion:
 The authoritative final repayment schedule is immutable obligation evidence. Salary Advance, UCL, and Collateral Loan support manual repayment posting, deterministic allocation, paid/outstanding tracking, contractual payoff to `SETTLED`, date-driven overdue evaluation, secured servicing reads, payment-backed Administrative Full-Balance Settlement, and separate administrative closure to `CLOSED`. Salary Advance alone performs exact principal used-exposure release; UCL and Collateral report zero product exposure release and create no Salary Advance movement.
@@ -266,14 +251,10 @@ Priority: P2
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Completion:
-V22-V24 implement code-configured per-application checklists, an on-demand
-`RECENT_PAYSLIP` correction requirement, immutable document versions, safe local
-storage behind a port, Customer and authorized-Staff upload, version-targeted manual
-acceptance/waiver/replacement, separate upload-completeness and processing-readiness
-contracts, content authorization, audit, rollback, and PostgreSQL concurrency proof.
+The Document foundation provides code-defined product checklist requirements and per-application snapshots for Salary Advance, UCL, and Collateral Loan. It supports immutable document versions, safe local storage behind a port, Customer and authorized-Staff upload, version-targeted acceptance, waiver and replacement, separate upload-completeness and processing-readiness contracts, content authorization, audit, rollback, and PostgreSQL concurrency proof.
 
 OCR was intentionally not included. It is tracked separately by `MER-FU-033`;
 production storage, malware scanning, and retention hardening are `MER-FU-032`.
@@ -287,7 +268,7 @@ Priority: P2
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Problem:
 No full audit trail or Loan Application lifecycle history tables existed for the implemented Salary Advance workflow.
@@ -306,13 +287,13 @@ Priority: P1
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Problem:
 Flyway migrations are growing and current schema is harder to inspect from migrations alone.
 
-Recommendation:
-`docs/database/MER-DB-CURRENT-SCHEMA.sql` now tracks the current physical schema through V42. This file is documentation only and must not be placed in the Flyway migration folder.
+Resolution:
+`MER-DB-CURRENT-SCHEMA.sql` is the checked-in human-readable current physical-schema snapshot through V47; Flyway V1-V47 remains the executable schema authority. Focused PostgreSQL migration and snapshot verification confirms their alignment.
 
 ### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
 
@@ -324,7 +305,7 @@ Priority: P1
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Problem:
 The P0 security patch protected sensitive endpoints with the current Spring Security authenticated gate and HTTP Basic development authentication. It did not enforce JWT authentication, role/action permissions, or customer ownership.
@@ -344,7 +325,7 @@ Priority: P2
 
 Status: Open
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Recommendation:
 Implement refresh token rotation after access-token-only JWT foundation is stable.
@@ -362,7 +343,7 @@ Priority: P2
 
 Status: Open
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Recommendation:
 Implement password reset when real user lifecycle management starts.
@@ -380,7 +361,7 @@ Priority: P2
 
 Status: Open
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Recommendation:
 Implement email verification with customer registration/profile flows.
@@ -398,7 +379,7 @@ Priority: P2
 
 Status: Open
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Recommendation:
 Implement admin user management UI after backend user-management use cases exist.
@@ -416,7 +397,7 @@ Priority: P1
 
 Status: Open
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Recommendation:
 Add lockout policy before exposing login beyond local/demo use.
@@ -434,7 +415,7 @@ Priority: P3
 
 Status: Open
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Recommendation:
 Defer MFA until production-grade authentication hardening.
@@ -452,7 +433,7 @@ Priority: P3
 
 Status: Open
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Recommendation:
 Defer full permission management UI until role management needs exceed seeded MVP roles.
@@ -470,7 +451,7 @@ Priority: P1
 
 Status: Open
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Recommendation:
 Current profile, bank-account, document/content, correction, offer/contract, LoanAccount, and repayment-history endpoints enforce token-derived ownership and approved concealment rules. Keep this item open only for future customer-facing surfaces and cross-endpoint consistency reviews; do not treat already-secured endpoints as unfinished.
@@ -488,7 +469,7 @@ Priority: P2
 
 Status: Open
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Recommendation:
 Implement token invalidation when logout/session management becomes in scope.
@@ -506,7 +487,7 @@ Priority: P1
 
 Status: Open
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Recommendation:
 Extend the existing Audit foundation with a deliberately bounded authentication-event catalog (for example login success/failure and future logout/token invalidation) only after privacy, retention, rate/noise, actor, and failure-transaction semantics are approved.
@@ -524,10 +505,10 @@ Priority: P2
 
 Status: Done
 
-Blocks next major feature: No
+Blocking: No current blocker.
 
 Resolution:
-`docs/api/Meridian-Platform.postman_collection.json` calls login, stores role-specific Bearer token variables, uses JWT auth for protected endpoints, removes request-provided customerId payload fields, and covers the executable Salary Advance path through manual repayment, immutable history, servicing reads, overdue evaluation, exact payoff, Administrative Full-Balance Settlement, administrative closure, and post-settlement submission behavior.
+`docs/api/Meridian-Platform.postman_collection.json` is aligned with the maintained v1 API across authentication, Salary Advance, UCL, Collateral Loan, common servicing, ownership and replay behavior, and representative negative coverage. It stores role-specific Bearer tokens and avoids request-provided Customer ownership identifiers.
 
 Suggested future branch name:
 `docs/update-postman-jwt-flow`
@@ -542,7 +523,7 @@ Priority: P2
 
 Status: Open
 
-Blocks current PR: No
+Blocking: No current blocker.
 
 Problem:
 The Approval Review Recommendation slice intentionally uses same-transaction event handling so Loan status transition failures roll back the saved recommendation. Moving this coordination to after-commit or asynchronous event handling without extra state would risk persisted recommendations whose Loan status transition failed later.
@@ -563,7 +544,7 @@ Priority: P1
 
 Status: Open
 
-Blocks current PR: No
+Blocking: No current blocker.
 
 Problem:
 Customer Partner Employee links are refreshed when the Customer verifies again. They are not automatically refreshed when new Partner Employee imports are completed.
@@ -571,7 +552,7 @@ Customer Partner Employee links are refreshed when the Customer verifies again. 
 Risk:
 Normal Salary Advance eligibility now fails closed when a reusable link is backed by stale or non-current-month Partner evidence. This prevents stale evidence from authorizing credit, but Customers remain blocked until re-verification or a future proactive refresh process updates the link.
 
-Completed for v0.1.0:
+Existing safety boundary:
 
 - Partner evidence freshness is enforced for normal Salary Advance eligibility.
 - Verified links backed by stale/non-current effective-month evidence fail closed.
@@ -604,7 +585,7 @@ Priority: P2
 
 Status: Done
 
-Blocks current PR: No
+Blocking: No current blocker.
 
 Resolution:
 Salary Advance submission now acquires a transaction-scoped PostgreSQL advisory lock keyed by customer and product before the authoritative blocking-application check. It retains the customer and employee-link advisory lock before limit initialization or row locking and repeats the blocking check defensively.
@@ -625,7 +606,7 @@ Priority: P1
 
 Status: Open
 
-Blocks current PR: No
+Blocking: No current blocker.
 
 Problem:
 Customer profile and bank-account changes after loan submission still need a deliberately scoped status-aware mutation policy. Customer must not acquire a dependency on Loan.
@@ -649,7 +630,7 @@ Priority: P1
 
 Status: Done
 
-Blocks current checkpoint: No
+Blocking: No current blocker.
 
 Completion:
 V23-V24 provide executable continuations for `RETURN_TO_CUSTOMER_REVISION`,
@@ -671,6 +652,8 @@ each entry action, synchronous rollback, Customer/Staff/mixed ownership, upload 
 review proof, duplicate completion/resubmission, stale cycles/versions, concurrent
 replacement/review/resubmission, audit/history, and the full return-to-review path.
 
+Later UCL and Collateral correction continuations reuse the common workflow foundation and are closed by `MER-FU-038` and `MER-FU-039`.
+
 ### MER-FU-032 - Harden document storage, scanning, and retention
 
 Area: Document / Security / Operations
@@ -681,7 +664,7 @@ Priority: P1
 
 Status: Open
 
-Blocks production deployment: Yes
+Blocking: Production deployment.
 
 Problem:
 The MVP local-filesystem adapter validates declared type, file signature, filename,
@@ -704,7 +687,7 @@ Priority: P2
 
 Status: Open
 
-Blocks current checkpoint: No
+Blocking: No current blocker.
 
 Problem:
 V22-V24 intentionally implement manual review only; no OCR job, extracted text,
@@ -725,7 +708,7 @@ Priority: P2
 
 Status: Open
 
-Blocks current checkpoint: No
+Blocking: No current blocker.
 
 Problem:
 Correction requests currently have no due date, escalation, expiry, reminder, or
@@ -746,7 +729,7 @@ Priority: P2
 
 Status: Open
 
-Blocks current checkpoint: No
+Blocking: No current blocker.
 
 Problem:
 Requested amount and term are immutable during V23-V24 correction. Reservation
@@ -767,16 +750,13 @@ Priority: P2
 
 Status: Open
 
-Blocks current checkpoint: No
+Blocking: No current blocker.
 
 Problem:
-Salary Advance checklist policy is intentionally code-configured: no documents on
-initial submission and `RECENT_PAYSLIP` only for a controlled correction.
+Salary Advance, UCL, and Collateral Loan checklist requirements are defined in code by product-specific resolvers and snapshotted per application. The requirements are not externalized or independently versioned as operational product configuration.
 
 Recommendation:
-When multiple products or operational template changes require it, introduce
-versioned database configuration with effective dates, immutable per-application
-snapshots, validation, administrative authorization, and migration/backfill rules.
+Keep the code-defined policies while they remain sufficient for the supported workflows. If operational template changes or product expansion require independent configuration, introduce versioned configuration with effective dates, immutable per-application snapshots, validation, administrative authorization, and migration/backfill rules.
 
 ### MER-FU-037 - Expand lending workflow read projections
 
@@ -788,25 +768,18 @@ Priority: P2
 
 Status: Open
 
-Blocks current checkpoint: No
+Blocking: No current blocker.
 
 Problem:
-The v0.1.0 query foundation intentionally exposes only the minimum safe reads needed
-to inspect pre-submission Salary Advance readiness and recover one durable
-LoanApplication status. It is not a generic workflow projection engine.
-
-Completed for v0.1.0:
-
-- Customer Salary Advance readiness and safe limit read.
-- Safe Customer-owned or authorized Staff LoanApplication status read.
+The common API exposes safe Customer-owned or authorized-Staff LoanApplication reads and activated LoanAccount, repayment-history, and servicing reads across supported products where applicable. It does not provide richer workflow projections for operational or frontend use.
 
 Still deferred:
 
-- Richer next-action projection and workflow command suggestions.
+- Next-action projection and workflow command suggestions.
 - Staff work queues and application search/filtering.
 - Consolidated lifecycle and history views.
-- Dashboard aggregation and frontend-specific query composition.
-- Broader read models for Unsecured Consumer Loan and Collateral Loan.
+- Dashboard and frontend-specific aggregation.
+- Richer product-specific projections where the common reads are insufficient.
 
 Cancellation note:
 The narrow Customer-owned command from `RETURNED_FOR_REVISION` to `CANCELLED`
@@ -830,42 +803,13 @@ Priority: P1
 
 Status: Done
 
-Blocks current checkpoint: No
+Blocking: No current blocker.
 
 Outcome:
-The approved UCL MVP backend lifecycle is executable from origination through
-positive or negative verification, structured correction and re-verification,
-review, approval, offer handling, correction cancellation, contract, activation,
-servicing, settlement, and closure. Product-scoped outstanding debt blocks new UCL
-origination and correction resubmission while contractual outstanding remains
-positive in `ACTIVE` or `OVERDUE`.
+The approved UCL backend lifecycle is executable from authenticated Customer-owned origination through document-backed verification, correction, review, approval, offer response, contract, activation, servicing, contractual payoff, Administrative Full-Balance Settlement and administrative closure. It includes negative verification and decision outcomes, returned-correction cancellation, immutable evidence and terms, ownership and replay controls, and PostgreSQL-backed rollback and concurrency proof.
 
-Completed:
-
-- Authenticated Customer-owned UCL origination.
-- Required income-proof, bank-statement, and employment-proof checklist creation.
-- Initial `PENDING_MANUAL_REVIEW` product-verification persistence.
-- Document-readiness-gated manual verification start and `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION` completion with authoritative Staff actor, time, and restricted assessment evidence.
-- Immutable sequenced UCL verification cycles, with the latest cycle authoritative and re-verification linked to its source correction.
-- Structured UCL correction from verification, Loan Officer review, or Approver review over application-owned income, bank-statement, and employment evidence.
-- Customer, Staff, and mixed task completion and resubmission, with amount and term immutable and a fresh verification required before review.
-- Verified-only entry into common Loan Officer review and approval or rejection recommendation through `APPROVAL_PENDING`.
-- Common Approver rejection and return-to-review decisions for UCL.
-- Exact-request UCL approval under the active 1.8% flat monthly policy.
-- Immutable monthly-installment offer generation with exact whole-VND reconciliation and seven-day validity.
-- Generic Customer offer read, accept, decline, and expiry without Salary Advance exposure effects.
-- Immutable operational-contract preparation that copies the accepted UCL offer terms and items exactly and captures a purpose-protected destination.
-- Controlled destination refresh through `DISBURSEMENT_ACCOUNT_REFRESH`, prior-version supersession, and fresh Customer acknowledgment.
-- Product-aware readiness that requires application-owned `VERIFIED` UCL evidence and never reads or mutates Salary Advance reservation or exposure state.
-- Idempotent and concurrency-safe manual disbursement that creates the active LoanAccount, immutable transfer evidence, exact final monthly schedule, progress, histories, transition, and audit atomically.
-- Truthful product activation results with no synthetic UCL limit, movement, or exposure evidence.
-- Partial and early repayment without repricing, rebate, schedule regeneration, or due-date mutation.
-- Deterministic oldest-installment and `FEE -> INTEREST -> PRINCIPAL` allocation, whole-operation overpayment rejection, and immutable servicing reads.
-- Date-driven `ACTIVE <-> OVERDUE` evaluation and repayment cure.
-- Ordinary contractual payoff and exact Administrative Full-Balance Settlement to `SETTLED`.
-- Separate Accounting closure to `CLOSED`, with zero UCL product-exposure release and no Salary Advance movement.
-- Customer-owned UCL cancellation from `RETURNED_FOR_REVISION`, with exact replay and no product-exposure effect.
-- Product-scoped outstanding-debt protection for UCL origination and resubmission, with zero-outstanding `SETTLED` or `CLOSED` accounts permitted and inconsistent state failing closed.
+Product boundary:
+UCL creates no Salary Advance exposure effect. Product-scoped outstanding debt blocks new UCL origination and correction resubmission while contractual outstanding is positive in `ACTIVE` or `OVERDUE`; zero-outstanding `SETTLED` or `CLOSED` UCL accounts do not block, and inconsistent evidence fails closed.
 
 Still deferred:
 
@@ -884,31 +828,16 @@ Priority: P1
 
 Status: Done
 
-Blocks current checkpoint: No
+Blocking: No current blocker.
 
 Completed in Collateral Loan CP1-CP5:
 
-- Authenticated Customer-owned origination for the active `COLLATERAL_LOAN` / `SECURED` product.
-- Customer readiness, current product amount bounds, whole-VND amount, and exact 6/12/18/24-month term validation.
-- One API-submitted Loan-owned Collateral fact record, with a physical model that permits later multi-asset extension.
-- Required Document-owned `COLLATERAL_OWNERSHIP_EVIDENCE` checklist evidence and a safe returned checklist-item identifier for the existing upload flow.
-- Initial `DOCUMENTS_PENDING` application state and application-owned sequence-1 `PENDING_MANUAL_REVIEW` Collateral verification.
-- Customer/product submission serialization, blocking-application protection, transactional history, and PII-safe audit.
-- Explicit start and exact-ID completion of immutable, numbered manual-verification cycles with `VERIFIED`, terminal `FAILED`, and `REQUIRES_MORE_INFORMATION` outcomes.
-- Document-only Customer replacement or Staff review correction for the existing `COLLATERAL_OWNERSHIP_EVIDENCE` item, followed by concurrency-safe resubmission into one linked next verification cycle.
-- Common Loan Officer review and recommendation through `APPROVAL_PENDING` only after the authoritative latest Collateral verification is `VERIFIED`.
-- Latest-verified gating for all four common Approver actions, including document-only correction and independent maker-checker enforcement.
-- Exact-request pricing at 1.5% monthly flat original-principal interest, zero fee, whole-VND `HALF_UP` total-interest rounding, and seven-calendar-day offer validity.
-- Immutable common ApprovedOffer snapshots with one reconciled undated monthly-installment item per approved month for exact 6/12/18/24-month terms.
-- Generic Customer offer read, expiry, accept, and decline behavior; acceptance reaches `CONTRACT_PENDING`, and Collateral creates no Salary Advance exposure effect.
-- Operational contract preparation that requires latest `VERIFIED` Collateral evidence before protected destination capture and copies accepted financial terms and items exactly.
-- Customer acknowledgment, product-aware readiness, controlled destination refresh, and audited destination reveal through the common contract controls.
-- Idempotent manual-disbursement activation into `DISBURSED` and an `ACTIVE` LoanAccount with an exact final dated monthly schedule and zero Salary Advance exposure effect.
-- Activated LoanAccount reads plus partial and early repayment with deterministic common allocation, durable outcomes, replay, history, and ownership concealment.
-- Date-driven overdue selection, `ACTIVE -> OVERDUE` evaluation, same-date no-op, later evaluation, and payment-driven cure using the common scheduler and servicing calculation.
-- Ordinary contractual payoff and exact Administrative Full-Balance Settlement to `SETTLED`, followed by separate Accounting closure to `CLOSED`.
-- Zero Collateral product-exposure release and no Salary Advance limit/movement, Partner, or post-activation verification dependency.
-- PostgreSQL-backed migration, policy constraints, rollback, concurrency, replay, ownership, lifecycle, contract, activation, repayment, overdue, settlement, closure, and reconciliation proof through terminal LoanAccount state.
+- Authenticated Customer-owned origination, ownership-evidence checklist, immutable manual verification and document-only correction, common review and approval, exact approved pricing and offer handling, operational contract preparation, and idempotent manual-disbursement activation.
+- Activated LoanAccount and servicing reads, partial and early repayment, date-driven overdue evaluation and cure, contractual payoff, Administrative Full-Balance Settlement to `SETTLED`, and separate administrative closure to `CLOSED`.
+- Product-specific constraints, immutable evidence and terms, ownership, maker-checker, replay, audit/history, rollback, concurrency, reconciliation, and PostgreSQL migration proof through terminal LoanAccount state.
+
+Product boundary:
+Collateral creates no Salary Advance limit, movement, or product-exposure effect and has no product-specific outstanding-LoanAccount origination restriction.
 
 Still deferred:
 
@@ -926,7 +855,7 @@ Priority: P2
 
 Status: Deferred
 
-Blocks current checkpoint: No
+Blocking: No current blocker.
 
 Problem:
 Collateral Loan CP2 requires `expectedVerificationId` on manual-verification completion so a stale Staff client cannot complete a superseded cycle. The older UCL completion contract identifies only the application and still relies on latest-cycle locking and state checks.
@@ -947,7 +876,7 @@ Priority: P2
 
 Status: Deferred
 
-Blocks current checkpoint: No
+Blocking: No current blocker.
 
 Problem:
 The Loan domain treats generated ApprovedOffer financial terms and provisional repayment items as immutable, and current commands do not expose a mutation path. PostgreSQL enforces uniqueness, whole-VND values, arithmetic reconciliation, and valid status timestamps, but it does not independently reject a direct update to common financial snapshot columns or repayment-item amounts.
@@ -958,8 +887,48 @@ Design one product-neutral migration that preserves the allowed pending-to-termi
 Suggested future branch name:
 `fix/approved-offer-db-immutability`
 
-## Recommended Next Roadmap
+### MER-FU-042 - Enforce Meridian public module boundaries in source and architecture tests
 
-1. Define reversal/refund, suspense/unapplied cash, waiver/write-off, discounted settlement, reconciliation, ledger, and collections rules before selecting another financial-servicing continuation.
-2. Select the next approved product or operational checkpoint without expanding Collateral into unapproved valuation, custody, enforcement, or outstanding-debt rules.
-3. Complete production document storage, malware-scanning, retention, and operational hardening before deployment.
+Area: Architecture / Modularity / Testing
+
+Type: Architecture conformance / hardening
+
+Priority: P2
+
+Status: Open
+
+Blocking: No current documentation checkpoint or production workflow blocker.
+
+Problem:
+The aligned architecture defines narrow cross-context collaboration through public application contracts and boundary adapters, but current feature application and domain packages still contain some foreign internal imports. `ArchitectureRulesTest` proves layer isolation, concrete-security isolation, and `shared` independence, but does not fully enforce feature-module public surfaces, legal module dependencies, module cycles, or named-interface/public-contract boundaries. Spring Modulith dependency metadata alone is not executable proof of those rules.
+
+Recommendation:
+Inventory every foreign internal dependency and distinguish legitimate public application contracts from internal leakage. Replace illegal dependencies with the intended consumer-owned output port and boundary adapter, provider public application contract, or inbound event adapter where asynchronous intake is intended. Add focused architecture enforcement for module dependencies, public surfaces, and cycles while preserving bounded-context ownership and runtime behavior; do not redesign business workflows merely to satisfy package aesthetics.
+
+Suggested future branch name:
+`refactor/architecture-module-boundary-conformance`
+
+### MER-FU-043 - Normalize executable API error identifier semantics
+
+Area: API / Error Contract
+
+Type: API contract conformance
+
+Priority: P1
+
+Status: Open
+
+Blocking: No current documentation checkpoint.
+
+Problem:
+Executable source does not consistently use one error identifier with one canonical runtime status and default message. `DOCUMENT_CHECKLIST_NOT_FOUND`, for example, is constructed through both 404-family `EntityNotFoundException` and 409-family `BusinessStateConflictException` paths, and other shared identifiers have multiple runtime default messages. Documentation must not silently choose behavior that source does not consistently implement.
+
+Recommendation:
+Inventory every executable error identifier and identify all uses with multiple HTTP statuses, exception families, or default messages. For each inconsistency, decide whether to converge on one canonical identifier, status, and message or split the meanings into distinct identifiers. Update exception construction, global mapping, and focused tests first; then align `MER-ARCH-004`, `MER-API-001`, and Postman while preserving safe caller-facing disclosure.
+
+Suggested future branch name:
+`fix/api-error-contract-conformance`
+
+## Roadmap Boundary
+
+`README.md` owns project sequencing and roadmap presentation. This register owns the status, priority, rationale, and recommended action for individual follow-ups.
