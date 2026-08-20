@@ -22,7 +22,7 @@ Source code, migrations, configuration, and executable tests are authoritative f
 
 Detailed database structures, API schemas, package placement, runtime lock mechanics, and deployment design belong to the database, API, and architecture documents unless a technical constraint is necessary to preserve a business outcome.
 
-The specification describes the completed MVP target. Delivery status, temporary gaps, and sequencing belong in the README roadmap and `docs/project/MER-TRACK-001-follow-up-register.md`.
+The specification describes the approved MVP business target. Delivery status, temporary gaps, and sequencing belong in the README roadmap and `docs/project/MER-TRACK-001-follow-up-register.md`.
 
 ---
 
@@ -36,7 +36,7 @@ Meridian uses one lending lifecycle with product-specific policy behavior.
 |---|---|---|---|---|
 | `SALARY_ADVANCE` | Salary Advance | `SALARY_BASED` | Flagship | Reusable employee verification and limit-based eligibility |
 | `UNSECURED_CONSUMER_LOAN` | Unsecured Consumer Loan | `UNSECURED` | Streamlined | Document-based income and employment review |
-| `COLLATERAL_LOAN` | Collateral Loan | `SECURED` | Streamlined | Collateral information and document review |
+| `COLLATERAL_LOAN` | Collateral Loan | `SECURED` | Streamlined | Structured Collateral facts, ownership-evidence review, and manual verification |
 
 `productCode` identifies the exact product. `productType` groups related products for reporting and policy selection.
 
@@ -60,7 +60,7 @@ Customer and back-office applications use the same backend and database.
 - Salary Advance Partner Company setup, monthly Partner Employee imports, reusable employee verification, limit calculation, exposure reservation, disbursement conversion, and repayment release.
 - Streamlined Unsecured Consumer Loan and Collateral Loan workflows.
 - Document checklist creation, upload completeness, immutable versions, manual review, replacement, waiver, correction, and processing readiness.
-- Loan Officer review, Approver decision, maker-checker separation, approved offers, Customer response, contract readiness, manual disbursement, LoanAccount activation, repayment, overdue servicing, settlement, closure, and audit.
+- Loan Officer review, Approver decision, maker-checker separation, approved offers, Customer response, contract readiness, manual disbursement, LoanAccount activation, repayment, overdue servicing, contractual payoff, Administrative Full-Balance Settlement, administrative closure, and audit.
 
 ### 3.4 MVP Out of Scope
 
@@ -125,7 +125,7 @@ Each active product defines:
 - pricing method and repayment method;
 - required documents and eligibility notes;
 - offer-validity period;
-- the product policy used for eligibility, offer construction, activation, repayment, settlement, and closure.
+- the product policy used for eligibility, offer construction, activation, repayment, contractual payoff, Administrative Full-Balance Settlement, and administrative closure.
 
 A Customer can select and submit only an active product.
 
@@ -161,7 +161,7 @@ The activation transaction must:
 
 A failure must not leave a partial account, schedule, exposure movement, application transition, or audit outcome.
 
-After activation, the LoanAccount owns servicing state, contractual outstanding, overdue status, settlement, and closure.
+After activation, the LoanAccount owns servicing state, contractual outstanding, overdue status, contractual payoff, Administrative Full-Balance Settlement, and administrative closure.
 
 ### 5.4 Partner Company and Partner Employee
 
@@ -209,11 +209,11 @@ Meridian separates five controls:
 | Document processing readiness | Determines whether every required item is accepted or validly waived | Document | Processing-ready result |
 | Correction workflow | Assigns and tracks Customer- or Staff-owned remediation before resubmission | Loan, using Document evidence where required | Correction request and tasks |
 
-Upload completeness does not imply acceptance. OCR output, when introduced, remains advisory evidence and does not replace authorized review.
+Upload completeness does not imply acceptance. OCR output remains advisory evidence and does not replace authorized review.
 
 ### 5.8 Collateral
 
-Collateral is structured asset information submitted for a Collateral Loan.
+Collateral is one structured asset fact submitted by the Customer for a Collateral Loan application.
 
 MVP collateral information includes:
 
@@ -221,9 +221,9 @@ MVP collateral information includes:
 - description;
 - estimated value;
 - ownership status;
-- ownership evidence;
-- condition note;
-- manual assessment note.
+- condition note.
+
+Document owns the required `COLLATERAL_OWNERSHIP_EVIDENCE` and its review readiness. Loan owns the application-specific Collateral verification cycle and its restricted manual assessment note. The submitted Collateral facts remain immutable after submission.
 
 Supported collateral types are `MOTORBIKE`, `CAR`, `ELECTRONICS`, `PROPERTY_DOCUMENT`, and `OTHER`.
 
@@ -246,7 +246,7 @@ All products use the same lifecycle authority but may enter document and verific
 | Customer offer response | The Customer accepts, declines, or allows the offer to expire |
 | Contract readiness | Accepted terms and destination are acknowledged and confirmed ready |
 | Disbursement and activation | External transfer evidence creates the LoanAccount and final schedule |
-| Servicing | Repayment, overdue state, settlement, and closure are tracked |
+| Servicing | Repayment, overdue state, contractual payoff, Administrative Full-Balance Settlement, and administrative closure are tracked |
 
 ### 6.1 Customer and Product Readiness
 
@@ -326,9 +326,9 @@ Every correction task has one owner: Customer or Staff. Mixed correction plans u
 
 Task completion requires the requested evidence. Customer-only corrections are resubmitted by the Customer owner. Staff-only and mixed corrections are resubmitted by authorized Staff. For UCL, verification, Loan Officer review, and Approver review may each produce a permitted structured correction over `INCOME_PROOF`, `BANK_STATEMENT`, or `EMPLOYMENT_PROOF`. Requested amount and term remain immutable, and correction resubmission returns to `SUBMITTED` for a fresh product-verification cycle before another review begins.
 
-For Collateral Loan, verification or Loan Officer review may require only replacement or Staff review of the existing `COLLATERAL_OWNERSHIP_EVIDENCE` checklist item. The submitted Collateral type, description, estimated value, ownership status, condition note, requested amount, and requested term remain immutable. Correction cannot create another Collateral asset or supporting checklist item. Resubmission returns to `SUBMITTED` and requires a new linked manual-verification cycle before Loan Officer review.
+For Collateral Loan, verification, Loan Officer review, or Approver decision may require only replacement or Staff review of the existing `COLLATERAL_OWNERSHIP_EVIDENCE` checklist item. The submitted Collateral type, description, estimated value, ownership status, condition note, requested amount, and requested term remain immutable. Correction cannot create another Collateral asset or supporting checklist item. Resubmission returns to `SUBMITTED` and requires a new linked manual-verification cycle before Loan Officer review.
 
-An authenticated Customer owner may instead terminate a Salary Advance or UCL application while it is `RETURNED_FOR_REVISION`. This narrow cancellation ends the active correction request and changes the application to `CANCELLED`. Salary Advance releases the existing pre-disbursement reservation exactly once in the same transaction; UCL creates no product-exposure effect. It does not require current Partner eligibility because abandonment must remain possible when correction re-verification cannot succeed. Cancellation from other states and Staff or administrative cancellation remain future policies.
+An authenticated Customer owner may instead terminate a Salary Advance or UCL application while it is `RETURNED_FOR_REVISION`. This narrow cancellation ends the active correction request and changes the application to `CANCELLED`. Salary Advance releases the existing pre-disbursement reservation exactly once in the same transaction; UCL creates no product-exposure effect. It does not require current Partner eligibility because abandonment must remain possible when correction re-verification cannot succeed. Cancellation from other states and Staff or administrative cancellation require separately approved policies.
 
 Resubmission revalidates every affected business condition and routes the application to the earliest stage that still requires work. Salary Advance amount and term remain immutable through correction, and the existing reservation is preserved unless a defined terminal or release rule applies.
 
@@ -343,7 +343,7 @@ The Loan Officer reviews Customer readiness, product verification, document read
 | `RETURN_TO_CUSTOMER_REVISION` | `RETURNED_FOR_REVISION` |
 | `REQUEST_STAFF_CORRECTION` | `RETURNED_FOR_REVISION` |
 
-A revision action requires a controlled reason and task ownership. The recommendation, LoanApplication transition, correction plan where applicable, and audit evidence form one business outcome.
+A revision action requires a controlled reason and task ownership. The recommendation and LoanApplication transition form one business outcome with the correction plan for a revision action and audit evidence for every action.
 
 ### 6.6 Approval Decision
 
@@ -363,7 +363,7 @@ MVP approval is exact-request approval:
 | `RETURN_TO_LOAN_OFFICER_REVIEW` | `RETURNED_TO_REVIEW` |
 | `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` | `RETURNED_FOR_REVISION` |
 
-Correction decisions require a controlled reason. When both Customer and Staff must act, the correction plan uses separate single-owner tasks. Rejection and return outcomes preserve the Approver's reason. The decision, resulting LoanApplication transition, correction plan or approved terms where applicable, and audit evidence form one business outcome.
+Correction decisions require a controlled reason. When both Customer and Staff must act, the correction plan uses separate single-owner tasks. Rejection and return outcomes preserve the Approver's reason. The decision and resulting LoanApplication transition form one business outcome with approved terms for approval, the correction plan for correction, and audit evidence for every action.
 
 Approval and approved-offer generation must complete as one controlled operation. The application must not remain permanently `APPROVED` without Customer-visible approved terms.
 
@@ -402,7 +402,7 @@ Readiness is calculated from current authoritative facts. Confirmation requires:
 - processing-ready documents;
 - no active correction;
 - valid product-specific pre-disbursement evidence;
-- an unreleased Salary Advance reservation where applicable.
+- for Salary Advance, an unreleased reservation.
 
 Confirmation marks the contract `READY_FOR_DISBURSEMENT` and the application `DISBURSEMENT_PENDING` atomically. It does not transfer funds, create the LoanAccount, create the final schedule, or convert Salary Advance reserved exposure to used exposure.
 
@@ -425,7 +425,7 @@ Confirmation creates one atomic outcome:
 
 Identical replay returns the original outcome without duplicate writes. Reusing the request identity with different content is a conflict.
 
-### 6.10 Repayment, Overdue State, Settlement, and Closure
+### 6.10 Repayment, Overdue State, Contractual Payoff, Administrative Full-Balance Settlement, and Administrative Closure
 
 The final repayment schedule is immutable contractual obligation evidence. Payment transactions, allocations, and servicing progress do not rewrite original schedule amounts or due dates.
 
@@ -439,7 +439,7 @@ Repayment follows these rules:
 - never rewrite earlier allocations or servicing history;
 - prevent duplicate payment evidence from producing duplicate allocations or financial effects.
 
-`principalAllocated` is the contractual principal satisfied by a payment. `principalReleased` is the product-exposure amount released by that allocation. For Salary Advance, allocated principal releases used exposure by the exact allocated amount. UCL has no product-exposure model, so its principal release is always zero and repayment creates no Salary Advance movement. Fee and interest allocations never release exposure.
+`principalAllocated` is the contractual principal satisfied by a payment. `principalReleased` is the product-exposure amount released by that allocation. For Salary Advance, allocated principal releases used exposure by the exact allocated amount. UCL and Collateral Loan have no product-exposure model: their principal release is always zero, and their servicing creates no Salary Advance movement. Fee and interest allocations never release exposure.
 
 An installment is:
 
@@ -456,15 +456,13 @@ A LoanAccount is:
 - `SETTLED` after full contractual repayment or Administrative Full-Balance Settlement;
 - `CLOSED` only after an eligible settled account completes administrative closure.
 
-Full contractual payoff must atomically settle the account and complete the product-specific exposure result. Salary Advance must release its allocated principal exactly; UCL must retain zero product exposure and create no Salary Advance movement.
+Full contractual payoff must atomically settle the account and complete the product-specific exposure result. Salary Advance must release its allocated principal exactly; UCL and Collateral Loan must retain zero product exposure and create no Salary Advance movement.
 
 Administrative Full-Balance Settlement is an exceptional Loan-owned servicing operation performed by an authorized Approver. It records an actual payment equal to the complete current contractual outstanding, applies the same deterministic allocation rules as repayment, preserves `paid + outstanding = originated` for every component, applies the product-specific exposure result, and moves an `ACTIVE` or `OVERDUE` LoanAccount to `SETTLED`. It is not a discounted settlement, concession, waiver, forgiveness, write-off, negotiation, or debt adjustment.
 
 Administrative closure is a separate Loan-owned operation performed by an authorized Accounting Officer. A `SETTLED` LoanAccount is immediately eligible when contractual outstanding is zero, installment progress is fully paid, financial-settlement provenance and status history are consistent, and product-specific exposure evidence is reconciled. Closure changes the account to `CLOSED` and records closure/history/audit evidence; it does not change the final schedule, payment evidence, allocations, balances, installment progress, product exposure, or LoanApplication state. Either ordinary contractual payoff or Administrative Full-Balance Settlement may provide the financial-settlement provenance.
 
-A matching `ACTIVE` or `OVERDUE` Salary Advance LoanAccount with positive contractual outstanding blocks a new Salary Advance submission. Increased available limit or stale overdue evaluation does not bypass this guard.
-
-The MVP excludes discounted or negotiated settlement, unapplied cash, suspense processing, repayment reversal or refund, waiver or write-off, payment-provider integration, bank reconciliation, and a financial ledger.
+Product-specific origination restrictions remain in the applicable product workflow. Section 13.3 defines the servicing and accounting capabilities excluded from the MVP.
 
 ---
 
@@ -598,7 +596,7 @@ A Customer cannot create or resubmit a UCL while another UCL LoanAccount has pos
 
 A Customer may cancel an owned UCL only from `RETURNED_FOR_REVISION`. Cancellation terminalizes the active correction and application without creating, releasing, converting, or otherwise changing product exposure. Salary Advance cancellation retains its exact reservation-release behavior.
 
-#### UCL financial policy
+#### UCL Financial Policy
 
 UCL uses exact-request approval. The approved principal and term equal the submitted requested amount and term; the Approver cannot create a counteroffer or edit either value. Supported terms are exactly 3, 6, 9, and 12 months.
 
@@ -625,7 +623,7 @@ Manual-disbursement confirmation atomically creates the UCL LoanAccount, immutab
 
 For example, a January 30 first repayment date produces January 30, February 28 or 29, March 30, April 30, and the same anchored sequence thereafter.
 
-Early or partial payment does not reprice the loan, rebate future interest, regenerate the schedule, mutate contractual due dates, or reduce contractual interest. Allocation follows the common `FEE → INTEREST → PRINCIPAL` order. Date-driven evaluation moves a UCL LoanAccount between `ACTIVE` and `OVERDUE`, and payment may cure an overdue account. Full contractual payoff requires the complete contractual outstanding and moves the account to `SETTLED`. Administrative Full-Balance Settlement is backed by payment of that exact complete outstanding and is not a discount, concession, forgiveness, waiver, or repricing event. UCL repayment and settlement report contractual principal allocation while releasing zero product exposure and creating no Salary Advance movement. A fully reconciled `SETTLED` account may then be closed administratively without changing the `DISBURSED` LoanApplication.
+Early or partial payment does not reprice the loan, rebate future interest, regenerate the schedule, mutate contractual due dates, or reduce contractual interest. Allocation follows the common `FEE → INTEREST → PRINCIPAL` order. Date-driven evaluation moves a UCL LoanAccount between `ACTIVE` and `OVERDUE`, and payment may cure an overdue account. Full contractual payoff requires the complete contractual outstanding and moves the account to `SETTLED`. Administrative Full-Balance Settlement is backed by payment of that exact complete outstanding and is not a discount, concession, forgiveness, waiver, or repricing event. UCL repayment and Administrative Full-Balance Settlement report contractual principal allocation while releasing zero product exposure and creating no Salary Advance movement. A fully reconciled `SETTLED` account may then be closed administratively without changing the `DISBURSED` LoanApplication.
 
 End-to-end workflow:
 
@@ -646,13 +644,15 @@ End-to-end workflow:
 15. Accounting confirms document, Customer, destination, and product readiness.
 16. Accounting performs and confirms the external transfer.
 17. System creates the LoanAccount and final schedule and moves the application to `DISBURSED`.
-18. Repayment, overdue state, settlement, and closure follow Section 6.10.
+18. Repayment, overdue state, contractual payoff, Administrative Full-Balance Settlement, and administrative closure follow Section 6.10.
 
 The UCL MVP excludes credit-bureau integration, automated income verification, bank-statement parsing, automated credit scoring, and fully automated approval.
 
 ### 7.3 Collateral Loan
 
-Collateral Loan is a streamlined secured product based on structured collateral facts, ownership evidence, and manual assessment.
+Collateral Loan is a streamlined secured product based on one Customer-submitted structured Collateral fact, required ownership evidence, and manual assessment.
+
+The common blocking-application rule applies, but an existing Collateral LoanAccount does not create an additional product-specific origination restriction. Collateral origination, activation, and servicing are independent of Salary Advance limit and exposure; no Collateral action creates a Salary Advance limit or movement effect.
 
 End-to-end workflow:
 
@@ -668,16 +668,16 @@ End-to-end workflow:
 10. `REQUIRES_MORE_INFORMATION` permits only replacement or Staff review of the existing ownership-evidence item. Resubmission preserves the completed cycle, returns the application to `SUBMITTED`, and creates a linked pending cycle for re-verification. Submitted structured Collateral facts and requested terms are not editable.
 11. Only the authoritative latest `VERIFIED` cycle permits Loan Officer review. The Loan Officer records a recommendation or a permitted document-only correction outcome; any correction must return through re-verification.
 12. The application enters `APPROVAL_PENDING` after a valid Loan Officer recommendation.
-13. The Approver records an independent decision while the authoritative latest Collateral verification remains `VERIFIED`.
+13. The Approver approves, rejects, returns the application to Loan Officer review, or requests the permitted document-only correction while the authoritative latest Collateral verification remains `VERIFIED`.
 14. After a valid approval decision, Loan generates one immutable offer under the configured Collateral Loan pricing and repayment policy.
 15. Customer accepts, declines, or allows the offer to expire.
 16. Accounting prepares the operational contract and Customer acknowledges the current version.
 17. Accounting confirms document, Customer, destination, and product readiness.
 18. Accounting performs and confirms the external transfer.
-19. System creates the LoanAccount and final schedule and moves the application to `DISBURSED`.
-20. Repayment, overdue state, settlement, and closure follow Section 6.10.
+19. System creates the LoanAccount and final schedule and moves the application to `DISBURSED`, with zero product-exposure effect.
+20. Repayment, overdue state, contractual payoff, Administrative Full-Balance Settlement, and administrative closure follow Section 6.10 and retain zero product exposure.
 
-The Collateral Loan MVP excludes post-submission structured-fact editing, supporting-photo expansion, multiple assets through the public API, automated valuation, automated loan-to-value decisions, collateral custody, notarization, asset-registry integration, insurance integration, repossession, liquidation, and legal enforcement.
+The Collateral Loan MVP excludes post-submission structured-fact editing, supporting photos or documents without an explicit product-policy decision, more than one Collateral asset per application, automated valuation, automated loan-to-value decisions, collateral custody, notarization, asset-registry integration, insurance integration, repossession, liquidation, and legal enforcement.
 
 ---
 
@@ -716,7 +716,10 @@ CUSTOMER_DECLINED
 DISBURSED
 CANCELLED
 EXPIRED
+VERIFICATION_FAILED
 ```
+
+`VERIFICATION_FAILED` is terminal for UCL and Collateral Loan. A product may permit correction after verification failure only through a separately approved product policy; UCL and Collateral Loan use `REQUIRES_MORE_INFORMATION` for correctable evidence issues instead.
 
 ### 8.2 Related Status and Outcome Groups
 
@@ -743,7 +746,6 @@ Upload completeness and processing readiness are calculated results. They must n
 | `VERIFICATION_PENDING` | Verification passes | System or authorized reviewer | Result is `VERIFIED` | `DOCUMENTS_PENDING` or `SUBMITTED` | No |
 | `VERIFICATION_PENDING` | Verification fails | System or authorized reviewer | Result is `FAILED` | `VERIFICATION_FAILED` | Yes |
 | `VERIFICATION_PENDING` | More information required | System or authorized reviewer | Correctable issue exists | `RETURNED_FOR_REVISION` | Yes |
-| `VERIFICATION_FAILED` | Corrected information resubmitted | Customer or Staff | Failure is correctable | `VERIFICATION_PENDING` | Yes |
 | `DOCUMENTS_PENDING` | Upload work completes | Customer or Staff | Checklist is upload-complete | `SUBMITTED` | No |
 | `SUBMITTED` | Request pre-review document replacement | Authorized reviewer | A current upload requires correction | `RETURNED_FOR_REVISION` | Yes |
 | `UNDER_REVIEW` or `RETURNED_TO_REVIEW` | Recommend approval or rejection | Loan Officer | Review is complete | `APPROVAL_PENDING` | Rejection requires a reason |
@@ -759,9 +761,9 @@ Upload completeness and processing readiness are calculated results. They must n
 | `CUSTOMER_ACCEPTANCE_PENDING` | Expire pending offer | System | Current time is at or after expiry | `EXPIRED` | No |
 | `CONTRACT_PENDING` | Confirm readiness | Accounting Officer | Current contract acknowledged and every blocker is cleared | `DISBURSEMENT_PENDING` | No |
 | `DISBURSEMENT_PENDING` | Confirm manual disbursement | Accounting Officer | Ready contract and valid transfer evidence | `DISBURSED` | No |
-| `RETURNED_FOR_REVISION` | Cancel returned correction | Customer | Authenticated owner; active correction and unreleased Salary Advance reservation remain consistent | `CANCELLED` | No |
+| `RETURNED_FOR_REVISION` | Cancel returned correction | Customer | Authenticated owner; product is Salary Advance or UCL; active correction exists; any Salary Advance reservation remains consistent | `CANCELLED` | No |
 
-Customer cancellation from other pre-disbursement states and every Staff or administrative cancellation transition remain target-state requirements, not executable v0.1.0 behavior.
+Customer cancellation from other pre-disbursement states and every Staff or administrative cancellation require a separately approved policy with defined authority, reason, and financial effects.
 
 A transition and its financial, correction, document, offer, contract, exposure, history, and audit effects must commit as one business outcome where the rule requires atomicity.
 
@@ -777,7 +779,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | FR-IAM-002 | The system shall enforce role and action permissions and preserve the authenticated actor for Staff business actions. |
 | FR-PROD-001 | The system shall store and display active products with amount limits, terms, pricing, repayment method, required documents, and eligibility notes. |
 | FR-PROD-002 | The system shall let Back-Office Admins manage product configuration, activation, and deactivation. |
-| FR-APP-001 | The system shall support draft creation, submission, cancellation, status tracking, and transition control through one common LoanApplication lifecycle. |
+| FR-APP-001 | The system shall support draft creation, submission, permitted cancellation, status tracking, and transition control through one common LoanApplication lifecycle. |
 | FR-APP-002 | The system shall validate Customer readiness, active product, amount, term, product-specific facts, checklist requirements, exposure, and concurrency rules before submission. |
 | FR-APP-003 | The system shall prevent a new submitted application for a product while the Customer has another blocking non-terminal application for that product. |
 | FR-SA-001 | The system shall let Back-Office Admins manage Partner Companies and monthly Partner Employee imports for Salary Advance. |
@@ -789,8 +791,8 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | FR-SA-007 | The system shall reserve limit at successful submission, release it exactly once on defined pre-disbursement outcomes, convert it to used exposure at disbursement, and release used exposure through allocated principal or another approved policy. |
 | FR-SA-008 | The system shall refresh employee links and Salary Advance limit when eligible Partner Employee data changes. |
 | FR-SA-009 | The system shall record one Salary Advance verification snapshot for each submitted Salary Advance application. |
-| FR-UCL-001 | The system shall support Unsecured Consumer Loan submission, income and employment evidence, positive and negative manual verification, structured correction and re-verification, review, approval, offer response, correction cancellation, contract readiness, disbursement, activation, repayment, settlement, closure, and product-scoped outstanding-debt protection. |
-| FR-CL-001 | The system shall support Collateral Loan submission, structured collateral facts, ownership evidence, manual assessment, approval, offer response, contract readiness, disbursement, activation, repayment, settlement, and closure. |
+| FR-UCL-001 | The system shall support Unsecured Consumer Loan submission, income and employment evidence, positive and negative manual verification, structured correction and re-verification, review, approval, offer response, correction cancellation, contract readiness, disbursement, activation, repayment, overdue servicing, contractual payoff, Administrative Full-Balance Settlement, administrative closure, zero product exposure, and product-scoped outstanding-debt protection. |
+| FR-CL-001 | The system shall support Collateral Loan submission with one structured Collateral fact, required ownership evidence, manual verification and re-verification, document-only correction, review, approval, offer response, contract readiness, disbursement, activation, repayment, overdue servicing, contractual payoff, Administrative Full-Balance Settlement, administrative closure, zero product exposure, and no Salary Advance movement. |
 | FR-DOC-001 | The system shall let Customers and authorized Staff upload and retrieve purpose-authorized documents associated with Customer, application, collateral, contract, or disbursement requirements. |
 | FR-DOC-002 | The system shall calculate upload completeness separately from processing readiness and document-review outcomes. |
 | FR-DOC-003 | The system shall support immutable document versions, acceptance, waiver, replacement, controlled reasons, and readiness queries. |
@@ -802,7 +804,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | FR-CON-002 | The system shall permit contract regeneration before readiness only for a controlled destination refresh and shall confirm readiness without performing disbursement. |
 | FR-DIS-001 | The system shall expose the full destination only through a dedicated authorized and audited disbursement operation and shall let Accounting confirm an external transfer only against a ready contract. |
 | FR-DIS-002 | The system shall create the LoanAccount, final schedule, disbursement evidence, exposure effects, application transition, history, and audit as one atomic activation outcome. |
-| FR-REP-001 | The system shall preserve the final schedule, record payments and allocations, track installment and account servicing state, settle eligible accounts, and support administrative closure. |
+| FR-REP-001 | The system shall preserve the final schedule, record payments and allocations, track installment and account servicing state, support contractual payoff and Administrative Full-Balance Settlement, and close eligible settled accounts through a separate administrative action. |
 | FR-REP-002 | The system shall make repayment idempotent by logical request and payment reference and shall prevent duplicate evidence from creating duplicate allocation, exposure, history, or audit effects. |
 | FR-PORTAL-001 | The system shall provide the Customer Web Portal capabilities for registration, authentication, profile and bank-account maintenance, product browsing, eligibility, application submission, document upload, offer response, contract acknowledgment, and status viewing. |
 | FR-PORTAL-002 | The system shall provide the Back-Office Web Portal capabilities for product, Partner, import, review, approval, correction, contract, disbursement, repayment, and audit operations according to permission. |
@@ -819,8 +821,8 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-002 | The Customer profile must satisfy the selected product's completeness rule before submission. |
 | BR-003 | A LoanApplication must pass every required submission validation before becoming submitted. |
 | BR-004 | A Customer may keep multiple drafts but cannot submit the same product while another blocking non-terminal application for that product exists. |
-| BR-005 | A Customer may cancel their own application from `RETURNED_FOR_REVISION`; the active correction ends and any Salary Advance reservation is released atomically. |
-| BR-006 | Future cancellation policies may authorize Customer cancellation from other pre-disbursement states or Staff cancellation with a controlled reason; neither is executable in v0.1.0. |
+| BR-005 | A Customer may cancel their own Salary Advance or UCL application from `RETURNED_FOR_REVISION`; the active correction ends, Salary Advance releases its reservation atomically, and UCL creates no product-exposure effect. |
+| BR-006 | Customer cancellation from another pre-disbursement state or Staff cancellation requires a separately approved policy defining actor authority, reason, permitted state, and financial effects. |
 | BR-007 | A `DISBURSED` application cannot be cancelled. |
 | BR-008 | Normal Salary Advance creation requires an active verified Customer–Partner Employee link. |
 | BR-009 | Salary Advance requested principal must not exceed active available limit. |
@@ -836,15 +838,15 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-019 | Salary Advance used exposure is released only for principal allocated by an actual ordinary repayment or Administrative Full-Balance Settlement payment and by exactly that amount; fee and interest allocations release none. Any non-payment release requires an explicitly approved future product rule. |
 | BR-020 | Unsecured Consumer Loan requires income and employment evidence and does not require collateral. |
 | BR-020A | Unsecured Consumer Loan `VERIFIED` records completed manual evidence and basic repayment-capacity verification, not credit approval. The same Loan Officer may verify and recommend; the Approver remains a separate actor. |
-| BR-021 | Collateral Loan requires structured collateral facts and ownership or supporting evidence. |
+| BR-021 | Collateral Loan requires one structured Collateral fact and the existing required ownership-evidence checklist item. |
 | BR-021A | Collateral Loan `VERIFIED` records completed manual assessment sufficient for Loan Officer review and is not credit approval; the same Loan Officer may verify and recommend. |
 | BR-021B | Completed Collateral verification cycles are immutable, the latest numbered cycle is authoritative, and a document correction must create a linked pending cycle and be re-verified before review. |
-| BR-021C | Collateral correction may replace or review only the existing ownership-evidence checklist item; submitted structured Collateral facts and requested terms are not editable in the MVP workflow. |
+| BR-021C | Collateral correction may replace or review only the existing ownership-evidence checklist item; submitted structured Collateral facts and requested terms are not editable after submission. |
 | BR-021D | Collateral `FAILED` is an unsuccessful application outcome and is not reopened; correctable evidence issues use `REQUIRES_MORE_INFORMATION`. |
 | BR-021E | A Collateral Approver action requires the authoritative latest manual-verification cycle to remain `VERIFIED`; all four common Approver actions are available, and only `APPROVE` creates an offer. |
 | BR-021F | Collateral approval preserves the submitted requested amount and term, applies 1.5% monthly flat original-principal interest, charges zero fee, rounds total interest once to whole VND using `HALF_UP`, and creates one reconciled provisional monthly item per approved month. |
 | BR-021G | A Collateral offer contains no due dates; later schedule construction requires a first repayment date after the disbursement value date and no later than one calendar month after it, followed by monthly anchoring with final-calendar-day clipping. |
-| BR-021H | Collateral early or partial payment does not reprice, rebate, or mutate contractual obligations; payoff and Administrative Full-Balance Settlement require the exact complete contractual outstanding, and activation and closure use the common controls. |
+| BR-021H | Collateral activation, early or partial repayment, contractual payoff, Administrative Full-Balance Settlement, and administrative closure use the common controls, release zero product exposure, and create no Salary Advance movement; early or partial payment does not reprice, rebate, or mutate contractual obligations, and both payoff paths require the exact complete contractual outstanding. |
 | BR-022 | Collateral estimated value is advisory in the MVP and does not create an automated loan-to-value decision. |
 | BR-023 | Upload completeness, manual document review and processing readiness, and product verification are separate controls. |
 | BR-024 | Product policy defines which checklist items must be upload-complete before submission. |
@@ -889,8 +891,8 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-062 | Identical repayment replay returns the original result; reused request or payment identity with different content is a conflict. |
 | BR-063 | Full contractual payoff atomically settles the LoanAccount and completes the required product-specific principal-exposure release. |
 | BR-064 | Read operations do not evaluate overdue state, alter servicing results, or publish new business evidence. |
-| BR-065 | UCL repayment and settlement may allocate contractual principal but release zero product exposure and create no Salary Advance movement. |
-| BR-066 | UCL supports date-driven `ACTIVE` and `OVERDUE` servicing, exact contractual payoff or full-balance administrative settlement to `SETTLED`, and separate administrative closure to `CLOSED`. |
+| BR-065 | UCL repayment and Administrative Full-Balance Settlement may allocate contractual principal but release zero product exposure and create no Salary Advance movement. |
+| BR-066 | UCL supports date-driven `ACTIVE` and `OVERDUE` servicing, exact contractual payoff or Administrative Full-Balance Settlement to `SETTLED`, and separate administrative closure to `CLOSED`. |
 
 ---
 
@@ -962,13 +964,15 @@ sum(item.feeDue) = 0 VND
 sum(item.totalDue) = totalRepaymentAmount
 ```
 
-### 11.3 Required Evidence by Product
+### 11.3 LoanApplication Checklist Evidence by Product
 
-| Product | MVP Evidence |
+This table defines product-specific LoanApplication checklist evidence. Customer readiness in Section 6.1 and the contract-bound destination in Sections 6.8 and 6.9 remain separate controls.
+
+| Product | Checklist Evidence |
 |---|---|
-| `SALARY_ADVANCE` | Profile identity evidence when not already satisfied; destination proof when policy requires it; correction evidence such as a recent payslip when requested; otherwise Customer upload may be `NOT_REQUIRED` |
-| `UNSECURED_CONSUMER_LOAN` | Identity evidence, proof of income, payslip or salary statement, bank statement, and labor contract or employment confirmation |
-| `COLLATERAL_LOAN` | Required collateral ownership evidence; supporting photos or additional supporting documents require an explicit product-policy decision |
+| `SALARY_ADVANCE` | No Customer document is required at initial submission; a correction may require `RECENT_PAYSLIP` |
+| `UNSECURED_CONSUMER_LOAN` | `INCOME_PROOF`, `BANK_STATEMENT`, and `EMPLOYMENT_PROOF` |
+| `COLLATERAL_LOAN` | `COLLATERAL_OWNERSHIP_EVIDENCE`; supporting photos or additional supporting documents require an explicit product-policy decision |
 
 Product policy determines which evidence must exist before submission and which may be introduced through correction.
 
@@ -980,7 +984,7 @@ Product policy determines which evidence must exist before submission and which 
 | Estimated value | Informational for manual assessment |
 | Automated loan-to-value validation | Not enforced |
 | Decision model | Manual verification followed by Loan Officer review and independent approval; the latest Collateral verification must remain `VERIFIED` when the Approver acts |
-| Collateral review note | Required |
+| Verification assessment note | Required for every manual-verification outcome |
 | Approval basis | Exact submitted requested amount and term; no counteroffer or loan-to-value adjustment |
 | Interest method | Flat interest on original principal |
 | Monthly interest rate | 1.5% (`0.015000`) |
@@ -1021,28 +1025,9 @@ Viewing an offer remains read-only and does not expire it, transition the applic
 
 ---
 
-## 12. Conceptual Business Records and Quality Requirements
+## 12. Business Quality Requirements
 
-### 12.1 Conceptual Business Records
-
-These names describe business concepts, not required Java classes or physical tables. `MER-DB-001` owns logical and physical data design.
-
-| Area | Representative Business Records |
-|---|---|
-| Identity and actors | User account, role assignment, authenticated actor, session evidence |
-| Customer | Customer, profile, verification state, bank account, consent evidence |
-| Product | LoanProduct, product policy, product configuration |
-| Partner | PartnerCompany, PartnerEmployee, import batch, import-row outcome, Customer–Partner Employee link |
-| Application | LoanApplication, product-specific facts, verification snapshot, status transition |
-| Salary Advance | SalaryAdvanceLimit, limit movement, reservation, exposure release |
-| Documents and correction | DocumentChecklist, checklist item, logical document, immutable version, review decision, correction request, correction task |
-| Review and approval | Review cycle, recommendation, ApprovalDecision, reason code |
-| Offer and contract | ApprovedOffer, financial terms, provisional repayment item, LoanContract, acknowledgment, protected destination snapshot |
-| Disbursement and account | ManualDisbursement, LoanAccount, final RepaymentSchedule |
-| Servicing | Repayment transaction, allocation, installment progress, overdue evaluation, settlement, closure |
-| Audit | Business audit event, operation context, status history |
-
-### 12.2 Quality Requirements
+Sections 5 through 8 define the business concepts and evidence required by Meridian. `MER-DB-001` owns the logical and physical record inventory; the architecture documents own context placement and communication.
 
 | Category | Requirement |
 |---|---|
@@ -1053,9 +1038,7 @@ These names describe business concepts, not required Java classes or physical ta
 | Idempotency | Retried offer, contract, disbursement, correction, and repayment commands must not duplicate business effects |
 | Concurrency | Competing requests must preserve one blocking application, one active workflow outcome, one disbursement, and consistent financial evidence |
 | Auditability | Important actions are attributable to actor, time, business reference, reason, and operation |
-| Availability | Where an external provider or worker is used, temporary failure must not corrupt business state; an allowed manual fallback remains visible and controlled |
-| Maintainability | Product variation remains explicit policy inside the common lending lifecycle |
-| Testability | Executable tests must cover business rules, transitions, failures, permissions, persistence constraints, idempotency, and concurrency-sensitive outcomes |
+| Availability | Failure of an external provider or worker must not corrupt business state; any permitted manual fallback remains visible and controlled |
 
 ---
 
@@ -1063,7 +1046,7 @@ These names describe business concepts, not required Java classes or physical ta
 
 ### 13.1 Required MVP Business Capabilities
 
-The completed MVP includes every capability defined as in scope in Section 3.3 and every requirement in Sections 9 and 10.
+The MVP business target includes every capability defined as in scope in Section 3.3 and every requirement in Sections 9 and 10.
 
 Salary Advance receives full product depth. UCL and Collateral Loan retain the same common lifecycle but use streamlined product-specific verification and manual review.
 
@@ -1092,13 +1075,9 @@ OCR remains advisory to Document review. Notification remains observational and 
 - full mobile delivery;
 - savings, entrusted, corporate, or other non-lending products.
 
-### 13.4 Approved Collateral Loan Financial and Operational Decisions
+### 13.4 Collateral Loan Boundary Guard
 
-The Collateral Loan MVP uses the exact-request pricing and provisional monthly-installment policy in Section 11.4. The 1.5% value is a monthly decimal rate applied to original principal for every approved month. Total interest is rounded once to whole VND using `HALF_UP`; installment allocation does not independently recalculate interest. Fees are zero, and only final-item residual allocation is permitted.
-
-The offer remains provisional and undated. Exact due dates are created only during the later disbursement workflow from a controlled first repayment date within the approved value-date window. Early payment does not change pricing or contractual obligations, and settlement requires the exact contractual outstanding. Collateral Loan uses the common activation and closure controls without an additional collateral-specific blocker.
-
-These decisions do not introduce automated loan-to-value assessment, a counteroffer, discounted settlement, custody, valuation, enforcement, or another Collateral asset. Those capabilities remain outside the MVP boundary unless separately approved.
+Section 11.4 is the authority for Collateral Loan pricing, provisional installments, final schedule dates, and payment behavior. Those policies do not introduce automated loan-to-value assessment, a counteroffer, discounted settlement, custody, valuation, enforcement, more than one Collateral asset, or an outstanding Collateral LoanAccount origination restriction. Each capability requires a separately approved business policy before it enters the MVP boundary.
 
 ### 13.5 Post-MVP Product Extensions
 
