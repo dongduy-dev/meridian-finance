@@ -349,7 +349,7 @@ Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `pr
 
 The application starts in `DOCUMENTS_PENDING` with application-owned sequence-1 `PENDING_MANUAL_REVIEW` Collateral verification. Uploading the required evidence through the existing Document workflow can complete generic upload readiness and advance the application to `SUBMITTED`; it does not complete Collateral verification or permit review. The Staff verification commands in Sections 4.8-4.9 make the terminal decision. Only the authoritative latest `VERIFIED` cycle permits review, recommendation, and an Approver action.
 
-Collateral submission serializes by Customer and product and rejects an existing blocking Collateral application. It deliberately does not impose an outstanding Collateral LoanAccount rule, compare requested amount to estimated value, or create Salary Advance reservation, Partner, or exposure effects. Structured Collateral facts and requested terms are immutable after submission. Approval, pricing, offer response, operational contract preparation, manual-disbursement activation, LoanAccount creation, and final schedule construction are executable. Repayment, overdue servicing, settlement, and closure remain unsupported for Collateral Loan.
+Collateral submission serializes by Customer and product and rejects an existing blocking Collateral application. It deliberately does not impose an outstanding Collateral LoanAccount rule, compare requested amount to estimated value, or create Salary Advance reservation, Partner, or exposure effects. Structured Collateral facts and requested terms are immutable after submission. Approval, pricing, offer response, operational contract preparation, manual-disbursement activation, LoanAccount creation, final schedule construction, repayment, overdue evaluation and cure, settlement, and closure are executable. Collateral servicing uses the common financial controls with zero Salary Advance exposure effect.
 
 Important errors:
 
@@ -843,7 +843,7 @@ The response contains:
 
 The read does not decrypt the destination or perform allocation, overdue evaluation, mutation, audit, or history writes.
 
-An activated Collateral LoanAccount is available through this read contract even though Collateral repayment and overdue servicing remain unsupported.
+An activated Collateral LoanAccount uses this same safe read contract before, during, and after servicing.
 
 For Customers, missing, foreign-owned, and unavailable accounts all return `404 LOAN_ACCOUNT_NOT_FOUND`.
 
@@ -851,7 +851,7 @@ For Customers, missing, foreign-owned, and unavailable accounts all return `404 
 
 ## 8. Repayment
 
-Repayment APIs support serviceable Salary Advance and UCL LoanAccounts. Collateral Loan remains unsupported.
+Repayment APIs support serviceable Salary Advance, UCL, and Collateral LoanAccounts.
 
 ### 8.1 Record or replay repayment
 
@@ -872,8 +872,8 @@ Rules visible to clients:
 - payment cannot exceed total outstanding;
 - value date cannot precede disbursement or exceed the current business date;
 - `principalAllocated` reports contractual principal satisfied by the payment;
-- `principalReleased` reports product exposure released: it equals allocated principal for Salary Advance and is zero for UCL;
-- UCL repayment never creates or mutates Salary Advance limit or movement evidence;
+- `principalReleased` reports product exposure released: it equals allocated principal for Salary Advance and is zero for UCL and Collateral Loan;
+- UCL and Collateral repayment never create or mutate Salary Advance limit or movement evidence;
 - exact contractual payoff produces `SETTLED`.
 
 The response includes safe transaction/account IDs, amount/value date, recording time, ordered allocations, `principalAllocated`, `principalReleased`, installment outcomes, resulting account status/balances, and `idempotentReplay`. It excludes the external reference, request UUID, actor, Customer, employee-link, limit, bank, audit, history, and internal operation evidence.
@@ -912,7 +912,7 @@ Content-Type: application/json
 }
 ```
 
-The caller must be an Approver with `loan:settlement:approve`. The Salary Advance or UCL account must be `ACTIVE` or `OVERDUE`, and `expectedSettlementAmount` must equal locked current total outstanding. Meridian records an `APPROVED_SETTLEMENT` payment transaction, applies oldest-installment and fee-interest-principal allocation, applies the product-specific exposure result, and returns a `SETTLED` result. Salary Advance releases allocated principal exactly; UCL reports zero principal released and creates no Salary Advance movement. Discounted, concessionary, waiver, forgiveness, and write-off outcomes are not accepted.
+The caller must be an Approver with `loan:settlement:approve`. The Salary Advance, UCL, or Collateral account must be `ACTIVE` or `OVERDUE`, and `expectedSettlementAmount` must equal locked current total outstanding. Meridian records an `APPROVED_SETTLEMENT` payment transaction, applies oldest-installment and fee-interest-principal allocation, applies the product-specific exposure result, and returns a `SETTLED` result. Salary Advance releases allocated principal exactly; UCL and Collateral report zero principal released and create no Salary Advance movement. Discounted, concessionary, waiver, forgiveness, and write-off outcomes are not accepted.
 
 The response contains safe application/account/payment/schedule identifiers, amount and value date, approval time, principal allocated and released, resulting balances/status, and `idempotentReplay`. It excludes the request UUID, canonical external payment reference, actor and Customer identities, settlement evidence identity, limit/movement identities, audit/history identities, and internal reconciliation evidence.
 
@@ -932,7 +932,7 @@ Content-Type: application/json
 }
 ```
 
-The caller must be an Accounting Officer with `loan:account:close`. Closure supports a fully reconciled Salary Advance or UCL `SETTLED` LoanAccount produced by ordinary contractual payoff or Administrative Full-Balance Settlement. It records a separate `SETTLED -> CLOSED` administrative result and does not change payments, allocations, balances, the final schedule, installment progress, product exposure, or LoanApplication state.
+The caller must be an Accounting Officer with `loan:account:close`. Closure supports a fully reconciled Salary Advance, UCL, or Collateral `SETTLED` LoanAccount produced by ordinary contractual payoff or Administrative Full-Balance Settlement. It records a separate `SETTLED -> CLOSED` administrative result and does not change payments, allocations, balances, the final schedule, installment progress, product exposure, or LoanApplication state.
 
 The response contains only application/account identity, `CLOSED`, closure time, and `idempotentReplay`. It excludes request, closure-evidence, actor, payment, limit/movement, audit/history, and internal reconciliation identities. An identical replay returns the original closure result. A different request after closure or an attempt before `SETTLED` returns `409 LOAN_ACCOUNT_CLOSURE_NOT_ALLOWED`; conflicting reuse of the same request UUID returns `409 IDEMPOTENCY_KEY_REUSED`; inconsistent evidence returns safe `409 SYSTEM_STATE_CONFLICT`; missing permission or business role returns `403`.
 
@@ -946,7 +946,7 @@ Collection:
 docs/api/Meridian-Platform.postman_collection.json
 ```
 
-It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. UCL scenarios include all three verification outcomes, correction and re-verification, cancellation, outstanding-debt rejection, and product-generic servicing through closure. The Collateral folder covers prepared ownership evidence, exact-cycle manual verification, Loan Officer recommendation, all four Approver actions, exact offer assertions, Customer acceptance/decline, protected contract preparation, acknowledgment, readiness, destination reveal, activation replay, final schedule reads, ownership concealment, and the explicit repayment-policy stop.
+It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. UCL scenarios include all three verification outcomes, correction and re-verification, cancellation, outstanding-debt rejection, and product-generic servicing through closure. The Collateral folder covers prepared ownership evidence, exact-cycle manual verification, Loan Officer recommendation, all four Approver actions, exact offer assertions, Customer acceptance/decline, protected contract preparation, acknowledgment, readiness, destination reveal, activation replay, final schedule reads, ownership concealment, partial repayment and history, Administrative Full-Balance Settlement, and closure.
 
 Complex correction scenarios require prepared application, review-cycle, checklist, and version variables. The optional cancellation folder requires `returnedCancellationScenarioEnabled=true` and a separate Customer-owned `cancellationLoanApplicationId` in `RETURNED_FOR_REVISION`; it confirms the command, exact replay, and terminal application GET without exposing internal evidence IDs. Seed fixtures and scenario-specific IDs belong to the collection or its environment, not this API contract.
 

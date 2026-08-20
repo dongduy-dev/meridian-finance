@@ -394,7 +394,7 @@ The product activation policy revalidates the authoritative product evidence for
 
 Customer ownership concealment belongs in the application service. A Customer receives the same not-found behavior for a missing, foreign-owned, or not-yet-activated account.
 
-Activated Collateral LoanAccounts participate in the common safe read. Repayment, overdue mutation, settlement, and closure commands remain unavailable until a Collateral repayment policy is implemented.
+Activated Collateral LoanAccounts participate in the common safe read and the common repayment, overdue evaluation, settlement, and closure services. The Collateral repayment policy validates product identity and requires zero product-exposure release; it has no Partner, Salary Advance limit, or post-activation verification dependency.
 
 Read operations must not:
 
@@ -406,7 +406,7 @@ Read operations must not:
 
 The repayment and settlement controllers forward external payment references without canonicalizing them. The Loan application services own normalization, operation-specific idempotency, and duplicate-reference handling. The canonical external payment reference remains internal financial evidence and is excluded from ordinary responses, logs, audit payloads, and errors.
 
-Administrative Full-Balance Settlement is a Loan-owned payment operation even though its actor is an Approver. It starts from `ACTIVE` or `OVERDUE`, requires the caller's expected amount to equal locked total outstanding, applies the repayment allocator and servicing calculator, and commits `SETTLED` with immutable settlement, payment, outcome, history, and audit evidence. The selected repayment policy releases allocated principal exactly for Salary Advance and requires zero product-exposure release for UCL.
+Administrative Full-Balance Settlement is a Loan-owned payment operation even though its actor is an Approver. It starts from `ACTIVE` or `OVERDUE`, requires the caller's expected amount to equal locked total outstanding, applies the repayment allocator and servicing calculator, and commits `SETTLED` with immutable settlement, payment, outcome, history, and audit evidence. The selected repayment policy releases allocated principal exactly for Salary Advance and requires zero product-exposure release for UCL and Collateral Loan.
 
 Administrative closure starts only from a fully reconciled `SETTLED` account. It accepts contractual-payoff provenance or approved-settlement provenance, verifies final progress, product-specific exposure semantics, status history, and durable evidence, then records `SETTLED -> CLOSED`. It does not acquire Salary Advance limit locks because it performs no financial or exposure mutation.
 
@@ -420,13 +420,13 @@ Existing application and account mutations use this global order:
 4. product-specific exposure locks when required;
 5. Salary Advance Customer-and-employee-link, limit, and movement rows when the selected policy mutates Salary Advance exposure.
 
-Activation, repayment, and settlement must not acquire product-specific exposure locks before the LoanApplication workflow lock. Salary Advance settlement follows request lock, workflow lock, application/account/schedule/progress row locks, payment validation, Customer-and-employee-link lock, then limit and movement locks. UCL uses the same common financial locks but acquires no Salary Advance exposure lock or row. Collateral activation likewise creates no Salary Advance exposure effect, while its servicing commands fail before financial mutation because no repayment policy is registered. Canonical external payment-reference uniqueness is enforced by the payment insert and its database constraint; a conflict is resolved without exposing the reference. Closure stops after workflow, application/account, and settlement-evidence verification because it does not mutate exposure. Submission and standalone limit refresh retain their Customer/product or Customer/employee-link to limit order and do not acquire an existing application workflow or account lock.
+Activation, repayment, and settlement must not acquire product-specific exposure locks before the LoanApplication workflow lock. Salary Advance settlement follows request lock, workflow lock, application/account/schedule/progress row locks, payment validation, Customer-and-employee-link lock, then limit and movement locks. UCL and Collateral Loan use the same common financial locks but acquire no Salary Advance exposure lock or row. Canonical external payment-reference uniqueness is enforced by the payment insert and its database constraint; a conflict is resolved without exposing the reference. Closure stops after workflow, application/account, and settlement-evidence verification because it does not mutate exposure. Submission and standalone limit refresh retain their Customer/product or Customer/employee-link to limit order and do not acquire an existing application workflow or account lock.
 
 ---
 
 ## 11. Overdue Evaluation
 
-The overdue batch samples the injected clock once and derives one UTC business date. It selects stale `ACTIVE` or `OVERDUE` accounts with positive outstanding balances for the authoritative Salary Advance and UCL product allow-list, in deterministic evaluation-date and LoanAccount-ID order. Activated Collateral accounts are excluded.
+The overdue batch samples the injected clock once and derives one UTC business date. It selects stale `ACTIVE` or `OVERDUE` accounts with positive outstanding balances for the authoritative Salary Advance, UCL, and Collateral product allow-list, in deterministic evaluation-date and LoanAccount-ID order.
 
 Each candidate runs in its own transaction and follows:
 
@@ -440,7 +440,7 @@ LoanApplication workflow lock
 
 A previous evaluation date is a state conflict. Repeating the same date is a no-op. A later date advances only the persisted evaluation and derived status. An open account with zero outstanding balance is a system-state conflict.
 
-The direct evaluator validates the application is `DISBURSED` and then resolves the product repayment policy before loading and mutating servicing state. A direct Collateral evaluation therefore returns `PRODUCT_REPAYMENT_NOT_SUPPORTED` without changing the account, progress, history, or audit evidence.
+The direct evaluator validates the application is `DISBURSED` and then resolves the product repayment policy before loading and mutating servicing state. Collateral evaluation follows the same persisted date/status calculation as UCL and creates no Salary Advance exposure evidence.
 
 One overdue-evaluation operation identifier groups installment changes produced by the same evaluation. A real `ACTIVE` to `OVERDUE` or `OVERDUE` to `ACTIVE` account transition records account history and one `LOAN_ACCOUNT_STATUS_CHANGED` audit event. Date-only or installment-only advancement does not create a top-level account-status audit.
 

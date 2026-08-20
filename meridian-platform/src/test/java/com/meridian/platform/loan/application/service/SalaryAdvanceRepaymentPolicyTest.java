@@ -14,7 +14,6 @@ import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovement;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
 import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
-import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,8 +23,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -157,23 +154,6 @@ class SalaryAdvanceRepaymentPolicyTest {
         verify(movements, never()).save(any());
     }
 
-    @Test
-    @MockitoSettings(strictness = Strictness.LENIENT)
-    void resolverSupportsSalaryAndUclWhileCollateralFailsClosed() {
-        LoanProductRepaymentPolicyResolver resolver =
-                new LoanProductRepaymentPolicyResolver(List.of(
-                        policy, new UnsecuredConsumerLoanRepaymentPolicy()
-                ));
-
-        assertEquals(policy, resolver.resolve(ProductCode.SALARY_ADVANCE));
-        assertEquals(ProductCode.UNSECURED_CONSUMER_LOAN,
-                resolver.resolve(ProductCode.UNSECURED_CONSUMER_LOAN).supportedProduct());
-        BusinessRuleViolationException exception = assertThrows(
-                BusinessRuleViolationException.class,
-                () -> resolver.resolve(ProductCode.COLLATERAL_LOAN)
-        );
-        assertEquals("PRODUCT_REPAYMENT_NOT_SUPPORTED", exception.getErrorCode());
-    }
     private void stubEvidence(
             SalaryAdvanceLimit limit,
             List<SalaryAdvanceLimitMovement> releases

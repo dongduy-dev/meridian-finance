@@ -13,7 +13,6 @@ import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
-import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -181,67 +180,46 @@ class OverdueEvaluationPostgreSqlIntegrationTest {
     }
 
     @Test
-    void directCollateralEvaluationFailsClosedWithoutMutatingServicingEvidence() {
+    void directCollateralEvaluationAdvancesOverdueDatesAndPaymentCuresTheAccount() {
         var activated = activate(ProductCode.COLLATERAL_LOAN);
         UUID accountId = activated.accountId();
-        java.util.Map<String, Object> accountBefore = jdbc.queryForMap(
-                "select status,servicing_evaluation_date,updated_at from loan_accounts where id=?",
-                accountId
-        );
-        List<java.util.Map<String, Object>> progressBefore = jdbc.queryForList(
-                "select installment_number,status,servicing_evaluation_date,updated_at "
-                        + "from repayment_installment_progress where loan_account_id=? "
-                        + "order by installment_number",
-                accountId
-        );
-        int installmentHistoryBefore = count(
-                "select count(*) from repayment_installment_status_transitions history "
-                        + "join repayment_installment_progress progress on "
-                        + "progress.repayment_schedule_item_id=history.repayment_schedule_item_id "
-                        + "where progress.loan_account_id=?",
-                accountId
-        );
-        int accountHistoryBefore = count(
-                "select count(*) from loan_account_status_transitions where loan_account_id=?",
-                accountId
-        );
-        int auditBefore = count(
-                "select count(*) from audit_events where entity_type='LOAN_ACCOUNT' and entity_id=?",
-                accountId
-        );
+        LocalDate overdueDate = LocalDate.of(2026, 8, 29);
 
-        BusinessRuleViolationException failure = assertThrows(
-                BusinessRuleViolationException.class,
-                () -> evaluate(
-                        activated.applicationId(), accountId, LocalDate.of(2026, 8, 29)
+        EvaluateLoanAccountOverdueUseCase.Result overdue = evaluate(
+                activated.applicationId(), accountId, overdueDate
+        );
+        assertFalse(overdue.noOp());
+        assertEquals("OVERDUE", overdue.resultingStatus().name());
+        assertEquals(List.of("OVERDUE", "NOT_DUE"), installmentStatuses(accountId));
+
+        EvaluateLoanAccountOverdueUseCase.Result sameDate = evaluate(
+                activated.applicationId(), accountId, overdueDate
+        );
+        assertTrue(sameDate.noOp());
+
+        LocalDate laterDate = overdueDate.plusDays(1);
+        EvaluateLoanAccountOverdueUseCase.Result later = evaluate(
+                activated.applicationId(), accountId, laterDate
+        );
+        assertFalse(later.noOp());
+        assertEquals("OVERDUE", later.resultingStatus().name());
+
+        testClock.set(laterDate.atTime(10, 0).toInstant(ZoneOffset.UTC));
+        RecordRepaymentUseCase.Result cure = repayments.record(
+                new RecordRepaymentUseCase.Command(
+                        UUID.randomUUID(), activated.applicationId(),
+                        "COLLATERAL-OVERDUE-CURE-" + UUID.randomUUID(),
+                        new BigDecimal("550.00"), laterDate
                 )
         );
 
-        assertEquals("PRODUCT_REPAYMENT_NOT_SUPPORTED", failure.getErrorCode());
-        assertEquals(accountBefore, jdbc.queryForMap(
-                "select status,servicing_evaluation_date,updated_at from loan_accounts where id=?",
-                accountId
-        ));
-        assertEquals(progressBefore, jdbc.queryForList(
-                "select installment_number,status,servicing_evaluation_date,updated_at "
-                        + "from repayment_installment_progress where loan_account_id=? "
-                        + "order by installment_number",
-                accountId
-        ));
-        assertEquals(installmentHistoryBefore, count(
-                "select count(*) from repayment_installment_status_transitions history "
-                        + "join repayment_installment_progress progress on "
-                        + "progress.repayment_schedule_item_id=history.repayment_schedule_item_id "
-                        + "where progress.loan_account_id=?",
-                accountId
-        ));
-        assertEquals(accountHistoryBefore, count(
-                "select count(*) from loan_account_status_transitions where loan_account_id=?",
-                accountId
-        ));
-        assertEquals(auditBefore, count(
-                "select count(*) from audit_events where entity_type='LOAN_ACCOUNT' and entity_id=?",
-                accountId
+        assertEquals("ACTIVE", cure.accountBalance().status().name());
+        assertEquals(0, cure.principalReleased().compareTo(BigDecimal.ZERO));
+        assertEquals(List.of("PAID", "NOT_DUE"), installmentStatuses(accountId));
+        assertEquals(0, count(
+                "select count(*) from salary_advance_limit_movements "
+                        + "where loan_application_id = ?",
+                activated.applicationId()
         ));
     }
 
