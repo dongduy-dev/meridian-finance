@@ -2,11 +2,11 @@
 
 ## Meridian Lending Platform
 
-Meridian is a multi-product digital lending platform built around a common lending lifecycle and product-specific policies. Salary Advance is the flagship and deepest product workflow; Unsecured Consumer Loan (UCL) and Collateral Loan use streamlined variants of the same lifecycle.
+Meridian is a multi-product digital lending platform built around a common lending lifecycle and product-specific policies. Salary Advance is the flagship workflow, with streamlined Unsecured Consumer Loan and Collateral Loan workflows built on the same lending core.
 
-The complete platform combines Customer, Staff, and administrative experiences, document management and advisory OCR-assisted processing, controlled correction and review, independent approval, immutable offers and operational contracts, disbursement activation, LoanAccount servicing, and audit evidence. Meridian prioritizes financial integrity, security, explicit state transitions, maker-checker controls, and clear operational ownership.
+Meridian helps lending teams manage the full journey from application through servicing and closure. Product workflows combine automated processing with controlled human review where business decisions or document verification require it. The platform is designed around practical financial software concerns such as auditability, security, data integrity, controlled state transitions, maker-checker controls, document traceability, and clear operational ownership.
 
-Meridian uses a Java and Spring modular monolith with Domain-Driven Design and Practical Hexagonal Architecture. React/Vite clients and Python/FastAPI OCR processing form the selected direction for upcoming platform components; the Roadmap distinguishes delivered capabilities from planned work.
+The complete Meridian platform combines a Java and Spring Boot modular monolith, backed by PostgreSQL, with React/Vite client applications and Python/FastAPI OCR processing. Meridian applies Domain-Driven Design and Practical Hexagonal Architecture within clearly defined bounded contexts. This approach enables rapid delivery within a cohesive platform while preserving clear boundaries and an evolutionary path toward selective distributed service extraction when justified by business requirements, scale, or operational ownership.
 
 ---
 
@@ -14,22 +14,23 @@ Meridian uses a Java and Spring modular monolith with Domain-Driven Design and P
 
 ### Lending Products
 
-- **Salary Advance** — Partner-linked employment eligibility and pre-submission Partner evidence drive a product-specific limit, reservation, and used-exposure model. Positive contractual outstanding on a matching `ACTIVE` or `OVERDUE` Salary Advance `LoanAccount` also blocks new submission.
-- **Unsecured Consumer Loan** — Required income, bank-statement, and employment evidence feed manual product verification, structured correction, and re-verification. UCL uses exact-request flat-rate pricing and a product-scoped outstanding-account restriction without creating Salary Advance exposure.
-- **Collateral Loan** — One Customer-submitted structured Collateral fact is supported by Document-owned ownership evidence, numbered manual verification, and document-only correction and re-verification. Collateral uses exact-request pricing, creates no Salary Advance exposure, and adds no product-specific outstanding-LoanAccount origination restriction.
+* **Salary Advance**: Uses Partner-linked employment evidence with a product-specific eligibility, limit, and exposure model.
+* **Unsecured Consumer Loan**: Uses income, bank-statement, and employment evidence with manual verification, correction, and flat-rate pricing.
+* **Collateral Loan**: Uses structured Collateral information with Document-owned ownership evidence and manual verification.
 
-All three products participate in Meridian's common application, approval, contract, activation, servicing, and closure lifecycle.
+All three products use Meridian's common application, approval, contract, activation, servicing, and closure lifecycle while retaining product-specific rules.
 
 ### Platform Capabilities
 
-- **Common Lending Lifecycle** — A shared LoanApplication lifecycle coordinates submission, verification, review, approval, Customer response, contract readiness, disbursement, and LoanAccount activation while product policies retain product-specific behavior.
-- **Document and OCR-Assisted Processing** — Document owns checklists, uploads, immutable versions, manual review, replacement, waiver, and processing readiness. Planned OCR processing remains advisory; authorized Document review stays authoritative and OCR never approves credit or documents by itself.
-- **Review, Correction, and Approval** — Loan owns review cycles, correction work, resubmission, and application transitions. Loan Officers record recommendations, while Approvers make independent decisions under maker-checker controls.
-- **Offers, Contracts, and Disbursement** — Immutable approved offers, Customer response, versioned operational contracts, acknowledgment, readiness, and idempotent manual-disbursement activation preserve accepted terms and operational evidence. Customer owns the mutable source bank account; Loan owns only the protected contract-bound destination snapshot.
-- **Common Loan Servicing Lifecycle** — Salary Advance, UCL, and Collateral Loan support repayment, overdue evaluation and cure, contractual payoff, payment-backed Administrative Full-Balance Settlement, and separate administrative closure.
-- **Identity and Ownership Controls** — JWT access-token authentication, permission-based RBAC, token-derived Customer identity, ownership checks, and purpose-limited cross-context contracts protect Customer and Staff operations.
-- **Transactional Command Safety** — Critical operations use command-specific request identities, semantic replay validation, atomic persistence, concurrency controls, and durable outcomes.
-- **Audit and Data Protection** — Ordered lifecycle history, append-only business audit evidence, protected sensitive values, masked responses, and restricted payloads preserve traceability without broad PII exposure.
+* **Common Lending Lifecycle**: A shared `LoanApplication` lifecycle coordinates submission, verification, review, approval, Customer response, contract readiness, disbursement, and `LoanAccount` activation.
+* **Document and OCR-Assisted Processing**: Document owns document checklists, uploads, immutable versions, review, replacement, waiver, and processing readiness. OCR-assisted processing remains advisory, while authorized Document review remains authoritative.
+* **Review Correction, and Approval**: Loan owns application review and correction workflows. Loan Officers record recommendations, while Approvers make independent decisions under maker-checker controls.
+* **Offers, Contracts, and Disbursement**: Loan preserves accepted lending terms through immutable offers, versioned contracts, Customer acknowledgment, readiness checks, and controlled disbursement activation.
+* **Loan Servicing**: Salary Advance, UCL, and Collateral Loan share repayment, overdue evaluation and cure, contractual payoff, payment-backed Administrative Full-Balance Settlement, and separate administrative closure.
+* **Identity and Access Control**: JWT authentication, permission-based RBAC, Customer ownership checks, and purpose-limited cross-context contracts protect Customer and Staff operations.
+* **Transactional Safety**: Critical financial commands use atomic state changes, operation-specific request identities, semantic replay validation, and concurrency controls.
+* **Immutable Audit Trail**: Ordered lifecycle history and append-only, PII-safe business audit evidence preserve traceability.
+* **Sensitive Data Protection**: AES-GCM protects selected Customer-sensitive values and immutable Loan disbursement bank-account snapshots at rest, while purpose-limited access and restricted or masked responses limit PII exposure.
 
 ### User Roles
 
@@ -53,24 +54,22 @@ All three products participate in Meridian's common application, approval, contr
 | **Internal Design** | Hexagonal Architecture (Ports & Adapters) |
 | **Domain Modeling** | Domain-Driven Design (Bounded Contexts) |
 | **Dependency Direction** | Inward-only — Infrastructure adapters → Application ports/services → Domain |
-| **Boundary Enforcement** | Architecture documents define the intended module law. Current ArchUnit tests enforce core layer, security, and shared-kernel rules; broader public-surface, legal-dependency, and cycle enforcement remains planned hardening. |
+| **Boundary Enforcement** | Architecture documents define the intended module law. Current ArchUnit tests enforce core layer, security, and shared-kernel rules. |
 | **Module Communication** | Narrow public application contracts support synchronous collaboration. Transaction-aware coordination preserves atomic outcomes, while durable asynchronous delivery requires explicit retry, recovery, and idempotency. |
 | **Future Evolution** | Bounded contexts and published contracts preserve selective extraction options; services are extracted only when stable boundaries, scale, or operational ownership justify it |
 
 ### Complete Platform Architecture
 
-The diagram shows Meridian's complete intended platform architecture. The Roadmap distinguishes delivered components from planned components.
-
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                                   CLIENTS                                    │
-│         React/Vite Customer Portal  ·  Staff/Admin  ·  Mobile Experience     │
+│         React/Vite Customer Portal  ·  Staff/Admin  ·  Mobile (Future)       │
 └──────────────────────────────────────┬───────────────────────────────────────┘
                                        │ HTTPS
                                        ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                         API EDGE / SECURITY LAYER                            │
-│              Spring Security  ·  JWT (RS256)  ·  RBAC  ·  CORS              │
+│              Spring Security  ·  JWT (RS256)  ·  RBAC  ·  CORS               │
 └──────────────────────────────────────┬───────────────────────────────────────┘
                                        │
 ┌──────────────────────────────────────▼──────────────────────────────────────┐
@@ -87,9 +86,12 @@ The diagram shows Meridian's complete intended platform architecture. The Roadma
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │ Audit & Compliance Controls                                         │    │
+│  │ Append-only PII-safe audit evidence · Ordered lifecycle history     │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
-│       Public contracts  ·  Transaction-aware coordination  ·  Events       │
+│       Public contracts · Transaction-aware coordination · Events            │
+│       Spring Modulith transactional event-publication persistence           │
+│       Logging foundation · Actuator observability · ArchUnit                │
 └──────────────────────────────────────┬──────────────────────────────────────┘
                                        │
                   ┌────────────────────┼────────────────────┐
@@ -118,20 +120,19 @@ The diagram shows Meridian's complete intended platform architecture. The Roadma
 
 ## Technology Stack
 
-The stack combines the delivered lending backend with technologies selected for upcoming Meridian platform components. The Roadmap shows delivery status.
-
 ### Backend
 
-| Technology | Purpose |
-|---|---|
-| **Java 25** | LTS runtime with virtual threads and pattern matching |
-| **Spring Boot 4.1.0** | Application framework |
+| Technology | Purpose                                                                                    |
+|---|--------------------------------------------------------------------------------------------|
+| **Java 25** | LTS runtime with virtual threads and pattern matching                                      |
+| **Spring Boot 4.1.0** | Application framework                                                                      |
 | **Spring Modulith 2.1.0** | Module organization, observability support, and transactional event-publication persistence |
-| **Spring Security** | Authentication & authorization |
-| **Spring Data JPA / Hibernate** | Data persistence |
-| **Flyway** | Versioned database migrations |
-| **ArchUnit** | Executable fitness functions for core layer, security, and dependency rules |
-| **JWT (RS256)** | Access-token authentication with asymmetric signing |
+| **Spring Security** | Authentication & authorization                                                             |
+| **Spring Data JPA / Hibernate** | Data persistence                                                                           |
+| **Flyway** | Versioned database migrations                                                              |
+| **ArchUnit** | Executable fitness functions for core layer, security, and shared-kernel rules             |
+| **JWT (RS256)** | Stateless authentication with asymmetric signing                                         |
+| **Springdoc OpenAPI** | Generated OpenAPI documentation and Swagger UI for the backend API                         |
 
 ### Frontend
 
@@ -142,24 +143,24 @@ The stack combines the delivered lending backend with technologies selected for 
 
 ### OCR / Document Intelligence
 
-| Technology | Purpose |
-|---|---|
-| **Python + FastAPI** | Purpose-limited OCR service and asynchronous document-processing worker |
-| **Vietnamese TrOCR** | Advisory OCR-assisted extraction for uploaded documents |
+| Technology | Purpose                                                        |
+|---|----------------------------------------------------------------|
+| **Python + FastAPI** | OCR service and asynchronous document-processing worker        |
+| **Vietnamese TrOCR** | Advisory OCR-assisted extraction for uploaded documents        |
 
 ### Database
 
 | Technology | Purpose |
 |---|---|
-| **PostgreSQL** | Primary relational store for ACID transactions, concurrency control, durable event evidence, and planned OCR job coordination |
+| **PostgreSQL** | Primary relational store for ACID transactions, concurrency control, durable event publication, and asynchronous job queues (SKIP LOCKED) |
 
 ### Infrastructure
 
 | Technology | Purpose |
 |---|---|
-| **Docker Compose** | Local PostgreSQL environment; application containerization remains roadmap work |
-| **GitHub Actions** | Java 25 and Maven verification against PostgreSQL 16 |
-| **SLF4J + Logback** | Application logging foundation; structured JSON and correlation remain roadmap work |
+| **Docker Compose** | Local development and deployment |
+| **GitHub Actions** | CI pipeline (build, test, architecture verification) |
+| **SLF4J + Logback** | Structured JSON logging |
 
 ### Development Tools
 
@@ -171,8 +172,6 @@ The stack combines the delivered lending backend with technologies selected for 
 ---
 
 ## Roadmap
-
-Phase 1 establishes the multi-product lending backend and is substantially complete. The next delivery focus is OCR-assisted document processing and Customer, Staff, and administrative experiences.
 
 ### Phase 1 — Core Lending MVP
 
