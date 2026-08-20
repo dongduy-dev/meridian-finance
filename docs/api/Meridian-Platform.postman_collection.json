@@ -1,7 +1,7 @@
 {
     "info":  {
-                 "name":  "Meridian Platform API - Full Current Endpoint Test Collection",
-                 "description":  "JWT/RBAC Postman collection for all currently implemented Meridian backend endpoints.\n\nRecommended run order:\n1. Run the Auth folder to capture role-specific Bearer tokens.\n2. Run Public and Partner Admin requests.\n3. Run Customer Profile and Bank Accounts, then Customer Employee Verification, then Salary Advance Application.\n4. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n5. For UCL, prepare and accept the required evidence, enable uclOfferScenarioEnabled, then run the UCL verification-through-offer requests in order. Separate prepared fixture variables enable FAILED, REQUIRES_MORE_INFORMATION, correction/re-verification, cancellation, and outstanding-debt examples.\n6. For Collateral Loan, originate the application, use the returned ownership checklist item with the common upload/review/completion requests, enable collateralVerificationScenarioEnabled, then run the CP5 sequence through approval, exact offer and contract assertions, Customer acknowledgment, readiness, destination reveal, activation, replay, final schedule, partial repayment, history, exact settlement, and closure. Separate prepared fixture variables exercise the other Approver and offer-terminal outcomes.\n\nThe Salary Advance, UCL, and Collateral happy paths are duplicate-sensitive because the authenticated demo customer can have only one active application per product. Run them on a fresh local database, or reset test data before repeating a full happy-path flow.",
+                 "name":  "Meridian Platform API - v1 Scenario Collection",
+                 "description":  "JWT/RBAC Postman companion for the Meridian HTTP API v1 contract.\n\nRecommended run order:\n1. Run the Auth folder to capture role-specific Bearer tokens.\n2. Run Public and Partner Admin requests.\n3. Run Customer Profile and Bank Accounts, then Customer Employee Verification, then Salary Advance Application.\n4. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n5. For UCL, prepare and accept the required evidence, enable uclOfferScenarioEnabled, then run the UCL verification-through-offer requests in order. Separate prepared fixture variables enable FAILED, REQUIRES_MORE_INFORMATION, correction/re-verification, cancellation, and outstanding-debt examples.\n6. For Collateral Loan, originate the application, use the returned ownership checklist item with the common upload/review/completion requests, enable collateralVerificationScenarioEnabled, then run the lifecycle sequence through approval, exact offer and contract assertions, Customer acknowledgment, readiness, destination reveal, activation, replay, final schedule, partial repayment, history, exact settlement, and closure. Separate prepared fixture variables exercise the other Approver and offer-terminal outcomes.\n\nThe Salary Advance, UCL, and Collateral happy paths are duplicate-sensitive because the authenticated demo customer can have only one active application per product. Run them on a fresh local database, or reset test data before repeating a full happy-path flow.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "auth":  {
@@ -196,7 +196,7 @@
                          "key":  "collateralVerificationScenarioEnabled",
                          "value":  "false",
                          "type":  "string",
-                         "description":  "Set true after the required Collateral ownership evidence is accepted and the application is SUBMITTED to run CP5 through LoanAccount activation, partial repayment, history, exact settlement, and closure."
+                         "description":  "Set true after the required Collateral ownership evidence is accepted and the application is SUBMITTED to run the lifecycle through LoanAccount activation, partial repayment, history, exact settlement, and closure."
                      },
                      {
                          "key":  "collateralRejectApplicationId",
@@ -924,7 +924,7 @@
                                                       "auth":  {
                                                                    "type":  "noauth"
                                                                },
-                                                      "description":  "Captures approverAccessToken for future approval-decision endpoints.",
+                                                      "description":  "Captures approverAccessToken for approval-decision and settlement requests.",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "{\n  \"email\": \"{{approverEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
@@ -987,7 +987,7 @@
                                                       "auth":  {
                                                                    "type":  "noauth"
                                                                },
-                                                      "description":  "Captures accountingAccessToken for future disbursement endpoints.",
+                                                      "description":  "Captures accountingAccessToken for contract, disbursement, repayment, and closure requests.",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "{\n  \"email\": \"{{accountingOfficerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
@@ -1217,6 +1217,56 @@
                                                                                     "});",
                                                                                     "pm.test(\"Response is an array\", function () {",
                                                                                     "    pm.expect(pm.response.json()).to.be.an(\"array\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "GET /api/v1/loan-products/{productCode}",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/loan-products/SALARY_ADVANCE",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "loan-products",
+                                                                               "SALARY_ADVANCE"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "description":  "Returns one active public loan product by normalized product code."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Salary Advance product is returned\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.productCode).to.eql(\"SALARY_ADVANCE\");",
+                                                                                    "    pm.expect(json.active).to.eql(true);",
                                                                                     "});"
                                                                                 ]
                                                                    }
@@ -2496,17 +2546,17 @@
                               ]
                  },
                  {
-                     "name":  "05B Loan Application - Collateral Loan CP1 through CP5",
+                     "name":  "05B Loan Application - Collateral Loan",
                      "item":  [
                                   {
                                       "name":  "POST Collateral Loan application - happy path",
                                       "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/collateral-loan","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Creates one structured Collateral asset, one required ownership-evidence checklist item, and pending manual-verification evidence. Customer identity comes from the Bearer token. Use the returned checklist item with the existing document-version upload endpoint.","body":{"mode":"raw","raw":"{\n  \"requestedAmount\": 25000000,\n  \"requestedTermMonths\": 12,\n  \"collateral\": {\n    \"type\": \"MOTORBIKE\",\n    \"description\": \"2024 Honda motorbike\",\n    \"estimatedValue\": 35000000,\n    \"ownershipStatus\": \"Customer-provided ownership statement\",\n    \"conditionNote\": \"Normal used condition\"\n  }\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
-                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","const json = pm.response.json();","pm.test(\"Collateral CP1 foundation is returned\", () => { pm.expect(json.productCode).to.eql(\"COLLATERAL_LOAN\"); pm.expect(json.productType).to.eql(\"SECURED\"); pm.expect(json.status).to.eql(\"DOCUMENTS_PENDING\"); pm.expect(json.collateralType).to.eql(\"MOTORBIKE\"); pm.expect(json.productVerificationResult).to.eql(\"PENDING_MANUAL_REVIEW\"); pm.expect(json.evidenceRequirements).to.have.length(1); pm.expect(json.evidenceRequirements[0].documentType).to.eql(\"COLLATERAL_OWNERSHIP_EVIDENCE\"); pm.expect(json.evidenceRequirements[0].requirementStatus).to.eql(\"REQUIRED\"); });","pm.test(\"Response excludes Customer and internal evidence\", () => { [\"customerId\",\"collateralId\",\"verificationId\",\"auditId\"].forEach(key => pm.expect(json).not.to.have.property(key)); });","pm.collectionVariables.set(\"collateralLoanApplicationId\", json.loanApplicationId);","pm.collectionVariables.set(\"collateralOwnershipChecklistItemId\", json.evidenceRequirements[0].checklistItemId);","pm.collectionVariables.set(\"checklistItemId\", json.evidenceRequirements[0].checklistItemId);"]}}]
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","const json = pm.response.json();","pm.test(\"Collateral origination evidence is returned\", () => { pm.expect(json.productCode).to.eql(\"COLLATERAL_LOAN\"); pm.expect(json.productType).to.eql(\"SECURED\"); pm.expect(json.status).to.eql(\"DOCUMENTS_PENDING\"); pm.expect(json.collateralType).to.eql(\"MOTORBIKE\"); pm.expect(json.productVerificationResult).to.eql(\"PENDING_MANUAL_REVIEW\"); pm.expect(json.evidenceRequirements).to.have.length(1); pm.expect(json.evidenceRequirements[0].documentType).to.eql(\"COLLATERAL_OWNERSHIP_EVIDENCE\"); pm.expect(json.evidenceRequirements[0].requirementStatus).to.eql(\"REQUIRED\"); });","pm.test(\"Response excludes Customer and internal evidence\", () => { [\"customerId\",\"collateralId\",\"verificationId\",\"auditId\"].forEach(key => pm.expect(json).not.to.have.property(key)); });","pm.collectionVariables.set(\"collateralLoanApplicationId\", json.loanApplicationId);","pm.collectionVariables.set(\"collateralOwnershipChecklistItemId\", json.evidenceRequirements[0].checklistItemId);","pm.collectionVariables.set(\"checklistItemId\", json.evidenceRequirements[0].checklistItemId);"]}}]
                                   },
                                   {
                                       "name":  "POST Collateral Loan application - duplicate blocking check",
-                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/collateral-loan","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Run after the happy path to verify the Customer/product blocking invariant. CP1 does not add an outstanding Collateral LoanAccount guard.","body":{"mode":"raw","raw":"{\n  \"requestedAmount\": 25000000,\n  \"requestedTermMonths\": 12,\n  \"collateral\": {\n    \"type\": \"CAR\",\n    \"description\": \"Second submitted asset\",\n    \"estimatedValue\": 50000000,\n    \"ownershipStatus\": \"Customer-provided ownership statement\",\n    \"conditionNote\": \"Normal used condition\"\n  }\n}","options":{"raw":{"language":"json"}}}},
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/collateral-loan","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Run after the happy path to verify the Customer/product blocking invariant. Collateral origination does not add an outstanding Collateral LoanAccount guard.","body":{"mode":"raw","raw":"{\n  \"requestedAmount\": 25000000,\n  \"requestedTermMonths\": 12,\n  \"collateral\": {\n    \"type\": \"CAR\",\n    \"description\": \"Second submitted asset\",\n    \"estimatedValue\": 50000000,\n    \"ownershipStatus\": \"Customer-provided ownership statement\",\n    \"conditionNote\": \"Normal used condition\"\n  }\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.test(\"Duplicate application is blocked\", () => pm.expect(pm.response.json().errorCode).to.eql(\"BLOCKING_APPLICATION_EXISTS\"));"]}}]
                                   },
@@ -2530,7 +2580,7 @@
                                   },
                                   {
                                       "name":  "POST recommend Collateral approval",
-                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/review-recommendations","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Records the common positive recommendation and moves the verified Collateral application to APPROVAL_PENDING.","body":{"mode":"raw","raw":"{\n  \"action\": \"RECOMMEND_APPROVAL\",\n  \"reason\": \"Manual collateral verification and document review are complete.\",\n  \"internalNotes\": \"Prepared Collateral CP3 positive-path scenario.\"\n}","options":{"raw":{"language":"json"}}}},
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/review-recommendations","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Records the common positive recommendation and moves the verified Collateral application to APPROVAL_PENDING.","body":{"mode":"raw","raw":"{\n  \"action\": \"RECOMMEND_APPROVAL\",\n  \"reason\": \"Manual collateral verification and document review are complete.\",\n  \"internalNotes\": \"Prepared Collateral positive-path scenario.\"\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
                                       "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Recommendation belongs to the Collateral application\", () => pm.expect(pm.response.json().loanApplicationId).to.eql(pm.collectionVariables.get(\"collateralLoanApplicationId\")));"]}}]
                                   },

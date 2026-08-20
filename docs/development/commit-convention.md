@@ -2,7 +2,7 @@
 
 ## Format
 
-```
+```text
 <type>(<scope>): <subject>
 
 [optional body]
@@ -10,150 +10,138 @@
 [optional footer]
 ```
 
----
+Use `!` before the colon for a breaking change:
+
+```text
+feat(api)!: change the loan response contract
+```
+
+The scope is optional.
 
 ## Type Prefixes
 
-| Type | When to Use |
+| Type | Use |
 |---|---|
-| `feat` | New feature or capability |
-| `fix` | Bug fix |
-| `refactor` | Code restructuring with no behavior change |
+| `feat` | New behavior or capability |
+| `fix` | Defect correction |
+| `refactor` | Code restructuring without a behavior change |
 | `perf` | Performance improvement |
-| `docs` | Documentation only (README, Javadoc, comments) |
-| `test` | Adding or fixing tests |
-| `build` | Build system, dependencies, CI pipeline (Maven, Gradle, GitHub Actions) |
-| `ci` | CI configuration changes only |
-| `style` | Formatting, whitespace, semicolons — no logic change |
-| `chore` | Maintenance tasks (dependency bumps, tooling, config) |
-| `revert` | Reverting a previous commit |
-
----
+| `docs` | Documentation-only change |
+| `test` | Test addition or correction |
+| `build` | Build system, dependency wiring, or packaging change |
+| `ci` | CI workflow change |
+| `style` | Formatting-only change with no logic change |
+| `chore` | Repository or tooling maintenance not covered above |
+| `revert` | Reversal of an earlier commit |
 
 ## Scopes
 
-### Module Scopes
+A scope identifies the principal change area. It does not create or rename a bounded context.
 
-| Scope | Bounded Context |
-|---|---|
-| `loan` | Loan Origination |
-| `approval` | Approval Workflow |
-| `identity` | Identity & Access (auth, JWT, RBAC) |
-| `customer` | Customer Management |
-| `document` | Document Management |
-| `ocr` | OCR Processing |
-| `audit` | Audit & Compliance |
-| `notification` | Notification |
-| `risk` | Risk Assessment |
-
-### Cross-Cutting Scopes
+### Context and Module Scopes
 
 | Scope | Area |
 |---|---|
-| `shared` | Shared kernel (base entities, Money VO, domain events) |
-| `security` | Security infrastructure (JWT filter, encryption) |
-| `api` | API layer (global error handling, response format, versioning) |
-| `db` | Database (Flyway migrations, schema changes) |
+| `identity` | Users, authentication, JWT, roles, permissions, and Spring Security |
+| `customer` | Customer profile, readiness, protected identity evidence, and bank accounts |
+| `partner` | Partner Companies, employee imports, Partner Employees, and employment links |
+| `loan` | All three lending products, application workflow, offers, contracts, activation, and servicing |
+| `approval` | Loan Officer recommendations and Approver decisions |
+| `document` | Checklists, document versions, storage, review, waiver, and replacement |
+| `audit` | Append-only business audit persistence |
+
+`shared` is a technical package scope, not a bounded context. `notification` may be used only for a change to the existing placeholder/future notification area.
+
+Salary Advance, UCL, and Collateral are product behaviors inside `loan`; they are not module scopes. OCR is a planned Document capability, not a top-level module. Risk Assessment is not a Meridian bounded context.
+
+### Technical and Change-Area Scopes
+
+| Scope | Area |
+|---|---|
+| `shared` | Narrow shared contracts and cross-cutting infrastructure |
+| `security` | Cross-cutting security or protection configuration |
+| `api` | HTTP contract, global web behavior, or Postman scenarios |
+| `db` | Flyway migrations, physical schema, or schema snapshot |
 | `config` | Application configuration |
-| `docker` | Docker / Docker Compose |
-| `ci` | CI/CD pipeline |
+| `build` | Maven wrapper, packaging, or build configuration |
+| `ci` | GitHub Actions and CI behavior |
 | `deps` | Dependency updates |
-| `ui` | Frontend / React |
+| `docs` | Cross-document structure or documentation tooling |
 
-### Omit scope when the change is truly global:
-```
-chore: update .gitignore
-docs: add architecture decision records
-```
+A narrower pragmatic scope is acceptable when it makes the commit easier to understand, provided the PR explains the area and the name does not misrepresent Meridian's architecture.
 
----
+Omit the scope when the change is genuinely repository-wide:
+
+```text
+chore: update gitignore rules
+docs: align Meridian documentation
+```
 
 ## Subject Rules
 
-- Imperative mood (command form)
-- Lowercase first letter
-- No period at the end
-- Max 50 characters
-- Describe the outcome rather than implementation details.
+- Use imperative mood.
+- Start with a lowercase letter.
+- Do not end with a period.
+- Keep the subject at or below 50 characters when a clear subject fits.
+- Describe the outcome rather than a low-level edit.
 
----
+## Body
 
-## Body (Optional)
+Use a body when the reason, invariant, or compatibility effect is not clear from the subject. Wrap prose at approximately 72 characters.
 
-Use when the **why** isn't obvious from the subject. Wrap at 72 characters.
+```text
+fix(loan): preserve repayment replay outcome
 
-```
-feat(loan): add idempotency check for loan submissions
-
-Loan submissions through the REST API were vulnerable to duplicate
-processing on network retries. This adds Idempotency-Key header
-validation using the shared IdempotencyService, storing keys in
-PostgreSQL with a 24-hour TTL.
-
-Financial operations must be idempotent per our architecture rules.
+Repayment replay must return the durable first outcome even after later
+payments change the LoanAccount. Keep requestId reuse detection separate
+from the immutable operation result.
 ```
 
----
+Meridian uses command-specific request UUID fields where a workflow defines replay behavior. Do not describe a generic `Idempotency-Key` header or shared idempotency service unless the HTTP contract and source actually introduce one.
 
-## Footer (Optional)
+## Footer
 
-| Footer | Usage |
+| Footer | Use |
 |---|---|
-| `BREAKING CHANGE: <description>` | API or behavior breaking changes |
-| `Closes #123` | Links to GitHub issue |
-| `Refs #456` | References related issue without closing |
+| `BREAKING CHANGE: <description>` | Describe a breaking API or behavior change |
+| `Closes #123` | Close an issue when the commit/PR completes it |
+| `Refs #456` | Link related work without closing it |
 
-```
-feat(api)!: change loan response schema to v2 format
+```text
+feat(api)!: change approved-offer response fields
 
-BREAKING CHANGE: LoanApplicationDto now uses Money value object
-instead of raw BigDecimal for amount fields. All API consumers
-must update their deserialization.
+BREAKING CHANGE: approved-offer responses rename the repayment item field.
 
-Closes #42
+Refs #123
 ```
 
-> The `!` after the scope is a shorthand for `BREAKING CHANGE`.
+## Examples
 
----
-
-## Real-World Examples
-
-### Features
-```
-feat(loan): add loan application state machine
-feat(approval): add multi-level approval chain
-```
-
-### Bug Fixes
-```
-fix(loan): prevent state transition from DISBURSED to DRAFT
-fix(db): fix flyway migration checksum mismatch on V3
+```text
+feat(loan): add collateral verification cycle
+fix(document): reject stale version review
+fix(db): add forward repair for policy terms
+docs(api): document repayment replay behavior
+test(customer): cover bank-account concealment
+ci: verify backend with Java 25
 ```
 
-### Documentation
-```
-docs: update readme with corrected roadmap
-docs(loan): add javadoc to loan application aggregate
-```
+Revert commits identify the reverted subject and explain why when the reason is not obvious:
 
-### Reverts
-```
-revert: revert "feat(approval): add auto-escalation on timeout"
+```text
+revert: revert "perf(db): add application queue index"
 
-This reverts commit a1b2c3d. Auto-escalation caused approval loops
-when managers were unavailable. Needs redesign.
+This reverts commit a1b2c3d because the index regressed the production-shaped
+queue query. A replacement needs query-plan evidence.
 ```
 
----
+## Flyway Migration Discipline
 
-## Database Migration & Rollback Strategy
+Meridian uses forward-only Flyway migrations.
 
-Meridian follows a forward-only migration strategy using Flyway.
-
-- Never modify a migration that has already been applied.
-- Never delete migration files from version control.
-- Schema changes must be introduced through new versioned migrations.
-- Production rollbacks should be performed through a new migration that restores the desired state rather than editing or reverting existing migrations.
-- Destructive operations (dropping columns or tables) should only occur after the application code no longer depends on them and has been deployed in a previous release.
----
+- Never modify, rename, or delete a migration that has entered shared or deployed history.
+- Introduce a schema correction through a new versioned migration.
+- A feature-branch migration may be amended before merge only when it has not entered shared history and the branch context is confirmed.
+- Roll back a deployed schema behavior through a new migration that restores the desired state.
+- Remove a column or table only after the application no longer depends on it and the rollout sequence is safe.
+- Keep JPA mappings, persistence tests, and `MER-DB-CURRENT-SCHEMA.sql` aligned with the resulting physical schema.
