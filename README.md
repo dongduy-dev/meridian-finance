@@ -24,7 +24,7 @@ All three products use Meridian's common application, approval, contract, activa
 
 * **Common Lending Lifecycle**: A shared `LoanApplication` lifecycle coordinates submission, verification, review, approval, Customer response, contract readiness, disbursement, and `LoanAccount` activation.
 * **Document and OCR-Assisted Processing**: Document owns document checklists, uploads, immutable versions, review, replacement, waiver, and processing readiness. OCR-assisted processing remains advisory, while authorized Document review remains authoritative.
-* **Review Correction, and Approval**: Loan owns application review and correction workflows. Loan Officers record recommendations, while Approvers make independent decisions under maker-checker controls.
+* **Review, Correction, and Approval**: Loan owns application review and correction workflows. Loan Officers record recommendations, while Approvers make independent decisions under maker-checker controls.
 * **Offers, Contracts, and Disbursement**: Loan preserves accepted lending terms through immutable offers, versioned contracts, Customer acknowledgment, readiness checks, and controlled disbursement activation.
 * **Loan Servicing**: Salary Advance, UCL, and Collateral Loan share repayment, overdue evaluation and cure, contractual payoff, payment-backed Administrative Full-Balance Settlement, and separate administrative closure.
 * **Identity and Access Control**: JWT authentication, permission-based RBAC, Customer ownership checks, and purpose-limited cross-context contracts protect Customer and Staff operations.
@@ -89,6 +89,10 @@ All three products use Meridian's common application, approval, contract, activa
 │  │ Append-only PII-safe audit evidence · Ordered lifecycle history     │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ Notification · Templates · Delivery requests · Channels · Status    │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
 │       Public contracts · Transaction-aware coordination · Events            │
 │       Spring Modulith transactional event-publication persistence           │
 │       Logging foundation · Actuator observability · ArchUnit                │
@@ -115,6 +119,7 @@ All three products use Meridian's common application, approval, contract, activa
 | **Approval Workflow** | Immutable Loan Officer recommendations, independent Approver decisions, decision authority, and maker-checker evidence. |
 | **Document Management** | Checklists, uploads, immutable versions, manual document review, readiness, storage, and advisory OCR-assisted processing. |
 | **Audit & Compliance Controls** | Append-only, PII-safe evidence of important business actions and compliance-oriented history. |
+| **Notification** | Message templates, notification requests, channel selection, delivery attempts, delivery status, retry policy, and Customer or Staff communication preferences. |
 
 ---
 
@@ -131,7 +136,7 @@ All three products use Meridian's common application, approval, contract, activa
 | **Spring Data JPA / Hibernate** | Data persistence                                                                           |
 | **Flyway** | Versioned database migrations                                                              |
 | **ArchUnit** | Executable fitness functions for core layer, security, and shared-kernel rules             |
-| **JWT (RS256)** | Stateless authentication with asymmetric signing                                         |
+| **JWT (RS256)** | Access-token authentication with asymmetric signing                                      |
 | **Springdoc OpenAPI** | Generated OpenAPI documentation and Swagger UI for the backend API                         |
 
 ### Frontend
