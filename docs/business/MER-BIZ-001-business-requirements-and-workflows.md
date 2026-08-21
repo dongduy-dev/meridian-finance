@@ -365,7 +365,7 @@ Correction decisions require a controlled reason. When both Customer and Staff m
 
 Approval and approved-offer generation must complete as one controlled operation. The application must not remain permanently `APPROVED` without Customer-visible approved terms.
 
-For Collateral Loan, the authoritative latest manual-verification cycle must remain `VERIFIED` when the Approver acts. All four common actions are available. `APPROVE` generates the exact-request offer defined in Section 11.4; `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` use the common lifecycle and reason requirements without creating an offer.
+For Collateral Loan, the authoritative latest manual-verification cycle must remain `VERIFIED` when the Approver acts. All four common actions are available. `APPROVE` generates the exact-request offer defined in Section 11.5; `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` use the common lifecycle and reason requirements without creating an offer.
 
 ### 6.7 Approved Offer and Customer Response
 
@@ -590,40 +590,13 @@ Salary Advance excludes automated payroll deduction and real employer, payroll, 
 
 Unsecured Consumer Loan is a streamlined document-based product. It requires income and employment evidence but no collateral.
 
-Required evidence is defined in Section 11.3. Loan purpose may be an optional product-policy field or document.
+Required evidence is defined in Section 11.4. Loan purpose may be an optional product-policy field or document.
 
 The common blocking-application rule applies. Separately, a matching `ACTIVE` or `OVERDUE` UCL `LoanAccount` with positive contractual outstanding blocks new UCL creation or correction resubmission. Product-matching `SETTLED` or `CLOSED` accounts with zero outstanding do not block, unrelated products do not satisfy the UCL outstanding-account guard, and inconsistent account/status/outstanding evidence fails closed. See `BR-004` and `BR-020B`.
 
 A Customer may cancel an owned UCL only from `RETURNED_FOR_REVISION`. Cancellation terminalizes the active correction and application without creating, releasing, converting, or otherwise changing product exposure. Salary Advance cancellation retains its exact reservation-release behavior.
 
-#### UCL Financial Policy
-
-UCL uses exact-request approval. The approved principal and term equal the submitted requested amount and term; the Approver cannot create a counteroffer or edit either value. Supported terms are exactly 3, 6, 9, and 12 months.
-
-The active default policy uses `FLAT_ORIGINAL_PRINCIPAL` interest at a monthly rate of `0.018000`, zero fee, `MONTHLY_INSTALLMENT` repayment, and seven-calendar-day offer validity. Pricing is:
-
-```text
-approvedPrincipal = submitted requested amount
-approvedTermMonths = submitted requested term
-unroundedTotalInterest = approvedPrincipal × 0.018 × approvedTermMonths
-totalInterest = round(unroundedTotalInterest, whole VND, HALF_UP)
-feeAmount = 0 VND
-totalRepaymentAmount = approvedPrincipal + totalInterest
-```
-
-The immutable offer contains one provisional repayment item per approved term month and no calendar due dates. Principal and total interest are each divided into equal whole-VND base portions; any remainder is assigned only to the final item. Every item has zero fee, and item totals must reconcile exactly to the offer principal, interest, fee, and total repayment.
-
-An accepted UCL offer is the exact financial authority for its operational contract. Contract preparation copies the accepted principal, term, pricing method, monthly rate, fee, repayment method, totals, and provisional items without repricing or recomputation. It captures the Customer's current eligible primary active bank account through the common purpose-protected contract destination mechanism. A contract may be regenerated only for `DISBURSEMENT_ACCOUNT_REFRESH`; regeneration supersedes the prior version, preserves every financial term and item, captures the newly eligible destination, and requires fresh Customer acknowledgment.
-
-UCL contract readiness requires the accepted offer, acknowledgment of the exact current contract, processing-ready documents, no active correction, an active Customer, a valid captured destination, and the authoritative latest application-owned UCL verification cycle in `VERIFIED`. UCL readiness and activation do not read, reserve, convert, release, or create Salary Advance limit or movement evidence. Readiness confirmation moves the contract to `READY_FOR_DISBURSEMENT` and the application to `DISBURSEMENT_PENDING` without activating a LoanAccount.
-
-At later manual disbursement, the controlled `firstRepaymentDate` must be after the disbursement value date and no later than one calendar month after it. The first installment uses that date. Later installments use its day-of-month as the monthly anchor; when a month does not contain that day, its final calendar day applies.
-
-Manual-disbursement confirmation atomically creates the UCL LoanAccount, immutable disbursement evidence, one authoritative final monthly schedule, initial installment progress and histories, and the `DISBURSED` application transition. The final schedule copies the contract amounts and item sequence exactly and adds only the controlled calendar dates. UCL activation has no product-exposure effect.
-
-For example, a January 30 first repayment date produces January 30, February 28 or 29, March 30, April 30, and the same anchored sequence thereafter.
-
-Early or partial payment does not reprice the loan, rebate future interest, regenerate the schedule, mutate contractual due dates, or reduce contractual interest. Allocation follows the common `FEE → INTEREST → PRINCIPAL` order. Date-driven evaluation moves a UCL LoanAccount between `ACTIVE` and `OVERDUE`, and payment may cure an overdue account. Full contractual payoff requires the complete contractual outstanding and moves the account to `SETTLED`. Administrative Full-Balance Settlement is backed by payment of that exact complete outstanding and is not a discount, concession, forgiveness, waiver, or repricing event. UCL repayment and Administrative Full-Balance Settlement report contractual principal allocation while releasing zero product exposure and creating no Salary Advance movement. A fully reconciled `SETTLED` account may then be closed administratively without changing the `DISBURSED` LoanApplication.
+UCL financial policy is defined in Section 11.3.
 
 End-to-end workflow:
 
@@ -912,7 +885,7 @@ These values define Meridian's portfolio and test configuration. They do not rep
 
 For Salary Advance, the term is both the approved month count and the number of provisional repayment items.
 
-The UCL and Collateral Loan rates and installment rules are executable business policies as defined in Sections 7.2 and 11.4.
+The UCL and Collateral Loan rates and installment rules are executable business policies as defined in Sections 11.3 and 11.5.
 
 ### 11.2 Salary Advance Policy Values
 
@@ -966,7 +939,36 @@ sum(item.feeDue) = 0 VND
 sum(item.totalDue) = totalRepaymentAmount
 ```
 
-### 11.3 LoanApplication Checklist Evidence by Product
+### 11.3 Unsecured Consumer Loan Policy Values
+
+UCL uses exact-request approval. The approved principal and term equal the submitted requested amount and term; the Approver cannot create a counteroffer or edit either value. Supported terms are exactly 3, 6, 9, and 12 months.
+
+The active default policy uses `FLAT_ORIGINAL_PRINCIPAL` interest at a monthly rate of `0.018000`, zero fee, `MONTHLY_INSTALLMENT` repayment, and seven-calendar-day offer validity. Pricing is:
+
+```text
+approvedPrincipal = submitted requested amount
+approvedTermMonths = submitted requested term
+unroundedTotalInterest = approvedPrincipal × 0.018 × approvedTermMonths
+totalInterest = round(unroundedTotalInterest, whole VND, HALF_UP)
+feeAmount = 0 VND
+totalRepaymentAmount = approvedPrincipal + totalInterest
+```
+
+The immutable offer contains one provisional repayment item per approved term month and no calendar due dates. Principal and total interest are each divided into equal whole-VND base portions; any remainder is assigned only to the final item. Every item has zero fee, and item totals must reconcile exactly to the offer principal, interest, fee, and total repayment.
+
+An accepted UCL offer is the exact financial authority for its operational contract. Contract preparation copies the accepted principal, term, pricing method, monthly rate, fee, repayment method, totals, and provisional items without repricing or recomputation. It captures the Customer's current eligible primary active bank account through the common purpose-protected contract destination mechanism. A contract may be regenerated only for `DISBURSEMENT_ACCOUNT_REFRESH`; regeneration supersedes the prior version, preserves every financial term and item, captures the newly eligible destination, and requires fresh Customer acknowledgment.
+
+UCL contract readiness requires the accepted offer, acknowledgment of the exact current contract, processing-ready documents, no active correction, an active Customer, a valid captured destination, and the authoritative latest application-owned UCL verification cycle in `VERIFIED`. UCL readiness and activation do not read, reserve, convert, release, or create Salary Advance limit or movement evidence. Readiness confirmation moves the contract to `READY_FOR_DISBURSEMENT` and the application to `DISBURSEMENT_PENDING` without activating a LoanAccount.
+
+At later manual disbursement, the controlled `firstRepaymentDate` must be after the disbursement value date and no later than one calendar month after it. The first installment uses that date. Later installments use its day-of-month as the monthly anchor; when a month does not contain that day, its final calendar day applies.
+
+Manual-disbursement confirmation atomically creates the UCL LoanAccount, immutable disbursement evidence, one authoritative final monthly schedule, initial installment progress and histories, and the `DISBURSED` application transition. The final schedule copies the contract amounts and item sequence exactly and adds only the controlled calendar dates. UCL activation has no product-exposure effect.
+
+For example, a January 30 first repayment date produces January 30, February 28 or 29, March 30, April 30, and the same anchored sequence thereafter.
+
+Early or partial payment does not reprice the loan, rebate future interest, regenerate the schedule, mutate contractual due dates, or reduce contractual interest. Allocation follows the common `FEE → INTEREST → PRINCIPAL` order. Date-driven evaluation moves a UCL LoanAccount between `ACTIVE` and `OVERDUE`, and payment may cure an overdue account. Full contractual payoff requires the complete contractual outstanding and moves the account to `SETTLED`. Administrative Full-Balance Settlement is backed by payment of that exact complete outstanding and is not a discount, concession, forgiveness, waiver, or repricing event. UCL repayment and Administrative Full-Balance Settlement report contractual principal allocation while releasing zero product exposure and creating no Salary Advance movement. A fully reconciled `SETTLED` account may then be closed administratively without changing the `DISBURSED` LoanApplication.
+
+### 11.4 LoanApplication Checklist Evidence by Product
 
 This table defines product-specific LoanApplication checklist evidence. Customer readiness in Section 6.1 and the contract-bound destination in Sections 6.8 and 6.9 remain separate controls.
 
@@ -978,7 +980,7 @@ This table defines product-specific LoanApplication checklist evidence. Customer
 
 Product policy determines which evidence must exist before submission and which may be introduced through correction.
 
-### 11.4 Collateral Loan Policy Values
+### 11.5 Collateral Loan Policy Values
 
 | Policy Item | Value |
 |---|---|
@@ -1011,7 +1013,7 @@ At later manual disbursement, the controlled first repayment date must be after 
 
 Early or partial payment does not reprice the loan, rebate future interest, regenerate the schedule, mutate contractual due dates, or reduce contractual interest. Full contractual payoff and Administrative Full-Balance Settlement require the exact complete contractual outstanding. Collateral Loan introduces no product-specific activation or closure control beyond the common lifecycle.
 
-### 11.5 Offer Validity
+### 11.6 Offer Validity
 
 The default offer-validity period is seven calendar days and is configurable by product.
 
@@ -1079,7 +1081,7 @@ OCR remains advisory to Document review. Notification remains observational and 
 
 ### 13.4 Collateral Loan Boundary Guard
 
-Section 11.4 is the authority for Collateral Loan pricing, provisional installments, final schedule dates, and payment behavior. Those policies do not introduce automated loan-to-value assessment, a counteroffer, discounted settlement, custody, valuation, enforcement, more than one Collateral asset, or an outstanding Collateral LoanAccount origination restriction. Each capability requires a separately approved business policy before it enters the MVP boundary.
+Section 11.5 is the authority for Collateral Loan pricing, provisional installments, final schedule dates, and payment behavior. Those policies do not introduce automated loan-to-value assessment, a counteroffer, discounted settlement, custody, valuation, enforcement, more than one Collateral asset, or an outstanding Collateral LoanAccount origination restriction. Each capability requires a separately approved business policy before it enters the MVP boundary.
 
 ### 13.5 Post-MVP Product Extensions
 
