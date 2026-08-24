@@ -54,14 +54,25 @@ import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerEmploy
 import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerEmployeeImportBatchController;
 import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerEmployeeVerificationController;
 import com.meridian.platform.shared.infrastructure.web.HealthController;
+import com.meridian.platform.shared.infrastructure.web.OpenApiConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springdoc.core.configuration.SpringDocConfiguration;
+import org.springdoc.core.properties.SpringDocConfigProperties;
+import org.springdoc.core.properties.SwaggerUiConfigProperties;
+import org.springdoc.core.properties.SwaggerUiOAuthProperties;
+import org.springdoc.webmvc.core.configuration.SpringDocWebMvcConfiguration;
+import org.springdoc.webmvc.ui.SwaggerConfig;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -74,10 +85,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = {
@@ -100,15 +114,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         PartnerEmployeeImportBatchController.class,
         PartnerEmployeeVerificationController.class
 })
+@ImportAutoConfiguration({
+        SpringDocConfiguration.class,
+        SpringDocConfigProperties.class,
+        SpringDocWebMvcConfiguration.class,
+        SwaggerConfig.class,
+        SwaggerUiConfigProperties.class,
+        SwaggerUiOAuthProperties.class
+})
 @Import({
         SecurityConfig.class,
         JwtAuthenticationFilter.class,
         SecurityErrorResponseWriter.class,
         MeridianAuthenticationEntryPoint.class,
-        MeridianAccessDeniedHandler.class
+        MeridianAccessDeniedHandler.class,
+        OpenApiConfig.class
 })
+@TestPropertySource(properties = "meridian.web.cors.allowed-origins=https://frontend.meridian.test")
 class SecurityConfigTest {
 
+    private static final String CONFIGURED_FRONTEND_ORIGIN = "https://frontend.meridian.test";
+    private static final String DISALLOWED_FRONTEND_ORIGIN = "https://untrusted.example";
     private static final UUID PARTNER_COMPANY_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID LINK_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
     private static final UUID LOAN_APPLICATION_ID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -178,6 +204,68 @@ class SecurityConfigTest {
 
     @MockitoBean
     private ManageOwnCustomerBankAccountUseCase manageOwnCustomerBankAccountUseCase;
+
+    @Test
+    void keepsOpenApiAndSwaggerUiPublic() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
+
+        mockMvc.perform(get("/swagger-ui.html"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/swagger-ui/index.html"));
+
+        mockMvc.perform(get("/swagger-ui/index.html"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void generatesMeridianMetadataAndBearerJwtSecurityScheme() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title").value("Meridian Lending Platform API"))
+                .andExpect(jsonPath("$.info.version").value("v1"))
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.bearerFormat").value("JWT"))
+                .andExpect(jsonPath("$.security[0].bearerAuth").isArray());
+    }
+
+    @Test
+    void allowsCorsPreflightFromConfiguredFrontendOrigin() throws Exception {
+        mockMvc.perform(options("/api/v1/customers/me")
+                        .header(HttpHeaders.ORIGIN, CONFIGURED_FRONTEND_ORIGIN)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.GET.name())
+                        .header(
+                                HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS,
+                                "Authorization, Content-Type, X-Request-ID"
+                        ))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, CONFIGURED_FRONTEND_ORIGIN))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, "GET,POST,PUT,OPTIONS"))
+                .andExpect(header().string(
+                        HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
+                        "Authorization, Content-Type, X-Request-ID"
+                ));
+    }
+
+    @Test
+    void exposesRequestIdToConfiguredFrontendOrigin() throws Exception {
+        mockMvc.perform(get("/api/v1/health")
+                        .header(HttpHeaders.ORIGIN, CONFIGURED_FRONTEND_ORIGIN))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, CONFIGURED_FRONTEND_ORIGIN))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, "X-Request-ID"));
+    }
+
+    @Test
+    void deniesCorsAccessToDisallowedOrigin() throws Exception {
+        mockMvc.perform(options("/api/v1/customers/me")
+                        .header(HttpHeaders.ORIGIN, DISALLOWED_FRONTEND_ORIGIN)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.GET.name()))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
 
     @Test
     void keepsVersionedHealthEndpointPublic() throws Exception {
