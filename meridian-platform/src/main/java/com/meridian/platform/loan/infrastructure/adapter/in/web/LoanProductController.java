@@ -2,6 +2,7 @@ package com.meridian.platform.loan.infrastructure.adapter.in.web;
 
 import com.meridian.platform.loan.application.dto.LoanProductDto;
 import com.meridian.platform.loan.application.port.in.QueryLoanProductUseCase;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,11 +21,13 @@ public class LoanProductController {
     }
 
     @GetMapping
+    @SecurityRequirements
     public List<LoanProductDto> getLoanProducts() {
         return queryLoanProductUseCase.findActiveLoanProducts();
     }
 
     @GetMapping("/{productCode}")
+    @SecurityRequirements
     public LoanProductDto getLoanProduct(@PathVariable String productCode) {
         return queryLoanProductUseCase.findByProductCode(productCode);
     }

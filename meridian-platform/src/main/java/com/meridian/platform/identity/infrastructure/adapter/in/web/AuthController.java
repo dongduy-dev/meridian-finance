@@ -3,6 +3,7 @@ package com.meridian.platform.identity.infrastructure.adapter.in.web;
 import com.meridian.platform.identity.application.dto.AuthResponse;
 import com.meridian.platform.identity.application.dto.LoginRequest;
 import com.meridian.platform.identity.application.port.in.AuthenticationUseCase;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,6 +21,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
+    @SecurityRequirements
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         return authenticationUseCase.login(request);
     }

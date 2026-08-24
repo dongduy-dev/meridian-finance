@@ -27,6 +27,8 @@ Public endpoints:
 - `POST /api/v1/auth/login`
 - `GET /api/v1/loan-products`
 - `GET /api/v1/loan-products/{productCode}`
+- `GET /v3/api-docs`
+- `GET /swagger-ui.html` and `/swagger-ui/**`
 
 All other endpoints require:
 
@@ -103,6 +105,12 @@ The contractual destination-reveal operation is the sole v1 JSON endpoint permit
 Every response includes `X-Request-ID` as transport correlation for the HTTP request. A caller may supply a canonical UUID in this header; Meridian returns that UUID. When the header is absent or malformed, Meridian generates and returns a new UUID without rejecting the business request.
 
 `X-Request-ID` does not provide idempotency and does not replace operation-specific request UUIDs such as `requestId`, `uploadRequestId`, or `reviewRequestId`. Those fields retain their operation-specific replay and conflict semantics.
+
+### 1.8 OpenAPI, Swagger UI, and browser origins
+
+`GET /v3/api-docs` returns the generated OpenAPI definition. `GET /swagger-ui.html` redirects to the Swagger UI entry under `/swagger-ui/`. The definition identifies the API as `Meridian Lending Platform API` version `v1` and declares stateless JWT access through the HTTP Bearer scheme named `bearerAuth`. The public operations listed in section 1.2 do not require that scheme.
+
+Meridian grants cross-origin browser access only to the explicit origins configured by `MERIDIAN_FRONTEND_ALLOWED_ORIGINS`; the local-development default is `http://localhost:5173`. The CORS policy allows `GET`, `POST`, `PUT`, and preflight `OPTIONS` requests with `Accept`, `Authorization`, `Content-Type`, and `X-Request-ID`. Responses expose `X-Request-ID` so browser clients can read the transport correlation identifier. A disallowed origin receives no CORS grant, and CORS does not change endpoint authentication or permission requirements.
 
 ---
 

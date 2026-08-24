@@ -192,6 +192,7 @@ All three products use Meridian's common application, approval, contract, activa
 - [x] Startup replay and recovery for incomplete event publications
 - [x] Application containerization and a complete local Compose environment with persistent PostgreSQL and Document storage
 - [x] Structured JSON logging with request and business correlation
+- [x] Generated OpenAPI documentation, Swagger UI, and explicit frontend CORS configuration
 
 ### Phase 2 — OCR-Assisted Document Processing
 
@@ -269,7 +270,7 @@ Docker is the only runtime prerequisite for the local Compose path. Compose buil
 2. Copy `.env.example` to `.env`.
 3. Set `POSTGRES_PASSWORD` and the three Base64-encoded key values in `.env`.
 4. Run `docker compose up --build`.
-5. Verify `http://localhost:8080/api/v1/health`.
+5. Verify `http://localhost:8080/api/v1/health`, `http://localhost:8080/v3/api-docs`, and `http://localhost:8080/swagger-ui.html`.
 
 Generate each local key with one of these commands and run the selected command three times:
 
@@ -282,6 +283,8 @@ openssl rand -base64 32
 ```
 
 `MERIDIAN_CUSTOMER_ENCRYPTION_KEY` and `MERIDIAN_LOAN_DISBURSEMENT_SNAPSHOT_KEYS_LOCAL` must each decode to exactly 32 bytes. `MERIDIAN_CUSTOMER_FINGERPRINT_KEY` must decode to at least 32 bytes. The local disbursement-snapshot active key ID is `local`, and `MERIDIAN_LOAN_DISBURSEMENT_SNAPSHOT_KEYS_LOCAL` supplies that key-ring entry.
+
+`MERIDIAN_FRONTEND_ALLOWED_ORIGINS` accepts a comma-separated list of explicit frontend origins and defaults to `http://localhost:5173`. Wildcard origins are rejected.
 
 `.env` contains local secrets and must not be committed.
 
