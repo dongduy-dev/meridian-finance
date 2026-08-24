@@ -18,8 +18,10 @@ import com.meridian.platform.customer.application.port.in.UpdateOwnCustomerProfi
 import com.meridian.platform.customer.infrastructure.adapter.in.web.CustomerBankAccountController;
 import com.meridian.platform.customer.infrastructure.adapter.in.web.CustomerProfileController;
 import com.meridian.platform.identity.application.dto.AuthResponse;
+import com.meridian.platform.identity.application.dto.AuthenticationResult;
 import com.meridian.platform.identity.application.port.in.AuthenticationUseCase;
 import com.meridian.platform.identity.infrastructure.adapter.in.web.AuthController;
+import com.meridian.platform.identity.infrastructure.adapter.in.web.RefreshTokenCookieService;
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionOutcome;
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionResult;
 import com.meridian.platform.loan.application.dto.ApprovedOfferDto;
@@ -128,6 +130,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         SecurityErrorResponseWriter.class,
         MeridianAuthenticationEntryPoint.class,
         MeridianAccessDeniedHandler.class,
+        RefreshTokenCookieService.class,
         OpenApiConfig.class
 })
 @TestPropertySource(properties = "meridian.web.cors.allowed-origins=https://frontend.meridian.test")
@@ -246,7 +249,8 @@ class SecurityConfigTest {
                 .andExpect(header().string(
                         HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
                         "Authorization, Content-Type, X-Request-ID"
-                ));
+                ))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
     }
 
     @Test
@@ -285,17 +289,7 @@ class SecurityConfigTest {
     @Test
     void keepsLoginAndLoanProductCatalogPublic() throws Exception {
         when(queryLoanProductUseCase.findActiveLoanProducts()).thenReturn(List.of());
-        when(authenticationUseCase.login(any())).thenReturn(new AuthResponse(
-                "Bearer",
-                "access-token",
-                Instant.now().plusSeconds(3600),
-                UUID.fromString("00000000-0000-0000-0000-000000000301"),
-                "customer.demo@meridian.local",
-                "CUSTOMER",
-                UUID.fromString("99999999-9999-9999-9999-999999999999"),
-                Set.of("CUSTOMER"),
-                Set.of("loan:submit")
-        ));
+        when(authenticationUseCase.login(any())).thenReturn(authenticationResult("access-token", "refresh-token"));
 
         mockMvc.perform(get("/api/v1/loan-products"))
                 .andExpect(status().isOk())
@@ -311,7 +305,34 @@ class SecurityConfigTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.accessToken").value("access-token"));
+                .andExpect(jsonPath("$.accessToken").value("access-token"))
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                .andExpect(header().string(
+                        HttpHeaders.SET_COOKIE,
+                        org.hamcrest.Matchers.allOf(
+                                org.hamcrest.Matchers.containsString("MERIDIAN_REFRESH_TOKEN=refresh-token"),
+                                org.hamcrest.Matchers.containsString("Path=/api/v1/auth/refresh"),
+                                org.hamcrest.Matchers.containsString("Max-Age=604800"),
+                                org.hamcrest.Matchers.containsString("HttpOnly"),
+                                org.hamcrest.Matchers.containsString("SameSite=Strict")
+                        )
+                ));
+    }
+
+    @Test
+    void keepsRefreshPublicAtBearerLayerAndAllowsCredentialedCors() throws Exception {
+        when(authenticationUseCase.refresh("refresh-token"))
+                .thenReturn(authenticationResult("rotated-access-token", "rotated-refresh-token"));
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .cookie(new jakarta.servlet.http.Cookie("MERIDIAN_REFRESH_TOKEN", "refresh-token"))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer stale-access-token")
+                        .header(HttpHeaders.ORIGIN, CONFIGURED_FRONTEND_ORIGIN))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, CONFIGURED_FRONTEND_ORIGIN))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
+                .andExpect(jsonPath("$.accessToken").value("rotated-access-token"))
+                .andExpect(jsonPath("$.refreshToken").doesNotExist());
     }
 
     @Test
@@ -905,6 +926,26 @@ class SecurityConfigTest {
                 null,
                 availableActions,
                 List.of()
+        );
+    }
+
+    private static AuthenticationResult authenticationResult(String accessToken, String refreshToken) {
+        Instant issuedAt = Instant.parse("2026-08-24T00:00:00Z");
+        return new AuthenticationResult(
+                new AuthResponse(
+                        "Bearer",
+                        accessToken,
+                        issuedAt.plusSeconds(3600),
+                        UUID.fromString("00000000-0000-0000-0000-000000000301"),
+                        "customer.demo@meridian.local",
+                        "CUSTOMER",
+                        UUID.fromString("99999999-9999-9999-9999-999999999999"),
+                        Set.of("CUSTOMER"),
+                        Set.of("loan:submit")
+                ),
+                refreshToken,
+                issuedAt,
+                issuedAt.plusSeconds(604800)
         );
     }
 }

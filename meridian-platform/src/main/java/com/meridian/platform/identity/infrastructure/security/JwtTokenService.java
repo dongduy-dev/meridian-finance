@@ -84,6 +84,7 @@ public class JwtTokenService implements TokenIssuerPort {
                 + "\"customerId\":" + nullableJsonString(user.customerId()) + ","
                 + "\"roles\":" + stringArrayJson(user.roles()) + ","
                 + "\"permissions\":" + stringArrayJson(user.permissions()) + ","
+                + "\"jti\":\"" + UUID.randomUUID() + "\","
                 + "\"iat\":" + issuedAt.getEpochSecond() + ","
                 + "\"exp\":" + expiresAt.getEpochSecond()
                 + "}";

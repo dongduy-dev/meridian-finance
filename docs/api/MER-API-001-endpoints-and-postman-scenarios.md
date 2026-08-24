@@ -25,22 +25,24 @@ Public endpoints:
 
 - `GET /api/v1/health`
 - `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
 - `GET /api/v1/loan-products`
 - `GET /api/v1/loan-products/{productCode}`
 - `GET /v3/api-docs`
 - `GET /swagger-ui.html` and `/swagger-ui/**`
 
-All other endpoints require:
+All endpoints outside login, refresh, and the other public operations require:
 
 ```text
 Authorization: Bearer <accessToken>
 ```
 
-Meridian uses stateless Bearer authentication. HTTP Basic, form login, server sessions, refresh-token endpoints, and logout endpoints are not part of v1.
+Meridian uses stateless Bearer access authentication. Login creates an opaque refresh token in an HttpOnly cookie, and the refresh endpoint authenticates through that cookie without requiring a Bearer token. HTTP Basic, form login, server sessions, and logout endpoints are not part of v1.
 
 | Failure | Response |
 |---|---|
 | Missing or invalid authentication | `401 AUTHENTICATION_REQUIRED` |
+| Missing, invalid, expired, revoked, or reused refresh token | `401 INVALID_REFRESH_TOKEN` |
 | Authenticated actor lacks permission | `403 ACCESS_DENIED` |
 
 Customer-facing operations derive `customerId` from the authenticated principal. Staff actor IDs are likewise token-derived and are not accepted in recommendation, decision, review, disbursement, or repayment request bodies.
@@ -94,7 +96,7 @@ An identical logical replay returns the original result without another business
 
 ### 1.6 Sensitive-data boundary
 
-Outside the login response, JSON responses do not expose passwords or access tokens. Public and Customer-facing responses must not expose unrestricted identity evidence, Partner salary evidence, full bank-account numbers, cryptographic envelope fields, document storage metadata, restricted Staff notes, external transfer/payment references, or internal audit/history identifiers.
+Outside the login and refresh responses, JSON responses do not expose passwords or access tokens. Refresh-token values never appear in JSON. Public and Customer-facing responses must not expose unrestricted identity evidence, Partner salary evidence, full bank-account numbers, cryptographic envelope fields, document storage metadata, restricted Staff notes, external transfer/payment references, or internal audit/history identifiers.
 
 Authorized Staff endpoints return only the restricted operational fields defined for their contracts. Partner employee reads may return employment and salary evidence to callers with `partner:read`; recommendation and decision responses may return their own actor and internal-note fields to the authorized Staff caller. Product-verification completion responses never return the reviewer or restricted assessment note.
 
@@ -110,7 +112,7 @@ Every response includes `X-Request-ID` as transport correlation for the HTTP req
 
 `GET /v3/api-docs` returns the generated OpenAPI definition. `GET /swagger-ui.html` redirects to the Swagger UI entry under `/swagger-ui/`. The definition identifies the API as `Meridian Lending Platform API` version `v1` and declares stateless JWT access through the HTTP Bearer scheme named `bearerAuth`. The public operations listed in section 1.2 do not require that scheme.
 
-Meridian grants cross-origin browser access only to the explicit origins configured by `MERIDIAN_FRONTEND_ALLOWED_ORIGINS`; the local-development default is `http://localhost:5173`. The CORS policy allows `GET`, `POST`, `PUT`, and preflight `OPTIONS` requests with `Accept`, `Authorization`, `Content-Type`, and `X-Request-ID`. Responses expose `X-Request-ID` so browser clients can read the transport correlation identifier. A disallowed origin receives no CORS grant, and CORS does not change endpoint authentication or permission requirements.
+Meridian grants credentialed cross-origin browser access only to the explicit origins configured by `MERIDIAN_FRONTEND_ALLOWED_ORIGINS`; the local-development default is `http://localhost:5173`. The CORS policy allows credentials plus `GET`, `POST`, `PUT`, and preflight `OPTIONS` requests with `Accept`, `Authorization`, `Content-Type`, and `X-Request-ID`. Responses expose `X-Request-ID` so browser clients can read the transport correlation identifier. A disallowed origin receives no CORS grant, wildcard origins are rejected, and CORS does not change endpoint authentication or permission requirements.
 
 ---
 
@@ -121,7 +123,8 @@ Meridian grants cross-origin browser access only to the explicit origins configu
 | Method | Path | Authorization | Summary |
 |---|---|---|---|
 | GET | `/api/v1/health` | Public | Return versioned health status. |
-| POST | `/api/v1/auth/login` | Public | Authenticate and return Bearer-token actor facts. |
+| POST | `/api/v1/auth/login` | Public | Authenticate, return Bearer-token actor facts, and create the refresh cookie. |
+| POST | `/api/v1/auth/refresh` | Public at the Bearer layer; refresh cookie required | Rotate the refresh token and return a fresh access token. |
 | GET | `/api/v1/loan-products` | Public | List active loan products. |
 | GET | `/api/v1/loan-products/{productCode}` | Public | Return one active loan product by code. |
 | GET | `/api/v1/customers/me` | `customer:profile:read:own` | Return the authenticated Customer’s safe profile-readiness view. |
@@ -192,6 +195,10 @@ Meridian grants cross-origin browser access only to the explicit origins configu
 
 ### 3.1 Login
 
+```text
+POST /api/v1/auth/login
+```
+
 ```json
 {
   "email": "customer.demo@meridian.local",
@@ -213,7 +220,22 @@ Successful response fields:
 
 `customerId` may be `null` for Staff principals.
 
-### 3.2 Loan-product catalogue
+Successful login also sets `MERIDIAN_REFRESH_TOKEN` as an HttpOnly cookie. The cookie is not part of the JSON response. Its path is `/api/v1/auth/refresh`, `SameSite` is `Strict`, its maximum age matches the configured refresh-token lifetime, and `Secure` is controlled by `MERIDIAN_REFRESH_TOKEN_COOKIE_SECURE`. Deployed HTTPS environments must set that flag to `true`; the local HTTP default is `false`.
+
+### 3.2 Refresh access
+
+```text
+POST /api/v1/auth/refresh
+Cookie: MERIDIAN_REFRESH_TOKEN=<opaque-refresh-token>
+```
+
+The endpoint accepts no request body and does not require a Bearer token. Meridian locks the refresh-token session, verifies that it is unconsumed, unrevoked, and unexpired, reloads the associated active User and current RBAC grants, consumes the presented token, and creates one replacement in the same family. The response uses the same JSON fields as login and replaces the refresh cookie. Each replacement receives the full configured inactivity lifetime from its rotation time.
+
+Only a SHA-256 digest of the cryptographically random refresh token is persisted. The raw refresh token, digest, session identity, family identity, and replacement relationship are not returned in JSON or errors.
+
+Missing, unknown, expired, revoked, or otherwise invalid refresh state returns `401 INVALID_REFRESH_TOKEN`. Reusing a consumed token also returns that safe error and revokes the active token family, requiring a new login. Competing refresh requests with one token cannot both succeed.
+
+### 3.3 Loan-product catalogue
 
 ```text
 GET /api/v1/loan-products
@@ -224,7 +246,7 @@ Both reads are public. The collection read returns active products; the item rea
 
 An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A recognized code with no active product returns `404 PRODUCT_NOT_FOUND`.
 
-### 3.3 Customer profile
+### 3.4 Customer profile
 
 ```json
 {
@@ -241,7 +263,7 @@ An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A recognized code with no 
 
 The safe Customer response contains `customerId`, `customerNumber`, Customer `status`, `verificationStatus`, `profileCompletionStatus`, `primaryActiveBankAccountPresent`, and the profile fields shown above except `identityReference`. Duplicate normalized identity evidence owned by another Customer returns `409 IDENTITY_REFERENCE_ALREADY_IN_USE` without echoing the submitted value.
 
-### 3.4 Customer bank accounts
+### 3.5 Customer bank accounts
 
 ```json
 {
@@ -254,11 +276,11 @@ The safe Customer response contains `customerId`, `customerNumber`, Customer `st
 
 The account number is normalized by removing spaces and hyphens and must contain at least six normalized characters. List, add, make-primary, and deactivate responses contain the account ID, bank code/name, account-holder name, masked account number, last four characters, status, primary flag, and lifecycle timestamps. They never return the full account number, ciphertext, fingerprint, or protection metadata.
 
-### 3.5 Partner staff reads
+### 3.6 Partner staff reads
 
 The Partner Company, employee, and import-batch reads require `partner:read`. Partner Company responses include the configured Salary Advance policy limit. Partner Employee responses include employee code, identity reference, salary amount, Salary Advance limit, employment status, active state, company identity, and import-batch identity. These are restricted Staff contracts and must not be reused as Customer response shapes. Import-batch responses contain company identity, effective month, status, and valid/invalid row counts.
 
-### 3.6 Employee verification
+### 3.7 Employee verification
 
 ```json
 {

@@ -27,6 +27,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 401 | `INVALID_CREDENTIALS` | Invalid credentials | Check the username and password |
 | 401 | `TOKEN_EXPIRED` | Token expired | Log in again to obtain a new access token |
 | 401 | `INVALID_TOKEN` | Invalid token | Log in again to obtain a valid access token |
+| 401 | `INVALID_REFRESH_TOKEN` | Refresh authentication failed | Log in again to create a new refresh-token family |
 | 403 | `ACCOUNT_SUSPENDED` | Account suspended | Contact support to review the account status |
 | 403 | `ACCESS_DENIED` | Access denied | Use a principal whose role includes the required permission |
 | 403 | `CUSTOMER_CONTEXT_REQUIRED` | Customer context required | Use an authenticated customer-linked token for a customer-owned flow |

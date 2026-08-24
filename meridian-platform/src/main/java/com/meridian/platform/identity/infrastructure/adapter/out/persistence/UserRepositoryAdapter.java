@@ -40,8 +40,25 @@ public class UserRepositoryAdapter implements UserRepository {
             return Optional.empty();
         }
 
-        UserRow row = rows.get(0);
-        return Optional.of(new User(
+        return Optional.of(toDomain(rows.get(0)));
+    }
+
+    @Override
+    public Optional<User> findById(UUID userId) {
+        List<UserRow> rows = jdbcTemplate.query(
+                """
+                        SELECT id, email, password_hash, user_type, status, display_name, customer_id
+                        FROM users
+                        WHERE id = ?
+                        """,
+                (resultSet, rowNum) -> mapUserRow(resultSet),
+                userId
+        );
+        return rows.stream().findFirst().map(this::toDomain);
+    }
+
+    private User toDomain(UserRow row) {
+        return new User(
                 row.id(),
                 row.email(),
                 row.passwordHash(),
@@ -51,7 +68,7 @@ public class UserRepositoryAdapter implements UserRepository {
                 row.customerId(),
                 findRoles(row.id()),
                 findPermissions(row.id())
-        ));
+        );
     }
 
     private Set<String> findRoles(UUID userId) {

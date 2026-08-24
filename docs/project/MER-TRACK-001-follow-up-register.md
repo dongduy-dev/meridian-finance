@@ -323,12 +323,12 @@ Type: Deferred feature
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocking: No current blocker.
 
-Recommendation:
-Implement refresh token rotation after access-token-only JWT foundation is stable.
+Outcome:
+Identity persists only SHA-256 refresh-token digests, rotates one locked token into one replacement, and revokes the active family when a consumed token is reused. The raw token remains confined to the HttpOnly refresh cookie.
 
 Suggested future branch name:
 `feature/iam-refresh-token-rotation`
