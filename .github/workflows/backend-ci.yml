@@ -52,3 +52,6 @@ jobs:
           SPRING_DATASOURCE_USERNAME: meridian_test
           SPRING_DATASOURCE_PASSWORD: meridian_test
         run: ./mvnw -B verify
+
+      - name: Build application container
+        run: docker build --tag meridian-platform:ci .

@@ -161,11 +161,11 @@ All three products use Meridian's common application, approval, contract, activa
 
 ### Infrastructure
 
-| Technology | Purpose |
-|---|---|
-| **Docker Compose** | Local development and deployment |
+| Technology | Purpose                                              |
+|---|------------------------------------------------------|
+| **Docker Compose** | Local application and PostgreSQL environment         |
 | **GitHub Actions** | CI pipeline (build, test, architecture verification) |
-| **SLF4J + Logback** | Structured JSON logging |
+| **SLF4J + Logback** | Structured JSON logging                              |
 
 ### Development Tools
 
@@ -190,7 +190,7 @@ All three products use Meridian's common application, approval, contract, activa
 - [x] Collateral Loan lifecycle through structured facts, ownership evidence, numbered verification, document-only correction, exact-request pricing, activation, servicing, closure, and zero Salary Advance exposure
 - [x] JWT/RBAC, command-specific idempotency, transactional and concurrency controls, Flyway/PostgreSQL persistence, Spring Modulith event publication, and GitHub Actions verification
 - [x] Startup replay and recovery for incomplete event publications
-- [ ] Application containerization and a complete local Compose environment; PostgreSQL Compose support exists
+- [x] Application containerization and a complete local Compose environment with persistent PostgreSQL and Document storage
 - [ ] Structured JSON logging with request and business correlation
 
 ### Phase 2 — OCR-Assisted Document Processing
@@ -258,6 +258,34 @@ shared · identity · customer · partner · loan · approval · document · aud
 ```
 
 `shared` is a technical shared kernel, not a bounded context. Feature modules use Meridian's Practical Hexagonal Architecture with only the packages each module needs. [MER-ARCH-002](docs/architecture/MER-ARCH-002-project-structure.md) defines source and package structure; [MER-ARCH-003](docs/architecture/MER-ARCH-003-dependency-rules.md) defines legal dependencies and architecture enforcement.
+
+---
+
+## Local Docker Compose
+
+Docker is the only runtime prerequisite for the local Compose path. Compose builds Meridian with the Maven wrapper, starts PostgreSQL 16, runs Flyway through normal Spring Boot startup, and persists PostgreSQL and Document filesystem data in named volumes.
+
+1. Change to `meridian-platform`.
+2. Copy `.env.example` to `.env`.
+3. Set `POSTGRES_PASSWORD` and the three Base64-encoded key values in `.env`.
+4. Run `docker compose up --build`.
+5. Verify `http://localhost:8080/api/v1/health`.
+
+Generate each local key with one of these commands and run the selected command three times:
+
+```bash
+openssl rand -base64 32
+```
+
+```powershell
+[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+```
+
+`MERIDIAN_CUSTOMER_ENCRYPTION_KEY` and `MERIDIAN_LOAN_DISBURSEMENT_SNAPSHOT_KEYS_LOCAL` must each decode to exactly 32 bytes. `MERIDIAN_CUSTOMER_FINGERPRINT_KEY` must decode to at least 32 bytes. The local disbursement-snapshot active key ID is `local`, and `MERIDIAN_LOAN_DISBURSEMENT_SNAPSHOT_KEYS_LOCAL` supplies that key-ring entry.
+
+`.env` contains local secrets and must not be committed.
+
+Stop the stack with `docker compose down`. This preserves the named PostgreSQL and Document volumes. Adding `-v` deletes both local data volumes and should be reserved for an intentionally disposable environment.
 
 ---
 
