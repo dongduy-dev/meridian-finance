@@ -98,6 +98,12 @@ Authorized Staff endpoints return only the restricted operational fields defined
 
 The contractual destination-reveal operation is the sole v1 JSON endpoint permitted to return the full immutable disbursement account number.
 
+### 1.7 Request correlation
+
+Every response includes `X-Request-ID` as transport correlation for the HTTP request. A caller may supply a canonical UUID in this header; Meridian returns that UUID. When the header is absent or malformed, Meridian generates and returns a new UUID without rejecting the business request.
+
+`X-Request-ID` does not provide idempotency and does not replace operation-specific request UUIDs such as `requestId`, `uploadRequestId`, or `reviewRequestId`. Those fields retain their operation-specific replay and conflict semantics.
+
 ---
 
 ## 2. Endpoint Catalogue

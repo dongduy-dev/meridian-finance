@@ -191,7 +191,7 @@ All three products use Meridian's common application, approval, contract, activa
 - [x] JWT/RBAC, command-specific idempotency, transactional and concurrency controls, Flyway/PostgreSQL persistence, Spring Modulith event publication, and GitHub Actions verification
 - [x] Startup replay and recovery for incomplete event publications
 - [x] Application containerization and a complete local Compose environment with persistent PostgreSQL and Document storage
-- [ ] Structured JSON logging with request and business correlation
+- [x] Structured JSON logging with request and business correlation
 
 ### Phase 2 — OCR-Assisted Document Processing
 
