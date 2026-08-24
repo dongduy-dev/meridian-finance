@@ -10,7 +10,7 @@ import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimit;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimit;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;

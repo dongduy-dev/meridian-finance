@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyRepository;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceOfferPolicy;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.springframework.stereotype.Repository;
 

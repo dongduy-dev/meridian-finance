@@ -1,5 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.service.salaryadvance.SalaryAdvanceReservationReleaseService;
+
 import com.meridian.platform.loan.application.port.in.CancelLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationCancellationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
@@ -16,10 +18,10 @@ import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
-import com.meridian.platform.loan.domain.model.ReservationReleaseTrigger;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovement;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
+import com.meridian.platform.loan.domain.model.salaryadvance.ReservationReleaseTrigger;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovement;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovementType;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceVerification;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvidenceReader;

@@ -1,5 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.service.unsecured.UnsecuredConsumerLoanRepaymentPolicy;
+
 import com.meridian.platform.loan.application.port.in.QueryRepaymentsUseCase;
 import com.meridian.platform.loan.application.port.out.LoanAccountRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;

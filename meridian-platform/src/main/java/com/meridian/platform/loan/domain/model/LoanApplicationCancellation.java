@@ -1,5 +1,7 @@
 package com.meridian.platform.loan.domain.model;
 
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovement;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovementType;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 
 import java.time.LocalDateTime;

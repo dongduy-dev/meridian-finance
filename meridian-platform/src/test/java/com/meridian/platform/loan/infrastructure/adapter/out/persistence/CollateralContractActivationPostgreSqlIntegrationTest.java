@@ -33,9 +33,9 @@ import com.meridian.platform.loan.application.port.in.RevealDisbursementDestinat
 import com.meridian.platform.loan.application.port.in.StartCollateralLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.out.CollateralLoanVerificationRepository;
-import com.meridian.platform.loan.domain.model.CollateralLoanManualVerificationOutcome;
-import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
-import com.meridian.platform.loan.domain.model.CollateralType;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanManualVerificationOutcome;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanVerification;
+import com.meridian.platform.loan.domain.model.collateral.CollateralType;
 import com.meridian.platform.loan.domain.model.ContractReadinessBlockerCode;
 import com.meridian.platform.loan.domain.model.ContractSupersessionReason;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;

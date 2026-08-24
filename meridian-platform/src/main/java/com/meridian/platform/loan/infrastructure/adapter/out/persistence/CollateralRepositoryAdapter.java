@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.application.port.out.CollateralRepository;
-import com.meridian.platform.loan.domain.model.Collateral;
+import com.meridian.platform.loan.domain.model.collateral.Collateral;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;

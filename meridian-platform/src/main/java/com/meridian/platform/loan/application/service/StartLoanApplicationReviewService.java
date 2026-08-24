@@ -1,5 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.service.collateral.CollateralLoanReviewGate;
+
 import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
@@ -10,7 +12,7 @@ import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
 import com.meridian.platform.loan.domain.model.ProductCode;
-import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanVerification;
+import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanVerification;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;

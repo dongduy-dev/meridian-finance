@@ -7,8 +7,8 @@ import com.meridian.platform.loan.application.port.out.ManualDisbursementReposit
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimit;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimit;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitStatus;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;

@@ -56,7 +56,7 @@ import com.meridian.platform.loan.domain.model.LoanContract;
 import com.meridian.platform.loan.domain.model.LoanContractStatus;
 import com.meridian.platform.loan.domain.model.ContractSupersessionReason;
 import com.meridian.platform.loan.domain.model.RepaymentMethod;
-import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanManualVerificationOutcome;
+import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanManualVerificationOutcome;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;

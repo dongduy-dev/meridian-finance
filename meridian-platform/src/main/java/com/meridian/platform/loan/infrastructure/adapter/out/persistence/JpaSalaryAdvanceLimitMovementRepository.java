@@ -1,6 +1,6 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovementType;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;

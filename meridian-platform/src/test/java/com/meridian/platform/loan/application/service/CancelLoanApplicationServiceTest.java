@@ -1,5 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.service.salaryadvance.SalaryAdvanceReservationReleaseService;
+
 import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
 import com.meridian.platform.loan.application.port.in.CancelLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationCancellationRepository;
@@ -17,10 +19,10 @@ import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceEmployeeVerificationOutcome;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovement;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceEmployeeVerificationOutcome;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovement;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovementType;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceVerification;
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvidenceReader;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -144,7 +146,7 @@ class CancelLoanApplicationServiceTest {
         verify(reservationReleases).releaseReservationOnce(
                 eq(application),
                 any(),
-                eq(com.meridian.platform.loan.domain.model.ReservationReleaseTrigger.CUSTOMER_CANCELLATION)
+                eq(com.meridian.platform.loan.domain.model.salaryadvance.ReservationReleaseTrigger.CUSTOMER_CANCELLATION)
         );
         verify(transitionRecorder).record(any(), any(), eq("CUSTOMER_CANCELLATION"));
         verify(auditPublisher).publish(any());

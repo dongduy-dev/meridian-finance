@@ -1,5 +1,8 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.service.collateral.CollateralLoanApprovalExecutionGuard;
+import com.meridian.platform.loan.application.service.salaryadvance.SalaryAdvanceReservationReleaseService;
+
 import com.meridian.platform.loan.application.dto.ApplyApprovalDecisionCommand;
 import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.in.ApplyApprovalDecisionUseCase;
@@ -10,19 +13,19 @@ import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyRepository;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanOfferPolicyRepository;
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
-import com.meridian.platform.loan.domain.model.CollateralLoanOfferPolicy;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanOfferPolicy;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionFact;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
 import com.meridian.platform.loan.domain.model.LoanApprovalDecisionAction;
 import com.meridian.platform.loan.domain.model.ProductCode;
-import com.meridian.platform.loan.domain.model.ReservationReleaseTrigger;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
-import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanOfferPolicy;
-import com.meridian.platform.loan.domain.service.CollateralLoanOfferCalculator;
-import com.meridian.platform.loan.domain.service.SalaryAdvanceOfferCalculator;
-import com.meridian.platform.loan.domain.service.UnsecuredConsumerLoanOfferCalculator;
+import com.meridian.platform.loan.domain.model.salaryadvance.ReservationReleaseTrigger;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceOfferPolicy;
+import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanOfferPolicy;
+import com.meridian.platform.loan.domain.service.collateral.CollateralLoanOfferCalculator;
+import com.meridian.platform.loan.domain.service.salaryadvance.SalaryAdvanceOfferCalculator;
+import com.meridian.platform.loan.domain.service.unsecured.UnsecuredConsumerLoanOfferCalculator;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;

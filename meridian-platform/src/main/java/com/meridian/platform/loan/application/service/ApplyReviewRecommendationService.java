@@ -1,5 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.service.collateral.CollateralLoanReviewGate;
+
 import com.meridian.platform.loan.application.dto.ApplyReviewRecommendationCommand;
 import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.in.ApplyReviewRecommendationUseCase;

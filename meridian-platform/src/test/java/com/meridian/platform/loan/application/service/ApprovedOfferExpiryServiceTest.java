@@ -1,5 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.service.salaryadvance.SalaryAdvanceReservationReleaseService;
+
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
@@ -16,14 +18,14 @@ import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
 import com.meridian.platform.loan.domain.model.RepaymentMethod;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceEmployeeVerificationOutcome;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimit;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovement;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
-import com.meridian.platform.loan.domain.service.SalaryAdvanceOfferCalculator;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceEmployeeVerificationOutcome;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimit;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovement;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovementType;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitStatus;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceOfferPolicy;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceVerification;
+import com.meridian.platform.loan.domain.service.salaryadvance.SalaryAdvanceOfferCalculator;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;

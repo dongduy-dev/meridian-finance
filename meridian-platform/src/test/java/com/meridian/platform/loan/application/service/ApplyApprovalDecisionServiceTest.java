@@ -1,5 +1,9 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.service.collateral.CollateralLoanApprovalExecutionGuard;
+import com.meridian.platform.loan.application.service.collateral.CollateralLoanReviewGate;
+import com.meridian.platform.loan.application.service.salaryadvance.SalaryAdvanceReservationReleaseService;
+
 import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
 import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
 import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
@@ -20,9 +24,9 @@ import com.meridian.platform.loan.application.port.out.SalaryAdvanceOfferPolicyR
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanOfferPolicyRepository;
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
-import com.meridian.platform.loan.domain.model.CollateralLoanManualVerificationOutcome;
-import com.meridian.platform.loan.domain.model.CollateralLoanOfferPolicy;
-import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanManualVerificationOutcome;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanOfferPolicy;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanVerification;
 import com.meridian.platform.loan.domain.model.InterestCalculationMethod;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
@@ -33,14 +37,14 @@ import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
 import com.meridian.platform.loan.domain.model.RepaymentMethod;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceEmployeeVerificationOutcome;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimit;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovement;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitMovementType;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceOfferPolicy;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
-import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanOfferPolicy;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceEmployeeVerificationOutcome;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimit;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovement;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovementType;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitStatus;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceOfferPolicy;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceVerification;
+import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanOfferPolicy;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;

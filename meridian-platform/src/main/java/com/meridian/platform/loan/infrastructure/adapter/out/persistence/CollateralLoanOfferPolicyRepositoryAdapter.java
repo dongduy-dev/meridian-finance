@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.application.port.out.CollateralLoanOfferPolicyRepository;
-import com.meridian.platform.loan.domain.model.CollateralLoanOfferPolicy;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanOfferPolicy;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.springframework.stereotype.Repository;
 

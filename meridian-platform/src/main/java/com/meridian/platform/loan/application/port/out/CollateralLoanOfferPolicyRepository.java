@@ -1,6 +1,6 @@
 package com.meridian.platform.loan.application.port.out;
 
-import com.meridian.platform.loan.domain.model.CollateralLoanOfferPolicy;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanOfferPolicy;
 
 import java.util.Optional;
 

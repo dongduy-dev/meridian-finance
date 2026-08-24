@@ -1,17 +1,19 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.service.collateral.CollateralLoanReviewGate;
+
 import com.meridian.platform.loan.application.port.out.CollateralLoanVerificationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
-import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
-import com.meridian.platform.loan.domain.model.CollateralLoanManualVerificationOutcome;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanVerification;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanManualVerificationOutcome;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
-import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanVerification;
+import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanVerification;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;

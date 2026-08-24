@@ -3,7 +3,7 @@ package com.meridian.platform.loan.application.dto;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
 import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
-import com.meridian.platform.loan.domain.model.CollateralLoanManualVerificationOutcome;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanManualVerificationOutcome;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanOfferPolicyRepository;
-import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanOfferPolicy;
+import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanOfferPolicy;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.springframework.stereotype.Repository;
 

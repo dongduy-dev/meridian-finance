@@ -36,8 +36,8 @@ import com.meridian.platform.loan.application.port.in.QueryOwnCorrectionTasksUse
 import com.meridian.platform.loan.application.port.in.ResubmitOwnCorrectionUseCase;
 import com.meridian.platform.loan.application.port.in.StartCollateralLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
-import com.meridian.platform.loan.domain.model.CollateralLoanManualVerificationOutcome;
-import com.meridian.platform.loan.domain.model.CollateralType;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanManualVerificationOutcome;
+import com.meridian.platform.loan.domain.model.collateral.CollateralType;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;

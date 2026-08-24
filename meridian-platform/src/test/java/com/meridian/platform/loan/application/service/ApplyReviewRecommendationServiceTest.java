@@ -1,5 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.service.collateral.CollateralLoanReviewGate;
+
 import com.meridian.platform.loan.application.dto.ApplyReviewRecommendationCommand;
 import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
 import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
@@ -13,8 +15,8 @@ import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
-import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
-import com.meridian.platform.loan.domain.model.CollateralLoanManualVerificationOutcome;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanVerification;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanManualVerificationOutcome;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;

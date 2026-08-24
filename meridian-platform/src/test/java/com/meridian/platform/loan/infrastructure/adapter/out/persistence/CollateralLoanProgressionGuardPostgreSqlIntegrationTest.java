@@ -16,7 +16,7 @@ import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseC
 import com.meridian.platform.loan.application.service.ApplyApprovalDecisionService;
 import com.meridian.platform.loan.application.service.ApplyReviewRecommendationService;
 import com.meridian.platform.loan.application.service.StartLoanApplicationReviewService;
-import com.meridian.platform.loan.domain.model.CollateralType;
+import com.meridian.platform.loan.domain.model.collateral.CollateralType;
 import com.meridian.platform.loan.domain.model.LoanApprovalDecisionAction;
 import com.meridian.platform.loan.domain.model.LoanReviewRecommendationAction;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
