@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceVerification;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;

@@ -1,6 +1,6 @@
 package com.meridian.platform.loan.application.port.out;
 
-import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanOfferPolicy;
+import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanOfferPolicy;
 
 import java.util.Optional;
 

@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimit;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimit;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

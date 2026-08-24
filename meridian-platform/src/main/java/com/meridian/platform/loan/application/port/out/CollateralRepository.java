@@ -1,6 +1,6 @@
 package com.meridian.platform.loan.application.port.out;
 
-import com.meridian.platform.loan.domain.model.Collateral;
+import com.meridian.platform.loan.domain.model.collateral.Collateral;
 
 import java.util.List;
 import java.util.UUID;

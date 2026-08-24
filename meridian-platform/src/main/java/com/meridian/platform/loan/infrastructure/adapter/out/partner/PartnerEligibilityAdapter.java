@@ -2,8 +2,8 @@ package com.meridian.platform.loan.infrastructure.adapter.out.partner;
 
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityPort;
 import com.meridian.platform.loan.application.port.out.PartnerEligibilityAssessment;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceEmployeeVerificationOutcome;
-import com.meridian.platform.loan.domain.model.VerifiedPartnerEmployeeLinkSnapshot;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceEmployeeVerificationOutcome;
+import com.meridian.platform.loan.domain.model.salaryadvance.VerifiedPartnerEmployeeLinkSnapshot;
 import com.meridian.platform.partner.application.port.in.QueryCustomerPartnerEmployeeLinkUseCase;
 import org.springframework.stereotype.Component;
 

@@ -1,6 +1,6 @@
 package com.meridian.platform.loan.application.port.out;
 
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimit;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimit;
 
 import java.util.Optional;
 import java.util.UUID;

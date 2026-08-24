@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
-import com.meridian.platform.loan.domain.model.Collateral;
-import com.meridian.platform.loan.domain.model.CollateralType;
+import com.meridian.platform.loan.domain.model.collateral.Collateral;
+import com.meridian.platform.loan.domain.model.collateral.CollateralType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

@@ -5,7 +5,7 @@ import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicati
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicationRequest;
 import com.meridian.platform.loan.application.port.in.StartUnsecuredConsumerLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
-import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanVerification;
+import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanVerification;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;

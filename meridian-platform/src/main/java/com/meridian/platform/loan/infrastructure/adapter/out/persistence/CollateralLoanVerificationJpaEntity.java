@@ -1,6 +1,6 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
-import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanVerification;
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

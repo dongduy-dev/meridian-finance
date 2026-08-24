@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceLimit;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimit;
 import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Repository;
 

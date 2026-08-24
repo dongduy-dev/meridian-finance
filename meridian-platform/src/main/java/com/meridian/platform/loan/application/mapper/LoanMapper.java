@@ -6,12 +6,12 @@ import com.meridian.platform.loan.application.dto.SalaryAdvanceApplicationDto;
 import com.meridian.platform.loan.application.dto.SubmissionEvidenceRequirementDto;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicationDto;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
-import com.meridian.platform.loan.domain.model.Collateral;
-import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
+import com.meridian.platform.loan.domain.model.collateral.Collateral;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanVerification;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanProduct;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceApplicationCreationResult;
-import com.meridian.platform.loan.domain.model.UnsecuredConsumerLoanVerification;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceApplicationCreationResult;
+import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanVerification;
 import org.springframework.stereotype.Component;
 
 @Component

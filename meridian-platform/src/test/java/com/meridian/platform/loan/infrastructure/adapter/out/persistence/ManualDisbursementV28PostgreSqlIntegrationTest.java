@@ -9,7 +9,7 @@ import com.meridian.platform.loan.application.port.out.RepaymentScheduleReposito
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
 import com.meridian.platform.loan.application.service.LoanProductActivationPolicy;
-import com.meridian.platform.loan.application.service.SalaryAdvanceLoanActivationPolicy;
+import com.meridian.platform.loan.application.service.salaryadvance.SalaryAdvanceLoanActivationPolicy;
 import com.meridian.platform.loan.domain.model.LoanAccount;
 import com.meridian.platform.loan.domain.model.LoanAccountStatus;
 import com.meridian.platform.loan.domain.model.LoanApplication;
@@ -548,7 +548,7 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                 IllegalTransactionStateException.class,
                 () -> salaryAdvanceMovements.findByLoanApplicationIdAndMovementTypeForUpdate(
                         fixture.applicationId(),
-                        com.meridian.platform.loan.domain.model
+                        com.meridian.platform.loan.domain.model.salaryadvance
                                 .SalaryAdvanceLimitMovementType.RESERVED
                 )
         );
@@ -623,9 +623,9 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus.class)
+    @EnumSource(com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitStatus.class)
     void salaryAdvancePolicyCommitsConversionForEveryLimitStatus(
-            com.meridian.platform.loan.domain.model.SalaryAdvanceLimitStatus limitStatus
+            com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitStatus limitStatus
     ) {
         PolicyFixture fixture = createPolicyFixture();
         jdbc.update("update salary_advance_limits set status = ? where id = ?",

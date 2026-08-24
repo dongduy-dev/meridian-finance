@@ -1,6 +1,6 @@
 package com.meridian.platform.loan.application.port.out;
 
-import com.meridian.platform.loan.domain.model.VerifiedPartnerEmployeeLinkSnapshot;
+import com.meridian.platform.loan.domain.model.salaryadvance.VerifiedPartnerEmployeeLinkSnapshot;
 
 import java.util.Optional;
 import java.util.UUID;

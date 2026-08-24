@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.application.dto;
 
 import com.fasterxml.jackson.annotation.JsonAnySetter;
-import com.meridian.platform.loan.domain.model.CollateralType;
+import com.meridian.platform.loan.domain.model.collateral.CollateralType;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

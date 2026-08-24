@@ -1,8 +1,8 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceEmployeeVerificationOutcome;
-import com.meridian.platform.loan.domain.model.SalaryAdvanceVerification;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceEmployeeVerificationOutcome;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceVerification;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

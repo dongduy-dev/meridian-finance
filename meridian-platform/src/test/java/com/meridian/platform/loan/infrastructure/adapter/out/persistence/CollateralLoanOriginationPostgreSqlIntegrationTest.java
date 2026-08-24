@@ -13,9 +13,9 @@ import com.meridian.platform.loan.application.port.out.CollateralLoanVerificatio
 import com.meridian.platform.loan.application.port.out.CollateralRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
-import com.meridian.platform.loan.domain.model.Collateral;
-import com.meridian.platform.loan.domain.model.CollateralLoanVerification;
-import com.meridian.platform.loan.domain.model.CollateralType;
+import com.meridian.platform.loan.domain.model.collateral.Collateral;
+import com.meridian.platform.loan.domain.model.collateral.CollateralLoanVerification;
+import com.meridian.platform.loan.domain.model.collateral.CollateralType;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionAction;

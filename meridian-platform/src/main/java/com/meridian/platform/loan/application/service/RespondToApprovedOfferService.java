@@ -1,5 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.service.salaryadvance.SalaryAdvanceReservationReleaseService;
+
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionOutcome;
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionResult;
 import com.meridian.platform.loan.application.mapper.ApprovedOfferMapper;
@@ -10,7 +12,7 @@ import com.meridian.platform.loan.domain.model.ApprovedOffer;
 import com.meridian.platform.loan.domain.model.ApprovedOfferStatus;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
-import com.meridian.platform.loan.domain.model.ReservationReleaseTrigger;
+import com.meridian.platform.loan.domain.model.salaryadvance.ReservationReleaseTrigger;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;

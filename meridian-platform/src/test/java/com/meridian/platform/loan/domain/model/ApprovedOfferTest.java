@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.domain.model;
 
-import com.meridian.platform.loan.domain.service.SalaryAdvanceOfferCalculator;
+import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceOfferPolicy;
+import com.meridian.platform.loan.domain.service.salaryadvance.SalaryAdvanceOfferCalculator;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.Test;
 
