@@ -125,6 +125,33 @@ class PasswordLoginServiceTest {
     }
 
     @Test
+    void correctPasswordForUnverifiedCustomerCreatesNoCredentialsAndClearsStaleFailures() {
+        User verifiedShape = user(UserType.CUSTOMER, UserStatus.ACTIVE, 2, null);
+        InMemoryUserRepository users = new InMemoryUserRepository(new User(
+                verifiedShape.id(),
+                verifiedShape.email(),
+                verifiedShape.passwordHash(),
+                verifiedShape.userType(),
+                verifiedShape.status(),
+                verifiedShape.displayName(),
+                verifiedShape.customerId(),
+                verifiedShape.roles(),
+                verifiedShape.permissions(),
+                verifiedShape.failedLoginAttempts(),
+                verifiedShape.lockedUntil(),
+                null
+        ));
+        CapturingRefreshTokenRepository refreshTokens = new CapturingRefreshTokenRepository();
+
+        PasswordLoginOutcome outcome = service(users, refreshTokens).login(login("valid-password"));
+
+        assertEquals(PasswordLoginOutcome.Failure.EMAIL_VERIFICATION_REQUIRED, outcome.failure());
+        assertEquals(0, users.user.failedLoginAttempts());
+        assertNull(users.user.lockedUntil());
+        assertNull(refreshTokens.created);
+    }
+
+    @Test
     void unknownEmailReturnsSafeFailureWithoutPersistenceState() {
         InMemoryUserRepository users = new InMemoryUserRepository(null);
 
@@ -231,7 +258,8 @@ class PasswordLoginServiceTest {
                 userType == UserType.CUSTOMER ? Set.of("CUSTOMER") : Set.of("LOAN_OFFICER"),
                 userType == UserType.CUSTOMER ? Set.of("loan:submit") : Set.of("loan:read"),
                 attempts,
-                lockedUntil
+                lockedUntil,
+                Instant.EPOCH
         );
     }
 
@@ -259,6 +287,21 @@ class PasswordLoginServiceTest {
         }
 
         @Override
+        public Optional<User> findByIdForUpdate(UUID userId) {
+            return Optional.ofNullable(user);
+        }
+
+        @Override
+        public void createCustomerUser(User user) {
+            throw new AssertionError("User creation should not be called.");
+        }
+
+        @Override
+        public void markEmailVerified(UUID userId, Instant verifiedAt) {
+            throw new AssertionError("Email verification should not be called.");
+        }
+
+        @Override
         public void updateLoginProtection(UUID userId, int failedLoginAttempts, Instant lockedUntil) {
             updateCount++;
             user = new User(
@@ -272,7 +315,8 @@ class PasswordLoginServiceTest {
                     user.roles(),
                     user.permissions(),
                     failedLoginAttempts,
-                    lockedUntil
+                    lockedUntil,
+                    user.emailVerifiedAt()
             );
         }
     }

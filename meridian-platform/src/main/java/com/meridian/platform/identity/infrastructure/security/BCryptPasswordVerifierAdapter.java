@@ -1,11 +1,12 @@
 package com.meridian.platform.identity.infrastructure.security;
 
+import com.meridian.platform.identity.application.port.out.PasswordHashingPort;
 import com.meridian.platform.identity.application.port.out.PasswordVerifierPort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 @Component
-public class BCryptPasswordVerifierAdapter implements PasswordVerifierPort {
+public class BCryptPasswordVerifierAdapter implements PasswordVerifierPort, PasswordHashingPort {
 
     private final PasswordEncoder passwordEncoder;
 
@@ -16,5 +17,10 @@ public class BCryptPasswordVerifierAdapter implements PasswordVerifierPort {
     @Override
     public boolean matches(String rawPassword, String passwordHash) {
         return passwordEncoder.matches(rawPassword, passwordHash);
+    }
+
+    @Override
+    public String hash(String rawPassword) {
+        return passwordEncoder.encode(rawPassword);
     }
 }

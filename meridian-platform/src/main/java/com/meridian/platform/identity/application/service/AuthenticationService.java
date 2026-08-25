@@ -35,6 +35,12 @@ public class AuthenticationService implements AuthenticationUseCase {
         if (outcome.failure() == PasswordLoginOutcome.Failure.ACCOUNT_SUSPENDED) {
             throw new AuthenticationFailedException("ACCOUNT_SUSPENDED", "Account is not active.");
         }
+        if (outcome.failure() == PasswordLoginOutcome.Failure.EMAIL_VERIFICATION_REQUIRED) {
+            throw new AuthenticationFailedException(
+                    "EMAIL_VERIFICATION_REQUIRED",
+                    "Email verification required."
+            );
+        }
         throw new AuthenticationFailedException("INVALID_CREDENTIALS", "Invalid credentials.");
     }
 

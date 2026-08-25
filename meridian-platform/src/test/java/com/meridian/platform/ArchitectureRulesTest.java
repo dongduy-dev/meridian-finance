@@ -79,4 +79,34 @@ class ArchitectureRulesTest {
                 )
                 .check(importedClasses);
     }
+
+    @Test
+    void identityApplicationAndDomainMustUsePortsForCustomerAndNotification() {
+        noClasses()
+                .that()
+                .resideInAnyPackage(
+                        "com.meridian.platform.identity.application..",
+                        "com.meridian.platform.identity.domain.."
+                )
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage(
+                        "com.meridian.platform.customer..",
+                        "com.meridian.platform.notification..",
+                        "org.springframework.mail..",
+                        "jakarta.mail.."
+                )
+                .check(importedClasses);
+    }
+
+    @Test
+    void notificationApplicationMustNotDependOnMailTransport() {
+        noClasses()
+                .that()
+                .resideInAPackage("com.meridian.platform.notification.application..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("org.springframework.mail..", "jakarta.mail..")
+                .check(importedClasses);
+    }
 }

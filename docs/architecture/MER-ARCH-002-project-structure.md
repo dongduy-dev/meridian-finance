@@ -61,7 +61,7 @@ com.meridian.platform/
 | `approval` | Loan Officer recommendations, Approver decisions, maker-checker controls, and decision records |
 | `document` | Checklists, document versions, review decisions, storage, readiness, and the backend OCR boundary |
 | `audit` | Append-only cross-cutting business audit records |
-| `notification` | Templates, delivery requests, channels, attempts, and delivery status |
+| `notification` | Controlled message templates, delivery-provider contracts, and transport adapters; broader request/status management remains incremental |
 
 Salary Advance, Unsecured Consumer Loan, and Collateral Loan remain product behaviors inside `loan`. They do not become top-level product packages such as `salaryadvance`, `unsecuredloan`, or `collateralloan`.
 
@@ -133,7 +133,7 @@ Domain code remains pure Java. Application code must not depend on infrastructur
 | Partner | Moderate | Company and employee data, imports, verification, reusable links, and Customer/Loan collaboration |
 | Document | Moderate | Checklists, versions, review, storage, readiness, and the OCR integration boundary |
 | Audit | Simplified | Event intake, append-only persistence, and authorized queries |
-| Notification | Simplified | Event intake, templates, provider ports, delivery attempts, and status |
+| Notification | Simplified | Public delivery contracts, controlled templates, provider ports, and transport adapters |
 
 A simplified module may omit domain services, mappers, publishers, or other packages when unnecessary. It must not collapse web or event intake, business orchestration, and persistence into one layer.
 
@@ -146,14 +146,14 @@ These examples show placement, not a required file inventory. The Java source tr
 | Module | Representative elements |
 |---|---|
 | Shared | `AuthenticatedUser`, `CurrentUserProvider`, `BusinessAuditEvent`, `BusinessOperationContext` |
-| Identity | `User`, `JwtAuthenticationFilter`, `JwtTokenService`, `SpringSecurityCurrentUserProvider`, `SecurityConfig` |
-| Customer | `Customer`, `CustomerProfile`, `CustomerBankAccount`, `ContractBankAccountUseCase` |
+| Identity | `User`, `EmailVerificationToken`, `RegisterCustomerUseCase`, `JwtAuthenticationFilter`, `JwtTokenService`, `SpringSecurityCurrentUserProvider`, `SecurityConfig` |
+| Customer | `Customer`, `CustomerProfile`, `CustomerBankAccount`, `RegisterCustomerUseCase`, `ContractBankAccountUseCase` |
 | Partner | `PartnerCompany`, `PartnerEmployee`, `PartnerEmployeeImportBatch`, `CustomerPartnerEmployeeLink`, `VerifyPartnerEmployeeService` |
 | Loan | `LoanApplication`, `SalaryAdvanceLimit`, `SalaryAdvanceVerification`, `UnsecuredConsumerLoanVerification`, `Collateral`, `CollateralLoanVerification`, `ApprovedOffer`, `LoanContract`, `LoanAccount`, `ManualDisbursement`, `RepaymentSchedule` |
 | Approval | `ReviewRecommendation`, `ApprovalDecision`, `SubmitApprovalDecisionService` |
 | Document | `DocumentChecklist`, `DocumentChecklistItem`, logical document/version models, review decisions, `DocumentChecklistService` |
 | Audit | `AuditEvent`, `RecordAuditEventsUseCase`, `RecordAuditEventsService`, `BusinessAuditEventListener` |
-| Notification | `Notification`, `NotificationTemplate`, delivery request/status types, sender ports |
+| Notification | `EmailVerificationMessage`, `SendEmailVerificationUseCase`, controlled template service, `EmailSenderPort`, SMTP adapter |
 
 Representative Loan application services include `StartSalaryAdvanceApplicationService`, `StartUnsecuredConsumerLoanApplicationService`, `StartCollateralLoanApplicationService`, `ApplyApprovalDecisionService`, `LoanContractReadinessService`, `ConfirmManualDisbursementService`, and `RecordRepaymentService`.
 
@@ -210,7 +210,9 @@ Backend OCR clients belong under an OCR-specific output-adapter package and impl
 
 ### Audit and Notification
 
-Business-audit and notification event listeners belong under `infrastructure.adapter.in.event`. Persistence and delivery-provider implementations belong under the corresponding output-adapter packages.
+Business-audit and notification event listeners belong under `infrastructure.adapter.in.event` when a durable event is the selected collaboration. Persistence and delivery-provider implementations belong under the corresponding output-adapter packages.
+
+Secret-bearing notification commands must not be serialized as durable events. The Customer email-verification flow therefore enters Notification through its public application contract only after Identity registration or token replacement commits. Identity owns token validity and passes the raw token transiently through an Identity infrastructure boundary adapter; Notification owns controlled rendering and SMTP transport. Delivery failure cannot reverse committed Identity or Customer state.
 
 Neither Audit nor Notification may control the workflow that produced an event.
 
@@ -278,7 +280,7 @@ A module that consumes a published business event handles it through `infrastruc
 
 Event intake is structurally different from a synchronous output-port call. Delivery may participate in the publisher's transaction or use durable asynchronous processing; `MER-ARCH-003-dependency-rules.md` owns those reliability choices and `MER-ARCH-006-api-request-flow-and-dependencies.md` documents representative runtime sequences.
 
-Audit and Notification consume business events through inbound event adapters. They do not use the synchronous output-port pattern for event delivery.
+Audit consumes business events through inbound event adapters. Notification may do the same for non-secret business events, while secret-bearing post-commit delivery uses the explicit synchronous output-port/public-contract pattern described above so durable `event_publication` state never contains the secret.
 
 ---
 

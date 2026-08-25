@@ -84,7 +84,9 @@ public class RefreshTokenRotationService {
         }
 
         Optional<User> currentUser = userRepository.findById(presentedSession.userId());
-        if (currentUser.isEmpty() || !currentUser.get().isActive()) {
+        if (currentUser.isEmpty()
+                || !currentUser.get().isActive()
+                || !currentUser.get().isEmailVerified()) {
             refreshTokenSessionRepository.revokeFamily(presentedSession.familyId(), now);
             return Optional.empty();
         }

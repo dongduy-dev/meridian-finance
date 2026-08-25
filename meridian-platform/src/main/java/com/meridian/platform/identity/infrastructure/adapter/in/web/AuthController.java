@@ -4,9 +4,16 @@ import com.meridian.platform.identity.application.dto.AuthResponse;
 import com.meridian.platform.identity.application.dto.AccessTokenReference;
 import com.meridian.platform.identity.application.dto.AuthenticationResult;
 import com.meridian.platform.identity.application.dto.CurrentSessionLogoutCommand;
+import com.meridian.platform.identity.application.dto.CustomerRegistrationRequest;
+import com.meridian.platform.identity.application.dto.CustomerRegistrationResponse;
+import com.meridian.platform.identity.application.dto.EmailVerificationConfirmationRequest;
+import com.meridian.platform.identity.application.dto.EmailVerificationRequest;
 import com.meridian.platform.identity.application.dto.LoginRequest;
 import com.meridian.platform.identity.application.port.in.AuthenticationUseCase;
+import com.meridian.platform.identity.application.port.in.ConfirmEmailVerificationUseCase;
 import com.meridian.platform.identity.application.port.in.LogoutUseCase;
+import com.meridian.platform.identity.application.port.in.RegisterCustomerUseCase;
+import com.meridian.platform.identity.application.port.in.RequestEmailVerificationUseCase;
 import com.meridian.platform.identity.infrastructure.security.JwtAuthenticationException;
 import com.meridian.platform.identity.infrastructure.security.JwtTokenService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -27,17 +34,26 @@ public class AuthController {
 
     private final AuthenticationUseCase authenticationUseCase;
     private final LogoutUseCase logoutUseCase;
+    private final RegisterCustomerUseCase registerCustomerUseCase;
+    private final RequestEmailVerificationUseCase requestEmailVerificationUseCase;
+    private final ConfirmEmailVerificationUseCase confirmEmailVerificationUseCase;
     private final RefreshTokenCookieService refreshTokenCookieService;
     private final JwtTokenService jwtTokenService;
 
     public AuthController(
             AuthenticationUseCase authenticationUseCase,
             LogoutUseCase logoutUseCase,
+            RegisterCustomerUseCase registerCustomerUseCase,
+            RequestEmailVerificationUseCase requestEmailVerificationUseCase,
+            ConfirmEmailVerificationUseCase confirmEmailVerificationUseCase,
             RefreshTokenCookieService refreshTokenCookieService,
             JwtTokenService jwtTokenService
     ) {
         this.authenticationUseCase = authenticationUseCase;
         this.logoutUseCase = logoutUseCase;
+        this.registerCustomerUseCase = registerCustomerUseCase;
+        this.requestEmailVerificationUseCase = requestEmailVerificationUseCase;
+        this.confirmEmailVerificationUseCase = confirmEmailVerificationUseCase;
         this.refreshTokenCookieService = refreshTokenCookieService;
         this.jwtTokenService = jwtTokenService;
     }
@@ -46,6 +62,32 @@ public class AuthController {
     @SecurityRequirements
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return response(authenticationUseCase.login(request));
+    }
+
+    @PostMapping("/register")
+    @SecurityRequirements
+    public ResponseEntity<CustomerRegistrationResponse> register(
+            @Valid @RequestBody CustomerRegistrationRequest request
+    ) {
+        return ResponseEntity.status(201).body(registerCustomerUseCase.register(request));
+    }
+
+    @PostMapping("/email-verification/request")
+    @SecurityRequirements
+    public ResponseEntity<Void> requestEmailVerification(
+            @Valid @RequestBody EmailVerificationRequest request
+    ) {
+        requestEmailVerificationUseCase.requestVerification(request);
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/email-verification/confirm")
+    @SecurityRequirements
+    public ResponseEntity<Void> confirmEmailVerification(
+            @Valid @RequestBody EmailVerificationConfirmationRequest request
+    ) {
+        confirmEmailVerificationUseCase.confirmVerification(request);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/refresh")

@@ -14,5 +14,11 @@ public interface UserRepository {
 
     Optional<User> findById(UUID userId);
 
+    Optional<User> findByIdForUpdate(UUID userId);
+
+    void createCustomerUser(User user);
+
     void updateLoginProtection(UUID userId, int failedLoginAttempts, Instant lockedUntil);
+
+    void markEmailVerified(UUID userId, Instant verifiedAt);
 }

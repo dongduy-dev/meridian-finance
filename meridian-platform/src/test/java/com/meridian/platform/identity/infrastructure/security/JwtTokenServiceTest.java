@@ -175,7 +175,8 @@ class JwtTokenServiceTest {
                 Set.of("CUSTOMER"),
                 Set.of("loan:submit", "partner:employee:verify:own"),
                 0,
-                null
+                null,
+                Instant.EPOCH
         );
     }
 }
