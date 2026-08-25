@@ -293,7 +293,7 @@ Problem:
 Flyway migrations are growing and current schema is harder to inspect from migrations alone.
 
 Resolution:
-`MER-DB-CURRENT-SCHEMA.sql` is the checked-in human-readable current physical-schema snapshot through V47; Flyway V1-V47 remains the executable schema authority. Focused PostgreSQL migration and snapshot verification confirms their alignment.
+`MER-DB-CURRENT-SCHEMA.sql` is the checked-in human-readable current physical-schema snapshot through V50; Flyway V1-V50 remains the executable schema authority. Focused PostgreSQL migration and snapshot verification confirms their alignment.
 
 ### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
 
@@ -395,12 +395,12 @@ Type: Risk
 
 Priority: P1
 
-Status: Open
+Status: Done
 
 Blocking: No current blocker.
 
-Recommendation:
-Add lockout policy before exposing login beyond local/demo use.
+Outcome:
+Identity serializes known-User password login on the User row, records consecutive failures durably, and applies a configurable temporary lock after the configured threshold. The default is 5 failed attempts and 15 minutes. Wrong passwords, unknown emails, and active locks share the same `INVALID_CREDENTIALS` response. Expiry starts a fresh sequence, while successful active-User login clears stale protection state. Lockout remains separate from administrative User status and does not revoke established access or refresh credentials.
 
 Suggested future branch name:
 `feature/iam-account-lockout`

@@ -12,7 +12,7 @@ Flyway migrations under `meridian-platform/src/main/resources/db/migration` are 
 
 The logical model covers:
 
-- Identity users, roles, permissions, refresh-token sessions, access-token revocations, and the optional association from a login user to a Customer;
+- Identity users and login-protection state, roles, permissions, refresh-token sessions, access-token revocations, and the optional association from a login user to a Customer;
 - Customer profile, protected identity evidence, and Customer-owned bank accounts;
 - Partner Companies, employee imports, Partner Employees, and reusable Customer–Partner Employee links;
 - the common LoanApplication lifecycle for Salary Advance, Unsecured Consumer Loan, and Collateral Loan;
@@ -26,11 +26,11 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V49. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure and Identity session invalidation.
+The physical schema is the result of Flyway migrations V1 through V50. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure and Identity login and session protection.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
-The V49 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
+The V50 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
 
 The physical `event_publication` table is Spring Modulith infrastructure. It is omitted from the business ERD because it does not own lending state or redefine the synchronous transaction boundaries documented in `MER-ARCH-006-api-request-flow-and-dependencies.md`.
 
@@ -121,6 +121,7 @@ The diagram shows ownership-relevant relationships, not a required physical-tabl
 Identity owns `users`, `roles`, `permissions`, `role_assignments`, `role_permissions`, `refresh_token_sessions`, and `access_token_revocations`.
 
 - A Customer login is associated through `users.customer_id`; Staff users have no Customer association.
+- `users` owns the consecutive failed-password count and temporary lock expiry separately from the administrative User status.
 - Roles and permissions preserve RBAC assignment separately from business records.
 - Access tokens remain self-contained RS256 credentials. Current-session logout stores only the presented valid token's `jti`, revocation time, and expiry so authentication can reject that token until it expires.
 - Refresh-token sessions store only a SHA-256 digest of each opaque token, its user and token-family relationship, issuance and expiry, and consumption or revocation state.
@@ -253,6 +254,7 @@ Audit events preserve operation, actor, action, entity, time, and a controlled P
 ### 8.1 Identity, Customer, and Partner
 
 - Normalized user email, Customer number, and stable business codes are unique within their namespaces.
+- Failed-login counts cannot be negative. A temporary login lock does not change `ACTIVE`, `SUSPENDED`, or `DISABLED` lifecycle state.
 - Refresh-token digests are unique, each token expires after issuance, and at most one unconsumed, unrevoked token remains active in a family.
 - Access-token revocation identity is unique, and each revocation expires after it is recorded. Repeated invalidation cannot create duplicate revocation state.
 - Customer protected identity evidence and bank-account fingerprints support duplicate detection without exposing plaintext through normal reads.

@@ -224,6 +224,10 @@ Successful response fields:
 
 Successful login also sets `MERIDIAN_REFRESH_TOKEN` as an HttpOnly cookie. The cookie is not part of the JSON response. Its path is `/api/v1/auth`, `SameSite` is `Strict`, its maximum age matches the configured refresh-token lifetime, and `Secure` is controlled by `MERIDIAN_REFRESH_TOKEN_COOKIE_SECURE`. Deployed HTTPS environments must set that flag to `true`; the local HTTP default is `false`.
 
+For a known User, Meridian records consecutive failed password attempts. The default policy temporarily blocks new password logins for 15 minutes after 5 consecutive failures; both values are configurable. Competing password attempts for one known User observe one authoritative sequence. An expired lock starts a fresh attempt sequence, and a successful active-User login clears previous failure and lock state.
+
+An unknown email, a wrong password, and any password submitted during an active temporary lock all return `401 INVALID_CREDENTIALS` with `Invalid credentials.`. The response does not expose whether the User exists, the failed-attempt count, or the lock expiry. Temporary login lockout does not change User status or revoke existing access tokens and refresh-token families. Administrative `SUSPENDED` and `DISABLED` behavior remains separate.
+
 ### 3.2 Refresh access
 
 ```text
