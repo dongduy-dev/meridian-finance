@@ -28,6 +28,9 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 401 | `TOKEN_EXPIRED` | Token expired | Log in again to obtain a new access token |
 | 401 | `INVALID_TOKEN` | Invalid token | Log in again to obtain a valid access token |
 | 401 | `INVALID_REFRESH_TOKEN` | Refresh authentication failed | Log in again to create a new refresh-token family |
+| 401 | `EMAIL_VERIFICATION_REQUIRED` | Email verification required. | Confirm the Customer email, then log in again |
+| 401 | `INVALID_EMAIL_VERIFICATION_TOKEN` | Email verification token is invalid or expired. | Request a replacement verification email and submit its token |
+| 409 | `EMAIL_ALREADY_REGISTERED` | An account with this email already exists. | Log in or use the account-recovery flow instead of registering again |
 | 403 | `ACCOUNT_SUSPENDED` | Account suspended | Contact support to review the account status |
 | 403 | `ACCESS_DENIED` | Access denied | Use a principal whose role includes the required permission |
 | 403 | `CUSTOMER_CONTEXT_REQUIRED` | Customer context required | Use an authenticated customer-linked token for a customer-owned flow |

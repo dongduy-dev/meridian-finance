@@ -21,6 +21,8 @@ public class AuthenticationRateLimitInterceptor implements HandlerInterceptor, W
 
     static final String LOGIN_PATH = "/api/v1/auth/login";
     static final String REFRESH_PATH = "/api/v1/auth/refresh";
+    static final String REGISTRATION_PATH = "/api/v1/auth/register";
+    static final String EMAIL_VERIFICATION_REQUEST_PATH = "/api/v1/auth/email-verification/request";
     static final int MAX_TRACKED_CLIENTS_PER_ENDPOINT = 10_000;
 
     private static final String ERROR_CODE = "RATE_LIMIT_EXCEEDED";
@@ -29,6 +31,8 @@ public class AuthenticationRateLimitInterceptor implements HandlerInterceptor, W
     private final SecurityErrorResponseWriter errorResponseWriter;
     private final FixedWindowRateLimiter loginLimiter;
     private final FixedWindowRateLimiter refreshLimiter;
+    private final FixedWindowRateLimiter registrationLimiter;
+    private final FixedWindowRateLimiter emailVerificationRequestLimiter;
 
     @Autowired
     public AuthenticationRateLimitInterceptor(
@@ -36,7 +40,13 @@ public class AuthenticationRateLimitInterceptor implements HandlerInterceptor, W
             @Value("${meridian.identity.rate-limit.login.max-requests:10}") int loginMaxRequests,
             @Value("${meridian.identity.rate-limit.login.window:1m}") Duration loginWindow,
             @Value("${meridian.identity.rate-limit.refresh.max-requests:30}") int refreshMaxRequests,
-            @Value("${meridian.identity.rate-limit.refresh.window:1m}") Duration refreshWindow
+            @Value("${meridian.identity.rate-limit.refresh.window:1m}") Duration refreshWindow,
+            @Value("${meridian.identity.rate-limit.registration.max-requests:5}") int registrationMaxRequests,
+            @Value("${meridian.identity.rate-limit.registration.window:10m}") Duration registrationWindow,
+            @Value("${meridian.identity.rate-limit.email-verification-request.max-requests:5}")
+            int emailVerificationRequestMaxRequests,
+            @Value("${meridian.identity.rate-limit.email-verification-request.window:10m}")
+            Duration emailVerificationRequestWindow
     ) {
         this(
                 errorResponseWriter,
@@ -45,6 +55,32 @@ public class AuthenticationRateLimitInterceptor implements HandlerInterceptor, W
                 loginWindow,
                 refreshMaxRequests,
                 refreshWindow,
+                registrationMaxRequests,
+                registrationWindow,
+                emailVerificationRequestMaxRequests,
+                emailVerificationRequestWindow,
+                MAX_TRACKED_CLIENTS_PER_ENDPOINT
+        );
+    }
+
+    AuthenticationRateLimitInterceptor(
+            SecurityErrorResponseWriter errorResponseWriter,
+            int loginMaxRequests,
+            Duration loginWindow,
+            int refreshMaxRequests,
+            Duration refreshWindow
+    ) {
+        this(
+                errorResponseWriter,
+                Clock.systemUTC(),
+                loginMaxRequests,
+                loginWindow,
+                refreshMaxRequests,
+                refreshWindow,
+                5,
+                Duration.ofMinutes(10),
+                5,
+                Duration.ofMinutes(10),
                 MAX_TRACKED_CLIENTS_PER_ENDPOINT
         );
     }
@@ -56,6 +92,34 @@ public class AuthenticationRateLimitInterceptor implements HandlerInterceptor, W
             Duration loginWindow,
             int refreshMaxRequests,
             Duration refreshWindow,
+            int maxTrackedClientsPerEndpoint
+    ) {
+        this(
+                errorResponseWriter,
+                clock,
+                loginMaxRequests,
+                loginWindow,
+                refreshMaxRequests,
+                refreshWindow,
+                5,
+                Duration.ofMinutes(10),
+                5,
+                Duration.ofMinutes(10),
+                maxTrackedClientsPerEndpoint
+        );
+    }
+
+    AuthenticationRateLimitInterceptor(
+            SecurityErrorResponseWriter errorResponseWriter,
+            Clock clock,
+            int loginMaxRequests,
+            Duration loginWindow,
+            int refreshMaxRequests,
+            Duration refreshWindow,
+            int registrationMaxRequests,
+            Duration registrationWindow,
+            int emailVerificationRequestMaxRequests,
+            Duration emailVerificationRequestWindow,
             int maxTrackedClientsPerEndpoint
     ) {
         this.errorResponseWriter = errorResponseWriter;
@@ -73,11 +137,30 @@ public class AuthenticationRateLimitInterceptor implements HandlerInterceptor, W
                 clock,
                 "refresh"
         );
+        this.registrationLimiter = new FixedWindowRateLimiter(
+                registrationMaxRequests,
+                registrationWindow,
+                maxTrackedClientsPerEndpoint,
+                clock,
+                "registration"
+        );
+        this.emailVerificationRequestLimiter = new FixedWindowRateLimiter(
+                emailVerificationRequestMaxRequests,
+                emailVerificationRequestWindow,
+                maxTrackedClientsPerEndpoint,
+                clock,
+                "email-verification-request"
+        );
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(this).addPathPatterns(LOGIN_PATH, REFRESH_PATH);
+        registry.addInterceptor(this).addPathPatterns(
+                LOGIN_PATH,
+                REFRESH_PATH,
+                REGISTRATION_PATH,
+                EMAIL_VERIFICATION_REQUEST_PATH
+        );
     }
 
     @Override
@@ -116,6 +199,8 @@ public class AuthenticationRateLimitInterceptor implements HandlerInterceptor, W
         return switch (requestPath) {
             case LOGIN_PATH -> loginLimiter;
             case REFRESH_PATH -> refreshLimiter;
+            case REGISTRATION_PATH -> registrationLimiter;
+            case EMAIL_VERIFICATION_REQUEST_PATH -> emailVerificationRequestLimiter;
             default -> null;
         };
     }

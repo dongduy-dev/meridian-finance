@@ -27,7 +27,7 @@ All three products use Meridian's common application, approval, contract, activa
 * **Review, Correction, and Approval**: Loan owns application review and correction workflows. Loan Officers record recommendations, while Approvers make independent decisions under maker-checker controls.
 * **Offers, Contracts, and Disbursement**: Loan preserves accepted lending terms through immutable offers, versioned contracts, Customer acknowledgment, readiness checks, and controlled disbursement activation.
 * **Loan Servicing**: Salary Advance, UCL, and Collateral Loan share repayment, overdue evaluation and cure, contractual payoff, payment-backed Administrative Full-Balance Settlement, and separate administrative closure.
-* **Identity and Access Control**: RS256 access tokens use persistent configured signing keys, while opaque HttpOnly refresh tokens rotate through Identity-owned sessions with reuse detection. Password login applies configurable consecutive-failure lockout without exposing account existence or invalidating established sessions. Login and refresh also use configurable single-instance per-remote-address request throttling. Current-session logout revokes the presented refresh family and durably invalidates the presented access token. Permission-based RBAC, Customer ownership checks, and purpose-limited cross-context contracts protect Customer and Staff operations.
+* **Identity and Access Control**: Public Customer registration atomically creates an incomplete Customer account and an Identity User without issuing credentials. Digest-only email verification gates login and refresh until confirmation, while Notification sends controlled SMTP email only after committed state exists. RS256 access tokens use persistent configured signing keys, opaque HttpOnly refresh tokens rotate with reuse detection, and configurable login protection and independent public-auth rate limits protect the boundary. Current-session logout revokes the presented refresh family and durably invalidates the presented access token. Permission-based RBAC, Customer ownership checks, and purpose-limited cross-context contracts protect Customer and Staff operations.
 * **Transactional Safety**: Critical financial commands use atomic state changes, operation-specific request identities, semantic replay validation, and concurrency controls.
 * **Immutable Audit Trail**: Ordered lifecycle history and append-only, PII-safe business audit evidence preserve traceability.
 * **Sensitive Data Protection**: AES-GCM protects selected Customer-sensitive values and immutable Loan disbursement bank-account snapshots at rest, while purpose-limited access and restricted or masked responses limit PII exposure.
@@ -112,14 +112,14 @@ All three products use Meridian's common application, approval, contract, activa
 
 | Context | Responsibility |
 |---|---|
-| **Identity & Access** | User identity, credentials, JWT access, roles, permissions, and the complete platform's session lifecycle. |
+| **Identity & Access** | Customer registration, User identity, credentials and email-verification state, JWT access, roles, permissions, and the complete platform's session lifecycle. |
 | **Customer Management** | Customer lifecycle, profile readiness, mutable source bank accounts, ownership controls, and protection of Customer data. |
 | **Partner Management** | Partner Companies, Partner Employees, monthly imports, employment matching, and reusable Salary Advance employment links. |
 | **Loan Core / Lending Lifecycle** | Product policies, LoanApplication state, product verification, review and correction cycles, offers, contracts, activation, LoanAccount servicing, contractual payoff, Administrative Full-Balance Settlement, and administrative closure. |
 | **Approval Workflow** | Immutable Loan Officer recommendations, independent Approver decisions, decision authority, and maker-checker evidence. |
 | **Document Management** | Checklists, uploads, immutable versions, manual document review, readiness, storage, and advisory OCR-assisted processing. |
 | **Audit & Compliance Controls** | Append-only, PII-safe evidence of important business actions and compliance-oriented history. |
-| **Notification** | Message templates, notification requests, channel selection, delivery attempts, delivery status, retry policy, and Customer or Staff communication preferences. |
+| **Notification** | Controlled verification-email rendering and SMTP transport; broader channels, preferences, durable delivery status, and retry management remain future increments. |
 
 ---
 
@@ -133,6 +133,7 @@ All three products use Meridian's common application, approval, contract, activa
 | **Spring Boot 4.1.0** | Application framework                                                                      |
 | **Spring Modulith 2.1.0** | Module organization, observability support, and transactional event-publication persistence |
 | **Spring Security** | Authentication & authorization                                                             |
+| **Spring Mail** | Notification-owned SMTP delivery for controlled verification email                       |
 | **Spring Data JPA / Hibernate** | Data persistence                                                                           |
 | **Flyway** | Versioned database migrations                                                              |
 | **ArchUnit** | Executable fitness functions for core layer, security, and shared-kernel rules             |
@@ -163,7 +164,7 @@ All three products use Meridian's common application, approval, contract, activa
 
 | Technology | Purpose                                              |
 |---|------------------------------------------------------|
-| **Docker Compose** | Local application and PostgreSQL environment         |
+| **Docker Compose** | Local application, PostgreSQL, and Mailpit SMTP-capture environment |
 | **GitHub Actions** | CI pipeline (build, test, architecture verification) |
 | **SLF4J + Logback** | Structured JSON logging                              |
 
@@ -189,6 +190,7 @@ All three products use Meridian's common application, approval, contract, activa
 - [x] UCL lifecycle through evidence, verification and correction, approval, exact-request pricing, activation, servicing, closure, product-scoped outstanding protection, and zero Salary Advance exposure
 - [x] Collateral Loan lifecycle through structured facts, ownership evidence, numbered verification, document-only correction, exact-request pricing, activation, servicing, closure, and zero Salary Advance exposure
 - [x] Persistent-key JWT/RBAC, configurable password-login lockout, rotating refresh-token sessions, current-session token invalidation, command-specific idempotency, transactional and concurrency controls, Flyway/PostgreSQL persistence, Spring Modulith event publication, and GitHub Actions verification
+- [x] Atomic Customer registration, digest-only Identity email verification, post-commit Notification SMTP delivery, enumeration-safe resend, and verification-gated login
 - [x] Startup replay and recovery for incomplete event publications
 - [x] Application containerization and a complete local Compose environment with persistent PostgreSQL and Document storage
 - [x] Structured JSON logging with request and business correlation
@@ -225,7 +227,7 @@ All three products use Meridian's common application, approval, contract, activa
 
 ### Future Considerations
 
-- Notification service for email, SMS, and in-app messages
+- Extend Notification beyond verification email to SMS and in-app messages, preferences, durable delivery status, and retry management
 - Mobile application support
 - Payroll provider, employer API, payment gateway, bank transfer, and credit-bureau integrations
 - Repayment reversal/refund, unapplied cash, suspense processing, waiver/write-off, and bank reconciliation
@@ -255,7 +257,7 @@ meridian-finance/
 The active backend modules under `com.meridian.platform` are:
 
 ```text
-shared · identity · customer · partner · loan · approval · document · audit
+shared · identity · customer · partner · loan · approval · document · audit · notification
 ```
 
 `shared` is a technical shared kernel, not a bounded context. Feature modules use Meridian's Practical Hexagonal Architecture with only the packages each module needs. [MER-ARCH-002](docs/architecture/MER-ARCH-002-project-structure.md) defines source and package structure; [MER-ARCH-003](docs/architecture/MER-ARCH-003-dependency-rules.md) defines legal dependencies and architecture enforcement.
@@ -264,13 +266,14 @@ shared · identity · customer · partner · loan · approval · document · aud
 
 ## Local Docker Compose
 
-Docker is the only runtime prerequisite for the local Compose path. Compose builds Meridian with the Maven wrapper, starts PostgreSQL 16, runs Flyway through normal Spring Boot startup, and persists PostgreSQL and Document filesystem data in named volumes.
+Docker is the only runtime prerequisite for the local Compose path. Compose builds Meridian with the Maven wrapper, starts PostgreSQL 16 and pinned Mailpit SMTP capture, runs Flyway through normal Spring Boot startup, and persists PostgreSQL and Document filesystem data in named volumes.
 
 1. Change to `meridian-platform`.
 2. Copy `.env.example` to `.env`.
 3. Set `POSTGRES_PASSWORD`, the three Base64-encoded symmetric key values, and the matching JWT private/public key pair in `.env`.
 4. Run `docker compose up --build`.
 5. Verify `http://localhost:8080/api/v1/health`, `http://localhost:8080/v3/api-docs`, and `http://localhost:8080/swagger-ui.html`.
+6. Register a local Customer and inspect its controlled verification email in the Mailpit UI at `http://localhost:8025`. Copy the fragment token into the JSON body for `POST /api/v1/auth/email-verification/confirm`; do not place it in a backend query string.
 
 Generate each local symmetric key with one of these commands and run the selected command three times:
 
@@ -299,6 +302,10 @@ Keep both lines from the same command run. Meridian fails startup when either va
 `MERIDIAN_ACCOUNT_LOCKOUT_MAX_FAILED_ATTEMPTS` defaults to `5`, and `MERIDIAN_ACCOUNT_LOCKOUT_DURATION` defaults to `15m`. Both values must be positive. The policy applies to new Customer and Staff password logins; it does not revoke established access or refresh credentials.
 
 `MERIDIAN_LOGIN_RATE_LIMIT_MAX_REQUESTS` defaults to `10`, and `MERIDIAN_LOGIN_RATE_LIMIT_WINDOW` defaults to `1m`. `MERIDIAN_REFRESH_RATE_LIMIT_MAX_REQUESTS` defaults to `30`, and `MERIDIAN_REFRESH_RATE_LIMIT_WINDOW` defaults to `1m`. All four values must be positive. These policies throttle login and refresh requests per effective servlet remote address and application instance; the Phase 4 Redis evaluation continues to track distributed rate limiting.
+
+`MERIDIAN_REGISTRATION_RATE_LIMIT_MAX_REQUESTS` and `MERIDIAN_EMAIL_VERIFICATION_REQUEST_RATE_LIMIT_MAX_REQUESTS` each default to `5`; their independent window variables each default to `10m`. `MERIDIAN_EMAIL_VERIFICATION_LIFETIME` defaults to `24h` and must be positive. Registration, verification request, login, and refresh limits are independent and use the effective servlet remote address rather than caller-controlled forwarding headers.
+
+`MERIDIAN_FRONTEND_BASE_URL` defaults to `http://localhost:5173` for the verification link. Notification SMTP uses `MERIDIAN_SMTP_HOST`, `MERIDIAN_SMTP_PORT`, optional `MERIDIAN_SMTP_USERNAME` and `MERIDIAN_SMTP_PASSWORD`, `MERIDIAN_SMTP_AUTH`, `MERIDIAN_SMTP_STARTTLS`, and `MERIDIAN_NOTIFICATION_FROM_ADDRESS`. Compose defaults to the `mailpit` service on port `1025`; the capture UI is exposed through `MAILPIT_UI_PORT`, default `8025`. These local defaults require no external credentials.
 
 `MERIDIAN_REFRESH_TOKEN_LIFETIME` defaults to `7d`. The refresh cookie is HttpOnly, uses `SameSite=Strict`, and is restricted to `/api/v1/auth` so refresh and current-session logout can receive it. Local HTTP uses `MERIDIAN_REFRESH_TOKEN_COOKIE_SECURE=false`; deployed HTTPS environments must set it to `true`. Browser clients must send credentialed authentication requests from an explicitly allowed frontend origin.
 

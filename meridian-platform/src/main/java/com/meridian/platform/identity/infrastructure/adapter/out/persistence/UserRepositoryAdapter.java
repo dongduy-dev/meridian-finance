@@ -39,13 +39,84 @@ public class UserRepositoryAdapter implements UserRepository {
 
     @Override
     public Optional<User> findById(UUID userId) {
+        return findById(userId, false);
+    }
+
+    @Override
+    public Optional<User> findByIdForUpdate(UUID userId) {
+        return findById(userId, true);
+    }
+
+    @Override
+    public void createCustomerUser(User user) {
+        int inserted = jdbcTemplate.update(
+                """
+                        INSERT INTO users (
+                            id, email, normalized_email, password_hash, user_type, status,
+                            display_name, customer_id, failed_login_attempts, locked_until,
+                            email_verified_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT ON CONSTRAINT uq_users_normalized_email DO NOTHING
+                        """,
+                user.id(),
+                user.email(),
+                user.email(),
+                user.passwordHash(),
+                user.userType().name(),
+                user.status().name(),
+                user.displayName(),
+                user.customerId(),
+                user.failedLoginAttempts(),
+                toLocalDateTime(user.lockedUntil()),
+                toLocalDateTime(user.emailVerifiedAt())
+        );
+        if (inserted != 1) {
+            throw new com.meridian.platform.shared.domain.exception.BusinessStateConflictException(
+                    "EMAIL_ALREADY_REGISTERED",
+                    "An account with this email already exists."
+            );
+        }
+
+        int assigned = jdbcTemplate.update(
+                """
+                        INSERT INTO role_assignments (id, user_id, role_id)
+                        SELECT ?, ?, id
+                        FROM roles
+                        WHERE code = 'CUSTOMER'
+                        """,
+                UUID.randomUUID(),
+                user.id()
+        );
+        if (assigned != 1) {
+            throw new IllegalStateException("CUSTOMER role is not configured.");
+        }
+    }
+
+    @Override
+    public void markEmailVerified(UUID userId, Instant verifiedAt) {
+        int updated = jdbcTemplate.update(
+                """
+                        UPDATE users
+                        SET email_verified_at = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ? AND email_verified_at IS NULL
+                        """,
+                toLocalDateTime(verifiedAt),
+                userId
+        );
+        if (updated != 1) {
+            throw new IllegalStateException("User email could not be marked verified.");
+        }
+    }
+
+    private Optional<User> findById(UUID userId, boolean forUpdate) {
+        String lockClause = forUpdate ? " FOR UPDATE" : "";
         List<UserRow> rows = jdbcTemplate.query(
                 """
                         SELECT id, email, password_hash, user_type, status, display_name, customer_id,
-                               failed_login_attempts, locked_until
+                               failed_login_attempts, locked_until, email_verified_at
                         FROM users
                         WHERE id = ?
-                        """,
+                        """ + lockClause,
                 (resultSet, rowNum) -> mapUserRow(resultSet),
                 userId
         );
@@ -73,7 +144,7 @@ public class UserRepositoryAdapter implements UserRepository {
         List<UserRow> rows = jdbcTemplate.query(
                 """
                         SELECT id, email, password_hash, user_type, status, display_name, customer_id,
-                               failed_login_attempts, locked_until
+                               failed_login_attempts, locked_until, email_verified_at
                         FROM users
                         WHERE normalized_email = ?
                         """ + lockClause,
@@ -96,7 +167,8 @@ public class UserRepositoryAdapter implements UserRepository {
                 findRoles(row.id()),
                 findPermissions(row.id()),
                 row.failedLoginAttempts(),
-                row.lockedUntil()
+                row.lockedUntil(),
+                row.emailVerifiedAt()
         );
     }
 
@@ -139,8 +211,13 @@ public class UserRepositoryAdapter implements UserRepository {
                 resultSet.getString("display_name"),
                 resultSet.getObject("customer_id", UUID.class),
                 resultSet.getInt("failed_login_attempts"),
-                toInstant(resultSet.getObject("locked_until", LocalDateTime.class))
+                toInstant(resultSet.getObject("locked_until", LocalDateTime.class)),
+                toInstant(resultSet.getObject("email_verified_at", LocalDateTime.class))
         );
+    }
+
+    private LocalDateTime toLocalDateTime(Instant value) {
+        return value == null ? null : LocalDateTime.ofInstant(value, ZoneOffset.UTC);
     }
 
     private Instant toInstant(LocalDateTime value) {
@@ -156,7 +233,8 @@ public class UserRepositoryAdapter implements UserRepository {
             String displayName,
             UUID customerId,
             int failedLoginAttempts,
-            Instant lockedUntil
+            Instant lockedUntil,
+            Instant emailVerifiedAt
     ) {
     }
 }

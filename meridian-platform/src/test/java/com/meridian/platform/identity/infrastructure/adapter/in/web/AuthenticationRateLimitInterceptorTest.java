@@ -37,12 +37,18 @@ class AuthenticationRateLimitInterceptorTest {
 
     private AuthenticationUseCase authenticationUseCase;
     private LogoutUseCase logoutUseCase;
+    private com.meridian.platform.identity.application.port.in.RegisterCustomerUseCase registerCustomerUseCase;
+    private com.meridian.platform.identity.application.port.in.RequestEmailVerificationUseCase requestEmailVerificationUseCase;
     private MutableClock clock;
 
     @BeforeEach
     void setUp() {
         authenticationUseCase = mock(AuthenticationUseCase.class);
         logoutUseCase = mock(LogoutUseCase.class);
+        registerCustomerUseCase = mock(com.meridian.platform.identity.application.port.in.RegisterCustomerUseCase.class);
+        requestEmailVerificationUseCase = mock(
+                com.meridian.platform.identity.application.port.in.RequestEmailVerificationUseCase.class
+        );
         clock = new MutableClock(Instant.parse("2026-08-25T00:00:00Z"));
         when(authenticationUseCase.login(any())).thenReturn(authenticationResult("login-access", "login-refresh"));
         when(authenticationUseCase.refresh(any())).thenReturn(authenticationResult("new-access", "new-refresh"));
@@ -169,6 +175,23 @@ class AuthenticationRateLimitInterceptorTest {
     }
 
     @Test
+    void registrationAndVerificationRequestHaveIndependentPoliciesAndIgnoreForwardingHeaders() throws Exception {
+        MockMvc mockMvc = mockMvc(10, Duration.ofMinutes(1), 10, Duration.ofMinutes(1), 1, 1);
+
+        mockMvc.perform(registration("192.0.2.1", "198.51.100.10"))
+                .andExpect(status().isCreated());
+        mockMvc.perform(registration("192.0.2.1", "203.0.113.20"))
+                .andExpect(status().isTooManyRequests());
+        mockMvc.perform(verificationRequest("192.0.2.1", "198.51.100.30"))
+                .andExpect(status().isAccepted());
+        mockMvc.perform(verificationRequest("192.0.2.1", "203.0.113.40"))
+                .andExpect(status().isTooManyRequests());
+
+        verify(registerCustomerUseCase).register(any());
+        verify(requestEmailVerificationUseCase).requestVerification(any());
+    }
+
+    @Test
     void rejectsInvalidConfiguredPoliciesDuringConstruction() {
         SecurityErrorResponseWriter writer = new SecurityErrorResponseWriter();
         org.junit.jupiter.api.Assertions.assertThrows(
@@ -195,9 +218,30 @@ class AuthenticationRateLimitInterceptorTest {
             int refreshMaxRequests,
             Duration refreshWindow
     ) {
+        return mockMvc(
+                loginMaxRequests,
+                loginWindow,
+                refreshMaxRequests,
+                refreshWindow,
+                5,
+                5
+        );
+    }
+
+    private MockMvc mockMvc(
+            int loginMaxRequests,
+            Duration loginWindow,
+            int refreshMaxRequests,
+            Duration refreshWindow,
+            int registrationMaxRequests,
+            int verificationRequestMaxRequests
+    ) {
         AuthController controller = new AuthController(
                 authenticationUseCase,
                 logoutUseCase,
+                registerCustomerUseCase,
+                requestEmailVerificationUseCase,
+                mock(com.meridian.platform.identity.application.port.in.ConfirmEmailVerificationUseCase.class),
                 new RefreshTokenCookieService(false),
                 mock(JwtTokenService.class)
         );
@@ -208,6 +252,10 @@ class AuthenticationRateLimitInterceptorTest {
                 loginWindow,
                 refreshMaxRequests,
                 refreshWindow,
+                registrationMaxRequests,
+                Duration.ofMinutes(10),
+                verificationRequestMaxRequests,
+                Duration.ofMinutes(10),
                 100
         );
         return standaloneSetup(controller)
@@ -237,6 +285,42 @@ class AuthenticationRateLimitInterceptorTest {
                     return request;
                 })
                 .cookie(new jakarta.servlet.http.Cookie("MERIDIAN_REFRESH_TOKEN", "valid-refresh-token"));
+    }
+
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder registration(
+            String remoteAddress,
+            String forwardedFor
+    ) {
+        return post(AuthenticationRateLimitInterceptor.REGISTRATION_PATH)
+                .with(request -> {
+                    request.setRemoteAddr(remoteAddress);
+                    return request;
+                })
+                .header("X-Forwarded-For", forwardedFor)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "email": "customer@example.com",
+                          "password": "registration-password",
+                          "displayName": "Customer Name"
+                        }
+                        """);
+    }
+
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder verificationRequest(
+            String remoteAddress,
+            String forwardedFor
+    ) {
+        return post(AuthenticationRateLimitInterceptor.EMAIL_VERIFICATION_REQUEST_PATH)
+                .with(request -> {
+                    request.setRemoteAddr(remoteAddress);
+                    return request;
+                })
+                .header("X-Forwarded-For", forwardedFor)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"email": "customer@example.com"}
+                        """);
     }
 
     private static AuthenticationResult authenticationResult(String accessToken, String refreshToken) {

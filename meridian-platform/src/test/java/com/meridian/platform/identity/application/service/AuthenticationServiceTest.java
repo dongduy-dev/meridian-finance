@@ -62,6 +62,21 @@ class AuthenticationServiceTest {
         assertEquals("Account is not active.", exception.getMessage());
     }
 
+    @Test
+    void exposesTheSpecificVerificationRequirementOnlyAfterCorrectPasswordProcessing() {
+        PasswordLoginService passwordLoginService = mock(PasswordLoginService.class);
+        when(passwordLoginService.login(LOGIN)).thenReturn(PasswordLoginOutcome.emailVerificationRequired());
+
+        AuthenticationFailedException exception = assertThrows(
+                AuthenticationFailedException.class,
+                () -> new AuthenticationService(passwordLoginService, mock(RefreshTokenRotationService.class))
+                        .login(LOGIN)
+        );
+
+        assertEquals("EMAIL_VERIFICATION_REQUIRED", exception.getErrorCode());
+        assertEquals("Email verification required.", exception.getMessage());
+    }
+
     private AuthenticationResult authenticationResult() {
         Instant now = Instant.parse("2026-08-25T00:00:00Z");
         return new AuthenticationResult(

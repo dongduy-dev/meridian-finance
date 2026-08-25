@@ -160,6 +160,15 @@ class SecurityConfigTest {
     private com.meridian.platform.identity.application.port.in.LogoutUseCase logoutUseCase;
 
     @MockitoBean
+    private com.meridian.platform.identity.application.port.in.RegisterCustomerUseCase registerCustomerUseCase;
+
+    @MockitoBean
+    private com.meridian.platform.identity.application.port.in.RequestEmailVerificationUseCase requestEmailVerificationUseCase;
+
+    @MockitoBean
+    private com.meridian.platform.identity.application.port.in.ConfirmEmailVerificationUseCase confirmEmailVerificationUseCase;
+
+    @MockitoBean
     private QueryLoanProductUseCase queryLoanProductUseCase;
 
     @MockitoBean
@@ -344,6 +353,36 @@ class SecurityConfigTest {
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
                 .andExpect(jsonPath("$.accessToken").value("rotated-access-token"))
                 .andExpect(jsonPath("$.refreshToken").doesNotExist());
+    }
+
+    @Test
+    void keepsRegistrationAndEmailVerificationPublicAtTheBearerLayer() throws Exception {
+        when(registerCustomerUseCase.register(any())).thenReturn(
+                com.meridian.platform.identity.application.dto.CustomerRegistrationResponse.verificationRequired()
+        );
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "customer@example.com",
+                                  "password": "registration-password",
+                                  "displayName": "Customer Name"
+                                }
+                                """))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/v1/auth/email-verification/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email": "customer@example.com"}
+                                """))
+                .andExpect(status().isAccepted());
+        mockMvc.perform(post("/api/v1/auth/email-verification/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"token": "opaque-verification-token"}
+                                """))
+                .andExpect(status().isNoContent());
     }
 
     @Test

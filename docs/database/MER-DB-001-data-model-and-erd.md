@@ -12,7 +12,7 @@ Flyway migrations under `meridian-platform/src/main/resources/db/migration` are 
 
 The logical model covers:
 
-- Identity users and login-protection state, roles, permissions, refresh-token sessions, access-token revocations, and the optional association from a login user to a Customer;
+- Identity users and login-protection and email-verification state, roles, permissions, refresh-token sessions, access-token revocations, and the optional association from a login user to a Customer;
 - Customer profile, protected identity evidence, and Customer-owned bank accounts;
 - Partner Companies, employee imports, Partner Employees, and reusable Customer–Partner Employee links;
 - the common LoanApplication lifecycle for Salary Advance, Unsecured Consumer Loan, and Collateral Loan;
@@ -26,11 +26,11 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V50. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure and Identity login and session protection.
+The physical schema is the result of Flyway migrations V1 through V51. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure and Identity registration, email verification, login, and session protection.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
-The V50 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
+The V51 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
 
 The physical `event_publication` table is Spring Modulith infrastructure. It is omitted from the business ERD because it does not own lending state or redefine the synchronous transaction boundaries documented in `MER-ARCH-006-api-request-flow-and-dependencies.md`.
 
@@ -56,6 +56,7 @@ erDiagram
     PERMISSION ||--o{ ROLE_PERMISSION : included_in
     USER o|--o| CUSTOMER : authenticates_as
     USER ||--o{ REFRESH_TOKEN_SESSION : owns
+    USER ||--o{ EMAIL_VERIFICATION_TOKEN : verifies_with
 
     CUSTOMER ||--|| CUSTOMER_PROFILE : owns
     CUSTOMER ||--o{ BANK_ACCOUNT : owns
@@ -118,11 +119,13 @@ The diagram shows ownership-relevant relationships, not a required physical-tabl
 
 ### 6.1 Identity and Access
 
-Identity owns `users`, `roles`, `permissions`, `role_assignments`, `role_permissions`, `refresh_token_sessions`, and `access_token_revocations`.
+Identity owns `users`, `roles`, `permissions`, `role_assignments`, `role_permissions`, `email_verification_tokens`, `refresh_token_sessions`, and `access_token_revocations`.
 
 - A Customer login is associated through `users.customer_id`; Staff users have no Customer association.
 - `users` owns the consecutive failed-password count and temporary lock expiry separately from the administrative User status.
+- `users.email_verified_at` is Identity-owned account-security state. It is distinct from Customer-owned `customers.verification_status` and email confirmation never changes that business-verification state.
 - Roles and permissions preserve RBAC assignment separately from business records.
+- Email-verification rows store only the SHA-256 digest of a cryptographically random opaque token plus issuance, expiry, consumption, and revocation state. At most one unconsumed, unrevoked token is active for a User; replacement revokes the previous active token.
 - Access tokens remain self-contained RS256 credentials. Current-session logout stores only the presented valid token's `jti`, revocation time, and expiry so authentication can reject that token until it expires.
 - Refresh-token sessions store only a SHA-256 digest of each opaque token, its user and token-family relationship, issuance and expiry, and consumption or revocation state.
 - Successful rotation consumes one locked session and creates one replacement in the same family. Detected reuse revokes the family so no replacement session remains active.
@@ -255,6 +258,7 @@ Audit events preserve operation, actor, action, entity, time, and a controlled P
 
 - Normalized user email, Customer number, and stable business codes are unique within their namespaces.
 - Failed-login counts cannot be negative. A temporary login lock does not change `ACTIVE`, `SUSPENDED`, or `DISABLED` lifecycle state.
+- Email-verification digests are unique, each token expires after issuance, terminal timestamps cannot precede issuance, and at most one unconsumed, unrevoked token remains active for a User.
 - Refresh-token digests are unique, each token expires after issuance, and at most one unconsumed, unrevoked token remains active in a family.
 - Access-token revocation identity is unique, and each revocation expires after it is recorded. Repeated invalidation cannot create duplicate revocation state.
 - Customer protected identity evidence and bank-account fingerprints support duplicate detection without exposing plaintext through normal reads.
@@ -305,7 +309,7 @@ Exact constraint and trigger definitions remain in Flyway and the current schema
 
 ## 9. Sensitive Data at Rest
 
-- Identity never persists a raw access or refresh token. Access-token revocation stores only `jti` and lifetime metadata. The refresh-token SHA-256 digest supports exact lookup and reuse detection for a cryptographically random high-entropy token.
+- Identity never persists a raw access, refresh, or email-verification token. Access-token revocation stores only `jti` and lifetime metadata. SHA-256 digests support exact refresh-session and email-verification lookup for cryptographically random high-entropy tokens. Raw email-verification tokens remain transient through generation and outbound email delivery and are never published as durable Modulith event payloads.
 - Customer identity references and source bank-account numbers use Customer-owned encryption envelopes. Deterministic fingerprints are internal duplicate-detection evidence.
 - Loan contract destinations use a separate Loan-owned, purpose-bound protection envelope. Loan must not reuse Customer ciphertext or fingerprint as contract evidence.
 - Partner salary, employee code, identity evidence, and import-source data are restricted Partner records.
@@ -322,6 +326,7 @@ Physical indexes belong in Flyway and the schema snapshot. The logical model req
 - normalized authentication and RBAC lookup;
 - unexpired access-token revocation lookup and expiry-based maintenance;
 - refresh-token digest lookup, per-token locking, and family revocation;
+- email-verification digest lookup, per-token locking, and active-token replacement by User;
 - Customer profile, primary bank account, and product-readiness lookup;
 - Partner Company/import/employee lookup and current employment-link resolution;
 - Customer/product application serialization and lifecycle queues;

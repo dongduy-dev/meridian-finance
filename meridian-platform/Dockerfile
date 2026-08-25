@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 FROM maven:3.9.16-eclipse-temurin-25-noble AS build
 
 WORKDIR /workspace
@@ -7,7 +9,7 @@ COPY mvnw pom.xml ./
 RUN chmod +x mvnw
 
 COPY src src
-RUN ./mvnw -B -DskipTests package
+RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -Dmaven.artifact.threads=1 -DskipTests package
 
 FROM eclipse-temurin:25-jre-jammy
 

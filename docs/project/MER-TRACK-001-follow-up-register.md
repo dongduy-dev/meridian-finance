@@ -293,7 +293,7 @@ Problem:
 Flyway migrations are growing and current schema is harder to inspect from migrations alone.
 
 Resolution:
-`MER-DB-CURRENT-SCHEMA.sql` is the checked-in human-readable current physical-schema snapshot through V50; Flyway V1-V50 remains the executable schema authority. Focused PostgreSQL migration and snapshot verification confirms their alignment.
+`MER-DB-CURRENT-SCHEMA.sql` is the checked-in human-readable current physical-schema snapshot through V51; Flyway V1-V51 remains the executable schema authority. Focused PostgreSQL migration and snapshot verification confirms their alignment.
 
 ### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
 
@@ -359,12 +359,12 @@ Type: Deferred feature
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocking: No current blocker.
 
-Recommendation:
-Implement email verification with customer registration/profile flows.
+Outcome:
+Identity exposes public Customer registration, verification-email request, and token confirmation while Customer owns creation of its `ACTIVE` / `UNVERIFIED` / `INCOMPLETE` aggregate. Registration atomically creates the Customer, Customer-linked User, role assignment, and digest-only verification-token state; controlled SMTP delivery occurs after commit through Notification and can be recovered by enumeration-safe resend. Email confirmation updates only Identity `email_verified_at`, gates login and refresh credentials until verified, and does not change Customer business verification status.
 
 Suggested future branch name:
 `feature/iam-email-verification`
@@ -712,7 +712,8 @@ Blocking: No current blocker.
 
 Problem:
 Correction requests currently have no due date, escalation, expiry, reminder, or
-notification behavior; the Notification module remains a placeholder.
+notification behavior. Notification currently owns controlled verification-email
+rendering and SMTP transport only; correction notifications remain unimplemented.
 
 Recommendation:
 Confirm SLA and expiry rules before adding UTC-Clock deadlines, scheduler locking,

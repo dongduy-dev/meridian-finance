@@ -124,6 +124,10 @@ public class PasswordLoginService {
             userRepository.updateLoginProtection(user.id(), 0, null);
         }
 
+        if (!user.isEmailVerified()) {
+            return PasswordLoginOutcome.emailVerificationRequired();
+        }
+
         IssuedAccessToken accessToken = tokenIssuer.issueAccessToken(user);
         GeneratedRefreshToken refreshToken = refreshTokenCodec.generate();
         Instant expiresAt = now.plus(refreshTokenLifetime);

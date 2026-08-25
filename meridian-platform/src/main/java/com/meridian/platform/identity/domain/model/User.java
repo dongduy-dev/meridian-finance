@@ -15,7 +15,8 @@ public record User(
         Set<String> roles,
         Set<String> permissions,
         int failedLoginAttempts,
-        Instant lockedUntil
+        Instant lockedUntil,
+        Instant emailVerifiedAt
 ) {
 
     public User {
@@ -36,5 +37,9 @@ public record User(
 
     public boolean hasExpiredLockAt(Instant instant) {
         return lockedUntil != null && !instant.isBefore(lockedUntil);
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerifiedAt != null;
     }
 }

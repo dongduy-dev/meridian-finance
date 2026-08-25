@@ -26,8 +26,13 @@ record PasswordLoginOutcome(Optional<AuthenticationResult> result, Failure failu
         return new PasswordLoginOutcome(Optional.empty(), Failure.ACCOUNT_SUSPENDED);
     }
 
+    static PasswordLoginOutcome emailVerificationRequired() {
+        return new PasswordLoginOutcome(Optional.empty(), Failure.EMAIL_VERIFICATION_REQUIRED);
+    }
+
     enum Failure {
         INVALID_CREDENTIALS,
-        ACCOUNT_SUSPENDED
+        ACCOUNT_SUSPENDED,
+        EMAIL_VERIFICATION_REQUIRED
     }
 }
