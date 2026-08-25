@@ -34,7 +34,8 @@ class JwtTokenServiceTest {
         );
 
         String token = tokenService.issueAccessToken(customerUser()).tokenValue();
-        AuthenticatedUser authenticatedUser = tokenService.parseAccessToken(token);
+        ParsedAccessToken parsedAccessToken = tokenService.parseAccessTokenDetails(token);
+        AuthenticatedUser authenticatedUser = parsedAccessToken.authenticatedUser();
 
         assertEquals(USER_ID, authenticatedUser.userId());
         assertEquals("customer.demo@meridian.local", authenticatedUser.email());
@@ -42,6 +43,9 @@ class JwtTokenServiceTest {
         assertEquals(CUSTOMER_ID, authenticatedUser.customerId());
         assertEquals(Set.of("CUSTOMER"), authenticatedUser.roles());
         assertEquals(Set.of("loan:submit", "partner:employee:verify:own"), authenticatedUser.permissions());
+        assertTrue(parsedAccessToken.tokenId().toString().matches("[0-9a-f-]{36}"));
+        assertEquals(NOW.plusSeconds(3600), parsedAccessToken.expiresAt());
+        assertEquals(authenticatedUser, tokenService.parseAccessToken(token));
     }
 
     @Test

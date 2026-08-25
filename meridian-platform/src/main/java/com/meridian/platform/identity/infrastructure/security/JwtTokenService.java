@@ -51,6 +51,20 @@ public class JwtTokenService implements TokenIssuerPort {
     }
 
     public AuthenticatedUser parseAccessToken(String token) {
+        return parseAccessTokenDetails(token).authenticatedUser();
+    }
+
+    public ParsedAccessToken parseAccessTokenDetails(String token) {
+        try {
+            return parseVerifiedAccessToken(token);
+        } catch (JwtAuthenticationException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw invalidToken();
+        }
+    }
+
+    private ParsedAccessToken parseVerifiedAccessToken(String token) {
         String[] parts = token.split("\\.", -1);
         if (parts.length != 3 || parts[0].isBlank() || parts[1].isBlank() || parts[2].isBlank()) {
             throw invalidToken();
@@ -65,13 +79,18 @@ public class JwtTokenService implements TokenIssuerPort {
             throw new JwtAuthenticationException("TOKEN_EXPIRED", "Token expired.");
         }
 
-        return new AuthenticatedUser(
+        AuthenticatedUser authenticatedUser = new AuthenticatedUser(
                 UUID.fromString(extractString(payload, "sub")),
                 extractString(payload, "email"),
                 extractString(payload, "userType"),
                 extractOptionalString(payload, "customerId").map(UUID::fromString).orElse(null),
                 extractStringArray(payload, "roles"),
                 extractStringArray(payload, "permissions")
+        );
+        return new ParsedAccessToken(
+                authenticatedUser,
+                UUID.fromString(extractString(payload, "jti")),
+                expiresAt
         );
     }
 

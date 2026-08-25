@@ -1,7 +1,7 @@
 -- Meridian current physical schema snapshot.
 -- Documentation only. Flyway migrations under meridian-platform/src/main/resources/db/migration
 -- remain the executable database history.
--- Snapshot source: migrations V1 through V48.
+-- Snapshot source: migrations V1 through V49.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -792,6 +792,18 @@ CREATE INDEX idx_refresh_token_sessions_family_id
 CREATE UNIQUE INDEX uq_refresh_token_sessions_active_family
     ON refresh_token_sessions (family_id)
     WHERE consumed_at IS NULL AND revoked_at IS NULL;
+
+CREATE TABLE access_token_revocations (
+    token_id UUID PRIMARY KEY,
+    revoked_at TIMESTAMP NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+
+    CONSTRAINT chk_access_token_revocations_expiry
+        CHECK (expires_at > revoked_at)
+);
+
+CREATE INDEX idx_access_token_revocations_expires_at
+    ON access_token_revocations (expires_at);
 
 CREATE TABLE review_recommendations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

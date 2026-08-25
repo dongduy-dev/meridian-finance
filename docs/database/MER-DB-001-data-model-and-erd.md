@@ -12,7 +12,7 @@ Flyway migrations under `meridian-platform/src/main/resources/db/migration` are 
 
 The logical model covers:
 
-- Identity users, roles, permissions, refresh-token sessions, and the optional association from a login user to a Customer;
+- Identity users, roles, permissions, refresh-token sessions, access-token revocations, and the optional association from a login user to a Customer;
 - Customer profile, protected identity evidence, and Customer-owned bank accounts;
 - Partner Companies, employee imports, Partner Employees, and reusable Customer–Partner Employee links;
 - the common LoanApplication lifecycle for Salary Advance, Unsecured Consumer Loan, and Collateral Loan;
@@ -26,11 +26,11 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V48. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure and Identity refresh-token rotation.
+The physical schema is the result of Flyway migrations V1 through V49. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure and Identity session invalidation.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
-The V48 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
+The V49 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
 
 The physical `event_publication` table is Spring Modulith infrastructure. It is omitted from the business ERD because it does not own lending state or redefine the synchronous transaction boundaries documented in `MER-ARCH-006-api-request-flow-and-dependencies.md`.
 
@@ -118,11 +118,12 @@ The diagram shows ownership-relevant relationships, not a required physical-tabl
 
 ### 6.1 Identity and Access
 
-Identity owns `users`, `roles`, `permissions`, `role_assignments`, `role_permissions`, and `refresh_token_sessions`.
+Identity owns `users`, `roles`, `permissions`, `role_assignments`, `role_permissions`, `refresh_token_sessions`, and `access_token_revocations`.
 
 - A Customer login is associated through `users.customer_id`; Staff users have no Customer association.
 - Roles and permissions preserve RBAC assignment separately from business records.
-- Access tokens remain self-contained RS256 credentials. Refresh-token sessions store only a SHA-256 digest of each opaque token, its user and token-family relationship, issuance and expiry, and consumption or revocation state.
+- Access tokens remain self-contained RS256 credentials. Current-session logout stores only the presented valid token's `jti`, revocation time, and expiry so authentication can reject that token until it expires.
+- Refresh-token sessions store only a SHA-256 digest of each opaque token, its user and token-family relationship, issuance and expiry, and consumption or revocation state.
 - Successful rotation consumes one locked session and creates one replacement in the same family. Detected reuse revokes the family so no replacement session remains active.
 - Actor references from other contexts identify who performed an action; they do not make Identity the owner of the action's business evidence.
 
@@ -253,6 +254,7 @@ Audit events preserve operation, actor, action, entity, time, and a controlled P
 
 - Normalized user email, Customer number, and stable business codes are unique within their namespaces.
 - Refresh-token digests are unique, each token expires after issuance, and at most one unconsumed, unrevoked token remains active in a family.
+- Access-token revocation identity is unique, and each revocation expires after it is recorded. Repeated invalidation cannot create duplicate revocation state.
 - Customer protected identity evidence and bank-account fingerprints support duplicate detection without exposing plaintext through normal reads.
 - A primary Customer bank account must be active and owned by that Customer.
 - Partner Employee rows remain tied to their Partner Company and import batch.
@@ -301,7 +303,7 @@ Exact constraint and trigger definitions remain in Flyway and the current schema
 
 ## 9. Sensitive Data at Rest
 
-- Identity never persists a raw refresh token. The stored SHA-256 digest supports exact lookup and reuse detection for a cryptographically random high-entropy token.
+- Identity never persists a raw access or refresh token. Access-token revocation stores only `jti` and lifetime metadata. The refresh-token SHA-256 digest supports exact lookup and reuse detection for a cryptographically random high-entropy token.
 - Customer identity references and source bank-account numbers use Customer-owned encryption envelopes. Deterministic fingerprints are internal duplicate-detection evidence.
 - Loan contract destinations use a separate Loan-owned, purpose-bound protection envelope. Loan must not reuse Customer ciphertext or fingerprint as contract evidence.
 - Partner salary, employee code, identity evidence, and import-source data are restricted Partner records.
@@ -316,6 +318,7 @@ The API disclosure contract is defined in `../api/MER-API-001-endpoints-and-post
 Physical indexes belong in Flyway and the schema snapshot. The logical model requires efficient access for:
 
 - normalized authentication and RBAC lookup;
+- unexpired access-token revocation lookup and expiry-based maintenance;
 - refresh-token digest lookup, per-token locking, and family revocation;
 - Customer profile, primary bank account, and product-readiness lookup;
 - Partner Company/import/employee lookup and current employment-link resolution;

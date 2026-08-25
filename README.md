@@ -27,7 +27,7 @@ All three products use Meridian's common application, approval, contract, activa
 * **Review, Correction, and Approval**: Loan owns application review and correction workflows. Loan Officers record recommendations, while Approvers make independent decisions under maker-checker controls.
 * **Offers, Contracts, and Disbursement**: Loan preserves accepted lending terms through immutable offers, versioned contracts, Customer acknowledgment, readiness checks, and controlled disbursement activation.
 * **Loan Servicing**: Salary Advance, UCL, and Collateral Loan share repayment, overdue evaluation and cure, contractual payoff, payment-backed Administrative Full-Balance Settlement, and separate administrative closure.
-* **Identity and Access Control**: RS256 access tokens use persistent configured signing keys, while opaque HttpOnly refresh tokens rotate through Identity-owned sessions with reuse detection. Permission-based RBAC, Customer ownership checks, and purpose-limited cross-context contracts protect Customer and Staff operations.
+* **Identity and Access Control**: RS256 access tokens use persistent configured signing keys, while opaque HttpOnly refresh tokens rotate through Identity-owned sessions with reuse detection. Current-session logout revokes the presented refresh family and durably invalidates the presented access token. Permission-based RBAC, Customer ownership checks, and purpose-limited cross-context contracts protect Customer and Staff operations.
 * **Transactional Safety**: Critical financial commands use atomic state changes, operation-specific request identities, semantic replay validation, and concurrency controls.
 * **Immutable Audit Trail**: Ordered lifecycle history and append-only, PII-safe business audit evidence preserve traceability.
 * **Sensitive Data Protection**: AES-GCM protects selected Customer-sensitive values and immutable Loan disbursement bank-account snapshots at rest, while purpose-limited access and restricted or masked responses limit PII exposure.
@@ -188,7 +188,7 @@ All three products use Meridian's common application, approval, contract, activa
 - [x] Salary Advance lifecycle through repayment, overdue cure, contractual payoff, Administrative Full-Balance Settlement, administrative closure, and exact product-exposure effects
 - [x] UCL lifecycle through evidence, verification and correction, approval, exact-request pricing, activation, servicing, closure, product-scoped outstanding protection, and zero Salary Advance exposure
 - [x] Collateral Loan lifecycle through structured facts, ownership evidence, numbered verification, document-only correction, exact-request pricing, activation, servicing, closure, and zero Salary Advance exposure
-- [x] Persistent-key JWT/RBAC, rotating refresh-token sessions, command-specific idempotency, transactional and concurrency controls, Flyway/PostgreSQL persistence, Spring Modulith event publication, and GitHub Actions verification
+- [x] Persistent-key JWT/RBAC, rotating refresh-token sessions, current-session token invalidation, command-specific idempotency, transactional and concurrency controls, Flyway/PostgreSQL persistence, Spring Modulith event publication, and GitHub Actions verification
 - [x] Startup replay and recovery for incomplete event publications
 - [x] Application containerization and a complete local Compose environment with persistent PostgreSQL and Document storage
 - [x] Structured JSON logging with request and business correlation
@@ -296,7 +296,7 @@ Keep both lines from the same command run. Meridian fails startup when either va
 
 `MERIDIAN_FRONTEND_ALLOWED_ORIGINS` accepts a comma-separated list of explicit frontend origins and defaults to `http://localhost:5173`. Wildcard origins are rejected.
 
-`MERIDIAN_REFRESH_TOKEN_LIFETIME` defaults to `7d`. The refresh cookie is HttpOnly, uses `SameSite=Strict`, and is restricted to `/api/v1/auth/refresh`. Local HTTP uses `MERIDIAN_REFRESH_TOKEN_COOKIE_SECURE=false`; deployed HTTPS environments must set it to `true`. Browser clients must send credentialed authentication requests from an explicitly allowed frontend origin.
+`MERIDIAN_REFRESH_TOKEN_LIFETIME` defaults to `7d`. The refresh cookie is HttpOnly, uses `SameSite=Strict`, and is restricted to `/api/v1/auth` so refresh and current-session logout can receive it. Local HTTP uses `MERIDIAN_REFRESH_TOKEN_COOKIE_SECURE=false`; deployed HTTPS environments must set it to `true`. Browser clients must send credentialed authentication requests from an explicitly allowed frontend origin.
 
 `.env` contains local secrets and must not be committed.
 
