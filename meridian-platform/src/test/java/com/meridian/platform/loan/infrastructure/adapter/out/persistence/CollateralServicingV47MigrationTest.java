@@ -53,7 +53,7 @@ class CollateralServicingV47MigrationTest {
         String marker = "-- Extend the common repayment, outcome, and closure reconciliation";
         int start = snapshot.lastIndexOf(marker);
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V47"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V48"));
         assertTrue(start >= 0);
         assertEquals(migration, snapshot.substring(start).strip());
     }

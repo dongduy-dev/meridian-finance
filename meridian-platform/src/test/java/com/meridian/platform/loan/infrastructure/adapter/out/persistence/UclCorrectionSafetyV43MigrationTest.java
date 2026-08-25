@@ -50,7 +50,7 @@ class UclCorrectionSafetyV43MigrationTest {
         String snapshot = Files.readString(CURRENT_SCHEMA)
                 .replace("\r\n", "\n").strip();
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V47"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V48"));
         assertTrue(snapshot.contains(
                 migration + "\n\n-- V44 Collateral Loan origination and ownership-evidence foundation"
         ));

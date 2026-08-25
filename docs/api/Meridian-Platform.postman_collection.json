@@ -773,6 +773,55 @@
                                                 ]
                                   },
                                   {
+                                      "name":  "Refresh Customer Access Token",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/auth/refresh",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "auth",
+                                                                               "refresh"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "description":  "Rotates the HttpOnly MERIDIAN_REFRESH_TOKEN cookie set by the immediately preceding customer login. Postman's cookie jar must be enabled. Captures the replacement customer access token; no refresh token is returned in JSON."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Replacement customer token is returned without refresh-token JSON\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.tokenType).to.eql(\"Bearer\");",
+                                                                                    "    pm.expect(json.accessToken).to.be.a(\"string\").and.not.empty;",
+                                                                                    "    pm.expect(json).not.to.have.property(\"refreshToken\");",
+                                                                                    "    pm.collectionVariables.set(\"customerAccessToken\", json.accessToken);",
+                                                                                    "    pm.collectionVariables.set(\"accessToken\", json.accessToken);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
                                       "name":  "Login as Back-Office Admin",
                                       "request":  {
                                                       "method":  "POST",

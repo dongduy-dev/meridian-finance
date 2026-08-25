@@ -60,6 +60,7 @@ public class SecurityConfig {
                                 "/error",
                                 "/api/v1/health",
                                 "/api/v1/auth/login",
+                                "/api/v1/auth/refresh",
                                 "/api/v1/loan-products",
                                 "/api/v1/loan-products/**",
                                 "/v3/api-docs/**",
@@ -101,6 +102,7 @@ public class SecurityConfig {
                 "X-Request-ID"
         ));
         configuration.setExposedHeaders(List.of("X-Request-ID"));
+        configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

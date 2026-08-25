@@ -12,7 +12,7 @@ Flyway migrations under `meridian-platform/src/main/resources/db/migration` are 
 
 The logical model covers:
 
-- Identity users, roles, permissions, and the optional association from a login user to a Customer;
+- Identity users, roles, permissions, refresh-token sessions, and the optional association from a login user to a Customer;
 - Customer profile, protected identity evidence, and Customer-owned bank accounts;
 - Partner Companies, employee imports, Partner Employees, and reusable Customer–Partner Employee links;
 - the common LoanApplication lifecycle for Salary Advance, Unsecured Consumer Loan, and Collateral Loan;
@@ -26,11 +26,11 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V47. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure.
+The physical schema is the result of Flyway migrations V1 through V48. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure and Identity refresh-token rotation.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
-The V47 physical schema does not contain refresh-token/session tables, OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates the planned refresh-token and OCR concepts from the current model.
+The V48 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
 
 The physical `event_publication` table is Spring Modulith infrastructure. It is omitted from the business ERD because it does not own lending state or redefine the synchronous transaction boundaries documented in `MER-ARCH-006-api-request-flow-and-dependencies.md`.
 
@@ -55,6 +55,7 @@ erDiagram
     ROLE ||--o{ ROLE_PERMISSION : grants
     PERMISSION ||--o{ ROLE_PERMISSION : included_in
     USER o|--o| CUSTOMER : authenticates_as
+    USER ||--o{ REFRESH_TOKEN_SESSION : owns
 
     CUSTOMER ||--|| CUSTOMER_PROFILE : owns
     CUSTOMER ||--o{ BANK_ACCOUNT : owns
@@ -117,11 +118,12 @@ The diagram shows ownership-relevant relationships, not a required physical-tabl
 
 ### 6.1 Identity and Access
 
-Identity owns `users`, `roles`, `permissions`, `role_assignments`, and `role_permissions`.
+Identity owns `users`, `roles`, `permissions`, `role_assignments`, `role_permissions`, and `refresh_token_sessions`.
 
 - A Customer login is associated through `users.customer_id`; Staff users have no Customer association.
 - Roles and permissions preserve RBAC assignment separately from business records.
-- Access tokens are issued and verified without a persisted refresh-token/session record.
+- Access tokens remain self-contained RS256 credentials. Refresh-token sessions store only a SHA-256 digest of each opaque token, its user and token-family relationship, issuance and expiry, and consumption or revocation state.
+- Successful rotation consumes one locked session and creates one replacement in the same family. Detected reuse revokes the family so no replacement session remains active.
 - Actor references from other contexts identify who performed an action; they do not make Identity the owner of the action's business evidence.
 
 ### 6.2 Customer
@@ -250,6 +252,7 @@ Audit events preserve operation, actor, action, entity, time, and a controlled P
 ### 8.1 Identity, Customer, and Partner
 
 - Normalized user email, Customer number, and stable business codes are unique within their namespaces.
+- Refresh-token digests are unique, each token expires after issuance, and at most one unconsumed, unrevoked token remains active in a family.
 - Customer protected identity evidence and bank-account fingerprints support duplicate detection without exposing plaintext through normal reads.
 - A primary Customer bank account must be active and owned by that Customer.
 - Partner Employee rows remain tied to their Partner Company and import batch.
@@ -298,6 +301,7 @@ Exact constraint and trigger definitions remain in Flyway and the current schema
 
 ## 9. Sensitive Data at Rest
 
+- Identity never persists a raw refresh token. The stored SHA-256 digest supports exact lookup and reuse detection for a cryptographically random high-entropy token.
 - Customer identity references and source bank-account numbers use Customer-owned encryption envelopes. Deterministic fingerprints are internal duplicate-detection evidence.
 - Loan contract destinations use a separate Loan-owned, purpose-bound protection envelope. Loan must not reuse Customer ciphertext or fingerprint as contract evidence.
 - Partner salary, employee code, identity evidence, and import-source data are restricted Partner records.
@@ -312,6 +316,7 @@ The API disclosure contract is defined in `../api/MER-API-001-endpoints-and-post
 Physical indexes belong in Flyway and the schema snapshot. The logical model requires efficient access for:
 
 - normalized authentication and RBAC lookup;
+- refresh-token digest lookup, per-token locking, and family revocation;
 - Customer profile, primary bank account, and product-readiness lookup;
 - Partner Company/import/employee lookup and current employment-link resolution;
 - Customer/product application serialization and lifecycle queues;
@@ -326,15 +331,11 @@ Physical indexes belong in Flyway and the schema snapshot. The logical model req
 
 Planned concepts remain outside the current ERD and physical-schema claim.
 
-### 11.1 Refresh-Token and Session Records
-
-Identity may later own hashed refresh-token or session records with expiry, revocation, rotation, and device/session metadata. The V47 schema has no such table, and the v1 API has no refresh or logout endpoint.
-
-### 11.2 OCR-Assisted Document Processing
+### 11.1 OCR-Assisted Document Processing
 
 Document may later own OCR job and result records for claim/lease state, attempts, extracted fields, confidence, model metadata, and trace correlation. OCR remains advisory and asynchronous. Manual Document review remains authoritative for acceptance, waiver, replacement, and processing readiness.
 
-### 11.3 External Financial and Operational Records
+### 11.2 External Financial and Operational Records
 
 Payment-provider reconciliation, bank/payroll integration, general-ledger/journal records, collections, concessions/write-off, reversal/refund, suspense cash, production compliance case management, and broader analytics/read models require separately approved designs. They are not represented as deployed tables in this document.
 

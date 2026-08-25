@@ -21,6 +21,8 @@ import java.util.Set;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final String REFRESH_PATH = "/api/v1/auth/refresh";
+
     private final JwtTokenService jwtTokenService;
     private final SecurityErrorResponseWriter errorResponseWriter;
 
@@ -30,6 +32,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     ) {
         this.jwtTokenService = jwtTokenService;
         this.errorResponseWriter = errorResponseWriter;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return (request.getContextPath() + REFRESH_PATH).equals(request.getRequestURI());
     }
 
     @Override
