@@ -262,12 +262,15 @@ class SecurityConfigTest {
     }
 
     @Test
-    void exposesRequestIdToConfiguredFrontendOrigin() throws Exception {
+    void exposesRequestIdAndRetryAfterToConfiguredFrontendOrigin() throws Exception {
         mockMvc.perform(get("/api/v1/health")
                         .header(HttpHeaders.ORIGIN, CONFIGURED_FRONTEND_ORIGIN))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, CONFIGURED_FRONTEND_ORIGIN))
-                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, "X-Request-ID"));
+                .andExpect(header().string(
+                        HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
+                        "X-Request-ID, Retry-After"
+                ));
     }
 
     @Test
@@ -341,6 +344,51 @@ class SecurityConfigTest {
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
                 .andExpect(jsonPath("$.accessToken").value("rotated-access-token"))
                 .andExpect(jsonPath("$.refreshToken").doesNotExist());
+    }
+
+    @Test
+    void rateLimitsLoginAtTheMvcBoundaryAndExposesRetryAfterToCorsClients() throws Exception {
+        when(authenticationUseCase.login(any())).thenReturn(authenticationResult("access-token", "refresh-token"));
+
+        for (int requestNumber = 0; requestNumber < 10; requestNumber++) {
+            mockMvc.perform(post("/api/v1/auth/login")
+                            .with(request -> {
+                                request.setRemoteAddr("192.0.2.50");
+                                return request;
+                            })
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "email": "customer.demo@meridian.local",
+                                      "password": "local-demo-password"
+                                    }
+                                    """))
+                    .andExpect(status().isOk());
+        }
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .with(request -> {
+                            request.setRemoteAddr("192.0.2.50");
+                            return request;
+                        })
+                        .header(HttpHeaders.ORIGIN, CONFIGURED_FRONTEND_ORIGIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "customer.demo@meridian.local",
+                                  "password": "local-demo-password"
+                                }
+                                """))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("X-Request-ID"))
+                .andExpect(header().exists(HttpHeaders.RETRY_AFTER))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, CONFIGURED_FRONTEND_ORIGIN))
+                .andExpect(header().string(
+                        HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
+                        "X-Request-ID, Retry-After"
+                ))
+                .andExpect(jsonPath("$.errorCode").value("RATE_LIMIT_EXCEEDED"))
+                .andExpect(jsonPath("$.message").value("Too many requests."));
     }
 
     @Test

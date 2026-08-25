@@ -54,7 +54,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "meridian.loan.offer-expiry.enabled=false",
         "meridian.document.orphan-reconciliation.enabled=false",
         "meridian.identity.account-lockout.max-failed-attempts=3",
-        "meridian.identity.account-lockout.lock-duration=15m"
+        "meridian.identity.account-lockout.lock-duration=15m",
+        "meridian.identity.rate-limit.login.max-requests=1000",
+        "meridian.identity.rate-limit.refresh.max-requests=1000"
 })
 @AutoConfigureMockMvc
 @ExtendWith(OutputCaptureExtension.class)

@@ -929,6 +929,24 @@ Inventory every executable error identifier and identify all uses with multiple 
 Suggested future branch name:
 `fix/api-error-contract-conformance`
 
+### MER-FU-044 - Add authentication endpoint rate limiting
+
+Area: Identity / Security / API
+
+Type: Security hardening
+
+Priority: P2
+
+Status: Done
+
+Blocking: No current blocker.
+
+Outcome:
+Login and refresh use separate configurable, bounded, single-instance request throttles keyed by the effective servlet remote address. Requests over a policy limit return `429 RATE_LIMIT_EXCEEDED` with `Retry-After` before password verification or refresh-token processing. Logout remains unthrottled. Distributed or Redis-backed throttling remains later operational hardening.
+
+Suggested future branch name:
+`feature/iam-auth-rate-limiting`
+
 ## Roadmap Boundary
 
 `README.md` owns project sequencing and roadmap presentation. This register owns the status, priority, rationale, and recommended action for individual follow-ups.

@@ -228,6 +228,8 @@ For a known User, Meridian records consecutive failed password attempts. The def
 
 An unknown email, a wrong password, and any password submitted during an active temporary lock all return `401 INVALID_CREDENTIALS` with `Invalid credentials.`. The response does not expose whether the User exists, the failed-attempt count, or the lock expiry. Temporary login lockout does not change User status or revoke existing access tokens and refresh-token families. Administrative `SUSPENDED` and `DISABLED` behavior remains separate.
 
+Login applies request-boundary throttling per effective servlet remote address and application instance before password verification. The default permits 10 requests per one-minute window. A request over the configured limit returns `429 RATE_LIMIT_EXCEEDED` with `Too many requests.` and a positive `Retry-After` header containing the whole-second wait until the current window resets. A rejected request does not change User login-protection state or create authentication credentials.
+
 ### 3.2 Refresh access
 
 ```text
@@ -241,6 +243,8 @@ Only a SHA-256 digest of the cryptographically random refresh token is persisted
 
 Missing, unknown, expired, revoked, or otherwise invalid refresh state returns `401 INVALID_REFRESH_TOKEN`. Reusing a consumed token also returns that safe error and revokes the active token family, requiring a new login. Competing refresh requests with one token cannot both succeed.
 
+Refresh uses an independent request-boundary policy per effective servlet remote address and application instance. The default permits 30 requests per one-minute window, and login traffic does not consume refresh capacity. A request over the configured limit returns `429 RATE_LIMIT_EXCEEDED` with `Too many requests.` and `Retry-After`; the request does not inspect, consume, rotate, or revoke refresh state.
+
 ### 3.3 Current-session logout
 
 ```text
@@ -252,6 +256,8 @@ Authorization: Bearer <accessToken>                    (optional)
 The endpoint accepts no request body. A known presented refresh token revokes its complete refresh-token family, and a presented valid Bearer token becomes unusable immediately. Logout clears `MERIDIAN_REFRESH_TOKEN` on `/api/v1/auth` with the same security attributes used for issuance and `Max-Age=0`.
 
 Logout returns `204 No Content` whether credentials are valid, missing, unknown, expired, malformed, or already revoked. An invalid Bearer token does not prevent revocation through a valid refresh cookie. Repeated logout is idempotent and does not disclose credential state. Only the credentials presented by the current client are invalidated; other login families and access tokens for the same User remain usable.
+
+Authentication request throttling does not apply to logout, so a client may always attempt to revoke its current session.
 
 ### 3.4 Loan-product catalogue
 

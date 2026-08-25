@@ -32,6 +32,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 403 | `ACCESS_DENIED` | Access denied | Use a principal whose role includes the required permission |
 | 403 | `CUSTOMER_CONTEXT_REQUIRED` | Customer context required | Use an authenticated customer-linked token for a customer-owned flow |
 | 403 | `SALARY_ADVANCE_READINESS_ACCESS_DENIED` | Salary Advance readiness access denied | Use an authenticated Customer principal with `loan:submit` |
+| 429 | `RATE_LIMIT_EXCEEDED` | Too many requests. | Retry after the number of seconds stated by the `Retry-After` response header |
 
 ---
 
@@ -304,7 +305,6 @@ These codes describe planned contract vocabulary. They are not active workflow e
 | 503 | `AUDIT_TRAIL_UNAVAILABLE` | Audit trail unavailable | Retry or escalate; the business action requires a durable audit record |
 | 500 | `INTERNAL_SERVER_ERROR` | Internal server error | Retry later or contact support if the error persists |
 | 503 | `SERVICE_TEMPORARILY_UNAVAILABLE` | Service temporarily unavailable | Retry later |
-| 429 | `RATE_LIMIT_EXCEEDED` | Rate limit exceeded | Wait before retrying |
 
 ### Generic Idempotency
 
