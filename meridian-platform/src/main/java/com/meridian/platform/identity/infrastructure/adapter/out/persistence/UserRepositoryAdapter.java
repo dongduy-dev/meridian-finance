@@ -9,6 +9,9 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -26,34 +29,58 @@ public class UserRepositoryAdapter implements UserRepository {
 
     @Override
     public Optional<User> findByNormalizedEmail(String normalizedEmail) {
-        List<UserRow> rows = jdbcTemplate.query(
-                """
-                        SELECT id, email, password_hash, user_type, status, display_name, customer_id
-                        FROM users
-                        WHERE normalized_email = ?
-                        """,
-                (resultSet, rowNum) -> mapUserRow(resultSet),
-                normalizedEmail
-        );
+        return findByNormalizedEmail(normalizedEmail, false);
+    }
 
-        if (rows.isEmpty()) {
-            return Optional.empty();
-        }
-
-        return Optional.of(toDomain(rows.get(0)));
+    @Override
+    public Optional<User> findByNormalizedEmailForUpdate(String normalizedEmail) {
+        return findByNormalizedEmail(normalizedEmail, true);
     }
 
     @Override
     public Optional<User> findById(UUID userId) {
         List<UserRow> rows = jdbcTemplate.query(
                 """
-                        SELECT id, email, password_hash, user_type, status, display_name, customer_id
+                        SELECT id, email, password_hash, user_type, status, display_name, customer_id,
+                               failed_login_attempts, locked_until
                         FROM users
                         WHERE id = ?
                         """,
                 (resultSet, rowNum) -> mapUserRow(resultSet),
                 userId
         );
+        return rows.stream().findFirst().map(this::toDomain);
+    }
+
+    @Override
+    public void updateLoginProtection(UUID userId, int failedLoginAttempts, Instant lockedUntil) {
+        jdbcTemplate.update(
+                """
+                        UPDATE users
+                        SET failed_login_attempts = ?,
+                            locked_until = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                        """,
+                failedLoginAttempts,
+                lockedUntil == null ? null : LocalDateTime.ofInstant(lockedUntil, ZoneOffset.UTC),
+                userId
+        );
+    }
+
+    private Optional<User> findByNormalizedEmail(String normalizedEmail, boolean forUpdate) {
+        String lockClause = forUpdate ? " FOR UPDATE" : "";
+        List<UserRow> rows = jdbcTemplate.query(
+                """
+                        SELECT id, email, password_hash, user_type, status, display_name, customer_id,
+                               failed_login_attempts, locked_until
+                        FROM users
+                        WHERE normalized_email = ?
+                        """ + lockClause,
+                (resultSet, rowNum) -> mapUserRow(resultSet),
+                normalizedEmail
+        );
+
         return rows.stream().findFirst().map(this::toDomain);
     }
 
@@ -67,7 +94,9 @@ public class UserRepositoryAdapter implements UserRepository {
                 row.displayName(),
                 row.customerId(),
                 findRoles(row.id()),
-                findPermissions(row.id())
+                findPermissions(row.id()),
+                row.failedLoginAttempts(),
+                row.lockedUntil()
         );
     }
 
@@ -108,8 +137,14 @@ public class UserRepositoryAdapter implements UserRepository {
                 resultSet.getString("user_type"),
                 resultSet.getString("status"),
                 resultSet.getString("display_name"),
-                resultSet.getObject("customer_id", UUID.class)
+                resultSet.getObject("customer_id", UUID.class),
+                resultSet.getInt("failed_login_attempts"),
+                toInstant(resultSet.getObject("locked_until", LocalDateTime.class))
         );
+    }
+
+    private Instant toInstant(LocalDateTime value) {
+        return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
 
     private record UserRow(
@@ -119,7 +154,9 @@ public class UserRepositoryAdapter implements UserRepository {
             String userType,
             String status,
             String displayName,
-            UUID customerId
+            UUID customerId,
+            int failedLoginAttempts,
+            Instant lockedUntil
     ) {
     }
 }

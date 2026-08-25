@@ -21,6 +21,7 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -51,13 +52,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
         "meridian.loan.offer-expiry.enabled=false",
-        "meridian.document.orphan-reconciliation.enabled=false"
+        "meridian.document.orphan-reconciliation.enabled=false",
+        "meridian.identity.account-lockout.max-failed-attempts=3",
+        "meridian.identity.account-lockout.lock-duration=15m"
 })
 @AutoConfigureMockMvc
 @ExtendWith(OutputCaptureExtension.class)
 class AuthenticationPostgreSqlIntegrationTest {
 
-    private static final String TEST_SCHEMA = "meridian_identity_session_v49_"
+    private static final String TEST_SCHEMA = "meridian_identity_session_v50_"
             + UUID.randomUUID().toString().replace("-", "");
     private static final UUID CUSTOMER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000301");
     private static final UUID CUSTOMER_ROLE_ID = UUID.fromString("00000000-0000-0000-0000-000000000101");
@@ -100,7 +103,12 @@ class AuthenticationPostgreSqlIntegrationTest {
     void resetIdentityState() {
         jdbcTemplate.update("DELETE FROM access_token_revocations");
         jdbcTemplate.update("DELETE FROM refresh_token_sessions");
-        jdbcTemplate.update("UPDATE users SET status = 'ACTIVE' WHERE id = ?", CUSTOMER_USER_ID);
+        jdbcTemplate.update(
+                """
+                        UPDATE users
+                        SET status = 'ACTIVE', failed_login_attempts = 0, locked_until = NULL
+                        """
+        );
         jdbcTemplate.update(
                 "DELETE FROM role_permissions WHERE role_id = ? AND permission_id = ?",
                 CUSTOMER_ROLE_ID,
@@ -140,6 +148,126 @@ class AuthenticationPostgreSqlIntegrationTest {
         assertNotEquals(rawRefreshToken, storedDigest);
         assertFalse(result.getResponse().getContentAsString().contains(rawRefreshToken));
         assertFalse(output.getAll().contains(rawRefreshToken));
+    }
+
+    @Test
+    void failedPasswordStateCommitsAlthoughLoginReturnsSafeUnauthorizedResponse(CapturedOutput output)
+            throws Exception {
+        mockMvc.perform(loginRequest("wrong-password"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("INVALID_CREDENTIALS"))
+                .andExpect(jsonPath("$.message").value("Invalid credentials."));
+
+        assertEquals(1, failedLoginAttempts());
+        assertEquals(0, count("SELECT COUNT(*) FROM users WHERE locked_until IS NOT NULL"));
+        assertFalse(output.getAll().contains("wrong-password"));
+        assertFalse(output.getAll().contains("customer.demo@meridian.local"));
+    }
+
+    @Test
+    void v50ConstraintRejectsNegativeFailedAttemptState() {
+        assertThrows(
+                DataIntegrityViolationException.class,
+                () -> jdbcTemplate.update(
+                        "UPDATE users SET failed_login_attempts = -1 WHERE id = ?",
+                        CUSTOMER_USER_ID
+                )
+        );
+        assertEquals(0, failedLoginAttempts());
+    }
+
+    @Test
+    void thresholdLockIsDurableAndCorrectPasswordRemainsEnumerationSafe() throws Exception {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            mockMvc.perform(loginRequest("wrong-password"))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.errorCode").value("INVALID_CREDENTIALS"));
+        }
+
+        assertEquals(3, failedLoginAttempts());
+        assertEquals(1, count("SELECT COUNT(*) FROM users WHERE locked_until > CURRENT_TIMESTAMP"));
+
+        mockMvc.perform(loginRequest("Meridian@123"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("INVALID_CREDENTIALS"))
+                .andExpect(jsonPath("$.message").value("Invalid credentials."));
+
+        assertEquals(3, failedLoginAttempts());
+    }
+
+    @Test
+    void expiredLockRestoresLoginWithoutSleepingAndSuccessfulLoginClearsState() throws Exception {
+        jdbcTemplate.update(
+                """
+                        UPDATE users
+                        SET failed_login_attempts = 3,
+                            locked_until = CURRENT_TIMESTAMP - INTERVAL '1 second'
+                        WHERE id = ?
+                        """,
+                CUSTOMER_USER_ID
+        );
+
+        mockMvc.perform(loginRequest("Meridian@123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isString());
+
+        assertEquals(0, failedLoginAttempts());
+        assertEquals(0, count("SELECT COUNT(*) FROM users WHERE locked_until IS NOT NULL"));
+    }
+
+    @Test
+    void successfulLoginClearsPersistedPreThresholdFailure() throws Exception {
+        mockMvc.perform(loginRequest("wrong-password"))
+                .andExpect(status().isUnauthorized());
+        assertEquals(1, failedLoginAttempts());
+
+        mockMvc.perform(loginRequest("Meridian@123"))
+                .andExpect(status().isOk());
+
+        assertEquals(0, failedLoginAttempts());
+        assertEquals(0, count("SELECT COUNT(*) FROM users WHERE locked_until IS NOT NULL"));
+    }
+
+    @Test
+    void concurrentFailedAttemptsCannotLoseIncrementsOrBypassThreshold() throws Exception {
+        int contenders = 5;
+        CountDownLatch ready = new CountDownLatch(contenders);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(contenders)) {
+            List<Future<Boolean>> futures = java.util.stream.IntStream.range(0, contenders)
+                    .mapToObj(unused -> executor.submit(() -> attemptFailedLogin(ready, start)))
+                    .toList();
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+
+            for (Future<Boolean> future : futures) {
+                assertTrue(future.get(30, TimeUnit.SECONDS));
+            }
+        }
+
+        assertEquals(3, failedLoginAttempts());
+        assertEquals(1, count("SELECT COUNT(*) FROM users WHERE locked_until > CURRENT_TIMESTAMP"));
+        mockMvc.perform(loginRequest("Meridian@123"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("INVALID_CREDENTIALS"));
+    }
+
+    @Test
+    void passwordLockoutDoesNotInvalidateExistingAccessOrRefreshSession() throws Exception {
+        AuthenticationResult existingSession = authenticationUseCase.login(LOGIN);
+
+        for (int attempt = 0; attempt < 3; attempt++) {
+            mockMvc.perform(loginRequest("wrong-password"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        protectedCustomerProfile(existingSession.response().accessToken())
+                .andExpect(status().isOk());
+        AuthenticationResult refreshed = authenticationUseCase.refresh(existingSession.refreshToken());
+        protectedCustomerProfile(refreshed.response().accessToken())
+                .andExpect(status().isOk());
+        assertEquals(0, count("SELECT COUNT(*) FROM access_token_revocations"));
     }
 
     @Test
@@ -475,6 +603,32 @@ class AuthenticationPostgreSqlIntegrationTest {
                 .cookie(new Cookie("MERIDIAN_REFRESH_TOKEN", refreshToken)));
     }
 
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder loginRequest(String password) {
+        return post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "email": "customer.demo@meridian.local",
+                          "password": "%s"
+                        }
+                        """.formatted(password));
+    }
+
+    private boolean attemptFailedLogin(CountDownLatch ready, CountDownLatch start) throws Exception {
+        ready.countDown();
+        assertTrue(start.await(10, TimeUnit.SECONDS));
+        try {
+            authenticationUseCase.login(new LoginRequest(
+                    "customer.demo@meridian.local",
+                    "wrong-password"
+            ));
+            return false;
+        } catch (AuthenticationFailedException exception) {
+            assertEquals("INVALID_CREDENTIALS", exception.getErrorCode());
+            return true;
+        }
+    }
+
     private org.springframework.test.web.servlet.ResultActions logout(
             String refreshToken,
             String accessToken
@@ -550,6 +704,14 @@ class AuthenticationPostgreSqlIntegrationTest {
 
     private int count(String sql) {
         return jdbcTemplate.queryForObject(sql, Integer.class);
+    }
+
+    private int failedLoginAttempts() {
+        return jdbcTemplate.queryForObject(
+                "SELECT failed_login_attempts FROM users WHERE id = ?",
+                Integer.class,
+                CUSTOMER_USER_ID
+        );
     }
 
     private int activeFamilySessions(UUID familyId) {

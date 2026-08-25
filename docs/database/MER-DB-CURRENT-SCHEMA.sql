@@ -1,7 +1,7 @@
 -- Meridian current physical schema snapshot.
 -- Documentation only. Flyway migrations under meridian-platform/src/main/resources/db/migration
 -- remain the executable database history.
--- Snapshot source: migrations V1 through V49.
+-- Snapshot source: migrations V1 through V50.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -683,12 +683,16 @@ CREATE TABLE users (
     status VARCHAR(50) NOT NULL,
     display_name VARCHAR(150) NOT NULL,
     customer_id UUID,
+    failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT uq_users_normalized_email UNIQUE (normalized_email),
     CONSTRAINT chk_users_user_type CHECK (user_type IN ('CUSTOMER', 'STAFF')),
     CONSTRAINT chk_users_status CHECK (status IN ('ACTIVE', 'SUSPENDED', 'DISABLED')),
+    CONSTRAINT chk_users_failed_login_attempts_non_negative
+        CHECK (failed_login_attempts >= 0),
     CONSTRAINT chk_users_customer_mapping
         CHECK (
             (user_type = 'CUSTOMER' AND customer_id IS NOT NULL)

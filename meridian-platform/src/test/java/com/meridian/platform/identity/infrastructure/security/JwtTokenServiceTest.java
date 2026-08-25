@@ -173,7 +173,9 @@ class JwtTokenServiceTest {
                 "Customer Demo",
                 CUSTOMER_ID,
                 Set.of("CUSTOMER"),
-                Set.of("loan:submit", "partner:employee:verify:own")
+                Set.of("loan:submit", "partner:employee:verify:own"),
+                0,
+                null
         );
     }
 }
