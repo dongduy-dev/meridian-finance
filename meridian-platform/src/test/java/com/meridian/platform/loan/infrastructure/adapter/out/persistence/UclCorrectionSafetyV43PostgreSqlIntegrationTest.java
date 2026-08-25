@@ -48,7 +48,7 @@ class UclCorrectionSafetyV43PostgreSqlIntegrationTest {
             migrate(schema, null);
             MigrateResult replay = migrate(schema, null);
 
-            assertEquals("48", latestVersion(schema));
+            assertEquals("49", latestVersion(schema));
             assertEquals(0, replay.migrationsExecuted);
             assertCurrentShape(schema);
         } finally {
@@ -67,7 +67,7 @@ class UclCorrectionSafetyV43PostgreSqlIntegrationTest {
 
             migrate(schema, null);
 
-            assertEquals("48", latestVersion(schema));
+            assertEquals("49", latestVersion(schema));
             assertCurrentShape(schema);
             if (verificationId != null) {
                 assertEquals(1, jdbc.queryForObject(

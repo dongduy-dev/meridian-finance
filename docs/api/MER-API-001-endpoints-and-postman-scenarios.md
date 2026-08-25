@@ -26,18 +26,19 @@ Public endpoints:
 - `GET /api/v1/health`
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
 - `GET /api/v1/loan-products`
 - `GET /api/v1/loan-products/{productCode}`
 - `GET /v3/api-docs`
 - `GET /swagger-ui.html` and `/swagger-ui/**`
 
-All endpoints outside login, refresh, and the other public operations require:
+All endpoints outside login, refresh, logout, and the other public operations require:
 
 ```text
 Authorization: Bearer <accessToken>
 ```
 
-Meridian uses stateless Bearer access authentication. Login creates an opaque refresh token in an HttpOnly cookie, and the refresh endpoint authenticates through that cookie without requiring a Bearer token. HTTP Basic, form login, server sessions, and logout endpoints are not part of v1.
+Meridian uses stateless Bearer access authentication. Login creates an opaque refresh token in an HttpOnly cookie, and refresh and current-session logout accept that cookie without requiring successful Bearer authentication. HTTP Basic, form login, server sessions, and Spring-managed logout are not part of v1.
 
 | Failure | Response |
 |---|---|
@@ -125,6 +126,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/health` | Public | Return versioned health status. |
 | POST | `/api/v1/auth/login` | Public | Authenticate, return Bearer-token actor facts, and create the refresh cookie. |
 | POST | `/api/v1/auth/refresh` | Public at the Bearer layer; refresh cookie required | Rotate the refresh token and return a fresh access token. |
+| POST | `/api/v1/auth/logout` | Public at the Bearer layer; credentials optional | Invalidate the presented current-session credentials and clear the refresh cookie. |
 | GET | `/api/v1/loan-products` | Public | List active loan products. |
 | GET | `/api/v1/loan-products/{productCode}` | Public | Return one active loan product by code. |
 | GET | `/api/v1/customers/me` | `customer:profile:read:own` | Return the authenticated Customer’s safe profile-readiness view. |
@@ -220,7 +222,7 @@ Successful response fields:
 
 `customerId` may be `null` for Staff principals.
 
-Successful login also sets `MERIDIAN_REFRESH_TOKEN` as an HttpOnly cookie. The cookie is not part of the JSON response. Its path is `/api/v1/auth/refresh`, `SameSite` is `Strict`, its maximum age matches the configured refresh-token lifetime, and `Secure` is controlled by `MERIDIAN_REFRESH_TOKEN_COOKIE_SECURE`. Deployed HTTPS environments must set that flag to `true`; the local HTTP default is `false`.
+Successful login also sets `MERIDIAN_REFRESH_TOKEN` as an HttpOnly cookie. The cookie is not part of the JSON response. Its path is `/api/v1/auth`, `SameSite` is `Strict`, its maximum age matches the configured refresh-token lifetime, and `Secure` is controlled by `MERIDIAN_REFRESH_TOKEN_COOKIE_SECURE`. Deployed HTTPS environments must set that flag to `true`; the local HTTP default is `false`.
 
 ### 3.2 Refresh access
 
@@ -235,7 +237,19 @@ Only a SHA-256 digest of the cryptographically random refresh token is persisted
 
 Missing, unknown, expired, revoked, or otherwise invalid refresh state returns `401 INVALID_REFRESH_TOKEN`. Reusing a consumed token also returns that safe error and revokes the active token family, requiring a new login. Competing refresh requests with one token cannot both succeed.
 
-### 3.3 Loan-product catalogue
+### 3.3 Current-session logout
+
+```text
+POST /api/v1/auth/logout
+Cookie: MERIDIAN_REFRESH_TOKEN=<opaque-refresh-token>  (optional)
+Authorization: Bearer <accessToken>                    (optional)
+```
+
+The endpoint accepts no request body. A known presented refresh token revokes its complete refresh-token family, and a presented valid Bearer token becomes unusable immediately. Logout clears `MERIDIAN_REFRESH_TOKEN` on `/api/v1/auth` with the same security attributes used for issuance and `Max-Age=0`.
+
+Logout returns `204 No Content` whether credentials are valid, missing, unknown, expired, malformed, or already revoked. An invalid Bearer token does not prevent revocation through a valid refresh cookie. Repeated logout is idempotent and does not disclose credential state. Only the credentials presented by the current client are invalidated; other login families and access tokens for the same User remain usable.
+
+### 3.4 Loan-product catalogue
 
 ```text
 GET /api/v1/loan-products
@@ -246,7 +260,7 @@ Both reads are public. The collection read returns active products; the item rea
 
 An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A recognized code with no active product returns `404 PRODUCT_NOT_FOUND`.
 
-### 3.4 Customer profile
+### 3.5 Customer profile
 
 ```json
 {
@@ -263,7 +277,7 @@ An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A recognized code with no 
 
 The safe Customer response contains `customerId`, `customerNumber`, Customer `status`, `verificationStatus`, `profileCompletionStatus`, `primaryActiveBankAccountPresent`, and the profile fields shown above except `identityReference`. Duplicate normalized identity evidence owned by another Customer returns `409 IDENTITY_REFERENCE_ALREADY_IN_USE` without echoing the submitted value.
 
-### 3.5 Customer bank accounts
+### 3.6 Customer bank accounts
 
 ```json
 {
@@ -276,11 +290,11 @@ The safe Customer response contains `customerId`, `customerNumber`, Customer `st
 
 The account number is normalized by removing spaces and hyphens and must contain at least six normalized characters. List, add, make-primary, and deactivate responses contain the account ID, bank code/name, account-holder name, masked account number, last four characters, status, primary flag, and lifecycle timestamps. They never return the full account number, ciphertext, fingerprint, or protection metadata.
 
-### 3.6 Partner staff reads
+### 3.7 Partner staff reads
 
 The Partner Company, employee, and import-batch reads require `partner:read`. Partner Company responses include the configured Salary Advance policy limit. Partner Employee responses include employee code, identity reference, salary amount, Salary Advance limit, employment status, active state, company identity, and import-batch identity. These are restricted Staff contracts and must not be reused as Customer response shapes. Import-batch responses contain company identity, effective month, status, and valid/invalid row counts.
 
-### 3.7 Employee verification
+### 3.8 Employee verification
 
 ```json
 {
@@ -1007,7 +1021,7 @@ Collection:
 docs/api/Meridian-Platform.postman_collection.json
 ```
 
-It authenticates role-specific demo actors, stores Bearer tokens, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. UCL scenarios include all three verification outcomes, correction and re-verification, cancellation, outstanding-debt rejection, and product-generic servicing through closure. The Collateral folder covers prepared ownership evidence, exact-cycle manual verification, Loan Officer recommendation, all four Approver actions, exact offer assertions, Customer acceptance/decline, protected contract preparation, acknowledgment, readiness, destination reveal, activation replay, final schedule reads, ownership concealment, partial repayment and history, Administrative Full-Balance Settlement, and closure.
+It authenticates role-specific demo actors, stores Bearer tokens, exercises refresh and current-session logout through the cookie jar, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. UCL scenarios include all three verification outcomes, correction and re-verification, cancellation, outstanding-debt rejection, and product-generic servicing through closure. The Collateral folder covers prepared ownership evidence, exact-cycle manual verification, Loan Officer recommendation, all four Approver actions, exact offer assertions, Customer acceptance/decline, protected contract preparation, acknowledgment, readiness, destination reveal, activation replay, final schedule reads, ownership concealment, partial repayment and history, Administrative Full-Balance Settlement, and closure.
 
 Complex correction scenarios require prepared application, review-cycle, checklist, and version variables. The optional cancellation folder requires `returnedCancellationScenarioEnabled=true` and a separate Customer-owned `cancellationLoanApplicationId` in `RETURNED_FOR_REVISION`; it confirms the command, exact replay, and terminal application GET without exposing internal evidence IDs. Seed fixtures and scenario-specific IDs belong to the collection or its environment, not this API contract.
 

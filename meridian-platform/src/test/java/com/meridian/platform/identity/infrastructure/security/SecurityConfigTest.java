@@ -84,6 +84,8 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -150,6 +152,12 @@ class SecurityConfigTest {
 
     @MockitoBean
     private JwtTokenService jwtTokenService;
+
+    @MockitoBean
+    private com.meridian.platform.identity.application.port.out.AccessTokenRevocationRepository accessTokenRevocationRepository;
+
+    @MockitoBean
+    private com.meridian.platform.identity.application.port.in.LogoutUseCase logoutUseCase;
 
     @MockitoBean
     private QueryLoanProductUseCase queryLoanProductUseCase;
@@ -311,7 +319,7 @@ class SecurityConfigTest {
                         HttpHeaders.SET_COOKIE,
                         org.hamcrest.Matchers.allOf(
                                 org.hamcrest.Matchers.containsString("MERIDIAN_REFRESH_TOKEN=refresh-token"),
-                                org.hamcrest.Matchers.containsString("Path=/api/v1/auth/refresh"),
+                                org.hamcrest.Matchers.containsString("Path=/api/v1/auth"),
                                 org.hamcrest.Matchers.containsString("Max-Age=604800"),
                                 org.hamcrest.Matchers.containsString("HttpOnly"),
                                 org.hamcrest.Matchers.containsString("SameSite=Strict")
@@ -333,6 +341,43 @@ class SecurityConfigTest {
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
                 .andExpect(jsonPath("$.accessToken").value("rotated-access-token"))
                 .andExpect(jsonPath("$.refreshToken").doesNotExist());
+    }
+
+    @Test
+    void keepsLogoutPublicAndClearsTheRefreshCookieDespiteMalformedBearer() throws Exception {
+        when(jwtTokenService.parseAccessTokenDetails("malformed-access-token"))
+                .thenThrow(new JwtAuthenticationException("INVALID_TOKEN", "Invalid token."));
+
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .cookie(new jakarta.servlet.http.Cookie("MERIDIAN_REFRESH_TOKEN", "refresh-token"))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer malformed-access-token"))
+                .andExpect(status().isNoContent())
+                .andExpect(header().string(
+                        HttpHeaders.SET_COOKIE,
+                        org.hamcrest.Matchers.allOf(
+                                org.hamcrest.Matchers.startsWith("MERIDIAN_REFRESH_TOKEN="),
+                                org.hamcrest.Matchers.containsString("Path=/api/v1/auth"),
+                                org.hamcrest.Matchers.containsString("Max-Age=0"),
+                                org.hamcrest.Matchers.containsString("HttpOnly"),
+                                org.hamcrest.Matchers.containsString("SameSite=Strict")
+                        )
+                ));
+    }
+
+    @Test
+    void expiredBearerDoesNotPreventPresentedRefreshCredentialLogout() throws Exception {
+        when(jwtTokenService.parseAccessTokenDetails("expired-access-token"))
+                .thenThrow(new JwtAuthenticationException("TOKEN_EXPIRED", "Token expired."));
+
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .cookie(new jakarta.servlet.http.Cookie("MERIDIAN_REFRESH_TOKEN", "refresh-token"))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer expired-access-token"))
+                .andExpect(status().isNoContent());
+
+        verify(logoutUseCase).logout(argThat(command ->
+                command.refreshToken().filter("refresh-token"::equals).isPresent()
+                        && command.accessToken().isEmpty()
+        ));
     }
 
     @Test

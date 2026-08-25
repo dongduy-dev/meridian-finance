@@ -1,10 +1,14 @@
 package com.meridian.platform.identity.infrastructure.adapter.in.web;
 
 import com.meridian.platform.identity.application.dto.AuthenticationResult;
+import com.meridian.platform.identity.application.dto.CurrentSessionLogoutCommand;
 import com.meridian.platform.identity.application.dto.LoginRequest;
 import com.meridian.platform.identity.application.port.in.AuthenticationUseCase;
+import com.meridian.platform.identity.application.port.in.LogoutUseCase;
 import com.meridian.platform.identity.application.port.out.RefreshTokenCodecPort;
+import com.meridian.platform.identity.infrastructure.adapter.out.persistence.AccessTokenRevocationRepositoryAdapter;
 import com.meridian.platform.identity.infrastructure.security.JwtTokenService;
+import com.meridian.platform.identity.infrastructure.security.ParsedAccessToken;
 import com.meridian.platform.shared.domain.exception.AuthenticationFailedException;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -52,7 +57,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ExtendWith(OutputCaptureExtension.class)
 class AuthenticationPostgreSqlIntegrationTest {
 
-    private static final String TEST_SCHEMA = "meridian_identity_refresh_v48_"
+    private static final String TEST_SCHEMA = "meridian_identity_session_v49_"
             + UUID.randomUUID().toString().replace("-", "");
     private static final UUID CUSTOMER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000301");
     private static final UUID CUSTOMER_ROLE_ID = UUID.fromString("00000000-0000-0000-0000-000000000101");
@@ -64,6 +69,9 @@ class AuthenticationPostgreSqlIntegrationTest {
 
     @Autowired
     private AuthenticationUseCase authenticationUseCase;
+
+    @Autowired
+    private LogoutUseCase logoutUseCase;
 
     @Autowired
     private RefreshTokenCodecPort refreshTokenCodec;
@@ -90,6 +98,7 @@ class AuthenticationPostgreSqlIntegrationTest {
 
     @BeforeEach
     void resetIdentityState() {
+        jdbcTemplate.update("DELETE FROM access_token_revocations");
         jdbcTemplate.update("DELETE FROM refresh_token_sessions");
         jdbcTemplate.update("UPDATE users SET status = 'ACTIVE' WHERE id = ?", CUSTOMER_USER_ID);
         jdbcTemplate.update(
@@ -116,7 +125,7 @@ class AuthenticationPostgreSqlIntegrationTest {
 
         String setCookie = result.getResponse().getHeader(HttpHeaders.SET_COOKIE);
         assertNotNull(setCookie);
-        assertTrue(setCookie.contains("Path=/api/v1/auth/refresh"));
+        assertTrue(setCookie.contains("Path=/api/v1/auth"));
         assertTrue(setCookie.contains("Max-Age=604800"));
         assertTrue(setCookie.contains("HttpOnly"));
         assertTrue(setCookie.contains("SameSite=Strict"));
@@ -144,9 +153,10 @@ class AuthenticationPostgreSqlIntegrationTest {
                 .andExpect(jsonPath("$.refreshToken").doesNotExist())
                 .andReturn();
 
-        String replacementRefreshToken = cookieValue(
-                refresh.getResponse().getHeader(HttpHeaders.SET_COOKIE)
-        );
+        String replacementCookie = refresh.getResponse().getHeader(HttpHeaders.SET_COOKIE);
+        assertNotNull(replacementCookie);
+        assertTrue(replacementCookie.contains("Path=/api/v1/auth"));
+        String replacementRefreshToken = cookieValue(replacementCookie);
         JsonNode response = objectMapper.readTree(refresh.getResponse().getContentAsString());
 
         assertNotEquals(login.refreshToken(), replacementRefreshToken);
@@ -278,9 +288,212 @@ class AuthenticationPostgreSqlIntegrationTest {
                 .permissions().contains("admin:config"));
     }
 
+    @Test
+    void logoutRevokesTheKnownRefreshFamilyAndClearsTheCookie() throws Exception {
+        AuthenticationResult login = authenticationUseCase.login(LOGIN);
+        UUID familyId = familyId(login.refreshToken());
+        MvcResult rotation = refresh(login.refreshToken())
+                .andExpect(status().isOk())
+                .andReturn();
+        String replacementRefreshToken = cookieValue(
+                rotation.getResponse().getHeader(HttpHeaders.SET_COOKIE)
+        );
+
+        MvcResult logout = logout(login.refreshToken(), null)
+                .andExpect(status().isNoContent())
+                .andReturn();
+
+        assertClearedCookie(logout.getResponse().getHeader(HttpHeaders.SET_COOKIE));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM refresh_token_sessions
+                WHERE family_id = '%s' AND revoked_at IS NULL
+                """.formatted(familyId)));
+        refresh(replacementRefreshToken)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("INVALID_REFRESH_TOKEN"));
+    }
+
+    @Test
+    void logoutPersistsOnlyAccessJtiAndImmediatelyRejectsThatBearer(CapturedOutput output) throws Exception {
+        AuthenticationResult login = authenticationUseCase.login(LOGIN);
+        String accessToken = login.response().accessToken();
+        ParsedAccessToken parsed = jwtTokenService.parseAccessTokenDetails(accessToken);
+
+        protectedCustomerProfile(accessToken).andExpect(status().isOk());
+        MvcResult logout = logout(null, accessToken)
+                .andExpect(status().isNoContent())
+                .andReturn();
+
+        assertEquals(parsed.tokenId(), jdbcTemplate.queryForObject(
+                "SELECT token_id FROM access_token_revocations",
+                UUID.class
+        ));
+        assertEquals(1, count("SELECT COUNT(*) FROM access_token_revocations"));
+        assertEquals(
+                List.of("expires_at", "revoked_at", "token_id"),
+                jdbcTemplate.queryForList(
+                        """
+                                SELECT column_name
+                                FROM information_schema.columns
+                                WHERE table_schema = ?
+                                  AND table_name = 'access_token_revocations'
+                                ORDER BY column_name
+                                """,
+                        String.class,
+                        TEST_SCHEMA
+                )
+        );
+        assertFalse(logout.getResponse().getContentAsString().contains(accessToken));
+        assertFalse(output.getAll().contains(accessToken));
+
+        protectedCustomerProfile(accessToken)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("INVALID_TOKEN"))
+                .andExpect(result -> assertFalse(result.getResponse()
+                        .getContentAsString().contains(parsed.tokenId().toString())));
+
+        String otherAccessToken = authenticationUseCase.login(LOGIN).response().accessToken();
+        protectedCustomerProfile(otherAccessToken).andExpect(status().isOk());
+    }
+
+    @Test
+    void repeatedMissingAndUnknownCredentialLogoutIsIdempotent() throws Exception {
+        logout(null, null)
+                .andExpect(status().isNoContent())
+                .andExpect(result -> assertClearedCookie(
+                        result.getResponse().getHeader(HttpHeaders.SET_COOKIE)
+                ));
+        logout("unknown-refresh-token", "malformed-access-token")
+                .andExpect(status().isNoContent());
+
+        AuthenticationResult login = authenticationUseCase.login(LOGIN);
+        logout(login.refreshToken(), login.response().accessToken())
+                .andExpect(status().isNoContent());
+        logout(login.refreshToken(), login.response().accessToken())
+                .andExpect(status().isNoContent());
+
+        assertEquals(1, count("SELECT COUNT(*) FROM access_token_revocations"));
+        assertEquals(0, count("""
+                SELECT COUNT(*) FROM refresh_token_sessions
+                WHERE consumed_at IS NULL AND revoked_at IS NULL
+                """));
+    }
+
+    @Test
+    void malformedBearerDoesNotPreventRefreshFamilyLogout() throws Exception {
+        AuthenticationResult login = authenticationUseCase.login(LOGIN);
+
+        logout(login.refreshToken(), "malformed-access-token")
+                .andExpect(status().isNoContent());
+
+        refresh(login.refreshToken())
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("INVALID_REFRESH_TOKEN"));
+        assertEquals(0, count("SELECT COUNT(*) FROM access_token_revocations"));
+    }
+
+    @Test
+    void logoutKeepsIndependentLoginFamiliesForTheSameUserUsable() throws Exception {
+        AuthenticationResult sessionA = authenticationUseCase.login(LOGIN);
+        AuthenticationResult sessionB = authenticationUseCase.login(LOGIN);
+        UUID familyA = familyId(sessionA.refreshToken());
+        UUID familyB = familyId(sessionB.refreshToken());
+
+        logout(sessionA.refreshToken(), sessionA.response().accessToken())
+                .andExpect(status().isNoContent());
+
+        assertEquals(0, activeFamilySessions(familyA));
+        assertEquals(1, activeFamilySessions(familyB));
+        refresh(sessionA.refreshToken()).andExpect(status().isUnauthorized());
+        refresh(sessionB.refreshToken()).andExpect(status().isOk());
+        protectedCustomerProfile(sessionA.response().accessToken()).andExpect(status().isUnauthorized());
+        protectedCustomerProfile(sessionB.response().accessToken()).andExpect(status().isOk());
+    }
+
+    @Test
+    void logoutAndRefreshRaceCannotLeaveAUsableReplacement() throws Exception {
+        AuthenticationResult login = authenticationUseCase.login(LOGIN);
+        UUID familyId = familyId(login.refreshToken());
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<AuthenticationResult> refresh = executor.submit(() ->
+                    attemptRefreshResult(login.refreshToken(), ready, start));
+            Future<Void> logout = executor.submit(() -> {
+                ready.countDown();
+                assertTrue(start.await(10, TimeUnit.SECONDS));
+                logoutUseCase.logout(new CurrentSessionLogoutCommand(
+                        java.util.Optional.of(login.refreshToken()),
+                        java.util.Optional.empty()
+                ));
+                return null;
+            });
+
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            AuthenticationResult replacement = refresh.get(20, TimeUnit.SECONDS);
+            logout.get(20, TimeUnit.SECONDS);
+
+            if (replacement != null) {
+                assertInvalidRefresh(replacement.refreshToken());
+            }
+        }
+
+        assertEquals(0, activeFamilySessions(familyId));
+    }
+
+    @Test
+    void accessRevocationRemainsDurableAcrossRepositoryRecreationAndExpiresFromChecks() {
+        AuthenticationResult login = authenticationUseCase.login(LOGIN);
+        ParsedAccessToken parsed = jwtTokenService.parseAccessTokenDetails(login.response().accessToken());
+        logoutUseCase.logout(new CurrentSessionLogoutCommand(
+                java.util.Optional.empty(),
+                java.util.Optional.of(new com.meridian.platform.identity.application.dto.AccessTokenReference(
+                        parsed.tokenId(),
+                        parsed.expiresAt()
+                ))
+        ));
+
+        AccessTokenRevocationRepositoryAdapter recreated =
+                new AccessTokenRevocationRepositoryAdapter(jdbcTemplate);
+        assertTrue(recreated.isRevoked(parsed.tokenId()));
+
+        UUID expiredTokenId = UUID.randomUUID();
+        jdbcTemplate.update(
+                """
+                        INSERT INTO access_token_revocations (token_id, revoked_at, expires_at)
+                        VALUES (?, CURRENT_TIMESTAMP - INTERVAL '2 hours', CURRENT_TIMESTAMP - INTERVAL '1 hour')
+                        """,
+                expiredTokenId
+        );
+        assertFalse(recreated.isRevoked(expiredTokenId));
+    }
+
     private org.springframework.test.web.servlet.ResultActions refresh(String refreshToken) throws Exception {
         return mockMvc.perform(post("/api/v1/auth/refresh")
                 .cookie(new Cookie("MERIDIAN_REFRESH_TOKEN", refreshToken)));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions logout(
+            String refreshToken,
+            String accessToken
+    ) throws Exception {
+        var request = post("/api/v1/auth/logout");
+        if (refreshToken != null) {
+            request.cookie(new Cookie("MERIDIAN_REFRESH_TOKEN", refreshToken));
+        }
+        if (accessToken != null) {
+            request.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
+        }
+        return mockMvc.perform(request);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions protectedCustomerProfile(
+            String accessToken
+    ) throws Exception {
+        return mockMvc.perform(get("/api/v1/customers/me")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken));
     }
 
     private boolean attemptRefresh(String refreshToken, CountDownLatch ready, CountDownLatch start) throws Exception {
@@ -292,6 +505,21 @@ class AuthenticationPostgreSqlIntegrationTest {
         } catch (AuthenticationFailedException exception) {
             assertEquals("INVALID_REFRESH_TOKEN", exception.getErrorCode());
             return false;
+        }
+    }
+
+    private AuthenticationResult attemptRefreshResult(
+            String refreshToken,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) throws Exception {
+        ready.countDown();
+        assertTrue(start.await(10, TimeUnit.SECONDS));
+        try {
+            return authenticationUseCase.refresh(refreshToken);
+        } catch (AuthenticationFailedException exception) {
+            assertEquals("INVALID_REFRESH_TOKEN", exception.getErrorCode());
+            return null;
         }
     }
 
@@ -322,6 +550,29 @@ class AuthenticationPostgreSqlIntegrationTest {
 
     private int count(String sql) {
         return jdbcTemplate.queryForObject(sql, Integer.class);
+    }
+
+    private int activeFamilySessions(UUID familyId) {
+        return jdbcTemplate.queryForObject(
+                """
+                        SELECT COUNT(*) FROM refresh_token_sessions
+                        WHERE family_id = ?
+                          AND consumed_at IS NULL
+                          AND revoked_at IS NULL
+                        """,
+                Integer.class,
+                familyId
+        );
+    }
+
+    private void assertClearedCookie(String setCookieHeader) {
+        assertNotNull(setCookieHeader);
+        assertTrue(setCookieHeader.startsWith("MERIDIAN_REFRESH_TOKEN="));
+        assertTrue(setCookieHeader.contains("Path=/api/v1/auth"));
+        assertTrue(setCookieHeader.contains("Max-Age=0"));
+        assertTrue(setCookieHeader.contains("HttpOnly"));
+        assertTrue(setCookieHeader.contains("SameSite=Strict"));
+        assertFalse(setCookieHeader.contains("; Secure"));
     }
 
     private String cookieValue(String setCookieHeader) {

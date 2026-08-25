@@ -1,5 +1,6 @@
 package com.meridian.platform.identity.infrastructure.security;
 
+import com.meridian.platform.identity.application.port.out.AccessTokenRevocationRepository;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -21,22 +22,29 @@ import java.util.Set;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private static final String REFRESH_PATH = "/api/v1/auth/refresh";
+    private static final Set<String> UNFILTERED_PATHS = Set.of(
+            "/api/v1/auth/refresh",
+            "/api/v1/auth/logout"
+    );
 
     private final JwtTokenService jwtTokenService;
+    private final AccessTokenRevocationRepository accessTokenRevocationRepository;
     private final SecurityErrorResponseWriter errorResponseWriter;
 
     public JwtAuthenticationFilter(
             JwtTokenService jwtTokenService,
+            AccessTokenRevocationRepository accessTokenRevocationRepository,
             SecurityErrorResponseWriter errorResponseWriter
     ) {
         this.jwtTokenService = jwtTokenService;
+        this.accessTokenRevocationRepository = accessTokenRevocationRepository;
         this.errorResponseWriter = errorResponseWriter;
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return (request.getContextPath() + REFRESH_PATH).equals(request.getRequestURI());
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        return UNFILTERED_PATHS.contains(path);
     }
 
     @Override
@@ -52,7 +60,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         try {
-            AuthenticatedUser authenticatedUser = jwtTokenService.parseAccessToken(authorizationHeader.substring(7));
+            ParsedAccessToken parsedAccessToken = jwtTokenService.parseAccessTokenDetails(authorizationHeader.substring(7));
+            if (accessTokenRevocationRepository.isRevoked(parsedAccessToken.tokenId())) {
+                throw new JwtAuthenticationException("INVALID_TOKEN", "Invalid token.");
+            }
+            AuthenticatedUser authenticatedUser = parsedAccessToken.authenticatedUser();
             MeridianPrincipal principal = new MeridianPrincipal(authenticatedUser);
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                     principal,

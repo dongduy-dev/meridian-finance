@@ -48,6 +48,7 @@ class LoanDisbursementSecurityTest {
 
     @Autowired MockMvc mockMvc;
     @MockitoBean JwtTokenService jwtTokenService;
+    @MockitoBean com.meridian.platform.identity.application.port.out.AccessTokenRevocationRepository accessTokenRevocationRepository;
     @MockitoBean ConfirmManualDisbursementUseCase confirm;
     @MockitoBean RevealDisbursementDestinationUseCase reveal;
     @MockitoBean QueryLoanAccountUseCase query;

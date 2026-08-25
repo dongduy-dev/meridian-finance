@@ -463,16 +463,16 @@ Suggested future branch name:
 
 Area: Identity / Security
 
-Type: Deferred feature
+Type: Security hardening
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocking: No current blocker.
 
-Recommendation:
-Implement token invalidation when logout/session management becomes in scope.
+Outcome:
+Current-session logout revokes the refresh-token family represented by the presented cookie, durably invalidates the presented valid access token until expiry, clears the shared authentication-path cookie, and returns the same idempotent `204 No Content` response for missing or invalid credentials. PostgreSQL row locking preserves refresh/logout race safety, and independent login families for the same User remain usable.
 
 Suggested future branch name:
 `feature/iam-token-invalidation`

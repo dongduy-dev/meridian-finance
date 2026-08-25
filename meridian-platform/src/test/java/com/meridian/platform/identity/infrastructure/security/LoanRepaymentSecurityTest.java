@@ -48,6 +48,7 @@ class LoanRepaymentSecurityTest {
 
     @Autowired MockMvc mockMvc;
     @MockitoBean JwtTokenService jwtTokenService;
+    @MockitoBean com.meridian.platform.identity.application.port.out.AccessTokenRevocationRepository accessTokenRevocationRepository;
     @MockitoBean RecordRepaymentUseCase record;
     @MockitoBean QueryRepaymentsUseCase query;
 

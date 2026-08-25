@@ -61,6 +61,7 @@ public class SecurityConfig {
                                 "/api/v1/health",
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
+                                "/api/v1/auth/logout",
                                 "/api/v1/loan-products",
                                 "/api/v1/loan-products/**",
                                 "/v3/api-docs/**",

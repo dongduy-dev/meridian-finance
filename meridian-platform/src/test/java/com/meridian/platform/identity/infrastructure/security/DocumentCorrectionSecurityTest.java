@@ -74,6 +74,7 @@ class DocumentCorrectionSecurityTest {
     @Autowired private MockMvc mockMvc;
 
     @MockitoBean private JwtTokenService jwtTokenService;
+    @MockitoBean private com.meridian.platform.identity.application.port.out.AccessTokenRevocationRepository accessTokenRevocationRepository;
     @MockitoBean private UploadDocumentUseCase uploadDocumentUseCase;
     @MockitoBean private QueryDocumentReviewQueueUseCase queryDocumentReviewQueueUseCase;
     @MockitoBean private ReviewDocumentUseCase reviewDocumentUseCase;

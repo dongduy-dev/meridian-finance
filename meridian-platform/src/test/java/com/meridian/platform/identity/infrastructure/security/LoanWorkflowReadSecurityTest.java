@@ -45,6 +45,7 @@ class LoanWorkflowReadSecurityTest {
 
     @Autowired MockMvc mockMvc;
     @MockitoBean JwtTokenService jwtTokenService;
+    @MockitoBean com.meridian.platform.identity.application.port.out.AccessTokenRevocationRepository accessTokenRevocationRepository;
     @MockitoBean QuerySalaryAdvanceReadinessUseCase readiness;
     @MockitoBean QueryLoanApplicationUseCase applications;
 

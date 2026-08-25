@@ -14,7 +14,7 @@ import java.util.Optional;
 @Component
 public class RefreshTokenCookieService {
 
-    static final String COOKIE_PATH = "/api/v1/auth/refresh";
+    static final String COOKIE_PATH = "/api/v1/auth";
     static final String COOKIE_NAME = "MERIDIAN_REFRESH_TOKEN";
 
     private final boolean secure;
@@ -55,6 +55,17 @@ public class RefreshTokenCookieService {
                 .sameSite("Strict")
                 .path(COOKIE_PATH)
                 .maxAge(maxAge)
+                .build()
+                .toString();
+    }
+
+    public String clear() {
+        return ResponseCookie.from(COOKIE_NAME, "")
+                .httpOnly(true)
+                .secure(secure)
+                .sameSite("Strict")
+                .path(COOKIE_PATH)
+                .maxAge(Duration.ZERO)
                 .build()
                 .toString();
     }

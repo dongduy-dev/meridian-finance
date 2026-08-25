@@ -19,8 +19,22 @@ class RefreshTokenCookieServiceTest {
         String header = service.issue("raw-token", issuedAt, issuedAt.plusSeconds(604800));
 
         assertTrue(header.contains("MERIDIAN_REFRESH_TOKEN=raw-token"));
-        assertTrue(header.contains("Path=/api/v1/auth/refresh"));
+        assertTrue(header.contains("Path=/api/v1/auth"));
         assertTrue(header.contains("Max-Age=604800"));
+        assertTrue(header.contains("Secure"));
+        assertTrue(header.contains("HttpOnly"));
+        assertTrue(header.contains("SameSite=Strict"));
+    }
+
+    @Test
+    void clearsCookieWithTheIssuingSecurityAttributes() {
+        RefreshTokenCookieService service = new RefreshTokenCookieService(true);
+
+        String header = service.clear();
+
+        assertTrue(header.startsWith("MERIDIAN_REFRESH_TOKEN="));
+        assertTrue(header.contains("Path=/api/v1/auth"));
+        assertTrue(header.contains("Max-Age=0"));
         assertTrue(header.contains("Secure"));
         assertTrue(header.contains("HttpOnly"));
         assertTrue(header.contains("SameSite=Strict"));

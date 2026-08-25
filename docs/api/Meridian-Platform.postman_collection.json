@@ -822,6 +822,126 @@
                                                 ]
                                   },
                                   {
+                                      "name":  "Logout Current Customer Session",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/auth/logout",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "auth",
+                                                                               "logout"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{customerAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Invalidates the current customer Bearer token and the refresh-token family supplied by Postman's cookie jar. The endpoint clears MERIDIAN_REFRESH_TOKEN and does not disclose prior credential state."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 204\", function () {",
+                                                                                    "    pm.response.to.have.status(204);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Logout returns no response body\", function () {",
+                                                                                    "    pm.expect(pm.response.text()).to.eql(\"\");",
+                                                                                    "});",
+                                                                                    "pm.test(\"Refresh cookie is cleared on the shared auth path\", function () {",
+                                                                                    "    const setCookie = pm.response.headers.get(\"Set-Cookie\") || \"\";",
+                                                                                    "    pm.expect(setCookie).to.include(\"MERIDIAN_REFRESH_TOKEN=\");",
+                                                                                    "    pm.expect(setCookie).to.include(\"Path=/api/v1/auth\");",
+                                                                                    "    pm.expect(setCookie).to.include(\"Max-Age=0\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Re-login as Customer After Logout",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json",
+                                                                         "type":  "text"
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/auth/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "auth",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "description":  "Creates a new independent customer session after the representative logout scenario so later collection folders use fresh credentials.",
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               }
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () {",
+                                                                                    "    pm.response.to.have.status(200);",
+                                                                                    "});",
+                                                                                    "pm.test(\"Fresh customer session is returned\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.tokenType).to.eql(\"Bearer\");",
+                                                                                    "    pm.expect(json.accessToken).to.be.a(\"string\").and.not.empty;",
+                                                                                    "    pm.collectionVariables.set(\"customerAccessToken\", json.accessToken);",
+                                                                                    "    pm.collectionVariables.set(\"currentUserId\", json.userId || \"\");",
+                                                                                    "    pm.collectionVariables.set(\"currentCustomerId\", json.customerId || \"\");",
+                                                                                    "    pm.collectionVariables.set(\"accessToken\", json.accessToken);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
                                       "name":  "Login as Back-Office Admin",
                                       "request":  {
                                                       "method":  "POST",
