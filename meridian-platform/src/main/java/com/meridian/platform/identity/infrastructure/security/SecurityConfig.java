@@ -102,7 +102,7 @@ public class SecurityConfig {
                 HttpHeaders.CONTENT_TYPE,
                 "X-Request-ID"
         ));
-        configuration.setExposedHeaders(List.of("X-Request-ID"));
+        configuration.setExposedHeaders(List.of("X-Request-ID", HttpHeaders.RETRY_AFTER));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
