@@ -9,11 +9,15 @@ import com.meridian.platform.identity.application.dto.CustomerRegistrationRespon
 import com.meridian.platform.identity.application.dto.EmailVerificationConfirmationRequest;
 import com.meridian.platform.identity.application.dto.EmailVerificationRequest;
 import com.meridian.platform.identity.application.dto.LoginRequest;
+import com.meridian.platform.identity.application.dto.PasswordResetConfirmationRequest;
+import com.meridian.platform.identity.application.dto.PasswordResetRequest;
 import com.meridian.platform.identity.application.port.in.AuthenticationUseCase;
 import com.meridian.platform.identity.application.port.in.ConfirmEmailVerificationUseCase;
+import com.meridian.platform.identity.application.port.in.ConfirmPasswordResetUseCase;
 import com.meridian.platform.identity.application.port.in.LogoutUseCase;
 import com.meridian.platform.identity.application.port.in.RegisterCustomerUseCase;
 import com.meridian.platform.identity.application.port.in.RequestEmailVerificationUseCase;
+import com.meridian.platform.identity.application.port.in.RequestPasswordResetUseCase;
 import com.meridian.platform.identity.infrastructure.security.JwtAuthenticationException;
 import com.meridian.platform.identity.infrastructure.security.JwtTokenService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -37,6 +41,8 @@ public class AuthController {
     private final RegisterCustomerUseCase registerCustomerUseCase;
     private final RequestEmailVerificationUseCase requestEmailVerificationUseCase;
     private final ConfirmEmailVerificationUseCase confirmEmailVerificationUseCase;
+    private final RequestPasswordResetUseCase requestPasswordResetUseCase;
+    private final ConfirmPasswordResetUseCase confirmPasswordResetUseCase;
     private final RefreshTokenCookieService refreshTokenCookieService;
     private final JwtTokenService jwtTokenService;
 
@@ -46,6 +52,8 @@ public class AuthController {
             RegisterCustomerUseCase registerCustomerUseCase,
             RequestEmailVerificationUseCase requestEmailVerificationUseCase,
             ConfirmEmailVerificationUseCase confirmEmailVerificationUseCase,
+            RequestPasswordResetUseCase requestPasswordResetUseCase,
+            ConfirmPasswordResetUseCase confirmPasswordResetUseCase,
             RefreshTokenCookieService refreshTokenCookieService,
             JwtTokenService jwtTokenService
     ) {
@@ -54,6 +62,8 @@ public class AuthController {
         this.registerCustomerUseCase = registerCustomerUseCase;
         this.requestEmailVerificationUseCase = requestEmailVerificationUseCase;
         this.confirmEmailVerificationUseCase = confirmEmailVerificationUseCase;
+        this.requestPasswordResetUseCase = requestPasswordResetUseCase;
+        this.confirmPasswordResetUseCase = confirmPasswordResetUseCase;
         this.refreshTokenCookieService = refreshTokenCookieService;
         this.jwtTokenService = jwtTokenService;
     }
@@ -88,6 +98,26 @@ public class AuthController {
     ) {
         confirmEmailVerificationUseCase.confirmVerification(request);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/password-reset/request")
+    @SecurityRequirements
+    public ResponseEntity<Void> requestPasswordReset(
+            @Valid @RequestBody PasswordResetRequest request
+    ) {
+        requestPasswordResetUseCase.requestReset(request);
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/password-reset/confirm")
+    @SecurityRequirements
+    public ResponseEntity<Void> confirmPasswordReset(
+            @Valid @RequestBody PasswordResetConfirmationRequest request
+    ) {
+        confirmPasswordResetUseCase.confirmReset(request);
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, refreshTokenCookieService.clear())
+                .build();
     }
 
     @PostMapping("/refresh")

@@ -15,4 +15,6 @@ public interface RefreshTokenSessionRepository {
     void markConsumed(UUID sessionId, Instant consumedAt);
 
     void revokeFamily(UUID familyId, Instant revokedAt);
+
+    void revokeAllForUser(UUID userId, Instant revokedAt);
 }

@@ -27,6 +27,8 @@ Public endpoints:
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/email-verification/request`
 - `POST /api/v1/auth/email-verification/confirm`
+- `POST /api/v1/auth/password-reset/request`
+- `POST /api/v1/auth/password-reset/confirm`
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
@@ -35,7 +37,7 @@ Public endpoints:
 - `GET /v3/api-docs`
 - `GET /swagger-ui.html` and `/swagger-ui/**`
 
-All endpoints outside registration, email verification, login, refresh, logout, and the other public operations require:
+All endpoints outside registration, email verification, password reset, login, refresh, logout, and the other public operations require:
 
 ```text
 Authorization: Bearer <accessToken>
@@ -131,6 +133,8 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/auth/register` | Public | Create an unverified Customer account and request verification email delivery without issuing credentials. |
 | POST | `/api/v1/auth/email-verification/request` | Public | Enumeration-safely replace and deliver a verification token for an eligible unverified Customer account. |
 | POST | `/api/v1/auth/email-verification/confirm` | Public | Confirm an email by opaque verification token. |
+| POST | `/api/v1/auth/password-reset/request` | Public | Enumeration-safely replace and deliver a password-reset token for an eligible User. |
+| POST | `/api/v1/auth/password-reset/confirm` | Public | Replace the password using an opaque reset token and revoke the User's refresh sessions. |
 | POST | `/api/v1/auth/login` | Public | Authenticate, return Bearer-token actor facts, and create the refresh cookie. |
 | POST | `/api/v1/auth/refresh` | Public at the Bearer layer; refresh cookie required | Rotate the refresh token and return a fresh access token. |
 | POST | `/api/v1/auth/logout` | Public at the Bearer layer; credentials optional | Invalidate the presented current-session credentials and clear the refresh cookie. |
@@ -264,7 +268,48 @@ Unknown, expired, and revoked tokens all return `401 INVALID_EMAIL_VERIFICATION_
 
 The controlled email contains a frontend link in the form `http://localhost:5173/verify-email#token=<opaque-token>` by default. The future frontend reads the fragment and sends the JSON request above; the raw token is not sent in a backend query string. Local manual testing obtains it from Mailpit at `http://localhost:8025`.
 
-### 3.4 Login
+### 3.4 Request password reset
+
+```text
+POST /api/v1/auth/password-reset/request
+```
+
+```json
+{
+  "email": "customer@example.com"
+}
+```
+
+The endpoint always returns `202 Accepted` with no response body. Unknown, email-unverified, `SUSPENDED`, and `DISABLED` Users receive the same response as eligible Users, and the response exposes no User, Customer, role, account-state, verification, or delivery fact. Email lookup trims surrounding whitespace and normalizes case under the registration and login convention.
+
+An `ACTIVE`, email-verified Customer or Staff User is eligible. Identity locks the authoritative User, revokes any prior active password-reset token, persists one fresh SHA-256 token digest with a 30-minute default lifetime, commits, and then asks Notification to send the raw token. SMTP failure does not reverse token state or alter the response; another request replaces that token. Competing requests for one User serialize so the database retains at most one unconsumed, unrevoked token.
+
+The endpoint has an independent per-instance, effective-remote-address limit of 5 requests per 10 minutes by default. Caller-controlled forwarding headers do not alter the key. A rejected request returns `429 RATE_LIMIT_EXCEEDED` with `Retry-After` before token mutation or email delivery and does not consume login, refresh, registration, or email-verification capacity.
+
+### 3.5 Confirm password reset
+
+```text
+POST /api/v1/auth/password-reset/confirm
+```
+
+```json
+{
+  "token": "<opaque-token-copied-from-the-captured-email>",
+  "newPassword": "<12-to-72-character-password>"
+}
+```
+
+The new password uses the registration length policy: 12 through 72 characters with no additional composition rule. Meridian does not trim or normalize the password.
+
+Identity digests and locks the token, locks its authoritative User, verifies that the token is known, active, unexpired, and owned by an active email-verified User, BCrypt-hashes the new password, replaces the password, clears failed-login and temporary-lock state, consumes the token, and revokes every refresh-token family for that User in one transaction. Competing confirmations cannot both change password state. Success returns `204 No Content`, clears the browser refresh cookie, and returns no access or refresh credential. The User must log in normally with the new password.
+
+Unknown, expired, revoked, consumed, or otherwise ineligible token state returns `401 INVALID_PASSWORD_RESET_TOKEN` with `Password reset token is invalid or expired.`. Consumed-token replay is not idempotently successful, including when the replay supplies a different password. Administrative User status, email-verification time, Customer association, roles, permissions, and Customer business-verification state do not change.
+
+Existing refresh tokens cannot mint new credentials after success, including tokens from independent login families. Refresh sessions owned by another User remain usable. Existing access JWTs are self-contained and are not enumerated or revoked by password reset; they remain usable until their existing one-hour expiry or a separate token-specific revocation.
+
+The controlled email uses the configured frontend base URL and a fragment link such as `http://localhost:5173/reset-password#token=<opaque-token>`. The frontend reads the fragment and submits the JSON body above. The raw token does not enter a backend query string, API response, durable event, or database row. Confirmation is not request-rate limited because the opaque token has at least 256 bits of entropy.
+
+### 3.6 Login
 
 ```text
 POST /api/v1/auth/login
@@ -301,7 +346,7 @@ A newly registered Customer User with a correct password but no `emailVerifiedAt
 
 Login applies request-boundary throttling per effective servlet remote address and application instance before password verification. The default permits 10 requests per one-minute window. A request over the configured limit returns `429 RATE_LIMIT_EXCEEDED` with `Too many requests.` and a positive `Retry-After` header containing the whole-second wait until the current window resets. A rejected request does not change User login-protection state or create authentication credentials.
 
-### 3.5 Refresh access
+### 3.7 Refresh access
 
 ```text
 POST /api/v1/auth/refresh
@@ -316,7 +361,7 @@ Missing, unknown, expired, revoked, or otherwise invalid refresh state returns `
 
 Refresh uses an independent request-boundary policy per effective servlet remote address and application instance. The default permits 30 requests per one-minute window, and login traffic does not consume refresh capacity. A request over the configured limit returns `429 RATE_LIMIT_EXCEEDED` with `Too many requests.` and `Retry-After`; the request does not inspect, consume, rotate, or revoke refresh state.
 
-### 3.6 Current-session logout
+### 3.8 Current-session logout
 
 ```text
 POST /api/v1/auth/logout
@@ -330,7 +375,7 @@ Logout returns `204 No Content` whether credentials are valid, missing, unknown,
 
 Authentication request throttling does not apply to logout, so a client may always attempt to revoke its current session.
 
-### 3.7 Loan-product catalogue
+### 3.9 Loan-product catalogue
 
 ```text
 GET /api/v1/loan-products
@@ -341,7 +386,7 @@ Both reads are public. The collection read returns active products; the item rea
 
 An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A recognized code with no active product returns `404 PRODUCT_NOT_FOUND`.
 
-### 3.8 Customer profile
+### 3.10 Customer profile
 
 ```json
 {
@@ -358,7 +403,7 @@ An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A recognized code with no 
 
 The safe Customer response contains `customerId`, `customerNumber`, Customer `status`, `verificationStatus`, `profileCompletionStatus`, `primaryActiveBankAccountPresent`, and the profile fields shown above except `identityReference`. Duplicate normalized identity evidence owned by another Customer returns `409 IDENTITY_REFERENCE_ALREADY_IN_USE` without echoing the submitted value.
 
-### 3.9 Customer bank accounts
+### 3.11 Customer bank accounts
 
 ```json
 {
@@ -371,11 +416,11 @@ The safe Customer response contains `customerId`, `customerNumber`, Customer `st
 
 The account number is normalized by removing spaces and hyphens and must contain at least six normalized characters. List, add, make-primary, and deactivate responses contain the account ID, bank code/name, account-holder name, masked account number, last four characters, status, primary flag, and lifecycle timestamps. They never return the full account number, ciphertext, fingerprint, or protection metadata.
 
-### 3.10 Partner staff reads
+### 3.12 Partner staff reads
 
 The Partner Company, employee, and import-batch reads require `partner:read`. Partner Company responses include the configured Salary Advance policy limit. Partner Employee responses include employee code, identity reference, salary amount, Salary Advance limit, employment status, active state, company identity, and import-batch identity. These are restricted Staff contracts and must not be reused as Customer response shapes. Import-batch responses contain company identity, effective month, status, and valid/invalid row counts.
 
-### 3.11 Employee verification
+### 3.13 Employee verification
 
 ```json
 {

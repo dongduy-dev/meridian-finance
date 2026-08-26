@@ -139,6 +139,25 @@ public class UserRepositoryAdapter implements UserRepository {
         );
     }
 
+    @Override
+    public void replacePasswordAndClearLoginProtection(UUID userId, String passwordHash) {
+        int updated = jdbcTemplate.update(
+                """
+                        UPDATE users
+                        SET password_hash = ?,
+                            failed_login_attempts = 0,
+                            locked_until = NULL,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                        """,
+                passwordHash,
+                userId
+        );
+        if (updated != 1) {
+            throw new IllegalStateException("User password could not be replaced.");
+        }
+    }
+
     private Optional<User> findByNormalizedEmail(String normalizedEmail, boolean forUpdate) {
         String lockClause = forUpdate ? " FOR UPDATE" : "";
         List<UserRow> rows = jdbcTemplate.query(

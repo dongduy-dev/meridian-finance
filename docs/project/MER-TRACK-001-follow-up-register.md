@@ -293,7 +293,7 @@ Problem:
 Flyway migrations are growing and current schema is harder to inspect from migrations alone.
 
 Resolution:
-`MER-DB-CURRENT-SCHEMA.sql` is the checked-in human-readable current physical-schema snapshot through V51; Flyway V1-V51 remains the executable schema authority. Focused PostgreSQL migration and snapshot verification confirms their alignment.
+`MER-DB-CURRENT-SCHEMA.sql` is the checked-in human-readable current physical-schema snapshot through V52; Flyway V1-V52 remains the executable schema authority. Focused PostgreSQL migration and snapshot verification confirms their alignment.
 
 ### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
 
@@ -341,12 +341,12 @@ Type: Deferred feature
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocking: No current blocker.
 
-Recommendation:
-Implement password reset when real user lifecycle management starts.
+Outcome:
+Identity exposes enumeration-safe request and non-idempotent confirmation endpoints for active email-verified Customer and Staff Users. It stores only 30-minute SHA-256 token digests, replaces prior active reset state under the User lock, changes the BCrypt password and clears temporary login protection atomically with token consumption, and revokes every refresh-token family for the User. Notification renders and sends the fragment-link email after commit through the existing SMTP boundary; delivery failure leaves replacement state committed.
 
 Suggested future branch name:
 `feature/iam-password-reset`

@@ -319,6 +319,11 @@ class PasswordLoginServiceTest {
                     user.emailVerifiedAt()
             );
         }
+
+        @Override
+        public void replacePasswordAndClearLoginProtection(UUID userId, String passwordHash) {
+            throw new AssertionError("Password replacement should not be called.");
+        }
     }
 
     private static final class CapturingRefreshTokenRepository implements RefreshTokenSessionRepository {
@@ -342,6 +347,11 @@ class PasswordLoginServiceTest {
         @Override
         public void revokeFamily(UUID familyId, Instant revokedAt) {
             throw new AssertionError("Family revocation should not be called.");
+        }
+
+        @Override
+        public void revokeAllForUser(UUID userId, Instant revokedAt) {
+            throw new AssertionError("User-wide revocation should not be called.");
         }
     }
 }

@@ -31,7 +31,7 @@ class AccountLockoutV50MigrationTest {
     void currentSchemaIncludesV50AccountLockoutState() throws IOException {
         String snapshot = normalized(CURRENT_SCHEMA);
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V51"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V52"));
         assertTrue(snapshot.contains("failed_login_attempts INTEGER NOT NULL DEFAULT 0"));
         assertTrue(snapshot.contains("locked_until TIMESTAMP"));
         assertTrue(snapshot.contains("chk_users_failed_login_attempts_non_negative"));
