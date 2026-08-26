@@ -46,6 +46,18 @@
                          "description":  "Manually copy the transient token from Mailpit. Never save a real token into the checked-in collection."
                      },
                      {
+                         "key":  "passwordResetToken",
+                         "value":  "",
+                         "type":  "string",
+                         "description":  "Manually copy the transient token from Mailpit. Never save a real token into the checked-in collection."
+                     },
+                     {
+                         "key":  "passwordResetNewPassword",
+                         "value":  "Meridian-local-reset-password",
+                         "type":  "string",
+                         "description":  "Fictional local-only replacement password for the generated registration scenario."
+                     },
+                     {
                          "key":  "customerEmail",
                          "value":  "customer.demo@meridian.local",
                          "type":  "string"
@@ -852,6 +864,94 @@
                                                               },
                                                       "auth":  {"type":  "noauth"},
                                                       "description":  "Manual local step: copy the raw token from the newest Mailpit verification link. Do not save or commit the populated variable."
+                                                  },
+                                      "response":  []
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "00 Password Reset",
+                     "description":  "Run after the generated Customer email has been verified. Request reset once, inspect http://localhost:8025, and copy only the fragment token into passwordResetToken before confirmation. The confirmation request skips itself when the variable is blank.",
+                     "item":  [
+                                  {
+                                      "name":  "Request password reset",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  ["pm.collectionVariables.unset(\"passwordResetToken\");"]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 202\", function () { pm.response.to.have.status(202); });",
+                                                                                    "pm.test(\"Response body is empty\", function () { pm.expect(pm.response.text()).to.eql(\"\"); });"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":  "Content-Type", "value":  "application/json", "type":  "text"}],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"{{registrationEmail}}\"\n}",
+                                                                   "options":  {"raw":  {"language":  "json"}}
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/auth/password-reset/request",
+                                                                  "host":  ["{{baseUrl}}"],
+                                                                  "path":  ["api", "v1", "auth", "password-reset", "request"]
+                                                              },
+                                                      "auth":  {"type":  "noauth"},
+                                                      "description":  "Always returns 202 without revealing account state. Use the newest Mailpit reset email if another request has replaced the token."
+                                                  },
+                                      "response":  []
+                                  },
+                                  {
+                                      "name":  "Confirm password reset with manually captured token",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "if (!pm.collectionVariables.get(\"passwordResetToken\")) {",
+                                                                                    "    pm.execution.skipRequest();",
+                                                                                    "}"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 204\", function () { pm.response.to.have.status(204); });",
+                                                                                    "pm.collectionVariables.unset(\"passwordResetToken\");"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":  "Content-Type", "value":  "application/json", "type":  "text"}],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"token\": \"{{passwordResetToken}}\",\n  \"newPassword\": \"{{passwordResetNewPassword}}\"\n}",
+                                                                   "options":  {"raw":  {"language":  "json"}}
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/auth/password-reset/confirm",
+                                                                  "host":  ["{{baseUrl}}"],
+                                                                  "path":  ["api", "v1", "auth", "password-reset", "confirm"]
+                                                              },
+                                                      "auth":  {"type":  "noauth"},
+                                                      "description":  "Manual local step: copy the raw token from the newest Mailpit reset link. Do not save or commit the populated variable. Success clears the browser refresh cookie and issues no credentials."
                                                   },
                                       "response":  []
                                   }

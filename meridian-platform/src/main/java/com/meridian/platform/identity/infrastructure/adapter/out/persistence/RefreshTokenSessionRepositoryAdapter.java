@@ -90,6 +90,20 @@ public class RefreshTokenSessionRepositoryAdapter implements RefreshTokenSession
         );
     }
 
+    @Override
+    public void revokeAllForUser(UUID userId, Instant revokedAt) {
+        jdbcTemplate.update(
+                """
+                        UPDATE refresh_token_sessions
+                        SET revoked_at = ?
+                        WHERE user_id = ?
+                          AND revoked_at IS NULL
+                        """,
+                Timestamp.from(revokedAt),
+                userId
+        );
+    }
+
     private RefreshTokenSession mapSession(ResultSet resultSet) throws SQLException {
         return new RefreshTokenSession(
                 resultSet.getObject("id", UUID.class),

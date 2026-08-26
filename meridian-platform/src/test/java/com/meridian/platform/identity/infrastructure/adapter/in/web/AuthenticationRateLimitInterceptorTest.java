@@ -39,6 +39,7 @@ class AuthenticationRateLimitInterceptorTest {
     private LogoutUseCase logoutUseCase;
     private com.meridian.platform.identity.application.port.in.RegisterCustomerUseCase registerCustomerUseCase;
     private com.meridian.platform.identity.application.port.in.RequestEmailVerificationUseCase requestEmailVerificationUseCase;
+    private com.meridian.platform.identity.application.port.in.RequestPasswordResetUseCase requestPasswordResetUseCase;
     private MutableClock clock;
 
     @BeforeEach
@@ -48,6 +49,9 @@ class AuthenticationRateLimitInterceptorTest {
         registerCustomerUseCase = mock(com.meridian.platform.identity.application.port.in.RegisterCustomerUseCase.class);
         requestEmailVerificationUseCase = mock(
                 com.meridian.platform.identity.application.port.in.RequestEmailVerificationUseCase.class
+        );
+        requestPasswordResetUseCase = mock(
+                com.meridian.platform.identity.application.port.in.RequestPasswordResetUseCase.class
         );
         clock = new MutableClock(Instant.parse("2026-08-25T00:00:00Z"));
         when(authenticationUseCase.login(any())).thenReturn(authenticationResult("login-access", "login-refresh"));
@@ -192,6 +196,23 @@ class AuthenticationRateLimitInterceptorTest {
     }
 
     @Test
+    void passwordResetRequestHasAnIndependentPolicyAndIgnoresForwardingHeaders() throws Exception {
+        MockMvc mockMvc = mockMvc(10, Duration.ofMinutes(1), 10, Duration.ofMinutes(1), 10, 10, 1);
+
+        mockMvc.perform(passwordResetRequest("192.0.2.1", "198.51.100.10"))
+                .andExpect(status().isAccepted());
+        mockMvc.perform(passwordResetRequest("192.0.2.1", "203.0.113.20"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.errorCode").value("RATE_LIMIT_EXCEEDED"));
+        mockMvc.perform(login("192.0.2.1")).andExpect(status().isOk());
+        mockMvc.perform(refresh("192.0.2.1")).andExpect(status().isOk());
+        mockMvc.perform(registration("192.0.2.1", "198.51.100.30")).andExpect(status().isCreated());
+        mockMvc.perform(verificationRequest("192.0.2.1", "198.51.100.40")).andExpect(status().isAccepted());
+
+        verify(requestPasswordResetUseCase).requestReset(any());
+    }
+
+    @Test
     void rejectsInvalidConfiguredPoliciesDuringConstruction() {
         SecurityErrorResponseWriter writer = new SecurityErrorResponseWriter();
         org.junit.jupiter.api.Assertions.assertThrows(
@@ -236,12 +257,34 @@ class AuthenticationRateLimitInterceptorTest {
             int registrationMaxRequests,
             int verificationRequestMaxRequests
     ) {
+        return mockMvc(
+                loginMaxRequests,
+                loginWindow,
+                refreshMaxRequests,
+                refreshWindow,
+                registrationMaxRequests,
+                verificationRequestMaxRequests,
+                5
+        );
+    }
+
+    private MockMvc mockMvc(
+            int loginMaxRequests,
+            Duration loginWindow,
+            int refreshMaxRequests,
+            Duration refreshWindow,
+            int registrationMaxRequests,
+            int verificationRequestMaxRequests,
+            int passwordResetRequestMaxRequests
+    ) {
         AuthController controller = new AuthController(
                 authenticationUseCase,
                 logoutUseCase,
                 registerCustomerUseCase,
                 requestEmailVerificationUseCase,
                 mock(com.meridian.platform.identity.application.port.in.ConfirmEmailVerificationUseCase.class),
+                requestPasswordResetUseCase,
+                mock(com.meridian.platform.identity.application.port.in.ConfirmPasswordResetUseCase.class),
                 new RefreshTokenCookieService(false),
                 mock(JwtTokenService.class)
         );
@@ -255,6 +298,8 @@ class AuthenticationRateLimitInterceptorTest {
                 registrationMaxRequests,
                 Duration.ofMinutes(10),
                 verificationRequestMaxRequests,
+                Duration.ofMinutes(10),
+                passwordResetRequestMaxRequests,
                 Duration.ofMinutes(10),
                 100
         );
@@ -312,6 +357,22 @@ class AuthenticationRateLimitInterceptorTest {
             String forwardedFor
     ) {
         return post(AuthenticationRateLimitInterceptor.EMAIL_VERIFICATION_REQUEST_PATH)
+                .with(request -> {
+                    request.setRemoteAddr(remoteAddress);
+                    return request;
+                })
+                .header("X-Forwarded-For", forwardedFor)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"email": "customer@example.com"}
+                        """);
+    }
+
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder passwordResetRequest(
+            String remoteAddress,
+            String forwardedFor
+    ) {
+        return post(AuthenticationRateLimitInterceptor.PASSWORD_RESET_REQUEST_PATH)
                 .with(request -> {
                     request.setRemoteAddr(remoteAddress);
                     return request;

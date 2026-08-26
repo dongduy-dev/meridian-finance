@@ -12,7 +12,7 @@ Flyway migrations under `meridian-platform/src/main/resources/db/migration` are 
 
 The logical model covers:
 
-- Identity users and login-protection and email-verification state, roles, permissions, refresh-token sessions, access-token revocations, and the optional association from a login user to a Customer;
+- Identity users and login-protection, email-verification, and password-reset state, roles, permissions, refresh-token sessions, access-token revocations, and the optional association from a login user to a Customer;
 - Customer profile, protected identity evidence, and Customer-owned bank accounts;
 - Partner Companies, employee imports, Partner Employees, and reusable Customer–Partner Employee links;
 - the common LoanApplication lifecycle for Salary Advance, Unsecured Consumer Loan, and Collateral Loan;
@@ -26,11 +26,11 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V51. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure and Identity registration, email verification, login, and session protection.
+The physical schema is the result of Flyway migrations V1 through V52. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure and Identity registration, email verification, password reset, login, and session protection.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
-The V51 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
+The V52 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
 
 The physical `event_publication` table is Spring Modulith infrastructure. It is omitted from the business ERD because it does not own lending state or redefine the synchronous transaction boundaries documented in `MER-ARCH-006-api-request-flow-and-dependencies.md`.
 
@@ -57,6 +57,7 @@ erDiagram
     USER o|--o| CUSTOMER : authenticates_as
     USER ||--o{ REFRESH_TOKEN_SESSION : owns
     USER ||--o{ EMAIL_VERIFICATION_TOKEN : verifies_with
+    USER ||--o{ PASSWORD_RESET_TOKEN : resets_with
 
     CUSTOMER ||--|| CUSTOMER_PROFILE : owns
     CUSTOMER ||--o{ BANK_ACCOUNT : owns
@@ -119,13 +120,14 @@ The diagram shows ownership-relevant relationships, not a required physical-tabl
 
 ### 6.1 Identity and Access
 
-Identity owns `users`, `roles`, `permissions`, `role_assignments`, `role_permissions`, `email_verification_tokens`, `refresh_token_sessions`, and `access_token_revocations`.
+Identity owns `users`, `roles`, `permissions`, `role_assignments`, `role_permissions`, `email_verification_tokens`, `password_reset_tokens`, `refresh_token_sessions`, and `access_token_revocations`.
 
 - A Customer login is associated through `users.customer_id`; Staff users have no Customer association.
 - `users` owns the consecutive failed-password count and temporary lock expiry separately from the administrative User status.
 - `users.email_verified_at` is Identity-owned account-security state. It is distinct from Customer-owned `customers.verification_status` and email confirmation never changes that business-verification state.
 - Roles and permissions preserve RBAC assignment separately from business records.
 - Email-verification rows store only the SHA-256 digest of a cryptographically random opaque token plus issuance, expiry, consumption, and revocation state. At most one unconsumed, unrevoked token is active for a User; replacement revokes the previous active token.
+- Password-reset rows separately store only the SHA-256 digest of their purpose-specific opaque token plus issuance, expiry, consumption, and revocation state. At most one unconsumed, unrevoked reset token is active for a User; successful consumption accompanies the password and login-protection update and user-wide refresh-session revocation in one transaction.
 - Access tokens remain self-contained RS256 credentials. Current-session logout stores only the presented valid token's `jti`, revocation time, and expiry so authentication can reject that token until it expires.
 - Refresh-token sessions store only a SHA-256 digest of each opaque token, its user and token-family relationship, issuance and expiry, and consumption or revocation state.
 - Successful rotation consumes one locked session and creates one replacement in the same family. Detected reuse revokes the family so no replacement session remains active.

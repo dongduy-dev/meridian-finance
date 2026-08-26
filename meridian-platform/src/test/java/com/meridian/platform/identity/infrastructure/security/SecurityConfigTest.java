@@ -169,6 +169,12 @@ class SecurityConfigTest {
     private com.meridian.platform.identity.application.port.in.ConfirmEmailVerificationUseCase confirmEmailVerificationUseCase;
 
     @MockitoBean
+    private com.meridian.platform.identity.application.port.in.RequestPasswordResetUseCase requestPasswordResetUseCase;
+
+    @MockitoBean
+    private com.meridian.platform.identity.application.port.in.ConfirmPasswordResetUseCase confirmPasswordResetUseCase;
+
+    @MockitoBean
     private QueryLoanProductUseCase queryLoanProductUseCase;
 
     @MockitoBean
@@ -356,7 +362,7 @@ class SecurityConfigTest {
     }
 
     @Test
-    void keepsRegistrationAndEmailVerificationPublicAtTheBearerLayer() throws Exception {
+    void keepsRegistrationEmailVerificationAndPasswordResetPublicAtTheBearerLayer() throws Exception {
         when(registerCustomerUseCase.register(any())).thenReturn(
                 com.meridian.platform.identity.application.dto.CustomerRegistrationResponse.verificationRequired()
         );
@@ -383,6 +389,25 @@ class SecurityConfigTest {
                                 {"token": "opaque-verification-token"}
                                 """))
                 .andExpect(status().isNoContent());
+        mockMvc.perform(post("/api/v1/auth/password-reset/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email": "customer@example.com"}
+                                """))
+                .andExpect(status().isAccepted());
+        mockMvc.perform(post("/api/v1/auth/password-reset/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "token": "opaque-password-reset-token",
+                                  "newPassword": "new-password-value"
+                                }
+                                """))
+                .andExpect(status().isNoContent())
+                .andExpect(header().string(
+                        HttpHeaders.SET_COOKIE,
+                        org.hamcrest.Matchers.containsString("Max-Age=0")
+                ));
     }
 
     @Test

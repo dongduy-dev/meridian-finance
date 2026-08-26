@@ -92,7 +92,7 @@ class EmailVerificationV51MigrationTest {
         assertTrue(migration.contains("CREATE TABLE email_verification_tokens"));
         assertTrue(migration.contains("uq_email_verification_tokens_active_user"));
         assertTrue(migration.contains("chk_email_verification_tokens_digest_sha256_hex"));
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V51"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V52"));
         assertTrue(snapshot.contains("email_verified_at TIMESTAMP"));
         assertTrue(snapshot.contains("CREATE TABLE email_verification_tokens"));
         assertTrue(snapshot.contains("uq_email_verification_tokens_active_user"));

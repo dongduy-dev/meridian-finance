@@ -38,7 +38,7 @@ class AccessTokenRevocationV49MigrationTest {
     void currentSchemaIncludesV49RevocationStateInLatestSnapshot() throws IOException {
         String snapshot = normalized(CURRENT_SCHEMA);
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V51"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V52"));
         assertTrue(snapshot.contains("CREATE TABLE access_token_revocations"));
         assertTrue(snapshot.contains("idx_access_token_revocations_expires_at"));
     }
