@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createApiClient } from './client'
 import { parseMeridianErrorEnvelope } from './error-envelope'
+import { NetworkError } from './NetworkError'
 
 function createFetchMock() {
   return vi.fn<
@@ -92,6 +93,32 @@ describe('Meridian API client', () => {
     expect(init?.body).toBe(JSON.stringify({ foundation: true }))
     expect(headers.get('Authorization')).toBe('Bearer in-memory-token')
     expect(headers.get('X-Request-ID')).toBe('request-id')
+  })
+
+  it('classifies only fetch transport failures as network errors', async () => {
+    const transportFailure = new TypeError('Failed to fetch')
+    const fetchMock = createFetchMock().mockRejectedValue(transportFailure)
+    const client = createApiClient({ fetchImplementation: fetchMock as typeof fetch })
+    const request = client.request('/foundation')
+
+    await expect(request).rejects.toEqual(
+      expect.objectContaining({
+        name: 'NetworkError',
+        cause: transportFailure,
+      }),
+    )
+    await expect(request).rejects.toBeInstanceOf(NetworkError)
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['an abort', new DOMException('Aborted', 'AbortError')],
+    ['an unexpected implementation error', new Error('Programming error')],
+  ])('preserves %s without reclassifying it', async (_label, failure) => {
+    const fetchMock = createFetchMock().mockRejectedValue(failure)
+    const client = createApiClient({ fetchImplementation: fetchMock as typeof fetch })
+
+    await expect(client.request('/foundation')).rejects.toBe(failure)
   })
 })
 

@@ -83,14 +83,6 @@ export function CustomerAppLayout() {
         </div>
         <Separator className="my-5 bg-white/14" />
         <NavigationLinks />
-        <div className="mt-auto rounded-md border border-white/12 bg-white/6 p-4">
-          <p className="text-xs font-semibold tracking-[0.16em] text-accent uppercase">
-            FE-CP1 foundation
-          </p>
-          <p className="mt-2 text-xs leading-5 text-primary-foreground/65">
-            Customer identity and account state arrive in later checkpoints.
-          </p>
-        </div>
       </aside>
 
       <div className="min-w-0 lg:col-start-2">
@@ -106,7 +98,7 @@ export function CustomerAppLayout() {
                 <SheetHeader>
                   <SheetTitle className="text-primary-foreground">Customer navigation</SheetTitle>
                   <SheetDescription className="text-primary-foreground/65">
-                    Meridian Customer Web foundation
+                    Choose a Customer Web destination.
                   </SheetDescription>
                 </SheetHeader>
                 <div className="px-4 pb-6">
@@ -127,9 +119,6 @@ export function CustomerAppLayout() {
           </div>
 
           <div className="flex items-center gap-3" aria-label="Account area">
-            <span className="hidden text-sm text-muted-foreground sm:inline">
-              Access setup in FE-CP2
-            </span>
             <div className="flex size-10 items-center justify-center rounded-full border border-border bg-card text-foreground">
               <CircleUserRound aria-hidden="true" className="size-5" />
             </div>

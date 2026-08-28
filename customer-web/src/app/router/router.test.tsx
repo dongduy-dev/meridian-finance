@@ -22,9 +22,12 @@ describe('application routing foundation', () => {
     for (const label of ['Dashboard', 'Products', 'Applications', 'Loans', 'Account']) {
       expect(screen.getByRole('link', { name: label })).toBeVisible()
     }
-    expect(
-      screen.getByRole('button', { name: 'Open customer navigation' }),
-    ).toHaveAccessibleName('Open customer navigation')
+    expect(within(screen.getByRole('complementary')).queryByText(/FE-CP|checkpoint/i)).not.toBeInTheDocument()
+    const navigationTrigger = screen.getByRole('button', { name: 'Open customer navigation' })
+    const shellBanner = navigationTrigger.closest('header') as HTMLElement
+
+    expect(within(shellBanner).queryByText(/FE-CP|checkpoint/i)).not.toBeInTheDocument()
+    expect(navigationTrigger).toHaveAccessibleName('Open customer navigation')
   })
 
   it.each([
@@ -48,6 +51,8 @@ describe('application routing foundation', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Customer navigation' })
     const productsLink = within(dialog).getByRole('link', { name: 'Products' })
 
+    expect(within(dialog).getByText('Choose a Customer Web destination.')).toBeVisible()
+    expect(within(dialog).queryByText(/FE-CP|checkpoint/i)).not.toBeInTheDocument()
     expect(productsLink).toHaveClass('flex')
     expect(productsLink.className).not.toContain('isActive')
 

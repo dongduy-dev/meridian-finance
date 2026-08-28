@@ -1,6 +1,7 @@
 import { environment } from '@/app/config/environment'
 
 import { ApiError } from './ApiError'
+import { NetworkError } from './NetworkError'
 import { parseMeridianErrorEnvelope } from './error-envelope'
 
 const GENERIC_ERROR_MESSAGE = 'The request could not be completed.'
@@ -35,6 +36,15 @@ function joinUrl(baseUrl: string, path: string) {
 
 function defaultFetch(input: RequestInfo | URL, init?: RequestInit) {
   return fetch(input, init)
+}
+
+function isAbortError(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    error.name === 'AbortError'
+  )
 }
 
 async function readJson(response: Response): Promise<unknown> {
@@ -101,13 +111,21 @@ export function createApiClient({
       headers.set('Authorization', `Bearer ${accessToken}`)
     }
 
-    const response = await fetchImplementation(joinUrl(baseUrl, path), {
-      ...requestInit,
-      body: json === undefined ? body : JSON.stringify(json),
-      credentials,
-      headers,
-      signal,
-    })
+    let response: Response
+    try {
+      response = await fetchImplementation(joinUrl(baseUrl, path), {
+        ...requestInit,
+        body: json === undefined ? body : JSON.stringify(json),
+        credentials,
+        headers,
+        signal,
+      })
+    } catch (error) {
+      if (signal?.aborted || isAbortError(error) || !(error instanceof TypeError)) {
+        throw error
+      }
+      throw new NetworkError(error)
+    }
 
     if (!response.ok) {
       throw await toApiError(response)
