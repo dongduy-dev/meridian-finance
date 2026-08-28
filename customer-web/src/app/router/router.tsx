@@ -4,12 +4,18 @@ import { AuthLayout } from '@/components/layout/AuthLayout'
 import { CustomerAppLayout } from '@/components/layout/CustomerAppLayout'
 import { NotFoundPage } from '@/routes/NotFoundPage'
 import { RouteErrorBoundary } from '@/routes/RouteErrorBoundary'
-import { AuthFoundationPage } from '@/routes/foundation/AuthFoundationPage'
 import { DetailPreviewPage } from '@/routes/foundation/DetailPreviewPage'
 import { FocusedFlowPreviewPage } from '@/routes/foundation/FocusedFlowPreviewPage'
 import { FoundationOverviewPage } from '@/routes/foundation/FoundationOverviewPage'
 import { FoundationPlaceholderPage } from '@/routes/foundation/FoundationPlaceholderPage'
+import { ForgotPasswordPage } from '@/routes/auth/ForgotPasswordPage'
+import { LoginPage } from '@/routes/auth/LoginPage'
+import { RegisterPage } from '@/routes/auth/RegisterPage'
+import { ResetPasswordPage } from '@/routes/auth/ResetPasswordPage'
+import { VerificationPendingPage } from '@/routes/auth/VerificationPendingPage'
+import { VerifyEmailPage } from '@/routes/auth/VerifyEmailPage'
 
+import { ProtectedCustomerRoute } from './ProtectedCustomerRoute'
 import { RouteFocusManager } from './RouteFocusManager'
 
 export const routes: RouteObject[] = [
@@ -18,22 +24,33 @@ export const routes: RouteObject[] = [
     errorElement: <RouteErrorBoundary />,
     children: [
       {
-        element: <CustomerAppLayout />,
+        element: <AuthLayout />,
         children: [
-          { index: true, element: <FoundationOverviewPage /> },
-          { path: 'products', element: <FoundationPlaceholderPage title="Products" /> },
-          {
-            path: 'applications',
-            element: <FoundationPlaceholderPage title="Applications" />,
-          },
-          { path: 'loans', element: <FoundationPlaceholderPage title="Loans" /> },
-          { path: 'account', element: <FoundationPlaceholderPage title="Account" /> },
+          { path: 'login', element: <LoginPage /> },
+          { path: 'register', element: <RegisterPage /> },
+          { path: 'verify-email', element: <VerifyEmailPage /> },
+          { path: 'verify-email/pending', element: <VerificationPendingPage /> },
+          { path: 'forgot-password', element: <ForgotPasswordPage /> },
+          { path: 'reset-password', element: <ResetPasswordPage /> },
         ],
       },
       {
-        path: 'foundation/auth',
-        element: <AuthLayout />,
-        children: [{ index: true, element: <AuthFoundationPage /> }],
+        element: <ProtectedCustomerRoute />,
+        children: [
+          {
+            element: <CustomerAppLayout />,
+            children: [
+              { index: true, element: <FoundationOverviewPage /> },
+              { path: 'products', element: <FoundationPlaceholderPage title="Products" /> },
+              {
+                path: 'applications',
+                element: <FoundationPlaceholderPage title="Applications" />,
+              },
+              { path: 'loans', element: <FoundationPlaceholderPage title="Loans" /> },
+              { path: 'account', element: <FoundationPlaceholderPage title="Account" /> },
+            ],
+          },
+        ],
       },
       { path: 'foundation/flow', element: <FocusedFlowPreviewPage /> },
       { path: 'foundation/detail', element: <DetailPreviewPage /> },

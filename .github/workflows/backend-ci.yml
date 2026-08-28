@@ -4,9 +4,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - "meridian-platform/**"
-      - ".github/workflows/backend-ci.yml"
   push:
     branches:
       - main
@@ -15,7 +12,35 @@ on:
       - ".github/workflows/backend-ci.yml"
 
 jobs:
-  backend-test:
+  detect-backend-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend-changed: ${{ steps.changes.outputs.backend-changed }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect backend-relevant changes
+        id: changes
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "backend-changed=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            -- meridian-platform .github/workflows/backend-ci.yml; then
+            echo "backend-changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend-changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  backend-verify:
+    needs: detect-backend-changes
+    if: needs.detect-backend-changes.outputs.backend-changed == 'true'
     runs-on: ubuntu-latest
 
     services:
@@ -61,3 +86,41 @@ jobs:
 
       - name: Build application container
         run: docker build --tag meridian-platform:ci .
+
+  backend-test:
+    needs:
+      - detect-backend-changes
+      - backend-verify
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Report required backend gate
+        shell: bash
+        env:
+          BACKEND_CHANGED: ${{ needs.detect-backend-changes.outputs.backend-changed }}
+          DETECTION_RESULT: ${{ needs.detect-backend-changes.result }}
+          VERIFICATION_RESULT: ${{ needs.backend-verify.result }}
+        run: |
+          if [[ "$DETECTION_RESULT" != "success" ]]; then
+            echo "Backend change detection did not succeed."
+            exit 1
+          fi
+
+          if [[ "$BACKEND_CHANGED" == "false" ]]; then
+            echo "No backend-relevant changes detected; backend verification was not required."
+            exit 0
+          fi
+
+          if [[ "$BACKEND_CHANGED" != "true" ]]; then
+            echo "Backend change detection did not produce a valid result."
+            exit 1
+          fi
+
+          if [[ "$VERIFICATION_RESULT" == "success" ]]; then
+            echo "Backend verification succeeded."
+            exit 0
+          fi
+
+          echo "Backend verification result: $VERIFICATION_RESULT"
+          exit 1

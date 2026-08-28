@@ -3,12 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
 import { AppProviders } from '@/app/providers/AppProviders'
+import { createTestAuthManager } from '@/test/auth'
 
 import { createTestRouter } from './router'
 
 function renderRoute(path: string) {
   const router = createTestRouter([path])
-  render(<AppProviders router={router} />)
+  render(<AppProviders router={router} authManager={createTestAuthManager()} />)
   return router
 }
 
@@ -31,7 +32,6 @@ describe('application routing foundation', () => {
   })
 
   it.each([
-    ['/foundation/auth', 'A calm start to every secure journey'],
     ['/foundation/flow', 'One clear task at a time'],
     ['/foundation/detail', 'Information with a clear hierarchy'],
   ])('renders the layout demonstration at %s', async (path, heading) => {
@@ -43,7 +43,7 @@ describe('application routing foundation', () => {
   it('keeps mobile navigation links composed, active, and dismissible', async () => {
     const user = userEvent.setup()
     const router = renderRoute('/')
-    const trigger = screen.getByRole('button', { name: 'Open customer navigation' })
+    const trigger = await screen.findByRole('button', { name: 'Open customer navigation' })
 
     trigger.focus()
     await user.keyboard('{Enter}')
