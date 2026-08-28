@@ -72,6 +72,8 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
     private static final String SCHEMA = schemaName("installed");
     private static final UUID ACCOUNTING_USER_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000304");
+    private static final LocalDateTime FIXTURE_ACTIVATION_TIME =
+            LocalDateTime.of(2026, 7, 27, 10, 15);
 
     @Autowired
     JdbcTemplate jdbc;
@@ -2670,14 +2672,16 @@ class ManualDisbursementV28PostgreSqlIntegrationTest {
                         + "fee_outstanding,total_outstanding,servicing_evaluation_date) "
                         + "values (?,?,?,?,'LA-' || upper(replace(?::text,'-','')),'ACTIVE',"
                         + principal + ",2,100,0," + ("1000".equals(principal) ? "1100" : "1100.50")
-                        + ",current_timestamp,0,0,0,0," + principal + ",100,0,"
+                        + ",?,0,0,0,0," + principal + ",100,0,"
                         + ("1000".equals(principal) ? "1100" : "1100.50")
-                        + ",current_date)",
+                        + ",?)",
                 accountId,
                 fixture.applicationId(),
                 fixture.contractId(),
                 fixture.customerId(),
-                accountId
+                accountId,
+                FIXTURE_ACTIVATION_TIME,
+                FIXTURE_ACTIVATION_TIME.toLocalDate()
         );
     }
 
