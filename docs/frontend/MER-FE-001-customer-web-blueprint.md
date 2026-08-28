@@ -405,12 +405,14 @@ Success, warning, danger, and information colors remain separate from the three 
 
 ### 10.2 Authoritative Logo Assets
 
-The final source-of-truth logo assets are:
+The preferred source-of-truth logo assets for Customer Web are:
 
-- `docs/branding/Logo Expand.png` for expanded branding where sufficient space is available;
-- `docs/branding/Logo.png` for more compact placement.
+- `docs/branding/Meridian Logo.svg` for the primary `M + MERIDIAN` lockup;
+- `docs/branding/Meridian Logo Expand.svg` for the expanded Meridian Finance lockup;
+- `docs/branding/Meridian Logo Mark.svg` for compact and icon contexts;
+- `docs/branding/Meridian Logo Wordmark.svg` where a horizontal wordmark fits the available space.
 
-Frontend implementation must inspect both assets and choose the appropriate variant for the available space. It must use the source assets unchanged, preserve their design and proportions, and must not redraw, regenerate, recolor, distort, replace them with Lucide icons, or create an AI-generated substitute. A frontend foundation may copy exact unchanged versions into its build asset directory when Vite bundling requires it; the originals under `docs/branding/` remain authoritative.
+`docs/branding/Logo Expand.png` and `docs/branding/Logo.png` remain the approved raster variants. Frontend implementation must choose the appropriate approved variant for the available space. It must use the source assets unchanged, preserve their design and proportions, and must not redraw, regenerate, recolor, distort, replace them with Lucide icons, or create an AI-generated substitute. A frontend foundation may copy exact unchanged versions into its build asset directory when Vite bundling requires it; the originals under `docs/branding/` remain authoritative.
 
 Illustrations and other extended brand assets remain deferred.
 

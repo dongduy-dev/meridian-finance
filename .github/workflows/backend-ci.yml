@@ -4,9 +4,15 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - "meridian-platform/**"
+      - ".github/workflows/backend-ci.yml"
   push:
     branches:
       - main
+    paths:
+      - "meridian-platform/**"
+      - ".github/workflows/backend-ci.yml"
 
 jobs:
   backend-test:
