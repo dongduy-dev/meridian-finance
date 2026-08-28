@@ -31,7 +31,7 @@ export function FoundationOverviewPage() {
         description="A live review surface for Meridian branding, reusable interface states, and responsive layout behavior. No Customer or lending data is loaded."
         actions={
           <Button asChild>
-            <Link to="/foundation/auth">Review auth layout</Link>
+            <Link to="/login">Review Login</Link>
           </Button>
         }
       />
@@ -40,8 +40,8 @@ export function FoundationOverviewPage() {
         <Info aria-hidden="true" />
         <AlertTitle>Foundation scope only</AlertTitle>
         <AlertDescription>
-          Authentication, account data, products, applications, and loans begin in later
-          checkpoints against authoritative APIs.
+          Customer authentication is now live. Account data, product integration,
+          applications, and loans remain honest placeholders until their checkpoints.
         </AlertDescription>
       </Alert>
 

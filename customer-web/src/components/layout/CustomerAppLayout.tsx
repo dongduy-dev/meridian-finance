@@ -3,11 +3,14 @@ import {
   Files,
   Landmark,
   LayoutDashboard,
+  LogOut,
   Menu,
   Shapes,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { MeridianLogo } from '@/components/common/MeridianLogo'
 import { Button } from '@/components/ui/button'
@@ -22,6 +25,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { cn } from '@/lib/cn'
+import { useAuth } from '@/features/auth/auth-context'
 
 interface NavigationItem {
   label: string
@@ -75,6 +79,21 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
 }
 
 export function CustomerAppLayout() {
+  const { manager } = useAuth()
+  const navigate = useNavigate()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const logout = async () => {
+    setIsLoggingOut(true)
+    try {
+      await manager.logout()
+    } catch {
+      // Local session clearing is guaranteed by the session manager.
+    } finally {
+      navigate('/login', { replace: true })
+    }
+  }
+
   return (
     <div className="min-h-svh bg-background lg:grid lg:grid-cols-[17rem_minmax(0,1fr)]">
       <aside className="fixed inset-y-0 left-0 hidden w-68 flex-col bg-primary px-4 py-5 text-primary-foreground lg:flex">
@@ -122,6 +141,16 @@ export function CustomerAppLayout() {
             <div className="flex size-10 items-center justify-center rounded-full border border-border bg-card text-foreground">
               <CircleUserRound aria-hidden="true" className="size-5" />
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Log out"
+              disabled={isLoggingOut}
+              onClick={() => void logout()}
+            >
+              <LogOut aria-hidden="true" />
+              <span className="hidden sm:inline">{isLoggingOut ? 'Logging out…' : 'Log out'}</span>
+            </Button>
           </div>
         </header>
 
