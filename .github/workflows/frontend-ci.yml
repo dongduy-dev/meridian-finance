@@ -1,0 +1,55 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    paths:
+      - "customer-web/**"
+      - ".github/workflows/frontend-ci.yml"
+      - "docs/frontend/**"
+      - "docs/branding/**"
+      - "README.md"
+  push:
+    branches:
+      - main
+    paths:
+      - "customer-web/**"
+      - ".github/workflows/frontend-ci.yml"
+      - "docs/frontend/**"
+      - "docs/branding/**"
+      - "README.md"
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: customer-web
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: customer-web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

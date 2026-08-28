@@ -250,6 +250,7 @@ All three products use Meridian's common application, approval, contract, activa
 ```text
 meridian-finance/
 ├── meridian-platform/       # Java/Spring backend, Flyway migrations, and PostgreSQL Compose
+├── customer-web/            # React/Vite Customer Web application
 ├── docs/                    # Business, architecture, API, database, and project documentation
 └── .github/workflows/       # Continuous integration workflows
 ```
@@ -261,6 +262,20 @@ shared · identity · customer · partner · loan · approval · document · aud
 ```
 
 `shared` is a technical shared kernel, not a bounded context. Feature modules use Meridian's Practical Hexagonal Architecture with only the packages each module needs. [MER-ARCH-002](docs/architecture/MER-ARCH-002-project-structure.md) defines source and package structure; [MER-ARCH-003](docs/architecture/MER-ARCH-003-dependency-rules.md) defines legal dependencies and architecture enforcement.
+
+---
+
+## Customer Web
+
+`customer-web/` contains Meridian's responsive Customer Web application. [MER-FE-001](docs/frontend/MER-FE-001-customer-web-blueprint.md) defines its frontend architecture, state ownership, visual language, accessibility baseline, and delivery sequence.
+
+```bash
+cd customer-web
+npm ci
+npm run dev
+```
+
+Frontend verification commands are `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. Copy `customer-web/.env.example` to `customer-web/.env` when needed and set the non-secret `VITE_API_BASE_URL`; local backend development uses `http://localhost:8080/api/v1`.
 
 ---
 
