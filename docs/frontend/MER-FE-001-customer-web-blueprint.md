@@ -374,34 +374,47 @@ The interface is:
 - polished through typography, spacing, and alignment rather than decoration;
 - restrained in its use of cards, gradients, shadows, and motion.
 
-One strong primary color, neutral surfaces, and semantic status colors carry the visual system. Cards group meaningful content; they do not wrap every heading, field, or row. Gradients, glassmorphism, neon effects, decorative charts, and continuous animation are outside the starting direction.
+Meridian Navy leads the visual system, Meridian Gold provides restrained accents, and Meridian Ivory gives the interface breathing room. Semantic status colors remain distinct from those brand anchors. Cards group meaningful content; they do not wrap every heading, field, or row. Gradients, glassmorphism, neon effects, decorative charts, and continuous animation are outside the starting direction.
 
 ---
 
 ## 10. Starting Design Tokens
 
-These tokens are the starting implementation direction. The first real Auth and shell pages may tune exact values through visual review, but pages must consume semantic tokens rather than introducing local replacements.
+These tokens are the starting implementation direction. The three approved brand-anchor values are fixed and must not drift. The first real Auth and shell pages may tune derived hover, pressed, border, muted, subtle, and selected variants centrally through browser review, but pages must consume semantic tokens rather than introducing local replacements.
 
 ### 10.1 Color
 
-| Token group | Starting direction | Use |
+| Token group | Approved anchor or direction | Use |
 |---|---|---|
-| Brand primary | Deep trustworthy blue; start near `#1D4ED8` | Primary actions, active navigation, links, focused brand moments |
-| Primary hover | Darker blue; start near `#1E40AF` | Hover and pressed primary controls |
-| Primary subtle | Pale blue; start near `#EFF6FF` | Selected and informational brand surfaces |
-| Page background | Cool near-white; start near `#F7F9FC` | Main app background |
-| Surface | White | Forms, grouped details, navigation |
-| Foreground | Deep slate; start near `#172033` | Primary text |
-| Muted foreground | Slate gray; start near `#667085` | Supporting text |
-| Border | Cool light gray; start near `#E4E7EC` | Fields, separators, grouped regions |
+| Meridian Navy | `#09122D` | Primary brand color, primary actions, active navigation, major headings, strong foreground, and dark branded surfaces |
+| Meridian Gold | `#D9B973` | Secondary brand accent, selected details, highlights, restrained decorative emphasis, and accent surfaces with Navy foreground where appropriate |
+| Meridian Ivory | `#F9F9F9` | Primary application canvas, page background, and light branded surfaces |
+| Surface | White | Content cards, forms, and grouped details where distinction from the Ivory canvas is useful |
+| Navy hover and pressed | Centrally derived from Meridian Navy | Hover and pressed primary controls |
+| Navy subtle and selected | Centrally derived from Meridian Navy and Ivory | Selected and subtle brand surfaces |
+| Muted foreground | Centrally derived neutral | Supporting text |
+| Border | Centrally derived neutral | Fields, separators, and grouped regions |
 | Success | Deep green with pale green surface | Completed and healthy states |
 | Warning | Amber/brown with pale amber surface | Pending, expiring, attention states |
 | Danger | Deep red with pale red surface | Destructive action, rejection, failure |
-| Information | Blue with pale blue surface | Neutral workflow information |
+| Information | Separate semantic informational hue with a subtle surface | Neutral workflow information |
 
-Status components must use the semantic token and a label or icon. Product identity must not create three unrelated page themes.
+The visual hierarchy is **NAVY LEADS, GOLD ACCENTS, IVORY BREATHES**. Gold must not become the dominant interface color or ordinary small text on white or Ivory where contrast is insufficient. Preferred high-contrast brand combinations are Ivory on Navy, Navy on Ivory, and Navy on Gold.
 
-### 10.2 Typography
+Success, warning, danger, and information colors remain separate from the three Meridian brand anchors. Status components must use the relevant semantic token and a label or icon. Product identity must not create three unrelated page themes.
+
+### 10.2 Authoritative Logo Assets
+
+The final source-of-truth logo assets are:
+
+- `docs/branding/Logo Expand.png` for expanded branding where sufficient space is available;
+- `docs/branding/Logo.png` for more compact placement.
+
+Frontend implementation must inspect both assets and choose the appropriate variant for the available space. It must use the source assets unchanged, preserve their design and proportions, and must not redraw, regenerate, recolor, distort, replace them with Lucide icons, or create an AI-generated substitute. A frontend foundation may copy exact unchanged versions into its build asset directory when Vite bundling requires it; the originals under `docs/branding/` remain authoritative.
+
+Illustrations and other extended brand assets remain deferred.
+
+### 10.3 Typography
 
 The starting typeface is a system sans stack. Inter may replace it only if the foundation deliberately bundles or loads it with an acceptable privacy and performance decision.
 
@@ -416,7 +429,7 @@ The starting typeface is a system sans stack. Inter may replace it only if the f
 
 Headings use semibold weight. Body copy uses regular weight. Money, account summaries, and aligned schedule values use tabular numerals.
 
-### 10.3 Shape, Spacing, and Elevation
+### 10.4 Shape, Spacing, and Elevation
 
 | Token | Rule |
 |---|---|
@@ -427,7 +440,7 @@ Headings use semibold weight. Body copy uses regular weight. Money, account summ
 | Focus ring | 2 px primary ring with visible offset |
 | Motion | 150–200 ms for state changes; honor reduced-motion preference |
 
-### 10.4 Width and Breakpoints
+### 10.5 Width and Breakpoints
 
 - Main app content: maximum 1280 px.
 - Detail content: maximum 1120 px.
@@ -435,7 +448,7 @@ Headings use semibold weight. Body copy uses regular weight. Money, account summ
 - Page gutters: 16 px on small screens, 24 px on medium screens, and 32 px on large screens.
 - Tailwind's default `sm`, `md`, `lg`, and `xl` breakpoints are sufficient until browser review proves otherwise.
 
-### 10.5 Action Hierarchy
+### 10.6 Action Hierarchy
 
 | Variant | Use |
 |---|---|
@@ -447,7 +460,7 @@ Headings use semibold weight. Body copy uses regular weight. Money, account summ
 
 An action region normally has one primary button. Destructive actions require explicit wording and a confirmation when the result is terminal or difficult to reverse. Button color must come from the shared variant; pages must not create product-colored button styles.
 
-### 10.6 Icons
+### 10.7 Icons
 
 Lucide icons normally render at 18 or 20 px with consistent stroke weight. Icons accompany text for important actions and status. An icon-only button requires an accessible name and tooltip; common primary actions keep visible text.
 
@@ -798,14 +811,9 @@ Figma may support later brand exploration, but implementation does not wait for 
 
 ## 20. Delivery Checkpoints
 
-The sequence below keeps review boundaries small and places missing API authority before dependent UI.
+The sequence below keeps review boundaries small and places missing API authority before dependent UI. `MER-FE-001` establishes this rulebook without changing frontend source, packages, or backend behavior. Delivery-history identifiers such as pull-request numbers do not form part of this durable roadmap.
 
-### Planning CP — MER-FE-001 Customer Web Blueprint
-
-- Establish this frontend rulebook.
-- No frontend source, package, or backend behavior change.
-
-### #71 — Frontend Foundation
+### FE-CP1 — Frontend Foundation
 
 - Vite, React, and TypeScript application;
 - React Router and provider composition;
@@ -817,7 +825,7 @@ The sequence below keeps review boundaries small and places missing API authorit
 - lint, unit/component test, build, and CI baseline;
 - no large business feature.
 
-### #72 — Customer Authentication Experience
+### FE-CP2 — Customer Authentication Experience
 
 - registration and verification pending;
 - fragment-token email confirmation;
@@ -826,14 +834,14 @@ The sequence below keeps review boundaries small and places missing API authorit
 - protected Customer routes and session-error handling;
 - rate-limit and request-correlation presentation.
 
-### #73 — Customer Account
+### FE-CP3 — Customer Account
 
 - own-profile read and completion/update;
 - protected identity-reference treatment;
 - bank-account list, add, make-primary, and deactivate;
 - account readiness presentation.
 
-### #74 — Frontend-Enabling Backend Read Contracts
+### FE-CP4 — Frontend-Enabling Backend Read Contracts
 
 Complete and test the smallest backend contracts required by the next Customer Web slices:
 
@@ -845,14 +853,14 @@ Complete and test the smallest backend contracts required by the next Customer W
 
 This checkpoint extends existing backend ownership and `MER-FU-037`; it must not create frontend-owned policy or expose restricted evidence.
 
-### #75 — Dashboard and Product Catalogue
+### FE-CP5 — Dashboard and Product Catalogue
 
 - readiness and required-action composition;
 - active application and LoanAccount summaries;
 - product catalogue and product detail pages;
 - full loading, empty, error, and responsive states.
 
-### #76 — Salary Advance Customer Flow
+### FE-CP6 — Salary Advance Customer Flow
 
 - readiness and blocker actions;
 - first-time/re-verification experience;
@@ -860,14 +868,14 @@ This checkpoint extends existing backend ownership and `MER-FU-037`; it must not
 - amount/term submission;
 - application destination and resume.
 
-### #77 — UCL and Collateral Origination and Evidence
+### FE-CP7 — UCL and Collateral Origination and Evidence
 
 - UCL amount/term submission and three-item evidence flow;
 - Collateral one-asset fact form and ownership evidence;
 - document upload, replacement baseline, reconnect, and status;
 - explicit product-specific copy without client-side pricing or LTV logic.
 
-### #78 — Application Tracking and Corrections
+### FE-CP8 — Application Tracking and Corrections
 
 - application list and detail;
 - faithful status/action projection;
@@ -875,13 +883,13 @@ This checkpoint extends existing backend ownership and `MER-FU-037`; it must not
 - narrow Salary Advance/UCL correction cancellation;
 - no Staff task execution.
 
-### #79 — Offers and Contracts
+### FE-CP9 — Offers and Contracts
 
 - approved-offer review, expiry, accept, and decline;
 - current operational contract and exact-version acknowledgment;
 - masked destination and provisional repayment presentation.
 
-### #80 — LoanAccount and Servicing Reads
+### FE-CP10 — LoanAccount and Servicing Reads
 
 - LoanAccount list and detail;
 - paid/outstanding summary;
@@ -897,7 +905,7 @@ Staff/Admin frontend, OCR review UI, deployment, and production hosting remain s
 
 The Customer Web MVP foundation deliberately defers:
 
-- final logo, illustration system, and immutable brand color approval;
+- illustration system and extended brand assets;
 - dark mode;
 - formal Figma component libraries;
 - Storybook or a separate design-system package;
@@ -913,7 +921,7 @@ The Customer Web MVP foundation deliberately defers:
 - OCR execution and Customer OCR-result presentation;
 - localization infrastructure until the initial UI language and copy authority are selected.
 
-The starting palette, system typography, desktop sidebar, mobile Sheet navigation, and English UI copy are implementation defaults. Deni's visual/product review should confirm the public-facing language, final brand mark, color tuning, and Customer copy tone during #71–#72. Those decisions tune the centralized system; they do not change the component, layout, state, or authority rules in this blueprint.
+The approved logo assets and Meridian Navy, Gold, and Ivory anchors are fixed inputs. System typography, desktop sidebar, mobile Sheet navigation, and English UI copy remain implementation defaults. Deni's visual/product review should confirm the public-facing language, derived color variants, minor centralized visual tuning, and Customer copy tone during FE-CP1–FE-CP2. Those decisions tune the centralized system; they do not change the approved anchor values or the component, layout, state, and authority rules in this blueprint.
 
 ---
 
