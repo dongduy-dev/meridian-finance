@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -71,6 +72,13 @@ public class LoanAccountRepositoryAdapter implements LoanAccountRepository {
     public Optional<LoanAccount> findByLoanApplicationIdForUpdate(UUID loanApplicationId) {
         return loanAccounts.findByLoanApplicationIdForUpdate(loanApplicationId)
                 .map(LoanAccountJpaEntity::toDomain);
+    }
+
+    @Override
+    public List<LoanAccount> findByCustomerIdOrderByActivatedAtDesc(UUID customerId) {
+        return loanAccounts.findByCustomerIdOrderByActivatedAtDescIdDesc(customerId).stream()
+                .map(LoanAccountJpaEntity::toDomain)
+                .toList();
     }
 
     private static BusinessStateConflictException conflict() {

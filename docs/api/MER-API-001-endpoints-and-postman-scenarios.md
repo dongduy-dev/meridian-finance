@@ -148,6 +148,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/customers/me/bank-accounts/{customerBankAccountId}/deactivate` | `customer:bank-account:write:own` | Deactivate an owned account subject to primary-account rules. |
 | GET | `/api/v1/partner-companies` | `partner:read` | List Partner Companies. |
 | GET | `/api/v1/partner-companies/{partnerCompanyId}` | `partner:read` | Return one Partner Company. |
+| GET | `/api/v1/partner-companies/verification-options` | `partner:employee:verify:own` | List active Partner Companies as a Customer-safe employee-verification selector. |
 | GET | `/api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=false` | `partner:read` | List Partner Employees; `activeOnly` defaults to `false`. |
 | GET | `/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | `partner:read` | List employee import batches. |
 | POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-verifications` | `partner:employee:verify:own` | Verify the authenticated Customer and create/reuse an eligible employee link. |
@@ -160,6 +161,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/loan-applications/salary-advance` | `loan:submit` | Submit a Salary Advance application and reserve eligible limit. |
 | POST | `/api/v1/loan-applications/unsecured-consumer-loan` | Customer with `loan:submit` | Submit an Unsecured Consumer Loan application for manual verification and required evidence collection. |
 | POST | `/api/v1/loan-applications/collateral-loan` | Customer with `loan:submit` | Submit a Collateral Loan application with one structured asset and required ownership-evidence collection. |
+| GET | `/api/v1/loan-applications` | Customer with `loan:read:own` | List the authenticated Customer's applications with authoritative lifecycle/action summaries. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}` | Customer `loan:read:own` or Staff `loan:read` | Return a safe durable LoanApplication status projection. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/cancel` | Customer with `loan:cancel:own` | Cancel an owned Salary Advance or UCL from `RETURNED_FOR_REVISION`; Salary Advance releases its reservation exactly once, while UCL has no exposure effect. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start` | Staff with `loan:review` | Start manual UCL verification after document processing readiness. |
@@ -173,6 +175,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/loan-applications/{loanApplicationId}/corrections/tasks/{taskId}/complete` | `loan:correction:own` | Complete an owned task after evidence exists. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/corrections/resubmit` | `loan:correction:own` | Resubmit an eligible Customer-only correction. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions` | `document:upload:own` | Upload or replace an owned document version. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/documents` | `document:read:own` | Return the owned submission checklist, current versions, and Customer-safe readiness. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | `document:read:own` | Stream an owned immutable version. |
 | GET | `/api/v1/document-review-items?status=AWAITING_REVIEW` | `document:review` | List current versions awaiting review. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/document-review-items/{checklistItemId}/reviews` | `document:review` | Review the exact current version. |
@@ -196,6 +199,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness/confirm` | `loan:disbursement:prepare` | Recompute and confirm readiness. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/disbursement-destination/reveal` | `loan:disburse` | Reveal the full immutable ready-contract destination. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/disbursements` | `loan:disburse` | Confirm an external transfer and activate the LoanAccount. |
+| GET | `/api/v1/loan-accounts` | Customer with `loan:read:own` | List the authenticated Customer's compact LoanAccount summaries. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/loan-account` | `loan:read:own` or `loan:read` | Return originated terms, final schedule, and servicing state. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/repayments` | `repayment:update` | Record or replay a manual Salary Advance, UCL, or Collateral Loan repayment. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read:own` or `loan:read` | Return immutable paged repayment history. |
@@ -382,7 +386,17 @@ GET /api/v1/loan-products
 GET /api/v1/loan-products/{productCode}
 ```
 
-Both reads are public. The collection read returns active products; the item read normalizes the supplied code and returns only an active matching product. Each product contains `productCode`, `productType`, `name`, `description`, `active`, `minAmount`, and `maxAmount`.
+Both reads are public. The collection read returns active products; the item read normalizes the supplied code and returns only an active matching product. Each product contains `productCode`, `productType`, `name`, `description`, `active`, `minAmount`, `maxAmount`, and a typed `policy` presentation:
+
+| Policy group | Fields |
+|---|---|
+| Terms | Ordered `allowedTermsMonths` |
+| Pricing | `flatMonthlyInterestRate`, `feeAmount`, `interestCalculationMethod` |
+| Repayment and validity | `repaymentMethod`, `offerValidityDays` |
+| Submission evidence | Ordered `documentType` and `requirementStatus` pairs |
+| Eligibility presentation | Ordered, verified `eligibilityNotes` that explain product prerequisites without calculating Customer eligibility |
+
+Pricing, repayment, validity, and returned terms come from the active executable product policy. Submission evidence comes from the same Document-owned product checklist resolver used to create an application checklist: Salary Advance has no initial item, UCL has required `BANK_STATEMENT`, `EMPLOYMENT_PROOF`, and `INCOME_PROOF`, and Collateral Loan has required `COLLATERAL_OWNERSHIP_EVIDENCE`. Missing or malformed active executable policy returns `422 PRODUCT_POLICY_INVALID`; the API does not return a partial policy.
 
 An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A recognized code with no active product returns `404 PRODUCT_NOT_FOUND`.
 
@@ -416,11 +430,19 @@ The safe Customer response contains `customerId`, `customerNumber`, Customer `st
 
 The account number is normalized by removing spaces and hyphens and must contain at least six normalized characters. List, add, make-primary, and deactivate responses contain the account ID, bank code/name, account-holder name, masked account number, last four characters, status, primary flag, and lifecycle timestamps. They never return the full account number, ciphertext, fingerprint, or protection metadata.
 
-### 3.12 Partner staff reads
+### 3.12 Customer Partner verification options
+
+```text
+GET /api/v1/partner-companies/verification-options
+```
+
+This authenticated Customer read requires `partner:employee:verify:own`. It returns active Partner Companies in deterministic company-code order with only `partnerCompanyId`, `companyCode`, and `name`. It excludes the Salary Advance policy limit, Partner Employees, salary and eligibility evidence, and import-batch facts. The selector does not itself verify employment or state that the Customer is eligible.
+
+### 3.13 Partner staff reads
 
 The Partner Company, employee, and import-batch reads require `partner:read`. Partner Company responses include the configured Salary Advance policy limit. Partner Employee responses include employee code, identity reference, salary amount, Salary Advance limit, employment status, active state, company identity, and import-batch identity. These are restricted Staff contracts and must not be reused as Customer response shapes. Import-batch responses contain company identity, effective month, status, and valid/invalid row counts.
 
-### 3.13 Employee verification
+### 3.14 Employee verification
 
 ```json
 {
@@ -450,7 +472,25 @@ The response contains `productCode`, the reusable `customerPartnerEmployeeLinkId
 
 Important blockers include Customer/profile/bank readiness, `EMPLOYEE_NOT_VERIFIED`, `SALARY_ADVANCE_ELIGIBILITY_DATA_STALE`, `SALARY_ADVANCE_LIMIT_UNAVAILABLE`, `INSUFFICIENT_AVAILABLE_LIMIT`, `BLOCKING_APPLICATION_EXISTS`, `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, `PRODUCT_NOT_AVAILABLE`, and safe `SYSTEM_STATE_CONFLICT`. Current eligibility requires the authoritative latest valid completed Partner import batch for the current UTC effective month; stale evidence remains blocked until re-verification refreshes the reusable link.
 
-### 4.2 LoanApplication status read
+### 4.2 Customer LoanApplication index and status read
+
+```text
+GET /api/v1/loan-applications
+```
+
+The index requires `loan:read:own`, derives Customer identity from the Bearer token, accepts no `customerId`, and returns only that Customer's applications newest first. Each item contains `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `requestedAmount`, `requestedTermMonths`, `status`, `submittedAt`, `lifecycleActive`, and `requiredAction`.
+
+`lifecycleActive` is false for `VERIFICATION_FAILED`, `REJECTED`, `CUSTOMER_DECLINED`, `DISBURSED`, `CANCELLED`, and `EXPIRED`; it is true for other lifecycle states. `requiredAction` is a server-owned finite value:
+
+| Value | Authoritative evidence |
+|---|---|
+| `UPLOAD_DOCUMENTS` | Application status is `DOCUMENTS_PENDING`. |
+| `COMPLETE_CORRECTIONS` | Application is `RETURNED_FOR_REVISION` and its active correction has an open Customer task or is ready for Customer resubmission. |
+| `REVIEW_APPROVED_OFFER` | Application is `CUSTOMER_ACCEPTANCE_PENDING` and its effective current offer remains `PENDING`. |
+| `ACKNOWLEDGE_CONTRACT` | Application is `CONTRACT_PENDING` and its current contract is `PREPARED`. |
+| `NONE` | No supported Customer action is proven by the owning state. |
+
+The values describe action meaning, not frontend routes. Staff-owned, waiting, and terminal states return `NONE`.
 
 ```text
 GET /api/v1/loan-applications/{loanApplicationId}
@@ -856,6 +896,18 @@ Success atomically marks the active correction request `CANCELLED`, changes the 
 
 ### 5.5 Document upload and review
 
+The Customer checklist projection is:
+
+```text
+GET /api/v1/loan-applications/{loanApplicationId}/documents
+```
+
+It requires `document:read:own`, derives Customer identity from authentication, and verifies application ownership through the Document-to-Loan boundary. Missing applications/checklists and foreign-owned applications return the same concealed `404 DOCUMENT_CHECKLIST_NOT_FOUND`.
+
+The response contains checklist ID, application ID, `stage`, aggregate `uploadComplete` and `processingReady`, and ordered items. Each item contains checklist-item ID, document type, requirement status, Customer status, item upload/processing readiness, and nullable `currentVersion`. Customer status is one of `NOT_UPLOADED`, `AWAITING_REVIEW`, `ACCEPTED`, `REPLACEMENT_REQUESTED`, or `WAIVED`. A current version contains only document-version ID, checklist-item ID, version number, original filename, detected MIME type, byte size, and upload time.
+
+The projection excludes review-decision IDs, reviewer identity, restricted notes and waiver rationale, storage keys/paths, hashes, audit IDs, historical versions, and document content. An empty Salary Advance submission checklist is both upload-complete and processing-ready.
+
 Upload is multipart with:
 
 - `uploadRequestId`
@@ -1030,6 +1082,18 @@ Important errors:
 - `PRODUCT_ACTIVATION_NOT_SUPPORTED`
 
 ### 7.3 Query LoanAccount
+
+The Customer LoanAccount index is:
+
+```text
+GET /api/v1/loan-accounts
+```
+
+It requires `loan:read:own`, derives Customer identity from authentication, accepts no `customerId`, and returns the Customer's accounts newest activation first. Each compact item contains application/account IDs, account number, application number, product code/type, account status, activation time, originated principal, authoritative total paid/outstanding from the LoanAccount repayment balance, and `servicingActive`. `servicingActive` is true only for `ACTIVE` and `OVERDUE`. An eligible Customer with no accounts receives an empty array.
+
+The index excludes the disbursement destination, schedule items, payment/transfer references, contract internals, settlement/closure evidence, Staff identities, and audit/history evidence. Inconsistent account-to-application ownership evidence fails with `409 SYSTEM_STATE_CONFLICT`.
+
+The detailed application-scoped read remains:
 
 The response contains:
 

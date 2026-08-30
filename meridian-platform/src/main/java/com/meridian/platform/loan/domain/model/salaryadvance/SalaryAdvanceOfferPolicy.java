@@ -1,6 +1,8 @@
 package com.meridian.platform.loan.domain.model.salaryadvance;
 
 import com.meridian.platform.loan.domain.model.InterestCalculationMethod;
+import com.meridian.platform.loan.domain.model.LoanProductTermPolicy;
+import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.RepaymentMethod;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 
@@ -18,8 +20,6 @@ public record SalaryAdvanceOfferPolicy(
         int offerValidityDays,
         Set<Integer> allowedTermsMonths
 ) {
-
-    private static final Set<Integer> REQUIRED_TERMS = Set.of(1, 2, 3);
 
     public SalaryAdvanceOfferPolicy {
         Objects.requireNonNull(id, "id must not be null");
@@ -44,8 +44,9 @@ public record SalaryAdvanceOfferPolicy(
         if (offerValidityDays <= 0) {
             throw invalidPolicy("Salary Advance offer validity must be positive.");
         }
-        if (!allowedTermsMonths.containsAll(REQUIRED_TERMS)) {
-            throw invalidPolicy("Salary Advance policy must allow 1, 2, and 3 month terms.");
+        if (!allowedTermsMonths.equals(LoanProductTermPolicy.allowedTermsMonths(
+                ProductCode.SALARY_ADVANCE))) {
+            throw invalidPolicy("Salary Advance policy must allow exactly 1, 2, and 3 month terms.");
         }
     }
 

@@ -17,7 +17,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class LoanMapper {
 
-    public LoanProductDto toLoanProductDto(LoanProduct loanProduct) {
+    public LoanProductDto toLoanProductDto(
+            LoanProduct loanProduct,
+            LoanProductDto.PolicyPresentationDto policy
+    ) {
         return new LoanProductDto(
                 loanProduct.productCode().name(),
                 loanProduct.productType().name(),
@@ -25,7 +28,8 @@ public class LoanMapper {
                 loanProduct.description(),
                 loanProduct.active(),
                 loanProduct.minAmount(),
-                loanProduct.maxAmount()
+                loanProduct.maxAmount(),
+                policy
         );
     }
 

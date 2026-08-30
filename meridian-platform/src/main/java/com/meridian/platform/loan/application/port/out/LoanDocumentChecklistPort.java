@@ -12,6 +12,10 @@ public interface LoanDocumentChecklistPort {
 
     SubmissionChecklistInitialState resolveSubmissionInitialState(ProductCode productCode);
 
+    default List<SubmissionEvidenceRequirement> resolveSubmissionRequirements(ProductCode productCode) {
+        return List.of();
+    }
+
     SubmissionChecklistSnapshot createSubmissionChecklist(
             UUID loanApplicationId,
             ProductCode productCode,
@@ -71,6 +75,12 @@ public interface LoanDocumentChecklistPort {
     }
 
     record SubmissionChecklistInitialState(boolean uploadComplete) {
+    }
+
+    record SubmissionEvidenceRequirement(
+            DocumentType documentType,
+            DocumentRequirementStatus requirementStatus
+    ) {
     }
 
     record SubmissionChecklistSnapshot(List<SubmissionChecklistItemSnapshot> items) {

@@ -4,6 +4,7 @@ import com.meridian.platform.loan.domain.model.collateral.Collateral;
 import com.meridian.platform.loan.domain.model.collateral.CollateralType;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanProduct;
+import com.meridian.platform.loan.domain.model.LoanProductTermPolicy;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
@@ -11,7 +12,6 @@ import com.meridian.platform.shared.domain.exception.BusinessRuleViolationExcept
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 
 public class CollateralLoanApplicationPolicy {
@@ -19,7 +19,6 @@ public class CollateralLoanApplicationPolicy {
     private static final int DESCRIPTION_MAX_LENGTH = 500;
     private static final int OWNERSHIP_STATUS_MAX_LENGTH = 200;
     private static final int CONDITION_NOTE_MAX_LENGTH = 500;
-    private static final Set<Integer> ALLOWED_TERMS_MONTHS = Set.of(6, 12, 18, 24);
 
     public void validateProduct(LoanProduct loanProduct) {
         Objects.requireNonNull(loanProduct, "loanProduct must not be null");
@@ -60,7 +59,8 @@ public class CollateralLoanApplicationPolicy {
     }
 
     public void validateRequestedTerm(int requestedTermMonths) {
-        if (!ALLOWED_TERMS_MONTHS.contains(requestedTermMonths)) {
+        if (!LoanProductTermPolicy.allowedTermsMonths(ProductCode.COLLATERAL_LOAN)
+                .contains(requestedTermMonths)) {
             throw new BusinessRuleViolationException(
                     "INVALID_PRODUCT_TERM",
                     "Requested term is not allowed for Collateral Loan."

@@ -22,6 +22,19 @@ public enum LoanApplicationStatus {
     CANCELLED,
     EXPIRED;
 
+    private static final Set<LoanApplicationStatus> TERMINAL_STATUSES = Set.of(
+            VERIFICATION_FAILED,
+            REJECTED,
+            CUSTOMER_DECLINED,
+            DISBURSED,
+            CANCELLED,
+            EXPIRED
+    );
+
+    public boolean isLifecycleActive() {
+        return !TERMINAL_STATUSES.contains(this);
+    }
+
     public static Set<LoanApplicationStatus> blockingStatuses() {
         return Set.of(
                 SUBMITTED,

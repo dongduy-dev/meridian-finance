@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.domain.service.salaryadvance;
 
 import com.meridian.platform.loan.domain.model.LoanProduct;
+import com.meridian.platform.loan.domain.model.LoanProductTermPolicy;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.loan.domain.model.salaryadvance.VerifiedPartnerEmployeeLinkSnapshot;
@@ -9,7 +10,6 @@ import com.meridian.platform.shared.domain.exception.BusinessRuleViolationExcept
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Objects;
-import java.util.Set;
 
 public class SalaryAdvanceApplicationPolicy {
 
@@ -17,7 +17,6 @@ public class SalaryAdvanceApplicationPolicy {
     // Documented Salary Advance seed policy: 40% of monthly salary.
     private static final BigDecimal SALARY_BASED_PERCENTAGE_CAP_RATE = new BigDecimal("0.40");
     private static final int MONEY_SCALE = 2;
-    private static final Set<Integer> ALLOWED_TERMS_MONTHS = Set.of(1, 2, 3);
 
     public void validateProduct(LoanProduct loanProduct) {
         Objects.requireNonNull(loanProduct, "loanProduct must not be null");
@@ -66,7 +65,8 @@ public class SalaryAdvanceApplicationPolicy {
     }
 
     public void validateRequestedTerm(int requestedTermMonths) {
-        if (!ALLOWED_TERMS_MONTHS.contains(requestedTermMonths)) {
+        if (!LoanProductTermPolicy.allowedTermsMonths(ProductCode.SALARY_ADVANCE)
+                .contains(requestedTermMonths)) {
             throw new BusinessRuleViolationException(
                     "INVALID_PRODUCT_TERM",
                     "Requested term is not allowed for Salary Advance."

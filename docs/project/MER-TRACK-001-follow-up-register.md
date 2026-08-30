@@ -767,19 +767,26 @@ Type: Deferred feature
 
 Priority: P2
 
-Status: Open
+Status: In progress
 
 Blocking: No current blocker.
 
 Problem:
-The common API exposes safe Customer-owned or authorized-Staff LoanApplication reads and activated LoanAccount, repayment-history, and servicing reads across supported products where applicable. It does not provide richer workflow projections for operational or frontend use.
+The common API now exposes safe Customer-owned LoanApplication and LoanAccount indexes, a narrow Customer action/resume projection, and application-scoped document checklist/current-version/readiness state in addition to the existing Customer-owned or authorized-Staff detail and servicing reads. Richer operational, search, aggregation, and lifecycle projections remain incomplete.
+
+Resolved scope:
+
+- Customer-owned LoanApplication index with lifecycle-active and proven Customer-action categories.
+- Customer-owned compact LoanAccount index using authoritative repayment balances.
+- Customer-owned submission-checklist, current-version, and readiness projection.
+- Frontend product-policy presentation and Customer-safe Partner verification selection supporting the lending reads.
 
 Still deferred:
 
-- Next-action projection and workflow command suggestions.
 - Staff work queues and application search/filtering.
 - Consolidated lifecycle and history views.
-- Dashboard and frontend-specific aggregation.
+- Broader Dashboard aggregation beyond the narrow Customer indexes and action facts.
+- Additional workflow command suggestions beyond the proven Customer action categories.
 - Richer product-specific projections where the common reads are insufficient.
 
 Cancellation note:
