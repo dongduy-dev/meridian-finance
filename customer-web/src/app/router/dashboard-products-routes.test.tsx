@@ -109,6 +109,30 @@ const applications = [
     lifecycleActive: true,
     requiredAction: 'NONE',
   },
+  {
+    loanApplicationId: '11111111-1111-4111-8111-111111111112',
+    applicationNumber: 'RETURNED-WITHOUT-CUSTOMER-ACTION',
+    productCode: 'UNSECURED_CONSUMER_LOAN',
+    productType: 'UNSECURED',
+    requestedAmount: 10_000_000,
+    requestedTermMonths: 6,
+    status: 'RETURNED_FOR_REVISION',
+    submittedAt: '2026-08-30T07:00:00',
+    lifecycleActive: true,
+    requiredAction: 'NONE',
+  },
+  {
+    loanApplicationId: '11111111-1111-4111-8111-111111111113',
+    applicationNumber: 'ACCEPTANCE-PENDING-WITHOUT-CUSTOMER-ACTION',
+    productCode: 'UNSECURED_CONSUMER_LOAN',
+    productType: 'UNSECURED',
+    requestedAmount: 10_000_000,
+    requestedTermMonths: 6,
+    status: 'CUSTOMER_ACCEPTANCE_PENDING',
+    submittedAt: '2026-08-30T06:00:00',
+    lifecycleActive: true,
+    requiredAction: 'NONE',
+  },
   ...[
     ['22222222-2222-4222-8222-222222222221', 'ACTION-DOCUMENTS', 'UPLOAD_DOCUMENTS'],
     ['22222222-2222-4222-8222-222222222222', 'ACTION-CORRECTIONS', 'COMPLETE_CORRECTIONS'],
@@ -235,6 +259,10 @@ describe('FE-CP5 Dashboard', () => {
     const activeApplications = screen.getByRole('heading', { name: 'Active applications' }).closest('section') as HTMLElement
     expect(within(activeApplications).getByText('UNKNOWN-ACTIVE-APPLICATION-WITH-A-LONG-REFERENCE-000001')).toBeVisible()
     expect(within(activeApplications).getByText('Status unavailable')).toBeVisible()
+    expect(within(activeApplications).getByText('Returned for revision')).toBeVisible()
+    expect(within(activeApplications).getByText('Customer acceptance pending')).toBeVisible()
+    expect(within(activeApplications).queryByText('Action required')).not.toBeInTheDocument()
+    expect(within(activeApplications).queryByText('Offer review required')).not.toBeInTheDocument()
     expect(within(activeApplications).queryByText('ACTION-DOCUMENTS')).not.toBeInTheDocument()
 
     const activeLoans = screen.getByRole('heading', { name: 'Active LoanAccounts' }).closest('section') as HTMLElement
@@ -315,11 +343,44 @@ describe('FE-CP5 product catalogue and details', () => {
     for (const product of products) {
       expect(await screen.findByRole('heading', { name: product.name })).toBeVisible()
     }
+    expect(screen.queryByText('Finish setting up your account')).not.toBeInTheDocument()
     expect(screen.queryByText(/flexible cash|quick funds|perfect for/i)).not.toBeInTheDocument()
+  })
+
+  it('prompts for incomplete basic account readiness using only existing account routes', async () => {
+    renderRoute('/products', (input, init) => {
+      if (String(input).endsWith('/customers/me')) {
+        return Promise.resolve(response({
+          ...customer,
+          profileCompletionStatus: 'INCOMPLETE',
+          primaryActiveBankAccountPresent: false,
+        }))
+      }
+      return successfulFetch(input, init)
+    })
+
+    expect(await screen.findByText('Finish setting up your account')).toBeVisible()
+    expect(screen.getByText(/does not confirm loan eligibility/i)).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Complete profile' })).toHaveAttribute('href', '/account/profile')
+    expect(screen.getByRole('link', { name: 'Manage bank accounts' })).toHaveAttribute('href', '/account/bank-accounts')
+    expect(await screen.findByRole('heading', { name: 'Salary Advance' })).toBeVisible()
+  })
+
+  it('keeps products visible when account readiness cannot be loaded', async () => {
+    renderRoute('/products', (input, init) => {
+      if (String(input).endsWith('/customers/me')) {
+        return Promise.resolve(errorResponse('/api/v1/customers/me'))
+      }
+      return successfulFetch(input, init)
+    })
+
+    expect(await screen.findByText('Account readiness could not be loaded')).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Salary Advance' })).toBeVisible()
   })
 
   it('renders a real empty catalogue state without synthesizing products', async () => {
     renderRoute('/products', async (input) => {
+      if (String(input).endsWith('/customers/me')) return response(customer)
       if (String(input).endsWith('/loan-products')) return response([])
       throw new Error(`Unexpected request: ${String(input)}`)
     })
@@ -332,6 +393,7 @@ describe('FE-CP5 product catalogue and details', () => {
     const user = userEvent.setup()
     let reads = 0
     renderRoute('/products', async (input) => {
+      if (String(input).endsWith('/customers/me')) return response(customer)
       if (!String(input).endsWith('/loan-products')) throw new Error(`Unexpected request: ${String(input)}`)
       reads += 1
       return reads === 1 ? errorResponse('/api/v1/loan-products') : response(products)

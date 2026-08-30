@@ -4,10 +4,12 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { PageHeader } from '@/components/common/PageHeader'
 import { QueryErrorFeedback } from '@/components/common/QueryErrorFeedback'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AccountReadinessPrompt, useOwnCustomerQuery } from '@/features/account'
 import { LoanProductCard } from '@/features/loan-products/components/LoanProductCard'
 import { useLoanProductsQuery } from '@/features/loan-products/loan-product-queries'
 
 export function ProductCataloguePage() {
+  const customerQuery = useOwnCustomerQuery()
   const productQuery = useLoanProductsQuery()
 
   return (
@@ -17,6 +19,18 @@ export function ProductCataloguePage() {
         title="Products"
         description="Compare active Meridian products using the current amount, term, pricing, evidence, and eligibility policy returned by the platform."
       />
+
+      {customerQuery.isPending ? (
+        <Skeleton className="h-32 w-full" role="status" aria-label="Loading account readiness" />
+      ) : null}
+      {customerQuery.isError ? (
+        <QueryErrorFeedback
+          error={customerQuery.error}
+          title="Account readiness could not be loaded"
+          onRetry={() => void customerQuery.refetch()}
+        />
+      ) : null}
+      {customerQuery.data ? <AccountReadinessPrompt customer={customerQuery.data} /> : null}
 
       {productQuery.isPending ? (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3" role="status" aria-label="Loading products">
