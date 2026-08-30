@@ -40,7 +40,7 @@ export function FoundationOverviewPage() {
         <Info aria-hidden="true" />
         <AlertTitle>Foundation scope only</AlertTitle>
         <AlertDescription>
-          Customer authentication is now live. Account data, product integration,
+          Customer authentication and account management are available. Product integration,
           applications, and loans remain honest placeholders until their checkpoints.
         </AlertDescription>
       </Alert>

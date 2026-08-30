@@ -1,4 +1,4 @@
-import { createBrowserRouter, createMemoryRouter, type RouteObject } from 'react-router-dom'
+import { createBrowserRouter, createMemoryRouter, Navigate, type RouteObject } from 'react-router-dom'
 
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { CustomerAppLayout } from '@/components/layout/CustomerAppLayout'
@@ -14,6 +14,8 @@ import { RegisterPage } from '@/routes/auth/RegisterPage'
 import { ResetPasswordPage } from '@/routes/auth/ResetPasswordPage'
 import { VerificationPendingPage } from '@/routes/auth/VerificationPendingPage'
 import { VerifyEmailPage } from '@/routes/auth/VerifyEmailPage'
+import { BankAccountsPage } from '@/routes/account/BankAccountsPage'
+import { ProfilePage } from '@/routes/account/ProfilePage'
 
 import { ProtectedCustomerRoute } from './ProtectedCustomerRoute'
 import { RouteFocusManager } from './RouteFocusManager'
@@ -47,7 +49,14 @@ export const routes: RouteObject[] = [
                 element: <FoundationPlaceholderPage title="Applications" />,
               },
               { path: 'loans', element: <FoundationPlaceholderPage title="Loans" /> },
-              { path: 'account', element: <FoundationPlaceholderPage title="Account" /> },
+              {
+                path: 'account',
+                children: [
+                  { index: true, element: <Navigate replace to="profile" /> },
+                  { path: 'profile', element: <ProfilePage /> },
+                  { path: 'bank-accounts', element: <BankAccountsPage /> },
+                ],
+              },
             ],
           },
         ],
