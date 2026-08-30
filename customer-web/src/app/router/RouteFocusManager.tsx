@@ -3,7 +3,10 @@ import { Outlet, useLocation } from 'react-router-dom'
 
 const routeTitles: Record<string, string> = {
   '/': 'Customer Dashboard',
-  '/products': 'Products Foundation',
+  '/products': 'Products',
+  '/products/salary-advance': 'Salary Advance',
+  '/products/unsecured-consumer-loan': 'Unsecured Consumer Loan',
+  '/products/collateral-loan': 'Collateral Loan',
   '/applications': 'Applications Foundation',
   '/loans': 'Loans Foundation',
   '/account': 'Account Foundation',

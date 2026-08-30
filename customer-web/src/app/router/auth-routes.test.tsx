@@ -232,7 +232,7 @@ describe('Customer authentication routes', () => {
     const api = createAuthApiMock()
     vi.mocked(api.logout).mockRejectedValue(new NetworkError())
     const { manager, router } = renderAuthRoute('/', api)
-    await screen.findByRole('heading', { name: 'Customer Web foundation' })
+    await screen.findByRole('heading', { name: 'Dashboard' })
 
     await user.click(screen.getByRole('button', { name: 'Log out' }))
 
