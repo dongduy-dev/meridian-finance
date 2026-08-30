@@ -1,6 +1,8 @@
 package com.meridian.platform.loan.domain.model.unsecured;
 
 import com.meridian.platform.loan.domain.model.InterestCalculationMethod;
+import com.meridian.platform.loan.domain.model.LoanProductTermPolicy;
+import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.RepaymentMethod;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 
@@ -18,8 +20,6 @@ public record UnsecuredConsumerLoanOfferPolicy(
         int offerValidityDays,
         Set<Integer> allowedTermsMonths
 ) {
-
-    private static final Set<Integer> REQUIRED_TERMS = Set.of(3, 6, 9, 12);
 
     public UnsecuredConsumerLoanOfferPolicy {
         Objects.requireNonNull(id, "id must not be null");
@@ -47,7 +47,8 @@ public record UnsecuredConsumerLoanOfferPolicy(
         if (offerValidityDays <= 0) {
             throw invalidPolicy("Unsecured Consumer Loan offer validity must be positive.");
         }
-        if (!allowedTermsMonths.equals(REQUIRED_TERMS)) {
+        if (!allowedTermsMonths.equals(LoanProductTermPolicy.allowedTermsMonths(
+                ProductCode.UNSECURED_CONSUMER_LOAN))) {
             throw invalidPolicy("Unsecured Consumer Loan policy must allow exactly 3, 6, 9, and 12 month terms.");
         }
     }

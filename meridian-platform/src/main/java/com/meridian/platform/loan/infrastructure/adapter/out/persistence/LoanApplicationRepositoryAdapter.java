@@ -10,6 +10,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -91,6 +92,14 @@ public class LoanApplicationRepositoryAdapter implements LoanApplicationReposito
     public Optional<LoanApplication> findByIdForUpdate(UUID loanApplicationId) {
         return jpaLoanApplicationRepository.findByIdForUpdate(loanApplicationId)
                 .map(this::toDomain);
+    }
+
+    @Override
+    public List<LoanApplication> findByCustomerIdOrderBySubmittedAtDesc(UUID customerId) {
+        return jpaLoanApplicationRepository.findByCustomerIdOrderBySubmittedAtDescIdDesc(customerId)
+                .stream()
+                .map(this::toDomain)
+                .toList();
     }
 
     @Override

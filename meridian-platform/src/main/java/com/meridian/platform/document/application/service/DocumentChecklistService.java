@@ -64,6 +64,17 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
     }
 
     @Override
+    public List<SubmissionEvidenceRequirement> resolveSubmissionRequirements(ProductCode productCode) {
+        return resolveChecklistItems(UUID.randomUUID(), productCode, java.time.LocalDateTime.MIN)
+                .stream()
+                .map(item -> new SubmissionEvidenceRequirement(
+                        item.documentType(),
+                        item.requirementStatus()
+                ))
+                .toList();
+    }
+
+    @Override
     public SubmissionChecklistSnapshot createSubmissionChecklist(
             UUID loanApplicationId,
             ProductCode productCode,

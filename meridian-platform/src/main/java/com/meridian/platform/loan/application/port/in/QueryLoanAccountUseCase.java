@@ -1,5 +1,6 @@
 package com.meridian.platform.loan.application.port.in;
 
+import com.meridian.platform.loan.application.dto.CustomerLoanAccountSummaryDto;
 import com.meridian.platform.loan.domain.model.LoanAccountStatus;
 import com.meridian.platform.loan.domain.model.RepaymentInstallmentStatus;
 import com.meridian.platform.loan.domain.model.RepaymentScheduleType;
@@ -14,6 +15,10 @@ import java.util.UUID;
 public interface QueryLoanAccountUseCase {
 
     Result query(UUID loanApplicationId);
+
+    default List<CustomerLoanAccountSummaryDto> queryOwnAccounts() {
+        throw new UnsupportedOperationException("Customer Loan Account index is not implemented.");
+    }
 
     record Result(
             UUID loanApplicationId,

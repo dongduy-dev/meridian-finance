@@ -1,6 +1,8 @@
 package com.meridian.platform.loan.domain.model.collateral;
 
 import com.meridian.platform.loan.domain.model.InterestCalculationMethod;
+import com.meridian.platform.loan.domain.model.LoanProductTermPolicy;
+import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.RepaymentMethod;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 
@@ -20,8 +22,6 @@ public record CollateralLoanOfferPolicy(
 ) {
 
     private static final BigDecimal REQUIRED_MONTHLY_RATE = new BigDecimal("0.015000");
-    private static final Set<Integer> REQUIRED_TERMS = Set.of(6, 12, 18, 24);
-
     public CollateralLoanOfferPolicy {
         Objects.requireNonNull(id, "id must not be null");
         Objects.requireNonNull(interestCalculationMethod, "interestCalculationMethod must not be null");
@@ -51,7 +51,8 @@ public record CollateralLoanOfferPolicy(
         if (offerValidityDays <= 0) {
             throw invalidPolicy("Collateral Loan offer validity must be positive.");
         }
-        if (!allowedTermsMonths.equals(REQUIRED_TERMS)) {
+        if (!allowedTermsMonths.equals(LoanProductTermPolicy.allowedTermsMonths(
+                ProductCode.COLLATERAL_LOAN))) {
             throw invalidPolicy("Collateral Loan policy must allow exactly 6, 12, 18, and 24 month terms.");
         }
     }

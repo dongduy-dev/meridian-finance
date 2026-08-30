@@ -4,6 +4,7 @@ import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -18,6 +19,10 @@ public interface LoanApplicationRepository {
     Optional<LoanApplication> findById(UUID loanApplicationId);
 
     Optional<LoanApplication> findByIdForUpdate(UUID loanApplicationId);
+
+    default List<LoanApplication> findByCustomerIdOrderBySubmittedAtDesc(UUID customerId) {
+        return List.of();
+    }
 
     boolean existsByCustomerIdAndProductCodeAndStatusIn(
             UUID customerId,

@@ -1,5 +1,6 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.dto.CustomerLoanAccountSummaryDto;
 import com.meridian.platform.loan.application.port.in.QueryLoanAccountUseCase;
 import com.meridian.platform.loan.application.port.out.LoanAccountRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
@@ -27,6 +28,8 @@ import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -131,6 +134,50 @@ public class QueryLoanAccountService implements QueryLoanAccountUseCase {
                                             current.lastPaymentRecordedAt()));
                         })
                         .toList()
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public List<CustomerLoanAccountSummaryDto> queryOwnAccounts() {
+        AuthenticatedUser actor = currentUserProvider.currentUser();
+        if (actor.optionalCustomerId().isEmpty() || !actor.hasPermission("loan:read:own")) {
+            throw accessDenied();
+        }
+        UUID customerId = actor.requireCustomerId();
+        Map<UUID, LoanApplication> ownedApplications = applications
+                .findByCustomerIdOrderBySubmittedAtDesc(customerId)
+                .stream()
+                .collect(Collectors.toMap(LoanApplication::id, Function.identity()));
+        return loanAccounts.findByCustomerIdOrderByActivatedAtDesc(customerId).stream()
+                .map(account -> toCustomerSummary(account, ownedApplications))
+                .toList();
+    }
+
+    private static CustomerLoanAccountSummaryDto toCustomerSummary(
+            LoanAccount account,
+            Map<UUID, LoanApplication> ownedApplications
+    ) {
+        LoanApplication application = ownedApplications.get(account.loanApplicationId());
+        if (application == null || !application.customerId().equals(account.customerId())) {
+            throw systemStateConflict();
+        }
+        var balance = account.repaymentBalance();
+        return new CustomerLoanAccountSummaryDto(
+                application.id(),
+                account.id(),
+                account.accountNumber(),
+                application.applicationNumber(),
+                application.productCode().name(),
+                application.productType().name(),
+                account.status().name(),
+                account.activatedAt(),
+                account.approvedPrincipal(),
+                balance.totalPaid(),
+                balance.totalOutstanding(),
+                account.status() == com.meridian.platform.loan.domain.model.LoanAccountStatus.ACTIVE
+                        || account.status()
+                        == com.meridian.platform.loan.domain.model.LoanAccountStatus.OVERDUE
         );
     }
 
