@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
 import { MeridianLogo } from '@/components/common/MeridianLogo'
@@ -25,6 +25,11 @@ export function FocusedFlowLayout({
   continueAction,
 }: FocusedFlowLayoutProps) {
   const progress = Math.round((currentStep / totalSteps) * 100)
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => document.getElementById('page-heading')?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [title])
 
   return (
     <div className="min-h-svh bg-background pb-24 sm:pb-28">

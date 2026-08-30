@@ -149,11 +149,6 @@ const verificationOutcomePresentations: Record<string, VerificationOutcomePresen
   },
 }
 
-const applicationStatusPresentations: Record<string, StatusPresentation> = {
-  SUBMITTED: { label: 'Submitted', tone: 'success', icon: CheckCircle2 },
-  DOCUMENTS_PENDING: { label: 'Documents pending', tone: 'information', icon: Clock3 },
-}
-
 export function blockerPresentation(code: string): BlockerPresentation {
   return blockerPresentations[code] ?? {
     title: 'Readiness unavailable',
@@ -198,13 +193,5 @@ export function verificationOutcomePresentation(
     tone: 'neutral',
     icon: CircleHelp,
     description: 'Meridian returned a verification result that Customer Web cannot safely interpret yet. Use the refreshed readiness result for current application availability.',
-  }
-}
-
-export function applicationStatusPresentation(value: string): StatusPresentation {
-  return applicationStatusPresentations[value] ?? {
-    label: 'Application status unavailable',
-    tone: 'neutral',
-    icon: CircleHelp,
   }
 }

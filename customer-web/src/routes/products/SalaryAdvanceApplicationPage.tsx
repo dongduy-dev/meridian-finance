@@ -26,6 +26,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { AccountFormField } from '@/features/account/components/AccountFormField'
+import { applicationStatusPresentation } from '@/features/applications/application-presentation'
 import { useLoanProductQuery } from '@/features/loan-products/loan-product-queries'
 import type { SalaryAdvanceApplication } from '@/features/salary-advance/salary-advance-api'
 import { AmountInput } from '@/features/salary-advance/components/AmountInput'
@@ -34,7 +35,6 @@ import {
   useSalaryAdvanceReadinessQuery,
   useSubmitSalaryAdvanceMutation,
 } from '@/features/salary-advance/salary-advance-queries'
-import { applicationStatusPresentation } from '@/features/salary-advance/salary-advance-presentation'
 import { ApiError } from '@/lib/api'
 
 interface SalaryAdvanceFormValues {
@@ -128,7 +128,7 @@ function SuccessState({ application }: { application: SalaryAdvanceApplication }
     <FocusedFlowLayout
       eyebrow="Salary Advance application"
       title="Application submitted"
-      description="Meridian recorded the application and reserved the approved current exposure under its authoritative submission checks."
+      description="Meridian recorded the application and reserved the requested amount against your current Salary Advance limit after its authoritative submission checks succeeded."
       currentStep={2}
       totalSteps={2}
       backAction={<span />}

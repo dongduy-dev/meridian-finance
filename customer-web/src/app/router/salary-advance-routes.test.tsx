@@ -439,7 +439,9 @@ describe('FE-CP6 focused Salary Advance application', () => {
       return defaultFetch(input, init)
     })
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Application cannot be started' })).toBeVisible()
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Application cannot be started' })
+    expect(heading).toBeVisible()
+    await waitFor(() => expect(heading).toHaveFocus())
     expect(screen.queryByLabelText('Requested amount')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Submit application' })).not.toBeInTheDocument()
   })
@@ -481,6 +483,7 @@ describe('FE-CP6 focused Salary Advance application', () => {
     const user = userEvent.setup()
     let resolveSubmission: ((value: Response) => void) | undefined
     const submissionResponse = new Promise<Response>((resolve) => { resolveSubmission = resolve })
+    const submittedApplication = { ...application, status: 'SUBMITTED' }
     let submissionCalls = 0
     let submittedBody: unknown
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
@@ -504,10 +507,13 @@ describe('FE-CP6 focused Salary Advance application', () => {
     await user.click(screen.getByRole('button', { name: 'Submitting…' }))
     expect(submissionCalls).toBe(1)
 
-    resolveSubmission?.(response(application, 201))
+    resolveSubmission?.(response(submittedApplication, 201))
     expect(await screen.findByRole('heading', { name: 'Application submitted' })).toBeVisible()
     expect(screen.getByText(application.applicationNumber)).toBeVisible()
-    expect(screen.getByText('Application status unavailable')).toBeVisible()
+    expect(screen.getByText('Meridian recorded the application and reserved the requested amount against your current Salary Advance limit after its authoritative submission checks succeeded.')).toBeVisible()
+    expect(screen.queryByText(/approved current exposure/i)).not.toBeInTheDocument()
+    expect(screen.getByText('Submission confirmed').closest('[role="alert"]')).toHaveClass('bg-success-subtle')
+    expect(screen.getByText('Submitted').parentElement).toHaveClass('bg-information-subtle')
     expect(screen.getByText(moneyText(application.requestedAmount))).toBeVisible()
     expect(screen.queryByText(application.loanApplicationId)).not.toBeInTheDocument()
     expect(submittedBody).toEqual({

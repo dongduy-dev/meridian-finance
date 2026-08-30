@@ -7,7 +7,8 @@ import {
 } from '@/lib/api'
 
 const nonEmptyString = z.string().min(1)
-const nullableUuid = z.string().uuid().nullable()
+const javaUuid = z.string().guid()
+const nullableUuid = javaUuid.nullable()
 
 export const salaryAdvanceReadinessSchema = z.object({
   productCode: nonEmptyString,
@@ -25,7 +26,7 @@ export const salaryAdvanceReadinessSchema = z.object({
 })
 
 export const partnerVerificationOptionSchema = z.object({
-  partnerCompanyId: z.string().uuid(),
+  partnerCompanyId: javaUuid,
   companyCode: nonEmptyString,
   name: nonEmptyString,
 })
@@ -33,8 +34,8 @@ export const partnerVerificationOptionSchema = z.object({
 const partnerVerificationOptionsSchema = z.array(partnerVerificationOptionSchema)
 
 export const employeeVerificationSchema = z.object({
-  customerId: z.string().uuid(),
-  partnerCompanyId: z.string().uuid(),
+  customerId: javaUuid,
+  partnerCompanyId: javaUuid,
   partnerEmployeeId: nullableUuid,
   customerPartnerEmployeeLinkId: nullableUuid,
   outcome: nonEmptyString,
@@ -43,15 +44,15 @@ export const employeeVerificationSchema = z.object({
 })
 
 export const salaryAdvanceApplicationSchema = z.object({
-  loanApplicationId: z.string().uuid(),
+  loanApplicationId: javaUuid,
   applicationNumber: nonEmptyString,
-  customerId: z.string().uuid(),
+  customerId: javaUuid,
   productCode: nonEmptyString,
   productType: nonEmptyString,
   status: nonEmptyString,
   requestedAmount: z.number().finite().positive(),
   requestedTermMonths: z.number().int().positive(),
-  customerPartnerEmployeeLinkId: z.string().uuid(),
+  customerPartnerEmployeeLinkId: javaUuid,
   productVerificationResult: nonEmptyString,
   totalLimitSnapshot: z.number().finite().nonnegative(),
   usedAmountSnapshot: z.number().finite().nonnegative(),
@@ -72,7 +73,7 @@ export interface SalaryAdvanceApplicationInput {
 }
 
 const salaryAdvanceApplicationInputSchema = z.object({
-  customerPartnerEmployeeLinkId: z.string().uuid(),
+  customerPartnerEmployeeLinkId: javaUuid,
   requestedAmount: z.number().int().positive(),
   requestedTermMonths: z.number().int().positive(),
 })

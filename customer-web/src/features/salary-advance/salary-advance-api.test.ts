@@ -20,13 +20,13 @@ const readiness = {
 }
 
 const option = {
-  partnerCompanyId: '11111111-1111-4111-8111-111111111111',
+  partnerCompanyId: '11111111-1111-1111-1111-111111111111',
   companyCode: 'MER-LONG-CODE',
   name: 'Meridian Partner Company',
 }
 
 const verification = {
-  customerId: '22222222-2222-4222-8222-222222222222',
+  customerId: '99999999-9999-9999-9999-999999999999',
   partnerCompanyId: option.partnerCompanyId,
   partnerEmployeeId: null,
   customerPartnerEmployeeLinkId: null,
