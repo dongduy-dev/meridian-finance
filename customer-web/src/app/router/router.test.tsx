@@ -13,12 +13,12 @@ function renderRoute(path: string) {
   return router
 }
 
-describe('application routing foundation', () => {
+describe('application routing and shell', () => {
   it('bootstraps the Customer shell with the planned navigation vocabulary', async () => {
     renderRoute('/')
 
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Customer Web foundation' }),
+      await screen.findByRole('heading', { level: 1, name: 'Dashboard' }),
     ).toBeVisible()
     for (const label of ['Dashboard', 'Products', 'Applications', 'Loans', 'Account']) {
       expect(screen.getByRole('link', { name: label })).toBeVisible()

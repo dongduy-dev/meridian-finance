@@ -6,7 +6,6 @@ import { NotFoundPage } from '@/routes/NotFoundPage'
 import { RouteErrorBoundary } from '@/routes/RouteErrorBoundary'
 import { DetailPreviewPage } from '@/routes/foundation/DetailPreviewPage'
 import { FocusedFlowPreviewPage } from '@/routes/foundation/FocusedFlowPreviewPage'
-import { FoundationOverviewPage } from '@/routes/foundation/FoundationOverviewPage'
 import { FoundationPlaceholderPage } from '@/routes/foundation/FoundationPlaceholderPage'
 import { ForgotPasswordPage } from '@/routes/auth/ForgotPasswordPage'
 import { LoginPage } from '@/routes/auth/LoginPage'
@@ -16,6 +15,9 @@ import { VerificationPendingPage } from '@/routes/auth/VerificationPendingPage'
 import { VerifyEmailPage } from '@/routes/auth/VerifyEmailPage'
 import { BankAccountsPage } from '@/routes/account/BankAccountsPage'
 import { ProfilePage } from '@/routes/account/ProfilePage'
+import { DashboardPage } from '@/routes/dashboard/DashboardPage'
+import { ProductCataloguePage } from '@/routes/products/ProductCataloguePage'
+import { ProductDetailPage } from '@/routes/products/ProductDetailPage'
 
 import { ProtectedCustomerRoute } from './ProtectedCustomerRoute'
 import { RouteFocusManager } from './RouteFocusManager'
@@ -42,8 +44,14 @@ export const routes: RouteObject[] = [
           {
             element: <CustomerAppLayout />,
             children: [
-              { index: true, element: <FoundationOverviewPage /> },
-              { path: 'products', element: <FoundationPlaceholderPage title="Products" /> },
+              { index: true, element: <DashboardPage /> },
+              {
+                path: 'products',
+                children: [
+                  { index: true, element: <ProductCataloguePage /> },
+                  { path: ':productSlug', element: <ProductDetailPage /> },
+                ],
+              },
               {
                 path: 'applications',
                 element: <FoundationPlaceholderPage title="Applications" />,
