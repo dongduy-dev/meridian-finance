@@ -96,6 +96,21 @@ const productDefinitions = {
 
 const products = Object.values(productDefinitions)
 
+const salaryAdvanceReadiness = {
+  productCode: 'SALARY_ADVANCE',
+  customerPartnerEmployeeLinkId: '55555555-5555-4555-8555-555555555551',
+  employeeVerificationStatus: 'VERIFIED',
+  partnerEligibilityStatus: 'ELIGIBLE',
+  limitStatus: 'ACTIVE',
+  totalAmount: 5_000_000,
+  usedAmount: 500_000,
+  reservedAmount: 0,
+  availableAmount: 4_500_000,
+  lastRefreshAt: '2026-08-30T08:00:00',
+  applicationAllowed: true,
+  blockerCodes: [],
+}
+
 const applications = [
   {
     loanApplicationId: '11111111-1111-4111-8111-111111111111',
@@ -218,6 +233,7 @@ function successfulFetch(input: RequestInfo | URL, init?: RequestInit) {
   if (url.endsWith('/loan-applications')) return Promise.resolve(response(applications))
   if (url.endsWith('/loan-accounts')) return Promise.resolve(response(loanAccounts))
   if (url.endsWith('/loan-products')) return Promise.resolve(response(products))
+  if (url.endsWith('/loan-products/salary-advance/readiness')) return Promise.resolve(response(salaryAdvanceReadiness))
   const productCode = Object.keys(productDefinitions).find((code) => url.endsWith(`/loan-products/${code}`))
   if (productCode) return Promise.resolve(response(productDefinitions[productCode as keyof typeof productDefinitions]))
   throw new Error(`Unexpected request: ${url}; ${init?.method ?? 'GET'}`)
@@ -415,14 +431,16 @@ describe('FE-CP5 product catalogue and details', () => {
     const product = productDefinitions[code as keyof typeof productDefinitions]
 
     expect(await screen.findByRole('heading', { level: 1, name })).toBeVisible()
-    expect(screen.getByText(moneyText(product.minAmount))).toBeVisible()
+    expect((await screen.findAllByText(moneyText(product.minAmount)))[0]).toBeVisible()
     expect(screen.getByText(formatPercentage(product.policy.pricing.flatMonthlyInterestRate))).toBeVisible()
     expect(screen.getByText(note)).toBeVisible()
     if (code === 'SALARY_ADVANCE') {
       expect(screen.getByText('No submission evidence is listed for this product.')).toBeVisible()
       expect(screen.queryByText(/flexible cash|quick funds/i)).not.toBeInTheDocument()
+      expect(await screen.findByRole('link', { name: 'Apply for Salary Advance' })).toHaveAttribute('href', '/products/salary-advance/apply')
+    } else {
+      expect(screen.queryByRole('button', { name: /apply|submit|verify/i })).not.toBeInTheDocument()
     }
-    expect(screen.queryByRole('button', { name: /apply|submit|verify/i })).not.toBeInTheDocument()
   })
 
   it('renders unknown enum-like policy values neutrally and keeps long returned content usable', async () => {

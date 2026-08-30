@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
 import { MeridianLogo } from '@/components/common/MeridianLogo'
 
 export interface FocusedFlowLayoutProps {
+  eyebrow?: string
   title: string
   description: string
   currentStep: number
@@ -14,6 +15,7 @@ export interface FocusedFlowLayoutProps {
 }
 
 export function FocusedFlowLayout({
+  eyebrow = 'Focused flow template',
   title,
   description,
   currentStep,
@@ -23,6 +25,11 @@ export function FocusedFlowLayout({
   continueAction,
 }: FocusedFlowLayoutProps) {
   const progress = Math.round((currentStep / totalSteps) * 100)
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => document.getElementById('page-heading')?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [title])
 
   return (
     <div className="min-h-svh bg-background pb-24 sm:pb-28">
@@ -45,7 +52,7 @@ export function FocusedFlowLayout({
         </div>
         <header className="mb-8 space-y-3">
           <p className="text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-            Focused flow template
+            {eyebrow}
           </p>
           <h1
             id="page-heading"
