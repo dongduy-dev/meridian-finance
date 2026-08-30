@@ -18,6 +18,7 @@ import { ProfilePage } from '@/routes/account/ProfilePage'
 import { DashboardPage } from '@/routes/dashboard/DashboardPage'
 import { ProductCataloguePage } from '@/routes/products/ProductCataloguePage'
 import { ProductDetailPage } from '@/routes/products/ProductDetailPage'
+import { SalaryAdvanceApplicationPage } from '@/routes/products/SalaryAdvanceApplicationPage'
 
 import { ProtectedCustomerRoute } from './ProtectedCustomerRoute'
 import { RouteFocusManager } from './RouteFocusManager'
@@ -66,6 +67,10 @@ export const routes: RouteObject[] = [
                 ],
               },
             ],
+          },
+          {
+            path: 'products/salary-advance/apply',
+            element: <SalaryAdvanceApplicationPage />,
           },
         ],
       },

@@ -19,6 +19,8 @@ import {
   productSlugToCode,
   repaymentMethodLabel,
 } from '@/features/loan-products/loan-product-presentation'
+import { SalaryAdvanceReadiness } from '@/features/salary-advance/components/SalaryAdvanceReadiness'
+import { useSalaryAdvanceReadinessQuery } from '@/features/salary-advance/salary-advance-queries'
 import { formatPercentage, formatTerms } from '@/lib/format/presentation'
 
 function PolicyFact({ label, children }: { label: string; children: ReactNode }) {
@@ -138,6 +140,59 @@ function ProductDetailContent({ productCode }: { productCode: string }) {
   )
 }
 
+function SalaryAdvanceProductContent() {
+  const productQuery = useLoanProductQuery('SALARY_ADVANCE')
+  const readinessQuery = useSalaryAdvanceReadinessQuery()
+
+  return (
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Product details"
+        title={productQuery.data?.name ?? 'Salary Advance'}
+        description={productQuery.data?.description ?? undefined}
+        actions={<Button variant="secondary" asChild><Link to="/products"><ArrowLeft aria-hidden="true" />Back to products</Link></Button>}
+      />
+      {productQuery.isPending ? (
+        <div role="status" aria-label="Loading Salary Advance product details">
+          <div className="grid gap-6 xl:grid-cols-2"><Skeleton className="h-96" /><Skeleton className="h-80" /></div>
+        </div>
+      ) : null}
+      {productQuery.isError ? (
+        <QueryErrorFeedback
+          error={productQuery.error}
+          title="Salary Advance product details could not be loaded"
+          onRetry={() => void productQuery.refetch()}
+        />
+      ) : null}
+      {productQuery.data ? (
+        <ProductPolicy product={productQuery.data} />
+      ) : null}
+
+      <section aria-labelledby="salary-advance-readiness-heading" className="space-y-5">
+        <div>
+          <h2 id="salary-advance-readiness-heading" className="text-2xl font-semibold tracking-tight">Your Salary Advance readiness</h2>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">Review the current backend readiness result, returned limit facts, and any Customer action Meridian requires.</p>
+        </div>
+        {readinessQuery.isPending ? (
+          <div className="grid gap-6 xl:grid-cols-2" role="status" aria-label="Loading Salary Advance readiness">
+            <Skeleton className="h-80" /><Skeleton className="h-80" />
+          </div>
+        ) : null}
+        {readinessQuery.isError ? (
+          <QueryErrorFeedback
+            error={readinessQuery.error}
+            title="Salary Advance readiness could not be loaded"
+            onRetry={() => void readinessQuery.refetch()}
+          />
+        ) : null}
+        {readinessQuery.data ? (
+          <SalaryAdvanceReadiness readiness={readinessQuery.data} showApplyAction />
+        ) : null}
+      </section>
+    </div>
+  )
+}
+
 export function ProductDetailPage() {
   const { productSlug } = useParams()
   const productCode = productSlug && productSlug in productSlugToCode
@@ -156,6 +211,10 @@ export function ProductDetailPage() {
         />
       </div>
     )
+  }
+
+  if (productCode === 'SALARY_ADVANCE') {
+    return <SalaryAdvanceProductContent />
   }
 
   return <ProductDetailContent productCode={productCode} />

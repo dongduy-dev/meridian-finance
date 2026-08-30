@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { MeridianLogo } from '@/components/common/MeridianLogo'
 
 export interface FocusedFlowLayoutProps {
+  eyebrow?: string
   title: string
   description: string
   currentStep: number
@@ -14,6 +15,7 @@ export interface FocusedFlowLayoutProps {
 }
 
 export function FocusedFlowLayout({
+  eyebrow = 'Focused flow template',
   title,
   description,
   currentStep,
@@ -45,7 +47,7 @@ export function FocusedFlowLayout({
         </div>
         <header className="mb-8 space-y-3">
           <p className="text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-            Focused flow template
+            {eyebrow}
           </p>
           <h1
             id="page-heading"

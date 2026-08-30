@@ -5,6 +5,7 @@ const routeTitles: Record<string, string> = {
   '/': 'Customer Dashboard',
   '/products': 'Products',
   '/products/salary-advance': 'Salary Advance',
+  '/products/salary-advance/apply': 'Apply for Salary Advance',
   '/products/unsecured-consumer-loan': 'Unsecured Consumer Loan',
   '/products/collateral-loan': 'Collateral Loan',
   '/applications': 'Applications Foundation',
