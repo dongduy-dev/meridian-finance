@@ -179,7 +179,7 @@ export function ApplicationCorrectionsPage() {
             <Dialog>
               <DialogTrigger asChild><Button variant="destructive"><Ban aria-hidden="true" />Cancel application</Button></DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle>Cancel this application?</DialogTitle><DialogDescription>This application will be cancelled and the correction flow will end. This action does not implement any Staff or administrative cancellation.</DialogDescription></DialogHeader>
+                <DialogHeader><DialogTitle>Cancel this application?</DialogTitle><DialogDescription>This application will be cancelled and the correction flow will end.</DialogDescription></DialogHeader>
                 {cancellationError ? <MutationFailure title="Application was not cancelled" error={cancellationError} fallback="The cancellation could not be completed. Check your connection and retry the same action if appropriate." /> : null}
                 <DialogFooter>
                   <DialogClose asChild><Button variant="secondary" disabled={cancellation.isPending}>Keep application</Button></DialogClose>

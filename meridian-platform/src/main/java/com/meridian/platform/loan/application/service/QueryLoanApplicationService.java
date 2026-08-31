@@ -11,6 +11,7 @@ import com.meridian.platform.loan.domain.model.ApprovedOfferStatus;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanContractStatus;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus;
+import com.meridian.platform.loan.domain.model.LoanCorrectionResponsibility;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
@@ -118,9 +119,16 @@ public class QueryLoanApplicationService implements QueryLoanApplicationUseCase 
         if (latestRequest.isEmpty() || !latestRequest.orElseThrow().isActive()) {
             return CustomerLoanApplicationSummaryDto.CustomerApplicationAction.NONE;
         }
-        if (latestRequest.orElseThrow().status() == LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION
-                || corrections.findCustomerTasks(applicationId, customerId).stream()
-                .anyMatch(task -> task.status() == LoanCorrectionTaskStatus.OPEN)) {
+        var request = latestRequest.orElseThrow();
+        boolean hasOpenCustomerTask = corrections.findCustomerTasks(applicationId, customerId).stream()
+                .anyMatch(task -> task.status() == LoanCorrectionTaskStatus.OPEN);
+        boolean readyForCustomerResubmission = request.status()
+                == LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION
+                && !corrections.existsTaskByRequestIdAndResponsibleParty(
+                        request.id(),
+                        LoanCorrectionResponsibility.STAFF
+                );
+        if (hasOpenCustomerTask || readyForCustomerResubmission) {
             return CustomerLoanApplicationSummaryDto.CustomerApplicationAction.COMPLETE_CORRECTIONS;
         }
         return CustomerLoanApplicationSummaryDto.CustomerApplicationAction.NONE;

@@ -96,6 +96,17 @@ public class LoanCorrectionRepositoryAdapter implements LoanCorrectionRepository
     }
 
     @Override
+    public boolean existsTaskByRequestIdAndResponsibleParty(
+            UUID correctionRequestId,
+            LoanCorrectionResponsibility responsibleParty
+    ) {
+        return taskRepository.existsByCorrectionRequestIdAndResponsibleParty(
+                correctionRequestId,
+                responsibleParty
+        );
+    }
+
+    @Override
     public Optional<LoanCorrectionTask> findOpenCustomerDocumentTask(UUID loanApplicationId, UUID checklistItemId) {
         return taskRepository.findOpenCustomerDocumentTask(
                         loanApplicationId,

@@ -14,6 +14,7 @@ import {
   useOwnApplicationQuery,
   useOwnApplicationsQuery,
 } from '@/features/applications/application-queries'
+import { applicationStatusPresentation } from '@/features/applications/application-presentation'
 import { ApplicationSummary } from '@/features/applications/components/ApplicationSummary'
 import { RequiredActionCard } from '@/features/applications/components/RequiredActionCard'
 
@@ -40,6 +41,7 @@ export function ApplicationDetailPage() {
     (application) => application.loanApplicationId === loanApplicationId,
   )
   const notice = workflowNotice(location.state)
+  const noticeStatus = notice ? applicationStatusPresentation(notice.status).label : undefined
   const notFound = detailQuery.error instanceof ApiError && detailQuery.error.status === 404
 
   if (notFound) {
@@ -87,7 +89,7 @@ export function ApplicationDetailPage() {
           <Alert variant="success">
             <CircleCheck aria-hidden="true" />
             <AlertTitle>{notice.kind === 'cancelled' ? 'Application cancelled' : 'Corrections resubmitted'}</AlertTitle>
-            <AlertDescription>Meridian returned the resulting application status: {notice.status}.</AlertDescription>
+            <AlertDescription>Current application status: {noticeStatus}.</AlertDescription>
           </Alert>
         ) : null}
         {detailQuery.isPending ? <Skeleton className="h-64" role="status" aria-label="Loading application details" /> : null}
@@ -95,13 +97,6 @@ export function ApplicationDetailPage() {
           <QueryErrorFeedback error={detailQuery.error} title="Application details could not be loaded" onRetry={() => void detailQuery.refetch()} />
         ) : null}
         {detailQuery.data ? <ApplicationSummary application={detailQuery.data} /> : null}
-        {detailQuery.data ? (
-          <Alert>
-            <Info aria-hidden="true" />
-            <AlertTitle>Current state only</AlertTitle>
-            <AlertDescription>This page does not reconstruct a lifecycle timeline or Staff review history from the current status.</AlertDescription>
-          </Alert>
-        ) : null}
       </div>
     </DetailLayout>
   )

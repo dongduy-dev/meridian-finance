@@ -15,6 +15,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface JpaLoanCorrectionTaskRepository extends JpaRepository<LoanCorrectionTaskJpaEntity, UUID> {
+    boolean existsByCorrectionRequestIdAndResponsibleParty(
+            UUID correctionRequestId,
+            LoanCorrectionResponsibility responsibleParty
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select task from LoanCorrectionTaskJpaEntity task where task.id = :id")
     Optional<LoanCorrectionTaskJpaEntity> findByIdForUpdate(@Param("id") UUID id);
