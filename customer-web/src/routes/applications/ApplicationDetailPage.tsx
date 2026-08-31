@@ -19,17 +19,18 @@ import { ApplicationSummary } from '@/features/applications/components/Applicati
 import { RequiredActionCard } from '@/features/applications/components/RequiredActionCard'
 
 interface WorkflowNotice {
-  kind: 'resubmitted' | 'cancelled'
-  status: string
+  kind: 'resubmitted' | 'cancelled' | 'offer-declined'
+  status?: string
 }
 
 function workflowNotice(value: unknown): WorkflowNotice | undefined {
   if (!value || typeof value !== 'object' || !('workflowResult' in value)) return undefined
   const result = value.workflowResult
   if (!result || typeof result !== 'object') return undefined
-  if (!('kind' in result) || (result.kind !== 'resubmitted' && result.kind !== 'cancelled')) return undefined
+  if (!('kind' in result) || !['resubmitted', 'cancelled', 'offer-declined'].includes(String(result.kind))) return undefined
+  if (result.kind === 'offer-declined') return { kind: result.kind }
   if (!('status' in result) || typeof result.status !== 'string') return undefined
-  return { kind: result.kind, status: result.status }
+  return { kind: result.kind as 'resubmitted' | 'cancelled', status: result.status }
 }
 
 export function ApplicationDetailPage() {
@@ -41,7 +42,7 @@ export function ApplicationDetailPage() {
     (application) => application.loanApplicationId === loanApplicationId,
   )
   const notice = workflowNotice(location.state)
-  const noticeStatus = notice ? applicationStatusPresentation(notice.status).label : undefined
+  const noticeStatus = notice?.status ? applicationStatusPresentation(notice.status).label : undefined
   const notFound = detailQuery.error instanceof ApiError && detailQuery.error.status === 404
 
   if (notFound) {
@@ -88,8 +89,8 @@ export function ApplicationDetailPage() {
         {notice ? (
           <Alert variant="success">
             <CircleCheck aria-hidden="true" />
-            <AlertTitle>{notice.kind === 'cancelled' ? 'Application cancelled' : 'Corrections resubmitted'}</AlertTitle>
-            <AlertDescription>Current application status: {noticeStatus}.</AlertDescription>
+            <AlertTitle>{notice.kind === 'cancelled' ? 'Application cancelled' : notice.kind === 'offer-declined' ? 'Offer declined' : 'Corrections resubmitted'}</AlertTitle>
+            <AlertDescription>{notice.kind === 'offer-declined' ? 'The approved offer was declined. No further offer response is available.' : `Current application status: ${noticeStatus}.`}</AlertDescription>
           </Alert>
         ) : null}
         {detailQuery.isPending ? <Skeleton className="h-64" role="status" aria-label="Loading application details" /> : null}

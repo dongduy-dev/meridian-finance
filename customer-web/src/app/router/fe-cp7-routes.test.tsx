@@ -169,7 +169,7 @@ describe('FE-CP7 document workspace', () => {
     expect(screen.queryByText(/Step 1 of 1/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Return to Dashboard' })).toHaveAttribute('href', '/')
-    expect(screen.getByText('Uploads: Not complete')).toBeVisible()
+    expect(await screen.findByText('Uploads: Not complete', {}, { timeout: 3_000 })).toBeVisible()
     expect(screen.getByText('Processing: Not complete')).toBeVisible()
     expect(screen.getByText('An upload exists and is awaiting review. It is not missing.')).toBeVisible()
     expect(screen.getByText('The current document has been accepted.')).toBeVisible()
