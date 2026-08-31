@@ -1,6 +1,8 @@
-import { FileText } from 'lucide-react'
+import { ArrowRight, FileText } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 import { StatusBadge } from '@/components/common/StatusBadge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { CustomerApplicationSummary } from '@/features/applications/application-api'
 import { requiredActionPresentation } from '@/features/applications/application-presentation'
@@ -29,6 +31,11 @@ export function RequiredActionCard({ application }: { application: CustomerAppli
           <FileText aria-hidden="true" className="size-4 shrink-0" />
           <span className="break-all">Application {application.applicationNumber}</span>
         </p>
+        {application.requiredAction === 'UPLOAD_DOCUMENTS' ? (
+          <Button asChild>
+            <Link to={`/applications/${application.loanApplicationId}/documents`}>Upload documents<ArrowRight aria-hidden="true" /></Link>
+          </Button>
+        ) : null}
       </CardContent>
     </Card>
   )

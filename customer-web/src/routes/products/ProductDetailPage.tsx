@@ -100,7 +100,7 @@ function ProductPolicy({ product }: { product: LoanProduct }) {
   )
 }
 
-function ProductDetailContent({ productCode }: { productCode: string }) {
+function ProductDetailContent({ productCode, applyPath }: { productCode: string; applyPath?: string }) {
   const productQuery = useLoanProductQuery(productCode)
 
   if (productQuery.isPending) {
@@ -133,7 +133,7 @@ function ProductDetailContent({ productCode }: { productCode: string }) {
         eyebrow="Product details"
         title={productQuery.data.name}
         description={productQuery.data.description ?? undefined}
-        actions={<Button variant="secondary" asChild><Link to="/products"><ArrowLeft aria-hidden="true" />Back to products</Link></Button>}
+        actions={<div className="flex flex-wrap gap-3"><Button variant="secondary" asChild><Link to="/products"><ArrowLeft aria-hidden="true" />Back to products</Link></Button>{applyPath && productQuery.data.active ? <Button asChild><Link to={applyPath}>Apply now</Link></Button> : null}</div>}
       />
       <ProductPolicy product={productQuery.data} />
     </div>
@@ -217,5 +217,5 @@ export function ProductDetailPage() {
     return <SalaryAdvanceProductContent />
   }
 
-  return <ProductDetailContent productCode={productCode} />
+  return <ProductDetailContent productCode={productCode} applyPath={`/products/${productSlug}/apply`} />
 }
