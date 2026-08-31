@@ -36,6 +36,11 @@ export function RequiredActionCard({ application }: { application: CustomerAppli
             <Link to={`/applications/${application.loanApplicationId}/documents`}>Upload documents<ArrowRight aria-hidden="true" /></Link>
           </Button>
         ) : null}
+        {application.requiredAction === 'COMPLETE_CORRECTIONS' ? (
+          <Button asChild>
+            <Link to={`/applications/${application.loanApplicationId}/corrections`}>Complete corrections<ArrowRight aria-hidden="true" /></Link>
+          </Button>
+        ) : null}
       </CardContent>
     </Card>
   )

@@ -36,6 +36,7 @@ export function useUploadDocumentMutation() {
     onSuccess: (_, input) => Promise.all([
       queryClient.invalidateQueries({ queryKey: documentKeys.checklist(input.loanApplicationId) }),
       queryClient.invalidateQueries({ queryKey: applicationKeys.index() }),
+      queryClient.invalidateQueries({ queryKey: applicationKeys.detail(input.loanApplicationId) }),
     ]),
   })
   return { ...mutation, upload: mutation.mutateAsync }

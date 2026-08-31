@@ -13,6 +13,7 @@ import com.meridian.platform.loan.domain.model.LoanContract;
 import com.meridian.platform.loan.domain.model.LoanContractStatus;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus;
+import com.meridian.platform.loan.domain.model.LoanCorrectionResponsibility;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTask;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
@@ -181,11 +182,92 @@ class QueryLoanApplicationServiceTest {
     }
 
     @Test
+    void openCustomerCorrectionTaskRemainsACompleteCorrectionsAction() {
+        LoanCorrectionTask openCustomerTask = mock(LoanCorrectionTask.class);
+        when(openCustomerTask.status()).thenReturn(LoanCorrectionTaskStatus.OPEN);
+
+        assertEquals(
+                "COMPLETE_CORRECTIONS",
+                correctionAction(LoanCorrectionRequestStatus.OPEN, List.of(openCustomerTask), true)
+        );
+    }
+
+    @Test
+    void customerOnlyReadyCorrectionIsACompleteCorrectionsAction() {
+        LoanCorrectionTask completedCustomerTask = mock(LoanCorrectionTask.class);
+        when(completedCustomerTask.status()).thenReturn(LoanCorrectionTaskStatus.COMPLETED);
+
+        assertEquals(
+                "COMPLETE_CORRECTIONS",
+                correctionAction(
+                        LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION,
+                        List.of(completedCustomerTask),
+                        false
+                )
+        );
+    }
+
+    @Test
+    void mixedReadyCorrectionIsNotAdvertisedAsACustomerAction() {
+        LoanCorrectionTask completedCustomerTask = mock(LoanCorrectionTask.class);
+        when(completedCustomerTask.status()).thenReturn(LoanCorrectionTaskStatus.COMPLETED);
+
+        assertEquals(
+                "NONE",
+                correctionAction(
+                        LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION,
+                        List.of(completedCustomerTask),
+                        true
+                )
+        );
+    }
+
+    @Test
+    void staffOnlyReadyCorrectionIsNotAdvertisedAsACustomerAction() {
+        assertEquals(
+                "NONE",
+                correctionAction(LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION, List.of(), true)
+        );
+    }
+
+    @Test
     void staffCannotUseCustomerApplicationIndex() {
         when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:read")));
 
         assertThrows(AuthorizationException.class, service::queryOwnApplications);
         verify(applications, never()).findByCustomerIdOrderBySubmittedAtDesc(any());
+    }
+
+    private String correctionAction(
+            LoanCorrectionRequestStatus requestStatus,
+            List<LoanCorrectionTask> customerTasks,
+            boolean hasStaffTask
+    ) {
+        when(currentUserProvider.currentUser()).thenReturn(customer(CUSTOMER_ID));
+        LoanApplication correction = application(
+                UUID.randomUUID(),
+                CUSTOMER_ID,
+                LoanApplicationStatus.RETURNED_FOR_REVISION,
+                LocalDateTime.of(2026, 8, 12, 8, 0)
+        );
+        when(applications.findByCustomerIdOrderBySubmittedAtDesc(CUSTOMER_ID))
+                .thenReturn(List.of(correction));
+        LoanCorrectionRequest request = mock(LoanCorrectionRequest.class);
+        UUID correctionRequestId = UUID.randomUUID();
+        when(request.isActive()).thenReturn(true);
+        when(request.status()).thenReturn(requestStatus);
+        when(corrections.findLatestRequestByApplicationId(correction.id()))
+                .thenReturn(Optional.of(request));
+        when(corrections.findCustomerTasks(correction.id(), CUSTOMER_ID)).thenReturn(customerTasks);
+        if (requestStatus == LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION) {
+            when(request.id()).thenReturn(correctionRequestId);
+            when(corrections.existsTaskByRequestIdAndResponsibleParty(
+                    correctionRequestId,
+                    LoanCorrectionResponsibility.STAFF
+            )).thenReturn(hasStaffTask);
+        }
+
+        return service.queryOwnApplications().getFirst().requiredAction().name();
     }
 
     private static LoanApplication application(UUID customerId) {
