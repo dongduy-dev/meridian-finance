@@ -41,6 +41,16 @@ export function RequiredActionCard({ application }: { application: CustomerAppli
             <Link to={`/applications/${application.loanApplicationId}/corrections`}>Complete corrections<ArrowRight aria-hidden="true" /></Link>
           </Button>
         ) : null}
+        {application.requiredAction === 'REVIEW_APPROVED_OFFER' ? (
+          <Button asChild>
+            <Link to={`/applications/${application.loanApplicationId}/offer`}>Review offer<ArrowRight aria-hidden="true" /></Link>
+          </Button>
+        ) : null}
+        {application.requiredAction === 'ACKNOWLEDGE_CONTRACT' ? (
+          <Button asChild>
+            <Link to={`/applications/${application.loanApplicationId}/contract`}>Review contract<ArrowRight aria-hidden="true" /></Link>
+          </Button>
+        ) : null}
       </CardContent>
     </Card>
   )

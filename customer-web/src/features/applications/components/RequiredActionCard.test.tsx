@@ -19,8 +19,12 @@ it('links only implemented Customer actions to their authoritative workspaces', 
   rerender(<MemoryRouter><RequiredActionCard application={{ ...application, requiredAction: 'COMPLETE_CORRECTIONS' }} /></MemoryRouter>)
   expect(screen.getByRole('link', { name: 'Complete corrections' })).toHaveAttribute('href', `/applications/${application.loanApplicationId}/corrections`)
 
-  for (const requiredAction of ['REVIEW_APPROVED_OFFER', 'ACKNOWLEDGE_CONTRACT', 'FUTURE_ACTION']) {
-    rerender(<MemoryRouter><RequiredActionCard application={{ ...application, requiredAction }} /></MemoryRouter>)
-    expect(screen.queryByRole('link')).not.toBeInTheDocument()
-  }
+  rerender(<MemoryRouter><RequiredActionCard application={{ ...application, requiredAction: 'REVIEW_APPROVED_OFFER' }} /></MemoryRouter>)
+  expect(screen.getByRole('link', { name: 'Review offer' })).toHaveAttribute('href', `/applications/${application.loanApplicationId}/offer`)
+
+  rerender(<MemoryRouter><RequiredActionCard application={{ ...application, requiredAction: 'ACKNOWLEDGE_CONTRACT' }} /></MemoryRouter>)
+  expect(screen.getByRole('link', { name: 'Review contract' })).toHaveAttribute('href', `/applications/${application.loanApplicationId}/contract`)
+
+  rerender(<MemoryRouter><RequiredActionCard application={{ ...application, requiredAction: 'FUTURE_ACTION' }} /></MemoryRouter>)
+  expect(screen.queryByRole('link')).not.toBeInTheDocument()
 })

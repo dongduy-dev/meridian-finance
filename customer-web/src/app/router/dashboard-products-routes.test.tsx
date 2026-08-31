@@ -270,7 +270,7 @@ describe('FE-CP5 Dashboard', () => {
       expect(await within(requiredWork).findByText(title)).toBeVisible()
     }
     expect(within(requiredWork).queryByText('UNKNOWN-ACTIVE-APPLICATION-WITH-A-LONG-REFERENCE-000001')).not.toBeInTheDocument()
-    expect(within(requiredWork).getAllByRole('link')).toHaveLength(2)
+    expect(within(requiredWork).getAllByRole('link')).toHaveLength(4)
     expect(within(requiredWork).getByRole('link', { name: 'Upload documents' })).toHaveAttribute(
       'href',
       '/applications/22222222-2222-4222-8222-222222222221/documents',
@@ -278,6 +278,14 @@ describe('FE-CP5 Dashboard', () => {
     expect(within(requiredWork).getByRole('link', { name: 'Complete corrections' })).toHaveAttribute(
       'href',
       '/applications/22222222-2222-4222-8222-222222222222/corrections',
+    )
+    expect(within(requiredWork).getByRole('link', { name: 'Review offer' })).toHaveAttribute(
+      'href',
+      '/applications/22222222-2222-4222-8222-222222222223/offer',
+    )
+    expect(within(requiredWork).getByRole('link', { name: 'Review contract' })).toHaveAttribute(
+      'href',
+      '/applications/22222222-2222-4222-8222-222222222224/contract',
     )
 
     const activeApplications = screen.getByRole('heading', { name: 'Active applications' }).closest('section') as HTMLElement

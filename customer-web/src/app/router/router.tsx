@@ -25,6 +25,8 @@ import { ApplicationDocumentsPage } from '@/routes/applications/ApplicationDocum
 import { ApplicationDetailPage } from '@/routes/applications/ApplicationDetailPage'
 import { ApplicationsPage } from '@/routes/applications/ApplicationsPage'
 import { ApplicationCorrectionsPage } from '@/routes/applications/ApplicationCorrectionsPage'
+import { ApplicationContractPage } from '@/routes/applications/ApplicationContractPage'
+import { ApplicationOfferPage } from '@/routes/applications/ApplicationOfferPage'
 
 import { ProtectedCustomerRoute } from './ProtectedCustomerRoute'
 import { RouteFocusManager } from './RouteFocusManager'
@@ -99,6 +101,14 @@ export const routes: RouteObject[] = [
           {
             path: 'applications/:loanApplicationId/corrections',
             element: <ApplicationCorrectionsPage />,
+          },
+          {
+            path: 'applications/:loanApplicationId/offer',
+            element: <ApplicationOfferPage />,
+          },
+          {
+            path: 'applications/:loanApplicationId/contract',
+            element: <ApplicationContractPage />,
           },
         ],
       },
