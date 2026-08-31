@@ -53,7 +53,7 @@ describe('Customer authentication routes', () => {
     await completeLogin(user)
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/loans'))
-    expect(await screen.findByRole('heading', { name: 'Loans' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Your LoanAccounts' })).toBeVisible()
   })
 
   it('keeps invalid credentials generic and never calls refresh recovery', async () => {

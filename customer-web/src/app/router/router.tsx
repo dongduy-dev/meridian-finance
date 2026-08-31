@@ -6,7 +6,6 @@ import { NotFoundPage } from '@/routes/NotFoundPage'
 import { RouteErrorBoundary } from '@/routes/RouteErrorBoundary'
 import { DetailPreviewPage } from '@/routes/foundation/DetailPreviewPage'
 import { FocusedFlowPreviewPage } from '@/routes/foundation/FocusedFlowPreviewPage'
-import { FoundationPlaceholderPage } from '@/routes/foundation/FoundationPlaceholderPage'
 import { ForgotPasswordPage } from '@/routes/auth/ForgotPasswordPage'
 import { LoginPage } from '@/routes/auth/LoginPage'
 import { RegisterPage } from '@/routes/auth/RegisterPage'
@@ -27,6 +26,8 @@ import { ApplicationsPage } from '@/routes/applications/ApplicationsPage'
 import { ApplicationCorrectionsPage } from '@/routes/applications/ApplicationCorrectionsPage'
 import { ApplicationContractPage } from '@/routes/applications/ApplicationContractPage'
 import { ApplicationOfferPage } from '@/routes/applications/ApplicationOfferPage'
+import { LoanDetailPage } from '@/routes/loans/LoanDetailPage'
+import { LoansPage } from '@/routes/loans/LoansPage'
 
 import { ProtectedCustomerRoute } from './ProtectedCustomerRoute'
 import { RouteFocusManager } from './RouteFocusManager'
@@ -67,7 +68,7 @@ export const routes: RouteObject[] = [
                   { index: true, element: <ApplicationsPage /> },
                 ],
               },
-              { path: 'loans', element: <FoundationPlaceholderPage title="Loans" /> },
+              { path: 'loans', element: <LoansPage /> },
               {
                 path: 'account',
                 children: [
@@ -109,6 +110,10 @@ export const routes: RouteObject[] = [
           {
             path: 'applications/:loanApplicationId/contract',
             element: <ApplicationContractPage />,
+          },
+          {
+            path: 'loans/:loanApplicationId',
+            element: <LoanDetailPage />,
           },
         ],
       },
