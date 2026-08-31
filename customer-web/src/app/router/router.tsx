@@ -60,7 +60,6 @@ export const routes: RouteObject[] = [
                 path: 'applications',
                 children: [
                   { index: true, element: <FoundationPlaceholderPage title="Applications" /> },
-                  { path: ':loanApplicationId/documents', element: <ApplicationDocumentsPage /> },
                 ],
               },
               { path: 'loans', element: <FoundationPlaceholderPage title="Loans" /> },
@@ -85,6 +84,10 @@ export const routes: RouteObject[] = [
           {
             path: 'products/collateral-loan/apply',
             element: <CollateralLoanApplicationPage />,
+          },
+          {
+            path: 'applications/:loanApplicationId/documents',
+            element: <ApplicationDocumentsPage />,
           },
         ],
       },

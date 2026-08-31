@@ -165,6 +165,10 @@ describe('FE-CP7 document workspace', () => {
     renderRoute(`/applications/${applicationId}/documents`, (input, init) => String(input).endsWith(`/loan-applications/${applicationId}/documents`) ? Promise.resolve(response(checklist)) : baseFetch(input, init))
     const heading = await screen.findByRole('heading', { name: 'Documents' })
     await waitFor(() => expect(heading).toHaveFocus())
+    expect(screen.queryByRole('navigation', { name: 'Customer navigation' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Step 1 of 1/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Return to Dashboard' })).toHaveAttribute('href', '/')
     expect(screen.getByText('Uploads: Not complete')).toBeVisible()
     expect(screen.getByText('Processing: Not complete')).toBeVisible()
     expect(screen.getByText('An upload exists and is awaiting review. It is not missing.')).toBeVisible()
@@ -175,6 +179,23 @@ describe('FE-CP7 document workspace', () => {
     expect(screen.getByRole('button', { name: 'Upload document' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Replace document' })).toBeDisabled()
     expect(screen.getAllByLabelText(/Choose (replacement )?file/)).toHaveLength(2)
+  })
+
+  it('keeps the focused evidence presentation while the checklist loads or fails', async () => {
+    let resolveChecklist!: (value: Response) => void
+    const checklistResponse = new Promise<Response>((resolve) => {
+      resolveChecklist = resolve
+    })
+    renderRoute(`/applications/${applicationId}/documents`, (input, init) => String(input).endsWith(`/loan-applications/${applicationId}/documents`) ? checklistResponse : baseFetch(input, init))
+
+    const heading = await screen.findByRole('heading', { name: 'Documents' })
+    expect(await screen.findByLabelText('Loading document checklist')).toBeVisible()
+    expect(screen.queryByText(/Step 1 of 1/i)).not.toBeInTheDocument()
+    resolveChecklist(response({ timestamp: '2026-08-31T09:00:00Z', status: 400, errorCode: 'QUERY_UNAVAILABLE', message: 'Checklist unavailable.', path: `/api/v1/loan-applications/${applicationId}/documents` }, 400))
+
+    expect(await screen.findByText('Document checklist could not be loaded')).toBeVisible()
+    expect(heading).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible()
   })
 
   it('uploads explicitly with a stable logical request ID after an uncertain failure', async () => {

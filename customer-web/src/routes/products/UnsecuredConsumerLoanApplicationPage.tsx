@@ -20,7 +20,7 @@ import {
 } from '@/features/applications/components/OriginationSupport'
 import { validateWholeVnd } from '@/features/applications/origination-validation'
 import { useLoanProductQuery } from '@/features/loan-products/loan-product-queries'
-import { AmountInput } from '@/features/salary-advance/components/AmountInput'
+import { AmountInput } from '@/components/common/AmountInput'
 import { useSubmitUnsecuredConsumerLoanMutation } from '@/features/unsecured-consumer-loan/unsecured-consumer-loan-queries'
 
 interface FormValues {

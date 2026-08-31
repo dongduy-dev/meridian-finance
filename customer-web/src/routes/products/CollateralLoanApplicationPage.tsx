@@ -20,7 +20,7 @@ import { validateWholeVnd } from '@/features/applications/origination-validation
 import { collateralTypes, type CollateralType } from '@/features/collateral-loan/collateral-loan-api'
 import { useSubmitCollateralLoanMutation } from '@/features/collateral-loan/collateral-loan-queries'
 import { useLoanProductQuery } from '@/features/loan-products/loan-product-queries'
-import { AmountInput } from '@/features/salary-advance/components/AmountInput'
+import { AmountInput } from '@/components/common/AmountInput'
 
 interface FormValues {
   requestedAmount: string

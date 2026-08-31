@@ -2,9 +2,9 @@ import { CheckCircle2, FileCheck2, FileText, UploadCloud } from 'lucide-react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 
 import { EmptyState } from '@/components/common/EmptyState'
-import { PageHeader } from '@/components/common/PageHeader'
 import { QueryErrorFeedback } from '@/components/common/QueryErrorFeedback'
 import { StatusBadge } from '@/components/common/StatusBadge'
+import { FocusedFlowLayout } from '@/components/layout/FocusedFlowLayout'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -40,13 +40,13 @@ export function ApplicationDocumentsPage() {
   const notice = submissionNotice(location.state)
 
   return (
-    <div className="space-y-8">
-      <PageHeader
-        eyebrow="Application evidence"
-        title="Documents"
-        description="Upload required evidence and review the current Customer-safe checklist state returned by Meridian."
-        actions={<Button variant="secondary" asChild><Link to="/">Return to Dashboard</Link></Button>}
-      />
+    <FocusedFlowLayout
+      eyebrow="Application evidence"
+      title="Documents"
+      description="Upload required evidence and review the current Customer-safe checklist state returned by Meridian."
+      backAction={<Button variant="secondary" asChild><Link to="/">Return to Dashboard</Link></Button>}
+    >
+      <div className="space-y-8">
       {notice ? (
         <Alert variant="success">
           <CheckCircle2 aria-hidden="true" />
@@ -114,7 +114,8 @@ export function ApplicationDocumentsPage() {
           </section>
         </>
       ) : null}
-    </div>
+      </div>
+    </FocusedFlowLayout>
   )
 }
 
