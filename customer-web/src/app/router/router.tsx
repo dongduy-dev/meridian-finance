@@ -19,6 +19,9 @@ import { DashboardPage } from '@/routes/dashboard/DashboardPage'
 import { ProductCataloguePage } from '@/routes/products/ProductCataloguePage'
 import { ProductDetailPage } from '@/routes/products/ProductDetailPage'
 import { SalaryAdvanceApplicationPage } from '@/routes/products/SalaryAdvanceApplicationPage'
+import { UnsecuredConsumerLoanApplicationPage } from '@/routes/products/UnsecuredConsumerLoanApplicationPage'
+import { CollateralLoanApplicationPage } from '@/routes/products/CollateralLoanApplicationPage'
+import { ApplicationDocumentsPage } from '@/routes/applications/ApplicationDocumentsPage'
 
 import { ProtectedCustomerRoute } from './ProtectedCustomerRoute'
 import { RouteFocusManager } from './RouteFocusManager'
@@ -55,7 +58,9 @@ export const routes: RouteObject[] = [
               },
               {
                 path: 'applications',
-                element: <FoundationPlaceholderPage title="Applications" />,
+                children: [
+                  { index: true, element: <FoundationPlaceholderPage title="Applications" /> },
+                ],
               },
               { path: 'loans', element: <FoundationPlaceholderPage title="Loans" /> },
               {
@@ -71,6 +76,18 @@ export const routes: RouteObject[] = [
           {
             path: 'products/salary-advance/apply',
             element: <SalaryAdvanceApplicationPage />,
+          },
+          {
+            path: 'products/unsecured-consumer-loan/apply',
+            element: <UnsecuredConsumerLoanApplicationPage />,
+          },
+          {
+            path: 'products/collateral-loan/apply',
+            element: <CollateralLoanApplicationPage />,
+          },
+          {
+            path: 'applications/:loanApplicationId/documents',
+            element: <ApplicationDocumentsPage />,
           },
         ],
       },

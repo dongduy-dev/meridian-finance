@@ -29,7 +29,7 @@ import { AccountFormField } from '@/features/account/components/AccountFormField
 import { applicationStatusPresentation } from '@/features/applications/application-presentation'
 import { useLoanProductQuery } from '@/features/loan-products/loan-product-queries'
 import type { SalaryAdvanceApplication } from '@/features/salary-advance/salary-advance-api'
-import { AmountInput } from '@/features/salary-advance/components/AmountInput'
+import { AmountInput } from '@/components/common/AmountInput'
 import { SalaryAdvanceReadiness } from '@/features/salary-advance/components/SalaryAdvanceReadiness'
 import {
   useSalaryAdvanceReadinessQuery,
