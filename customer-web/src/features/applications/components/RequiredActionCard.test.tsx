@@ -12,11 +12,14 @@ const application: CustomerApplicationSummary = {
   lifecycleActive: true, requiredAction: 'UPLOAD_DOCUMENTS',
 }
 
-it('links only UPLOAD_DOCUMENTS to the real evidence workspace', () => {
+it('links only implemented Customer actions to their authoritative workspaces', () => {
   const { rerender } = render(<MemoryRouter><RequiredActionCard application={application} /></MemoryRouter>)
   expect(screen.getByRole('link', { name: 'Upload documents' })).toHaveAttribute('href', `/applications/${application.loanApplicationId}/documents`)
 
-  for (const requiredAction of ['COMPLETE_CORRECTIONS', 'REVIEW_APPROVED_OFFER', 'ACKNOWLEDGE_CONTRACT', 'FUTURE_ACTION']) {
+  rerender(<MemoryRouter><RequiredActionCard application={{ ...application, requiredAction: 'COMPLETE_CORRECTIONS' }} /></MemoryRouter>)
+  expect(screen.getByRole('link', { name: 'Complete corrections' })).toHaveAttribute('href', `/applications/${application.loanApplicationId}/corrections`)
+
+  for (const requiredAction of ['REVIEW_APPROVED_OFFER', 'ACKNOWLEDGE_CONTRACT', 'FUTURE_ACTION']) {
     rerender(<MemoryRouter><RequiredActionCard application={{ ...application, requiredAction }} /></MemoryRouter>)
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
   }

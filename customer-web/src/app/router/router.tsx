@@ -22,6 +22,9 @@ import { SalaryAdvanceApplicationPage } from '@/routes/products/SalaryAdvanceApp
 import { UnsecuredConsumerLoanApplicationPage } from '@/routes/products/UnsecuredConsumerLoanApplicationPage'
 import { CollateralLoanApplicationPage } from '@/routes/products/CollateralLoanApplicationPage'
 import { ApplicationDocumentsPage } from '@/routes/applications/ApplicationDocumentsPage'
+import { ApplicationDetailPage } from '@/routes/applications/ApplicationDetailPage'
+import { ApplicationsPage } from '@/routes/applications/ApplicationsPage'
+import { ApplicationCorrectionsPage } from '@/routes/applications/ApplicationCorrectionsPage'
 
 import { ProtectedCustomerRoute } from './ProtectedCustomerRoute'
 import { RouteFocusManager } from './RouteFocusManager'
@@ -59,7 +62,7 @@ export const routes: RouteObject[] = [
               {
                 path: 'applications',
                 children: [
-                  { index: true, element: <FoundationPlaceholderPage title="Applications" /> },
+                  { index: true, element: <ApplicationsPage /> },
                 ],
               },
               { path: 'loans', element: <FoundationPlaceholderPage title="Loans" /> },
@@ -88,6 +91,14 @@ export const routes: RouteObject[] = [
           {
             path: 'applications/:loanApplicationId/documents',
             element: <ApplicationDocumentsPage />,
+          },
+          {
+            path: 'applications/:loanApplicationId',
+            element: <ApplicationDetailPage />,
+          },
+          {
+            path: 'applications/:loanApplicationId/corrections',
+            element: <ApplicationCorrectionsPage />,
           },
         ],
       },

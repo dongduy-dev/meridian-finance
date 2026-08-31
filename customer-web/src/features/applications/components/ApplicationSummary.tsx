@@ -1,14 +1,29 @@
 import { CalendarClock, CalendarRange, FileText } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 import { MoneyDisplay } from '@/components/common/MoneyDisplay'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import type { CustomerApplicationSummary } from '@/features/applications/application-api'
 import { applicationStatusPresentation } from '@/features/applications/application-presentation'
 import { productNameForCode } from '@/features/loan-products/loan-product-presentation'
 import { formatTimestamp } from '@/lib/format/presentation'
 
-export function ApplicationSummary({ application }: { application: CustomerApplicationSummary }) {
+interface ApplicationSummaryView {
+  applicationNumber: string
+  productCode: string
+  requestedAmount: number
+  requestedTermMonths: number
+  status: string
+  submittedAt: string
+}
+
+export function ApplicationSummary({
+  application,
+  action,
+}: {
+  application: ApplicationSummaryView
+  action?: ReactNode
+}) {
   return (
     <Card className="min-w-0">
       <CardHeader className="gap-3">
@@ -45,6 +60,7 @@ export function ApplicationSummary({ application }: { application: CustomerAppli
             <dd className="mt-1 break-words font-medium">{formatTimestamp(application.submittedAt)}</dd>
           </div>
         </dl>
+        {action ? <div className="mt-5 flex flex-wrap gap-3">{action}</div> : null}
       </CardContent>
     </Card>
   )
