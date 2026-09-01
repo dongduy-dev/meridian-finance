@@ -45,11 +45,11 @@ Meridian uses one lending lifecycle with product-specific policy behavior.
 | Component | MVP Responsibility |
 |---|---|
 | Backend | Business rules, security, persistence, workflow control, product-policy selection, and audit evidence |
-| Customer Web Portal | Registration, profile completion, product selection, application submission, document upload, offer response, and status tracking |
-| Back-Office Web Portal | Product, Partner, import, review, approval, disbursement, repayment, and audit operations |
+| Customer Web | Registration, profile completion, product selection, application submission, document upload, offer response, and status tracking |
+| Internal Web | Permission-scoped internal capabilities: Staff Web for review, approval, correction, contract, disbursement, and repayment; Back-Office Administration for product, Partner, import, internal-user, role, permission, and configuration administration; audit operations within the relevant area |
 | Mobile App | Outside the MVP |
 
-Customer and back-office applications use the same backend and database.
+Customer Web and Internal Web use the same backend and database.
 
 ### 3.3 MVP In Scope
 
@@ -89,8 +89,8 @@ Meridian is delivered as a modular-monolith backend with one database and multip
 
 | Action | Customer | Loan Officer | Approver | Accounting Officer | Back-Office Admin | System |
 |---|---|---|---|---|---|---|
-| Register and authenticate to Customer Portal | Own account | No | No | No | No | Validate |
-| Authenticate to Back-Office Portal | No | Yes | Yes | Yes | Yes | Validate |
+| Register and authenticate to Customer Web | Own account | No | No | No | No | Validate |
+| Authenticate to Internal Web | No | Yes | Yes | Yes | Yes | Validate |
 | Maintain Customer profile | Own profile | View or review | View | View purpose-limited destination facts | Support as configured | Validate and audit |
 | Manage products | No | No | No | No | Yes | Enforce active policy |
 | Manage Partner Companies and imports | No | No | No | No | Yes | Validate and store |
@@ -748,7 +748,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 |---|---|
 | FR-CUST-001 | The system shall let Customers register, authenticate, maintain their own profile, manage their own bank accounts, and provide the identity, contact, residential, employment, consent, and destination facts required by supported products. |
 | FR-CUST-002 | The system shall restrict and audit identity, profile, and bank-account changes according to business state and historical-data rules. |
-| FR-IAM-001 | The system shall authenticate Customer and Staff actors before protected portal access. |
+| FR-IAM-001 | The system shall authenticate Customer and Staff actors before protected Customer Web or Internal Web access. |
 | FR-IAM-002 | The system shall enforce role and action permissions and preserve the authenticated actor for Staff business actions. |
 | FR-PROD-001 | The system shall store and display active products with amount limits, terms, pricing, repayment method, required documents, and eligibility notes. |
 | FR-PROD-002 | The system shall let Back-Office Admins manage product configuration, activation, and deactivation. |
@@ -779,8 +779,8 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | FR-DIS-002 | The system shall create the LoanAccount, final schedule, disbursement evidence, exposure effects, application transition, history, and audit as one atomic activation outcome. |
 | FR-REP-001 | The system shall preserve the final schedule, record payments and allocations, track installment and account servicing state, support contractual payoff and Administrative Full-Balance Settlement, and close eligible settled accounts through a separate administrative action. |
 | FR-REP-002 | The system shall make repayment idempotent by logical request and payment reference and shall prevent duplicate evidence from creating duplicate allocation, exposure, history, or audit effects. |
-| FR-PORTAL-001 | The system shall provide the Customer Web Portal capabilities for registration, authentication, profile and bank-account maintenance, product browsing, eligibility, application submission, document upload, offer response, contract acknowledgment, and status viewing. |
-| FR-PORTAL-002 | The system shall provide the Back-Office Web Portal capabilities for product, Partner, import, review, approval, correction, contract, disbursement, repayment, and audit operations according to permission. |
+| FR-PORTAL-001 | The system shall provide Customer Web capabilities for registration, authentication, profile and bank-account maintenance, product browsing, eligibility, application submission, document upload, offer response, contract acknowledgment, and status viewing. |
+| FR-PORTAL-002 | The system shall provide permission-scoped Internal Web capabilities: Staff Web contains review, approval, correction, contract, disbursement, and repayment operations; Back-Office Administration contains product, Partner, import, internal-user, role, permission, and configuration administration; audit operations remain scoped to the relevant area. |
 | FR-AUD-001 | The system shall record auditable business actions and transitions with actor, action, time, affected business reference, status change, reason, and operation correlation where applicable. |
 | FR-AUD-002 | The system shall keep audit evidence append-only for normal users, PII-safe, and sufficient for maker-checker and business-operation traceability. |
 
@@ -1062,7 +1062,7 @@ The following capabilities may be added without changing the core lending lifecy
 - notification delivery;
 - OCR-assisted document extraction;
 - lightweight analytics;
-- a mobile client after the Customer Web Portal is stable.
+- a mobile client after Customer Web is stable.
 
 OCR remains advisory to Document review. Notification remains observational and does not own workflow decisions.
 

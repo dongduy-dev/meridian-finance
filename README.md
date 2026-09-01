@@ -63,7 +63,7 @@ All three products use Meridian's common application, approval, contract, activa
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                                   CLIENTS                                    │
-│         React/Vite Customer Portal  ·  Staff/Admin  ·  Mobile (Future)       │
+│        React/Vite Customer Web  ·  Internal Web  ·  Mobile (Future)         │
 └──────────────────────────────────────┬───────────────────────────────────────┘
                                        │ HTTPS
                                        ▼
@@ -144,7 +144,7 @@ All three products use Meridian's common application, approval, contract, activa
 
 | Technology | Purpose |
 |---|---|
-| **React** | Customer, Staff, and administrative web experiences |
+| **React** | Customer Web, plus Staff Web and Back-Office Administration within Internal Web |
 | **Vite** | Frontend build tooling |
 
 ### OCR / Document Intelligence
@@ -204,11 +204,11 @@ All three products use Meridian's common application, approval, contract, activa
 - [ ] PostgreSQL-backed asynchronous OCR jobs and result persistence
 - [ ] Authorized manual review experience for OCR-assisted document results
 
-### Phase 3 — Customer and Staff Experience
+### Phase 3 — Customer and Internal Web Experience
 
-- [x] Customer web portal for profile, applications, documents, offers, and loan tracking
-- [ ] Staff web portal for review, approval, correction, disbursement, and repayment operations
-- [ ] Back-office administration for products, partners, users, and configuration
+- [x] Customer Web for profile, applications, documents, offers, and loan tracking
+- [ ] Staff Web lending operations inside Internal Web for review, approval, correction, disbursement, and repayment
+- [ ] Back-Office Administration inside Internal Web for products, partners, users, and configuration
 
 ### Phase 4 — Operational Maturity
 
@@ -251,7 +251,7 @@ All three products use Meridian's common application, approval, contract, activa
 meridian-finance/
 ├── meridian-platform/       # Java/Spring backend, Flyway migrations, and PostgreSQL Compose
 ├── customer-web/            # React/Vite Customer Web application
-├── internal-web/            # React/Vite Staff Web foundation
+├── internal-web/            # Shared React/Vite Internal Web application
 ├── docs/                    # Business, architecture, API, database, and project documentation
 └── .github/workflows/       # Continuous integration workflows
 ```
@@ -282,7 +282,9 @@ Frontend verification commands are `npm run lint`, `npm run typecheck`, `npm tes
 
 ## Internal Web
 
-`internal-web/` contains Meridian's Staff Web foundation: Staff-only authentication/session restoration, explicit capability checks, the responsive internal shell, and safe no-access/not-found states. Operational queues and workflows remain future checkpoints, so the Phase 3 Staff portal roadmap item remains open. [MER-FE-002](docs/frontend/MER-FE-002-staff-web-blueprint.md) defines the intended architecture and delivery sequence.
+`internal-web/` contains Meridian's shared Internal Web application. Staff FE-CP1 established its foundation and the current `/staff/*` feature area: Staff-only authentication/session restoration, explicit capability checks, the responsive internal shell, and safe no-access/not-found states. Staff Web lending operations remain scheduled across later Staff FE checkpoints, so the Phase 3 Staff Web roadmap item remains open.
+
+Future Back-Office Administration will use the same application, primarily under `/admin/*`, and remains incomplete. [MER-FE-002](docs/frontend/MER-FE-002-staff-web-blueprint.md) governs Staff Web architecture and delivery; it does not define future Back-Office Administration behavior.
 
 ```bash
 cd internal-web
@@ -327,7 +329,7 @@ $rsa = [Security.Cryptography.RSA]::Create(2048)
 
 Keep both lines from the same command run. Meridian fails startup when either value is missing, malformed, weaker than RSA-2048, or not part of the same key pair.
 
-`MERIDIAN_FRONTEND_ALLOWED_ORIGINS` accepts a comma-separated list of explicit frontend origins and defaults to `http://localhost:5173,http://localhost:5174` for the Customer and Staff web development servers. Wildcard origins are rejected.
+`MERIDIAN_FRONTEND_ALLOWED_ORIGINS` accepts a comma-separated list of explicit frontend origins and defaults to `http://localhost:5173,http://localhost:5174` for the Customer Web and Internal Web development servers. Wildcard origins are rejected.
 
 `MERIDIAN_ACCOUNT_LOCKOUT_MAX_FAILED_ATTEMPTS` defaults to `5`, and `MERIDIAN_ACCOUNT_LOCKOUT_DURATION` defaults to `15m`. Both values must be positive. The policy applies to new Customer and Staff password logins; it does not revoke established access or refresh credentials.
 
