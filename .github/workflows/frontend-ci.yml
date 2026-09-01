@@ -2,21 +2,9 @@ name: Frontend CI
 
 on:
   pull_request:
-    paths:
-      - "customer-web/**"
-      - ".github/workflows/frontend-ci.yml"
-      - "docs/frontend/**"
-      - "docs/branding/**"
-      - "README.md"
   push:
     branches:
       - main
-    paths:
-      - "customer-web/**"
-      - ".github/workflows/frontend-ci.yml"
-      - "docs/frontend/**"
-      - "docs/branding/**"
-      - "README.md"
 
 permissions:
   contents: read
