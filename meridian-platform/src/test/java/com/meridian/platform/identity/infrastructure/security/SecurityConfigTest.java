@@ -135,10 +135,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         RefreshTokenCookieService.class,
         OpenApiConfig.class
 })
-@TestPropertySource(properties = "meridian.web.cors.allowed-origins=https://frontend.meridian.test")
+@TestPropertySource(properties = "meridian.web.cors.allowed-origins=http://localhost:5173,http://localhost:5174")
 class SecurityConfigTest {
 
-    private static final String CONFIGURED_FRONTEND_ORIGIN = "https://frontend.meridian.test";
+    private static final String CONFIGURED_FRONTEND_ORIGIN = "http://localhost:5173";
+    private static final String CONFIGURED_STAFF_FRONTEND_ORIGIN = "http://localhost:5174";
     private static final String DISALLOWED_FRONTEND_ORIGIN = "https://untrusted.example";
     private static final UUID PARTNER_COMPANY_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID LINK_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
@@ -272,6 +273,23 @@ class SecurityConfigTest {
                 .andExpect(header().string(
                         HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
                         "Authorization, Content-Type, X-Request-ID"
+                ))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+    }
+
+    @Test
+    void allowsCorsPreflightFromConfiguredStaffFrontendOrigin() throws Exception {
+        mockMvc.perform(options("/api/v1/customers/me")
+                        .header(HttpHeaders.ORIGIN, CONFIGURED_STAFF_FRONTEND_ORIGIN)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.GET.name())
+                        .header(
+                                HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS,
+                                "Authorization, Content-Type, X-Request-ID"
+                        ))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        CONFIGURED_STAFF_FRONTEND_ORIGIN
                 ))
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
     }

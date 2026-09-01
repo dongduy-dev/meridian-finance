@@ -81,7 +81,7 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
-            @Value("${meridian.web.cors.allowed-origins:http://localhost:5173}") List<String> configuredOrigins
+            @Value("${meridian.web.cors.allowed-origins:http://localhost:5173,http://localhost:5174}") List<String> configuredOrigins
     ) {
         List<String> allowedOrigins = configuredOrigins.stream()
                 .map(String::trim)
