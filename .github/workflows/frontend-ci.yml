@@ -2,15 +2,48 @@ name: Frontend CI
 
 on:
   pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
+    paths:
+      - "customer-web/**"
+      - ".github/workflows/frontend-ci.yml"
 
 permissions:
   contents: read
 
 jobs:
-  frontend-checks:
+  detect-frontend-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      customer-web-changed: ${{ steps.changes.outputs.customer-web-changed }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect customer web changes
+        id: changes
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "customer-web-changed=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}" \
+            -- customer-web .github/workflows/frontend-ci.yml; then
+            echo "customer-web-changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "customer-web-changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  customer-web-verify:
+    needs: detect-frontend-changes
+    if: needs.detect-frontend-changes.outputs.customer-web-changed == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -41,3 +74,41 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  frontend-test:
+    needs:
+      - detect-frontend-changes
+      - customer-web-verify
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Report required frontend gate
+        shell: bash
+        env:
+          CUSTOMER_WEB_CHANGED: ${{ needs.detect-frontend-changes.outputs.customer-web-changed }}
+          DETECTION_RESULT: ${{ needs.detect-frontend-changes.result }}
+          VERIFICATION_RESULT: ${{ needs.customer-web-verify.result }}
+        run: |
+          if [[ "$DETECTION_RESULT" != "success" ]]; then
+            echo "Frontend change detection did not succeed."
+            exit 1
+          fi
+
+          if [[ "$CUSTOMER_WEB_CHANGED" == "false" ]]; then
+            echo "No frontend-relevant changes detected; frontend verification was not required."
+            exit 0
+          fi
+
+          if [[ "$CUSTOMER_WEB_CHANGED" != "true" ]]; then
+            echo "Frontend change detection did not produce a valid result."
+            exit 1
+          fi
+
+          if [[ "$VERIFICATION_RESULT" == "success" ]]; then
+            echo "Customer web verification succeeded."
+            exit 0
+          fi
+
+          echo "Customer web verification result: $VERIFICATION_RESULT"
+          exit 1
