@@ -251,6 +251,7 @@ All three products use Meridian's common application, approval, contract, activa
 meridian-finance/
 ├── meridian-platform/       # Java/Spring backend, Flyway migrations, and PostgreSQL Compose
 ├── customer-web/            # React/Vite Customer Web application
+├── internal-web/            # React/Vite Staff Web foundation
 ├── docs/                    # Business, architecture, API, database, and project documentation
 └── .github/workflows/       # Continuous integration workflows
 ```
@@ -276,6 +277,20 @@ npm run dev
 ```
 
 Frontend verification commands are `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. Copy `customer-web/.env.example` to `customer-web/.env` when needed and set the non-secret `VITE_API_BASE_URL`; local backend development uses `http://localhost:8080/api/v1`.
+
+---
+
+## Internal Web
+
+`internal-web/` contains Meridian's Staff Web foundation: Staff-only authentication/session restoration, explicit capability checks, the responsive internal shell, and safe no-access/not-found states. Operational queues and workflows remain future checkpoints, so the Phase 3 Staff portal roadmap item remains open. [MER-FE-002](docs/frontend/MER-FE-002-staff-web-blueprint.md) defines the intended architecture and delivery sequence.
+
+```bash
+cd internal-web
+npm ci
+npm run dev
+```
+
+The local server uses `http://localhost:5174`. The same lint, type-check, test, and build commands apply; see [the Internal Web README](internal-web/README.md) for its scope and security model.
 
 ---
 
@@ -312,7 +327,7 @@ $rsa = [Security.Cryptography.RSA]::Create(2048)
 
 Keep both lines from the same command run. Meridian fails startup when either value is missing, malformed, weaker than RSA-2048, or not part of the same key pair.
 
-`MERIDIAN_FRONTEND_ALLOWED_ORIGINS` accepts a comma-separated list of explicit frontend origins and defaults to `http://localhost:5173`. Wildcard origins are rejected.
+`MERIDIAN_FRONTEND_ALLOWED_ORIGINS` accepts a comma-separated list of explicit frontend origins and defaults to `http://localhost:5173,http://localhost:5174` for the Customer and Staff web development servers. Wildcard origins are rejected.
 
 `MERIDIAN_ACCOUNT_LOCKOUT_MAX_FAILED_ATTEMPTS` defaults to `5`, and `MERIDIAN_ACCOUNT_LOCKOUT_DURATION` defaults to `15m`. Both values must be positive. The policy applies to new Customer and Staff password logins; it does not revoke established access or refresh credentials.
 
@@ -356,6 +371,11 @@ Stop the stack with `docker compose down`. This preserves the named PostgreSQL a
 
 - [Logical data model and ERD](docs/database/MER-DB-001-data-model-and-erd.md)
 - [Current physical-schema snapshot](docs/database/MER-DB-CURRENT-SCHEMA.sql)
+
+### Frontend
+
+- [Customer Web frontend blueprint](docs/frontend/MER-FE-001-customer-web-blueprint.md)
+- [Staff Web frontend blueprint](docs/frontend/MER-FE-002-staff-web-blueprint.md)
 
 ### Project
 

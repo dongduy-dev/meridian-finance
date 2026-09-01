@@ -9,6 +9,7 @@ on:
       - main
     paths:
       - "customer-web/**"
+      - "internal-web/**"
       - ".github/workflows/frontend-ci.yml"
 
 permissions:
@@ -19,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       customer-web-changed: ${{ steps.changes.outputs.customer-web-changed }}
+      internal-web-changed: ${{ steps.changes.outputs.internal-web-changed }}
 
     steps:
       - name: Check out repository
@@ -26,19 +28,52 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect customer web changes
+      - name: Detect frontend changes
         id: changes
         shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "push" ]]; then
-            echo "customer-web-changed=true" >> "$GITHUB_OUTPUT"
-          elif git diff --quiet \
-            "${{ github.event.pull_request.base.sha }}" \
-            "${{ github.event.pull_request.head.sha }}" \
-            -- customer-web .github/workflows/frontend-ci.yml; then
-            echo "customer-web-changed=false" >> "$GITHUB_OUTPUT"
+            before_sha="${{ github.event.before }}"
+            after_sha="${{ github.sha }}"
+
+            if [[ -z "$before_sha" || "$before_sha" =~ ^0+$ || -z "$after_sha" ]] || \
+              ! git cat-file -e "${before_sha}^{commit}" || \
+              ! git cat-file -e "${after_sha}^{commit}"; then
+              echo "customer-web-changed=true" >> "$GITHUB_OUTPUT"
+              echo "internal-web-changed=true" >> "$GITHUB_OUTPUT"
+            else
+              if git diff --quiet "$before_sha" "$after_sha" \
+                -- customer-web .github/workflows/frontend-ci.yml; then
+                echo "customer-web-changed=false" >> "$GITHUB_OUTPUT"
+              else
+                echo "customer-web-changed=true" >> "$GITHUB_OUTPUT"
+              fi
+
+              if git diff --quiet "$before_sha" "$after_sha" \
+                -- internal-web .github/workflows/frontend-ci.yml; then
+                echo "internal-web-changed=false" >> "$GITHUB_OUTPUT"
+              else
+                echo "internal-web-changed=true" >> "$GITHUB_OUTPUT"
+              fi
+            fi
           else
-            echo "customer-web-changed=true" >> "$GITHUB_OUTPUT"
+            if git diff --quiet \
+              "${{ github.event.pull_request.base.sha }}" \
+              "${{ github.event.pull_request.head.sha }}" \
+              -- customer-web .github/workflows/frontend-ci.yml; then
+              echo "customer-web-changed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "customer-web-changed=true" >> "$GITHUB_OUTPUT"
+            fi
+
+            if git diff --quiet \
+              "${{ github.event.pull_request.base.sha }}" \
+              "${{ github.event.pull_request.head.sha }}" \
+              -- internal-web .github/workflows/frontend-ci.yml; then
+              echo "internal-web-changed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "internal-web-changed=true" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
   customer-web-verify:
@@ -75,10 +110,45 @@ jobs:
       - name: Build
         run: npm run build
 
+  internal-web-verify:
+    needs: detect-frontend-changes
+    if: needs.detect-frontend-changes.outputs.internal-web-changed == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: internal-web
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: internal-web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
   frontend-test:
     needs:
       - detect-frontend-changes
       - customer-web-verify
+      - internal-web-verify
     if: always()
     runs-on: ubuntu-latest
 
@@ -87,28 +157,39 @@ jobs:
         shell: bash
         env:
           CUSTOMER_WEB_CHANGED: ${{ needs.detect-frontend-changes.outputs.customer-web-changed }}
+          INTERNAL_WEB_CHANGED: ${{ needs.detect-frontend-changes.outputs.internal-web-changed }}
           DETECTION_RESULT: ${{ needs.detect-frontend-changes.result }}
           VERIFICATION_RESULT: ${{ needs.customer-web-verify.result }}
+          INTERNAL_VERIFICATION_RESULT: ${{ needs.internal-web-verify.result }}
         run: |
           if [[ "$DETECTION_RESULT" != "success" ]]; then
             echo "Frontend change detection did not succeed."
             exit 1
           fi
 
-          if [[ "$CUSTOMER_WEB_CHANGED" == "false" ]]; then
+          if [[ "$CUSTOMER_WEB_CHANGED" == "false" && "$INTERNAL_WEB_CHANGED" == "false" ]]; then
             echo "No frontend-relevant changes detected; frontend verification was not required."
             exit 0
           fi
 
-          if [[ "$CUSTOMER_WEB_CHANGED" != "true" ]]; then
+          if [[ "$CUSTOMER_WEB_CHANGED" != "true" && "$CUSTOMER_WEB_CHANGED" != "false" ]]; then
             echo "Frontend change detection did not produce a valid result."
             exit 1
           fi
 
-          if [[ "$VERIFICATION_RESULT" == "success" ]]; then
-            echo "Customer web verification succeeded."
-            exit 0
+          if [[ "$INTERNAL_WEB_CHANGED" != "true" && "$INTERNAL_WEB_CHANGED" != "false" ]]; then
+            echo "Internal frontend change detection did not produce a valid result."
+            exit 1
           fi
 
-          echo "Customer web verification result: $VERIFICATION_RESULT"
-          exit 1
+          if [[ "$CUSTOMER_WEB_CHANGED" == "true" && "$VERIFICATION_RESULT" != "success" ]]; then
+            echo "Customer web verification result: $VERIFICATION_RESULT"
+            exit 1
+          fi
+
+          if [[ "$INTERNAL_WEB_CHANGED" == "true" && "$INTERNAL_VERIFICATION_RESULT" != "success" ]]; then
+            echo "Internal web verification result: $INTERNAL_VERIFICATION_RESULT"
+            exit 1
+          fi
+
+          echo "All required frontend verification succeeded."
