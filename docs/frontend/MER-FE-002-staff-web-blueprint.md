@@ -10,13 +10,13 @@
 | Version | 1.0 |
 | Status | Planning baseline |
 | Author | Dong Duy |
-| Scope | Responsive internal Staff Web for lending review, approval, correction, contract, disbursement, repayment, settlement, and closure operations |
+| Scope | Staff Web feature area within Internal Web for responsive lending review, approval, correction, contract, disbursement, repayment, settlement, and closure operations |
 
 ---
 
 ## 2. Purpose and Authority
 
-This document defines the stable frontend decisions for Meridian's internal lending operations experience: application topology, source organization, authentication, permission-aware navigation, state ownership, work queues, case workspaces, command recovery, maker-checker presentation, sensitive-data handling, visual language, layouts, route inventory, API dependencies, and delivery sequence.
+This document defines the stable frontend decisions for Staff Web, Meridian's lending-operations feature area within the shared Internal Web application: application topology, source organization, authentication, permission-aware navigation, state ownership, work queues, case workspaces, command recovery, maker-checker presentation, sensitive-data handling, visual language, layouts, route inventory, API dependencies, and delivery sequence.
 
 It does not define lending rules, lifecycle transitions, role assignments, financial calculations, document validity, settlement authority, or the HTTP contract. Those rules remain with their existing authorities.
 
@@ -82,7 +82,7 @@ Staff Web is an operational client for durable workflow and financial commands. 
 This blueprint does not define or authorize:
 
 - Staff Web source code, React scaffolding, package installation, or deployment;
-- Back-Office product, Partner, user, role, permission, or configuration screens;
+- Back-Office Administration product, Partner, user, role, permission, or configuration screens;
 - backend endpoint or schema changes;
 - OCR execution or OCR-result screens;
 - automated credit, collateral valuation, loan-to-value, or risk decisions;
@@ -95,9 +95,9 @@ This blueprint does not define or authorize:
 
 ---
 
-## 4. Staff and Back-Office Boundary
+## 4. Staff Web and Back-Office Administration Boundary
 
-Meridian uses `STAFF` as the internal authentication type. Business roles and permissions then distinguish lending operations from platform administration.
+Meridian uses `STAFF` as the Identity `userType` for internal users. It does not mean membership in Staff Web. Business roles and permissions determine whether an internal user has capabilities in Staff Web, Back-Office Administration, or both.
 
 | Internal area | Included in this blueprint | Excluded for MER-FE-003 or later work |
 |---|---|---|
@@ -107,9 +107,9 @@ Meridian uses `STAFF` as the internal authentication type. Business roles and pe
 | Audit | Case-safe history when an authorized API exists | Generic audit exploration, compliance search, and export |
 | Configuration | None | Operational and system configuration |
 
-Back-Office permissions exist in seeded roles, but most corresponding management use cases and HTTP endpoints do not. `MER-FU-019` and `MER-FU-022` explicitly defer user and permission management UI until backend support exists.
+Administration permissions exist in seeded roles, but most corresponding management use cases and HTTP endpoints do not. `MER-FU-019` and `MER-FU-022` explicitly defer user and permission management UI until backend support exists.
 
-One narrow current seam must remain visible in planning: `document:upload:staff` is seeded to the Back-Office Admin role, while Staff correction upload tasks belong to the lending correction workflow. Staff Web may present the task and its missing proof, but an upload control must appear only for an authenticated actor who actually has `document:upload:staff`. This blueprint does not silently move the permission to Loan Officer or design the Back-Office administration experience.
+One narrow current seam must remain visible in planning: `document:upload:staff` is seeded to the Back-Office Admin role, while Staff correction upload tasks belong to the lending correction workflow. Staff Web may present the task and its missing proof, but an upload control must appear only for an authenticated actor who actually has `document:upload:staff`. This blueprint does not silently move the permission to Loan Officer or design the Back-Office Administration experience.
 
 ---
 
@@ -144,7 +144,7 @@ Backend enum values map through feature-owned label and semantic-treatment maps.
 
 Unknown enum values render a neutral “Status unavailable” treatment and a safe refresh path. They do not crash the workspace, become an assumed lifecycle stage, or enable an action.
 
-The same backend value must use the same label within one internal application unless a clearly named context changes its meaning. Queue labels may add operational context, such as “Awaiting document review,” without replacing the durable status.
+The same backend value must use the same label within Internal Web unless a clearly named context changes its meaning. Queue labels may add operational context, such as “Awaiting document review,” without replacing the durable status.
 
 ---
 
@@ -157,7 +157,7 @@ The same backend value must use the same label within one internal application u
 | Loan Officer | UCL and Collateral verification, LoanApplication review, recommendation, document review, and authorized correction initiation | `loan:read`, `loan:review`, `approval:recommend`, `document:review`, `loan:correction:staff`; waiver additionally requires `document:waive` |
 | Approver | Independent decision and payment-backed Administrative Full-Balance Settlement | `loan:read`, `approval:decide`, `document:read`, `audit:read`, `loan:settlement:approve`; settlement also requires the Approver role |
 | Accounting Officer | Contract preparation/readiness, destination reveal, manual disbursement, repayment, and administrative closure | `loan:read`, `loan:contract:prepare`, `loan:contract:read`, `loan:disbursement:prepare`, `loan:disburse`, `repayment:update`, `loan:account:close`; closure also requires the Accounting Officer role |
-| Back-Office Admin | Platform administration outside this blueprint; currently also holds the narrow Staff document-upload permission | `loan:product:manage`, `partner:read`, `partner:manage`, `identity:user:manage`, `admin:config`, `audit:read`, `document:upload:staff` |
+| Back-Office Admin | Back-Office Administration outside this blueprint; currently also holds the narrow Staff document-upload permission | `loan:product:manage`, `partner:read`, `partner:manage`, `identity:user:manage`, `admin:config`, `audit:read`, `document:upload:staff` |
 
 The permission sets above describe the current seeded roles; they are not a frontend role template. Identity supports composable role assignments, and authentication returns sets of roles and permissions. Staff Web therefore gates capabilities from permission and user-type facts, then lets the backend enforce both permission and any stricter business-role rule.
 
@@ -277,36 +277,36 @@ The frontend must not implement an aggregated queue by polling every known appli
 
 ### 9.1 Decision
 
-Build one internal React application for Staff and Back-Office users when implementation begins, with strict feature and route boundaries inside it. A conceptual repository root is `internal-web/`; this document does not create it.
+Internal Web is one shared internal React application rooted at `internal-web/`. Staff Web occupies the `/staff/*` feature and route boundary. Back-Office Administration occupies the future `/admin/*` feature and route boundary. The two areas share only intentionally shared Internal Web foundations, and their feature internals remain separated.
 
 Customer Web remains a separate application because its public/Customer trust boundary, ownership model, navigation, content exposure, and delivery character differ materially from internal operations.
 
-### 9.2 Why One Internal Application Is Required Now
+### 9.2 Why One Internal Application Is Required
 
 | Evidence | Consequence |
 |---|---|
-| All internal actors authenticate as `STAFF` through the same login, access token, refresh cookie, and logout contract | One session and auth foundation is sufficient |
+| All internal actors authenticate with Identity `userType = STAFF` through the same login, access token, refresh cookie, and logout contract | One session and auth foundation is sufficient |
 | Users may have multiple roles and permissions | One permission-aware shell handles the union without duplicated login or app switching |
-| Staff and administration need the same dense tables, filters, status treatments, forms, errors, and correlation support | Shared internal primitives avoid premature package extraction |
+| Staff Web and Back-Office Administration need the same dense tables, filters, status treatments, forms, errors, and correlation support | Shared Internal Web primitives avoid premature package extraction |
 | Backend RBAC and service checks are the real security boundary | Separate frontend deployments would not create authorization by themselves |
 | No current evidence requires independent release teams, availability targets, identity providers, or regulated workstation policies | Two deployments would add operational cost without a proven boundary |
-| Back-Office HTTP use cases are mostly absent | A second application would initially be a shell without executable work |
+| Staff Web and Back-Office Administration are feature areas rather than independent products | A second application would duplicate foundations without establishing a separate product boundary |
 
 ### 9.3 Shared Concerns
 
-The internal application shares authentication/session handling, protected transport, error and correlation parsing, permission helpers, route focus, formatting, Meridian tokens, accessible primitives, queue composition, case identity, operation-recovery presentation, and test infrastructure. These are technical or presentation concerns; they do not merge Loan, Approval, Document, Identity, Partner, or Back-Office business ownership.
+Internal Web shares authentication/session handling, protected transport, error and correlation parsing, permission helpers, route focus, formatting, Meridian tokens, accessible primitives, queue composition, case identity, operation-recovery presentation, and test infrastructure. These are technical or presentation concerns; they do not merge Loan, Approval, Document, Identity, Partner, or administrative business ownership.
 
 ### 9.4 Separated Feature Boundaries
 
 One bundle does not mean one undifferentiated feature tree.
 
 ```text
-internal-web/                         # conceptual; not created by this document
+internal-web/                         # shared Internal Web application root
 └── src/
     ├── app/                          # providers, router, internal shell, session
     ├── routes/
-    │   ├── staff/                    # lending operations route compositions
-    │   └── admin/                    # reserved for MER-FE-003
+    │   ├── staff/                    # Staff Web route compositions
+    │   └── admin/                    # future Back-Office Administration boundary
     ├── features/
     │   ├── applications/
     │   ├── verification/
@@ -325,29 +325,29 @@ internal-web/                         # conceptual; not created by this document
 
 Rules:
 
-- Staff features must not import future Admin feature internals, or vice versa.
+- Staff Web features must not import future Back-Office Administration feature internals, or vice versa.
 - Shared code contains technical primitives and genuinely repeated presentation, not permission-specific business policy.
 - Navigation groups are permission-aware, but direct routes remain guarded.
 - The client does not eagerly fetch all data for all visible role groups.
-- MER-FE-003 owns Admin pages, Admin route inventory, and Admin delivery checkpoints.
+- MER-FE-003 will own Back-Office Administration pages, route inventory, and delivery checkpoints when that blueprint is separately scheduled.
 
 ### 9.5 Security Implications
 
-One internal application does not grant one internal authority level. Login establishes only an internal session; every navigation item, query, reveal, and command remains permission-scoped, and the backend remains authoritative for permission, business role, state, maker-checker, and evidence checks.
+One Internal Web application does not grant one internal authority level. Login establishes only an internal session; every navigation item, query, reveal, and command remains permission-scoped, and the backend remains authoritative for permission, business role, state, maker-checker, and evidence checks.
 
-Code delivered in the browser cannot be treated as confidential authorization policy. Lazy Staff/Admin route chunks reduce loading and accidental data access but are not a security boundary. Sensitive resources are fetched only after the current actor has the route capability and explicitly enters the relevant workspace.
+Code delivered in the browser cannot be treated as confidential authorization policy. Lazy Staff Web and Back-Office Administration route chunks reduce loading and accidental data access but are not a security boundary. Sensitive resources are fetched only after the current actor has the route capability and explicitly enters the relevant workspace.
 
 ### 9.6 Required Now, Useful Later, and Unnecessary Complexity Today
 
 | Timing | Topology capability |
 |---|---|
-| Required now | One internal auth/session, route-level capability metadata, Staff/Admin feature boundaries, lazy route loading, permission-scoped queries, separate navigation groups, cache clearing on session change |
+| Required now | One Internal Web auth/session, route-level capability metadata, Staff Web and Back-Office Administration feature boundaries, lazy route loading, permission-scoped queries, separate navigation groups, cache clearing on session change |
 | Useful later | Workspace package only after real duplication, independent route build chunks, feature ownership checks, shared visual regression harness, per-area telemetry budgets |
-| Unnecessary today | Microfrontends, module federation, separate Staff and Admin deployments, separate identity clients, shared Customer/Internal design-system package, monorepo orchestration beyond actual need |
+| Unnecessary today | Microfrontends, module federation, separate Staff Web and Back-Office Administration deployments, separate identity clients, shared Customer Web/Internal Web design-system package, monorepo orchestration beyond actual need |
 
 ### 9.7 Reconsideration Triggers
 
-Reconsider separate Staff and Admin applications only when repository or operating evidence establishes one or more of these boundaries:
+Reconsider separate Staff Web and Back-Office Administration applications only when repository or operating evidence establishes one or more of these boundaries:
 
 - different identity providers, session policies, device trust, or network zones;
 - independent release ownership and materially different deployment cadence;
@@ -403,7 +403,7 @@ Staff Web uses the existing Identity contract:
 - the client allows only one refresh request at a time and replays an eligible failed request once;
 - logout clears the in-memory token, actor facts, pending operation state, private Query cache, and sensitive local component state.
 
-The internal app must reject a successful authentication response unless `userType = STAFF` and `customerId = null`. It must not transform a Customer session into a Staff session or expose the Customer application shell.
+Internal Web must reject a successful authentication response unless `userType = STAFF` and `customerId = null`. It must not transform a Customer session into an internal session or expose the Customer Web application shell.
 
 ### 11.2 Session Provider Responsibilities
 
@@ -725,7 +725,7 @@ The interface should feel calm, exact, and accountable:
 Desktop shell:
 
 - left navigation grouped into Work, Lending, Servicing, and Administration;
-- Administration group appears only when future Admin routes and permissions exist;
+- Back-Office Administration group appears only when future `/admin/*` routes and permissions exist;
 - top bar contains current Staff identity summary, environment label when non-production, session menu, and optional global application search only after its API exists;
 - main content has a bounded readable width for forms and a wider mode for queues and side-by-side evidence.
 
@@ -1202,7 +1202,7 @@ Routes are conceptual implementation targets. “API dependency” means the rou
 | `/staff/applications/:loanApplicationId/repayments/new` | Record repayment | Command executable; discovery dependency |
 | `/staff/applications/:loanApplicationId/settlement` | Exact full-balance settlement | Command executable; Approver and discovery dependency |
 | `/staff/applications/:loanApplicationId/closure` | Administrative closure | Command executable; Accounting and discovery dependency |
-| `/admin/*` | Back-Office feature boundary | Reserved for MER-FE-003; no pages defined here |
+| `/admin/*` | Back-Office Administration feature boundary | Reserved for MER-FE-003; no pages defined here |
 
 The current servicing APIs are application-scoped, so routes retain `loanApplicationId`. Do not pretend the path parameter is a LoanAccount ID. A future LoanAccount search may introduce a canonical account route with an explicit redirect strategy.
 
@@ -1219,13 +1219,13 @@ The current servicing APIs are application-scoped, so routes retain `loanApplica
 | Repayment | Accounting Officer with `repayment:update`; account reads need `loan:read` | LoanAccount, repayment command, and history endpoints | Record externally received payment and inspect outcome | `ACTIVE`, `OVERDUE`, `SETTLED`; Accounting records ordinary repayment, backend allocates |
 | Settlement | Approver role plus `loan:settlement:approve` | Settlement endpoint and Staff LoanAccount read | Record exact full-balance settlement | `ACTIVE` or `OVERDUE` to `SETTLED`; Approver owns settlement, no concession path |
 | Closure | Accounting Officer role plus `loan:account:close` | Closure endpoint and Staff LoanAccount read | Record administrative terminal closure | `SETTLED` to `CLOSED`; Accounting owns closure, no financial mutation |
-| Admin | Future Back-Office capabilities | Future administration APIs and MER-FE-003 | Platform administration | No Staff lending action is moved here merely because one actor has an Admin role |
+| Back-Office Administration | Future administrative capabilities | Future administration APIs and MER-FE-003 | Platform administration | No Staff Web lending action is moved here merely because one actor has the Back-Office Admin role |
 
 ### 28.2 Route Metadata
 
 Each protected route declares:
 
-- required `STAFF` user type;
+- required Identity `userType = STAFF`;
 - one or more navigation permissions;
 - stronger command permission checked at the action;
 - query keys to clear when capability changes;
@@ -1256,7 +1256,7 @@ Each protected route declares:
 | Settlement | Foundation exists but discovery projection missing | Locked/current outstanding and entered payment evidence | Apply full-balance settlement | wrong role, changed amount, non-serviceable state, replay/result unknown |
 | Closure | Foundation exists but discovery projection missing | Reconciled settled account | Close account | wrong role, not settled, competing operation, replay/result unknown |
 | Generic audit page | Deferred | No authorized query exists | None | do not synthesize audit evidence |
-| Back-Office pages | Deferred to MER-FE-003 | Future administration projections | Future Admin actions | no placeholder management forms |
+| Back-Office Administration pages | Deferred to MER-FE-003 | Future administration projections | Future administrative actions | no placeholder management forms |
 | No access | Executable now | Session capability facts | Logout | permission change |
 
 No page derives a missing index from browser history or local storage.
@@ -1397,7 +1397,7 @@ An `OperationStatusPanel` is client recovery state, not audit evidence.
 - automated risk or collateral valuation;
 - discounted settlement, reversal/refund, suspense, write-off, or reconciliation;
 - analytics, reporting, and executive dashboards;
-- Back-Office administration owned by MER-FE-003.
+- Back-Office Administration owned by MER-FE-003.
 
 ### 33.4 Do Not Solve Missing Reads in the Browser
 
@@ -1448,7 +1448,7 @@ Each future checkpoint runs lint, TypeScript checking, unit/component tests, and
 
 Mocked frontend fixtures must come from current OpenAPI/API examples and remain PII-safe. Contract tests should prove that Staff Web fails closed when required versions, balances, actor evidence, or state fields are absent.
 
-Consequential checkpoints should add browser-level flows against a controlled test backend once the project selects and installs an end-to-end tool. That choice is deferred until the internal app exists; this blueprint does not add a dependency.
+Consequential checkpoints should add browser-level flows against a controlled test backend once the project selects and installs an end-to-end tool. This blueprint does not select or add that dependency.
 
 ---
 
@@ -1456,13 +1456,15 @@ Consequential checkpoints should add browser-level flows against a controlled te
 
 Each checkpoint is a complete vertical frontend increment with its required backend read dependency, permission coverage, recovery behavior, responsive states, accessibility, and tests. A checkpoint does not ship command forms against a knowingly unreconcilable API.
 
+Staff FE checkpoints deliver the Staff Web feature area inside `internal-web/`. Future Back-Office Administration checkpoints may modify the same physical application, but they do not rename or alter the Staff FE checkpoint sequence.
+
 ### Staff FE-CP1 — Internal Foundation
 
-- create the single internal application and preserve Staff/Admin feature boundaries;
+- establish the shared Internal Web application foundation at `internal-web/` and preserve Staff Web and Back-Office Administration feature boundaries;
 - strict TypeScript, routing, Query, forms, validation, tokens, primitives, formatting, and testing foundation;
 - Staff-only login, in-memory access token, rotating refresh cookie, single refresh, logout, and private-cache cleanup;
 - permission-aware shell, route metadata, access states, error/correlation model, and operation-status foundation;
-- no Back-Office pages.
+- no Back-Office Administration pages.
 
 ### Staff FE-CP2 — Operational Discovery and Case Read Foundation
 
@@ -1538,7 +1540,7 @@ Each checkpoint is a complete vertical frontend increment with its required back
 
 The Staff Web planning baseline deliberately defers:
 
-- Back-Office product, Partner, Identity, role, permission, and configuration screens;
+- Back-Office Administration screens for product, Partner, Identity, role, permission, and configuration;
 - OCR-assisted review and OCR operations;
 - assignment, reassignment, SLA, escalation, and workload management;
 - global dashboards, analytics, reporting, exports, and generic audit search;

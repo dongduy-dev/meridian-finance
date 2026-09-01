@@ -72,7 +72,7 @@ Backend delivery remains correctness-heavy because it owns financial and workflo
 
 This blueprint does not define:
 
-- Staff or Back-Office screens;
+- Staff Web or Back-Office Administration screens;
 - React scaffolding or package installation;
 - backend contract changes;
 - a mobile application;
@@ -899,7 +899,7 @@ This checkpoint extends existing backend ownership and `MER-FU-037`; it must not
 - paged repayment history;
 - no Customer payment-entry or Staff servicing commands.
 
-Staff/Admin frontend, OCR review UI, deployment, and production hosting remain separate later work.
+Staff Web and Back-Office Administration feature delivery, OCR review UI, deployment, and production hosting remain separate later work.
 
 ---
 
