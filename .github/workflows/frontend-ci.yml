@@ -33,25 +33,47 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "push" ]]; then
-            echo "customer-web-changed=true" >> "$GITHUB_OUTPUT"
-          elif git diff --quiet \
-            "${{ github.event.pull_request.base.sha }}" \
-            "${{ github.event.pull_request.head.sha }}" \
-            -- customer-web .github/workflows/frontend-ci.yml; then
-            echo "customer-web-changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "customer-web-changed=true" >> "$GITHUB_OUTPUT"
-          fi
+            before_sha="${{ github.event.before }}"
+            after_sha="${{ github.sha }}"
 
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            echo "internal-web-changed=true" >> "$GITHUB_OUTPUT"
-          elif git diff --quiet \
-            "${{ github.event.pull_request.base.sha }}" \
-            "${{ github.event.pull_request.head.sha }}" \
-            -- internal-web .github/workflows/frontend-ci.yml; then
-            echo "internal-web-changed=false" >> "$GITHUB_OUTPUT"
+            if [[ -z "$before_sha" || "$before_sha" =~ ^0+$ || -z "$after_sha" ]] || \
+              ! git cat-file -e "${before_sha}^{commit}" || \
+              ! git cat-file -e "${after_sha}^{commit}"; then
+              echo "customer-web-changed=true" >> "$GITHUB_OUTPUT"
+              echo "internal-web-changed=true" >> "$GITHUB_OUTPUT"
+            else
+              if git diff --quiet "$before_sha" "$after_sha" \
+                -- customer-web .github/workflows/frontend-ci.yml; then
+                echo "customer-web-changed=false" >> "$GITHUB_OUTPUT"
+              else
+                echo "customer-web-changed=true" >> "$GITHUB_OUTPUT"
+              fi
+
+              if git diff --quiet "$before_sha" "$after_sha" \
+                -- internal-web .github/workflows/frontend-ci.yml; then
+                echo "internal-web-changed=false" >> "$GITHUB_OUTPUT"
+              else
+                echo "internal-web-changed=true" >> "$GITHUB_OUTPUT"
+              fi
+            fi
           else
-            echo "internal-web-changed=true" >> "$GITHUB_OUTPUT"
+            if git diff --quiet \
+              "${{ github.event.pull_request.base.sha }}" \
+              "${{ github.event.pull_request.head.sha }}" \
+              -- customer-web .github/workflows/frontend-ci.yml; then
+              echo "customer-web-changed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "customer-web-changed=true" >> "$GITHUB_OUTPUT"
+            fi
+
+            if git diff --quiet \
+              "${{ github.event.pull_request.base.sha }}" \
+              "${{ github.event.pull_request.head.sha }}" \
+              -- internal-web .github/workflows/frontend-ci.yml; then
+              echo "internal-web-changed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "internal-web-changed=true" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
   customer-web-verify:
