@@ -644,7 +644,7 @@ The operational contract page must state that acknowledgment is operational evid
 
 | Page | Purpose and primary goal | Backend capability | Composition and primary actions | Important states and success destination |
 |---|---|---|---|---|
-| Loans | Find activated owned LoanAccounts | Customer LoanAccount index is missing | `CustomerAppLayout`, `LoanAccountCard` list, status filter if supported | **API dependency.** Empty and filtered states must come from an authoritative query. |
+| Loans | Find activated owned LoanAccounts | Owned Customer LoanAccount index | `CustomerAppLayout`, `LoanAccountCard` list | Authoritative empty and list states come from the Customer LoanAccount query. |
 | Loan Detail | Understand account status, outstanding balance, destination mask, and final schedule | Owned LoanAccount read by application ID | `DetailLayout`, status, `RepaymentSummary`, masked destination, responsive schedule of `InstallmentRow` | `ACTIVE`, `OVERDUE`, `SETTLED`, `CLOSED`; concealed unavailable state; no Customer repayment or settlement action |
 | Repayment History | Review immutable recorded payment outcomes | Owned paged repayment history | Tab within Loan Detail, history rows/cards, pagination, allocation detail disclosure | Empty history, loading next page, page error, and successful history; pagination remains in URL search state |
 

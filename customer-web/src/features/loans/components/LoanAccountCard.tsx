@@ -1,8 +1,10 @@
-import { CalendarClock, FileText, Landmark } from 'lucide-react'
+import { ArrowRight, CalendarClock, FileText, Landmark } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 import { MoneyDisplay } from '@/components/common/MoneyDisplay'
 import { StatusBadge } from '@/components/common/StatusBadge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { productNameForCode } from '@/features/loan-products/loan-product-presentation'
 import type { CustomerLoanAccountSummary } from '@/features/loans/loan-api'
 import { loanAccountStatusPresentation } from '@/features/loans/loan-presentation'
@@ -54,6 +56,13 @@ export function LoanAccountCard({ account }: { account: CustomerLoanAccountSumma
           </div>
         </dl>
       </CardContent>
+      <CardFooter>
+        <Button variant="secondary" asChild>
+          <Link to={`/loans/${account.loanApplicationId}`}>
+            View loan details <ArrowRight aria-hidden="true" />
+          </Link>
+        </Button>
+      </CardFooter>
     </Card>
   )
 }

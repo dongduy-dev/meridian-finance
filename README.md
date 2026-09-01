@@ -206,7 +206,7 @@ All three products use Meridian's common application, approval, contract, activa
 
 ### Phase 3 — Customer and Staff Experience
 
-- [ ] Customer web portal for profile, applications, documents, offers, and loan tracking
+- [x] Customer web portal for profile, applications, documents, offers, and loan tracking
 - [ ] Staff web portal for review, approval, correction, disbursement, and repayment operations
 - [ ] Back-office administration for products, partners, users, and configuration
 
