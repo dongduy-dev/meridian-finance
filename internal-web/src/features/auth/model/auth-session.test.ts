@@ -11,8 +11,8 @@ vi.mock('../api/auth-api', async () => {
   return { ...actual, login: vi.fn(), refresh: vi.fn(), logout: vi.fn() }
 })
 
-const staff = (overrides: Partial<AuthResponse> = {}): AuthResponse => ({ tokenType: 'Bearer', accessToken: 'staff-token', expiresAt: '2026-09-01T01:00:00Z', userId: '11111111-1111-1111-1111-111111111111', email: 'staff@meridian.local', userType: 'STAFF', customerId: null, roles: ['LOAN_OFFICER'], permissions: ['loan:read'], ...overrides })
-const customer = (): AuthResponse => staff({ userType: 'CUSTOMER', customerId: '22222222-2222-2222-2222-222222222222', accessToken: 'customer-token' })
+const staff = (overrides: Partial<AuthResponse> = {}): AuthResponse => ({ tokenType: 'Bearer', accessToken: 'staff-token', expiresAt: '2026-09-01T01:00:00Z', userId: '11111111-1111-4111-8111-111111111111', email: 'staff@meridian.local', userType: 'STAFF', customerId: null, roles: ['LOAN_OFFICER'], permissions: ['loan:read'], ...overrides })
+const customer = (): AuthResponse => staff({ userType: 'CUSTOMER', customerId: '22222222-2222-4222-8222-222222222222', accessToken: 'customer-token' })
 
 describe('staff session manager', () => {
   let queryClient: QueryClient
@@ -68,12 +68,43 @@ describe('staff session manager', () => {
     expect(manager.getSnapshot()).toMatchObject({ status: 'checking', error: 'Session verification is temporarily unavailable.' })
   })
 
-  it('clears private query data on logout and actor change', async () => {
-    vi.mocked(authApi.login).mockResolvedValueOnce(staff()).mockResolvedValueOnce(staff({ userId: '33333333-3333-3333-3333-333333333333' }))
+  it('preserves private query data when the actor and effective authority are unchanged', async () => {
+    vi.mocked(authApi.login)
+      .mockResolvedValueOnce(staff({ roles: ['LOAN_OFFICER', 'REVIEWER'], permissions: ['loan:read', 'document:review'] }))
+      .mockResolvedValueOnce(staff({ roles: ['REVIEWER', 'LOAN_OFFICER'], permissions: ['document:review', 'loan:read'] }))
+    await manager.login('one@meridian.local', 'secret')
+    queryClient.setQueryData(['private'], { secret: true })
+    await manager.login('one@meridian.local', 'secret')
+    expect(queryClient.getQueryData(['private'])).toEqual({ secret: true })
+  })
+
+  it('clears private query data when permissions change for the same user', async () => {
+    vi.mocked(authApi.login).mockResolvedValueOnce(staff()).mockResolvedValueOnce(staff({ permissions: ['document:review'] }))
+    await manager.login('one@meridian.local', 'secret')
+    queryClient.setQueryData(['private'], { secret: true })
+    await manager.login('one@meridian.local', 'secret')
+    expect(queryClient.getQueryData(['private'])).toBeUndefined()
+  })
+
+  it('clears private query data when roles change for the same user', async () => {
+    vi.mocked(authApi.login).mockResolvedValueOnce(staff()).mockResolvedValueOnce(staff({ roles: ['APPROVER'] }))
+    await manager.login('one@meridian.local', 'secret')
+    queryClient.setQueryData(['private'], { secret: true })
+    await manager.login('one@meridian.local', 'secret')
+    expect(queryClient.getQueryData(['private'])).toBeUndefined()
+  })
+
+  it('clears private query data when the user changes', async () => {
+    vi.mocked(authApi.login).mockResolvedValueOnce(staff()).mockResolvedValueOnce(staff({ userId: '33333333-3333-4333-8333-333333333333' }))
     await manager.login('one@meridian.local', 'secret')
     queryClient.setQueryData(['private'], { secret: true })
     await manager.login('two@meridian.local', 'secret')
     expect(queryClient.getQueryData(['private'])).toBeUndefined()
+  })
+
+  it('clears private query data on logout', async () => {
+    vi.mocked(authApi.login).mockResolvedValue(staff())
+    await manager.login('one@meridian.local', 'secret')
     queryClient.setQueryData(['private'], { secret: true })
     await manager.logout()
     expect(queryClient.getQueryData(['private'])).toBeUndefined()

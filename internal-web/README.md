@@ -2,7 +2,7 @@
 
 `internal-web/` is the independent React/Vite foundation for Meridian Staff operations. FE-CP1 intentionally contains authentication, authorization, session restoration, the responsive operations shell, and generic operation-state primitives only. It does not implement lending queues, approvals, documents, disbursement, repayment, partner administration, user administration, or other operational workflows.
 
-The governing frontend blueprint is [MER-FE-002](../docs/frontend/MER-FE-002-staff-web-frontend-blueprint.md). Backend behavior remains authoritative; the frontend never infers authorization from a role name or permission prefix.
+The governing frontend blueprint is [MER-FE-002](../docs/frontend/MER-FE-002-staff-web-blueprint.md). Backend behavior remains authoritative; the frontend never infers authorization from a role name or permission prefix.
 
 ## Local development
 

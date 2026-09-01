@@ -282,7 +282,7 @@ Frontend verification commands are `npm run lint`, `npm run typecheck`, `npm tes
 
 ## Internal Web
 
-`internal-web/` contains Meridian's Staff Web foundation: Staff-only authentication/session restoration, explicit capability checks, the responsive internal shell, and safe no-access/not-found states. Operational queues and workflows remain future checkpoints, so the Phase 3 Staff portal roadmap item remains open. [MER-FE-002](docs/frontend/MER-FE-002-staff-web-frontend-blueprint.md) defines the intended architecture and delivery sequence.
+`internal-web/` contains Meridian's Staff Web foundation: Staff-only authentication/session restoration, explicit capability checks, the responsive internal shell, and safe no-access/not-found states. Operational queues and workflows remain future checkpoints, so the Phase 3 Staff portal roadmap item remains open. [MER-FE-002](docs/frontend/MER-FE-002-staff-web-blueprint.md) defines the intended architecture and delivery sequence.
 
 ```bash
 cd internal-web
@@ -375,7 +375,7 @@ Stop the stack with `docker compose down`. This preserves the named PostgreSQL a
 ### Frontend
 
 - [Customer Web frontend blueprint](docs/frontend/MER-FE-001-customer-web-blueprint.md)
-- [Staff Web frontend blueprint](docs/frontend/MER-FE-002-staff-web-frontend-blueprint.md)
+- [Staff Web frontend blueprint](docs/frontend/MER-FE-002-staff-web-blueprint.md)
 
 ### Project
 

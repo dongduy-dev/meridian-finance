@@ -20,6 +20,18 @@ export class InternalAccessRequiredError extends Error {
 
 const SESSION_ERROR_CODES = new Set(['AUTHENTICATION_REQUIRED', 'TOKEN_EXPIRED', 'INVALID_TOKEN'])
 
+function equalStringSets(left: readonly string[], right: readonly string[]): boolean {
+  const leftSet = new Set(left)
+  const rightSet = new Set(right)
+  return leftSet.size === rightSet.size && [...leftSet].every((value) => rightSet.has(value))
+}
+
+function hasSameAuthority(left: StaffActor, right: StaffActor): boolean {
+  return left.userId === right.userId
+    && equalStringSets(left.roles, right.roles)
+    && equalStringSets(left.permissions, right.permissions)
+}
+
 export class AuthSessionManager {
   private state: SessionState = { status: 'checking', epoch: 0 }
   private refreshPromise?: Promise<AuthResponse>
@@ -63,8 +75,8 @@ export class AuthSessionManager {
       roles: [...response.roles],
       permissions: [...response.permissions],
     }
-    const previousActor = this.state.status === 'authenticated' ? this.state.actor.userId : undefined
-    if (previousActor !== actor.userId) this.queryClient.clear()
+    const previousActor = this.state.status === 'authenticated' ? this.state.actor : undefined
+    if (!previousActor || !hasSameAuthority(previousActor, actor)) this.queryClient.clear()
     setAccessToken(response.accessToken)
     this.publish({ status: 'authenticated', actor, epoch: this.state.epoch + 1 })
     return actor

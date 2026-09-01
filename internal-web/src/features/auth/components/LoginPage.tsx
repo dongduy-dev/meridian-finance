@@ -10,8 +10,7 @@ import { AuthCard } from './AuthCard'
 import { useAuth } from '../model/auth-context'
 import { InternalAccessRequiredError } from '../model/auth-session'
 import { useRateLimitRecovery } from '../model/use-rate-limit'
-
-type LoginFields = { email: string; password: string }
+import { loginInputSchema, type LoginInput } from '../model/login-input'
 
 export function LoginPage() {
   const { manager, state } = useAuth()
@@ -20,17 +19,26 @@ export function LoginPage() {
   const [feedback, setFeedback] = useState<string>()
   const [requestId, setRequestId] = useState<string>()
   const rateLimit = useRateLimitRecovery()
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFields>()
+  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<LoginInput>()
 
   const displayedFeedback = feedback ?? (state.status === 'anonymous' && state.reason === 'INTERNAL_ACCESS_REQUIRED'
     ? 'This workspace is available only to Meridian staff accounts.'
     : undefined)
 
-  const submit = handleSubmit(async ({ email, password }) => {
+  const submit = handleSubmit(async (fields) => {
+    const validated = loginInputSchema.safeParse(fields)
+    if (!validated.success) {
+      for (const issue of validated.error.issues) {
+        const field = issue.path[0]
+        if (field === 'email' || field === 'password') setError(field, { message: issue.message }, { shouldFocus: true })
+      }
+      return
+    }
+    const { email, password } = validated.data
     setFeedback(undefined)
     setRequestId(undefined)
     try {
-      await manager.login(email.trim(), password)
+      await manager.login(email, password)
       const requested = (location.state as { from?: string } | null)?.from
       navigate(requested?.startsWith('/staff') ? requested : '/staff', { replace: true })
     } catch (error) {
@@ -54,15 +62,12 @@ export function LoginPage() {
         {displayedFeedback && <Alert variant="destructive"><div><p>{displayedFeedback}</p>{rateLimit.isActive ? <p className="mt-1">Try again in {rateLimit.remainingSeconds} second{rateLimit.remainingSeconds === 1 ? '' : 's'}.</p> : null}{requestId ? <RequestCorrelation requestId={requestId} /> : null}</div></Alert>}
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor="email">Email</label>
-          <Input id="email" type="email" autoComplete="username" aria-invalid={Boolean(errors.email)} {...register('email', {
-            required: 'Enter your email.',
-            pattern: { value: /^\S+@\S+\.\S+$/, message: 'Enter a valid email address.' },
-          })} />
+          <Input id="email" type="email" autoComplete="username" aria-invalid={Boolean(errors.email)} {...register('email')} />
           {errors.email && <p className="text-sm text-danger">{errors.email.message}</p>}
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor="password">Password</label>
-          <Input id="password" type="password" autoComplete="current-password" aria-invalid={Boolean(errors.password)} {...register('password', { required: 'Enter your password.' })} />
+          <Input id="password" type="password" autoComplete="current-password" aria-invalid={Boolean(errors.password)} {...register('password')} />
           {errors.password && <p className="text-sm text-danger">{errors.password.message}</p>}
         </div>
         <Button className="w-full" size="lg" disabled={isSubmitting || rateLimit.isActive} type="submit">

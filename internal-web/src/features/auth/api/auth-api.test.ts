@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { login, logout, refresh } from './auth-api'
 
-const staffResponse = { tokenType: 'Bearer', accessToken: 'token', expiresAt: '2026-09-01T01:00:00Z', userId: '11111111-1111-1111-1111-111111111111', email: 'staff@meridian.local', userType: 'STAFF', customerId: null, roles: ['LOAN_OFFICER'], permissions: ['loan:read'] }
+const staffResponse = { tokenType: 'Bearer', accessToken: 'token', expiresAt: '2026-09-01T01:00:00Z', userId: '11111111-1111-4111-8111-111111111111', email: 'staff@meridian.local', userType: 'STAFF', customerId: null, roles: ['LOAN_OFFICER'], permissions: ['loan:read'] }
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -22,6 +22,14 @@ describe('auth API', () => {
 
   it('fails closed on a malformed authentication response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ accessToken: 'token' }), { status: 200 })))
+    await expect(refresh()).rejects.toThrow('invalid session')
+  })
+
+  it.each([
+    ['userId', { userId: 'not-a-uuid' }],
+    ['customerId', { userType: 'CUSTOMER', customerId: 'not-a-uuid' }],
+  ])('fails closed when %s is not a UUID', async (_field, override) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...staffResponse, ...override }), { status: 200 })))
     await expect(refresh()).rejects.toThrow('invalid session')
   })
 })

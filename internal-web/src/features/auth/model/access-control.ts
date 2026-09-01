@@ -23,6 +23,8 @@ export const STAFF_OPERATIONAL_PERMISSIONS = [
   'loan:account:close',
 ] as const
 
+export type StaffOperationalPermission = (typeof STAFF_OPERATIONAL_PERMISSIONS)[number]
+
 export function hasRole(actor: StaffActor, role: string): boolean {
   return actor.roles.includes(role)
 }

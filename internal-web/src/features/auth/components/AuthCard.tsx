@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from 'react'
 import { MeridianLogo } from '@/components/common/MeridianLogo'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 
 export function AuthCard({ children }: PropsWithChildren) {
   return (
@@ -9,7 +9,7 @@ export function AuthCard({ children }: PropsWithChildren) {
         <CardHeader className="space-y-5">
           <MeridianLogo className="h-9 w-auto" />
           <div className="space-y-1.5">
-            <CardTitle>Staff sign in</CardTitle>
+            <h1 data-route-heading tabIndex={-1} className="text-lg font-semibold tracking-tight">Staff sign in</h1>
             <CardDescription>Use your Meridian staff credentials to enter the internal workspace.</CardDescription>
           </div>
         </CardHeader>
