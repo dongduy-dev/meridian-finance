@@ -19,14 +19,22 @@ describe('internal presentation formatting', () => {
     expect(formatDateOnly(value)).toBe('Date unavailable')
   })
 
-  it('formats an offset timestamp in the explicit Asia/Ho_Chi_Minh policy', () => {
+  it('formats an explicit UTC timestamp in the Asia/Ho_Chi_Minh policy', () => {
     const formatted = formatTimestamp('2026-01-01T00:00:00Z')
     expect(formatted).toContain('01 Jan 2026')
     expect(formatted).toContain('07:00')
     expect(formatted).toMatch(/GMT\+7|ICT/)
   })
 
-  it.each(['2026-01-01T00:00:00', 'not-a-date', '', null])('returns a safe timestamp fallback for %s', (value) => {
+  it('interprets an offset-free Meridian LocalDateTime as UTC', () => {
+    expect(formatTimestamp('2026-01-01T00:00:00')).toBe(formatTimestamp('2026-01-01T00:00:00Z'))
+  })
+
+  it('continues to support timestamps with an explicit offset', () => {
+    expect(formatTimestamp('2026-01-01T07:00:00+07:00')).toBe(formatTimestamp('2026-01-01T00:00:00Z'))
+  })
+
+  it.each(['2026-02-30T00:00:00', '2026-02-30T00:00:00Z', '2026-01-01T24:00:00', 'not-a-date', '', null])('returns a safe timestamp fallback for %s', (value) => {
     expect(formatTimestamp(value)).toBe('Date unavailable')
   })
 })
