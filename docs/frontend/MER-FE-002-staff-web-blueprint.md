@@ -132,7 +132,7 @@ One narrow current seam must remain visible in planning: `document:upload:staff`
 - Client validation improves input quality. Backend validation and role checks remain authoritative.
 - Staff Web formats financial values; it must not calculate pricing, readiness, balances, allocations, payoff, settlement amounts, schedules, or product exposure.
 - A hidden or disabled action is not authorization. The backend must authorize every request.
-- The client must not interpret a permission description as proof that an endpoint exists. For example, `loan:read` describes work-queue access, but no general Staff application queue or search endpoint currently exists.
+- The client must not interpret a permission description as proof that every related endpoint exists. Exact `loan:read` now authorizes the Staff application index and CP2 case projection, but it does not imply a verification, approval, document, contract, or servicing projection.
 - Browser storage must not become an application index, approval ledger, document register, or command-outcome database.
 - A case timeline must be based on returned immutable lifecycle evidence. It must not be reconstructed from the current status and local action history.
 - The client must not expose Customer-only endpoints through a Staff route merely because a Staff user knows a resource identifier.
@@ -186,12 +186,14 @@ Maker-checker is a backend invariant and a visible operational constraint:
 
 ## 7. Verified Staff HTTP Surface
 
-The current backend provides a broad set of direct commands and application-scoped reads, but only two narrow operational queues. The distinction determines what can ship safely.
+The current backend provides a broad set of direct commands, two narrow operational queues, and the CP2 Staff application discovery/case foundation. The distinction determines what can ship safely.
 
 ### 7.1 Executable Reads
 
 | Capability | Endpoint | Authority | Current limit |
 |---|---|---|---|
+| Staff application discovery | `GET /api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20` | Staff `loan:read` | Cross-product safe facts, exact filters, deterministic page envelope |
+| Staff case foundation | `GET /api/v1/staff/loan-applications/{loanApplicationId}` | Staff `loan:read` | Safe header, purpose-limited Customer readiness, and ordered lifecycle transitions only |
 | Safe application status | `GET /api/v1/loan-applications/{loanApplicationId}` | Staff `loan:read` | Minimal durable summary; not a case projection |
 | Document-review queue | `GET /api/v1/document-review-items?status=AWAITING_REVIEW&page=0&size=20` | `document:review` | Current versions awaiting review; list has no total or page metadata |
 | Review-authorized content | `GET /api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | `document:review` | Exact known version only; `no-store`, private attachment |
@@ -227,7 +229,7 @@ The current backend provides a broad set of direct commands and application-scop
 
 ## 8. Operational Read Dependencies
 
-`MER-FU-037` remains the durable home for incomplete Staff work queues, application search, consolidated lifecycle/history, dashboard aggregation, and richer product projections.
+`MER-FU-037` remains the durable home for specialized Staff work queues, expanded action evidence/history, dashboard aggregation, and richer product projections beyond the CP2 discovery and case foundation.
 
 ### 8.1 Queue Inventory
 
@@ -235,24 +237,29 @@ The current backend provides a broad set of direct commands and application-scop
 |---|---|---|
 | Document review | Executable narrow queue | May ship first, with honest pagination limits and direct case linking |
 | Staff correction tasks | Executable narrow queue | May ship first; show proof and maker-checker constraints |
-| Applications awaiting verification | API dependency | Do not create from saved IDs, browser history, or status polling |
-| Applications awaiting Loan Officer review | API dependency | Requires authoritative filterable operational index |
+| Cross-product application discovery | Executable foundation | Exact product/status filters, deterministic paging, safe rows, and direct case links |
+| Applications awaiting verification | Executable status-filtered discovery | CP2 may discover by durable status; later workflow screens still require authoritative verification evidence |
+| Applications awaiting Loan Officer review | Executable status-filtered discovery | CP2 may discover by durable status; review action remains blocked on current-cycle evidence |
 | Applications awaiting recommendation | API dependency | Requires current review-cycle and recommendation eligibility facts |
 | Applications awaiting approval | API dependency | Requires latest recommendation evidence and maker-checker-safe case facts |
 | Contracts awaiting preparation or readiness | API dependency | Direct known-ID reads are insufficient for a queue |
 | Disbursements awaiting transfer confirmation | API dependency | Requires ready-contract index with exact safe financial snapshot |
 | Active or overdue LoanAccounts | API dependency | Customer index cannot be reused; Staff servicing index is missing |
 | Accounts eligible for settlement or closure | API dependency | Requires authoritative state and reconciliation facts, not client filtering |
-| Cross-product application search | API dependency | No Staff application search/filter endpoint exists |
+| Direct application-number lookup | Useful enhancement | CP2 intentionally provides no free-text or application-number search |
 
 There is no assignment model in the current backend. Labels such as “My work,” “Assigned to me,” ownership SLA, reassignment, and workload balancing must not appear until assignment semantics and an authoritative projection exist. Initial queues are capability-based pending work.
 
 ### 8.2 Case Workspace Projection
 
-A production Staff case workspace needs one authorized, PII-minimized read contract that can compose context-owned facts without exposing persistence internals. At minimum it should return, when applicable:
+The CP2 Staff case contract is an authorized, PII-minimized foundation that composes context-owned facts without exposing persistence internals. It currently returns:
 
 - safe LoanApplication identity, number, product, requested terms, durable status, and submission time;
-- safe Customer readiness or identity-review summary deliberately approved for Staff use;
+- purpose-limited Customer readiness;
+- safe ordered LoanApplication lifecycle transitions.
+
+Later operational sections still require richer purpose-owned projections for:
+
 - product-specific verification summary and exact current cycle identity where an action requires it;
 - document checklist/readiness summary, current version identities, review outcomes, and permissible content links;
 - current correction request, responsibilities, proof state, and safe instructions;
@@ -261,7 +268,7 @@ A production Staff case workspace needs one authorized, PII-minimized read contr
 - current offer/contract summary needed for contract operations without using Customer-only reads;
 - current LoanAccount and servicing summary when activated;
 - server-derived available actions or blockers where the backend can prove them;
-- safe ordered lifecycle/history evidence when a timeline is shown.
+- safe action-specific history beyond the application transitions returned by CP2.
 
 The projection must retain bounded-context ownership. Loan does not query Customer, Approval, or Document persistence directly merely to build a convenient DTO; the backend must compose through narrow public contracts or purpose-owned query adapters.
 
@@ -898,13 +905,13 @@ The case header should contain only authoritative safe facts:
 - submitted time;
 - current operational stage or blocker when returned by the case projection.
 
-Customer identity details, Partner facts, income, collateral, document readiness, offer, contract, and LoanAccount state appear only in their authorized sections. The minimal existing application read cannot populate a production case workspace by itself.
+Customer identity details, Partner facts, income, collateral, document readiness, offer, contract, and LoanAccount state appear only in their authorized sections. The CP2 case projection populates the safe header, Overview readiness, and LoanApplication History only; it does not authorize or populate later workflow sections.
 
 ### 22.2 Workspace Sections
 
 | Section | Purpose | Required authority |
 |---|---|---|
-| Overview | Safe application and Customer readiness summary, current stage, available actions | New case projection |
+| Overview | Safe application and Customer readiness summary | Executable CP2 Staff case projection |
 | Product verification | Salary Advance snapshot summary or UCL/Collateral manual cycle evidence | New Staff verification read |
 | Documents | Checklist, current versions, readiness, reviews, content actions | New Staff checklist/history read plus existing queue/content actions |
 | Corrections | Active request, Customer/Staff tasks, proof, completion and resubmission | Expanded correction projection plus current queue/commands |
@@ -913,7 +920,7 @@ Customer identity details, Partner facts, income, collateral, document readiness
 | Contract | Current masked contract, versions, acknowledgment/readiness, preparation | Existing direct contract/readiness reads plus discovery/case projection |
 | Disbursement | Ready-contract facts, controlled reveal, transfer confirmation | Existing direct commands plus discovery/case projection |
 | LoanAccount | Final schedule, balances, installment progress, repayments | Existing direct account/history reads |
-| History | Ordered safe lifecycle and action evidence | New consolidated lifecycle/history projection |
+| History | Ordered safe LoanApplication status-transition evidence | Executable CP2 Staff case projection; action-specific histories remain future dependencies |
 
 ### 22.3 Evidence Freshness
 
@@ -1368,8 +1375,7 @@ An `OperationStatusPanel` is client recovery state, not audit evidence.
 
 | Dependency | Experiences blocked | Required safe outcome |
 |---|---|---|
-| Staff application index/search | discovery, direct case access, all broad queues | Authorized paging/filtering across products and durable states |
-| Consolidated Staff case projection | overview and evidence context for every action | PII-minimized current facts composed across context-owned contracts |
+| Expanded Staff case projections | evidence context for CP3+ action workspaces | PII-minimized current facts composed across context-owned contracts beyond the CP2 header/readiness/history foundation |
 | Product verification read/history | UCL/Collateral recovery and evidence review; Salary Advance snapshot | Current exact cycle, immutable outcome, permitted restricted facts |
 | Review-cycle and recommendation read | review start/recommendation recovery; Approver evidence | Current cycle, latest immutable recommendation, actor separation evidence |
 | Approval decision read/history | decision recovery and case history | Latest durable decision and safe outcome facts |
@@ -1377,7 +1383,7 @@ An `OperationStatusPanel` is client recovery state, not audit evidence.
 | Expanded correction projection | mixed-task workspace and resubmission readiness | Current request, all responsible parties, proof and completion state |
 | Contract/disbursement operational indexes | Accounting discovery | Current version/status/readiness blockers and ready cases |
 | Staff LoanAccount/servicing index | repayment, overdue, settlement, closure discovery | Authorized balances/states with server paging/filtering |
-| Consolidated lifecycle/history | case timeline and reliable no-UUID reconciliation | Ordered safe immutable workflow evidence |
+| Expanded action histories | action timelines and reliable no-UUID reconciliation | Ordered safe immutable evidence beyond CP2 LoanApplication transitions |
 
 ### 33.2 Useful but Non-Blocking Enhancements
 

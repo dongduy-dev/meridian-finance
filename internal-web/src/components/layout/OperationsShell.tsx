@@ -70,7 +70,7 @@ export function OperationsShell() {
           <p className="hidden text-sm font-medium lg:block">Internal workspace</p>
           <p className="max-w-48 truncate text-sm text-muted-foreground lg:max-w-xs">{state.actor.email}</p>
         </header>
-        <main id="main-content" className="p-4 sm:p-6 lg:p-8"><Outlet /></main>
+        <main id="main-content" className="min-w-0 overflow-x-hidden p-4 sm:p-6 lg:p-8"><Outlet /></main>
       </div>
     </div>
   )

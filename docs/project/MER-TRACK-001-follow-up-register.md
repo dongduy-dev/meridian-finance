@@ -772,7 +772,7 @@ Status: In progress
 Blocking: No current blocker.
 
 Problem:
-The common API now exposes safe Customer-owned LoanApplication and LoanAccount indexes, a narrow Customer action/resume projection, and application-scoped document checklist/current-version/readiness state in addition to the existing Customer-owned or authorized-Staff detail and servicing reads. Richer operational, search, aggregation, and lifecycle projections remain incomplete.
+The common API exposes safe Customer-owned LoanApplication and LoanAccount indexes, a narrow Customer action/resume projection, and application-scoped document checklist/current-version/readiness state. Staff FE-CP2 adds a permission-scoped cross-product application index plus a consolidated safe case header, purpose-limited Customer readiness, and ordered LoanApplication transition history. Specialized operational queues, action evidence, aggregation, and richer product projections remain incomplete.
 
 Resolved scope:
 
@@ -780,11 +780,13 @@ Resolved scope:
 - Customer-owned compact LoanAccount index using authoritative repayment balances.
 - Customer-owned submission-checklist, current-version, and readiness projection.
 - Frontend product-policy presentation and Customer-safe Partner verification selection supporting the lending reads.
+- Staff application paging and exact product/status filtering with deterministic ordering.
+- Staff case header, purpose-limited Customer readiness, and immutable ordered LoanApplication transition history.
 
 Still deferred:
 
-- Staff work queues and application search/filtering.
-- Consolidated lifecycle and history views.
+- Specialized Staff work queues and direct application-number lookup beyond the CP2 application index.
+- Consolidated product-verification, document, correction, review, decision, contract, and servicing evidence/history.
 - Broader Dashboard aggregation beyond the narrow Customer indexes and action facts.
 - Additional workflow command suggestions beyond the proven Customer action categories.
 - Richer product-specific projections where the common reads are insufficient.

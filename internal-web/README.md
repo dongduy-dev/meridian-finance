@@ -1,6 +1,6 @@
 # Meridian Internal Web
 
-`internal-web/` is Meridian's shared Internal Web React/Vite application. Its delivered feature area is the Staff Web foundation under `/staff/*`: authentication, authorization, session restoration, the responsive operations shell, and generic operation-state primitives. It does not yet implement lending queues, approvals, documents, disbursement, repayment, partner administration, user administration, or other operational workflows.
+`internal-web/` is Meridian's shared Internal Web React/Vite application. Its delivered Staff Web feature area under `/staff/*` includes authentication, authorization, session restoration, the responsive operations shell, permission-scoped application discovery at `/staff/applications`, and a read-only case Overview and LoanApplication History. It does not yet implement workflow commands, specialized lending queues, approvals, documents, disbursement, repayment, partner administration, user administration, or other later operational workspaces.
 
 Future Back-Office Administration belongs to the same application under `/admin/*`; that route area remains reserved and unimplemented. [MER-FE-002](../docs/frontend/MER-FE-002-staff-web-blueprint.md) governs Staff Web architecture and delivery. A future MER-FE-003 may govern Back-Office Administration when that area is separately scheduled. Backend behavior remains authoritative; the frontend never infers authorization from a role name or permission prefix.
 

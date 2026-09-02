@@ -73,9 +73,28 @@ describe('internal router access contract', () => {
 
   it('does not grant navigation or direct-route access through a permission prefix', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff(['loan:read:all']))
-    renderRoute('/staff')
+    const router = renderRoute('/staff/applications')
     expect(await screen.findByRole('heading', { name: 'No operational access' })).toBeVisible()
-    expect(screen.queryByRole('link', { name: 'Internal operations' })).not.toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/staff/applications')
+    expect(screen.queryByRole('link', { name: 'Applications' })).not.toBeInTheDocument()
+  })
+
+  it('refuses direct case access without the exact loan read permission', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff(['document:review']))
+    const router = renderRoute('/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')
+    expect(await screen.findByRole('heading', { name: 'No operational access' })).toBeVisible()
+    expect(router.state.location.pathname).toBe('/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')
+  })
+
+  it('rejects a Customer-shaped session before it can reach Staff routes', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue({
+      ...staff(),
+      userType: 'CUSTOMER',
+      customerId: '22222222-2222-4222-8222-222222222222',
+    })
+    const router = renderRoute('/staff/applications')
+    expect(await screen.findByRole('heading', { name: 'Staff sign in' })).toBeVisible()
+    expect(router.state.location.pathname).toBe('/login')
   })
 
   it.each(['/admin/users', '/not-a-route'])('renders the safe unavailable state for %s', async (path) => {

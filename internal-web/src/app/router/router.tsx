@@ -5,10 +5,16 @@ import { OperationsShell } from '@/components/layout/OperationsShell'
 import { LoginRoute, ProtectedStaffRoute, StaffCapabilityRoute } from '@/routes/guards'
 import { RouteErrorPage } from '@/routes/RouteErrorPage'
 import { RouteFocus } from '@/routes/RouteFocus'
-import { STAFF_HOME_ROUTE } from './staff-route-metadata'
+import {
+  STAFF_APPLICATION_CASE_ROUTE,
+  STAFF_APPLICATIONS_ROUTE,
+  STAFF_HOME_ROUTE,
+} from './staff-route-metadata'
 
 const LoginPage = lazy(() => import('@/features/auth/components/LoginPage').then((module) => ({ default: module.LoginPage })))
 const StaffLandingPage = lazy(() => import('@/features/staff/pages/StaffLandingPage').then((module) => ({ default: module.StaffLandingPage })))
+const ApplicationSearchPage = lazy(() => import('@/features/staff-applications/pages/ApplicationSearchPage').then((module) => ({ default: module.ApplicationSearchPage })))
+const ApplicationCasePage = lazy(() => import('@/features/staff-applications/pages/ApplicationCasePage').then((module) => ({ default: module.ApplicationCasePage })))
 const NotFoundPage = lazy(() => import('@/routes/NotFoundPage').then((module) => ({ default: module.NotFoundPage })))
 
 function RouteFrame() { return <><RouteFocus /><Outlet /></> }
@@ -22,6 +28,12 @@ export const routes: RouteObject[] = [{ element: <RouteFrame />, errorElement: <
   { element: <ProtectedStaffRoute />, children: [{ element: <OperationsShell />, children: [
     { element: <StaffCapabilityRoute route={STAFF_HOME_ROUTE} />, children: [
       { path: STAFF_HOME_ROUTE.path, element: <Deferred><StaffLandingPage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_APPLICATIONS_ROUTE} />, children: [
+      { path: STAFF_APPLICATIONS_ROUTE.path, element: <Deferred><ApplicationSearchPage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_APPLICATION_CASE_ROUTE} />, children: [
+      { path: STAFF_APPLICATION_CASE_ROUTE.path, element: <Deferred><ApplicationCasePage /></Deferred> },
     ] },
   ] }] },
   { path: '/admin/*', element: <Deferred><NotFoundPage /></Deferred> },

@@ -10,6 +10,18 @@ import java.util.Set;
 import java.util.UUID;
 
 public interface LoanApplicationRepository {
+    record StaffPage(
+            int page,
+            int size,
+            long totalElements,
+            int totalPages,
+            List<LoanApplication> applications
+    ) {
+        public StaffPage {
+            applications = List.copyOf(applications);
+        }
+    }
+
     void acquireWorkflowLock(UUID loanApplicationId);
 
     void acquireCustomerProductLock(UUID customerId, ProductCode productCode);
@@ -22,6 +34,15 @@ public interface LoanApplicationRepository {
 
     default List<LoanApplication> findByCustomerIdOrderBySubmittedAtDesc(UUID customerId) {
         return List.of();
+    }
+
+    default StaffPage findStaffPage(
+            ProductCode productCode,
+            LoanApplicationStatus status,
+            int page,
+            int size
+    ) {
+        throw new UnsupportedOperationException("Staff application index is not implemented.");
     }
 
     boolean existsByCustomerIdAndProductCodeAndStatusIn(

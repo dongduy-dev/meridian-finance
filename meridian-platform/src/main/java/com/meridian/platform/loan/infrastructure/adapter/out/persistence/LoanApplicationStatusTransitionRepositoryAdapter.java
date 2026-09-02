@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -30,6 +31,17 @@ public class LoanApplicationStatusTransitionRepositoryAdapter
     @Override
     public LoanApplicationStatusTransition save(LoanApplicationStatusTransition transition) {
         return jpaRepository.save(new LoanApplicationStatusTransitionJpaEntity(transition)).toDomain();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LoanApplicationStatusTransition> findByLoanApplicationIdOrderBySequenceNumberAsc(
+            UUID loanApplicationId
+    ) {
+        return jpaRepository.findByLoanApplicationIdOrderBySequenceNumberAsc(loanApplicationId)
+                .stream()
+                .map(LoanApplicationStatusTransitionJpaEntity::toDomain)
+                .toList();
     }
 
     @Override

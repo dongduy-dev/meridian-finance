@@ -282,7 +282,7 @@ Frontend verification commands are `npm run lint`, `npm run typecheck`, `npm tes
 
 ## Internal Web
 
-`internal-web/` contains Meridian's shared Internal Web application. Staff FE-CP1 established its foundation and the current `/staff/*` feature area: Staff-only authentication/session restoration, explicit capability checks, the responsive internal shell, and safe no-access/not-found states. Staff Web lending operations remain scheduled across later Staff FE checkpoints, so the Phase 3 Staff Web roadmap item remains open.
+`internal-web/` contains Meridian's shared Internal Web application. Staff FE-CP1 established Staff-only authentication/session restoration, explicit capability checks, the responsive internal shell, and safe access states. Staff FE-CP2 adds permission-scoped application discovery and a read-only case header, Customer-readiness Overview, and immutable LoanApplication History under `/staff/applications`. Workflow commands and specialized lending workspaces remain scheduled across later Staff FE checkpoints, so the Phase 3 Staff Web roadmap item remains open.
 
 Future Back-Office Administration will use the same application, primarily under `/admin/*`, and remains incomplete. [MER-FE-002](docs/frontend/MER-FE-002-staff-web-blueprint.md) governs Staff Web architecture and delivery; it does not define future Back-Office Administration behavior.
 
