@@ -163,6 +163,8 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/loan-applications/collateral-loan` | Customer with `loan:submit` | Submit a Collateral Loan application with one structured asset and required ownership-evidence collection. |
 | GET | `/api/v1/loan-applications` | Customer with `loan:read:own` | List the authenticated Customer's applications with authoritative lifecycle/action summaries. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}` | Customer `loan:read:own` or Staff `loan:read` | Return a safe durable LoanApplication status projection. |
+| GET | `/api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20` | Staff with `loan:read` | Discover applications across products through a safe, deterministic page. |
+| GET | `/api/v1/staff/loan-applications/{loanApplicationId}` | Staff with `loan:read` | Return the purpose-limited Staff case header, Customer readiness, and ordered lifecycle evidence. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/cancel` | Customer with `loan:cancel:own` | Cancel an owned Salary Advance or UCL from `RETURNED_FOR_REVISION`; Salary Advance releases its reservation exactly once, while UCL has no exposure effect. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start` | Staff with `loan:review` | Start manual UCL verification after document processing readiness. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete` | Staff with `loan:review` | Complete manual UCL verification as `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION`. |
@@ -472,7 +474,9 @@ The response contains `productCode`, the reusable `customerPartnerEmployeeLinkId
 
 Important blockers include Customer/profile/bank readiness, `EMPLOYEE_NOT_VERIFIED`, `SALARY_ADVANCE_ELIGIBILITY_DATA_STALE`, `SALARY_ADVANCE_LIMIT_UNAVAILABLE`, `INSUFFICIENT_AVAILABLE_LIMIT`, `BLOCKING_APPLICATION_EXISTS`, `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, `PRODUCT_NOT_AVAILABLE`, and safe `SYSTEM_STATE_CONFLICT`. Current eligibility requires the authoritative latest valid completed Partner import batch for the current UTC effective month; stale evidence remains blocked until re-verification refreshes the reusable link.
 
-### 4.2 Customer LoanApplication index and status read
+### 4.2 LoanApplication read projections
+
+#### 4.2.1 Customer index and shared minimal status read
 
 ```text
 GET /api/v1/loan-applications
@@ -501,6 +505,44 @@ An authenticated Customer with `loan:read:own` may read only their own applicati
 The response contains only `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `requestedAmount`, `requestedTermMonths`, `status`, and `submittedAt`. It excludes Customer, employee-link, limit, verification, review-cycle, actor, audit/history, payment, and banking evidence. This is a durable status projection for reconnect/resume flows, not a next-action engine, command recommendation, history API, or Staff work queue.
 
 The Customer-owned correction-abandonment command in Section 5.4 is the only v1 command that produces `CANCELLED`. The route does not accept cancellation from another state or a Staff or administrative cancellation.
+
+#### 4.2.2 Staff application discovery and case read
+
+```text
+GET /api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20
+GET /api/v1/staff/loan-applications/{loanApplicationId}
+```
+
+Both routes require an authenticated Staff actor with the exact `loan:read` permission. `loan:read:own`, another lending or document permission, a role name, or a permission prefix does not authorize these routes. Normal authentication and authorization failures return `401` and `403`; a missing case returns `404 LOAN_APPLICATION_NOT_FOUND`.
+
+The Staff index accepts optional exact `productCode` and `status` filters. `page` defaults to `0`, `size` defaults to `20`, and `size` is limited to `1` through `100`; invalid enum, page, or size input returns `400 VALIDATION_FAILED`. Results are ordered by `submittedAt DESC`, then LoanApplication ID `DESC`, and use this page envelope:
+
+```json
+{
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1,
+  "items": [
+    {
+      "loanApplicationId": "UUID",
+      "applicationNumber": "UCL-20260902-000001",
+      "productCode": "UNSECURED_CONSUMER_LOAN",
+      "productType": "UNSECURED",
+      "requestedAmount": 12000000.00,
+      "requestedTermMonths": 6,
+      "status": "UNDER_REVIEW",
+      "submittedAt": "2026-09-02T08:00:00"
+    }
+  ]
+}
+```
+
+Each index item is limited to those eight durable application facts. The endpoint does not return Customer identity or contact data, bank data, Partner salary facts, restricted notes, document content, external references, operation or audit identifiers, actor identifiers, or inferred next actions.
+
+The consolidated Staff case response contains the same eight application facts plus `customerReadiness` and `lifecycleHistory`. `customerReadiness` contains only `active`, `profileComplete`, `hasPrimaryActiveBankAccount`, and `verificationStatus`. Loan obtains that purpose-limited snapshot through its Customer readiness port; it does not read Customer persistence. This is not a general Staff Customer-profile contract and requires no `customer:read` expansion.
+
+`lifecycleHistory` preserves Loan's authoritative transition sequence. Each item contains nullable `fromStatus`, `toStatus`, `action`, `actorType`, and `occurredAt`. It omits transition and persistence IDs, sequence internals, operation IDs, actor User IDs, audit IDs, reasons, restricted assessment or internal notes, and external references. The read does not synthesize history, infer action eligibility, or mutate application, history, audit, or Customer state.
 
 ### 4.3 Submit application
 

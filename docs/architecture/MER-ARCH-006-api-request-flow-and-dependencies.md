@@ -148,6 +148,8 @@ Representative variations:
 | `GET /api/v1/partner-companies/{partnerCompanyId}` | An empty repository result becomes `PARTNER_COMPANY_NOT_FOUND` through the global error boundary. |
 | `GET /api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=true` | The protected query requires `partner:read`. The `activeOnly` condition is pushed into the persistence query rather than filtering a complete result in the controller. |
 | `GET /api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | The service verifies the Partner Company before loading its import batches, so a missing parent returns a Partner Company error rather than an empty child collection. |
+| `GET /api/v1/staff/loan-applications` | The Staff query requires exact `loan:read`, pushes optional product/status filtering and deterministic paging into Loan persistence, and returns only durable application facts. |
+| `GET /api/v1/staff/loan-applications/{loanApplicationId}` | The Staff case query composes Loan-owned application and ordered-transition evidence with purpose-limited Customer readiness through a consumer-owned port. |
 
 Detailed Partner Employee evidence and salary or limit fields remain restricted to authorized Staff responses. Customer-facing endpoints use purpose-limited DTOs and must not reuse the back-office representation.
 
@@ -207,6 +209,30 @@ The query is read-only and non-locking. It does not initialize or refresh a pers
 ### LoanApplication Status Query
 
 `GET /api/v1/loan-applications/{loanApplicationId}` returns a minimal durable status projection. Customers require `loan:read:own`, must own the application, and receive the same not-found result for missing and foreign-owned IDs. Staff require `loan:read`. The service returns application identity, product, requested terms, status, and submission time without exposing Customer, Partner, limit, verification, actor, audit/history, or financial-servicing evidence. It does not infer next actions or mutate workflow state.
+
+### Staff Discovery and Case Queries
+
+`GET /api/v1/staff/loan-applications` and `GET /api/v1/staff/loan-applications/{loanApplicationId}` use a dedicated Staff input port and query service. Controller and service authorization require an authenticated Staff actor with exact `loan:read`; Customer ownership reads remain separate.
+
+```mermaid
+flowchart LR
+    Controller["StaffLoanApplicationController"]
+    InPort["QueryStaffLoanApplicationsUseCase"]
+    Service["QueryStaffLoanApplicationsService"]
+    ApplicationRepo["LoanApplicationRepository"]
+    TransitionRepo["LoanApplicationStatusTransitionRepository"]
+    CustomerPort["CustomerReadinessPort"]
+    LoanPersistence["Loan persistence adapters"]
+    CustomerAdapter["CustomerReadinessAdapter"]
+    CustomerUseCase["QueryCustomerReadinessUseCase"]
+
+    Controller --> InPort --> Service
+    Service --> ApplicationRepo --> LoanPersistence
+    Service --> TransitionRepo --> LoanPersistence
+    Service --> CustomerPort --> CustomerAdapter --> CustomerUseCase
+```
+
+The index applies product/status predicates, `submittedAt DESC, id DESC` ordering, and page bounds in persistence. The case read is side-effect-free and composes the application header, the existing purpose-limited Customer readiness snapshot, and transitions loaded in authoritative sequence order. It neither reaches Customer persistence directly nor copies audit events into Loan's HTTP model. Exact fields, exclusions, and error behavior are defined in `MER-API-001`.
 
 ### Submission Command
 
