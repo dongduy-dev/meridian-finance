@@ -159,6 +159,59 @@ class CustomerIdentityAndBankAccountPostgreSqlIntegrationTest {
         assertFalse(fingerprint.contains("123456"));
     }
 
+    @Test
+    void repeatedlySwitchingPrimaryBankAccountsKeepsOneRequestedActivePrimary() {
+        UUID customerId = insertCustomer("CUST-BANK-SWITCH");
+        UUID firstAccountId = UUID.randomUUID();
+        UUID secondAccountId = UUID.randomUUID();
+        insertBankAccount(
+                firstAccountId,
+                customerId,
+                "VCB",
+                sensitiveValueProtector.protectBankAccountNumber("VCB", "11111111"),
+                true,
+                NOW.minusMinutes(2)
+        );
+        insertBankAccount(
+                secondAccountId,
+                customerId,
+                "ACB",
+                sensitiveValueProtector.protectBankAccountNumber("ACB", "22222222"),
+                false,
+                NOW.minusMinutes(1)
+        );
+        authenticateCustomer(customerId);
+        List<?> protectionBefore = bankAccountProtection(customerId);
+        int primaryChangeAuditCount = countAuditRows("CUSTOMER_BANK_ACCOUNT_MADE_PRIMARY");
+
+        assertPrimaryState(customerId, firstAccountId, secondAccountId);
+
+        CustomerBankAccountDto secondPrimary = manageOwnCustomerBankAccountService.makePrimary(secondAccountId);
+        assertTrue(secondPrimary.primaryAccount());
+        assertEquals("ACTIVE", secondPrimary.status());
+        assertEquals("****2222", secondPrimary.maskedAccountNumber());
+        assertPrimaryState(customerId, secondAccountId, firstAccountId);
+
+        CustomerBankAccountDto firstPrimary = manageOwnCustomerBankAccountService.makePrimary(firstAccountId);
+        assertTrue(firstPrimary.primaryAccount());
+        assertEquals("ACTIVE", firstPrimary.status());
+        assertEquals("****1111", firstPrimary.maskedAccountNumber());
+        assertPrimaryState(customerId, firstAccountId, secondAccountId);
+
+        CustomerBankAccountDto secondPrimaryAgain = manageOwnCustomerBankAccountService.makePrimary(secondAccountId);
+        assertTrue(secondPrimaryAgain.primaryAccount());
+        assertEquals("ACTIVE", secondPrimaryAgain.status());
+        assertEquals("****2222", secondPrimaryAgain.maskedAccountNumber());
+        assertPrimaryState(customerId, secondAccountId, firstAccountId);
+        assertEquals(primaryChangeAuditCount + 3, countAuditRows("CUSTOMER_BANK_ACCOUNT_MADE_PRIMARY"));
+
+        manageOwnCustomerBankAccountService.makePrimary(secondAccountId);
+
+        assertPrimaryState(customerId, secondAccountId, firstAccountId);
+        assertEquals(primaryChangeAuditCount + 3, countAuditRows("CUSTOMER_BANK_ACCOUNT_MADE_PRIMARY"));
+        assertEquals(protectionBefore, bankAccountProtection(customerId));
+    }
+
     private UUID insertCustomer(String customerNumber) {
         UUID customerId = UUID.randomUUID();
         jdbcTemplate.update(
@@ -175,6 +228,97 @@ class CustomerIdentityAndBankAccountPostgreSqlIntegrationTest {
                 customerNumber
         );
         return customerId;
+    }
+
+    private void insertBankAccount(
+            UUID accountId,
+            UUID customerId,
+            String bankCode,
+            ProtectedSensitiveValue accountNumber,
+            boolean primaryAccount,
+            LocalDateTime createdAt
+    ) {
+        jdbcTemplate.update(
+                """
+                        insert into %s.customer_bank_accounts (
+                            id,
+                            customer_id,
+                            bank_code,
+                            bank_name_snapshot,
+                            account_holder_name,
+                            account_number_ciphertext,
+                            account_number_fingerprint,
+                            account_number_last_four,
+                            status,
+                            primary_account,
+                            created_at,
+                            updated_at
+                        ) values (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)
+                        """.formatted(TEST_SCHEMA),
+                accountId,
+                customerId,
+                bankCode,
+                bankCode + " Bank",
+                "Customer Demo",
+                accountNumber.ciphertext(),
+                accountNumber.fingerprint(),
+                accountNumber.lastFour(),
+                primaryAccount,
+                createdAt,
+                createdAt
+        );
+    }
+
+    private void assertPrimaryState(UUID customerId, UUID expectedPrimaryId, UUID expectedNonPrimaryId) {
+        assertEquals(1, jdbcTemplate.queryForObject(
+                """
+                        select count(*)
+                        from %s.customer_bank_accounts
+                        where customer_id = ?
+                          and status = 'ACTIVE'
+                          and primary_account = true
+                        """.formatted(TEST_SCHEMA),
+                Integer.class,
+                customerId
+        ));
+        assertEquals(Boolean.TRUE, jdbcTemplate.queryForObject(
+                "select primary_account from " + table("customer_bank_accounts") + " where id = ? and status = 'ACTIVE'",
+                Boolean.class,
+                expectedPrimaryId
+        ));
+        assertEquals(Boolean.FALSE, jdbcTemplate.queryForObject(
+                "select primary_account from " + table("customer_bank_accounts") + " where id = ? and status = 'ACTIVE'",
+                Boolean.class,
+                expectedNonPrimaryId
+        ));
+        assertEquals(2, jdbcTemplate.queryForObject(
+                "select count(*) from " + table("customer_bank_accounts") + " where customer_id = ? and status = 'ACTIVE'",
+                Integer.class,
+                customerId
+        ));
+    }
+
+    private List<?> bankAccountProtection(UUID customerId) {
+        return jdbcTemplate.queryForList(
+                """
+                        select id,
+                               account_number_ciphertext,
+                               account_number_fingerprint,
+                               account_number_last_four
+                        from %s.customer_bank_accounts
+                        where customer_id = ?
+                        order by created_at, id
+                        """.formatted(TEST_SCHEMA),
+                customerId
+        );
+    }
+
+    private int countAuditRows(String action) {
+        return jdbcTemplate.queryForObject(
+                "select count(*) from " + table("audit_events") + " where action = ?",
+                Integer.class,
+                action
+        );
     }
 
     private static Customer customerWithProfile(
