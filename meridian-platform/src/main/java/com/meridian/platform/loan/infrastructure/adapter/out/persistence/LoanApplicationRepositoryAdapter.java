@@ -6,6 +6,7 @@ import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import jakarta.persistence.EntityManager;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 
@@ -100,6 +101,28 @@ public class LoanApplicationRepositoryAdapter implements LoanApplicationReposito
                 .stream()
                 .map(this::toDomain)
                 .toList();
+    }
+
+    @Override
+    public StaffPage findStaffPage(
+            ProductCode productCode,
+            LoanApplicationStatus status,
+            int page,
+            int size
+    ) {
+        org.springframework.data.domain.Page<LoanApplicationJpaEntity> selected =
+                jpaLoanApplicationRepository.findStaffPage(
+                        productCode,
+                        status,
+                        PageRequest.of(page, size)
+                );
+        return new StaffPage(
+                selected.getNumber(),
+                selected.getSize(),
+                selected.getTotalElements(),
+                selected.getTotalPages(),
+                selected.getContent().stream().map(this::toDomain).toList()
+        );
     }
 
     @Override
