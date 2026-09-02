@@ -181,17 +181,28 @@ public class CustomerRepositoryAdapter implements CustomerRepository {
     }
 
     private void saveBankAccounts(List<CustomerBankAccount> bankAccounts) {
-        for (CustomerBankAccount bankAccount : bankAccounts) {
-            CustomerBankAccountJpaEntity bankAccountEntity = bankAccount.id() == null
-                    ? new CustomerBankAccountJpaEntity(bankAccount)
-                    : bankAccountRepository.findById(bankAccount.id())
-                            .map(existingEntity -> {
-                                existingEntity.updateFrom(bankAccount);
-                                return existingEntity;
-                            })
-                            .orElseGet(() -> new CustomerBankAccountJpaEntity(bankAccount));
-            bankAccountRepository.save(bankAccountEntity);
-        }
+        bankAccounts.stream()
+                .filter(bankAccount -> !bankAccount.primaryAccount())
+                .forEach(this::saveBankAccount);
+        // Make every demotion database-visible before a different account can be promoted.
+        bankAccountRepository.flush();
+
+        bankAccounts.stream()
+                .filter(CustomerBankAccount::primaryAccount)
+                .forEach(this::saveBankAccount);
+        bankAccountRepository.flush();
+    }
+
+    private void saveBankAccount(CustomerBankAccount bankAccount) {
+        CustomerBankAccountJpaEntity bankAccountEntity = bankAccount.id() == null
+                ? new CustomerBankAccountJpaEntity(bankAccount)
+                : bankAccountRepository.findById(bankAccount.id())
+                        .map(existingEntity -> {
+                            existingEntity.updateFrom(bankAccount);
+                            return existingEntity;
+                        })
+                        .orElseGet(() -> new CustomerBankAccountJpaEntity(bankAccount));
+        bankAccountRepository.save(bankAccountEntity);
     }
 
     private boolean isIdentityReferenceFingerprintConstraintViolation(DataIntegrityViolationException exception) {
