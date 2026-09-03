@@ -234,6 +234,30 @@ flowchart LR
 
 The index applies product/status predicates, `submittedAt DESC, id DESC` ordering, and page bounds in persistence. The case read is side-effect-free and composes the application header, the existing purpose-limited Customer readiness snapshot, and transitions loaded in authoritative sequence order. It neither reaches Customer persistence directly nor copies audit events into Loan's HTTP model. Exact fields, exclusions, and error behavior are defined in `MER-API-001`.
 
+### Staff Document Checklist and History Query
+
+`GET /api/v1/staff/loan-applications/{loanApplicationId}/documents` uses a dedicated Staff Document input port and query service. It requires `document:review` independently of the general `loan:read` case contract.
+
+```mermaid
+flowchart LR
+    Controller["StaffDocumentReadController"]
+    InPort["QueryStaffDocumentChecklistUseCase"]
+    Service["QueryStaffDocumentChecklistService"]
+    ChecklistRepo["DocumentChecklistRepository"]
+    DocumentRepo["DocumentRepository"]
+    LoanPort["LoanDocumentWorkflowPort"]
+    DocumentPersistence["Document persistence adapters"]
+    LoanAdapter["LoanDocumentWorkflowAdapter"]
+    LoanPersistence["Loan persistence"]
+
+    Controller --> InPort --> Service
+    Service --> ChecklistRepo --> DocumentPersistence
+    Service --> DocumentRepo --> DocumentPersistence
+    Service --> LoanPort --> LoanAdapter --> LoanPersistence
+```
+
+Document owns checklist, version, and review-history projection. It obtains only application existence and safe status through the purpose-limited Loan contract. Deterministic repository queries read the existing immutable version and review rows; no parallel history store is created.
+
 ### Submission Command
 
 `POST /api/v1/loan-applications/salary-advance` requires Bearer authentication and `loan:submit`. The application service derives the Customer from the authenticated actor and obtains Customer and Partner facts through their public contracts.
@@ -327,6 +351,28 @@ flowchart LR
 ```
 
 Customer correction endpoints derive the exact owner from `CurrentUserProvider`. Staff queue, task completion, upload, content-read, review, waiver, and resubmission endpoints require their narrow permissions. Application services recheck task ownership and maker-checker constraints.
+
+The Staff correction case query remains inside Loan because Loan owns the correction lifecycle:
+
+```mermaid
+flowchart LR
+    Controller["StaffCorrectionReadController"]
+    InPort["QueryStaffCorrectionCaseUseCase"]
+    Service["QueryStaffCorrectionCaseService"]
+    ApplicationRepo["LoanApplicationRepository"]
+    CorrectionRepo["LoanCorrectionRepository"]
+    DocumentPort["LoanDocumentChecklistPort"]
+    LoanPersistence["Loan persistence"]
+    DocumentService["DocumentChecklistService"]
+    DocumentPersistence["Document persistence"]
+
+    Controller --> InPort --> Service
+    Service --> ApplicationRepo --> LoanPersistence
+    Service --> CorrectionRepo --> LoanPersistence
+    Service --> DocumentPort --> DocumentService --> DocumentPersistence
+```
+
+The service computes current-actor maker-checker evidence without serializing actor IDs. It derives Staff task proof through `LoanDocumentChecklistPort`; Loan does not query Document tables or adapters. The read is advisory presentation evidence, while completion and resubmission commands revalidate locked state.
 
 ### Collateral Verification and Approval Coordination
 
