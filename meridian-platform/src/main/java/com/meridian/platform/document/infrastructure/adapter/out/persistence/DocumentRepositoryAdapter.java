@@ -6,6 +6,7 @@ import com.meridian.platform.document.domain.model.DocumentVersion;
 import com.meridian.platform.document.domain.model.StoredDocument;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -63,6 +64,13 @@ public class DocumentRepositoryAdapter implements DocumentRepository {
     }
 
     @Override
+    public List<DocumentVersion> findVersionsByDocumentId(UUID documentId) {
+        return versionRepository.findAllByDocumentIdOrderByVersionNumberAscIdAsc(documentId).stream()
+                .map(DocumentVersionJpaEntity::toDomain)
+                .toList();
+    }
+
+    @Override
     public DocumentReviewDecision saveReviewDecision(DocumentReviewDecision decision) {
         return reviewDecisionRepository.save(new DocumentReviewDecisionJpaEntity(decision)).toDomain();
     }
@@ -77,6 +85,14 @@ public class DocumentRepositoryAdapter implements DocumentRepository {
     public Optional<DocumentReviewDecision> findReviewDecisionByReviewRequestId(UUID reviewRequestId) {
         return reviewDecisionRepository.findByReviewRequestId(reviewRequestId)
                 .map(DocumentReviewDecisionJpaEntity::toDomain);
+    }
+
+    @Override
+    public List<DocumentReviewDecision> findReviewDecisionsByChecklistItemId(UUID checklistItemId) {
+        return reviewDecisionRepository
+                .findAllByChecklistItemIdOrderByDecidedAtAscIdAsc(checklistItemId).stream()
+                .map(DocumentReviewDecisionJpaEntity::toDomain)
+                .toList();
     }
 
     @Override
