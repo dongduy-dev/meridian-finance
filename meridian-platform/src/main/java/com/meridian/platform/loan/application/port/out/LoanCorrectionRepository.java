@@ -26,6 +26,8 @@ public interface LoanCorrectionRepository {
 
     List<LoanCorrectionTask> findTasksByRequestIdForUpdate(UUID correctionRequestId);
 
+    List<LoanCorrectionTask> findTasksByRequestId(UUID correctionRequestId);
+
     List<LoanCorrectionTask> findCustomerTasks(UUID loanApplicationId, UUID customerId);
 
     boolean existsTaskByRequestIdAndResponsibleParty(
