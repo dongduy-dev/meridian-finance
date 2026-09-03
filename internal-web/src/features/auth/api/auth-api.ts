@@ -5,10 +5,10 @@ const authResponseSchema = z.object({
   tokenType: z.literal('Bearer'),
   accessToken: z.string().min(1),
   expiresAt: z.string(),
-  userId: z.uuid(),
+  userId: z.guid(),
   email: z.string().email(),
   userType: z.enum(['CUSTOMER', 'STAFF']),
-  customerId: z.uuid().nullable(),
+  customerId: z.guid().nullable(),
   roles: z.array(z.string()),
   permissions: z.array(z.string()),
 })

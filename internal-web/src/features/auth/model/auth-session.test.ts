@@ -21,6 +21,7 @@ describe('staff session manager', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    sessionStorage.clear()
     queryClient = new QueryClient()
     manager = new AuthSessionManager(queryClient)
   })
@@ -82,8 +83,10 @@ describe('staff session manager', () => {
     vi.mocked(authApi.login).mockResolvedValueOnce(staff()).mockResolvedValueOnce(staff({ permissions: ['document:review'] }))
     await manager.login('one@meridian.local', 'secret')
     queryClient.setQueryData(['private'], { secret: true })
+    sessionStorage.setItem('meridian.staff.unresolved-operations.v1', '[{"operationId":"safe-metadata"}]')
     await manager.login('one@meridian.local', 'secret')
     expect(queryClient.getQueryData(['private'])).toBeUndefined()
+    expect(sessionStorage).toHaveLength(0)
   })
 
   it('clears private query data when roles change for the same user', async () => {
@@ -106,8 +109,10 @@ describe('staff session manager', () => {
     vi.mocked(authApi.login).mockResolvedValue(staff())
     await manager.login('one@meridian.local', 'secret')
     queryClient.setQueryData(['private'], { secret: true })
+    sessionStorage.setItem('meridian.staff.unresolved-operations.v1', '[{"operationId":"safe-metadata"}]')
     await manager.logout()
     expect(queryClient.getQueryData(['private'])).toBeUndefined()
+    expect(sessionStorage).toHaveLength(0)
     expect(manager.getSnapshot().status).toBe('anonymous')
   })
 
@@ -123,6 +128,27 @@ describe('staff session manager', () => {
     expect(authApi.refresh).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(new Headers(fetchMock.mock.calls[1]?.[1].headers).get('Authorization')).toBe('Bearer rotated-token')
+  })
+
+  it('preserves multipart and Blob response modes through authenticated replay', async () => {
+    vi.mocked(authApi.login).mockResolvedValue(staff())
+    vi.mocked(authApi.refresh).mockResolvedValue(staff({ accessToken: 'rotated-token' }))
+    await manager.login('staff@meridian.local', 'secret')
+    const expired = new Response(JSON.stringify({ timestamp: 'now', status: 401, errorCode: 'TOKEN_EXPIRED', message: 'expired', path: '/content' }), { status: 401 })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(expired)
+      .mockResolvedValueOnce(new Response('file', { status: 200, headers: { 'Content-Type': 'application/pdf' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const form = new FormData()
+    form.set('file', new Blob(['file'], { type: 'application/pdf' }), 'proof.pdf')
+    const result = await manager.protectedRequest<{ blob: Blob }>('/content', {
+      method: 'POST', body: form, responseType: 'blob',
+    })
+    expect(result.blob.size).toBe(4)
+    const replay = fetchMock.mock.calls[1]?.[1] as RequestInit
+    expect(replay.body).toBe(form)
+    expect(new Headers(replay.headers).has('Content-Type')).toBe(false)
+    expect(new Headers(replay.headers).get('Authorization')).toBe('Bearer rotated-token')
   })
 
   it('does not enter an infinite replay loop on a second session rejection', async () => {

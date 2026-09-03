@@ -10,16 +10,17 @@ export function QueryErrorPanel({
   onRetry,
 }: {
   error: unknown
-  resource: 'index' | 'case'
+  resource: 'index' | 'case' | 'document queue' | 'document evidence' | 'correction queue' | 'correction evidence'
   onRetry: () => void
 }) {
   const forbidden = error instanceof ApiError && error.status === 403
-  const missing = resource === 'case' && error instanceof ApiError && error.status === 404
+  const caseResource = resource === 'case' || resource.endsWith('evidence')
+  const missing = caseResource && error instanceof ApiError && error.status === 404
   const title = forbidden ? 'Application access changed'
     : missing ? 'Application unavailable'
-      : resource === 'case' ? 'Case data unavailable' : 'Applications unavailable'
+      : caseResource ? 'Case data unavailable' : 'Work queue unavailable'
   const description = forbidden
-    ? 'Your current session does not have permission to read Staff applications.'
+    ? 'Your current session no longer has the exact permission required for this workspace.'
     : missing
       ? 'This application cannot be opened from the current session.'
       : error instanceof ApiError

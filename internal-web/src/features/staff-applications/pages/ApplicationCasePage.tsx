@@ -135,6 +135,8 @@ export function ApplicationCasePage() {
       <nav aria-label="Case workspace" className="flex gap-2 overflow-x-auto rounded-lg border bg-card p-2">
         <a href="#overview" className="inline-flex min-h-11 items-center rounded-md bg-selected px-4 text-sm font-semibold">Overview</a>
         <a href="#history" className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">History</a>
+        {state.status === 'authenticated' && hasPermission(state.actor, 'document:review') ? <Link to={`/staff/applications/${loanApplicationId}/documents`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Documents</Link> : null}
+        {state.status === 'authenticated' && hasPermission(state.actor, 'loan:correction:staff') ? <Link to={`/staff/applications/${loanApplicationId}/corrections`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Corrections</Link> : null}
       </nav>
 
       <section id="overview" className="scroll-mt-4 space-y-4" aria-labelledby="overview-heading">
@@ -186,7 +188,7 @@ export function ApplicationCasePage() {
         </Card>
       </section>
 
-      <Alert variant="information"><CircleUserRound aria-hidden="true" /><AlertTitle>Read-only checkpoint</AlertTitle><AlertDescription>This workspace contains discovery, readiness, and lifecycle evidence only. No review, approval, correction, contract, disbursement, or servicing command is available here.</AlertDescription></Alert>
+      <Alert variant="information"><CircleUserRound aria-hidden="true" /><AlertTitle>Application overview</AlertTitle><AlertDescription>This overview remains read-only. Document review and Staff correction commands are available only through their permission-scoped workspaces.</AlertDescription></Alert>
     </section>
   )
 }
