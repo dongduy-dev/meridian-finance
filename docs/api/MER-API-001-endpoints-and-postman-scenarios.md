@@ -976,7 +976,7 @@ Review targets the exact `documentVersionId` and supports:
 - `WAIVE_DOCUMENT`
 - `REQUEST_REPLACEMENT`
 
-Waiver requires `document:waive` and an allowed waiver code. Replacement requires `DOCUMENT_REPLACEMENT_REQUIRED` plus a Customer-visible instruction. Reviewing a non-current version returns `409 STALE_DOCUMENT_VERSION`.
+Waiver requires `document:waive` and an allowed waiver code. Replacement requires `DOCUMENT_REPLACEMENT_REQUIRED` plus a Customer-visible instruction. Only an unreviewed authoritative current version is actionable. Reviewing a non-current version returns `409 STALE_DOCUMENT_VERSION`; a new logical review against an already-reviewed current version returns `409 DOCUMENT_ALREADY_REVIEWED`. An exact replay with the original `reviewRequestId` and logical payload still returns the existing immutable decision, while reuse of that request ID with different content remains `409 IDEMPOTENCY_KEY_REUSED`.
 
 Content responses stream only the authorized immutable version and include attachment, `Cache-Control: no-store, private`, and `X-Content-Type-Options: nosniff`.
 

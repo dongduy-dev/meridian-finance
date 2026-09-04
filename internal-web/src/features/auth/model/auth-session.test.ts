@@ -5,6 +5,7 @@ import type { AuthResponse } from '../api/auth-api'
 import * as authApi from '../api/auth-api'
 import { getAccessToken } from './access-credential'
 import { AuthSessionManager, InternalAccessRequiredError } from './auth-session'
+import { findUnresolvedOperation, saveUnresolvedOperation } from '@/lib/operation/unresolved-operation'
 
 vi.mock('../api/auth-api', async () => {
   const actual = await vi.importActual<typeof import('../api/auth-api')>('../api/auth-api')
@@ -60,6 +61,24 @@ describe('staff session manager', () => {
     expect(manager.getSnapshot()).toMatchObject({ status: 'authenticated', actor: { email: 'staff@meridian.local' } })
   })
 
+  it('preserves unresolved recovery through normal restoration for the same actor and authority', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff({
+      roles: ['REVIEWER', 'LOAN_OFFICER'],
+      permissions: ['loan:correction:staff', 'document:review'],
+    }))
+    await manager.restore()
+    saveRecovery()
+
+    const restored = new AuthSessionManager(new QueryClient())
+    vi.mocked(authApi.refresh).mockResolvedValue(staff({
+      roles: ['LOAN_OFFICER', 'REVIEWER'],
+      permissions: ['document:review', 'loan:correction:staff'],
+    }))
+    await restored.restore()
+
+    expect(findUnresolvedOperation('DOCUMENT_REVIEW', 'application:item')?.operationId).toBe('operation-id')
+  })
+
   it('distinguishes definitive anonymous refresh from a transient restore failure', async () => {
     vi.mocked(authApi.refresh).mockRejectedValueOnce(new ApiError(401, 'INVALID_REFRESH_TOKEN', 'required', '/auth/refresh', 'now'))
     await manager.restore()
@@ -83,37 +102,67 @@ describe('staff session manager', () => {
     vi.mocked(authApi.login).mockResolvedValueOnce(staff()).mockResolvedValueOnce(staff({ permissions: ['document:review'] }))
     await manager.login('one@meridian.local', 'secret')
     queryClient.setQueryData(['private'], { secret: true })
-    sessionStorage.setItem('meridian.staff.unresolved-operations.v1', '[{"operationId":"safe-metadata"}]')
+    saveRecovery()
     await manager.login('one@meridian.local', 'secret')
     expect(queryClient.getQueryData(['private'])).toBeUndefined()
-    expect(sessionStorage).toHaveLength(0)
+    expect(findUnresolvedOperation('DOCUMENT_REVIEW', 'application:item')).toBeUndefined()
   })
 
   it('clears private query data when roles change for the same user', async () => {
     vi.mocked(authApi.login).mockResolvedValueOnce(staff()).mockResolvedValueOnce(staff({ roles: ['APPROVER'] }))
     await manager.login('one@meridian.local', 'secret')
     queryClient.setQueryData(['private'], { secret: true })
+    saveRecovery()
     await manager.login('one@meridian.local', 'secret')
     expect(queryClient.getQueryData(['private'])).toBeUndefined()
+    expect(findUnresolvedOperation('DOCUMENT_REVIEW', 'application:item')).toBeUndefined()
   })
 
   it('clears private query data when the user changes', async () => {
     vi.mocked(authApi.login).mockResolvedValueOnce(staff()).mockResolvedValueOnce(staff({ userId: '33333333-3333-4333-8333-333333333333' }))
     await manager.login('one@meridian.local', 'secret')
     queryClient.setQueryData(['private'], { secret: true })
+    saveRecovery()
     await manager.login('two@meridian.local', 'secret')
     expect(queryClient.getQueryData(['private'])).toBeUndefined()
+    expect(findUnresolvedOperation('DOCUMENT_REVIEW', 'application:item')).toBeUndefined()
   })
 
   it('clears private query data on logout', async () => {
     vi.mocked(authApi.login).mockResolvedValue(staff())
     await manager.login('one@meridian.local', 'secret')
     queryClient.setQueryData(['private'], { secret: true })
-    sessionStorage.setItem('meridian.staff.unresolved-operations.v1', '[{"operationId":"safe-metadata"}]')
+    saveRecovery()
     await manager.logout()
     expect(queryClient.getQueryData(['private'])).toBeUndefined()
     expect(sessionStorage).toHaveLength(0)
     expect(manager.getSnapshot().status).toBe('anonymous')
+  })
+
+  it('clears unresolved recovery when restoration proves the session expired', async () => {
+    vi.mocked(authApi.login).mockResolvedValue(staff())
+    await manager.login('one@meridian.local', 'secret')
+    saveRecovery()
+    vi.mocked(authApi.refresh).mockRejectedValue(
+      new ApiError(401, 'INVALID_REFRESH_TOKEN', 'required', '/auth/refresh', 'now'),
+    )
+
+    await manager.restore()
+
+    expect(findUnresolvedOperation('DOCUMENT_REVIEW', 'application:item')).toBeUndefined()
+    expect(sessionStorage).toHaveLength(0)
+  })
+
+  it('clears unresolved recovery when a restored session is not Staff', async () => {
+    vi.mocked(authApi.login).mockResolvedValue(staff())
+    await manager.login('one@meridian.local', 'secret')
+    saveRecovery()
+    vi.mocked(authApi.refresh).mockResolvedValue(customer())
+
+    await expect(manager.refresh()).rejects.toBeInstanceOf(InternalAccessRequiredError)
+
+    expect(findUnresolvedOperation('DOCUMENT_REVIEW', 'application:item')).toBeUndefined()
+    expect(sessionStorage).toHaveLength(0)
   })
 
   it('refreshes and replays a protected request exactly once after token expiry', async () => {
@@ -163,3 +212,13 @@ describe('staff session manager', () => {
     expect(manager.getSnapshot().status).toBe('anonymous')
   })
 })
+
+function saveRecovery() {
+  saveUnresolvedOperation({
+    type: 'DOCUMENT_REVIEW',
+    resource: 'application:item',
+    operationId: 'operation-id',
+    payloadDigest: 'payload-digest',
+    unresolvedAt: '2026-09-04T01:00:00Z',
+  })
+}

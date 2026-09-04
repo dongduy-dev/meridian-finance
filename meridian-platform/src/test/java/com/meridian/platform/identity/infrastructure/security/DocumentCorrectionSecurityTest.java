@@ -25,6 +25,7 @@ import com.meridian.platform.loan.infrastructure.adapter.in.web.StaffCorrectionC
 import com.meridian.platform.loan.infrastructure.adapter.in.web.StaffCorrectionReadController;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -212,6 +213,31 @@ class DocumentCorrectionSecurityTest {
                         .with(user("reader").authorities(
                                 new SimpleGrantedAuthority("loan:read"))))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void exposesAlreadyReviewedCurrentVersionAsTheNarrowConflictContract() throws Exception {
+        when(currentUserProvider.currentUser()).thenReturn(authenticatedStaff());
+        when(reviewDocumentUseCase.review(any())).thenThrow(new BusinessStateConflictException(
+                "DOCUMENT_ALREADY_REVIEWED", "Document version already reviewed."
+        ));
+
+        mockMvc.perform(post(
+                        "/api/v1/loan-applications/{applicationId}/document-review-items/{itemId}/reviews",
+                        APPLICATION_ID, ITEM_ID)
+                        .with(user("reviewer").authorities(
+                                new SimpleGrantedAuthority("document:review")))
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "documentVersionId": "%s",
+                                  "reviewRequestId": "%s",
+                                  "outcome": "ACCEPT_DOCUMENT"
+                                }
+                                """.formatted(VERSION_ID, UUID.randomUUID())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("DOCUMENT_ALREADY_REVIEWED"))
+                .andExpect(jsonPath("$.message").value("Document version already reviewed."));
     }
 
     private AuthenticatedUser authenticatedCustomer() {

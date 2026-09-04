@@ -77,6 +77,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -1059,14 +1060,12 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                     "STALE_DOCUMENT_VERSION",
                     ((BusinessStateConflictException) uploadFailures.getFirst()).getErrorCode()
             );
-            if (reviewOutcome.failure() != null) {
-                assertEquals(
-                        "STALE_DOCUMENT_VERSION",
-                        ((BusinessStateConflictException) reviewOutcome.failure()).getErrorCode()
-                );
-            } else {
-                assertTrue(reviewOutcome.reviewed());
-            }
+            assertNotNull(reviewOutcome.failure());
+            assertTrue(
+                    Set.of("STALE_DOCUMENT_VERSION", "DOCUMENT_ALREADY_REVIEWED").contains(
+                            ((BusinessStateConflictException) reviewOutcome.failure()).getErrorCode()
+                    )
+            );
             return successfulUploads.getFirst().version();
         }
     }

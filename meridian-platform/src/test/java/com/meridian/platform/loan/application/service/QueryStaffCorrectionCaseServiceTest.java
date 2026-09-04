@@ -102,6 +102,98 @@ class QueryStaffCorrectionCaseServiceTest {
         assertEquals("Review replacement.", result.tasks().get(1).staffInstruction());
     }
 
+    @Test
+    void reportsStaffOnlyReadyCorrectionAsStaffResubmittable() {
+        assertStaffResubmissionReady(
+                LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION,
+                List.of(task(1, LoanCorrectionResponsibility.STAFF, LoanCorrectionTaskStatus.COMPLETED)),
+                true
+        );
+    }
+
+    @Test
+    void reportsFullyCompletedMixedCorrectionAsStaffResubmittable() {
+        assertStaffResubmissionReady(
+                LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION,
+                List.of(
+                        task(1, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.COMPLETED),
+                        task(2, LoanCorrectionResponsibility.STAFF, LoanCorrectionTaskStatus.COMPLETED)
+                ),
+                true
+        );
+    }
+
+    @Test
+    void doesNotReportCustomerOnlyCorrectionAsStaffResubmittable() {
+        assertStaffResubmissionReady(
+                LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION,
+                List.of(task(1, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.COMPLETED)),
+                false
+        );
+    }
+
+    @Test
+    void doesNotReportCorrectionWithIncompleteStaffTaskAsStaffResubmittable() {
+        assertStaffResubmissionReady(
+                LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION,
+                List.of(task(1, LoanCorrectionResponsibility.STAFF, LoanCorrectionTaskStatus.OPEN)),
+                false
+        );
+    }
+
+    @Test
+    void doesNotReportNonReadyCorrectionAsStaffResubmittable() {
+        assertStaffResubmissionReady(
+                LoanCorrectionRequestStatus.OPEN,
+                List.of(task(1, LoanCorrectionResponsibility.STAFF, LoanCorrectionTaskStatus.COMPLETED)),
+                false
+        );
+    }
+
+    private void assertStaffResubmissionReady(
+            LoanCorrectionRequestStatus status,
+            List<LoanCorrectionTask> tasks,
+            boolean expected
+    ) {
+        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
+                .thenReturn(Optional.of(request(status)));
+        when(corrections.findTasksByRequestId(REQUEST_ID)).thenReturn(tasks);
+
+        var result = service.query(APPLICATION_ID).correctionRequest();
+
+        assertEquals(expected, result.staffResubmissionReady());
+    }
+
+    private static LoanCorrectionRequest request(LoanCorrectionRequestStatus status) {
+        return new LoanCorrectionRequest(
+                REQUEST_ID, APPLICATION_ID, UUID.randomUUID(), "REQUEST_CORRECTION",
+                CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED, UUID.randomUUID(), status,
+                null, NOW.minusHours(3), null, null
+        );
+    }
+
+    private static LoanCorrectionTask task(
+            int sequence,
+            LoanCorrectionResponsibility responsibility,
+            LoanCorrectionTaskStatus status
+    ) {
+        LocalDateTime completedAt = status == LoanCorrectionTaskStatus.COMPLETED ? NOW.minusHours(1) : null;
+        return new LoanCorrectionTask(
+                UUID.randomUUID(), REQUEST_ID, sequence, responsibility,
+                responsibility == LoanCorrectionResponsibility.STAFF
+                        ? LoanCorrectionScope.SUPPORTING_DOCUMENT_UPLOAD
+                        : LoanCorrectionScope.DOCUMENT_REPLACEMENT,
+                DocumentType.BANK_STATEMENT, false, ITEM_ID, VERSION_ID,
+                responsibility == LoanCorrectionResponsibility.CUSTOMER ? "Replace it." : null,
+                responsibility == LoanCorrectionResponsibility.STAFF ? "Upload it." : null,
+                status,
+                status == LoanCorrectionTaskStatus.COMPLETED ? UUID.randomUUID() : null,
+                status == LoanCorrectionTaskStatus.COMPLETED ? UUID.randomUUID() : null,
+                completedAt,
+                NOW.minusHours(2)
+        );
+    }
+
     private static LoanApplication application() {
         return new LoanApplication(
                 APPLICATION_ID, UUID.randomUUID(), UUID.randomUUID(), "MER-2026-000001",

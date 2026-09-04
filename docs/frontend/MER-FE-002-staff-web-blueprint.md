@@ -552,12 +552,12 @@ Generate a fresh `X-Request-ID` for each HTTP attempt unless the transport repla
 
 - Create the UUID when the operator begins the final submission attempt, not on every render.
 - Keep the same UUID and exactly the same logical payload for a retry after timeout, lost response, refresh, or reconnect.
-- A changed amount, reference, value date, outcome, version, reason, task selection, or other semantic input is a new logical operation and receives a new UUID.
+- A changed amount, reference, value date, outcome, version, reason, task selection, or other semantic input receives a new UUID only when no prior operation result for that resource remains unresolved. While a result is unresolved, changed semantics are blocked until authoritative reconciliation. A flow that offers explicit local recovery abandonment must complete that separate action before accepting new semantics.
 - Where backend replay includes actor identity, retry uses the same authenticated actor. Another Staff member does not inherit the operation identity.
 - Disable duplicate submits while a request is in flight, but do not confuse button disabling with durable idempotency.
-- Persist an unresolved operation identity only in narrowly scoped session storage when survival across refresh is necessary. Store the minimum safe payload digest and resource identity, never the external reference, notes, full financial payload, or revealed data.
+- Persist an unresolved operation identity only in narrowly scoped session storage when survival across refresh is necessary. Bind the recovery envelope to a digest of the Staff actor and sorted authority set so same-authority restoration preserves it while logout, session expiry, actor changes, and authority changes clear it. Store the binding digest, minimum safe payload digest, and resource identity, never access or refresh tokens, role/permission values, external references, notes, full financial payloads, file bytes, or revealed data.
 - After refresh, a digest-only record can support “Check result” but cannot reconstruct a sensitive payload. Retry is allowed only after the operator re-enters or reselects the exact inputs and the client verifies that their digest matches the unresolved operation. Files must be reselected; the browser must not persist their bytes.
-- Remove resolved operation records after authoritative reconciliation or an explicit operator abandonment of an unsubmitted draft.
+- Remove resolved operation records after authoritative reconciliation. If a flow offers explicit local abandonment, it removes only recovery metadata, never claims the server operation failed, and must precede any new semantics for the same resource.
 - `409 IDEMPOTENCY_KEY_REUSED` is not a prompt to generate a new UUID automatically. Preserve evidence, show the conflict, and require reconciliation.
 - When the backend defines exact replay after later state changes, recovery remains available even if the current state would reject a new operation. Staff Web labels this as replay of prior evidence and never substitutes a new UUID to bypass current state.
 

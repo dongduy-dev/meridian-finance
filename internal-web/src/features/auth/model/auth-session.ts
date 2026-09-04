@@ -4,7 +4,7 @@ import { clearAccessToken, getAccessToken, setAccessToken } from './access-crede
 import type { StaffActor } from './access-control'
 import type { AuthResponse } from '../api/auth-api'
 import * as authApi from '../api/auth-api'
-import { clearUnresolvedOperations } from '@/lib/operation/unresolved-operation'
+import { bindUnresolvedOperations, clearUnresolvedOperations } from '@/lib/operation/unresolved-operation'
 
 export type AnonymousReason = 'INTERNAL_ACCESS_REQUIRED' | 'SESSION_EXPIRED'
 export type SessionState =
@@ -80,8 +80,8 @@ export class AuthSessionManager {
     const previousActor = this.state.status === 'authenticated' ? this.state.actor : undefined
     if (!previousActor || !hasSameAuthority(previousActor, actor)) {
       this.queryClient.clear()
-      clearUnresolvedOperations()
     }
+    await bindUnresolvedOperations(actor)
     setAccessToken(response.accessToken)
     this.publish({ status: 'authenticated', actor, epoch: this.state.epoch + 1 })
     return actor

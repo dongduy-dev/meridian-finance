@@ -7,12 +7,12 @@ import { OperationStatusPanel, type OperationStatus } from '@/components/operati
 import { RequestCorrelation } from '@/components/common/RequestCorrelation'
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import { ApiError, NetworkError } from '@/lib/api'
-import { createOperationIdentity } from '@/lib/operation/operation-identity'
 import {
+  decideOperationIdentity,
   digestOperationPayload,
-  findUnresolvedOperation,
   removeUnresolvedOperation,
   saveUnresolvedOperation,
+  UnresolvedOperationConflictError,
 } from '@/lib/operation/unresolved-operation'
 import { staffCorrectionKeys } from '@/features/staff-corrections/api/queries'
 import type { StaffDocumentItem } from '../api/contracts'
@@ -35,17 +35,24 @@ export function DocumentReviewForm({ manager, loanApplicationId, item, canWaive,
   const version = item.currentVersion
   const semanticPayload = { outcome, waiverReasonCode, customerInstruction, restrictedStaffNotes, version: version?.documentVersionId }
   const signature = JSON.stringify(semanticPayload)
-  const recoveryResource = `${loanApplicationId}:${item.checklistItemId}:${version?.documentVersionId ?? 'none'}`
+  const recoveryResource = `${loanApplicationId}:${item.checklistItemId}`
 
   const openConfirmation = async () => {
     if (!version || stale) return
     if (outcome === 'WAIVE_DOCUMENT' && !waiverReasonCode) return
     if (outcome === 'REQUEST_REPLACEMENT' && !customerInstruction.trim()) return
     const digest = await digestOperationPayload(semanticPayload)
-    const unresolved = findUnresolvedOperation('DOCUMENT_REVIEW', recoveryResource)
+    const decision = decideOperationIdentity('DOCUMENT_REVIEW', recoveryResource, digest)
+    if (decision.kind === 'CONFLICT_WITH_UNRESOLVED') {
+      setOperation(undefined)
+      setStatus('RESULT_UNKNOWN')
+      setError(new UnresolvedOperationConflictError())
+      return
+    }
     setOperation((current) => current?.signature === signature
       ? current
-      : { id: unresolved?.payloadDigest === digest ? unresolved.operationId : createOperationIdentity(), signature })
+      : { id: decision.operationId, signature })
+    setError(undefined)
     setConfirming(true)
   }
 
@@ -91,7 +98,9 @@ export function DocumentReviewForm({ manager, loanApplicationId, item, canWaive,
       else {
         setStatus('BLOCKED')
         removeUnresolvedOperation('DOCUMENT_REVIEW', recoveryResource)
-        if (caught instanceof ApiError && caught.errorCode === 'STALE_DOCUMENT_VERSION') {
+        if (caught instanceof ApiError && [
+          'STALE_DOCUMENT_VERSION', 'DOCUMENT_ALREADY_REVIEWED',
+        ].includes(caught.errorCode)) {
           await queryClient.invalidateQueries({ queryKey: staffDocumentKeys.case(loanApplicationId) })
         }
       }
@@ -109,7 +118,7 @@ export function DocumentReviewForm({ manager, loanApplicationId, item, canWaive,
     <label className="grid gap-2 text-sm font-semibold">Restricted Staff notes <span className="font-normal text-muted-foreground">Optional · internal only</span><textarea className="min-h-24 rounded-md border bg-background p-3 font-normal" maxLength={2000} value={restrictedStaffNotes} onChange={(event) => setRestrictedStaffNotes(event.target.value)} /></label>
     {stale ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Selected evidence is stale</AlertTitle><AlertDescription>Refresh or select the authoritative current version before submitting a review.</AlertDescription></Alert> : null}
     {status !== 'DRAFT' ? <OperationStatusPanel status={status} /> : null}
-    {error ? <Alert variant="destructive"><AlertTriangle /><AlertTitle>Review not confirmed</AlertTitle><AlertDescription>{error instanceof ApiError ? error.message : 'The result could not be confirmed.'}{error instanceof ApiError && error.requestId ? <RequestCorrelation requestId={error.requestId} /> : null}</AlertDescription></Alert> : null}
+    {error ? <Alert variant="destructive"><AlertTriangle /><AlertTitle>Review not confirmed</AlertTitle><AlertDescription>{error instanceof ApiError || error instanceof UnresolvedOperationConflictError ? error.message : 'The result could not be confirmed.'}{error instanceof ApiError && error.requestId ? <RequestCorrelation requestId={error.requestId} /> : null}</AlertDescription></Alert> : null}
     <Button id="review-final-details" disabled={invalid || status === 'IN_FLIGHT' || status === 'RECONCILING'} onClick={() => void openConfirmation()}>Review final details</Button>
     {confirming ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="review-confirm-title"><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><div><h2 id="review-confirm-title" className="text-xl font-semibold">Confirm exact-version review</h2><p className="mt-1 text-sm text-muted-foreground">This command is bound to the immutable evidence below.</p></div><dl className="grid gap-3 text-sm"><div><dt className="text-muted-foreground">Document type</dt><dd className="font-semibold">{item.documentType}</dd></div><div><dt className="text-muted-foreground">Version</dt><dd className="break-all font-semibold">{version.versionNumber} · {version.documentVersionId}</dd></div><div><dt className="text-muted-foreground">Filename</dt><dd className="font-semibold">{version.originalFilename}</dd></div><div><dt className="text-muted-foreground">Outcome</dt><dd className="font-semibold">{outcome}</dd></div></dl><div className="flex justify-end gap-2"><Button variant="outline" onClick={closeConfirmation}>Cancel</Button><Button autoFocus onClick={() => void submit()} disabled={status === 'IN_FLIGHT'}><CheckCircle2 /> Confirm review</Button></div></div></div> : null}
   </div>

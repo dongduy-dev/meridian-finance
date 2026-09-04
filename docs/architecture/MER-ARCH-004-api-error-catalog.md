@@ -157,6 +157,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 403 | `DOCUMENT_ACCESS_DENIED` | Document access denied | Use the exact Customer owner or an authorized Staff actor |
 | 403 | `DOCUMENT_UPLOAD_DENIED` | Document upload not authorized | Upload through the open correction task for this checklist item |
 | 409 | `STALE_DOCUMENT_VERSION` | Document version is stale | Refresh the current immutable version before replacing or reviewing |
+| 409 | `DOCUMENT_ALREADY_REVIEWED` | Document version already reviewed. | Refresh the current document evidence. Only an unreviewed current version may receive a new review decision. |
 | 409 | `DOCUMENT_UPLOAD_REQUIRED` | Current upload required | Upload a current document version before manual review |
 | 403 | `DOCUMENT_WAIVER_DENIED` | Waiver permission required | Use a Loan Officer with separate `document:waive` authority |
 | 422 | `DOCUMENT_WAIVER_REASON_REQUIRED` | Controlled waiver reason required | Supply an approved waiver reason code |

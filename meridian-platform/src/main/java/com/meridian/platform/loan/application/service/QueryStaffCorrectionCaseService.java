@@ -64,12 +64,16 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
             AuthenticatedUser actor
     ) {
         List<LoanCorrectionTask> tasks = corrections.findTasksByRequestId(request.id());
+        boolean hasStaffTasks = tasks.stream()
+                .anyMatch(task -> task.responsibleParty() == LoanCorrectionResponsibility.STAFF);
         boolean allComplete = !tasks.isEmpty() && tasks.stream()
                 .allMatch(task -> task.status() == LoanCorrectionTaskStatus.COMPLETED);
         return new StaffCorrectionCaseDto.CorrectionRequestDto(
                 request.id(), request.status().name(), request.reasonCode().name(), request.createdAt(),
                 request.createdByUserId().equals(actor.userId()), allComplete,
-                request.status() == LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION && allComplete,
+                hasStaffTasks
+                        && request.status() == LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION
+                        && allComplete,
                 tasks.stream().map(task -> toTask(request, task, tasks)).toList());
     }
 
