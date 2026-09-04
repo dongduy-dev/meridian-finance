@@ -6,21 +6,26 @@ import com.meridian.platform.document.application.port.in.QueryDocumentReviewQue
 import com.meridian.platform.document.application.port.in.ReadDocumentContentUseCase;
 import com.meridian.platform.document.application.port.in.ReviewDocumentUseCase;
 import com.meridian.platform.document.application.port.in.UploadDocumentUseCase;
+import com.meridian.platform.document.application.port.in.QueryStaffDocumentChecklistUseCase;
 import com.meridian.platform.document.infrastructure.adapter.in.web.CustomerDocumentController;
 import com.meridian.platform.document.infrastructure.adapter.in.web.DocumentContentController;
 import com.meridian.platform.document.infrastructure.adapter.in.web.DocumentReviewController;
 import com.meridian.platform.document.infrastructure.adapter.in.web.DocumentReviewQueueController;
 import com.meridian.platform.document.infrastructure.adapter.in.web.StaffDocumentController;
+import com.meridian.platform.document.infrastructure.adapter.in.web.StaffDocumentReadController;
 import com.meridian.platform.loan.application.port.in.CompleteOwnCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.CompleteStaffCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.QueryOwnCorrectionTasksUseCase;
 import com.meridian.platform.loan.application.port.in.QueryStaffCorrectionTasksUseCase;
 import com.meridian.platform.loan.application.port.in.ResubmitOwnCorrectionUseCase;
 import com.meridian.platform.loan.application.port.in.ResubmitStaffCorrectionUseCase;
+import com.meridian.platform.loan.application.port.in.QueryStaffCorrectionCaseUseCase;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.CustomerCorrectionController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.StaffCorrectionController;
+import com.meridian.platform.loan.infrastructure.adapter.in.web.StaffCorrectionReadController;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -52,8 +57,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         DocumentContentController.class,
         DocumentReviewQueueController.class,
         DocumentReviewController.class,
+        StaffDocumentReadController.class,
         CustomerCorrectionController.class,
-        StaffCorrectionController.class
+        StaffCorrectionController.class,
+        StaffCorrectionReadController.class
 })
 @Import({
         SecurityConfig.class,
@@ -79,12 +86,14 @@ class DocumentCorrectionSecurityTest {
     @MockitoBean private QueryDocumentReviewQueueUseCase queryDocumentReviewQueueUseCase;
     @MockitoBean private ReviewDocumentUseCase reviewDocumentUseCase;
     @MockitoBean private ReadDocumentContentUseCase readDocumentContentUseCase;
+    @MockitoBean private QueryStaffDocumentChecklistUseCase queryStaffDocumentChecklistUseCase;
     @MockitoBean private QueryOwnCorrectionTasksUseCase queryOwnCorrectionTasksUseCase;
     @MockitoBean private CompleteOwnCorrectionTaskUseCase completeOwnCorrectionTaskUseCase;
     @MockitoBean private ResubmitOwnCorrectionUseCase resubmitOwnCorrectionUseCase;
     @MockitoBean private QueryStaffCorrectionTasksUseCase queryStaffCorrectionTasksUseCase;
     @MockitoBean private CompleteStaffCorrectionTaskUseCase completeStaffCorrectionTaskUseCase;
     @MockitoBean private ResubmitStaffCorrectionUseCase resubmitStaffCorrectionUseCase;
+    @MockitoBean private QueryStaffCorrectionCaseUseCase queryStaffCorrectionCaseUseCase;
     @MockitoBean private CurrentUserProvider currentUserProvider;
 
     @Test
@@ -94,6 +103,10 @@ class DocumentCorrectionSecurityTest {
         mockMvc.perform(get("/api/v1/staff-corrections/tasks"))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/v1/document-review-items"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/documents", APPLICATION_ID))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/corrections", APPLICATION_ID))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get(
                         "/api/v1/staff/loan-applications/{id}/documents/{item}/versions/{version}/content",
@@ -111,6 +124,10 @@ class DocumentCorrectionSecurityTest {
         mockMvc.perform(get("/api/v1/staff-corrections/tasks").with(actor))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/document-review-items").with(actor))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/documents", APPLICATION_ID).with(actor))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/corrections", APPLICATION_ID).with(actor))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get(
                         "/api/v1/loan-applications/{id}/documents/{item}/versions/{version}/content",
@@ -176,6 +193,51 @@ class DocumentCorrectionSecurityTest {
                         .with(user("staff").authorities(
                                 new SimpleGrantedAuthority("document:upload:staff"))))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void grantsNewStaffReadsOnlyToTheirExactPermissions() throws Exception {
+        mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/documents", APPLICATION_ID)
+                        .with(user("reviewer").authorities(
+                                new SimpleGrantedAuthority("document:review"))))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/documents", APPLICATION_ID)
+                        .with(user("customer").authorities(
+                                new SimpleGrantedAuthority("document:read:own"))))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/corrections", APPLICATION_ID)
+                        .with(user("correction-staff").authorities(
+                                new SimpleGrantedAuthority("loan:correction:staff"))))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/corrections", APPLICATION_ID)
+                        .with(user("reader").authorities(
+                                new SimpleGrantedAuthority("loan:read"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void exposesAlreadyReviewedCurrentVersionAsTheNarrowConflictContract() throws Exception {
+        when(currentUserProvider.currentUser()).thenReturn(authenticatedStaff());
+        when(reviewDocumentUseCase.review(any())).thenThrow(new BusinessStateConflictException(
+                "DOCUMENT_ALREADY_REVIEWED", "Document version already reviewed."
+        ));
+
+        mockMvc.perform(post(
+                        "/api/v1/loan-applications/{applicationId}/document-review-items/{itemId}/reviews",
+                        APPLICATION_ID, ITEM_ID)
+                        .with(user("reviewer").authorities(
+                                new SimpleGrantedAuthority("document:review")))
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "documentVersionId": "%s",
+                                  "reviewRequestId": "%s",
+                                  "outcome": "ACCEPT_DOCUMENT"
+                                }
+                                """.formatted(VERSION_ID, UUID.randomUUID())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("DOCUMENT_ALREADY_REVIEWED"))
+                .andExpect(jsonPath("$.message").value("Document version already reviewed."));
     }
 
     private AuthenticatedUser authenticatedCustomer() {

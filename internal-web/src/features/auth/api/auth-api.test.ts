@@ -25,6 +25,14 @@ describe('auth API', () => {
     await expect(refresh()).rejects.toThrow('invalid session')
   })
 
+  it('accepts the UUID-shaped identifiers used by the fictional demo seed', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ...staffResponse,
+      userId: '00000000-0000-0000-0000-000000000302',
+    }), { status: 200 })))
+    await expect(refresh()).resolves.toMatchObject({ userId: '00000000-0000-0000-0000-000000000302' })
+  })
+
   it.each([
     ['userId', { userId: 'not-a-uuid' }],
     ['customerId', { userType: 'CUSTOMER', customerId: 'not-a-uuid' }],

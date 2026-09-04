@@ -194,6 +194,8 @@ The current backend provides a broad set of direct commands, two narrow operatio
 |---|---|---|---|
 | Staff application discovery | `GET /api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20` | Staff `loan:read` | Cross-product safe facts, exact filters, deterministic page envelope |
 | Staff case foundation | `GET /api/v1/staff/loan-applications/{loanApplicationId}` | Staff `loan:read` | Safe header, purpose-limited Customer readiness, and ordered lifecycle transitions only |
+| Staff document evidence | `GET /api/v1/staff/loan-applications/{loanApplicationId}/documents` | `document:review` | Checklist/readiness, exact current version, immutable version history, and safe review history |
+| Staff correction case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/corrections` | `loan:correction:staff` | Latest request, mixed task composition, proof, completion readiness, and current-actor maker-checker evidence |
 | Safe application status | `GET /api/v1/loan-applications/{loanApplicationId}` | Staff `loan:read` | Minimal durable summary; not a case projection |
 | Document-review queue | `GET /api/v1/document-review-items?status=AWAITING_REVIEW&page=0&size=20` | `document:review` | Current versions awaiting review; list has no total or page metadata |
 | Review-authorized content | `GET /api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | `document:review` | Exact known version only; `no-store`, private attachment |
@@ -218,7 +220,7 @@ The current backend provides a broad set of direct commands, two narrow operatio
 ### 7.3 Existing Foundations That Are Not Staff Screens
 
 - Customer-owned application and LoanAccount indexes do not authorize Staff indexing.
-- Customer-owned document checklist reads do not provide a Staff checklist or document-history projection.
+- Customer-owned document checklist reads remain separate from the dedicated Staff document checklist/history projection.
 - Customer approved-offer reads do not provide a Staff approval-evidence view.
 - `audit:read` has no generic audit-query controller.
 - `customer:read` does not currently expose a Staff Customer-review endpoint.
@@ -258,11 +260,9 @@ The CP2 Staff case contract is an authorized, PII-minimized foundation that comp
 - purpose-limited Customer readiness;
 - safe ordered LoanApplication lifecycle transitions.
 
-Later operational sections still require richer purpose-owned projections for:
+CP3 adds purpose-owned document and correction projections. Later operational sections still require richer projections for:
 
 - product-specific verification summary and exact current cycle identity where an action requires it;
-- document checklist/readiness summary, current version identities, review outcomes, and permissible content links;
-- current correction request, responsibilities, proof state, and safe instructions;
 - current review cycle and action eligibility;
 - latest recommendation and decision evidence required for independent review;
 - current offer/contract summary needed for contract operations without using Customer-only reads;
@@ -552,12 +552,12 @@ Generate a fresh `X-Request-ID` for each HTTP attempt unless the transport repla
 
 - Create the UUID when the operator begins the final submission attempt, not on every render.
 - Keep the same UUID and exactly the same logical payload for a retry after timeout, lost response, refresh, or reconnect.
-- A changed amount, reference, value date, outcome, version, reason, task selection, or other semantic input is a new logical operation and receives a new UUID.
+- A changed amount, reference, value date, outcome, version, reason, task selection, or other semantic input receives a new UUID only when no prior operation result for that resource remains unresolved. While a result is unresolved, changed semantics are blocked until authoritative reconciliation. A flow that offers explicit local recovery abandonment must complete that separate action before accepting new semantics.
 - Where backend replay includes actor identity, retry uses the same authenticated actor. Another Staff member does not inherit the operation identity.
 - Disable duplicate submits while a request is in flight, but do not confuse button disabling with durable idempotency.
-- Persist an unresolved operation identity only in narrowly scoped session storage when survival across refresh is necessary. Store the minimum safe payload digest and resource identity, never the external reference, notes, full financial payload, or revealed data.
+- Persist an unresolved operation identity only in narrowly scoped session storage when survival across refresh is necessary. Bind the recovery envelope to a digest of the Staff actor and sorted authority set so same-authority restoration preserves it while logout, session expiry, actor changes, and authority changes clear it. Store the binding digest, minimum safe payload digest, and resource identity, never access or refresh tokens, role/permission values, external references, notes, full financial payloads, file bytes, or revealed data.
 - After refresh, a digest-only record can support “Check result” but cannot reconstruct a sensitive payload. Retry is allowed only after the operator re-enters or reselects the exact inputs and the client verifies that their digest matches the unresolved operation. Files must be reselected; the browser must not persist their bytes.
-- Remove resolved operation records after authoritative reconciliation or an explicit operator abandonment of an unsubmitted draft.
+- Remove resolved operation records after authoritative reconciliation. If a flow offers explicit local abandonment, it removes only recovery metadata, never claims the server operation failed, and must precede any new semantics for the same resource.
 - `409 IDEMPOTENCY_KEY_REUSED` is not a prompt to generate a new UUID automatically. Preserve evidence, show the conflict, and require reconciliation.
 - When the backend defines exact replay after later state changes, recovery remains available even if the current state would reject a new operation. Staff Web labels this as replay of prior evidence and never substitutes a new UUID to bypass current state.
 
@@ -1379,8 +1379,6 @@ An `OperationStatusPanel` is client recovery state, not audit evidence.
 | Product verification read/history | UCL/Collateral recovery and evidence review; Salary Advance snapshot | Current exact cycle, immutable outcome, permitted restricted facts |
 | Review-cycle and recommendation read | review start/recommendation recovery; Approver evidence | Current cycle, latest immutable recommendation, actor separation evidence |
 | Approval decision read/history | decision recovery and case history | Latest durable decision and safe outcome facts |
-| Staff document checklist/version projection | document workspace and correction proof | Current checklist/readiness, current version discovery, authorized review evidence |
-| Expanded correction projection | mixed-task workspace and resubmission readiness | Current request, all responsible parties, proof and completion state |
 | Contract/disbursement operational indexes | Accounting discovery | Current version/status/readiness blockers and ready cases |
 | Staff LoanAccount/servicing index | repayment, overdue, settlement, closure discovery | Authorized balances/states with server paging/filtering |
 | Expanded action histories | action timelines and reliable no-UUID reconciliation | Ordered safe immutable evidence beyond CP2 LoanApplication transitions |
@@ -1486,6 +1484,8 @@ Staff FE checkpoints deliver the Staff Web feature area inside `internal-web/`. 
 - accept, waive, replacement, Staff upload when authorized, task completion, and resubmission;
 - exact operation identities, stale-version handling, proof reconciliation, and correction maker-checker;
 - complete the Staff checklist/correction projection dependencies needed by the workspace.
+
+The CP3 routes and their purpose-limited read contracts are executable in Internal Web. Later product verification, review, decision, contract, disbursement, and servicing checkpoints remain separate.
 
 ### Staff FE-CP4 — Product Verification and Loan Officer Review
 

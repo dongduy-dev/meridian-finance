@@ -139,6 +139,12 @@ public class ReviewDocumentService implements ReviewDocumentUseCase {
                     "Only the current immutable document version can be reviewed."
             );
         }
+        if (item.currentReviewDecisionId() != null) {
+            throw new BusinessStateConflictException(
+                    "DOCUMENT_ALREADY_REVIEWED",
+                    "Document version already reviewed."
+            );
+        }
 
         DocumentReviewDecision decision = documentRepository.saveReviewDecision(new DocumentReviewDecision(
                 UUID.randomUUID(),

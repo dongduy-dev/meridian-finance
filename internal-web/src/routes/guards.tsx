@@ -22,6 +22,6 @@ export function ProtectedStaffRoute() {
   const { state } = useAuth()
   const location = useLocation()
   if (state.status === 'checking') return <SessionStatusScreen />
-  if (state.status === 'anonymous') return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  if (state.status === 'anonymous') return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
   return <Outlet />
 }

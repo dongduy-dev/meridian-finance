@@ -29,7 +29,36 @@ export const STAFF_APPLICATION_CASE_ROUTE = {
   requiredPermissions: ['loan:read'],
 } as const satisfies StaffRouteDefinition
 
-export const STAFF_ROUTES = [STAFF_HOME_ROUTE, STAFF_APPLICATIONS_ROUTE] as const satisfies readonly StaffRouteDefinition[]
+export const STAFF_DOCUMENT_QUEUE_ROUTE = {
+  path: '/staff/work/documents',
+  label: 'Document review',
+  requiredPermissions: ['document:review'],
+} as const satisfies StaffRouteDefinition
+
+export const STAFF_CORRECTION_QUEUE_ROUTE = {
+  path: '/staff/work/corrections',
+  label: 'Corrections',
+  requiredPermissions: ['loan:correction:staff'],
+} as const satisfies StaffRouteDefinition
+
+export const STAFF_DOCUMENT_CASE_ROUTE = {
+  path: '/staff/applications/:loanApplicationId/documents',
+  label: 'Application documents',
+  requiredPermissions: ['document:review'],
+} as const satisfies StaffRouteDefinition
+
+export const STAFF_CORRECTION_CASE_ROUTE = {
+  path: '/staff/applications/:loanApplicationId/corrections',
+  label: 'Application corrections',
+  requiredPermissions: ['loan:correction:staff'],
+} as const satisfies StaffRouteDefinition
+
+export const STAFF_ROUTES = [
+  STAFF_HOME_ROUTE,
+  STAFF_APPLICATIONS_ROUTE,
+  STAFF_DOCUMENT_QUEUE_ROUTE,
+  STAFF_CORRECTION_QUEUE_ROUTE,
+] as const satisfies readonly StaffRouteDefinition[]
 
 export function canAccessStaffRoute(actor: StaffActor, route: StaffRouteDefinition): boolean {
   return hasAnyPermission(actor, route.requiredPermissions)

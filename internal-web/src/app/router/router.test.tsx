@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import { RouterProvider } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuthResponse } from '@/features/auth/api/auth-api'
 import * as authApi from '@/features/auth/api/auth-api'
 import { AuthProvider } from '@/features/auth/model/auth-context'
@@ -38,6 +38,7 @@ function renderRoute(path: string) {
 
 describe('internal router access contract', () => {
   beforeEach(() => vi.clearAllMocks())
+  afterEach(() => vi.unstubAllGlobals())
 
   it('redirects an anonymous direct /staff visit to login and focuses its deferred heading', async () => {
     vi.mocked(authApi.refresh).mockRejectedValue(new ApiError(401, 'INVALID_REFRESH_TOKEN', 'required', '/auth/refresh', 'now'))
@@ -84,6 +85,33 @@ describe('internal router access contract', () => {
     const router = renderRoute('/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')
     expect(await screen.findByRole('heading', { name: 'No operational access' })).toBeVisible()
     expect(router.state.location.pathname).toBe('/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')
+  })
+
+  it('preserves a safe exact-evidence query string through the authentication redirect', async () => {
+    vi.mocked(authApi.refresh).mockRejectedValue(new ApiError(401, 'INVALID_REFRESH_TOKEN', 'required', '/auth/refresh', 'now'))
+    const path = '/staff/applications/11111111-1111-4111-8111-111111111111/documents?checklistItemId=22222222-2222-4222-8222-222222222222&documentVersionId=44444444-4444-4444-8444-444444444444'
+    const router = renderRoute(path)
+    await screen.findByRole('heading', { name: 'Staff sign in' })
+    expect(router.state.location.state).toEqual({ from: path })
+  })
+
+  it.each([
+    ['/staff/work/documents', ['document:review'], 'Document review'],
+    ['/staff/work/corrections', ['loan:correction:staff'], 'Staff corrections'],
+  ] as const)('allows %s only through its exact capability', async (path, permissions, heading) => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff([...permissions]))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', { status: 200 })))
+    renderRoute(path)
+    expect(await screen.findByRole('heading', { name: heading })).toBeVisible()
+  })
+
+  it.each([
+    ['/staff/work/documents', ['document:review:all']],
+    ['/staff/work/corrections', ['loan:correction']],
+  ] as const)('does not grant CP3 route %s through a permission prefix', async (path, permissions) => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff([...permissions]))
+    renderRoute(path)
+    expect(await screen.findByRole('heading', { name: 'No operational access' })).toBeVisible()
   })
 
   it('rejects a Customer-shaped session before it can reach Staff routes', async () => {

@@ -16,9 +16,9 @@ export function NoOperationalAccessPage() {
       </div>
       <Alert variant="warning">
         <LockKeyhole aria-hidden="true" />
-        <AlertTitle>No supported staff capability</AlertTitle>
+        <AlertTitle>Access is not available</AlertTitle>
         <AlertDescription>
-          Your account is authenticated as {state.actor.email}, but it does not hold a capability supported by this internal workspace. Contact a Meridian administrator if this is unexpected.
+          Your account is authenticated as {state.actor.email}, but it does not hold the capability required for this Staff workspace. Contact a Meridian administrator if this is unexpected.
         </AlertDescription>
       </Alert>
       <Card>

@@ -165,6 +165,8 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/loan-applications/{loanApplicationId}` | Customer `loan:read:own` or Staff `loan:read` | Return a safe durable LoanApplication status projection. |
 | GET | `/api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20` | Staff with `loan:read` | Discover applications across products through a safe, deterministic page. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}` | Staff with `loan:read` | Return the purpose-limited Staff case header, Customer readiness, and ordered lifecycle evidence. |
+| GET | `/api/v1/staff/loan-applications/{loanApplicationId}/documents` | Staff with `document:review` | Return the Staff-safe submission checklist, immutable version history, and safe review history. |
+| GET | `/api/v1/staff/loan-applications/{loanApplicationId}/corrections` | Staff with `loan:correction:staff` | Return the latest correction request, mixed task composition, proof state, and current-actor maker-checker evidence. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/cancel` | Customer with `loan:cancel:own` | Cancel an owned Salary Advance or UCL from `RETURNED_FOR_REVISION`; Salary Advance releases its reservation exactly once, while UCL has no exposure effect. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start` | Staff with `loan:review` | Start manual UCL verification after document processing readiness. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete` | Staff with `loan:review` | Complete manual UCL verification as `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION`. |
@@ -950,6 +952,16 @@ The response contains checklist ID, application ID, `stage`, aggregate `uploadCo
 
 The projection excludes review-decision IDs, reviewer identity, restricted notes and waiver rationale, storage keys/paths, hashes, audit IDs, historical versions, and document content. An empty Salary Advance submission checklist is both upload-complete and processing-ready.
 
+The Staff document projection is:
+
+```text
+GET /api/v1/staff/loan-applications/{loanApplicationId}/documents
+```
+
+It requires exact `document:review` authority and does not require `loan:read`. The response contains the application ID and safe status, checklist stage and readiness, and ordered checklist items. Each item contains its requirement and evidence status, readiness, nullable current version, deterministic version history, and deterministic safe review history. Version metadata contains document-version ID, version number, original filename, detected MIME type, byte size, and upload time. Review history contains only the reviewed version ID, outcome, optional controlled waiver reason, and decision time.
+
+The Staff projection excludes restricted Staff notes, reviewer and uploader User IDs, storage references, hashes, request/operation IDs, audit IDs, document content, and Customer identity or contact data. A missing checklist returns `404 DOCUMENT_CHECKLIST_NOT_FOUND`. Inconsistent current-version or review associations fail with `409 SYSTEM_STATE_CONFLICT` rather than returning partial evidence.
+
 Upload is multipart with:
 
 - `uploadRequestId`
@@ -964,9 +976,21 @@ Review targets the exact `documentVersionId` and supports:
 - `WAIVE_DOCUMENT`
 - `REQUEST_REPLACEMENT`
 
-Waiver requires `document:waive` and an allowed waiver code. Replacement requires `DOCUMENT_REPLACEMENT_REQUIRED` plus a Customer-visible instruction. Reviewing a non-current version returns `409 STALE_DOCUMENT_VERSION`.
+Waiver requires `document:waive` and an allowed waiver code. Replacement requires `DOCUMENT_REPLACEMENT_REQUIRED` plus a Customer-visible instruction. Only an unreviewed authoritative current version is actionable. Reviewing a non-current version returns `409 STALE_DOCUMENT_VERSION`; a new logical review against an already-reviewed current version returns `409 DOCUMENT_ALREADY_REVIEWED`. An exact replay with the original `reviewRequestId` and logical payload still returns the existing immutable decision, while reuse of that request ID with different content remains `409 IDEMPOTENCY_KEY_REUSED`.
 
 Content responses stream only the authorized immutable version and include attachment, `Cache-Control: no-store, private`, and `X-Content-Type-Options: nosniff`.
+
+### 5.6 Staff correction case and proof
+
+```text
+GET /api/v1/staff/loan-applications/{loanApplicationId}/corrections
+```
+
+The endpoint requires exact `loan:correction:staff` authority and does not require `loan:read`. It returns safe Loan-owned application number, product, and status facts plus a nullable latest correction request. No correction is an ordinary `200` response with `correctionRequest: null`.
+
+A correction request contains its ID, status, controlled reason, creation time, `makerCheckerBlockedForCurrentActor`, `allTasksComplete`, `staffResubmissionReady`, and tasks in deterministic request sequence. Each task contains its ID, responsibility, status, scope, optional document/item/baseline identities, controlled reason, Staff instruction only for Staff-owned work, timestamps, and backend-derived `SATISFIED`, `MISSING`, or `NOT_APPLICABLE` proof state.
+
+Loan derives document proof through `LoanDocumentChecklistPort`; it does not access Document persistence. The response excludes the correction creator and completer User IDs, operation IDs, audit IDs, restricted assessment notes, Customer instructions for Customer-owned tasks, and unrelated Customer data. `404 LOAN_APPLICATION_NOT_FOUND` represents a missing application. The command endpoints remain authoritative when state changes after the read.
 
 ---
 

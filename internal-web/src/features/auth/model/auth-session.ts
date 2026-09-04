@@ -1,9 +1,10 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { apiRequest, ApiError } from '@/lib/api'
+import { apiRequest, ApiError, type ApiRequestOptions } from '@/lib/api'
 import { clearAccessToken, getAccessToken, setAccessToken } from './access-credential'
 import type { StaffActor } from './access-control'
 import type { AuthResponse } from '../api/auth-api'
 import * as authApi from '../api/auth-api'
+import { bindUnresolvedOperations, clearUnresolvedOperations } from '@/lib/operation/unresolved-operation'
 
 export type AnonymousReason = 'INTERNAL_ACCESS_REQUIRED' | 'SESSION_EXPIRED'
 export type SessionState =
@@ -53,6 +54,7 @@ export class AuthSessionManager {
 
   private clearPrivateState(reason?: AnonymousReason): void {
     clearAccessToken()
+    clearUnresolvedOperations()
     this.queryClient.clear()
     this.publish({ status: 'anonymous', epoch: this.state.epoch + 1, reason })
   }
@@ -76,7 +78,10 @@ export class AuthSessionManager {
       permissions: [...response.permissions],
     }
     const previousActor = this.state.status === 'authenticated' ? this.state.actor : undefined
-    if (!previousActor || !hasSameAuthority(previousActor, actor)) this.queryClient.clear()
+    if (!previousActor || !hasSameAuthority(previousActor, actor)) {
+      this.queryClient.clear()
+    }
+    await bindUnresolvedOperations(actor)
     setAccessToken(response.accessToken)
     this.publish({ status: 'authenticated', actor, epoch: this.state.epoch + 1 })
     return actor
@@ -116,7 +121,7 @@ export class AuthSessionManager {
     }
   }
 
-  async protectedRequest<T>(path: string, options: RequestInit & { body?: unknown } = {}): Promise<T> {
+  async protectedRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
     if (!getAccessToken()) {
       try {
         await this.refresh()

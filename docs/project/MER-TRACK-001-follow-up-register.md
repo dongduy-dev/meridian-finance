@@ -782,11 +782,13 @@ Resolved scope:
 - Frontend product-policy presentation and Customer-safe Partner verification selection supporting the lending reads.
 - Staff application paging and exact product/status filtering with deterministic ordering.
 - Staff case header, purpose-limited Customer readiness, and immutable ordered LoanApplication transition history.
+- Staff submission-checklist, current-version, immutable version-history, and safe review-history projection for document operations.
+- Staff correction case projection with mixed task composition, backend-derived proof state, resubmission readiness, and current-actor maker-checker evidence.
 
 Still deferred:
 
-- Specialized Staff work queues and direct application-number lookup beyond the CP2 application index.
-- Consolidated product-verification, document, correction, review, decision, contract, and servicing evidence/history.
+- Specialized Staff work queues beyond the executable document-review and Staff-correction queues, plus direct application-number lookup.
+- Consolidated product-verification, review, decision, contract, and servicing evidence/history beyond the CP3 document/correction projections.
 - Broader Dashboard aggregation beyond the narrow Customer indexes and action facts.
 - Additional workflow command suggestions beyond the proven Customer action categories.
 - Richer product-specific projections where the common reads are insufficient.
