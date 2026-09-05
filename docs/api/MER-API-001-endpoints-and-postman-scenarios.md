@@ -167,6 +167,8 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}` | Staff with `loan:read` | Return the purpose-limited Staff case header, Customer readiness, and ordered lifecycle evidence. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/documents` | Staff with `document:review` | Return the Staff-safe submission checklist, immutable version history, and safe review history. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/corrections` | Staff with `loan:correction:staff` | Return the latest correction request, mixed task composition, proof state, and current-actor maker-checker evidence. |
+| GET | `/api/v1/staff/loan-applications/{loanApplicationId}/verification` | Staff with `loan:review` | Return purpose-limited product-verification evidence, readiness, backend-derived action availability, and authoritative current/history cycles. |
+| GET | `/api/v1/staff/loan-applications/{loanApplicationId}/review` | Staff with `loan:review` | Return purpose-limited review-start readiness and the latest Loan-owned review cycle. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/cancel` | Customer with `loan:cancel:own` | Cancel an owned Salary Advance or UCL from `RETURNED_FOR_REVISION`; Salary Advance releases its reservation exactly once, while UCL has no exposure effect. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start` | Staff with `loan:review` | Start manual UCL verification after document processing readiness. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete` | Staff with `loan:review` | Complete manual UCL verification as `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION`. |
@@ -543,6 +545,27 @@ The Staff index accepts optional exact `productCode` and `status` filters. `page
 Each index item is limited to those eight durable application facts. The endpoint does not return Customer identity or contact data, bank data, Partner salary facts, restricted notes, document content, external references, operation or audit identifiers, actor identifiers, or inferred next actions.
 
 The consolidated Staff case response contains the same eight application facts plus `customerReadiness` and `lifecycleHistory`. `customerReadiness` contains only `active`, `profileComplete`, `hasPrimaryActiveBankAccount`, and `verificationStatus`. Loan obtains that purpose-limited snapshot through its Customer readiness port; it does not read Customer persistence. This is not a general Staff Customer-profile contract and requires no `customer:read` expansion.
+
+#### 4.2.3 Staff product-verification and review reads
+
+```text
+GET /api/v1/staff/loan-applications/{loanApplicationId}/verification
+GET /api/v1/staff/loan-applications/{loanApplicationId}/review
+Authorization: Bearer <staff-token with exact loan:review>
+```
+
+Both reads are independent of the broader `loan:read` case projection. They require a Staff-shaped principal and the exact `loan:review` authority at both controller and application-service boundaries. A role name, a permission prefix, `approval:recommend`, or `loan:read` alone does not grant either read.
+
+The verification response contains the safe common application facts, upload and processing readiness, backend-derived `startAvailable` and `completeAvailable` flags, and product-specific evidence:
+
+- Salary Advance returns the immutable application-owned verification sequence, outcomes, limit snapshots, and verification time. It never exposes a manual verification action or live Partner values.
+- UCL returns the authoritative current cycle and all immutable cycles ordered by verification sequence.
+- Collateral returns the same ordered cycle evidence plus the single application-owned Collateral assessment snapshot. No LTV or browser-derived eligibility value is returned.
+- UCL and Collateral may return current document-version correction targets limited to the product's supported evidence vocabulary. Each target carries its checklist item, document type, requirement status, and current immutable version ID so the client does not accept free-form correction identifiers.
+
+The review response contains the same safe common facts, document readiness, the latest product-verification result, backend-derived product readiness, `reviewStartAvailable`, and the latest Loan-owned review cycle when one exists. It deliberately excludes recommendation and Approver-decision evidence; those remain a later contract.
+
+Neither response exposes Customer PII, raw document contents, reviewer identities, assessment notes, internal operation IDs, or audit payloads. Reads return `LOAN_APPLICATION_NOT_FOUND` for an absent application, product-specific verification-required conflicts for missing authoritative verification evidence, and `SYSTEM_STATE_CONFLICT` for inconsistent application-owned evidence. Clients use these GETs to reconcile the no-business-UUID verification and review-start commands and must not automatically replay a POST after an unknown network result.
 
 `lifecycleHistory` preserves Loan's authoritative transition sequence. Each item contains nullable `fromStatus`, `toStatus`, `action`, `actorType`, and `occurredAt`. It omits transition and persistence IDs, sequence internals, operation IDs, actor User IDs, audit IDs, reasons, restricted assessment or internal notes, and external references. The read does not synthesize history, infer action eligibility, or mutate application, history, audit, or Customer state.
 
