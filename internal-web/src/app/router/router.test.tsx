@@ -87,6 +87,28 @@ describe('internal router access contract', () => {
     expect(router.state.location.pathname).toBe('/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')
   })
 
+  it.each([
+    '/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/verification',
+    '/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/review',
+  ])('allows the CP4 direct route %s with loan:review and without loan:read', async (path) => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff(['loan:review']))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 500 })))
+    const router = renderRoute(path)
+    await screen.findByRole('heading', { name: /product verification|Loan Officer review/i })
+    expect(router.state.location.pathname).toBe(path)
+    expect(screen.queryByRole('heading', { name: 'No operational access' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    'loan:read',
+    'approval:recommend',
+    'loan:review:all',
+  ])('does not grant CP4 direct-route access through %s', async (permission) => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff([permission]))
+    renderRoute('/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/verification')
+    expect(await screen.findByRole('heading', { name: 'No operational access' })).toBeVisible()
+  })
+
   it('preserves a safe exact-evidence query string through the authentication redirect', async () => {
     vi.mocked(authApi.refresh).mockRejectedValue(new ApiError(401, 'INVALID_REFRESH_TOKEN', 'required', '/auth/refresh', 'now'))
     const path = '/staff/applications/11111111-1111-4111-8111-111111111111/documents?checklistItemId=22222222-2222-4222-8222-222222222222&documentVersionId=44444444-4444-4444-8444-444444444444'

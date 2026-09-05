@@ -44,6 +44,7 @@ import com.meridian.platform.loan.application.port.in.PrepareLoanContractUseCase
 import com.meridian.platform.loan.application.port.in.QueryApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.QueryContractReadinessUseCase;
 import com.meridian.platform.loan.application.port.in.QueryOwnCorrectionTasksUseCase;
+import com.meridian.platform.loan.application.port.in.QueryStaffLoanApplicationVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.RespondToApprovedOfferUseCase;
 import com.meridian.platform.loan.application.port.in.ResubmitOwnCorrectionUseCase;
 import com.meridian.platform.loan.application.port.in.ResubmitStaffCorrectionUseCase;
@@ -151,6 +152,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     @Autowired private RecordRepaymentUseCase recordRepaymentUseCase;
     @Autowired private CloseLoanAccountUseCase closeLoanAccountUseCase;
     @Autowired private QueryOwnCorrectionTasksUseCase correctionTaskQuery;
+    @Autowired private QueryStaffLoanApplicationVerificationUseCase staffVerificationQuery;
     @Autowired private CompleteOwnCorrectionTaskUseCase correctionTaskCompletion;
     @Autowired private ResubmitOwnCorrectionUseCase correctionResubmission;
     @Autowired private CompleteStaffCorrectionTaskUseCase staffTaskCompletion;
@@ -967,6 +969,18 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 applicationId));
 
         useLoanOfficer();
+        var verificationRead = staffVerificationQuery.query(applicationId);
+        var productRead = (com.meridian.platform.loan.application.dto
+                .StaffLoanApplicationVerificationDto.ManualVerificationDto)
+                verificationRead.productVerification();
+        assertEquals(List.of(1, 2), productRead.history().stream()
+                .map(item -> item.verificationSequence()).toList());
+        assertEquals("REQUIRES_MORE_INFORMATION",
+                productRead.history().getFirst().productVerificationResult());
+        assertEquals("PENDING_MANUAL_REVIEW",
+                productRead.currentCycle().productVerificationResult());
+        assertEquals(3, verificationRead.correctionTargets().size());
+
         verificationUseCase.startManualVerification(applicationId);
         verificationUseCase.completeManualVerification(
                 applicationId,

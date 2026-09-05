@@ -4,6 +4,7 @@ import com.meridian.platform.loan.application.port.out.CollateralLoanVerificatio
 import com.meridian.platform.loan.domain.model.collateral.CollateralLoanVerification;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,6 +29,16 @@ public class CollateralLoanVerificationRepositoryAdapter
     public Optional<CollateralLoanVerification> findLatestByLoanApplicationId(UUID loanApplicationId) {
         return repository.findFirstByLoanApplicationIdOrderByVerificationSequenceDesc(loanApplicationId)
                 .map(CollateralLoanVerificationJpaEntity::toDomain);
+    }
+
+    @Override
+    public List<CollateralLoanVerification> findAllByLoanApplicationIdOrderByVerificationSequenceAsc(
+            UUID loanApplicationId
+    ) {
+        return repository.findAllByLoanApplicationIdOrderByVerificationSequenceAsc(loanApplicationId)
+                .stream()
+                .map(CollateralLoanVerificationJpaEntity::toDomain)
+                .toList();
     }
 
     @Override

@@ -53,6 +53,18 @@ export const STAFF_CORRECTION_CASE_ROUTE = {
   requiredPermissions: ['loan:correction:staff'],
 } as const satisfies StaffRouteDefinition
 
+export const STAFF_VERIFICATION_CASE_ROUTE = {
+  path: '/staff/applications/:loanApplicationId/verification',
+  label: 'Product verification',
+  requiredPermissions: ['loan:review'],
+} as const satisfies StaffRouteDefinition
+
+export const STAFF_REVIEW_CASE_ROUTE = {
+  path: '/staff/applications/:loanApplicationId/review',
+  label: 'Loan Officer review',
+  requiredPermissions: ['loan:review'],
+} as const satisfies StaffRouteDefinition
+
 export const STAFF_ROUTES = [
   STAFF_HOME_ROUTE,
   STAFF_APPLICATIONS_ROUTE,

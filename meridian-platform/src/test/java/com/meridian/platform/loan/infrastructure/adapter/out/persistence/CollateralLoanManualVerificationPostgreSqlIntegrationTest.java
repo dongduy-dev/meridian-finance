@@ -33,6 +33,8 @@ import com.meridian.platform.loan.application.dto.CustomerCorrectionTaskDto;
 import com.meridian.platform.loan.application.port.in.CompleteOwnCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.ManageCollateralLoanVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.QueryOwnCorrectionTasksUseCase;
+import com.meridian.platform.loan.application.port.in.QueryStaffLoanApplicationReviewUseCase;
+import com.meridian.platform.loan.application.port.in.QueryStaffLoanApplicationVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.ResubmitOwnCorrectionUseCase;
 import com.meridian.platform.loan.application.port.in.StartCollateralLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
@@ -117,6 +119,8 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
     @Autowired private SubmitApprovalDecisionUseCase decisionUseCase;
     @Autowired private ManageOwnCustomerBankAccountUseCase bankAccountUseCase;
     @Autowired private QueryOwnCorrectionTasksUseCase correctionTaskQuery;
+    @Autowired private QueryStaffLoanApplicationVerificationUseCase staffVerificationQuery;
+    @Autowired private QueryStaffLoanApplicationReviewUseCase staffReviewQuery;
     @Autowired private CompleteOwnCorrectionTaskUseCase correctionTaskCompletion;
     @Autowired private ResubmitOwnCorrectionUseCase correctionResubmission;
     @Autowired private JdbcTemplate jdbc;
@@ -165,6 +169,10 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
         assertEquals("SUBMITTED", status(ready.applicationId()));
 
         assertEquals("UNDER_REVIEW", reviewStartUseCase.startReview(ready.applicationId()).status());
+        var reviewRead = staffReviewQuery.query(ready.applicationId());
+        assertEquals("ACTIVE", reviewRead.currentReviewCycle().status());
+        assertEquals("UNDER_REVIEW", reviewRead.applicationStatus());
+        assertTrue(!reviewRead.reviewStartAvailable());
         recommendationUseCase.submitReviewRecommendation(
                 ready.applicationId(),
                 new ReviewRecommendationRequest(ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null)
@@ -357,6 +365,17 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
                 + "FROM collateral_loan_verifications WHERE id = ?", firstVerificationId));
 
         useLoanOfficer();
+        var verificationRead = staffVerificationQuery.query(ready.applicationId());
+        var productRead = (com.meridian.platform.loan.application.dto
+                .StaffLoanApplicationVerificationDto.ManualVerificationDto)
+                verificationRead.productVerification();
+        assertEquals(List.of(1, 2), productRead.history().stream()
+                .map(item -> item.verificationSequence()).toList());
+        assertEquals(latestVerificationId, productRead.currentCycle().verificationId());
+        assertEquals("CAR", productRead.collateral().collateralType());
+        assertEquals(ready.checklistItemId(), verificationRead.correctionTargets()
+                .getFirst().checklistItemId());
+
         BusinessStateConflictException stale = assertThrows(
                 BusinessStateConflictException.class,
                 () -> verificationUseCase.completeManualVerification(

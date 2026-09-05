@@ -942,9 +942,9 @@ Opening a confirmation freezes only the displayed review snapshot. Submission st
 
 | Product | Current backend fact | Staff Web implication |
 |---|---|---|
-| Salary Advance | Product verification is created during submission from Partner/employment evidence; there is no separate Staff verification command | Show a Staff-safe immutable summary only when a new case projection exposes it; do not manufacture a verification task |
-| UCL | Loan Officer can start and complete manual verification with `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION` | Needs current-cycle/history read before production UI because start/complete have no client UUID and the response is too narrow for robust recovery |
-| Collateral | Loan Officer starts numbered verification, receives restricted Collateral facts, and completes the exact `expectedVerificationId` | Keep the assessment snapshot and cycle ID together; stale ID requires refetch and review; a queryable latest cycle is still needed for recovery |
+| Salary Advance | Product verification is created during submission from Partner/employment evidence; there is no separate Staff verification command | The executable CP4 projection shows the immutable application-owned summary and no manual action or live Partner value |
+| UCL | Loan Officer can start and complete manual verification with `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION` | The executable CP4 projection returns the current cycle and ordered history for action gating and lost-response reconciliation |
+| Collateral | Loan Officer starts numbered verification, receives restricted Collateral facts, and completes the exact `expectedVerificationId` | The executable CP4 projection keeps the assessment snapshot and authoritative cycle together; a stale ID preserves the form, refetches, disables action, and requires explicit re-review |
 
 Verification outcomes are not generic approval decisions. The UI keeps product verification, Loan Officer recommendation, and Approver decision visibly separate.
 
@@ -984,7 +984,7 @@ The task workspace shows responsible party, scope, required document/item, basel
 
 ### 24.1 Start Review
 
-The Loan Officer sees authoritative verification, document readiness, active-correction absence, and current status before “Start review.” The command has no body or business UUID. A production UI therefore requires a queryable active review-cycle projection for lost-response reconciliation.
+The Loan Officer sees authoritative verification, document readiness, and current status before “Start review.” The CP4 review projection supplies backend-derived readiness and the latest Loan-owned review cycle. The command has no body or business UUID, so the workspace reconciles an unknown response through that read and never automatically retries the POST.
 
 The same Loan Officer may complete UCL or Collateral verification and start review. This does not weaken the later Approver maker-checker rule.
 
@@ -1196,12 +1196,12 @@ Routes are conceptual implementation targets. “API dependency” means the rou
 | `/staff/work/contracts` | Contract preparation/readiness | API dependency |
 | `/staff/work/disbursements` | Ready external-transfer confirmations | API dependency |
 | `/staff/work/servicing` | Active/overdue/settled operational accounts | API dependency |
-| `/staff/applications` | Staff application search/filter | API dependency |
-| `/staff/applications/:loanApplicationId` | Case overview | API dependency beyond minimal status read |
-| `/staff/applications/:loanApplicationId/verification` | Product verification | API dependency for authoritative read/recovery |
-| `/staff/applications/:loanApplicationId/documents` | Document evidence/review | Partially executable; Staff checklist/history dependency |
-| `/staff/applications/:loanApplicationId/corrections` | Correction tasks/proof/resubmission | Partially executable; expanded case dependency |
-| `/staff/applications/:loanApplicationId/review` | Review and recommendation | API dependency for durable read/recovery |
+| `/staff/applications` | Staff application search/filter | Executable |
+| `/staff/applications/:loanApplicationId` | Case overview | Executable with purpose-limited readiness and lifecycle history |
+| `/staff/applications/:loanApplicationId/verification` | Product verification | Executable with `loan:review`; does not require `loan:read` |
+| `/staff/applications/:loanApplicationId/documents` | Document evidence/review | Executable |
+| `/staff/applications/:loanApplicationId/corrections` | Correction tasks/proof/resubmission | Executable |
+| `/staff/applications/:loanApplicationId/review` | Review start and current cycle | Executable with `loan:review`; recommendation remains CP5 |
 | `/staff/applications/:loanApplicationId/decision` | Independent decision | API dependency for recommendation/decision evidence |
 | `/staff/applications/:loanApplicationId/contract` | Current contract/readiness | Direct known-ID reads executable; discovery/case dependency |
 | `/staff/applications/:loanApplicationId/disbursement` | Reveal and disbursement | Commands executable; discovery/case dependency |
@@ -1219,7 +1219,7 @@ The current servicing APIs are application-scoped, so routes retain `loanApplica
 |---|---|---|---|---|
 | Document work | Loan Officer with `document:review`; waiver also needs `document:waive` | Document review queue, content, and review endpoints | Inspect and decide the exact current version | `AWAITING_REVIEW`; Loan Officer owns review, Back-Office Admin may own Staff-task upload only with `document:upload:staff` |
 | Correction work | Loan Officer with `loan:correction:staff`; uploader also needs `document:upload:staff` | Staff correction queue, task completion, upload, and resubmission endpoints | Satisfy Staff proof and return an eligible request to workflow | `OPEN`, proof incomplete/complete, mixed work incomplete, resubmitted; backend owns maker-checker |
-| Verification and review | Loan Officer with `loan:review` and `approval:recommend` | Product-verification, review-start, and recommendation endpoints plus required new reads | Verify product evidence, start review, submit recommendation | Submitted/pending verification, verified/failed/more information, under review; Loan Officer acts, Approver does not verify |
+| Verification and review | Loan Officer with `loan:review`; recommendation later also needs `approval:recommend` | Purpose-limited verification/review reads and existing verification/review-start commands; recommendation remains CP5 | Verify product evidence and start review; no recommendation control in CP4 | Submitted/pending verification, verified/failed/more information, under review; Loan Officer acts, Approver does not verify |
 | Approval | Approver with `approval:decide` | Decision endpoint plus required recommendation/decision reads | Independently approve, reject, return, or request correction | Awaiting decision, customer acceptance pending, rejected, returned; Approver owns final decision, backend owns separation |
 | Contract/readiness | Accounting Officer with `loan:contract:prepare`, `loan:contract:read`, and `loan:disbursement:prepare` | Contract and readiness endpoints | Prepare/regenerate and confirm an eligible contract | Contract pending, acknowledgment missing, ready/not ready, disbursement pending; Accounting owns operations, Customer owns acknowledgment |
 | Disbursement | Accounting Officer with `loan:disburse` | Reveal and disbursement endpoints | Verify destination and record an external transfer | `DISBURSEMENT_PENDING`, ready contract, activated/disbursed; Accounting owns confirmation, external bank remains outside Meridian |
@@ -1485,7 +1485,7 @@ Staff FE checkpoints deliver the Staff Web feature area inside `internal-web/`. 
 - exact operation identities, stale-version handling, proof reconciliation, and correction maker-checker;
 - complete the Staff checklist/correction projection dependencies needed by the workspace.
 
-The CP3 routes and their purpose-limited read contracts are executable in Internal Web. Later product verification, review, decision, contract, disbursement, and servicing checkpoints remain separate.
+The CP3 routes and their purpose-limited read contracts are executable in Internal Web. CP4 product verification and review start are now also executable; recommendation, decision, contract, disbursement, and servicing remain separate later checkpoints.
 
 ### Staff FE-CP4 — Product Verification and Loan Officer Review
 
@@ -1494,6 +1494,8 @@ The CP3 routes and their purpose-limited read contracts are executable in Intern
 - start/complete verification and safe lost-response reconciliation;
 - review start and current review-cycle evidence;
 - product-specific evidence panels without client pricing, LTV, or eligibility rules.
+
+The two CP4 case routes and their purpose-limited `loan:review` read contracts are executable in Internal Web. They operate without `loan:read`, use backend-derived action availability, reconcile no-business-UUID commands through GET without automatic POST retry, keep restricted assessment notes in memory only, and expose no recommendation or Approver-decision controls. Specialized verification/review queues and Loan Officer recommendation remain later scope.
 
 ### Staff FE-CP5 — Recommendation and Independent Decision
 

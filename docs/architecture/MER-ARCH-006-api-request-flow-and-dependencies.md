@@ -321,6 +321,33 @@ Collateral validates and persists one structured asset with type, description, e
 
 UCL verification start and completion acquire the LoanApplication workflow lock, the application row, and the authoritative latest UCL verification row. Completion rechecks Document processing readiness and atomically persists the verification result, LoanApplication transition, status history, PII-safe audit, and any structured `REQUIRES_MORE_INFORMATION` correction. `VERIFIED` opens Loan Officer review, `FAILED` ends the application as `VERIFICATION_FAILED`, and correctable evidence issues use `REQUIRES_MORE_INFORMATION` followed by a linked pending re-verification cycle after resubmission.
 
+### Staff Product-Verification and Review Read Flow
+
+The CP4 reads remain Loan-owned purpose-limited projections. They authorize an exact Staff `loan:review` capability in the web adapter and application service, then assemble only the evidence needed to verify a product or start/reconcile Loan Officer review.
+
+```mermaid
+flowchart LR
+    Client["Staff verification or review workspace"]
+    Controller["Staff Loan read controller"]
+    InPort["Purpose-limited Loan query port"]
+    Service["Repeatable-read Loan query service"]
+    ApplicationRepo["LoanApplication repository"]
+    ProductRepos["Loan-owned verification / Collateral repositories"]
+    ReviewRepo["Loan review-cycle repository"]
+    DocumentPort["LoanDocumentChecklistPort"]
+    DocumentService["DocumentChecklistService"]
+
+    Client --> Controller --> InPort --> Service
+    Service --> ApplicationRepo
+    Service --> ProductRepos
+    Service --> ReviewRepo
+    Service --> DocumentPort --> DocumentService
+```
+
+Loan does not read Document persistence or Customer persistence. Document resolves readiness and current immutable version targets behind `LoanDocumentChecklistPort`. The verification projection orders immutable product cycles by sequence and treats the latest as authoritative; Collateral additionally requires exactly one application-owned assessment snapshot. The review projection reads the latest Loan-owned review cycle and product result. Both reads are advisory presentation evidence: every mutation reacquires its established workflow/application locks and revalidates authoritative state.
+
+Because verification start/completion and review start have no client business UUID, Internal Web never automatically retries their POSTs. After a lost response it performs the corresponding purpose-limited GET and reports only what the refreshed durable state proves. Collateral completion carries the displayed `expectedVerificationId`; a stale conflict preserves the in-memory form, refreshes the latest cycle, and requires an explicit new confirmation.
+
 ---
 
 ## 7. Approval, Review, and Correction Coordination

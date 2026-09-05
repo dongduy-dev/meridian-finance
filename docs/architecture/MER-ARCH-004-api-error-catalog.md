@@ -36,6 +36,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 403 | `ACCESS_DENIED` | Access denied | Use a principal whose role includes the required permission |
 | 403 | `CUSTOMER_CONTEXT_REQUIRED` | Customer context required | Use an authenticated customer-linked token for a customer-owned flow |
 | 403 | `SALARY_ADVANCE_READINESS_ACCESS_DENIED` | Salary Advance readiness access denied | Use an authenticated Customer principal with `loan:submit` |
+| 403 | `LOAN_REVIEW_ACCESS_DENIED` | Loan review access is denied. | Use a Staff principal with the exact `loan:review` permission |
 | 429 | `RATE_LIMIT_EXCEEDED` | Too many requests. | Retry after the number of seconds stated by the `Retry-After` response header |
 
 ---

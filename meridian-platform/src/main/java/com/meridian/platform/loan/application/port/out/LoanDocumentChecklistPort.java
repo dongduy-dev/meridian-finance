@@ -28,6 +28,10 @@ public interface LoanDocumentChecklistPort {
         return new ChecklistReadinessSnapshot(true, isProcessingReady(loanApplicationId));
     }
 
+    default List<CurrentDocumentVersionTargetSnapshot> currentVersionTargets(UUID loanApplicationId) {
+        throw new UnsupportedOperationException("Document correction targets are not supported.");
+    }
+
     default UUID createRequiredItem(
             UUID loanApplicationId,
             DocumentType documentType,
@@ -102,6 +106,14 @@ public interface LoanDocumentChecklistPort {
     record CurrentDocumentVersionSnapshot(
             DocumentType documentType,
             UUID documentVersionId
+    ) {
+    }
+
+    record CurrentDocumentVersionTargetSnapshot(
+            UUID checklistItemId,
+            DocumentType documentType,
+            DocumentRequirementStatus requirementStatus,
+            UUID currentDocumentVersionId
     ) {
     }
 }
