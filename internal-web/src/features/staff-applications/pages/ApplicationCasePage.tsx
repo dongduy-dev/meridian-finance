@@ -135,6 +135,8 @@ export function ApplicationCasePage() {
       <nav aria-label="Case workspace" className="flex gap-2 overflow-x-auto rounded-lg border bg-card p-2">
         <a href="#overview" className="inline-flex min-h-11 items-center rounded-md bg-selected px-4 text-sm font-semibold">Overview</a>
         <a href="#history" className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">History</a>
+        {state.status === 'authenticated' && hasPermission(state.actor, 'loan:review') ? <Link to={`/staff/applications/${loanApplicationId}/verification`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Verification</Link> : null}
+        {state.status === 'authenticated' && hasPermission(state.actor, 'loan:review') ? <Link to={`/staff/applications/${loanApplicationId}/review`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Review</Link> : null}
         {state.status === 'authenticated' && hasPermission(state.actor, 'document:review') ? <Link to={`/staff/applications/${loanApplicationId}/documents`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Documents</Link> : null}
         {state.status === 'authenticated' && hasPermission(state.actor, 'loan:correction:staff') ? <Link to={`/staff/applications/${loanApplicationId}/corrections`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Corrections</Link> : null}
       </nav>
