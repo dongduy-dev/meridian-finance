@@ -7,6 +7,7 @@ import { createTestRouter } from '@/app/router/router'
 import type { AuthResponse } from '@/features/auth/api/auth-api'
 import * as authApi from '@/features/auth/api/auth-api'
 import { AuthProvider } from '@/features/auth/model/auth-context'
+import { staffApplicationKeys } from '@/features/staff-applications/api/queries'
 import * as api from '@/lib/api'
 import { NetworkError } from '@/lib/api'
 import { createQueryClient } from '@/lib/query/query-client'
@@ -50,6 +51,7 @@ describe('Staff review workspace', () => {
   })
 
   it('reconciles a lost review-start response without retrying POST or exposing recommendation controls', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue({ ...staff, permissions: ['loan:review', 'loan:read'] })
     let started = false
     vi.mocked(api.apiRequest).mockImplementation(async (path) => {
       if (String(path).endsWith('/review/start')) {
@@ -59,7 +61,9 @@ describe('Staff review workspace', () => {
       return reviewCase(started)
     })
     const router = createTestRouter([`/staff/applications/${applicationId}/review`])
-    render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
+    const queryClient = createQueryClient()
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+    render(<QueryClientProvider client={queryClient}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
     const user = userEvent.setup()
 
     await user.click(await screen.findByRole('button', { name: 'Start review' }))
@@ -69,7 +73,41 @@ describe('Staff review workspace', () => {
     expect(screen.getByText(/Recommendation and Approver decision are intentionally outside Staff FE-CP4/i)).toBeVisible()
     expect(screen.queryByRole('button', { name: /recommend|approve|reject/i })).not.toBeInTheDocument()
     expect(vi.mocked(api.apiRequest).mock.calls.filter(([path]) => String(path).endsWith('/review/start'))).toHaveLength(1)
-    expect(screen.queryByRole('link', { name: /Application overview/ })).not.toBeInTheDocument()
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: staffApplicationKeys.all })
+    expect(screen.getByRole('link', { name: /Application overview/ })).toBeVisible()
+  })
+
+  it('keeps review start unresolved when reconciliation GET fails and unlocks only after a successful Refresh', async () => {
+    let startPosted = false
+    let authoritativeReadAvailable = false
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      const isStartPost = String(path).endsWith('/review/start')
+        && (options as RequestInit | undefined)?.method === 'POST'
+      if (isStartPost) {
+        startPosted = true
+        throw new NetworkError('connection lost')
+      }
+      if (startPosted && !authoritativeReadAvailable) throw new NetworkError('authoritative read unavailable')
+      return reviewCase(startPosted)
+    })
+    const router = createTestRouter([`/staff/applications/${applicationId}/review`])
+    render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Start review' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm review start' }))
+
+    expect(await screen.findByText(/operation result is still unknown because authoritative state could not be refreshed/i)).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Start review' })).not.toBeInTheDocument()
+    const startPosts = () => vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
+      String(path).endsWith('/review/start') && (options as RequestInit | undefined)?.method === 'POST')
+    expect(startPosts()).toHaveLength(1)
+
+    authoritativeReadAvailable = true
+    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+
+    expect(await screen.findByText(/authoritative read confirms that review started/i)).toBeVisible()
+    expect(startPosts()).toHaveLength(1)
   })
 
   it('renders an unknown product-verification value neutrally and fails closed', async () => {

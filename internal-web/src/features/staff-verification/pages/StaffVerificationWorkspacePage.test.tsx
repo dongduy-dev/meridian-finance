@@ -7,6 +7,7 @@ import { createTestRouter } from '@/app/router/router'
 import type { AuthResponse } from '@/features/auth/api/auth-api'
 import * as authApi from '@/features/auth/api/auth-api'
 import { AuthProvider } from '@/features/auth/model/auth-context'
+import { staffApplicationKeys } from '@/features/staff-applications/api/queries'
 import * as api from '@/lib/api'
 import { ApiError, NetworkError } from '@/lib/api'
 import { createQueryClient } from '@/lib/query/query-client'
@@ -85,6 +86,7 @@ describe('Staff verification workspace', () => {
   })
 
   it('reconciles an unknown completion result with GET and never retries the POST', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue({ ...staff, permissions: ['loan:review', 'loan:read'] })
     let completed = false
     vi.mocked(api.apiRequest).mockImplementation(async (path) => {
       if (String(path).endsWith('/unsecured-consumer-loan-verification/complete')) {
@@ -93,7 +95,9 @@ describe('Staff verification workspace', () => {
       }
       return completed ? uclCase('VERIFIED') : uclCase()
     })
-    renderWorkspace()
+    const queryClient = createQueryClient()
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+    renderWorkspace(queryClient)
     const user = userEvent.setup()
     await user.type(await screen.findByLabelText('Assessment note'), 'Evidence is complete.')
     await user.click(screen.getByRole('button', { name: 'Review verification completion' }))
@@ -104,6 +108,40 @@ describe('Staff verification workspace', () => {
       String(path).endsWith('/unsecured-consumer-loan-verification/complete')
       && (options as RequestInit | undefined)?.method === 'POST')
     expect(posts).toHaveLength(1)
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: staffApplicationKeys.all })
+  })
+
+  it('keeps completion unresolved when reconciliation GET fails and unlocks only after a successful Refresh', async () => {
+    let completionPosted = false
+    let authoritativeReadAvailable = false
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      const isCompletionPost = String(path).endsWith('/unsecured-consumer-loan-verification/complete')
+        && (options as RequestInit | undefined)?.method === 'POST'
+      if (isCompletionPost) {
+        completionPosted = true
+        throw new NetworkError('connection lost')
+      }
+      if (completionPosted && !authoritativeReadAvailable) throw new NetworkError('authoritative read unavailable')
+      return completionPosted ? uclCase('VERIFIED') : uclCase()
+    })
+    renderWorkspace()
+    const user = userEvent.setup()
+    await user.type(await screen.findByLabelText('Assessment note'), 'Evidence is complete.')
+    await user.click(screen.getByRole('button', { name: 'Review verification completion' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    expect(await screen.findByText(/operation result is still unknown because authoritative state could not be refreshed/i)).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Review verification completion' })).not.toBeInTheDocument()
+    const completionPosts = () => vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
+      String(path).endsWith('/unsecured-consumer-loan-verification/complete')
+      && (options as RequestInit | undefined)?.method === 'POST')
+    expect(completionPosts()).toHaveLength(1)
+
+    authoritativeReadAvailable = true
+    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+
+    expect(await screen.findByText(/authoritative read confirms the completed verification outcome/i)).toBeVisible()
+    expect(completionPosts()).toHaveLength(1)
   })
 
   it('preserves the form and blocks confirmation after a stale Collateral cycle', async () => {
@@ -130,7 +168,7 @@ describe('Staff verification workspace', () => {
   })
 })
 
-function renderWorkspace() {
+function renderWorkspace(queryClient = createQueryClient()) {
   const router = createTestRouter([`/staff/applications/${applicationId}/verification`])
-  render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
+  render(<QueryClientProvider client={queryClient}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
 }
