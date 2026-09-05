@@ -31,6 +31,12 @@ public class LoanReviewCycleRepositoryAdapter implements LoanReviewCycleReposito
     }
 
     @Override
+    public Optional<LoanApplicationReviewCycle> findLatestByLoanApplicationId(UUID loanApplicationId) {
+        return repository.findFirstByLoanApplicationIdOrderByCycleNumberDesc(loanApplicationId)
+                .map(LoanReviewCycleJpaEntity::toDomain);
+    }
+
+    @Override
     public Optional<LoanApplicationReviewCycle> findActiveByLoanApplicationIdForUpdate(UUID loanApplicationId) {
         return repository.findByApplicationAndStatusForUpdate(loanApplicationId, LoanReviewCycleStatus.ACTIVE)
                 .map(LoanReviewCycleJpaEntity::toDomain);

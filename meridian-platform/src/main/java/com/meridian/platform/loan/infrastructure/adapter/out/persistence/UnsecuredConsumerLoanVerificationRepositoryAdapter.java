@@ -4,6 +4,7 @@ import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVeri
 import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanVerification;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,6 +29,16 @@ public class UnsecuredConsumerLoanVerificationRepositoryAdapter
     public Optional<UnsecuredConsumerLoanVerification> findLatestByLoanApplicationId(UUID loanApplicationId) {
         return repository.findFirstByLoanApplicationIdOrderByVerificationSequenceDesc(loanApplicationId)
                 .map(UnsecuredConsumerLoanVerificationJpaEntity::toDomain);
+    }
+
+    @Override
+    public List<UnsecuredConsumerLoanVerification> findAllByLoanApplicationIdOrderByVerificationSequenceAsc(
+            UUID loanApplicationId
+    ) {
+        return repository.findAllByLoanApplicationIdOrderByVerificationSequenceAsc(loanApplicationId)
+                .stream()
+                .map(UnsecuredConsumerLoanVerificationJpaEntity::toDomain)
+                .toList();
     }
 
     @Override

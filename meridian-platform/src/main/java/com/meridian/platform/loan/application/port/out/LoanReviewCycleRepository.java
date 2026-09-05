@@ -10,6 +10,10 @@ public interface LoanReviewCycleRepository {
 
     Optional<LoanApplicationReviewCycle> findActiveByLoanApplicationId(UUID loanApplicationId);
 
+    default Optional<LoanApplicationReviewCycle> findLatestByLoanApplicationId(UUID loanApplicationId) {
+        return findActiveByLoanApplicationId(loanApplicationId);
+    }
+
     Optional<LoanApplicationReviewCycle> findActiveByLoanApplicationIdForUpdate(UUID loanApplicationId);
 
     Optional<LoanApplicationReviewCycle> findByIdForUpdate(UUID reviewCycleId);

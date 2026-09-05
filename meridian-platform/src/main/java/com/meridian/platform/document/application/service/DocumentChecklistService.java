@@ -146,6 +146,22 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
     }
 
     @Override
+    public List<CurrentDocumentVersionTargetSnapshot> currentVersionTargets(UUID loanApplicationId) {
+        DocumentChecklist checklist = requireChecklist(loanApplicationId);
+        return checklist.items().stream()
+                .map(item -> documentRepository.findDocumentByChecklistItemId(item.id())
+                        .filter(document -> document.currentVersionId() != null)
+                        .map(document -> new CurrentDocumentVersionTargetSnapshot(
+                                item.id(),
+                                item.documentType(),
+                                item.requirementStatus(),
+                                document.currentVersionId()
+                        )))
+                .flatMap(java.util.Optional::stream)
+                .toList();
+    }
+
+    @Override
     public UUID createRequiredItem(
             UUID loanApplicationId,
             DocumentType documentType,

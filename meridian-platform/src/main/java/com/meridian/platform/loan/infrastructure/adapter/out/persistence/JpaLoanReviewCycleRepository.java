@@ -15,6 +15,10 @@ public interface JpaLoanReviewCycleRepository extends JpaRepository<LoanReviewCy
             UUID loanApplicationId, LoanReviewCycleStatus status
     );
 
+    Optional<LoanReviewCycleJpaEntity> findFirstByLoanApplicationIdOrderByCycleNumberDesc(
+            UUID loanApplicationId
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select cycle from LoanReviewCycleJpaEntity cycle where cycle.loanApplicationId = :applicationId and cycle.status = :status")
     Optional<LoanReviewCycleJpaEntity> findByApplicationAndStatusForUpdate(
