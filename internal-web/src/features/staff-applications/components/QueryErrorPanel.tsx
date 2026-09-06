@@ -10,7 +10,7 @@ export function QueryErrorPanel({
   onRetry,
 }: {
   error: unknown
-  resource: 'index' | 'case' | 'document queue' | 'document evidence' | 'correction queue' | 'correction evidence'
+  resource: 'index' | 'case' | 'queue' | 'document queue' | 'document evidence' | 'correction queue' | 'correction evidence' | 'approval queue'
   onRetry: () => void
 }) {
   const forbidden = error instanceof ApiError && error.status === 403

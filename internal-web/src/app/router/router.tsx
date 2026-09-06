@@ -15,6 +15,8 @@ import {
   STAFF_CORRECTION_CASE_ROUTE,
   STAFF_VERIFICATION_CASE_ROUTE,
   STAFF_REVIEW_CASE_ROUTE,
+  STAFF_APPROVAL_QUEUE_ROUTE,
+  STAFF_DECISION_CASE_ROUTE,
 } from './staff-route-metadata'
 
 const LoginPage = lazy(() => import('@/features/auth/components/LoginPage').then((module) => ({ default: module.LoginPage })))
@@ -27,6 +29,8 @@ const StaffCorrectionQueuePage = lazy(() => import('@/features/staff-corrections
 const StaffCorrectionWorkspacePage = lazy(() => import('@/features/staff-corrections/pages/StaffCorrectionWorkspacePage').then((module) => ({ default: module.StaffCorrectionWorkspacePage })))
 const StaffVerificationWorkspacePage = lazy(() => import('@/features/staff-verification/pages/StaffVerificationWorkspacePage').then((module) => ({ default: module.StaffVerificationWorkspacePage })))
 const StaffReviewWorkspacePage = lazy(() => import('@/features/staff-review/pages/StaffReviewWorkspacePage').then((module) => ({ default: module.StaffReviewWorkspacePage })))
+const StaffApprovalQueuePage = lazy(() => import('@/features/staff-approval/pages/StaffApprovalQueuePage').then((module) => ({ default: module.StaffApprovalQueuePage })))
+const StaffDecisionWorkspacePage = lazy(() => import('@/features/staff-approval/pages/StaffDecisionWorkspacePage').then((module) => ({ default: module.StaffDecisionWorkspacePage })))
 const NotFoundPage = lazy(() => import('@/routes/NotFoundPage').then((module) => ({ default: module.NotFoundPage })))
 
 function RouteFrame() { return <><RouteFocus /><Outlet /></> }
@@ -64,6 +68,12 @@ export const routes: RouteObject[] = [{ element: <RouteFrame />, errorElement: <
     ] },
     { element: <StaffCapabilityRoute route={STAFF_REVIEW_CASE_ROUTE} />, children: [
       { path: STAFF_REVIEW_CASE_ROUTE.path, element: <Deferred><StaffReviewWorkspacePage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_APPROVAL_QUEUE_ROUTE} />, children: [
+      { path: STAFF_APPROVAL_QUEUE_ROUTE.path, element: <Deferred><StaffApprovalQueuePage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_DECISION_CASE_ROUTE} />, children: [
+      { path: STAFF_DECISION_CASE_ROUTE.path, element: <Deferred><StaffDecisionWorkspacePage /></Deferred> },
     ] },
   ] }] },
   { path: '/admin/*', element: <Deferred><NotFoundPage /></Deferred> },

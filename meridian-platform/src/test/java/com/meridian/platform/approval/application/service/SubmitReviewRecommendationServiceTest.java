@@ -191,6 +191,12 @@ class SubmitReviewRecommendationServiceTest {
             return Optional.ofNullable(savedRecommendation)
                     .filter(recommendation -> recommendation.loanApplicationId().equals(loanApplicationId));
         }
+
+        @Override
+        public Optional<ReviewRecommendation> findByReviewCycleId(UUID reviewCycleId) {
+            return Optional.ofNullable(savedRecommendation)
+                    .filter(recommendation -> recommendation.reviewCycleId().equals(reviewCycleId));
+        }
     }
 
     private static class FakeReviewRecommendationEventPublisher implements ReviewRecommendationEventPublisher {

@@ -772,7 +772,7 @@ Status: In progress
 Blocking: No current blocker.
 
 Problem:
-The common API exposes safe Customer-owned LoanApplication and LoanAccount indexes, a narrow Customer action/resume projection, and application-scoped document checklist/current-version/readiness state. Staff FE-CP2 adds a permission-scoped cross-product application index plus a consolidated safe case header, purpose-limited Customer readiness, and ordered LoanApplication transition history. Staff FE-CP3 adds document and correction projections. Staff FE-CP4 adds purpose-limited product-verification and review-start projections. Specialized operational queues, later decision/servicing evidence, aggregation, and richer product projections remain incomplete.
+The common API exposes safe Customer-owned LoanApplication and LoanAccount indexes, a narrow Customer action/resume projection, and application-scoped document checklist/current-version/readiness state. Staff FE-CP2 adds a permission-scoped cross-product application index plus a consolidated safe case header, purpose-limited Customer readiness, and ordered LoanApplication transition history. Staff FE-CP3 adds document and correction projections. Staff FE-CP4 adds purpose-limited product-verification and review-start projections. Staff FE-CP5 adds Approval-owned recommendation/decision reads and authoritative Approver discovery. Later contract and servicing queues, aggregation, and richer product projections remain incomplete.
 
 Resolved scope:
 
@@ -786,11 +786,14 @@ Resolved scope:
 - Staff correction case projection with mixed task composition, backend-derived proof state, resubmission readiness, and current-actor maker-checker evidence.
 - Staff product-verification projection with Salary Advance immutable snapshots; UCL and Collateral authoritative current/ordered history; Collateral assessment facts; Document-port readiness and current-version correction targets; and backend-derived start/complete availability.
 - Staff review-start projection with product/document readiness and the latest Loan-owned review cycle for no-business-UUID reconciliation.
+- Approval-owned current recommendation projection with review-cycle provenance, safe reason evidence, backend-derived availability, and authoritative structured correction options.
+- Approval-owned decision projection with recommendation provenance, current-actor maker-checker relation, latest decision and ordered decision history, resulting Loan state, and backend-derived availability.
+- Purpose-limited Approver queue with exact `APPROVAL_PENDING` membership, deterministic paging/order, product filtering, and maker-checker availability without exposing internal actor identifiers.
 
 Still deferred:
 
-- Specialized Staff work queues beyond the executable document-review and Staff-correction queues, including verification/review queues, plus direct application-number lookup.
-- Recommendation, Approver decision, contract, and servicing evidence/history beyond the executable CP4 verification and review-start projections.
+- Specialized Staff work queues beyond the executable document-review, Staff-correction, and Approver queues, including verification/review queues, plus direct application-number lookup.
+- Contract and servicing evidence/history beyond the executable CP4 verification/review and CP5 recommendation/decision projections.
 - Broader Dashboard aggregation beyond the narrow Customer indexes and action facts.
 - Additional workflow command suggestions beyond the proven Customer action categories.
 - Richer product-specific projections where the common reads are insufficient.

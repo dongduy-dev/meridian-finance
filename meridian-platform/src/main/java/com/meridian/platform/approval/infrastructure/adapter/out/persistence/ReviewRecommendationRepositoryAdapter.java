@@ -51,7 +51,14 @@ public class ReviewRecommendationRepositoryAdapter implements ReviewRecommendati
 
     @Override
     public Optional<ReviewRecommendation> findLatestByLoanApplicationId(UUID loanApplicationId) {
-        return jpaReviewRecommendationRepository.findFirstByLoanApplicationIdOrderBySubmittedAtDesc(loanApplicationId)
+        return jpaReviewRecommendationRepository
+                .findFirstByLoanApplicationIdOrderBySubmittedAtDescIdDesc(loanApplicationId)
+                .map(ReviewRecommendationJpaEntity::toDomain);
+    }
+
+    @Override
+    public Optional<ReviewRecommendation> findByReviewCycleId(UUID reviewCycleId) {
+        return jpaReviewRecommendationRepository.findByReviewCycleId(reviewCycleId)
                 .map(ReviewRecommendationJpaEntity::toDomain);
     }
 }

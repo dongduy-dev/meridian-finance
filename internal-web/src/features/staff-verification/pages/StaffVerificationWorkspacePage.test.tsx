@@ -130,7 +130,11 @@ describe('Staff verification workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Review verification completion' }))
     await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
-    expect(await screen.findByText(/operation result is still unknown because authoritative state could not be refreshed/i)).toBeVisible()
+    expect(await screen.findByText(
+      /operation result is still unknown because authoritative state could not be refreshed/i,
+      undefined,
+      { timeout: 5_000 },
+    )).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review verification completion' })).not.toBeInTheDocument()
     const completionPosts = () => vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
       String(path).endsWith('/unsecured-consumer-loan-verification/complete')

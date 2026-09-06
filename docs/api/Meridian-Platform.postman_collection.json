@@ -3247,6 +3247,12 @@
                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Staff sees durable review status\", () => pm.expect(json.status).to.eql(\"UNDER_REVIEW\"));","pm.test(\"Staff status response remains minimal\", () => [\"customerId\",\"customerPartnerEmployeeLinkId\",\"salaryAdvanceLimitId\",\"salaryAdvanceVerificationId\",\"reviewCycleId\",\"actorUserId\"].forEach(key => pm.expect(json).not.to.have.property(key)));"]}}]
                                   },
                                   {
+                                      "name":  "GET Staff recommendation case",
+                                      "request":  {"method":"GET","header":[],"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/recommendation","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Loads Approval-owned, purpose-limited recommendation evidence for the current review cycle. Requires the exact approval:recommend permission."},
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Recommendation evidence is purpose-limited\", () => [\"customerId\",\"loanOfficerUserId\",\"internalNotes\"].forEach(key => pm.expect(json).not.to.have.property(key)));","pm.test(\"Current review cycle is authoritative\", () => pm.expect(json.evidence.currentReviewCycle.reviewCycleId).to.eql(pm.collectionVariables.get(\"reviewCycleId\")));"]}}]
+                                  },
+                                  {
                                       "name":  "POST recommend approval",
                                       "request":  {
                                                       "method":  "POST",
@@ -3381,6 +3387,18 @@
                                                                    }
                                                     }
                                                 ]
+                                  },
+                                  {
+                                      "name":  "GET Staff approval queue",
+                                      "request":  {"method":"GET","header":[],"url":"{{baseUrl}}/api/v1/staff/approval-work?page=0&size=20","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Loads the exact server-paged APPROVAL_PENDING queue for independent Approver work. Requires the exact approval:decide permission."},
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Queue is server paged\", () => { pm.expect(json.page).to.eql(0); pm.expect(json.size).to.eql(20); pm.expect(json.items).to.be.an(\"array\"); });","pm.test(\"Queue items remain purpose-limited\", () => json.items.forEach(item => [\"customerId\",\"loanOfficerUserId\",\"internalNotes\"].forEach(key => pm.expect(item).not.to.have.property(key))));"]}}]
+                                  },
+                                  {
+                                      "name":  "GET Staff decision case after decision",
+                                      "request":  {"method":"GET","header":[],"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/decision","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Loads recommendation evidence, maker-checker eligibility, durable decision history, and resulting Loan state for exact lost-response reconciliation. Requires approval:decide."},
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Durable decision is correlated exactly\", () => { pm.expect(json.latestDecision.decisionId).to.eql(pm.collectionVariables.get(\"approvalDecisionId\")); pm.expect(json.latestDecision.reviewRecommendationId).to.eql(pm.collectionVariables.get(\"reviewRecommendationId\")); });","pm.test(\"Decision read excludes restricted fields\", () => [\"customerId\",\"approverUserId\",\"loanOfficerUserId\",\"internalNotes\"].forEach(key => pm.expect(json).not.to.have.property(key)));"]}}]
                                   },
                                   {
                                       "name":  "POST recommend rejection example",

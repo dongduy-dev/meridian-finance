@@ -65,11 +65,24 @@ export const STAFF_REVIEW_CASE_ROUTE = {
   requiredPermissions: ['loan:review'],
 } as const satisfies StaffRouteDefinition
 
+export const STAFF_APPROVAL_QUEUE_ROUTE = {
+  path: '/staff/work/approvals',
+  label: 'Approval decisions',
+  requiredPermissions: ['approval:decide'],
+} as const satisfies StaffRouteDefinition
+
+export const STAFF_DECISION_CASE_ROUTE = {
+  path: '/staff/applications/:loanApplicationId/decision',
+  label: 'Independent decision',
+  requiredPermissions: ['approval:decide'],
+} as const satisfies StaffRouteDefinition
+
 export const STAFF_ROUTES = [
   STAFF_HOME_ROUTE,
   STAFF_APPLICATIONS_ROUTE,
   STAFF_DOCUMENT_QUEUE_ROUTE,
   STAFF_CORRECTION_QUEUE_ROUTE,
+  STAFF_APPROVAL_QUEUE_ROUTE,
 ] as const satisfies readonly StaffRouteDefinition[]
 
 export function canAccessStaffRoute(actor: StaffActor, route: StaffRouteDefinition): boolean {

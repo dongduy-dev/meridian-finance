@@ -830,6 +830,22 @@ For Collateral Loan, review start requires the authoritative latest numbered ver
 
 ## 5. Recommendation, Approval, Corrections, and Documents
 
+### 5.0 Staff recommendation and decision reads
+
+```text
+GET /api/v1/staff/loan-applications/{loanApplicationId}/recommendation
+GET /api/v1/staff/loan-applications/{loanApplicationId}/decision
+GET /api/v1/staff/approval-work?productCode={productCode}&page={page}&size={size}
+```
+
+The recommendation read requires exact `approval:recommend`. It returns the current Loan-owned review cycle, product-verification and document readiness, authoritative correction options, a durable recommendation for that cycle when present, and backend-derived recommendation availability. The decision read and Approver queue require exact `approval:decide`; neither requires `loan:read`. Application services also require a Staff-shaped principal with no Customer context.
+
+The decision read returns the exact latest recommendation and review-cycle provenance, current-actor maker-checker eligibility, current Loan state and readiness, the durable decision tied to that recommendation when present, and ordered safe decision history. It does not expose recommending or deciding User IDs. The Approver queue uses server-side exact `APPROVAL_PENDING` membership, optional exact product filtering, zero-based paging of 1 to 100 items, and deterministic `submittedAt DESC, loanApplicationId DESC` ordering.
+
+These reads exclude restricted internal notes, Customer PII, document content, audit and operation identifiers, external references, and Customer-only offer data. They execute as repeatable-read observations across the Approval-owned evidence and Loan-owned boundary projection. A missing application returns `404 LOAN_APPLICATION_NOT_FOUND`; inconsistent recommendation, decision, verification, or Loan state fails closed with `409 SYSTEM_STATE_CONFLICT`.
+
+Recommendation and decision POSTs have no business UUID and are never automatically retried. After an uncertain result, the client reads the corresponding projection and resolves only when the exact review-cycle/recommendation provenance and action prove the durable result. A failed reconciliation read leaves contradictory commands locked until an explicit successful refresh.
+
 ### 5.1 Review recommendation
 
 Supported actions:

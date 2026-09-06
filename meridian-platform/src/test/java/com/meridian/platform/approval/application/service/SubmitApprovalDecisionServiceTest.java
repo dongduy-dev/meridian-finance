@@ -32,6 +32,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.List;
 import java.util.Set;
@@ -263,6 +264,12 @@ class SubmitApprovalDecisionServiceTest {
             return latestRecommendation
                     .filter(recommendation -> recommendation.loanApplicationId().equals(loanApplicationId));
         }
+
+        @Override
+        public Optional<ReviewRecommendation> findByReviewCycleId(UUID reviewCycleId) {
+            return latestRecommendation
+                    .filter(recommendation -> recommendation.reviewCycleId().equals(reviewCycleId));
+        }
     }
 
     private static class FakeApprovalDecisionRepository implements ApprovalDecisionRepository {
@@ -273,6 +280,20 @@ class SubmitApprovalDecisionServiceTest {
         public ApprovalDecision save(ApprovalDecision approvalDecision) {
             savedDecision = approvalDecision;
             return approvalDecision;
+        }
+
+        @Override
+        public Optional<ApprovalDecision> findByReviewRecommendationId(UUID reviewRecommendationId) {
+            return Optional.ofNullable(savedDecision)
+                    .filter(decision -> decision.reviewRecommendationId().equals(reviewRecommendationId));
+        }
+
+        @Override
+        public List<ApprovalDecision> findByLoanApplicationIdOrderByDecidedAtDesc(UUID loanApplicationId) {
+            return Optional.ofNullable(savedDecision)
+                    .filter(decision -> decision.loanApplicationId().equals(loanApplicationId))
+                    .map(List::of)
+                    .orElseGet(List::of);
         }
     }
 

@@ -120,6 +120,7 @@ describe('internal router access contract', () => {
   it.each([
     ['/staff/work/documents', ['document:review'], 'Document review'],
     ['/staff/work/corrections', ['loan:correction:staff'], 'Staff corrections'],
+    ['/staff/work/approvals', ['approval:decide'], 'Independent decision queue'],
   ] as const)('allows %s only through its exact capability', async (path, permissions, heading) => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff([...permissions]))
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', { status: 200 })))
@@ -130,10 +131,18 @@ describe('internal router access contract', () => {
   it.each([
     ['/staff/work/documents', ['document:review:all']],
     ['/staff/work/corrections', ['loan:correction']],
+    ['/staff/work/approvals', ['approval:decide:all']],
   ] as const)('does not grant CP3 route %s through a permission prefix', async (path, permissions) => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff([...permissions]))
     renderRoute(path)
     expect(await screen.findByRole('heading', { name: 'No operational access' })).toBeVisible()
+  })
+
+  it('protects the independent decision route with exact approval:decide', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff(['approval:decide']))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 500 })))
+    renderRoute('/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/decision')
+    expect(await screen.findByRole('heading', { name: 'Loading independent decision' })).toBeVisible()
   })
 
   it('rejects a Customer-shaped session before it can reach Staff routes', async () => {
