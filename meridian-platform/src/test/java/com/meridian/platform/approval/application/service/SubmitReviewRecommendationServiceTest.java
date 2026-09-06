@@ -74,7 +74,10 @@ class SubmitReviewRecommendationServiceTest {
                 new ReviewRecommendationRequest(
                         ReviewRecommendationAction.RECOMMEND_APPROVAL,
                         null,
-                        "ready for approval"
+                        "ready for approval",
+                        REVIEW_CYCLE_ID,
+                        null,
+                        null
                 )
         );
 
@@ -98,6 +101,9 @@ class SubmitReviewRecommendationServiceTest {
                 new ReviewRecommendationRequest(
                         ReviewRecommendationAction.RECOMMEND_REJECTION,
                         "Policy reason.",
+                        null,
+                        REVIEW_CYCLE_ID,
+                        null,
                         null
                 )
         );
@@ -153,12 +159,43 @@ class SubmitReviewRecommendationServiceTest {
                         new ReviewRecommendationRequest(
                                 ReviewRecommendationAction.RECOMMEND_APPROVAL,
                                 null,
+                                null,
+                                REVIEW_CYCLE_ID,
+                                null,
                                 null
                         )
                 )
         );
 
         assertEquals("loan rejected transition", exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ReviewRecommendationAction.class,
+            names = {"RECOMMEND_APPROVAL", "RECOMMEND_REJECTION"}
+    )
+    void rejectsStaleCycleBeforeAnyApprovalOrLoanSideEffect(ReviewRecommendationAction action) {
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.submitReviewRecommendation(
+                        LOAN_APPLICATION_ID,
+                        new ReviewRecommendationRequest(
+                                action,
+                                action == ReviewRecommendationAction.RECOMMEND_REJECTION
+                                        ? "Policy reason." : null,
+                                "preserve",
+                                UUID.randomUUID(),
+                                null,
+                                null
+                        )
+                )
+        );
+
+        assertEquals("STALE_REVIEW_CYCLE", exception.getErrorCode());
+        assertNull(repository.savedRecommendation);
+        assertNull(auditPublisher.publishedEvent);
+        assertNull(eventPublisher.publishedEvent);
     }
 
     private static class FixedCurrentUserProvider implements CurrentUserProvider {

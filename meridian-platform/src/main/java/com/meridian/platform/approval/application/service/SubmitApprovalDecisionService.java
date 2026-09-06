@@ -77,10 +77,11 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
         ReviewRecommendation latestRecommendation = reviewRecommendationRepository
                 .findLatestByLoanApplicationId(loanApplicationId)
                 .orElseThrow(() -> new BusinessStateConflictException(
-                        "REVIEW_RECOMMENDATION_REQUIRED",
-                        "An approval decision requires a Loan Officer recommendation."
+                        "STALE_REVIEW_RECOMMENDATION",
+                        "The expected Loan Officer recommendation is no longer applicable."
                 ));
-        validateCorrectionContract(request, latestRecommendation);
+        validateExpectedEvidence(request, latestRecommendation);
+        validateCorrectionContract(request);
 
         AuthenticatedUser currentUser = currentUserProvider.currentUser();
         validateMakerChecker(latestRecommendation, currentUser);
@@ -125,20 +126,8 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
         return approvalMapper.toDto(savedDecision);
     }
 
-    private void validateCorrectionContract(
-            ApprovalDecisionRequest request,
-            ReviewRecommendation latestRecommendation
-    ) {
+    private void validateCorrectionContract(ApprovalDecisionRequest request) {
         if (request.action() == ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION) {
-            UUID activeCycleId = loanReviewCyclePort.findActiveReviewCycleId(
-                            latestRecommendation.loanApplicationId())
-                    .orElseThrow(() -> new BusinessStateConflictException(
-                            "REVIEW_CYCLE_REQUIRED", "An active review cycle is required."));
-            if (!activeCycleId.equals(request.expectedReviewCycleId())
-                    || !activeCycleId.equals(latestRecommendation.reviewCycleId())) {
-                throw new BusinessStateConflictException(
-                        "STALE_REVIEW_CYCLE", "The expected review cycle is no longer active.");
-            }
             if (request.reasonCode() == null || request.reason() != null) {
                 throw new BusinessRuleViolationException(
                         "INVALID_CORRECTION_PLAN",
@@ -148,13 +137,33 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
             correctionPlanPolicy.validateMixedCorrection(request.correctionPlan());
             return;
         }
-        if (request.expectedReviewCycleId() != null
-                || request.reasonCode() != null
+        if (request.reasonCode() != null
                 || request.correctionPlan() != null) {
             throw new BusinessRuleViolationException(
                     "INVALID_CORRECTION_PLAN",
                     "Correction fields are allowed only for revision-producing actions."
             );
+        }
+    }
+
+    private void validateExpectedEvidence(
+            ApprovalDecisionRequest request,
+            ReviewRecommendation latestRecommendation
+    ) {
+        if (!latestRecommendation.id().equals(request.expectedReviewRecommendationId())) {
+            throw new BusinessStateConflictException(
+                    "STALE_REVIEW_RECOMMENDATION",
+                    "The expected Loan Officer recommendation is no longer applicable."
+            );
+        }
+        UUID activeCycleId = loanReviewCyclePort.findActiveReviewCycleId(
+                        latestRecommendation.loanApplicationId())
+                .orElseThrow(() -> new BusinessStateConflictException(
+                        "REVIEW_CYCLE_REQUIRED", "An active review cycle is required."));
+        if (!activeCycleId.equals(request.expectedReviewCycleId())
+                || !activeCycleId.equals(latestRecommendation.reviewCycleId())) {
+            throw new BusinessStateConflictException(
+                    "STALE_REVIEW_CYCLE", "The expected review cycle is no longer active.");
         }
     }
 

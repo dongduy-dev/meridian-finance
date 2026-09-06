@@ -9,7 +9,7 @@ import * as authApi from '@/features/auth/api/auth-api'
 import { AuthProvider } from '@/features/auth/model/auth-context'
 import { staffApplicationKeys } from '@/features/staff-applications/api/queries'
 import * as api from '@/lib/api'
-import { NetworkError } from '@/lib/api'
+import { ApiError, NetworkError } from '@/lib/api'
 import { createQueryClient } from '@/lib/query/query-client'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
@@ -23,6 +23,7 @@ vi.mock('@/lib/api', async () => {
 
 const applicationId = '11111111-1111-4111-8111-111111111111'
 const recommendationId = '44444444-4444-4444-8444-444444444444'
+const cycleId = '33333333-3333-4333-8333-333333333333'
 const staff: AuthResponse = {
   tokenType: 'Bearer', accessToken: 'staff-token', expiresAt: '2026-09-06T10:00:00Z',
   userId: '22222222-2222-4222-8222-222222222222', email: 'approver@meridian.local',
@@ -37,9 +38,9 @@ function decisionCase(decided = false, eligible = true) {
     productType: 'PERSONAL', requestedAmount: 10_000_000, requestedTermMonths: 6,
     applicationStatus: decided ? 'CUSTOMER_ACCEPTANCE_PENDING' : 'APPROVAL_PENDING', submittedAt: '2026-09-06T08:00:00',
     evidence: { uploadComplete: true, processingReady: true, productVerificationResult: 'VERIFIED', readyForDecision: true,
-      currentReviewCycle: { reviewCycleId: '33333333-3333-4333-8333-333333333333', cycleNumber: 1,
+      currentReviewCycle: { reviewCycleId: cycleId, cycleNumber: 1,
         status: decided ? 'COMPLETED' : 'ACTIVE', startedAt: '2026-09-06T08:10:00', endedAt: decided ? '2026-09-06T08:30:00' : null } },
-    recommendation: { recommendationId, reviewCycleId: '33333333-3333-4333-8333-333333333333',
+    recommendation: { recommendationId, reviewCycleId: cycleId,
       action: 'RECOMMEND_APPROVAL', reason: null, reasonCode: null, submittedAt: '2026-09-06T08:20:00' },
     makerCheckerEligible: eligible, decisionAvailable: eligible && !decided,
     latestDecision: decision, decisionHistory: decision ? [decision] : [],
@@ -59,6 +60,94 @@ describe('Staff decision workspace', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(authApi.refresh).mockResolvedValue(staff)
+  })
+
+  it.each([
+    'APPROVE',
+    'REJECT',
+    'RETURN_TO_LOAN_OFFICER_REVIEW',
+    'REQUEST_CUSTOMER_OR_STAFF_CORRECTION',
+  ] as const)('sends the displayed recommendation and cycle for %s', async (selectedAction) => {
+    let submittedBody: Record<string, unknown> | undefined
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (String(path).endsWith('/approval-decisions')
+        && (options as RequestInit | undefined)?.method === 'POST') {
+        submittedBody = (options as { body?: Record<string, unknown> }).body
+        throw new ApiError(409, 'STALE_REVIEW_RECOMMENDATION', 'recommendation changed', '/approval-decisions', 'request-1')
+      }
+      return decisionCase()
+    })
+    renderPage()
+    const user = userEvent.setup()
+    if (selectedAction !== 'APPROVE') {
+      await user.click(await screen.findByLabelText(
+        selectedAction === 'REJECT' ? 'Reject'
+          : selectedAction === 'RETURN_TO_LOAN_OFFICER_REVIEW' ? 'Return to Loan Officer review'
+            : 'Request Customer and Staff correction',
+      ))
+    }
+    if (selectedAction === 'REJECT' || selectedAction === 'RETURN_TO_LOAN_OFFICER_REVIEW') {
+      await user.type(screen.getByLabelText('Decision reason'), 'Decision reason.')
+    }
+    if (selectedAction === 'REQUEST_CUSTOMER_OR_STAFF_CORRECTION') {
+      await user.click(screen.getByRole('button', { name: 'Add task' }))
+      await user.click(screen.getByRole('button', { name: 'Add task' }))
+      await user.selectOptions(screen.getAllByLabelText('Task type')[1]!, 'DOCUMENT_REVIEW')
+      await user.type(screen.getByLabelText('Customer instruction'), 'Replace the evidence.')
+      await user.type(screen.getByLabelText('Staff instruction'), 'Review the replacement.')
+    }
+    await user.click(await screen.findByRole('button', { name: 'Review decision' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm decision' }))
+
+    await screen.findByRole('heading', { name: 'Decision evidence changed' })
+    expect(submittedBody).toMatchObject({
+      action: selectedAction,
+      expectedReviewRecommendationId: recommendationId,
+      expectedReviewCycleId: cycleId,
+    })
+    expect(vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
+      String(path).endsWith('/approval-decisions')
+      && (options as RequestInit | undefined)?.method === 'POST')).toHaveLength(1)
+  })
+
+  it('preserves the draft and requires explicit re-review after a stale recommendation', async () => {
+    const nextRecommendationId = '88888888-8888-4888-8888-888888888888'
+    const nextCycleId = '99999999-9999-4999-8999-999999999999'
+    let postAttempted = false
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (String(path).endsWith('/approval-decisions')
+        && (options as RequestInit | undefined)?.method === 'POST') {
+        postAttempted = true
+        throw new ApiError(409, 'STALE_REVIEW_RECOMMENDATION', 'recommendation changed', '/approval-decisions', 'request-2')
+      }
+      const value = decisionCase()
+      return postAttempted ? {
+        ...value,
+        evidence: {
+          ...value.evidence,
+          currentReviewCycle: { ...value.evidence.currentReviewCycle, reviewCycleId: nextCycleId, cycleNumber: 2 },
+        },
+        recommendation: {
+          ...value.recommendation,
+          recommendationId: nextRecommendationId,
+          reviewCycleId: nextCycleId,
+        },
+      } : value
+    })
+    renderPage()
+    const user = userEvent.setup()
+    await user.type(await screen.findByLabelText('Restricted internal notes'), 'preserve this decision draft')
+    await user.click(screen.getByRole('button', { name: 'Review decision' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm decision' }))
+
+    expect(await screen.findByRole('heading', { name: 'Decision evidence changed' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'I reviewed the updated evidence' }))
+    expect(await screen.findByRole('button', { name: 'Review decision' })).toBeVisible()
+    expect(screen.getByDisplayValue('preserve this decision draft')).toBeVisible()
+    expect(vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
+      String(path).endsWith('/approval-decisions')
+      && (options as RequestInit | undefined)?.method === 'POST')).toHaveLength(1)
   })
 
   it('keeps a lost decision result locked through failed GET and reconciles on explicit Refresh without another POST', async () => {

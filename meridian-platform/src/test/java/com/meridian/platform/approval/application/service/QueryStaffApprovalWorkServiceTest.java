@@ -126,18 +126,38 @@ class QueryStaffApprovalWorkServiceTest {
     }
 
     @Test
-    void missingRecommendationAndDecisionRemainExplicitlyUnavailable() {
+    void approvalPendingWithoutRecommendationFailsClosed() {
         when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:decide")));
         when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("APPROVAL_PENDING")));
         when(recommendations.findLatestByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.empty());
         when(decisions.findByLoanApplicationIdOrderByDecidedAtDesc(APPLICATION_ID)).thenReturn(List.of());
 
-        var result = service.queryDecisionCase(APPLICATION_ID);
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.queryDecisionCase(APPLICATION_ID)
+        );
 
-        assertNull(result.recommendation());
-        assertNull(result.latestDecision());
-        assertFalse(result.makerCheckerEligible());
-        assertFalse(result.decisionAvailable());
+        assertEquals("SYSTEM_STATE_CONFLICT", exception.getErrorCode());
+    }
+
+    @Test
+    void approvalPendingRecommendationFromAnotherCycleFailsClosed() {
+        ReviewRecommendation stale = ReviewRecommendation.recorded(
+                RECOMMENDATION_ID, APPLICATION_ID, UUID.randomUUID(), OFFICER_ID,
+                ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null, null, NOW.minusMinutes(30)
+        );
+        when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:decide")));
+        when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("APPROVAL_PENDING")));
+        when(recommendations.findLatestByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.of(stale));
+        when(decisions.findByLoanApplicationIdOrderByDecidedAtDesc(APPLICATION_ID)).thenReturn(List.of());
+        when(decisions.findByReviewRecommendationId(RECOMMENDATION_ID)).thenReturn(Optional.empty());
+
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.queryDecisionCase(APPLICATION_ID)
+        );
+
+        assertEquals("SYSTEM_STATE_CONFLICT", exception.getErrorCode());
     }
 
     @Test

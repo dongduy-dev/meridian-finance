@@ -88,7 +88,8 @@ export type ApprovalDecisionRequest = {
   action: DecisionAction
   reason: string | null
   internalNotes: string | null
-  expectedReviewCycleId: string | null
+  expectedReviewRecommendationId: string
+  expectedReviewCycleId: string
   reasonCode: string | null
   correctionPlan: { tasks: CorrectionTaskRequest[] } | null
 }

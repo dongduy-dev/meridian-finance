@@ -529,7 +529,7 @@ Generate a fresh `X-Request-ID` for each HTTP attempt unless the transport repla
 | Class | Examples | Client rule |
 |---|---|---|
 | Exact business request UUID | document upload/review, correction completion/resubmission, contract preparation/readiness confirmation, disbursement, repayment, settlement, closure | Keep one stable UUID for one logical payload until the result is reconciled |
-| Expected evidence identity | Collateral `expectedVerificationId`, review `expectedReviewCycleId`, contract `expectedCurrentContractVersion` or `expectedContractVersion`, document `documentVersionId` or replacement baseline | Refetch and require operator review after stale conflict; never treat as idempotency |
+| Expected evidence identity | Collateral `expectedVerificationId`, recommendation `expectedReviewCycleId`, decision `expectedReviewRecommendationId` plus `expectedReviewCycleId`, contract `expectedCurrentContractVersion` or `expectedContractVersion`, document `documentVersionId` or replacement baseline | Refetch and require operator review after stale conflict; never treat as idempotency |
 | No client business UUID | verification start/complete, review start, recommendation, decision, destination reveal | No automatic command retry after an uncertain result; reconcile from an authoritative read |
 | Transport correlation | `X-Request-ID` | One HTTP-attempt diagnostic; never reused as business identity |
 
@@ -584,6 +584,8 @@ For commands without a business UUID, an uncertain result is more restrictive:
 - if the projection cannot prove either outcome, label the result unresolved and block a contradictory command.
 
 Product-verification, recommendation, and decision commands use their purpose-limited current/history projections for browser reconciliation. A no-UUID command must remain disabled when its authoritative read cannot prove either the durable outcome or that a new explicit attempt is safe.
+
+Recommendation confirmation captures the displayed review-cycle ID for every action. Decision confirmation captures the displayed recommendation and review-cycle IDs for every action. A stale conflict preserves the unsent form and restricted notes in memory, refreshes the authoritative projection, blocks another command, and requires explicit operator re-review. The client never substitutes refreshed identifiers into an open confirmation or automatically retries the POST.
 
 ### 14.5 Destination Reveal Exception
 
@@ -1255,7 +1257,7 @@ Each protected route declares:
 | Case overview | API dependency | Consolidated safe case projection | Navigate to eligible work | partial dependency, stale case, forbidden/not found |
 | Verification | Foundation exists but projection missing | Current product cycle and evidence | Complete exact outcome | readiness blocker, stale cycle, unresolved no-UUID command |
 | Review/recommendation | Executable | Review cycle, readiness, correction options, and durable recommendation | Submit recommendation | stale cycle, invalid task plan, unresolved command |
-| Decision | Executable | Latest recommendation, maker-checker relation, decision history, and resulting Loan state | Submit decision | maker-checker, stale cycle, unresolved command |
+| Decision | Executable | Latest recommendation, maker-checker relation, decision history, and resulting Loan state | Submit decision | maker-checker, stale recommendation or cycle, unresolved command |
 | Contract | Foundation exists but discovery projection missing | Current masked contract and readiness | Prepare/regenerate/confirm | stale version, acknowledgment or readiness blockers, replay conflict |
 | Disbursement | Foundation exists but discovery projection missing | Ready contract, local reveal, transfer evidence | Confirm disbursement | reveal unavailable, duplicate reference, invalid dates, result unknown/replay |
 | LoanAccount | Foundation exists but Staff index missing | Account, balances, schedule, history | Open servicing action | unavailable account, history paging failure, inconsistent state |
@@ -1502,7 +1504,7 @@ The two CP4 case routes and their purpose-limited `loan:review` read contracts a
 - visible maker-checker, current-cycle, verification, document, and restricted-note boundaries;
 - safe no-UUID command reconciliation and atomic-outcome presentation.
 
-The CP5 recommendation and independent-decision workspaces are executable. Approval-owned reads expose the durable recommendation, decision history, backend-derived maker-checker relation, action availability, and safe Loan-owned readiness evidence through narrow boundary contracts. The Approver queue uses server-side `APPROVAL_PENDING` membership, product filtering, paging, and deterministic ordering. Recommendation controls additionally require `approval:recommend` without changing CP4 `loan:review` route access; the queue and decision route require exact `approval:decide`. Unknown command results remain locked until a successful authoritative refresh, and neither command automatically retries its POST.
+The CP5 recommendation and independent-decision workspaces are executable. Approval-owned reads expose the durable recommendation, decision history, backend-derived maker-checker relation, action availability, and safe Loan-owned readiness evidence through narrow boundary contracts. The Approver queue uses server-side `APPROVAL_PENDING` membership, product filtering, paging, and deterministic ordering. Recommendation controls additionally require `approval:recommend` without changing CP4 `loan:review` route access; the queue and decision route require exact `approval:decide`. Every confirmation carries the displayed review cycle and, for a decision, the displayed recommendation as expected-state evidence. A stale conflict preserves in-memory input and requires explicit re-review. Unknown command results remain locked until a successful authoritative refresh, and neither command automatically retries its POST.
 
 ### Staff FE-CP6 — Contract and Readiness Operations
 

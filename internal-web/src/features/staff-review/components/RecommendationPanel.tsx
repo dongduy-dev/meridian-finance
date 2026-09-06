@@ -19,6 +19,7 @@ import { CorrectionPlanFields, toCorrectionTaskRequests, validateCorrectionTasks
 
 type OperationState = { status: OperationStatus; detail?: string; error?: Error }
 type PendingReconciliation = { action: RecommendationAction; expectedReviewCycleId: string; commandConfirmed: boolean; commandError?: Error }
+type RecommendationConfirmation = { action: RecommendationAction; reviewCycleId: string; cycleNumber: number }
 
 const actions: { value: RecommendationAction; label: string }[] = [
   { value: 'RECOMMEND_APPROVAL', label: 'Recommend approval' },
@@ -39,7 +40,7 @@ export function RecommendationPanel({ loanApplicationId }: { loanApplicationId: 
   const [reasonCode, setReasonCode] = useState('DOCUMENT_REPLACEMENT_REQUIRED')
   const [tasks, setTasks] = useState<CorrectionTaskInput[]>([])
   const [validationError, setValidationError] = useState<string>()
-  const [confirming, setConfirming] = useState(false)
+  const [confirming, setConfirming] = useState<RecommendationConfirmation>()
   const [staleExpectedCycleId, setStaleExpectedCycleId] = useState<string>()
   const [pending, setPending] = useState<PendingReconciliation>()
   const [operation, setOperation] = useState<OperationState>({ status: 'DRAFT' })
@@ -81,13 +82,16 @@ export function RecommendationPanel({ loanApplicationId }: { loanApplicationId: 
     return true
   }
 
-  const buildRequest = (): RecommendationRequest => ({
-    action,
-    reason: action === 'RECOMMEND_REJECTION' ? reason.trim() : null,
+  const buildRequest = (confirmation: RecommendationConfirmation): RecommendationRequest => ({
+    action: confirmation.action,
+    reason: confirmation.action === 'RECOMMEND_REJECTION' ? reason.trim() : null,
     internalNotes: internalNotes.trim() || null,
-    expectedReviewCycleId: revision ? cycle!.reviewCycleId : null,
-    reasonCode: revision ? reasonCode : null,
-    correctionPlan: revision ? { tasks: toCorrectionTaskRequests(tasks, data.correctionOptions) } : null,
+    expectedReviewCycleId: confirmation.reviewCycleId,
+    reasonCode: confirmation.action === 'RETURN_TO_CUSTOMER_REVISION'
+      || confirmation.action === 'REQUEST_STAFF_CORRECTION' ? reasonCode : null,
+    correctionPlan: confirmation.action === 'RETURN_TO_CUSTOMER_REVISION'
+      || confirmation.action === 'REQUEST_STAFF_CORRECTION'
+      ? { tasks: toCorrectionTaskRequests(tasks, data.correctionOptions) } : null,
   })
 
   const reconcile = async (next: PendingReconciliation) => {
@@ -131,22 +135,28 @@ export function RecommendationPanel({ loanApplicationId }: { loanApplicationId: 
   }
 
   const submit = async () => {
-    if (!cycle || !validate()) return
-    setConfirming(false)
+    const confirmation = confirming
+    if (!confirmation || !validate()) return
+    setConfirming(undefined)
     setOperation({ status: 'IN_FLIGHT' })
     let commandConfirmed = false
     let commandError: Error | undefined
     try {
-      await submitRecommendation(manager, loanApplicationId, buildRequest())
+      await submitRecommendation(manager, loanApplicationId, buildRequest(confirmation))
       commandConfirmed = true
     } catch (error) {
       commandError = error instanceof Error ? error : new NetworkError()
       if (!(commandError instanceof ApiError)) setOperation({ status: 'RESULT_UNKNOWN', error: commandError })
     }
-    await reconcile({ action, expectedReviewCycleId: cycle.reviewCycleId, commandConfirmed, commandError })
+    await reconcile({
+      action: confirmation.action,
+      expectedReviewCycleId: confirmation.reviewCycleId,
+      commandConfirmed,
+      commandError,
+    })
   }
 
   const refresh = async () => pending ? reconcile(pending) : void await query.refetch()
 
-  return <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>Loan Officer recommendation</CardTitle><p className="mt-2 text-sm text-muted-foreground">Recommendation evidence is Approval-owned. The command is never automatically retried.</p></div><Button variant="outline" onClick={() => void refresh()} disabled={query.isFetching}><RefreshCw className={query.isFetching ? 'animate-spin' : undefined} />Refresh</Button></div></CardHeader><CardContent className="space-y-5">{query.isError ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Latest refresh unavailable</AlertTitle><AlertDescription>Cached evidence cannot authorize another recommendation.</AlertDescription></Alert> : null}{data.recommendation ? <Alert variant={knownAction ? 'success' : 'warning'}><CheckCircle2 /><AlertTitle>Durable recommendation recorded</AlertTitle><AlertDescription>{knownAction ? humanizeKnownValue(data.recommendation.action) : 'Recommendation action unavailable'} · {formatTimestamp(data.recommendation.submittedAt)}{data.recommendation.reason ? <span className="mt-2 block">Reason: {data.recommendation.reason}</span> : null}{data.recommendation.reasonCode ? <span className="mt-2 block">Controlled reason: {humanizeKnownValue(data.recommendation.reasonCode)}</span> : null}</AlertDescription></Alert> : null}{available ? <div className="space-y-4"><fieldset className="space-y-2"><legend className="font-semibold">Recommendation action</legend>{actions.map((item) => <label key={item.value} className="flex min-h-11 items-center gap-3 rounded-md border px-4"><input type="radio" name="recommendation-action" checked={action === item.value} onChange={() => { setAction(item.value); setTasks([]); setValidationError(undefined) }} />{item.label}</label>)}</fieldset>{action === 'RECOMMEND_REJECTION' ? <label className="grid gap-2 text-sm font-semibold">Recommendation reason<textarea className="min-h-24 rounded-md border bg-card p-3 font-normal" value={reason} maxLength={2000} onChange={(event) => setReason(event.target.value)} /></label> : null}{revision ? <><label className="grid gap-2 text-sm font-semibold">Controlled reason<select className="h-11 rounded-md border bg-card px-3 font-normal" value={reasonCode} onChange={(event) => setReasonCode(event.target.value)}>{data.correctionReasonCodes.map((code) => <option key={code} value={code}>{humanizeKnownValue(code)}</option>)}</select></label><CorrectionPlanFields options={data.correctionOptions} mode={mode} tasks={tasks} onChange={setTasks} /></> : null}<label className="grid gap-2 text-sm font-semibold">Restricted internal notes<textarea className="min-h-24 rounded-md border bg-card p-3 font-normal" value={internalNotes} maxLength={2000} onChange={(event) => setInternalNotes(event.target.value)} /></label><p className="text-sm text-muted-foreground">Internal notes remain memory-only and are never copied into Customer instructions.</p>{validationError ? <p role="alert" className="font-semibold text-danger">{validationError}</p> : null}<Button id="recommendation-trigger" onClick={() => validate() && setConfirming(true)}>Review recommendation</Button></div> : !data.recommendation ? <p className="text-sm text-muted-foreground">Recommendation is unavailable for the authoritative current state.</p> : null}{staleExpectedCycleId ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Review evidence changed</AlertTitle><AlertDescription><p>The previous confirmation targeted cycle <span className="break-all font-semibold">{staleExpectedCycleId}</span>. Re-review the current evidence before continuing.</p><Button className="mt-3" variant="outline" onClick={() => setStaleExpectedCycleId(undefined)}>I reviewed the updated cycle</Button></AlertDescription></Alert> : null}{operation.status !== 'DRAFT' ? <OperationStatusPanel status={operation.status} /> : null}{operation.detail ? <p aria-live="polite" className="text-sm font-medium">{operation.detail}</p> : null}{operation.error instanceof ApiError && operation.error.requestId ? <RequestCorrelation requestId={operation.error.requestId} /> : null}</CardContent>{confirming ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="recommendation-confirm-title"><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><h2 id="recommendation-confirm-title" className="text-xl font-semibold">Confirm {humanizeKnownValue(action)}</h2><p className="text-sm text-muted-foreground">Cycle {cycle?.cycleNumber}. This command has no business UUID and will not be retried automatically.</p><div className="flex justify-end gap-2"><Button variant="outline" onClick={() => { setConfirming(false); setTimeout(() => document.getElementById('recommendation-trigger')?.focus(), 0) }}>Cancel</Button><Button autoFocus variant={action === 'RECOMMEND_REJECTION' ? 'destructive' : 'default'} onClick={() => void submit()}>Confirm</Button></div></div></div> : null}</Card>
+  return <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>Loan Officer recommendation</CardTitle><p className="mt-2 text-sm text-muted-foreground">Recommendation evidence is Approval-owned. The command is never automatically retried.</p></div><Button variant="outline" onClick={() => void refresh()} disabled={query.isFetching}><RefreshCw className={query.isFetching ? 'animate-spin' : undefined} />Refresh</Button></div></CardHeader><CardContent className="space-y-5">{query.isError ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Latest refresh unavailable</AlertTitle><AlertDescription>Cached evidence cannot authorize another recommendation.</AlertDescription></Alert> : null}{data.recommendation ? <Alert variant={knownAction ? 'success' : 'warning'}><CheckCircle2 /><AlertTitle>Durable recommendation recorded</AlertTitle><AlertDescription>{knownAction ? humanizeKnownValue(data.recommendation.action) : 'Recommendation action unavailable'} · {formatTimestamp(data.recommendation.submittedAt)}{data.recommendation.reason ? <span className="mt-2 block">Reason: {data.recommendation.reason}</span> : null}{data.recommendation.reasonCode ? <span className="mt-2 block">Controlled reason: {humanizeKnownValue(data.recommendation.reasonCode)}</span> : null}</AlertDescription></Alert> : null}{available ? <div className="space-y-4"><fieldset className="space-y-2"><legend className="font-semibold">Recommendation action</legend>{actions.map((item) => <label key={item.value} className="flex min-h-11 items-center gap-3 rounded-md border px-4"><input type="radio" name="recommendation-action" checked={action === item.value} onChange={() => { setAction(item.value); setTasks([]); setValidationError(undefined) }} />{item.label}</label>)}</fieldset>{action === 'RECOMMEND_REJECTION' ? <label className="grid gap-2 text-sm font-semibold">Recommendation reason<textarea className="min-h-24 rounded-md border bg-card p-3 font-normal" value={reason} maxLength={2000} onChange={(event) => setReason(event.target.value)} /></label> : null}{revision ? <><label className="grid gap-2 text-sm font-semibold">Controlled reason<select className="h-11 rounded-md border bg-card px-3 font-normal" value={reasonCode} onChange={(event) => setReasonCode(event.target.value)}>{data.correctionReasonCodes.map((code) => <option key={code} value={code}>{humanizeKnownValue(code)}</option>)}</select></label><CorrectionPlanFields options={data.correctionOptions} mode={mode} tasks={tasks} onChange={setTasks} /></> : null}<label className="grid gap-2 text-sm font-semibold">Restricted internal notes<textarea className="min-h-24 rounded-md border bg-card p-3 font-normal" value={internalNotes} maxLength={2000} onChange={(event) => setInternalNotes(event.target.value)} /></label><p className="text-sm text-muted-foreground">Internal notes remain memory-only and are never copied into Customer instructions.</p>{validationError ? <p role="alert" className="font-semibold text-danger">{validationError}</p> : null}<Button id="recommendation-trigger" onClick={() => validate() && cycle && setConfirming({ action, reviewCycleId: cycle.reviewCycleId, cycleNumber: cycle.cycleNumber })}>Review recommendation</Button></div> : !data.recommendation ? <p className="text-sm text-muted-foreground">Recommendation is unavailable for the authoritative current state.</p> : null}{staleExpectedCycleId ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Review evidence changed</AlertTitle><AlertDescription><p>The previous confirmation targeted cycle <span className="break-all font-semibold">{staleExpectedCycleId}</span>. Re-review the current evidence before continuing.</p><Button className="mt-3" variant="outline" onClick={() => setStaleExpectedCycleId(undefined)}>I reviewed the updated cycle</Button></AlertDescription></Alert> : null}{operation.status !== 'DRAFT' ? <OperationStatusPanel status={operation.status} /> : null}{operation.detail ? <p aria-live="polite" className="text-sm font-medium">{operation.detail}</p> : null}{operation.error instanceof ApiError && operation.error.requestId ? <RequestCorrelation requestId={operation.error.requestId} /> : null}</CardContent>{confirming ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="recommendation-confirm-title"><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><h2 id="recommendation-confirm-title" className="text-xl font-semibold">Confirm {humanizeKnownValue(confirming.action)}</h2><p className="text-sm text-muted-foreground">Cycle {confirming.cycleNumber}. This command has no business UUID and will not be retried automatically.</p><div className="flex justify-end gap-2"><Button variant="outline" onClick={() => { setConfirming(undefined); setTimeout(() => document.getElementById('recommendation-trigger')?.focus(), 0) }}>Cancel</Button><Button autoFocus variant={confirming.action === 'RECOMMEND_REJECTION' ? 'destructive' : 'default'} onClick={() => void submit()}>Confirm</Button></div></div></div> : null}</Card>
 }

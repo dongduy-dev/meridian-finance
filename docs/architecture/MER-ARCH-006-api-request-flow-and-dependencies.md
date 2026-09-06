@@ -358,6 +358,8 @@ Approval exposes separate purpose-limited Staff projections for recommendation r
 
 The projections expose a current-actor maker-checker relation instead of internal User identifiers. The Approver queue keeps membership, product filtering, paging, and ordering on the server. It does not fetch the general `loan:read` index and filter in the browser.
 
+Every recommendation command carries the review-cycle identifier shown to the Loan Officer. Every decision command carries the recommendation and review-cycle identifiers shown to the Approver. Approval compares these expected-state identifiers with the latest applicable Approval evidence and active Loan-owned cycle before it records, audits, or publishes an outcome. A mismatch returns `STALE_REVIEW_RECOMMENDATION` or `STALE_REVIEW_CYCLE` without an Approval or Loan side effect. These identifiers are concurrency guards; the commands still have no client business UUID.
+
 Revision-producing actions use synchronous transaction participation because a failure to apply the structured outcome must roll back the source Approval record and the resulting Loan, Document, Audit, and history changes.
 
 ```mermaid

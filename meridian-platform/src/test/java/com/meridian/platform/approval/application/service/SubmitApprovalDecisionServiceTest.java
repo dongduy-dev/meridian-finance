@@ -34,7 +34,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -72,11 +71,7 @@ class SubmitApprovalDecisionServiceTest {
     void derivesApproverActorFromCurrentUserAuditsAndPublishesEvent() {
         ApprovalDecisionDto result = service.submitApprovalDecision(
                 LOAN_APPLICATION_ID,
-                new ApprovalDecisionRequest(
-                        ApprovalDecisionAction.APPROVE,
-                        null,
-                        "approved"
-                )
+                request(ApprovalDecisionAction.APPROVE, null, "approved")
         );
 
         assertNotNull(result.decisionId());
@@ -126,6 +121,7 @@ class SubmitApprovalDecisionServiceTest {
                         ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
                         null,
                         "restricted",
+                        RECOMMENDATION_ID,
                         REVIEW_CYCLE_ID,
                         CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED,
                         plan
@@ -147,7 +143,7 @@ class SubmitApprovalDecisionServiceTest {
     void recordsOtherNonApprovalActions(ApprovalDecisionAction action) {
         ApprovalDecisionDto result = service.submitApprovalDecision(
                 LOAN_APPLICATION_ID,
-                new ApprovalDecisionRequest(action, "Decision reason.", null)
+                request(action, "Decision reason.", null)
         );
 
         assertEquals(action.name(), result.action());
@@ -164,7 +160,7 @@ class SubmitApprovalDecisionServiceTest {
                 BusinessRuleViolationException.class,
                 () -> service.submitApprovalDecision(
                         LOAN_APPLICATION_ID,
-                        new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                        request(ApprovalDecisionAction.APPROVE, null, null)
                 )
         );
 
@@ -172,18 +168,18 @@ class SubmitApprovalDecisionServiceTest {
     }
 
     @Test
-    void requiresPriorReviewRecommendation() {
+    void treatsMissingExpectedRecommendationAsStaleEvidence() {
         reviewRecommendationRepository.latestRecommendation = Optional.empty();
 
         BusinessStateConflictException exception = assertThrows(
                 BusinessStateConflictException.class,
                 () -> service.submitApprovalDecision(
                         LOAN_APPLICATION_ID,
-                        new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                        request(ApprovalDecisionAction.APPROVE, null, null)
                 )
         );
 
-        assertEquals("REVIEW_RECOMMENDATION_REQUIRED", exception.getErrorCode());
+        assertEquals("STALE_REVIEW_RECOMMENDATION", exception.getErrorCode());
     }
 
     @Test
@@ -194,11 +190,79 @@ class SubmitApprovalDecisionServiceTest {
                 IllegalStateException.class,
                 () -> service.submitApprovalDecision(
                         LOAN_APPLICATION_ID,
-                        new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                        request(ApprovalDecisionAction.APPROVE, null, null)
                 )
         );
 
         assertEquals("loan rejected transition", exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ApprovalDecisionAction.class,
+            names = {"APPROVE", "REJECT"}
+    )
+    void rejectsSupersededRecommendationBeforeAnyApprovalOrLoanSideEffect(ApprovalDecisionAction action) {
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.submitApprovalDecision(
+                        LOAN_APPLICATION_ID,
+                        new ApprovalDecisionRequest(
+                                action,
+                                action == ApprovalDecisionAction.REJECT ? "Policy reason." : null,
+                                "preserve",
+                                UUID.randomUUID(),
+                                REVIEW_CYCLE_ID,
+                                null,
+                                null
+                        )
+                )
+        );
+
+        assertEquals("STALE_REVIEW_RECOMMENDATION", exception.getErrorCode());
+        assertNull(approvalDecisionRepository.savedDecision);
+        assertNull(auditPublisher.publishedEvent);
+        assertNull(eventPublisher.publishedEvent);
+    }
+
+    @Test
+    void rejectsStaleCycleBeforeAnyApprovalOrLoanSideEffect() {
+        BusinessStateConflictException exception = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.submitApprovalDecision(
+                        LOAN_APPLICATION_ID,
+                        new ApprovalDecisionRequest(
+                                ApprovalDecisionAction.APPROVE,
+                                null,
+                                null,
+                                RECOMMENDATION_ID,
+                                UUID.randomUUID(),
+                                null,
+                                null
+                        )
+                )
+        );
+
+        assertEquals("STALE_REVIEW_CYCLE", exception.getErrorCode());
+        assertNull(approvalDecisionRepository.savedDecision);
+        assertNull(auditPublisher.publishedEvent);
+        assertNull(eventPublisher.publishedEvent);
+    }
+
+    private static ApprovalDecisionRequest request(
+            ApprovalDecisionAction action,
+            String reason,
+            String internalNotes
+    ) {
+        return new ApprovalDecisionRequest(
+                action,
+                reason,
+                internalNotes,
+                RECOMMENDATION_ID,
+                REVIEW_CYCLE_ID,
+                null,
+                null
+        );
     }
 
     private SubmitApprovalDecisionService newService(UUID userId) {

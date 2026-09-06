@@ -632,7 +632,8 @@ class SecurityConfigTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "action": "RECOMMEND_APPROVAL"
+                                  "action": "RECOMMEND_APPROVAL",
+                                  "expectedReviewCycleId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
                                 }
                                 """)
                         .with(user("reviewer").authorities(new SimpleGrantedAuthority("loan:review"))))
@@ -643,7 +644,9 @@ class SecurityConfigTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "action": "APPROVE"
+                                  "action": "APPROVE",
+                                  "expectedReviewRecommendationId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                                  "expectedReviewCycleId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
                                 }
                                 """)
                         .with(user("loan-officer").authorities(new SimpleGrantedAuthority("approval:recommend"))))
@@ -983,7 +986,8 @@ class SecurityConfigTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "action": "RECOMMEND_APPROVAL"
+                                  "action": "RECOMMEND_APPROVAL",
+                                  "expectedReviewCycleId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
                                 }
                                 """)
                         .with(user("loan-officer")
@@ -1036,7 +1040,9 @@ class SecurityConfigTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "action": "APPROVE"
+                                  "action": "APPROVE",
+                                  "expectedReviewRecommendationId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                                  "expectedReviewCycleId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
                                 }
                                 """)
                         .with(user("approver")

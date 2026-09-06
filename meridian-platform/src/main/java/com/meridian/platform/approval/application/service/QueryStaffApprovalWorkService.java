@@ -79,6 +79,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
                 .findByLoanApplicationIdOrderByDecidedAtDesc(loanApplicationId);
         ApprovalDecision latestDecision = recommendation == null ? null
                 : decisions.findByReviewRecommendationId(recommendation.id()).orElse(null);
+        validatePendingDecisionEvidence(loanCase, recommendation, latestDecision);
         boolean makerCheckerEligible = recommendation != null
                 && !recommendation.loanOfficerUserId().equals(actor.userId());
         boolean available = recommendation != null
@@ -197,6 +198,22 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
     private static boolean activeCycle(ApprovalLoanCasePort.CaseSnapshot loanCase) {
         return loanCase.currentReviewCycle() != null
                 && "ACTIVE".equals(loanCase.currentReviewCycle().status());
+    }
+
+    private static void validatePendingDecisionEvidence(
+            ApprovalLoanCasePort.CaseSnapshot loanCase,
+            ReviewRecommendation recommendation,
+            ApprovalDecision latestDecision
+    ) {
+        if (!"APPROVAL_PENDING".equals(loanCase.applicationStatus())) {
+            return;
+        }
+        if (!activeCycle(loanCase)
+                || recommendation == null
+                || latestDecision != null
+                || !loanCase.currentReviewCycle().reviewCycleId().equals(recommendation.reviewCycleId())) {
+            throw systemConflict();
+        }
     }
 
     private static String normalizeProduct(String productCode) {

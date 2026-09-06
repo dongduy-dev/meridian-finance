@@ -117,7 +117,7 @@ export type RecommendationRequest = {
   action: RecommendationAction
   reason: string | null
   internalNotes: string | null
-  expectedReviewCycleId: string | null
+  expectedReviewCycleId: string
   reasonCode: string | null
   correctionPlan: { tasks: CorrectionTaskRequest[] } | null
 }

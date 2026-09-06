@@ -178,6 +178,16 @@
                          "type":  "string"
                      },
                      {
+                         "key":  "uclReviewCycleId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "uclReviewRecommendationId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
                          "key":  "collateralLoanApplicationId",
                          "value":  "",
                          "type":  "string"
@@ -194,6 +204,11 @@
                      },
                      {
                          "key":  "collateralReviewCycleId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "collateralReviewRecommendationId",
                          "value":  "",
                          "type":  "string"
                      },
@@ -235,16 +250,41 @@
                          "description":  "A separate verified Collateral application in APPROVAL_PENDING for the REJECT example."
                      },
                      {
+                         "key":  "collateralRejectReviewCycleId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "collateralRejectRecommendationId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
                          "key":  "collateralReturnApplicationId",
                          "value":  "",
                          "type":  "string",
                          "description":  "A separate verified Collateral application in APPROVAL_PENDING for the return-to-review example."
                      },
                      {
+                         "key":  "collateralReturnReviewCycleId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
+                         "key":  "collateralReturnRecommendationId",
+                         "value":  "",
+                         "type":  "string"
+                     },
+                     {
                          "key":  "collateralCorrectionApplicationId",
                          "value":  "",
                          "type":  "string",
                          "description":  "A separate verified Collateral application in APPROVAL_PENDING for the document-only correction example."
+                     },
+                     {
+                         "key":  "collateralCorrectionRecommendationId",
+                         "value":  "",
+                         "type":  "string"
                      },
                      {
                          "key":  "collateralCorrectionReviewCycleId",
@@ -2907,17 +2947,17 @@
                                       "name":  "POST start UCL review after verification",
                                       "request":  {"method":"POST","header":[],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/review/start","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Starts the common Loan Officer review only after the authoritative latest UCL verification cycle is VERIFIED."},
                                       "response":  [],
-                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclOfferScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"UCL entered common review\", () => pm.expect(pm.response.json().status).to.eql(\"UNDER_REVIEW\"));"]}}]
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclOfferScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"UCL entered common review\", () => pm.expect(pm.response.json().status).to.eql(\"UNDER_REVIEW\"));","pm.collectionVariables.set(\"uclReviewCycleId\", pm.response.json().activeReviewCycleId);"]}}]
                                   },
                                   {
                                       "name":  "POST recommend UCL approval",
-                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/review-recommendations","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Records the executable positive UCL recommendation and moves the application to APPROVAL_PENDING.","body":{"mode":"raw","raw":"{\n  \"action\": \"RECOMMEND_APPROVAL\",\n  \"reason\": \"Manual verification and document review are complete.\",\n  \"internalNotes\": \"Prepared UCL positive-path scenario.\"\n}","options":{"raw":{"language":"json"}}}},
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/review-recommendations","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Records the executable positive UCL recommendation and moves the application to APPROVAL_PENDING.","body":{"mode":"raw","raw":"{\n  \"action\": \"RECOMMEND_APPROVAL\",\n  \"reason\": \"Manual verification and document review are complete.\",\n  \"internalNotes\": \"Prepared UCL positive-path scenario.\",\n  \"expectedReviewCycleId\": \"{{uclReviewCycleId}}\"\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
-                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclOfferScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Recommendation belongs to the UCL application\", () => pm.expect(pm.response.json().loanApplicationId).to.eql(pm.collectionVariables.get(\"uclLoanApplicationId\")));"]}}]
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclOfferScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Recommendation belongs to the UCL application\", () => pm.expect(pm.response.json().loanApplicationId).to.eql(pm.collectionVariables.get(\"uclLoanApplicationId\")));","pm.collectionVariables.set(\"uclReviewRecommendationId\", pm.response.json().recommendationId);"]}}]
                                   },
                                   {
                                       "name":  "POST approve UCL and generate exact-request offer",
-                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Atomically records the UCL approval and creates one immutable exact-request monthly-installment offer.","body":{"mode":"raw","raw":"{\n  \"action\": \"APPROVE\",\n  \"reason\": null,\n  \"internalNotes\": null\n}","options":{"raw":{"language":"json"}}}},
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclLoanApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Atomically records the UCL approval and creates one immutable exact-request monthly-installment offer.","body":{"mode":"raw","raw":"{\n  \"action\": \"APPROVE\",\n  \"reason\": null,\n  \"internalNotes\": null,\n  \"expectedReviewRecommendationId\": \"{{uclReviewRecommendationId}}\",\n  \"expectedReviewCycleId\": \"{{uclReviewCycleId}}\"\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
                                       "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclOfferScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Approval decision belongs to the UCL application\", () => pm.expect(pm.response.json().loanApplicationId).to.eql(pm.collectionVariables.get(\"uclLoanApplicationId\")));"]}}]
                                   },
@@ -3000,13 +3040,13 @@
                                   },
                                   {
                                       "name":  "POST recommend Collateral approval",
-                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/review-recommendations","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Records the common positive recommendation and moves the verified Collateral application to APPROVAL_PENDING.","body":{"mode":"raw","raw":"{\n  \"action\": \"RECOMMEND_APPROVAL\",\n  \"reason\": \"Manual collateral verification and document review are complete.\",\n  \"internalNotes\": \"Prepared Collateral positive-path scenario.\"\n}","options":{"raw":{"language":"json"}}}},
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/review-recommendations","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Records the common positive recommendation and moves the verified Collateral application to APPROVAL_PENDING.","body":{"mode":"raw","raw":"{\n  \"action\": \"RECOMMEND_APPROVAL\",\n  \"reason\": \"Manual collateral verification and document review are complete.\",\n  \"internalNotes\": \"Prepared Collateral positive-path scenario.\",\n  \"expectedReviewCycleId\": \"{{collateralReviewCycleId}}\"\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
-                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Recommendation belongs to the Collateral application\", () => pm.expect(pm.response.json().loanApplicationId).to.eql(pm.collectionVariables.get(\"collateralLoanApplicationId\")));"]}}]
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Recommendation belongs to the Collateral application\", () => pm.expect(pm.response.json().loanApplicationId).to.eql(pm.collectionVariables.get(\"collateralLoanApplicationId\")));","pm.collectionVariables.set(\"collateralReviewRecommendationId\", pm.response.json().recommendationId);"]}}]
                                   },
                                   {
                                       "name":  "POST approve Collateral and generate exact-request offer",
-                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Atomically records the Collateral approval and creates one exact-request 1.5% flat monthly offer with no Salary Advance exposure effect.","body":{"mode":"raw","raw":"{\n  \"action\": \"APPROVE\",\n  \"reason\": null,\n  \"internalNotes\": null\n}","options":{"raw":{"language":"json"}}}},
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Atomically records the Collateral approval and creates one exact-request 1.5% flat monthly offer with no Salary Advance exposure effect.","body":{"mode":"raw","raw":"{\n  \"action\": \"APPROVE\",\n  \"reason\": null,\n  \"internalNotes\": null,\n  \"expectedReviewRecommendationId\": \"{{collateralReviewRecommendationId}}\",\n  \"expectedReviewCycleId\": \"{{collateralReviewCycleId}}\"\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
                                       "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Approval decision belongs to the Collateral application\", () => pm.expect(pm.response.json().loanApplicationId).to.eql(pm.collectionVariables.get(\"collateralLoanApplicationId\")));"]}}]
                                   },
@@ -3126,21 +3166,21 @@
                                   },
                                   {
                                       "name":  "POST reject prepared Collateral application",
-                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralRejectApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Prepared independent REJECT action. It creates no ApprovedOffer or Salary Advance effect.","body":{"mode":"raw","raw":"{\n  \"action\": \"REJECT\",\n  \"reason\": \"The verified application is not approved under manual credit review.\",\n  \"internalNotes\": null\n}","options":{"raw":{"language":"json"}}}},
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralRejectApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Prepared independent REJECT action. It creates no ApprovedOffer or Salary Advance effect.","body":{"mode":"raw","raw":"{\n  \"action\": \"REJECT\",\n  \"reason\": \"The verified application is not approved under manual credit review.\",\n  \"internalNotes\": null,\n  \"expectedReviewRecommendationId\": \"{{collateralRejectRecommendationId}}\",\n  \"expectedReviewCycleId\": \"{{collateralRejectReviewCycleId}}\"\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
-                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"collateralRejectApplicationId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Collateral rejection is recorded\", () => { const json = pm.response.json(); pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"collateralRejectApplicationId\")); pm.expect(json.action).to.eql(\"REJECT\"); });"]}}]
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"collateralRejectApplicationId\") || !pm.collectionVariables.get(\"collateralRejectReviewCycleId\") || !pm.collectionVariables.get(\"collateralRejectRecommendationId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Collateral rejection is recorded\", () => { const json = pm.response.json(); pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"collateralRejectApplicationId\")); pm.expect(json.action).to.eql(\"REJECT\"); });"]}}]
                                   },
                                   {
                                       "name":  "POST return prepared Collateral application to review",
-                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralReturnApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Prepared independent RETURN_TO_LOAN_OFFICER_REVIEW action using the common review-cycle semantics.","body":{"mode":"raw","raw":"{\n  \"action\": \"RETURN_TO_LOAN_OFFICER_REVIEW\",\n  \"reason\": \"The recommendation requires additional Loan Officer analysis.\",\n  \"internalNotes\": null\n}","options":{"raw":{"language":"json"}}}},
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralReturnApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Prepared independent RETURN_TO_LOAN_OFFICER_REVIEW action using the common review-cycle semantics.","body":{"mode":"raw","raw":"{\n  \"action\": \"RETURN_TO_LOAN_OFFICER_REVIEW\",\n  \"reason\": \"The recommendation requires additional Loan Officer analysis.\",\n  \"internalNotes\": null,\n  \"expectedReviewRecommendationId\": \"{{collateralReturnRecommendationId}}\",\n  \"expectedReviewCycleId\": \"{{collateralReturnReviewCycleId}}\"\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
-                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"collateralReturnApplicationId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Collateral return is recorded\", () => pm.expect(pm.response.json().action).to.eql(\"RETURN_TO_LOAN_OFFICER_REVIEW\"));"]}}]
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"collateralReturnApplicationId\") || !pm.collectionVariables.get(\"collateralReturnReviewCycleId\") || !pm.collectionVariables.get(\"collateralReturnRecommendationId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Collateral return is recorded\", () => pm.expect(pm.response.json().action).to.eql(\"RETURN_TO_LOAN_OFFICER_REVIEW\"));"]}}]
                                   },
                                   {
                                       "name":  "POST request prepared Collateral document correction",
-                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralCorrectionApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Prepared independent correction action limited to replacement of the existing ownership-evidence item. It cannot change submitted Collateral facts or requested terms.","body":{"mode":"raw","raw":"{\n  \"action\": \"REQUEST_CUSTOMER_OR_STAFF_CORRECTION\",\n  \"reason\": \"The ownership evidence must be replaced before another review cycle.\",\n  \"internalNotes\": null,\n  \"expectedReviewCycleId\": \"{{collateralCorrectionReviewCycleId}}\",\n  \"reasonCode\": \"DOCUMENT_REPLACEMENT_REQUIRED\",\n  \"correctionPlan\": {\n    \"tasks\": [{\n      \"scope\": \"DOCUMENT_REPLACEMENT\",\n      \"responsibleParty\": \"CUSTOMER\",\n      \"documentType\": \"COLLATERAL_OWNERSHIP_EVIDENCE\",\n      \"createChecklistItem\": false,\n      \"checklistItemId\": \"{{collateralCorrectionChecklistItemId}}\",\n      \"baselineDocumentVersionId\": \"{{collateralCorrectionBaselineVersionId}}\",\n      \"customerInstruction\": \"Upload a clear current replacement for the ownership evidence.\",\n      \"staffInstruction\": null\n    }]\n  }\n}","options":{"raw":{"language":"json"}}}},
+                                      "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralCorrectionApplicationId}}/approval-decisions","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},"description":"Prepared independent correction action limited to replacement of the existing ownership-evidence item. It cannot change submitted Collateral facts or requested terms.","body":{"mode":"raw","raw":"{\n  \"action\": \"REQUEST_CUSTOMER_OR_STAFF_CORRECTION\",\n  \"reason\": \"The ownership evidence must be replaced before another review cycle.\",\n  \"internalNotes\": null,\n  \"expectedReviewRecommendationId\": \"{{collateralCorrectionRecommendationId}}\",\n  \"expectedReviewCycleId\": \"{{collateralCorrectionReviewCycleId}}\",\n  \"reasonCode\": \"DOCUMENT_REPLACEMENT_REQUIRED\",\n  \"correctionPlan\": {\n    \"tasks\": [{\n      \"scope\": \"DOCUMENT_REPLACEMENT\",\n      \"responsibleParty\": \"CUSTOMER\",\n      \"documentType\": \"COLLATERAL_OWNERSHIP_EVIDENCE\",\n      \"createChecklistItem\": false,\n      \"checklistItemId\": \"{{collateralCorrectionChecklistItemId}}\",\n      \"baselineDocumentVersionId\": \"{{collateralCorrectionBaselineVersionId}}\",\n      \"customerInstruction\": \"Upload a clear current replacement for the ownership evidence.\",\n      \"staffInstruction\": null\n    }]\n  }\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
-                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"collateralCorrectionApplicationId\") || !pm.collectionVariables.get(\"collateralCorrectionReviewCycleId\") || !pm.collectionVariables.get(\"collateralCorrectionChecklistItemId\") || !pm.collectionVariables.get(\"collateralCorrectionBaselineVersionId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Collateral correction is recorded\", () => pm.expect(pm.response.json().action).to.eql(\"REQUEST_CUSTOMER_OR_STAFF_CORRECTION\"));"]}}]
+                                      "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (!pm.collectionVariables.get(\"collateralCorrectionApplicationId\") || !pm.collectionVariables.get(\"collateralCorrectionRecommendationId\") || !pm.collectionVariables.get(\"collateralCorrectionReviewCycleId\") || !pm.collectionVariables.get(\"collateralCorrectionChecklistItemId\") || !pm.collectionVariables.get(\"collateralCorrectionBaselineVersionId\")) { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","pm.test(\"Collateral correction is recorded\", () => pm.expect(pm.response.json().action).to.eql(\"REQUEST_CUSTOMER_OR_STAFF_CORRECTION\"));"]}}]
                                   },
                                   {
                                       "name":  "POST decline prepared Collateral offer",
@@ -3289,7 +3329,7 @@
                                                       "description":  "Records recommendation and triggers Loan-owned status transition in the same transaction.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"action\": \"{{recommendationAction}}\",\n  \"reason\": \"{{recommendationReason}}\",\n  \"internalNotes\": \"{{internalNotes}}\"\n}",
+                                                                   "raw":  "{\n  \"action\": \"{{recommendationAction}}\",\n  \"reason\": \"{{recommendationReason}}\",\n  \"internalNotes\": \"{{internalNotes}}\",\n  \"expectedReviewCycleId\": \"{{reviewCycleId}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -3357,7 +3397,7 @@
                                                       "description":  "Records final Approver decision after Loan Officer recommendation and triggers Loan-owned status transition.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"action\": \"{{approvalDecisionAction}}\",\n  \"reason\": \"{{approvalDecisionReason}}\",\n  \"internalNotes\": \"{{internalNotes}}\"\n}",
+                                                                   "raw":  "{\n  \"action\": \"{{approvalDecisionAction}}\",\n  \"reason\": \"{{approvalDecisionReason}}\",\n  \"internalNotes\": \"{{internalNotes}}\",\n  \"expectedReviewRecommendationId\": \"{{reviewRecommendationId}}\",\n  \"expectedReviewCycleId\": \"{{reviewCycleId}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -3437,7 +3477,7 @@
                                                       "description":  "Example payload for a separate application still in UNDER_REVIEW or RETURNED_TO_REVIEW.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"action\": \"RECOMMEND_REJECTION\",\n  \"reason\": \"Repayment capacity is not acceptable for this request.\",\n  \"internalNotes\": \"Postman rejection example.\"\n}",
+                                                                   "raw":  "{\n  \"action\": \"RECOMMEND_REJECTION\",\n  \"reason\": \"Repayment capacity is not acceptable for this request.\",\n  \"internalNotes\": \"Postman rejection example.\",\n  \"expectedReviewCycleId\": \"{{reviewCycleId}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -3631,7 +3671,7 @@
                                                       "description":  "Manual scenario: requires APPROVAL_PENDING plus current checklistItemId/documentVersionId and a different Approver from the recommender.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\r\n    \"action\":  \"REQUEST_CUSTOMER_OR_STAFF_CORRECTION\",\r\n    \"reason\":  null,\r\n    \"internalNotes\":  \"Restricted Postman mixed-correction example.\",\r\n    \"expectedReviewCycleId\":  \"{{reviewCycleId}}\",\r\n    \"reasonCode\":  \"DOCUMENT_REPLACEMENT_REQUIRED\",\r\n    \"correctionPlan\":  {\r\n                           \"tasks\":  [\r\n                                         {\r\n                                             \"scope\":  \"DOCUMENT_REPLACEMENT\",\r\n                                             \"responsibleParty\":  \"CUSTOMER\",\r\n                                             \"documentType\":  \"RECENT_PAYSLIP\",\r\n                                             \"createChecklistItem\":  false,\r\n                                             \"checklistItemId\":  \"{{checklistItemId}}\",\r\n                                             \"baselineDocumentVersionId\":  \"{{documentVersionId}}\",\r\n                                             \"customerInstruction\":  \"Replace the payslip with a readable current copy.\",\r\n                                             \"staffInstruction\":  null\r\n                                         },\r\n                                         {\r\n                                             \"scope\":  \"DOCUMENT_REVIEW\",\r\n                                             \"responsibleParty\":  \"STAFF\",\r\n                                             \"documentType\":  \"RECENT_PAYSLIP\",\r\n                                             \"createChecklistItem\":  false,\r\n                                             \"checklistItemId\":  \"{{checklistItemId}}\",\r\n                                             \"baselineDocumentVersionId\":  \"{{documentVersionId}}\",\r\n                                             \"customerInstruction\":  null,\r\n                                             \"staffInstruction\":  \"Review the customer replacement version.\"\r\n                                         }\r\n                                     ]\r\n                       }\r\n}",
+                                                                   "raw":  "{\r\n    \"action\":  \"REQUEST_CUSTOMER_OR_STAFF_CORRECTION\",\r\n    \"reason\":  null,\r\n    \"internalNotes\":  \"Restricted Postman mixed-correction example.\",\r\n    \"expectedReviewRecommendationId\":  \"{{reviewRecommendationId}}\",\r\n    \"expectedReviewCycleId\":  \"{{reviewCycleId}}\",\r\n    \"reasonCode\":  \"DOCUMENT_REPLACEMENT_REQUIRED\",\r\n    \"correctionPlan\":  {\r\n                           \"tasks\":  [\r\n                                         {\r\n                                             \"scope\":  \"DOCUMENT_REPLACEMENT\",\r\n                                             \"responsibleParty\":  \"CUSTOMER\",\r\n                                             \"documentType\":  \"RECENT_PAYSLIP\",\r\n                                             \"createChecklistItem\":  false,\r\n                                             \"checklistItemId\":  \"{{checklistItemId}}\",\r\n                                             \"baselineDocumentVersionId\":  \"{{documentVersionId}}\",\r\n                                             \"customerInstruction\":  \"Replace the payslip with a readable current copy.\",\r\n                                             \"staffInstruction\":  null\r\n                                         },\r\n                                         {\r\n                                             \"scope\":  \"DOCUMENT_REVIEW\",\r\n                                             \"responsibleParty\":  \"STAFF\",\r\n                                             \"documentType\":  \"RECENT_PAYSLIP\",\r\n                                             \"createChecklistItem\":  false,\r\n                                             \"checklistItemId\":  \"{{checklistItemId}}\",\r\n                                             \"baselineDocumentVersionId\":  \"{{documentVersionId}}\",\r\n                                             \"customerInstruction\":  null,\r\n                                             \"staffInstruction\":  \"Review the customer replacement version.\"\r\n                                         }\r\n                                     ]\r\n                       }\r\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -5966,7 +6006,7 @@
                                                       "description":  "Customer token lacks approval:recommend.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"action\": \"RECOMMEND_APPROVAL\"\n}",
+                                                                   "raw":  "{\n  \"action\": \"RECOMMEND_APPROVAL\",\n  \"expectedReviewCycleId\": \"{{reviewCycleId}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -6093,7 +6133,7 @@
                                                       "description":  "Customer token lacks approval:decide.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"action\": \"APPROVE\"\n}",
+                                                                   "raw":  "{\n  \"action\": \"APPROVE\",\n  \"expectedReviewRecommendationId\": \"{{reviewRecommendationId}}\",\n  \"expectedReviewCycleId\": \"{{reviewCycleId}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"

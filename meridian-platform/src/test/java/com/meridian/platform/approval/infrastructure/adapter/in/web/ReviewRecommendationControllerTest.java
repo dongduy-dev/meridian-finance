@@ -48,7 +48,8 @@ class ReviewRecommendationControllerTest {
                         .content("""
                                 {
                                   "action": "RECOMMEND_APPROVAL",
-                                  "internalNotes": "ready"
+                                  "internalNotes": "ready",
+                                  "expectedReviewCycleId": "cccccccc-cccc-cccc-cccc-cccccccccccc"
                                 }
                                 """))
                 .andExpect(status().isCreated())

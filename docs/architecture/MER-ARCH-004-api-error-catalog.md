@@ -120,6 +120,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
 | 409 | `MAKER_CHECKER_VIOLATION` | Maker-checker violation | Use a different authorized user for the final Approver decision |
+| 409 | `STALE_REVIEW_RECOMMENDATION` | Expected recommendation is stale | Refresh the Staff decision evidence and review the latest applicable recommendation |
 | 422 | `REVIEW_RECOMMENDATION_REQUIRED` | Review recommendation required | Record the Loan Officer recommendation before the final decision |
 
 ---

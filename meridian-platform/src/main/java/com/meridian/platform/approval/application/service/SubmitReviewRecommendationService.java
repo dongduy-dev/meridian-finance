@@ -70,7 +70,13 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
         UUID reviewCycleId = loanReviewCyclePort.findActiveReviewCycleId(loanApplicationId)
                 .orElseThrow(() -> new BusinessStateConflictException(
                         "REVIEW_CYCLE_REQUIRED", "An active review cycle is required."));
-        validateCorrectionContract(request, reviewCycleId);
+        if (!reviewCycleId.equals(request.expectedReviewCycleId())) {
+            throw new BusinessStateConflictException(
+                    "STALE_REVIEW_CYCLE",
+                    "The expected review cycle is no longer active."
+            );
+        }
+        validateCorrectionContract(request);
 
         AuthenticatedUser currentUser = currentUserProvider.currentUser();
         LocalDateTime now = LocalDateTime.now(clock);
@@ -112,15 +118,9 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
         return approvalMapper.toDto(savedRecommendation);
     }
 
-    private void validateCorrectionContract(ReviewRecommendationRequest request, UUID activeCycleId) {
+    private void validateCorrectionContract(ReviewRecommendationRequest request) {
         if (request.action() == ReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION
                 || request.action() == ReviewRecommendationAction.REQUEST_STAFF_CORRECTION) {
-            if (!activeCycleId.equals(request.expectedReviewCycleId())) {
-                throw new BusinessStateConflictException(
-                        "STALE_REVIEW_CYCLE",
-                        "The expected review cycle is no longer active."
-                );
-            }
             if (request.reasonCode() == null || request.reason() != null) {
                 throw new com.meridian.platform.shared.domain.exception.BusinessRuleViolationException(
                         "INVALID_CORRECTION_PLAN",
@@ -134,8 +134,7 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
             }
             return;
         }
-        if (request.expectedReviewCycleId() != null
-                || request.reasonCode() != null
+        if (request.reasonCode() != null
                 || request.correctionPlan() != null) {
             throw new com.meridian.platform.shared.domain.exception.BusinessRuleViolationException(
                     "INVALID_CORRECTION_PLAN",

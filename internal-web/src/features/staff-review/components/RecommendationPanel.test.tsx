@@ -50,6 +50,40 @@ describe('RecommendationPanel', () => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff)
   })
 
+  it.each(['RECOMMEND_APPROVAL', 'RECOMMEND_REJECTION'] as const)(
+    'sends the displayed review cycle for %s',
+    async (selectedAction) => {
+      let recorded = false
+      let submittedBody: Record<string, unknown> | undefined
+      vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+        if (String(path).endsWith('/review-recommendations')
+          && (options as RequestInit | undefined)?.method === 'POST') {
+          submittedBody = (options as { body?: Record<string, unknown> }).body
+          recorded = true
+          return {}
+        }
+        const value = recommendationCase(recorded)
+        return recorded
+          ? { ...value, recommendation: { ...value.recommendation!, action: selectedAction } }
+          : value
+      })
+      render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RecommendationPanel loanApplicationId={applicationId} /></AuthProvider></QueryClientProvider>)
+      const user = userEvent.setup()
+      if (selectedAction === 'RECOMMEND_REJECTION') {
+        await user.click(await screen.findByLabelText('Recommend rejection'))
+        await user.type(screen.getByLabelText('Recommendation reason'), 'Policy reason.')
+      }
+      await user.click(await screen.findByRole('button', { name: 'Review recommendation' }))
+      await user.click(screen.getByRole('button', { name: 'Confirm' }))
+
+      await screen.findByText(/confirms the exact recommendation/i)
+      expect(submittedBody).toMatchObject({
+        action: selectedAction,
+        expectedReviewCycleId: cycleId,
+      })
+    },
+  )
+
   it('reconciles a lost POST response by exact cycle and action without a second POST', async () => {
     let recorded = false
     vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
@@ -127,6 +161,9 @@ describe('RecommendationPanel', () => {
 
     expect(await screen.findByRole('heading', { name: 'Review evidence changed' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review recommendation' })).not.toBeInTheDocument()
+    expect(vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
+      String(path).endsWith('/review-recommendations')
+      && (options as RequestInit | undefined)?.method === 'POST')).toHaveLength(1)
     await user.click(screen.getByRole('button', { name: 'I reviewed the updated cycle' }))
     expect(await screen.findByRole('button', { name: 'Review recommendation' })).toBeVisible()
     expect(screen.getByDisplayValue('preserve this draft')).toBeVisible()

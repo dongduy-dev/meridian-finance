@@ -173,9 +173,14 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
         assertEquals("ACTIVE", reviewRead.currentReviewCycle().status());
         assertEquals("UNDER_REVIEW", reviewRead.applicationStatus());
         assertTrue(!reviewRead.reviewStartAvailable());
-        recommendationUseCase.submitReviewRecommendation(
+        var recommendation = recommendationUseCase.submitReviewRecommendation(
                 ready.applicationId(),
-                new ReviewRecommendationRequest(ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null)
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.RECOMMEND_APPROVAL,
+                        null,
+                        null,
+                        reviewRead.currentReviewCycle().reviewCycleId()
+                )
         );
         assertEquals("APPROVAL_PENDING", status(ready.applicationId()));
         UUID reviewCycleId = uuid("SELECT id FROM loan_application_review_cycles "
@@ -183,7 +188,7 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
         useApprover();
         decisionUseCase.submitApprovalDecision(
                 ready.applicationId(),
-                approvalRequest(action, reviewCycleId, ready)
+                approvalRequest(action, recommendation.recommendationId(), reviewCycleId, ready)
         );
 
         String expectedStatus = switch (action) {
@@ -523,21 +528,29 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
 
     private ApprovalDecisionRequest approvalRequest(
             ApprovalDecisionAction action,
+            UUID recommendationId,
             UUID reviewCycleId,
             ReadyApplication ready
     ) {
         return switch (action) {
-            case APPROVE -> new ApprovalDecisionRequest(action, null, null);
-            case REJECT -> new ApprovalDecisionRequest(action, "Not approved.", null);
+            case APPROVE -> new ApprovalDecisionRequest(
+                    action, null, null, recommendationId, reviewCycleId
+            );
+            case REJECT -> new ApprovalDecisionRequest(
+                    action, "Not approved.", null, recommendationId, reviewCycleId
+            );
             case RETURN_TO_LOAN_OFFICER_REVIEW -> new ApprovalDecisionRequest(
                         ApprovalDecisionAction.RETURN_TO_LOAN_OFFICER_REVIEW,
                         "Return for further Loan Officer review.",
-                        null
+                        null,
+                        recommendationId,
+                        reviewCycleId
                 );
             case REQUEST_CUSTOMER_OR_STAFF_CORRECTION -> new ApprovalDecisionRequest(
                         ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
                         null,
                         null,
+                        recommendationId,
                         reviewCycleId,
                         CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                         mixedCorrectionPlan(ready)
