@@ -24,6 +24,7 @@ vi.mock('@/lib/api', async () => {
 const applicationId = '11111111-1111-4111-8111-111111111111'
 const recommendationId = '44444444-4444-4444-8444-444444444444'
 const cycleId = '33333333-3333-4333-8333-333333333333'
+const successorCycleId = '88888888-8888-4888-8888-888888888888'
 const staff: AuthResponse = {
   tokenType: 'Bearer', accessToken: 'staff-token', expiresAt: '2026-09-06T10:00:00Z',
   userId: '22222222-2222-4222-8222-222222222222', email: 'approver@meridian.local',
@@ -47,6 +48,35 @@ function decisionCase(decided = false, eligible = true) {
     correctionReasonCodes: ['DOCUMENT_REPLACEMENT_REQUIRED', 'DOCUMENT_REVIEW_REQUIRED'],
     correctionOptions: [{ documentType: 'INCOME_PROOF', checklistItemId: '55555555-5555-4555-8555-555555555555',
       currentDocumentVersionId: '66666666-6666-4666-8666-666666666666', allowedScopes: ['DOCUMENT_REPLACEMENT', 'DOCUMENT_REVIEW'] }],
+  }
+}
+
+function returnedToReviewCase() {
+  const value = decisionCase()
+  const decision = {
+    decisionId: '77777777-7777-4777-8777-777777777777',
+    reviewRecommendationId: recommendationId,
+    action: 'RETURN_TO_LOAN_OFFICER_REVIEW',
+    reason: 'Review the case again.',
+    reasonCode: null,
+    decidedAt: '2026-09-06T08:30:00',
+  }
+  return {
+    ...value,
+    applicationStatus: 'RETURNED_TO_REVIEW',
+    evidence: {
+      ...value.evidence,
+      currentReviewCycle: {
+        reviewCycleId: successorCycleId,
+        cycleNumber: 2,
+        status: 'ACTIVE',
+        startedAt: '2026-09-06T08:30:00',
+        endedAt: null,
+      },
+    },
+    decisionAvailable: false,
+    latestDecision: decision,
+    decisionHistory: [decision],
   }
 }
 
@@ -183,6 +213,41 @@ describe('Staff decision workspace', () => {
     expect(posts()).toHaveLength(1)
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => String(path).includes('/approved-offer'))).toBe(false)
     expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: staffApplicationKeys.all })
+  })
+
+  it('reconciles a lost return-to-review decision against the new active successor cycle', async () => {
+    let posted = false
+    let readsAvailable = true
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      const isPost = String(path).endsWith('/approval-decisions')
+        && (options as RequestInit | undefined)?.method === 'POST'
+      if (isPost) {
+        posted = true
+        readsAvailable = false
+        throw new NetworkError('connection lost')
+      }
+      if (posted && !readsAvailable) throw new NetworkError('read unavailable')
+      return posted ? returnedToReviewCase() : decisionCase()
+    })
+    renderPage()
+    const user = userEvent.setup()
+    await user.click(await screen.findByLabelText('Return to Loan Officer review'))
+    await user.type(screen.getByLabelText('Decision reason'), 'Review the case again.')
+    await user.click(screen.getByRole('button', { name: 'Review decision' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm decision' }))
+
+    expect(await screen.findByText(/decision result is unknown/i)).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
+    const posts = () => vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
+      String(path).endsWith('/approval-decisions') && (options as RequestInit | undefined)?.method === 'POST')
+    expect(posts()).toHaveLength(1)
+
+    readsAvailable = true
+    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+
+    expect(await screen.findByText(/durable decision and resulting Loan state are confirmed: RETURNED_TO_REVIEW/i)).toBeVisible()
+    expect(posts()).toHaveLength(1)
+    expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => String(path).includes('/approved-offer'))).toBe(false)
   })
 
   it('keeps a confirmed command successful when its immediate reconciliation GET is unavailable', async () => {
