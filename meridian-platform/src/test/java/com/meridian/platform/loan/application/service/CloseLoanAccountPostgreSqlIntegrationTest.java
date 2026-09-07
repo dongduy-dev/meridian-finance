@@ -433,6 +433,68 @@ class CloseLoanAccountPostgreSqlIntegrationTest {
         }
     }
 
+    @Test
+    void overdueEvaluationAfterClosureIsTerminalNoOp() {
+        Activated activated = activate("OVERDUE-AFTER-CLOSURE");
+        RecordRepaymentUseCase.Result payoff = repayFully(activated);
+        assertEquals(LoanAccountStatus.SETTLED, payoff.accountBalance().status());
+        assertEquals(0, outstanding(activated.accountId()).signum());
+
+        CloseLoanAccountUseCase.Result closure = closures.close(
+                closureCommand(activated)
+        );
+        assertEquals(LoanAccountStatus.CLOSED, closure.resultingStatus());
+        assertEquals("CLOSED", status(activated.accountId()));
+        FinancialFingerprint before = fingerprint(activated);
+        int accountHistoryBefore = count(
+                "select count(*) from loan_account_status_transitions "
+                        + "where loan_account_id=?",
+                activated.accountId()
+        );
+        int auditBefore = count(
+                "select count(*) from audit_events "
+                        + "where entity_type='LOAN_ACCOUNT' and entity_id=?",
+                activated.accountId()
+        );
+
+        EvaluateLoanAccountOverdueUseCase.Result evaluated =
+                overdueEvaluator.evaluate(
+                        new EvaluateLoanAccountOverdueUseCase.Command(
+                                activated.applicationId(),
+                                activated.accountId(),
+                                OPERATION_DATE,
+                                EVALUATED_AT
+                        )
+                );
+
+        assertTrue(evaluated.noOp());
+        assertEquals(LoanAccountStatus.CLOSED, evaluated.previousStatus());
+        assertEquals(LoanAccountStatus.CLOSED, evaluated.resultingStatus());
+        assertEquals(0, evaluated.installmentTransitionCount());
+        assertFalse(evaluated.accountStatusChanged());
+        assertEquals("CLOSED", status(activated.accountId()));
+        assertEquals(before, fingerprint(activated));
+        assertEquals(accountHistoryBefore, count(
+                "select count(*) from loan_account_status_transitions "
+                        + "where loan_account_id=?",
+                activated.accountId()
+        ));
+        assertEquals(auditBefore, count(
+                "select count(*) from audit_events "
+                        + "where entity_type='LOAN_ACCOUNT' and entity_id=?",
+                activated.accountId()
+        ));
+        assertEquals(0, count(
+                "select count(*) from loan_account_status_transitions "
+                        + "where loan_account_id=? and sequence_number>("
+                        + "select sequence_number from loan_account_status_transitions "
+                        + "where loan_account_id=? "
+                        + "and action='ADMINISTRATIVE_CLOSURE')",
+                activated.accountId(),
+                activated.accountId()
+        ));
+    }
+
     private Object[] raceSettlementAndClosure(Activated activated) throws Exception {
         ExecutorService pool = Executors.newFixedThreadPool(2);
         CountDownLatch start = new CountDownLatch(1);
