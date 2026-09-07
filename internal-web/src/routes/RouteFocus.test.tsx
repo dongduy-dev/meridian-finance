@@ -20,8 +20,10 @@ describe('route focus', () => {
   it.each([
     ['/staff/work/documents', 'Document review | Meridian'],
     ['/staff/work/corrections', 'Staff corrections | Meridian'],
+    ['/staff/work/contracts', 'Contract and readiness queue | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/documents', 'Application documents | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/corrections', 'Application corrections | Meridian'],
+    ['/staff/applications/11111111-1111-4111-8111-111111111111/contract', 'Contract and readiness | Meridian'],
   ])('publishes an accurate title for %s', async (path, title) => {
     render(<MemoryRouter initialEntries={[path]}><RouteFocus /><DeferredHeading /></MemoryRouter>)
     await waitFor(() => expect(document.title).toBe(title))

@@ -1,12 +1,19 @@
 const STORAGE_KEY = 'meridian.staff.unresolved-operations.v1'
 
-export type UnresolvedOperationType = 'DOCUMENT_REVIEW' | 'STAFF_UPLOAD' | 'TASK_COMPLETION' | 'STAFF_RESUBMISSION'
+export type UnresolvedOperationType =
+  | 'DOCUMENT_REVIEW'
+  | 'STAFF_UPLOAD'
+  | 'TASK_COMPLETION'
+  | 'STAFF_RESUBMISSION'
+  | 'CONTRACT_PREPARATION'
+  | 'CONTRACT_READINESS_CONFIRMATION'
 export type UnresolvedOperation = {
   type: UnresolvedOperationType
   resource: string
   operationId: string
   payloadDigest: string
   unresolvedAt: string
+  semanticPayload?: unknown
 }
 export type RecoveryBindingIdentity = {
   userId: string
