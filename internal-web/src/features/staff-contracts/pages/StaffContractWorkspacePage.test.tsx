@@ -9,6 +9,7 @@ import * as authApi from '@/features/auth/api/auth-api'
 import { AuthProvider } from '@/features/auth/model/auth-context'
 import * as api from '@/lib/api'
 import { ApiError, NetworkError } from '@/lib/api'
+import { findUnresolvedOperation } from '@/lib/operation/unresolved-operation'
 import { createQueryClient } from '@/lib/query/query-client'
 import { caseFixture, contractFixture } from '../api/contracts.test'
 
@@ -198,6 +199,95 @@ describe('Staff contract workspace', () => {
     expect(postCalls()).toHaveLength(2)
     expect(submitted[1]).toEqual(submitted[0])
     expect(submitted[0]).toMatchObject({ preparationRequestId: operationId, expectedCurrentContractVersion: 0 })
+  })
+
+  it('keeps a preparation 5xx unresolved even when the GET shows the expected resulting state', async () => {
+    let attempts = 0
+    let serverLooksPrepared = false
+    const submitted: Record<string, unknown>[] = []
+    vi.mocked(api.apiRequest).mockImplementation(async (_path, options) => {
+      if ((options as RequestInit | undefined)?.method === 'POST') {
+        attempts += 1
+        submitted.push({ ...(options as { body: Record<string, unknown> }).body })
+        serverLooksPrepared = true
+        if (attempts === 1) {
+          throw new ApiError(502, 'UNEXPECTED_RESPONSE', 'response failed', '/contracts', 'now', 'cp6-server-request')
+        }
+        return contractFixture('PREPARED')
+      }
+      return serverLooksPrepared ? preparedCase() : noContractCase()
+    })
+    renderPage()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Review preparation' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
+
+    expect(await screen.findByRole('heading', { name: 'Contract preparation result unknown' })).toBeVisible()
+    expect(screen.getByText(/authoritative state was refreshed, but it cannot prove this exact request identity/i)).toBeVisible()
+    expect(screen.getByText(/Support reference: cp6-server-request/i)).toBeVisible()
+    expect(postCalls()).toHaveLength(1)
+    expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
+    expect(findUnresolvedOperation('CONTRACT_PREPARATION', applicationId)).toMatchObject({
+      operationId,
+      semanticPayload: {
+        loanApplicationId: applicationId,
+        expectedCurrentContractVersion: 0,
+        supersessionReasonCode: null,
+      },
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
+    await screen.findByText(/command response and refreshed authoritative contract case are confirmed/i)
+
+    expect(postCalls()).toHaveLength(2)
+    expect(submitted[1]).toEqual(submitted[0])
+    expect(submitted[1]).toEqual({
+      preparationRequestId: operationId,
+      expectedCurrentContractVersion: 0,
+      supersessionReasonCode: null,
+    })
+    expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
+    expect(findUnresolvedOperation('CONTRACT_PREPARATION', applicationId)).toBeUndefined()
+    expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => {
+      const value = String(path)
+      return value.includes('/acknowledgment') || value.includes('/destination') || value.includes('/disbursements')
+    })).toBe(false)
+  })
+
+  it('retains the exact readiness confirmation after a 500 until explicit replay succeeds', async () => {
+    let attempts = 0
+    let serverLooksConfirmed = false
+    const submitted: Record<string, unknown>[] = []
+    vi.mocked(api.apiRequest).mockImplementation(async (_path, options) => {
+      if ((options as RequestInit | undefined)?.method === 'POST') {
+        attempts += 1
+        submitted.push({ ...(options as { body: Record<string, unknown> }).body })
+        serverLooksConfirmed = true
+        if (attempts === 1) throw new ApiError(500, 'INTERNAL_ERROR', 'response failed', '/readiness', 'now')
+        return contractFixture('READY_FOR_DISBURSEMENT')
+      }
+      return serverLooksConfirmed ? confirmedCase() : caseFixture()
+    })
+    renderPage()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Review readiness confirmation' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
+
+    expect(await screen.findByRole('heading', { name: 'Readiness confirmation result unknown' })).toBeVisible()
+    expect(postCalls()).toHaveLength(1)
+    expect(findUnresolvedOperation('CONTRACT_READINESS_CONFIRMATION', applicationId)).toMatchObject({
+      operationId,
+      semanticPayload: { loanApplicationId: applicationId, expectedContractVersion: 1 },
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
+    await screen.findByText(/command response and refreshed authoritative contract case are confirmed/i)
+
+    expect(postCalls()).toHaveLength(2)
+    expect(submitted[1]).toEqual(submitted[0])
+    expect(submitted[1]).toEqual({ confirmationRequestId: operationId, expectedContractVersion: 1 })
+    expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
+    expect(findUnresolvedOperation('CONTRACT_READINESS_CONFIRMATION', applicationId)).toBeUndefined()
   })
 
   it('does not POST again after definite success when refresh fails', async () => {

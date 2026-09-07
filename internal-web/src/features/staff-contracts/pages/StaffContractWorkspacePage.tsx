@@ -124,18 +124,22 @@ export function StaffContractWorkspacePage() {
     }
   }
 
-  const reconcileUnknownResult = async () => {
+  const reconcileUnknownResult = async (commandError: Error) => {
     setOperation({ status: 'RECONCILING' })
     try {
       await query.refetch({ throwOnError: true })
       setOperation({
         status: 'RESULT_UNKNOWN',
+        error: commandError,
         detail: 'Authoritative state was refreshed, but it cannot prove this exact request identity. Retry the exact operation with the retained UUID.',
       })
     } catch (error) {
+      const reconciliationError = commandError instanceof ApiError && commandError.requestId
+        ? commandError
+        : error instanceof Error ? error : new NetworkError()
       setOperation({
         status: 'RESULT_UNKNOWN',
-        error: error instanceof Error ? error : new NetworkError(),
+        error: reconciliationError,
         detail: 'The command result remains unknown. No POST was retried automatically.',
       })
     }
@@ -159,7 +163,7 @@ export function StaffContractWorkspacePage() {
       await refreshAfterConfirmedCommand(result)
     } catch (error) {
       const commandError = error instanceof Error ? error : new NetworkError()
-      if (commandError instanceof ApiError) {
+      if (commandError instanceof ApiError && commandError.status < 500) {
         removeUnresolvedOperation(type, resource)
         const stale = commandError.errorCode === 'CONTRACT_VERSION_STALE'
         if (stale) {
@@ -188,10 +192,10 @@ export function StaffContractWorkspacePage() {
         status: 'RESULT_UNKNOWN',
         error: commandError,
         detail: retrying
-          ? 'The exact retry response was also lost. The same UUID and payload remain retained.'
-          : 'The response was lost. No automatic POST retry will occur; the exact UUID and payload are retained.',
+          ? 'The exact retry outcome is also unknown. The same UUID and payload remain retained.'
+          : 'The command outcome is unknown. No automatic POST retry will occur; the exact UUID and payload are retained.',
       })
-      await reconcileUnknownResult()
+      await reconcileUnknownResult(commandError)
     }
   }
 
