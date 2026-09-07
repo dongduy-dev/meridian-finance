@@ -178,7 +178,7 @@ class CollateralLoanProgressionGuardPostgreSqlIntegrationTest {
 
         submitApprovalDecision.submitApprovalDecision(
                 applicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                decisionRequest(applicationId, ApprovalDecisionAction.APPROVE, null)
         );
 
         assertEquals("CUSTOMER_ACCEPTANCE_PENDING", status(applicationId));
@@ -218,7 +218,7 @@ class CollateralLoanProgressionGuardPostgreSqlIntegrationTest {
         useApprover();
         submitApprovalDecision.submitApprovalDecision(
                 applicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                decisionRequest(applicationId, ApprovalDecisionAction.APPROVE, null)
         );
         List<Map<String, Object>> financialSnapshot = offerFinancialSnapshot(applicationId);
         List<Map<String, Object>> itemSnapshot = offerItemSnapshot(applicationId);
@@ -244,7 +244,7 @@ class CollateralLoanProgressionGuardPostgreSqlIntegrationTest {
         useApprover();
         submitApprovalDecision.submitApprovalDecision(
                 applicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                decisionRequest(applicationId, ApprovalDecisionAction.APPROVE, null)
         );
 
         currentUser.use(UUID.randomUUID(), UUID.randomUUID());
@@ -294,17 +294,15 @@ class CollateralLoanProgressionGuardPostgreSqlIntegrationTest {
         useApprover();
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
-        ApprovalDecisionRequest competingRequest = new ApprovalDecisionRequest(
-                competingAction,
-                "Competing authorized decision.",
-                null
+        ApprovalDecisionRequest competingRequest = decisionRequest(
+                applicationId, competingAction, "Competing authorized decision."
         );
 
         List<Boolean> outcomes;
         try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
             Future<Boolean> approval = executor.submit(() -> decisionAfter(
                     applicationId,
-                    new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null),
+                    decisionRequest(applicationId, ApprovalDecisionAction.APPROVE, null),
                     ready,
                     start
             ));
@@ -414,9 +412,30 @@ class CollateralLoanProgressionGuardPostgreSqlIntegrationTest {
     ) {
         return decisionAfter(
                 applicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null),
+                decisionRequest(applicationId, ApprovalDecisionAction.APPROVE, null),
                 ready,
                 start
+        );
+    }
+
+    private ApprovalDecisionRequest decisionRequest(
+            UUID applicationId,
+            ApprovalDecisionAction action,
+            String reason
+    ) {
+        Map<String, Object> evidence = jdbcTemplate.queryForMap(
+                "SELECT recommendation.id AS recommendation_id, recommendation.review_cycle_id "
+                        + "FROM review_recommendations recommendation "
+                        + "WHERE recommendation.loan_application_id = ? "
+                        + "ORDER BY recommendation.submitted_at DESC LIMIT 1",
+                applicationId
+        );
+        return new ApprovalDecisionRequest(
+                action,
+                reason,
+                null,
+                (UUID) evidence.get("recommendation_id"),
+                (UUID) evidence.get("review_cycle_id")
         );
     }
 

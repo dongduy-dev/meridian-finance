@@ -77,7 +77,10 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> submitApprovalDecisionService.submitApprovalDecision(
                 loanApplicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                new ApprovalDecisionRequest(
+                        ApprovalDecisionAction.APPROVE, null, null,
+                        recommendationId, activeCycleId(loanApplicationId)
+                )
         ));
         assertTrue(containsMessage(exception, "sequenceNumber exceeds smallint range."));
 
@@ -107,7 +110,10 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
                 RuntimeException.class,
                 () -> submitApprovalDecisionService.submitApprovalDecision(
                         loanApplicationId,
-                        new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                        new ApprovalDecisionRequest(
+                                ApprovalDecisionAction.APPROVE, null, null,
+                                recommendationId, activeCycleId(loanApplicationId)
+                        )
                 )
         );
         assertTrue(containsMessage(exception, "sequenceNumber exceeds smallint range."));
@@ -131,7 +137,10 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
                 RuntimeException.class,
                 () -> submitApprovalDecisionService.submitApprovalDecision(
                         loanApplicationId,
-                        new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                        new ApprovalDecisionRequest(
+                                ApprovalDecisionAction.APPROVE, null, null,
+                                recommendationId, activeCycleId(loanApplicationId)
+                        )
                 )
         );
         assertTrue(containsMessage(exception, "sequenceNumber exceeds smallint range."));
@@ -212,6 +221,7 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
                                 ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
                                 null,
                                 "Restricted rollback note.",
+                                recommendationId,
                                 cycleId,
                                 CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                                 new CorrectionPlanRequest(List.of(

@@ -830,6 +830,22 @@ For Collateral Loan, review start requires the authoritative latest numbered ver
 
 ## 5. Recommendation, Approval, Corrections, and Documents
 
+### 5.0 Staff recommendation and decision reads
+
+```text
+GET /api/v1/staff/loan-applications/{loanApplicationId}/recommendation
+GET /api/v1/staff/loan-applications/{loanApplicationId}/decision
+GET /api/v1/staff/approval-work?productCode={productCode}&page={page}&size={size}
+```
+
+The recommendation read requires exact `approval:recommend`. It returns the current Loan-owned review cycle, product-verification and document readiness, authoritative correction options, a durable recommendation for that cycle when present, and backend-derived recommendation availability. The decision read and Approver queue require exact `approval:decide`; neither requires `loan:read`. Application services also require a Staff-shaped principal with no Customer context.
+
+The decision read returns the exact latest recommendation and review-cycle provenance, current-actor maker-checker eligibility, current Loan state and readiness, the durable decision tied to that recommendation when present, and ordered safe decision history. It does not expose recommending or deciding User IDs. The Approver queue uses server-side exact `APPROVAL_PENDING` membership, optional exact product filtering, zero-based paging of 1 to 100 items, and deterministic `submittedAt DESC, loanApplicationId DESC` ordering.
+
+These reads exclude restricted internal notes, Customer PII, document content, audit and operation identifiers, external references, and Customer-only offer data. They execute as repeatable-read observations across the Approval-owned evidence and Loan-owned boundary projection. A missing application returns `404 LOAN_APPLICATION_NOT_FOUND`. An `APPROVAL_PENDING` case without an applicable recommendation for the active review cycle, or with a decision already recorded for that recommendation, fails closed with `409 SYSTEM_STATE_CONFLICT`; historical decisions remain readable after later valid Loan transitions.
+
+Recommendation and decision POSTs have no business UUID and are never automatically retried. After an uncertain result, the client reads the corresponding projection and resolves only when the exact review-cycle/recommendation provenance and action prove the durable result. A failed reconciliation read leaves contradictory commands locked until an explicit successful refresh.
+
 ### 5.1 Review recommendation
 
 Supported actions:
@@ -845,11 +861,12 @@ Normal recommendation:
 {
   "action": "RECOMMEND_APPROVAL",
   "reason": "Application and verification snapshot reviewed.",
-  "internalNotes": "Optional staff-only note."
+  "internalNotes": "Optional staff-only note.",
+  "expectedReviewCycleId": "UUID"
 }
 ```
 
-Rejection requires a nonblank `reason`. Revision actions require `expectedReviewCycleId`, a controlled `reasonCode`, and one to ten tasks.
+Every recommendation requires `expectedReviewCycleId` from the Staff recommendation projection. The identifier is expected-state evidence, not a business operation UUID, and must match the active Loan-owned review cycle. Rejection also requires a nonblank `reason`. Revision actions additionally require a controlled `reasonCode` and one to ten tasks.
 
 For UCL, positive and rejection recommendations and the structured Customer or Staff correction actions are executable. UCL correction tasks may replace or review only application-owned current `INCOME_PROOF`, `BANK_STATEMENT`, or `EMPLOYMENT_PROOF` evidence. They cannot create a Salary-specific `RECENT_PAYSLIP` task or change requested amount or term.
 
@@ -898,11 +915,13 @@ Supported actions:
 {
   "action": "APPROVE",
   "reason": "Optional for approval; required for reject or return.",
-  "internalNotes": "Optional staff-only note."
+  "internalNotes": "Optional staff-only note.",
+  "expectedReviewRecommendationId": "UUID",
+  "expectedReviewCycleId": "UUID"
 }
 ```
 
-The Approver must differ from the Loan Officer who submitted the applicable recommendation. Mixed corrections use separate Customer and Staff tasks.
+Every decision requires the recommendation and review-cycle identifiers returned by the Staff decision projection. These expected-state identifiers must still identify the latest applicable recommendation and active review cycle; they are concurrency evidence, not a business operation UUID. The Approver must differ from the Loan Officer who submitted the applicable recommendation. Mixed corrections use separate Customer and Staff tasks.
 
 Success returns `201 Created` with decision, application, recommendation, and Approver identities; action, reason, reason code, restricted internal notes, and decision time. This Staff-only response is not exposed through Customer application, offer, contract, or LoanAccount reads.
 
@@ -912,7 +931,7 @@ For Collateral Loan, the authoritative latest verification cycle must still be `
 
 Collateral `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` use the common transitions and reason/plan rules. Correction remains limited to replacement or Staff review of the existing ownership-evidence item; no action changes submitted Collateral facts or requested terms. None creates Salary Advance reservation, limit, movement, or exposure effects. `MER-ARCH-006-api-request-flow-and-dependencies.md` defines the synchronous coordination and rollback boundary.
 
-Important errors include `MAKER_CHECKER_VIOLATION`, `STALE_REVIEW_CYCLE`, `COLLATERAL_VERIFICATION_REQUIRED`, the product-verification outcome codes above, `PRODUCT_POLICY_INVALID`, `INVALID_PRODUCT_TERM`, and controlled reason/plan validation errors.
+Important errors include `MAKER_CHECKER_VIOLATION`, `STALE_REVIEW_RECOMMENDATION`, `STALE_REVIEW_CYCLE`, `COLLATERAL_VERIFICATION_REQUIRED`, the product-verification outcome codes above, `PRODUCT_POLICY_INVALID`, `INVALID_PRODUCT_TERM`, and controlled reason/plan validation errors.
 
 ### 5.3 Task completion and resubmission
 

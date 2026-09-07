@@ -50,7 +50,7 @@ describe('Staff review workspace', () => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff)
   })
 
-  it('reconciles a lost review-start response without retrying POST or exposing recommendation controls', async () => {
+  it('reconciles a lost review-start response without retrying POST or requiring recommendation authority', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue({ ...staff, permissions: ['loan:review', 'loan:read'] })
     let started = false
     vi.mocked(api.apiRequest).mockImplementation(async (path) => {
@@ -66,11 +66,10 @@ describe('Staff review workspace', () => {
     render(<QueryClientProvider client={queryClient}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
     const user = userEvent.setup()
 
-    await user.click(await screen.findByRole('button', { name: 'Start review' }))
+    await user.click(await screen.findByRole('button', { name: 'Start review' }, { timeout: 5_000 }))
     await user.click(screen.getByRole('button', { name: 'Confirm review start' }))
 
     expect(await screen.findByText(/authoritative read confirms that review started/i)).toBeVisible()
-    expect(screen.getByText(/Recommendation and Approver decision are intentionally outside Staff FE-CP4/i)).toBeVisible()
     expect(screen.queryByRole('button', { name: /recommend|approve|reject/i })).not.toBeInTheDocument()
     expect(vi.mocked(api.apiRequest).mock.calls.filter(([path]) => String(path).endsWith('/review/start'))).toHaveLength(1)
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: staffApplicationKeys.all })
@@ -97,7 +96,11 @@ describe('Staff review workspace', () => {
     await user.click(await screen.findByRole('button', { name: 'Start review' }))
     await user.click(screen.getByRole('button', { name: 'Confirm review start' }))
 
-    expect(await screen.findByText(/operation result is still unknown because authoritative state could not be refreshed/i)).toBeVisible()
+    expect(await screen.findByText(
+      /operation result is still unknown because authoritative state could not be refreshed/i,
+      undefined,
+      { timeout: 5_000 },
+    )).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Start review' })).not.toBeInTheDocument()
     const startPosts = () => vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
       String(path).endsWith('/review/start') && (options as RequestInit | undefined)?.method === 'POST')

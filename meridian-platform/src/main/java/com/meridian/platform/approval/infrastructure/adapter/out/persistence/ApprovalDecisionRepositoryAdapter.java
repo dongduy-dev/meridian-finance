@@ -6,6 +6,9 @@ import com.meridian.platform.shared.domain.exception.BusinessStateConflictExcept
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.sql.SQLException;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -31,6 +34,21 @@ public class ApprovalDecisionRepositoryAdapter implements ApprovalDecisionReposi
             }
             throw exception;
         }
+    }
+
+    @Override
+    public Optional<ApprovalDecision> findByReviewRecommendationId(UUID reviewRecommendationId) {
+        return jpaApprovalDecisionRepository.findByReviewRecommendationId(reviewRecommendationId)
+                .map(ApprovalDecisionJpaEntity::toDomain);
+    }
+
+    @Override
+    public List<ApprovalDecision> findByLoanApplicationIdOrderByDecidedAtDesc(UUID loanApplicationId) {
+        return jpaApprovalDecisionRepository
+                .findByLoanApplicationIdOrderByDecidedAtDescIdDesc(loanApplicationId)
+                .stream()
+                .map(ApprovalDecisionJpaEntity::toDomain)
+                .toList();
     }
 
     private boolean isUniqueConstraint(Throwable exception, String constraint) {

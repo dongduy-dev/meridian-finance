@@ -17,6 +17,10 @@ public record ApprovalDecisionRequest(
         @Size(max = 2000)
         String internalNotes,
 
+        @NotNull
+        UUID expectedReviewRecommendationId,
+
+        @NotNull
         UUID expectedReviewCycleId,
 
         CorrectionReasonCode reasonCode,
@@ -26,8 +30,10 @@ public record ApprovalDecisionRequest(
     public ApprovalDecisionRequest(
             ApprovalDecisionAction action,
             String reason,
-            String internalNotes
+            String internalNotes,
+            UUID expectedReviewRecommendationId,
+            UUID expectedReviewCycleId
     ) {
-        this(action, reason, internalNotes, null, null, null);
+        this(action, reason, internalNotes, expectedReviewRecommendationId, expectedReviewCycleId, null, null);
     }
 }

@@ -267,14 +267,19 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                 + "WHERE loan_application_id = ? AND movement_type = 'RESERVED'", applicationId));
 
         useLoanOfficer();
-        recommendationUseCase.submitReviewRecommendation(
+        var finalRecommendation = recommendationUseCase.submitReviewRecommendation(
                 applicationId,
-                new ReviewRecommendationRequest(ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null)
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null, cycle2
+                )
         );
         useApprover();
         decisionUseCase.submitApprovalDecision(
                 applicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                new ApprovalDecisionRequest(
+                        ApprovalDecisionAction.APPROVE, null, null,
+                        finalRecommendation.recommendationId(), cycle2
+                )
         );
         useCustomer();
         assertEquals(ApprovedOfferActionOutcome.SUCCESS, offerResponseUseCase.acceptOffer(applicationId).outcome());
@@ -723,9 +728,11 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
         UUID cycle2 = activeCycle(applicationId);
         assertEquals(2, cycleNumber(cycle2));
         useLoanOfficer();
-        recommendationUseCase.submitReviewRecommendation(
+        var correctionRecommendation = recommendationUseCase.submitReviewRecommendation(
                 applicationId,
-                new ReviewRecommendationRequest(ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null)
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null, cycle2
+                )
         );
 
         useApprover();
@@ -735,6 +742,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                         ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
                         null,
                         "Restricted mixed-correction note.",
+                        correctionRecommendation.recommendationId(),
                         cycle2,
                         CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                         new CorrectionPlanRequest(List.of(
@@ -821,14 +829,19 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                 """, applicationId, cycle2));
 
         useLoanOfficer();
-        recommendationUseCase.submitReviewRecommendation(
+        var finalRecommendation = recommendationUseCase.submitReviewRecommendation(
                 applicationId,
-                new ReviewRecommendationRequest(ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null)
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null, cycle3
+                )
         );
         useApprover();
         decisionUseCase.submitApprovalDecision(
                 applicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                new ApprovalDecisionRequest(
+                        ApprovalDecisionAction.APPROVE, null, null,
+                        finalRecommendation.recommendationId(), cycle3
+                )
         );
         useCustomer();
         assertEquals(ApprovedOfferActionOutcome.SUCCESS, offerResponseUseCase.acceptOffer(applicationId).outcome());

@@ -473,16 +473,24 @@ class CollateralContractActivationPostgreSqlIntegrationTest {
                 )
         );
         reviews.startReview(applicationId);
-        recommendations.submitReviewRecommendation(
+        UUID reviewCycleId = jdbc.queryForObject(
+                "select id from loan_application_review_cycles where loan_application_id = ? and status = 'ACTIVE'",
+                UUID.class,
+                applicationId
+        );
+        var recommendation = recommendations.submitReviewRecommendation(
                 applicationId,
                 new ReviewRecommendationRequest(
-                        ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null
+                        ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null, reviewCycleId
                 )
         );
         useApprover();
         decisions.submitApprovalDecision(
                 applicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                new ApprovalDecisionRequest(
+                        ApprovalDecisionAction.APPROVE, null, null,
+                        recommendation.recommendationId(), reviewCycleId
+                )
         );
         useCustomer(customer);
         offerResponses.acceptOffer(applicationId);

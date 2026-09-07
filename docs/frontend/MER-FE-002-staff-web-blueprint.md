@@ -529,7 +529,7 @@ Generate a fresh `X-Request-ID` for each HTTP attempt unless the transport repla
 | Class | Examples | Client rule |
 |---|---|---|
 | Exact business request UUID | document upload/review, correction completion/resubmission, contract preparation/readiness confirmation, disbursement, repayment, settlement, closure | Keep one stable UUID for one logical payload until the result is reconciled |
-| Expected evidence identity | Collateral `expectedVerificationId`, review `expectedReviewCycleId`, contract `expectedCurrentContractVersion` or `expectedContractVersion`, document `documentVersionId` or replacement baseline | Refetch and require operator review after stale conflict; never treat as idempotency |
+| Expected evidence identity | Collateral `expectedVerificationId`, recommendation `expectedReviewCycleId`, decision `expectedReviewRecommendationId` plus `expectedReviewCycleId`, contract `expectedCurrentContractVersion` or `expectedContractVersion`, document `documentVersionId` or replacement baseline | Refetch and require operator review after stale conflict; never treat as idempotency |
 | No client business UUID | verification start/complete, review start, recommendation, decision, destination reveal | No automatic command retry after an uncertain result; reconcile from an authoritative read |
 | Transport correlation | `X-Request-ID` | One HTTP-attempt diagnostic; never reused as business identity |
 
@@ -583,7 +583,9 @@ For commands without a business UUID, an uncertain result is more restrictive:
 - if the projection proves it did not occur and state is still eligible, permit a fresh operator-confirmed attempt;
 - if the projection cannot prove either outcome, label the result unresolved and block a contradictory command.
 
-Recommendation, decision, and UCL verification currently lack sufficient read/history projections for robust browser reconciliation. Those workspaces are API dependencies before production command enablement, even though the POST endpoints exist.
+Product-verification, recommendation, and decision commands use their purpose-limited current/history projections for browser reconciliation. A no-UUID command must remain disabled when its authoritative read cannot prove either the durable outcome or that a new explicit attempt is safe.
+
+Recommendation confirmation captures the displayed review-cycle ID for every action. Decision confirmation captures the displayed recommendation and review-cycle IDs for every action. A stale conflict preserves the unsent form and restricted notes in memory, refreshes the authoritative projection, blocks another command, and requires explicit operator re-review. The client never substitutes refreshed identifiers into an open confirmation or automatically retries the POST.
 
 ### 14.5 Destination Reveal Exception
 
@@ -999,7 +1001,7 @@ Supported actions remain distinct:
 
 The recommendation page presents the current review cycle, verification result, document evidence, and controlled action-specific fields. Rejection requires a reason. Revision/correction requires exact current review cycle, controlled reason code, and structured tasks within the product rules.
 
-Recommendation POST has no client business UUID and no later read endpoint. Production enablement is blocked until the case projection exposes the latest recommendation or a command-status resource supports reconciliation.
+Recommendation POST has no client business UUID. The Approval-owned case projection exposes the durable recommendation for the displayed review cycle, so recovery proves the exact cycle and action before resolving or permitting a new explicit attempt.
 
 ### 24.3 Independent Decision
 
@@ -1012,7 +1014,7 @@ Supported actions remain distinct:
 
 The decision page must show the exact latest recommendation, recommending Loan Officer evidence needed for separation, product verification state, review cycle, documents/readiness, and any action-specific correction plan. It must not rely on the transient recommendation response from another browser session.
 
-Approval POST has no client business UUID and no decision read/history endpoint. The page is an API dependency until the current recommendation and resulting decision are durably queryable.
+Approval POST has no client business UUID. The Approval-owned decision projection exposes the exact recommendation provenance, resulting decision, history, and current Loan state needed for durable recovery.
 
 Approval may atomically create an immutable Customer offer. Staff Web must report only the Staff-authorized decision outcome; it must not call the Customer-only approved-offer endpoint to inspect it.
 
@@ -1192,7 +1194,7 @@ Routes are conceptual implementation targets. “API dependency” means the rou
 | `/staff/work/corrections` | Staff-correction queue | Executable narrow queue |
 | `/staff/work/verifications` | Pending UCL/Collateral verification | API dependency |
 | `/staff/work/reviews` | Pending Loan Officer review/recommendation | API dependency |
-| `/staff/work/approvals` | Pending independent decisions | API dependency |
+| `/staff/work/approvals` | Pending independent decisions | Executable with `approval:decide` |
 | `/staff/work/contracts` | Contract preparation/readiness | API dependency |
 | `/staff/work/disbursements` | Ready external-transfer confirmations | API dependency |
 | `/staff/work/servicing` | Active/overdue/settled operational accounts | API dependency |
@@ -1201,8 +1203,8 @@ Routes are conceptual implementation targets. “API dependency” means the rou
 | `/staff/applications/:loanApplicationId/verification` | Product verification | Executable with `loan:review`; does not require `loan:read` |
 | `/staff/applications/:loanApplicationId/documents` | Document evidence/review | Executable |
 | `/staff/applications/:loanApplicationId/corrections` | Correction tasks/proof/resubmission | Executable |
-| `/staff/applications/:loanApplicationId/review` | Review start and current cycle | Executable with `loan:review`; recommendation remains CP5 |
-| `/staff/applications/:loanApplicationId/decision` | Independent decision | API dependency for recommendation/decision evidence |
+| `/staff/applications/:loanApplicationId/review` | Review start, current cycle, and capability-gated recommendation | Executable with `loan:review`; recommendation controls additionally require `approval:recommend` |
+| `/staff/applications/:loanApplicationId/decision` | Independent decision | Executable with `approval:decide` |
 | `/staff/applications/:loanApplicationId/contract` | Current contract/readiness | Direct known-ID reads executable; discovery/case dependency |
 | `/staff/applications/:loanApplicationId/disbursement` | Reveal and disbursement | Commands executable; discovery/case dependency |
 | `/staff/applications/:loanApplicationId/loan-account` | Account/schedule/history | Direct known-ID reads executable; Staff index dependency |
@@ -1219,7 +1221,7 @@ The current servicing APIs are application-scoped, so routes retain `loanApplica
 |---|---|---|---|---|
 | Document work | Loan Officer with `document:review`; waiver also needs `document:waive` | Document review queue, content, and review endpoints | Inspect and decide the exact current version | `AWAITING_REVIEW`; Loan Officer owns review, Back-Office Admin may own Staff-task upload only with `document:upload:staff` |
 | Correction work | Loan Officer with `loan:correction:staff`; uploader also needs `document:upload:staff` | Staff correction queue, task completion, upload, and resubmission endpoints | Satisfy Staff proof and return an eligible request to workflow | `OPEN`, proof incomplete/complete, mixed work incomplete, resubmitted; backend owns maker-checker |
-| Verification and review | Loan Officer with `loan:review`; recommendation later also needs `approval:recommend` | Purpose-limited verification/review reads and existing verification/review-start commands; recommendation remains CP5 | Verify product evidence and start review; no recommendation control in CP4 | Submitted/pending verification, verified/failed/more information, under review; Loan Officer acts, Approver does not verify |
+| Verification and review | Loan Officer with `loan:review`; recommendation additionally needs `approval:recommend` | Purpose-limited verification/review reads, Approval-owned recommendation read, and existing commands | Verify product evidence, start review, and record a recommendation when separately authorized | Submitted/pending verification, verified/failed/more information, under review; Loan Officer acts, Approver does not verify |
 | Approval | Approver with `approval:decide` | Decision endpoint plus required recommendation/decision reads | Independently approve, reject, return, or request correction | Awaiting decision, customer acceptance pending, rejected, returned; Approver owns final decision, backend owns separation |
 | Contract/readiness | Accounting Officer with `loan:contract:prepare`, `loan:contract:read`, and `loan:disbursement:prepare` | Contract and readiness endpoints | Prepare/regenerate and confirm an eligible contract | Contract pending, acknowledgment missing, ready/not ready, disbursement pending; Accounting owns operations, Customer owns acknowledgment |
 | Disbursement | Accounting Officer with `loan:disburse` | Reveal and disbursement endpoints | Verify destination and record an external transfer | `DISBURSEMENT_PENDING`, ready contract, activated/disbursed; Accounting owns confirmation, external bank remains outside Meridian |
@@ -1254,8 +1256,8 @@ Each protected route declares:
 | Application search | API dependency | Staff operational index | Open case | API unavailable, no results, invalid filters |
 | Case overview | API dependency | Consolidated safe case projection | Navigate to eligible work | partial dependency, stale case, forbidden/not found |
 | Verification | Foundation exists but projection missing | Current product cycle and evidence | Complete exact outcome | readiness blocker, stale cycle, unresolved no-UUID command |
-| Review/recommendation | Foundation exists but projection missing | Review cycle and evidence | Submit recommendation | stale cycle, invalid task plan, unresolved command |
-| Decision | Foundation exists but projection missing | Latest recommendation and separation evidence | Submit decision | maker-checker, stale cycle, unresolved command |
+| Review/recommendation | Executable | Review cycle, readiness, correction options, and durable recommendation | Submit recommendation | stale cycle, invalid task plan, unresolved command |
+| Decision | Executable | Latest recommendation, maker-checker relation, decision history, and resulting Loan state | Submit decision | maker-checker, stale recommendation or cycle, unresolved command |
 | Contract | Foundation exists but discovery projection missing | Current masked contract and readiness | Prepare/regenerate/confirm | stale version, acknowledgment or readiness blockers, replay conflict |
 | Disbursement | Foundation exists but discovery projection missing | Ready contract, local reveal, transfer evidence | Confirm disbursement | reveal unavailable, duplicate reference, invalid dates, result unknown/replay |
 | LoanAccount | Foundation exists but Staff index missing | Account, balances, schedule, history | Open servicing action | unavailable account, history paging failure, inconsistent state |
@@ -1376,12 +1378,9 @@ An `OperationStatusPanel` is client recovery state, not audit evidence.
 | Dependency | Experiences blocked | Required safe outcome |
 |---|---|---|
 | Expanded Staff case projections | evidence context for CP3+ action workspaces | PII-minimized current facts composed across context-owned contracts beyond the CP2 header/readiness/history foundation |
-| Product verification read/history | UCL/Collateral recovery and evidence review; Salary Advance snapshot | Current exact cycle, immutable outcome, permitted restricted facts |
-| Review-cycle and recommendation read | review start/recommendation recovery; Approver evidence | Current cycle, latest immutable recommendation, actor separation evidence |
-| Approval decision read/history | decision recovery and case history | Latest durable decision and safe outcome facts |
 | Contract/disbursement operational indexes | Accounting discovery | Current version/status/readiness blockers and ready cases |
 | Staff LoanAccount/servicing index | repayment, overdue, settlement, closure discovery | Authorized balances/states with server paging/filtering |
-| Expanded action histories | action timelines and reliable no-UUID reconciliation | Ordered safe immutable evidence beyond CP2 LoanApplication transitions |
+| Expanded action histories beyond recommendation and decision evidence | later action timelines and reliable no-UUID reconciliation | Ordered safe immutable evidence beyond CP2 LoanApplication transitions and CP5 Approval history |
 
 ### 33.2 Useful but Non-Blocking Enhancements
 
@@ -1485,7 +1484,7 @@ Staff FE checkpoints deliver the Staff Web feature area inside `internal-web/`. 
 - exact operation identities, stale-version handling, proof reconciliation, and correction maker-checker;
 - complete the Staff checklist/correction projection dependencies needed by the workspace.
 
-The CP3 routes and their purpose-limited read contracts are executable in Internal Web. CP4 product verification and review start are now also executable; recommendation, decision, contract, disbursement, and servicing remain separate later checkpoints.
+The CP3 routes and their purpose-limited read contracts are executable in Internal Web. CP4 product verification and review start and CP5 recommendation and decision are also executable; contract, disbursement, and servicing remain separate later checkpoints.
 
 ### Staff FE-CP4 — Product Verification and Loan Officer Review
 
@@ -1495,7 +1494,7 @@ The CP3 routes and their purpose-limited read contracts are executable in Intern
 - review start and current review-cycle evidence;
 - product-specific evidence panels without client pricing, LTV, or eligibility rules.
 
-The two CP4 case routes and their purpose-limited `loan:review` read contracts are executable in Internal Web. They operate without `loan:read`, use backend-derived action availability, reconcile no-business-UUID commands through GET without automatic POST retry, keep restricted assessment notes in memory only, and expose no recommendation or Approver-decision controls. Specialized verification/review queues and Loan Officer recommendation remain later scope.
+The two CP4 case routes and their purpose-limited `loan:review` read contracts are executable in Internal Web. They operate without `loan:read`, use backend-derived action availability, reconcile no-business-UUID commands through GET without automatic POST retry, and keep restricted assessment notes in memory only. CP5 adds recommendation controls only for actors who also hold `approval:recommend`; the CP4 read/start capability remains unchanged. Specialized verification/review queues remain later scope.
 
 ### Staff FE-CP5 — Recommendation and Independent Decision
 
@@ -1504,6 +1503,8 @@ The two CP4 case routes and their purpose-limited `loan:review` read contracts a
 - Approver queue and decision workspace;
 - visible maker-checker, current-cycle, verification, document, and restricted-note boundaries;
 - safe no-UUID command reconciliation and atomic-outcome presentation.
+
+The CP5 recommendation and independent-decision workspaces are executable. Approval-owned reads expose the durable recommendation, decision history, backend-derived maker-checker relation, action availability, and safe Loan-owned readiness evidence through narrow boundary contracts. The Approver queue uses server-side `APPROVAL_PENDING` membership, product filtering, paging, and deterministic ordering. Recommendation controls additionally require `approval:recommend` without changing CP4 `loan:review` route access; the queue and decision route require exact `approval:decide`. Every confirmation carries the displayed review cycle and, for a decision, the displayed recommendation as expected-state evidence. A stale conflict preserves in-memory input and requires explicit re-review. Unknown command results remain locked until a successful authoritative refresh, and neither command automatically retries its POST.
 
 ### Staff FE-CP6 — Contract and Readiness Operations
 

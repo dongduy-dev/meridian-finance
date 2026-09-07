@@ -85,7 +85,8 @@ public class EvaluateLoanAccountOverdueService
                 .orElseThrow(EvaluateLoanAccountOverdueService::conflict);
         validateOwnership(command, application, account);
 
-        if (account.status() == LoanAccountStatus.SETTLED
+        if ((account.status() == LoanAccountStatus.SETTLED
+                || account.status() == LoanAccountStatus.CLOSED)
                 && account.repaymentBalance().totalOutstanding().signum() == 0) {
             return noOp(command, account);
         }

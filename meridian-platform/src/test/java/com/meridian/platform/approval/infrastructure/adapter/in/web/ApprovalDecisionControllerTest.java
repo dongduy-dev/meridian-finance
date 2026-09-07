@@ -48,7 +48,9 @@ class ApprovalDecisionControllerTest {
                         .content("""
                                 {
                                   "action": "APPROVE",
-                                  "internalNotes": "ready"
+                                  "internalNotes": "ready",
+                                  "expectedReviewRecommendationId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                                  "expectedReviewCycleId": "cccccccc-cccc-cccc-cccc-cccccccccccc"
                                 }
                                 """))
                 .andExpect(status().isCreated())
@@ -78,7 +80,9 @@ class ApprovalDecisionControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "action": "REJECT"
+                                  "action": "REJECT",
+                                  "expectedReviewRecommendationId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                                  "expectedReviewCycleId": "cccccccc-cccc-cccc-cccc-cccccccccccc"
                                 }
                                 """))
                 .andExpect(status().isUnprocessableEntity())
@@ -92,6 +96,7 @@ class ApprovalDecisionControllerTest {
                         .content("""
                                 {
                                   "action": "REQUEST_CUSTOMER_OR_STAFF_CORRECTION",
+                                  "expectedReviewRecommendationId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
                                   "expectedReviewCycleId": "cccccccc-cccc-cccc-cccc-cccccccccccc",
                                   "reasonCode": "DOCUMENT_REPLACEMENT_REQUIRED",
                                   "correctionPlan": {

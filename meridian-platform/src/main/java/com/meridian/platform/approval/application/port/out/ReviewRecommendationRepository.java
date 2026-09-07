@@ -10,4 +10,6 @@ public interface ReviewRecommendationRepository {
     ReviewRecommendation save(ReviewRecommendation recommendation);
 
     Optional<ReviewRecommendation> findLatestByLoanApplicationId(UUID loanApplicationId);
+
+    Optional<ReviewRecommendation> findByReviewCycleId(UUID reviewCycleId);
 }

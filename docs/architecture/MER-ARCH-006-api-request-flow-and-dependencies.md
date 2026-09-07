@@ -354,6 +354,12 @@ Because verification start/completion and review start have no client business U
 
 Approval owns the immutable recommendation or decision record. Loan owns the active review cycle, correction workflow, and LoanApplication transition.
 
+Approval exposes separate purpose-limited Staff projections for recommendation recovery, independent-decision recovery, and Approver discovery. The query service requires exact `approval:recommend` or `approval:decide` authority and composes Approval-owned immutable evidence with a narrow Loan-owned case boundary. Loan supplies application state, review-cycle, product-verification, Document readiness, correction options, and exact `APPROVAL_PENDING` queue membership without transferring ownership to Approval. Repeatable-read isolation keeps the composed evidence coherent.
+
+The projections expose a current-actor maker-checker relation instead of internal User identifiers. The Approver queue keeps membership, product filtering, paging, and ordering on the server. It does not fetch the general `loan:read` index and filter in the browser.
+
+Every recommendation command carries the review-cycle identifier shown to the Loan Officer. Every decision command carries the recommendation and review-cycle identifiers shown to the Approver. Approval compares these expected-state identifiers with the latest applicable Approval evidence and active Loan-owned cycle before it records, audits, or publishes an outcome. A mismatch returns `STALE_REVIEW_RECOMMENDATION` or `STALE_REVIEW_CYCLE` without an Approval or Loan side effect. These identifiers are concurrency guards; the commands still have no client business UUID.
+
 Revision-producing actions use synchronous transaction participation because a failure to apply the structured outcome must roll back the source Approval record and the resulting Loan, Document, Audit, and history changes.
 
 ```mermaid

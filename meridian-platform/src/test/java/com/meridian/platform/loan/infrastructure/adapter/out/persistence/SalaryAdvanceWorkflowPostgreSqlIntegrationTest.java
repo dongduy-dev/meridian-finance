@@ -51,6 +51,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -665,12 +666,14 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
         );
         useLoanOfficer();
         reviewUseCase.startReview(application.loanApplicationId());
+        UUID reviewCycleId = activeReviewCycleId(application.loanApplicationId());
         recommendationUseCase.submitReviewRecommendation(
                 application.loanApplicationId(),
                 new ReviewRecommendationRequest(
                         ReviewRecommendationAction.RECOMMEND_APPROVAL,
                         null,
-                        "Workflow integration test."
+                        "Workflow integration test.",
+                        reviewCycleId
                 )
         );
         assertEquals("APPROVAL_PENDING", applicationStatus(application.loanApplicationId()));
@@ -682,7 +685,7 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
         useApprover();
         ApprovalDecisionDto decision = approvalUseCase.submitApprovalDecision(
                 loanApplicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                decisionRequest(loanApplicationId, ApprovalDecisionAction.APPROVE)
         );
         assertEquals("APPROVE", decision.action());
         assertEquals("CUSTOMER_ACCEPTANCE_PENDING", applicationStatus(loanApplicationId));
@@ -702,11 +705,7 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
             useApprover();
             approvalUseCase.submitApprovalDecision(
                     loanApplicationId,
-                    new ApprovalDecisionRequest(
-                            action,
-                            action == ApprovalDecisionAction.REJECT ? "Policy rejection." : null,
-                            null
-                    )
+                    decisionRequest(loanApplicationId, action)
             );
             return DecisionAttempt.success(action);
         } catch (Throwable throwable) {
@@ -714,6 +713,33 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
         } finally {
             currentUserProvider.clear();
         }
+    }
+
+    private UUID activeReviewCycleId(UUID loanApplicationId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT id FROM loan_application_review_cycles "
+                        + "WHERE loan_application_id = ? AND status = 'ACTIVE'",
+                UUID.class,
+                loanApplicationId
+        );
+    }
+
+    private ApprovalDecisionRequest decisionRequest(
+            UUID loanApplicationId,
+            ApprovalDecisionAction action
+    ) {
+        Map<String, Object> evidence = jdbcTemplate.queryForMap(
+                "SELECT id AS recommendation_id, review_cycle_id FROM review_recommendations "
+                        + "WHERE loan_application_id = ? ORDER BY submitted_at DESC LIMIT 1",
+                loanApplicationId
+        );
+        return new ApprovalDecisionRequest(
+                action,
+                action == ApprovalDecisionAction.REJECT ? "Policy rejection." : null,
+                null,
+                (UUID) evidence.get("recommendation_id"),
+                (UUID) evidence.get("review_cycle_id")
+        );
     }
 
     private OfferRaceAttempt accept(

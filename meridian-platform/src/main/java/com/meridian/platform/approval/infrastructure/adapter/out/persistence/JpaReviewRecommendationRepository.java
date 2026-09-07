@@ -7,5 +7,9 @@ import java.util.UUID;
 
 public interface JpaReviewRecommendationRepository extends JpaRepository<ReviewRecommendationJpaEntity, UUID> {
 
-    Optional<ReviewRecommendationJpaEntity> findFirstByLoanApplicationIdOrderBySubmittedAtDesc(UUID loanApplicationId);
+    Optional<ReviewRecommendationJpaEntity> findFirstByLoanApplicationIdOrderBySubmittedAtDescIdDesc(
+            UUID loanApplicationId
+    );
+
+    Optional<ReviewRecommendationJpaEntity> findByReviewCycleId(UUID reviewCycleId);
 }

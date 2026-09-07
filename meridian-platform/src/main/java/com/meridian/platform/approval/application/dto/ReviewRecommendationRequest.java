@@ -17,6 +17,7 @@ public record ReviewRecommendationRequest(
         @Size(max = 2000)
         String internalNotes,
 
+        @NotNull
         UUID expectedReviewCycleId,
 
         CorrectionReasonCode reasonCode,
@@ -26,8 +27,9 @@ public record ReviewRecommendationRequest(
     public ReviewRecommendationRequest(
             ReviewRecommendationAction action,
             String reason,
-            String internalNotes
+            String internalNotes,
+            UUID expectedReviewCycleId
     ) {
-        this(action, reason, internalNotes, null, null, null);
+        this(action, reason, internalNotes, expectedReviewCycleId, null, null);
     }
 }

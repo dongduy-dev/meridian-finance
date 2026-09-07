@@ -196,7 +196,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         useApprover();
         decisionUseCase.submitApprovalDecision(
                 applicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                approvalRequest(applicationId, ApprovalDecisionAction.APPROVE)
         );
         assertEquals("CUSTOMER_ACCEPTANCE_PENDING", status(applicationId));
         assertEquals(1, count("SELECT count(*) FROM approved_offers WHERE loan_application_id = ?", applicationId));
@@ -415,7 +415,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         useApprover();
         decisionUseCase.submitApprovalDecision(
                 applicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                approvalRequest(applicationId, ApprovalDecisionAction.APPROVE)
         );
 
         useCustomer();
@@ -611,10 +611,10 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 BusinessStateConflictException.class,
                 () -> decisionUseCase.submitApprovalDecision(
                         applicationId,
-                        new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                        approvalRequest(applicationId, ApprovalDecisionAction.APPROVE)
                 )
         );
-        assertEquals("APPROVAL_DECISION_NOT_ALLOWED", replayFailure.getErrorCode());
+        assertEquals("REVIEW_CYCLE_REQUIRED", replayFailure.getErrorCode());
         assertEquals(1, count("SELECT count(*) FROM approval_decisions WHERE loan_application_id = ?", applicationId));
         assertEquals(1, count("SELECT count(*) FROM approved_offers WHERE loan_application_id = ?", applicationId));
     }
@@ -994,14 +994,15 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 new ReviewRecommendationRequest(
                         ReviewRecommendationAction.RECOMMEND_APPROVAL,
                         null,
-                        null
+                        null,
+                        activeReviewCycleId(applicationId)
                 )
         );
         assertEquals("APPROVAL_PENDING", status(applicationId));
         useApprover();
         decisionUseCase.submitApprovalDecision(
                 applicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                approvalRequest(applicationId, ApprovalDecisionAction.APPROVE)
         );
         assertEquals("CUSTOMER_ACCEPTANCE_PENDING", status(applicationId));
         assertEquals(1, count("SELECT count(*) FROM approved_offers "
@@ -1070,7 +1071,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                         ReviewRecommendationAction.RECOMMEND_APPROVAL,
                         null,
                         null,
-                        null,
+                        secondCycle,
                         null,
                         null
                 )
@@ -1091,6 +1092,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                         ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
                         null,
                         "Restricted Approver correction note.",
+                        latestRecommendationId(applicationId),
                         firstCycle,
                         CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                         mixedReplacementAndReviewPlan(evidence)
@@ -1155,7 +1157,8 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 new ReviewRecommendationRequest(
                         ReviewRecommendationAction.RECOMMEND_APPROVAL,
                         null,
-                        null
+                        null,
+                        activeReviewCycleId(applicationId)
                 )
         );
         assertEquals("APPROVAL_PENDING", status(applicationId));
@@ -1275,7 +1278,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         useApprover();
         decisionUseCase.submitApprovalDecision(
                 applicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                approvalRequest(applicationId, ApprovalDecisionAction.APPROVE)
         );
         useCustomer();
         ApprovedOfferDto offer = queryApprovedOfferUseCase.getApprovedOffer(applicationId);
@@ -1338,7 +1341,12 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         assertEquals("UNDER_REVIEW", reviewStartUseCase.startReview(applicationId).status());
         recommendationUseCase.submitReviewRecommendation(
                 applicationId,
-                new ReviewRecommendationRequest(ReviewRecommendationAction.RECOMMEND_APPROVAL, null, null)
+                new ReviewRecommendationRequest(
+                        ReviewRecommendationAction.RECOMMEND_APPROVAL,
+                        null,
+                        null,
+                        activeReviewCycleId(applicationId)
+                )
         );
         assertEquals("APPROVAL_PENDING", status(applicationId));
         return applicationId;
@@ -1595,8 +1603,41 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         useApprover();
         return afterBarrier(ready, start, () -> decisionUseCase.submitApprovalDecision(
                 applicationId,
-                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null)
+                approvalRequest(applicationId, ApprovalDecisionAction.APPROVE)
         ));
+    }
+
+    private UUID activeReviewCycleId(UUID applicationId) {
+        return uuid(
+                "SELECT id FROM loan_application_review_cycles "
+                        + "WHERE loan_application_id = ? AND status = 'ACTIVE'",
+                applicationId
+        );
+    }
+
+    private UUID latestRecommendationId(UUID applicationId) {
+        return uuid(
+                "SELECT id FROM review_recommendations "
+                        + "WHERE loan_application_id = ? ORDER BY submitted_at DESC LIMIT 1",
+                applicationId
+        );
+    }
+
+    private ApprovalDecisionRequest approvalRequest(
+            UUID applicationId,
+            ApprovalDecisionAction action
+    ) {
+        return new ApprovalDecisionRequest(
+                action,
+                null,
+                null,
+                latestRecommendationId(applicationId),
+                uuid(
+                        "SELECT review_cycle_id FROM review_recommendations "
+                                + "WHERE loan_application_id = ? ORDER BY submitted_at DESC LIMIT 1",
+                        applicationId
+                )
+        );
     }
 
     private CommandOutcome disburseAfter(
