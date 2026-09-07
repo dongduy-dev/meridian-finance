@@ -186,7 +186,7 @@ Maker-checker is a backend invariant and a visible operational constraint:
 
 ## 7. Verified Staff HTTP Surface
 
-The current backend provides a broad set of direct commands, two narrow operational queues, and the CP2 Staff application discovery/case foundation. The distinction determines what can ship safely.
+The current backend provides a broad set of direct commands, purpose-limited operational queues including contract work, and Staff application/case foundations. The distinction determines what can ship safely.
 
 ### 7.1 Executable Reads
 
@@ -202,6 +202,8 @@ The current backend provides a broad set of direct commands, two narrow operatio
 | Staff correction queue | `GET /api/v1/staff-corrections/tasks?status=OPEN&page=0&size=20` | `loan:correction:staff` | Open tasks only; list has no total or page metadata |
 | Current contract | `GET /api/v1/loan-applications/{loanApplicationId}/contracts/current` | `loan:contract:read` | Known application only; masked destination |
 | Advisory readiness | `GET /api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness` | `loan:contract:read` | Point-in-time result; optional expected version |
+| Staff contract queue | `GET /api/v1/staff/contract-work?productCode={productCode}&page=0&size=25` | Staff `loan:contract:read` plus Accounting Officer role | Exact `CONTRACT_PENDING` membership, safe contract/readiness summary, product filter, and deterministic page envelope |
+| Staff contract case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/contract` | Staff `loan:contract:read` plus Accounting Officer role | `CONTRACT_PENDING` or `DISBURSEMENT_PENDING`; masked contract, canonical readiness, and backend-derived work stage |
 | LoanAccount detail | `GET /api/v1/loan-applications/{loanApplicationId}/loan-account` | `loan:read` | Known application only; safe terms, schedule, and servicing state |
 | Repayment history | `GET /api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read` | Known application only; immutable paged outcomes, no external references |
 
@@ -244,7 +246,7 @@ The current backend provides a broad set of direct commands, two narrow operatio
 | Applications awaiting Loan Officer review | Executable status-filtered discovery | CP2 may discover by durable status; review action remains blocked on current-cycle evidence |
 | Applications awaiting recommendation | API dependency | Requires current review-cycle and recommendation eligibility facts |
 | Applications awaiting approval | API dependency | Requires latest recommendation evidence and maker-checker-safe case facts |
-| Contracts awaiting preparation or readiness | API dependency | Direct known-ID reads are insufficient for a queue |
+| Contracts awaiting preparation or readiness | Executable narrow queue | Server-owned `CONTRACT_PENDING` membership and backend-derived preparation, acknowledgment, blocker, or confirm stage |
 | Disbursements awaiting transfer confirmation | API dependency | Requires ready-contract index with exact safe financial snapshot |
 | Active or overdue LoanAccounts | API dependency | Customer index cannot be reused; Staff servicing index is missing |
 | Accounts eligible for settlement or closure | API dependency | Requires authoritative state and reconciliation facts, not client filtering |
@@ -1082,7 +1084,7 @@ After success, Staff Web shows the safe returned disbursement/account identifier
 
 ### 25.4 Discovery Dependency
 
-Direct contract and disbursement endpoints are executable for a known application ID. Production queues for contracts needing preparation, acknowledgment/readiness blockers, and disbursements awaiting confirmation remain API dependencies. The browser must not derive them by scanning application statuses.
+The contract operational queue and case projection are executable and authoritative for preparation, Customer-acknowledgment waiting, readiness blockers, and confirmation. The disbursement queue remains an API dependency. The browser must not derive either membership or work stage by scanning or reinterpreting application statuses.
 
 ---
 
@@ -1195,7 +1197,7 @@ Routes are conceptual implementation targets. “API dependency” means the rou
 | `/staff/work/verifications` | Pending UCL/Collateral verification | API dependency |
 | `/staff/work/reviews` | Pending Loan Officer review/recommendation | API dependency |
 | `/staff/work/approvals` | Pending independent decisions | Executable with `approval:decide` |
-| `/staff/work/contracts` | Contract preparation/readiness | API dependency |
+| `/staff/work/contracts` | Contract preparation/readiness | Executable with `loan:contract:read`; operational read also requires Accounting Officer role |
 | `/staff/work/disbursements` | Ready external-transfer confirmations | API dependency |
 | `/staff/work/servicing` | Active/overdue/settled operational accounts | API dependency |
 | `/staff/applications` | Staff application search/filter | Executable |
@@ -1205,7 +1207,7 @@ Routes are conceptual implementation targets. “API dependency” means the rou
 | `/staff/applications/:loanApplicationId/corrections` | Correction tasks/proof/resubmission | Executable |
 | `/staff/applications/:loanApplicationId/review` | Review start, current cycle, and capability-gated recommendation | Executable with `loan:review`; recommendation controls additionally require `approval:recommend` |
 | `/staff/applications/:loanApplicationId/decision` | Independent decision | Executable with `approval:decide` |
-| `/staff/applications/:loanApplicationId/contract` | Current contract/readiness | Direct known-ID reads executable; discovery/case dependency |
+| `/staff/applications/:loanApplicationId/contract` | Current contract/readiness | Executable Staff case projection with `loan:contract:read`; operational read also requires Accounting Officer role |
 | `/staff/applications/:loanApplicationId/disbursement` | Reveal and disbursement | Commands executable; discovery/case dependency |
 | `/staff/applications/:loanApplicationId/loan-account` | Account/schedule/history | Direct known-ID reads executable; Staff index dependency |
 | `/staff/applications/:loanApplicationId/repayments/new` | Record repayment | Command executable; discovery dependency |
@@ -1258,7 +1260,7 @@ Each protected route declares:
 | Verification | Foundation exists but projection missing | Current product cycle and evidence | Complete exact outcome | readiness blocker, stale cycle, unresolved no-UUID command |
 | Review/recommendation | Executable | Review cycle, readiness, correction options, and durable recommendation | Submit recommendation | stale cycle, invalid task plan, unresolved command |
 | Decision | Executable | Latest recommendation, maker-checker relation, decision history, and resulting Loan state | Submit decision | maker-checker, stale recommendation or cycle, unresolved command |
-| Contract | Foundation exists but discovery projection missing | Current masked contract and readiness | Prepare/regenerate/confirm | stale version, acknowledgment or readiness blockers, replay conflict |
+| Contract | Executable | Authoritative queue/case, current masked contract, accepted terms/items, and advisory readiness | Prepare/regenerate/confirm | stale version, acknowledgment or readiness blockers, replay conflict, contradictory or unknown evidence |
 | Disbursement | Foundation exists but discovery projection missing | Ready contract, local reveal, transfer evidence | Confirm disbursement | reveal unavailable, duplicate reference, invalid dates, result unknown/replay |
 | LoanAccount | Foundation exists but Staff index missing | Account, balances, schedule, history | Open servicing action | unavailable account, history paging failure, inconsistent state |
 | Repayment | Foundation exists but discovery projection missing | Authoritative account summary and entered payment | Record repayment | overpayment, invalid date, duplicate reference, replay/result unknown |
@@ -1484,7 +1486,7 @@ Staff FE checkpoints deliver the Staff Web feature area inside `internal-web/`. 
 - exact operation identities, stale-version handling, proof reconciliation, and correction maker-checker;
 - complete the Staff checklist/correction projection dependencies needed by the workspace.
 
-The CP3 routes and their purpose-limited read contracts are executable in Internal Web. CP4 product verification and review start and CP5 recommendation and decision are also executable; contract, disbursement, and servicing remain separate later checkpoints.
+The CP3 routes and their purpose-limited read contracts are executable in Internal Web. CP4 product verification and review start, CP5 recommendation and decision, and CP6 contract/readiness operations are also executable; disbursement and servicing remain separate later checkpoints.
 
 ### Staff FE-CP4 — Product Verification and Loan Officer Review
 
@@ -1513,6 +1515,8 @@ The CP5 recommendation and independent-decision workspaces are executable. Appro
 - prepare/regenerate with exact version and stable request identity;
 - advisory readiness, blockers, confirmation, and post-command reconciliation;
 - clear separation between ready, confirmed, and disbursed.
+
+The CP6 queue and workspace are executable in Internal Web. Loan owns queue membership and work-stage derivation; the browser renders the masked current contract, immutable accepted terms and items, and canonical point-in-time readiness without recreating policy. Preparation/regeneration and readiness confirmation bind one stable request UUID to the displayed semantic payload; an unknown result is never automatically posted again, and only an explicit exact retry may reuse that UUID and payload. Definite command success followed by read failure retries only authoritative GETs. Unknown or contradictory evidence disables consequential actions. Customer acknowledgment remains Customer-owned, while destination reveal, transfer confirmation, and activation remain CP7.
 
 ### Staff FE-CP7 — Disbursement and Activation
 

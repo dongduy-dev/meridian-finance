@@ -202,6 +202,8 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/loan-applications/{loanApplicationId}/contracts/current` | `loan:read:own` or `loan:contract:read` | Return the safe masked current contract. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/acknowledgment` | `loan:contract:acknowledge:own` | Acknowledge the exact current version. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness` | `loan:contract:read` | Calculate point-in-time readiness; optional `expectedContractVersion`. |
+| GET | `/api/v1/staff/contract-work?productCode={productCode}&page=0&size=25` | Staff `loan:contract:read` plus Accounting Officer role | Return the authoritative `CONTRACT_PENDING` operational queue with safe current-contract and advisory-readiness evidence. |
+| GET | `/api/v1/staff/loan-applications/{loanApplicationId}/contract` | Staff `loan:contract:read` plus Accounting Officer role | Return one contract workspace for `CONTRACT_PENDING` or `DISBURSEMENT_PENDING`. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness/confirm` | `loan:disbursement:prepare` | Recompute and confirm readiness. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/disbursement-destination/reveal` | `loan:disburse` | Reveal the full immutable ready-contract destination. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/disbursements` | `loan:disburse` | Confirm an external transfer and activate the LoanAccount. |
@@ -1134,6 +1136,19 @@ Success moves the contract to `READY_FOR_DISBURSEMENT` and the application to `D
 Stable blockers include `DOCUMENTS_NOT_PROCESSING_READY`, `ACTIVE_CORRECTION_REQUEST`, `CUSTOMER_INACTIVE`, `CAPTURED_ACCOUNT_MISSING`, `CAPTURED_ACCOUNT_INACTIVE`, `SALARY_ADVANCE_RESERVATION_INVALID`, `SALARY_ADVANCE_RESERVATION_RELEASED`, `UCL_VERIFICATION_INVALID`, `COLLATERAL_VERIFICATION_INVALID`, `READINESS_ALREADY_CONFIRMED`, and `CONTRACT_VERSION_STALE`.
 
 Product readiness is explicit: Salary Advance requires its exact unreleased reservation. UCL and Collateral Loan require authoritative latest application-owned `VERIFIED` evidence and have no Salary Advance reservation or exposure effect.
+
+### 6.5 Staff contract work reads
+
+```text
+GET /api/v1/staff/contract-work?productCode=UNSECURED_CONSUMER_LOAN&page=0&size=25
+GET /api/v1/staff/loan-applications/{loanApplicationId}/contract
+```
+
+Both reads require a Staff actor with exact `loan:contract:read` authority and the Accounting Officer role. The queue applies `CONTRACT_PENDING` membership, optional exact product filtering, paging with `size` from 1 through 100, and the established deterministic application ordering on the server. The case read accepts only `CONTRACT_PENDING` and `DISBURSEMENT_PENDING`; unrelated lifecycle states return `INVALID_APPLICATION_STATE`.
+
+Each safe row or case combines the application header, current masked `LoanContractDto` when present, canonical point-in-time `ContractReadinessDto`, and one backend-derived `workStage`: `NEEDS_PREPARATION`, `CUSTOMER_ACKNOWLEDGMENT_REQUIRED`, `READINESS_BLOCKED`, `READY_TO_CONFIRM`, or `READINESS_CONFIRMED`. Contradictory application, contract, readiness-identity, or stage evidence fails with `SYSTEM_STATE_CONFLICT`; the browser must not repair or reinterpret it. The response contains no full account number, cryptographic protection material, internal actor/operation identifier, document content, assessment note, or Customer-owned acknowledgment command.
+
+These Staff reads are operational discovery and composition only. Contract preparation/regeneration and readiness confirmation continue to use the commands in Sections 6.2 and 6.4 with exact displayed versions and stable request UUIDs. Customer acknowledgment remains exclusively Customer-owned. `READINESS_CONFIRMED` means the application is `DISBURSEMENT_PENDING`; it does not mean a transfer occurred or a LoanAccount was activated.
 
 ---
 

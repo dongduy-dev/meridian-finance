@@ -5003,6 +5003,116 @@
                      "description":  "Run after an application reaches CONTRACT_PENDING. Regeneration and cross-Customer requests use their separately documented collection variables. Preparation expects 404 APPROVED_OFFER_NOT_FOUND when no approved offer exists and 422 OFFER_NOT_ACCEPTED when an offer exists but is not accepted.",
                      "item":  [
                                   {
+                                      "name":  "Accounting - list authoritative contract work",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/contract-work?page=0\u0026size=25",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "staff",
+                                                                               "contract-work"
+                                                                           ],
+                                                                  "query":  [
+                                                                                {
+                                                                                    "key":  "page",
+                                                                                    "value":  "0"
+                                                                                },
+                                                                                {
+                                                                                    "key":  "size",
+                                                                                    "value":  "25"
+                                                                                }
+                                                                            ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Lists only server-selected CONTRACT_PENDING work. Optional productCode filtering is exact; current contract data is masked and readiness remains point-in-time advisory evidence."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Queue membership and page envelope are authoritative\", function () { pm.expect(json.page).to.eql(0); pm.expect(json.size).to.eql(25); json.items.forEach(item =\u003e pm.expect(item.applicationStatus).to.eql(\"CONTRACT_PENDING\")); });",
+                                                                                    "pm.test(\"Queue excludes protected destination and internal identity material\", function () { const raw = pm.response.text(); [\"protectedAccountNumber\", \"ciphertext\", \"fingerprint\", \"actorUserId\", \"operationId\"].forEach(field =\u003e pm.expect(raw).not.to.include(field)); });"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Accounting - read contract workspace",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/contract",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "staff",
+                                                                               "loan-applications",
+                                                                               "{{loanApplicationId}}",
+                                                                               "contract"
+                                                                           ]
+                                                              },
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Loads the safe contract/readiness workspace for CONTRACT_PENDING or DISBURSEMENT_PENDING. It does not expose or perform Customer acknowledgment, destination reveal, transfer confirmation, or activation."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Workspace is bound to the application and exposes a backend work stage\", function () { pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"loanApplicationId\")); pm.expect(json.workStage).to.be.a(\"string\").and.not.empty; pm.expect(json.readiness.calculationSemantics).to.eql(\"POINT_IN_TIME_ADVISORY\"); });",
+                                                                                    "pm.test(\"Current destination remains masked when a contract exists\", function () { if (json.currentContract) { pm.expect(json.currentContract.disbursementBankAccount.maskedAccountNumber).to.match(/^\\*\\*\\*\\*.+/); } });"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
                                       "name":  "Accounting - prepare first operational contract",
                                       "request":  {
                                                       "method":  "POST",
