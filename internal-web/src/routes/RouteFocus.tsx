@@ -7,8 +7,10 @@ function routeTitle(pathname: string): string {
   if (pathname === '/staff/applications') return 'Applications | Meridian'
   if (pathname === '/staff/work/documents') return 'Document review | Meridian'
   if (pathname === '/staff/work/corrections') return 'Staff corrections | Meridian'
+  if (pathname === '/staff/work/contracts') return 'Contract and readiness queue | Meridian'
   if (/^\/staff\/applications\/[^/]+\/documents$/.test(pathname)) return 'Application documents | Meridian'
   if (/^\/staff\/applications\/[^/]+\/corrections$/.test(pathname)) return 'Application corrections | Meridian'
+  if (/^\/staff\/applications\/[^/]+\/contract$/.test(pathname)) return 'Contract and readiness | Meridian'
   if (pathname.startsWith('/staff/applications/')) return 'Application case | Meridian'
   return 'Page not found | Meridian'
 }

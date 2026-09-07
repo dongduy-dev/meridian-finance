@@ -107,4 +107,45 @@ describe('unresolved operation recovery', () => {
       .toBe('NEW')
     expect(listUnresolvedOperations()).toHaveLength(1)
   })
+
+  it('retains the safe semantic payload required for exact contract replay', () => {
+    const semanticPayload = {
+      loanApplicationId: '11111111-1111-4111-8111-111111111111',
+      expectedCurrentContractVersion: 2,
+      supersessionReasonCode: 'DISBURSEMENT_ACCOUNT_REFRESH',
+    }
+    saveUnresolvedOperation({
+      type: 'CONTRACT_PREPARATION',
+      resource: semanticPayload.loanApplicationId,
+      operationId: '33333333-3333-4333-8333-333333333333',
+      payloadDigest: 'contract-digest',
+      semanticPayload,
+      unresolvedAt: '2026-09-07T01:00:00Z',
+    })
+
+    expect(findUnresolvedOperation(
+      'CONTRACT_PREPARATION',
+      semanticPayload.loanApplicationId,
+    )?.semanticPayload).toEqual(semanticPayload)
+  })
+
+  it('blocks a changed contract semantic payload while an exact operation is unresolved', () => {
+    saveUnresolvedOperation({
+      type: 'CONTRACT_READINESS_CONFIRMATION',
+      resource: 'application-one',
+      operationId: 'retained-contract-id',
+      payloadDigest: 'version-one-digest',
+      semanticPayload: { loanApplicationId: 'application-one', expectedContractVersion: 1 },
+      unresolvedAt: '2026-09-07T01:00:00Z',
+    })
+
+    expect(decideOperationIdentity(
+      'CONTRACT_READINESS_CONFIRMATION',
+      'application-one',
+      'version-two-digest',
+    )).toMatchObject({
+      kind: 'CONFLICT_WITH_UNRESOLVED',
+      operation: { operationId: 'retained-contract-id' },
+    })
+  })
 })
