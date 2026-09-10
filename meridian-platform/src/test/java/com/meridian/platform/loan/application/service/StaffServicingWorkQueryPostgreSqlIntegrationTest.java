@@ -124,7 +124,9 @@ class StaffServicingWorkQueryPostgreSqlIntegrationTest {
                     principal_outstanding = 0,
                     interest_outstanding = 0,
                     fee_outstanding = 0,
-                    total_outstanding = 0
+                    total_outstanding = 0,
+                    last_payment_value_date = servicing_evaluation_date,
+                    last_payment_recorded_at = activated_at
                 where loan_application_id = ?
                 """, applicationId);
     }
