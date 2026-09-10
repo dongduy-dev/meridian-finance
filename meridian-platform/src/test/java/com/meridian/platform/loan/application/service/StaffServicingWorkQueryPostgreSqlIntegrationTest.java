@@ -16,7 +16,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 
-import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
 
@@ -72,9 +71,6 @@ class StaffServicingWorkQueryPostgreSqlIntegrationTest {
         var overdue = activate(ProductCode.UNSECURED_CONSUMER_LOAN, "SERVICING-C");
         var settled = activate(ProductCode.COLLATERAL_LOAN, "SERVICING-D");
 
-        setActivatedAt(olderActive.applicationId(), LocalDateTime.of(2026, 7, 20, 10, 0));
-        setActivatedAt(newerActive.applicationId(), LocalDateTime.of(2026, 7, 21, 10, 0));
-        setActivatedAt(overdue.applicationId(), LocalDateTime.of(2026, 7, 22, 10, 0));
         setStatus(overdue.applicationId(), "OVERDUE");
         settle(settled.applicationId());
 
@@ -110,11 +106,6 @@ class StaffServicingWorkQueryPostgreSqlIntegrationTest {
         disbursements.confirm(support.command(fixture, UUID.randomUUID(),
                 reference + "-" + fixture.token()));
         return fixture;
-    }
-
-    private void setActivatedAt(UUID applicationId, LocalDateTime activatedAt) {
-        jdbc.update("update loan_accounts set activated_at = ? where loan_application_id = ?",
-                activatedAt, applicationId);
     }
 
     private void setStatus(UUID applicationId, String status) {
