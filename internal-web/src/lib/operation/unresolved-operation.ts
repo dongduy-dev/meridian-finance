@@ -7,6 +7,7 @@ export type UnresolvedOperationType =
   | 'STAFF_RESUBMISSION'
   | 'CONTRACT_PREPARATION'
   | 'CONTRACT_READINESS_CONFIRMATION'
+  | 'DISBURSEMENT_CONFIRMATION'
 export type UnresolvedOperation = {
   type: UnresolvedOperationType
   resource: string

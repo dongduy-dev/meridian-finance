@@ -122,6 +122,7 @@ describe('internal router access contract', () => {
     ['/staff/work/corrections', ['loan:correction:staff'], 'Staff corrections'],
     ['/staff/work/approvals', ['approval:decide'], 'Independent decision queue'],
     ['/staff/work/contracts', ['loan:contract:read'], 'Contract and readiness queue'],
+    ['/staff/work/disbursements', ['loan:disburse'], 'Ready-disbursement queue'],
   ] as const)('allows %s only through its exact capability', async (path, permissions, heading) => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff([...permissions]))
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', { status: 200 })))
@@ -134,6 +135,7 @@ describe('internal router access contract', () => {
     ['/staff/work/corrections', ['loan:correction']],
     ['/staff/work/approvals', ['approval:decide:all']],
     ['/staff/work/contracts', ['loan:contract:read:all']],
+    ['/staff/work/disbursements', ['loan:disburse:all']],
   ] as const)('does not grant CP3 route %s through a permission prefix', async (path, permissions) => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff([...permissions]))
     renderRoute(path)
@@ -152,6 +154,13 @@ describe('internal router access contract', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 500 })))
     renderRoute('/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/contract')
     expect(await screen.findByRole('heading', { name: 'Loading contract workspace' })).toBeVisible()
+  })
+
+  it('protects the disbursement workspace with exact loan:disburse', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff(['loan:disburse']))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 500 })))
+    renderRoute('/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/disbursement')
+    expect(await screen.findByRole('heading', { name: 'Loading disbursement workspace' })).toBeVisible()
   })
 
   it('rejects a Customer-shaped session before it can reach Staff routes', async () => {
