@@ -74,6 +74,14 @@ function revealCalls() {
   return vi.mocked(api.apiRequest).mock.calls.filter(([path]) => String(path).endsWith('/reveal'))
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
 describe('Staff disbursement workspace', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -145,6 +153,105 @@ describe('Staff disbursement workspace', () => {
     document.dispatchEvent(new Event('visibilitychange'))
     await act(() => vi.advanceTimersByTimeAsync(REVEALED_DESTINATION_BACKGROUND_TIMEOUT_MS))
     expect(screen.queryByText(fullAccountNumber)).not.toBeInTheDocument()
+  })
+
+  it('keeps cached evidence visible but locks consequential actions after a failed refresh until a successful refresh', async () => {
+    let readsAvailable = true
+    vi.mocked(api.apiRequest).mockImplementation(async () => {
+      if (!readsAvailable) {
+        throw new ApiError(403, 'AUTHORITATIVE_READ_FAILED', 'refresh unavailable', '/disbursement', 'refresh')
+      }
+      return pendingCase()
+    })
+    renderPage()
+    const user = userEvent.setup()
+
+    const reveal = await screen.findByRole('button', { name: 'Reveal destination' })
+    const confirm = screen.getByRole('button', { name: 'Review disbursement confirmation' })
+    expect(reveal).toBeEnabled()
+    expect(confirm).toBeEnabled()
+
+    readsAvailable = false
+    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+
+    expect(await screen.findByRole('heading', { name: 'Latest refresh unavailable' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'UCL-20260910-000001' })).toBeVisible()
+    expect(screen.getByText('****7890')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Reveal destination' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Review disbursement confirmation' })).toBeDisabled()
+
+    readsAvailable = true
+    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Latest refresh unavailable' })).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Reveal destination' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Review disbursement confirmation' })).toBeEnabled()
+  })
+
+  it('discards an in-flight reveal response after the background cleanup timeout', async () => {
+    const oldReveal = deferred<ReturnType<typeof destinationReveal>>()
+    vi.mocked(api.apiRequest).mockImplementation(async (path) =>
+      String(path).endsWith('/reveal') ? oldReveal.promise : pendingCase())
+    const { queryClient } = renderPage()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Reveal destination' }))
+    expect(revealCalls()).toHaveLength(1)
+
+    vi.useFakeTimers()
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    document.dispatchEvent(new Event('visibilitychange'))
+    await act(() => vi.advanceTimersByTimeAsync(REVEALED_DESTINATION_BACKGROUND_TIMEOUT_MS))
+    await act(async () => {
+      oldReveal.resolve(destinationReveal())
+      await oldReveal.promise
+      await Promise.resolve()
+    })
+
+    expect(screen.queryByText(fullAccountNumber)).not.toBeInTheDocument()
+    expect(JSON.stringify(queryClient.getQueryCache().getAll().map((entry) => entry.state.data)))
+      .not.toContain(fullAccountNumber)
+    expect(JSON.stringify(sessionStorage)).not.toContain(fullAccountNumber)
+    expect(JSON.stringify(localStorage)).not.toContain(fullAccountNumber)
+
+    visibility.mockReturnValue('visible')
+    document.dispatchEvent(new Event('visibilitychange'))
+    await act(async () => Promise.resolve())
+    expect(screen.queryByText(fullAccountNumber)).not.toBeInTheDocument()
+  })
+
+  it('discards an in-flight version-one reveal after the authoritative contract changes', async () => {
+    const oldReveal = deferred<ReturnType<typeof destinationReveal>>()
+    let currentCase = pendingCase()
+    let revealAttempts = 0
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (String(path).endsWith('/reveal')) {
+        revealAttempts += 1
+        return revealAttempts === 1 ? oldReveal.promise : destinationReveal(2)
+      }
+      return currentCase
+    })
+    renderPage()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Reveal destination' }))
+    currentCase = pendingCase({
+      currentContract: { ...pendingCase().currentContract, contractVersion: 2 },
+    })
+    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+    await waitFor(() => expect(screen.getByText('Exact version').parentElement).toHaveTextContent('2'))
+
+    await act(async () => {
+      oldReveal.resolve(destinationReveal(1))
+      await oldReveal.promise
+      await Promise.resolve()
+    })
+    expect(screen.queryByText(fullAccountNumber)).not.toBeInTheDocument()
+    expect(screen.getByText('Exact version').parentElement).toHaveTextContent('2')
+
+    await user.click(screen.getByRole('button', { name: 'Reveal destination' }))
+    expect(await screen.findByText(fullAccountNumber)).toBeVisible()
+    expect((revealCalls()[1]?.[1] as { body?: unknown }).body).toEqual({ expectedContractVersion: 2 })
   })
 
   it('clears a revealed destination when the authoritative contract version changes', async () => {
