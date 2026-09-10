@@ -205,6 +205,8 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/staff/contract-work?productCode={productCode}&page=0&size=25` | Staff `loan:contract:read` plus Accounting Officer role | Return the authoritative `CONTRACT_PENDING` operational queue with safe current-contract and advisory-readiness evidence. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/contract` | Staff `loan:contract:read` plus Accounting Officer role | Return one contract workspace for `CONTRACT_PENDING` or `DISBURSEMENT_PENDING`. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness/confirm` | `loan:disbursement:prepare` | Recompute and confirm readiness. |
+| GET | `/api/v1/staff/disbursement-work?productCode={productCode}&page=0&size=25` | Staff `loan:disburse` plus Accounting Officer role | Return the authoritative ready-disbursement queue. |
+| GET | `/api/v1/staff/loan-applications/{loanApplicationId}/disbursement` | Staff `loan:disburse` plus Accounting Officer role | Return one coherent pending or completed disbursement case. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/disbursement-destination/reveal` | `loan:disburse` | Reveal the full immutable ready-contract destination. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/disbursements` | `loan:disburse` | Confirm an external transfer and activate the LoanAccount. |
 | GET | `/api/v1/loan-accounts` | Customer with `loan:read:own` | List the authenticated Customer's compact LoanAccount summaries. |
@@ -1154,7 +1156,22 @@ These Staff reads are operational discovery and composition only. Contract prepa
 
 ## 7. Destination Reveal, Disbursement, and LoanAccount
 
-### 7.1 Reveal destination
+### 7.1 Staff disbursement work reads
+
+```text
+GET /api/v1/staff/disbursement-work?productCode=UNSECURED_CONSUMER_LOAN&page=0&size=25
+GET /api/v1/staff/loan-applications/{loanApplicationId}/disbursement
+```
+
+Both reads require an authenticated Staff actor with no Customer identity, exact `loan:disburse` authority, and the Accounting Officer role. The queue selects exactly `DISBURSEMENT_PENDING` applications. It supports an optional exact `productCode`, `page >= 0`, and `size` from 1 through 100, using the deterministic application ordering owned by Loan.
+
+Every queue item contains the application identity and requested terms, a safe current-contract summary with approved terms and masked destination, and the projection-only `READY_TO_DISBURSE` work stage. The case read accepts only `DISBURSEMENT_PENDING` and `DISBURSED`. A pending case returns the complete safe current contract with provisional repayment items and no activation. A completed case returns `DISBURSED`, the activated LoanAccount summary, value dates, and the persisted final schedule.
+
+Loan composes each result under a repeatable read. A pending case requires the current confirmed, non-superseded `READY_FOR_DISBURSEMENT` contract, matching application and destination identity, and no activation evidence. A completed case additionally requires coherent `ManualDisbursement`, LoanAccount, and final `RepaymentSchedule` identities, contract version, financial terms, dates, and activation timestamps. Missing or contradictory evidence returns `SYSTEM_STATE_CONFLICT`; the read does not repair state.
+
+These responses exclude Customer ID, the full destination, protection ciphertext, nonce, key ID and AAD, external transfer reference, request UUID, Staff actor ID, and audit identifiers. The completed case proves durable activation state but does not prove which disbursement request UUID caused it.
+
+### 7.2 Reveal destination
 
 ```json
 {
@@ -1176,7 +1193,7 @@ X-Content-Type-Options: nosniff
 
 Important conflicts: `CONTRACT_VERSION_STALE`, `DISBURSEMENT_DESTINATION_REVEAL_NOT_ALLOWED`, and `DISBURSEMENT_DESTINATION_UNAVAILABLE`.
 
-### 7.2 Confirm manual disbursement
+### 7.3 Confirm manual disbursement
 
 ```json
 {
@@ -1204,7 +1221,7 @@ Important errors:
 - `FIRST_REPAYMENT_DATE_INVALID`
 - `PRODUCT_ACTIVATION_NOT_SUPPORTED`
 
-### 7.3 Query LoanAccount
+### 7.4 Query LoanAccount
 
 The Customer LoanAccount index is:
 

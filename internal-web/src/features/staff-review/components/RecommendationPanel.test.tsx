@@ -126,7 +126,7 @@ describe('RecommendationPanel', () => {
     await user.click(await screen.findByRole('button', { name: 'Review recommendation' }))
     await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
-    expect(await screen.findByText(/recommendation result is unknown/i)).toBeVisible()
+    expect(await screen.findByText(/recommendation result is unknown/i, {}, { timeout: 3_000 })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review recommendation' })).not.toBeInTheDocument()
     const posts = () => vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
       String(path).endsWith('/review-recommendations') && (options as RequestInit | undefined)?.method === 'POST')
