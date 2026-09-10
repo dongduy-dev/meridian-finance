@@ -5739,6 +5739,38 @@
                     "name": "10 Manual Disbursement and LoanAccount Activation",
                     "item": [
                         {
+                            "name": "Accounting - list ready-disbursement work",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {"raw": "{{baseUrl}}/api/v1/staff/disbursement-work?page=0&size=25", "host": ["{{baseUrl}}"], "path": ["api", "v1", "staff", "disbursement-work"], "query": [{"key": "page", "value": "0"}, {"key": "size", "value": "25"}]},
+                                "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{accountingAccessToken}}", "type": "string"}]},
+                                "description": "Lists only server-selected DISBURSEMENT_PENDING work with safe ready-contract and masked-destination evidence. Optional productCode filtering is exact."
+                            },
+                            "response": [],
+                            "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                "pm.test(\"Queue membership is authoritative\", function () { const json = pm.response.json(); json.items.forEach(item => { pm.expect(item.applicationStatus).to.eql(\"DISBURSEMENT_PENDING\"); pm.expect(item.workStage).to.eql(\"READY_TO_DISBURSE\"); }); });",
+                                "pm.test(\"Queue excludes sensitive evidence\", function () { const text = pm.response.text(); [\"accountNumber\", \"ciphertext\", \"nonce\", \"keyId\", \"externalTransferReference\", \"requestId\", \"confirmedByUserId\"].forEach(field => pm.expect(text).not.to.include(field)); });"
+                            ]}}]
+                        },
+                        {
+                            "name": "Accounting - read disbursement workspace",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {"raw": "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/disbursement", "host": ["{{baseUrl}}"], "path": ["api", "v1", "staff", "loan-applications", "{{loanApplicationId}}", "disbursement"]},
+                                "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{accountingAccessToken}}", "type": "string"}]},
+                                "description": "Returns one coherent pending or completed disbursement case. A completed case includes the safe activated LoanAccount and persisted final schedule."
+                            },
+                            "response": [],
+                            "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                "pm.test(\"Case state is coherent\", function () { const json = pm.response.json(); pm.expect([\"DISBURSEMENT_PENDING\", \"DISBURSED\"]).to.include(json.applicationStatus); pm.expect([\"READY_TO_DISBURSE\", \"DISBURSED\"]).to.include(json.workStage); });",
+                                "pm.test(\"Case excludes sensitive evidence\", function () { const text = pm.response.text(); [\"accountNumber\", \"ciphertext\", \"nonce\", \"keyId\", \"externalTransferReference\", \"requestId\", \"confirmedByUserId\"].forEach(field => pm.expect(text).not.to.include(field)); });"
+                            ]}}]
+                        },
+                        {
                             "name": "Reject stale destination-reveal contract version",
                             "request": {
                                 "method": "POST",

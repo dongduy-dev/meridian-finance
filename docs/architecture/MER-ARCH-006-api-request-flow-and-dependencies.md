@@ -470,6 +470,20 @@ Salary Advance validates its exact unreleased reservation. UCL and Collateral Lo
 
 ## 9. Destination Reveal and Manual Disbursement
 
+Loan owns the Staff disbursement queue and case projection:
+
+```text
+StaffDisbursementWorkController
+    -> QueryStaffDisbursementWorkUseCase
+    -> QueryStaffDisbursementWorkService
+    -> Loan-owned repositories
+    -> safe StaffDisbursementWorkPageDto or StaffDisbursementCaseDto
+```
+
+The queue selects only `DISBURSEMENT_PENDING` applications with server-side product filtering, paging, and deterministic ordering. Loan verifies the current confirmed, non-superseded `READY_FOR_DISBURSEMENT` contract, matching destination identity, and absence of contradictory activation evidence before returning `READY_TO_DISBURSE`.
+
+The case projection composes one pending or completed case under a repeatable-read transaction. A `DISBURSED` result requires coherent Loan-owned `ManualDisbursement`, LoanAccount, and final `RepaymentSchedule` evidence linked to the same application, contract, version, and activation outcome. Any lifecycle, identity, version, financial, date, or timestamp contradiction fails closed with `SYSTEM_STATE_CONFLICT`. The controller and browser do not repair or infer missing state, and the query does not access another context's persistence.
+
 ```mermaid
 sequenceDiagram
     participant O as Accounting Staff
