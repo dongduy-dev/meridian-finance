@@ -772,7 +772,7 @@ Status: In progress
 Blocking: No current blocker.
 
 Problem:
-The common API exposes safe Customer-owned LoanApplication and LoanAccount indexes, a narrow Customer action/resume projection, and application-scoped document checklist/current-version/readiness state. Staff FE-CP2 adds a permission-scoped cross-product application index plus a consolidated safe case header, purpose-limited Customer readiness, and ordered LoanApplication transition history. Staff FE-CP3 adds document and correction projections. Staff FE-CP4 adds purpose-limited product-verification and review-start projections. Staff FE-CP5 adds Approval-owned recommendation/decision reads and authoritative Approver discovery. Staff FE-CP6 adds the Loan-owned contract operational queue and contract/readiness case projection. Staff FE-CP7 adds the Loan-owned ready-disbursement queue and pending/completed disbursement case projection. Servicing, settlement, and closure queues, aggregation, and richer product projections remain incomplete.
+The common API exposes safe Customer-owned LoanApplication and LoanAccount indexes, a narrow Customer action/resume projection, and application-scoped document checklist/current-version/readiness state. Staff FE-CP2 adds a permission-scoped cross-product application index plus a consolidated safe case header, purpose-limited Customer readiness, and ordered LoanApplication transition history. Staff FE-CP3 adds document and correction projections. Staff FE-CP4 adds purpose-limited product-verification and review-start projections. Staff FE-CP5 adds Approval-owned recommendation/decision reads and authoritative Approver discovery. Staff FE-CP6 adds the Loan-owned contract operational queue and contract/readiness case projection. Staff FE-CP7 adds the Loan-owned ready-disbursement queue and pending/completed disbursement case projection. Staff FE-CP8 adds the Loan-owned `ACTIVE` / `OVERDUE` servicing queue and composes existing LoanAccount and repayment reads. Settlement and closure queues, aggregation, and richer product projections remain incomplete.
 
 Resolved scope:
 
@@ -791,11 +791,14 @@ Resolved scope:
 - Purpose-limited Approver queue with exact `APPROVAL_PENDING` membership, deterministic paging/order, product filtering, and maker-checker availability without exposing internal actor identifiers.
 - Loan-owned Staff contract queue with exact `CONTRACT_PENDING` membership, deterministic paging/order, product filtering, safe current-contract/readiness composition, and backend-derived work stage; plus the corresponding `CONTRACT_PENDING` / `DISBURSEMENT_PENDING` case read.
 - Loan-owned Staff disbursement queue with exact `DISBURSEMENT_PENDING` membership, deterministic paging/order, product filtering, safe ready-contract composition, and backend-derived work stage; plus the corresponding repeatable-read `DISBURSEMENT_PENDING` / `DISBURSED` case with safe LoanAccount and final-schedule activation evidence.
+- Loan-owned Staff servicing queue with exact `ACTIVE` / `OVERDUE` LoanAccount membership, deterministic activation/identifier ordering, product and serviceable-status filtering, server paging, positive-outstanding and `DISBURSED` consistency validation, and PII-minimized balances and last-payment facts.
+- Staff LoanAccount servicing workspace using the existing coherent account read for originated terms, current balances, permanently masked destination, immutable final schedule and installment progress, together with the existing server-paged immutable repayment history.
+- Ordinary repayment operation integration with stable exact-request replay, digest-only protected-reference recovery, backend-returned allocation/installment outcomes, and separate current-state reconciliation.
 
 Still deferred:
 
-- Specialized Staff work queues beyond the executable document-review, Staff-correction, Approver, contract, and disbursement queues, including verification/review and servicing/settlement/closure queues, plus direct application-number lookup.
-- Servicing, repayment, settlement, and closure evidence/history beyond the executable CP4 verification/review, CP5 recommendation/decision, CP6 contract/readiness, and CP7 disbursement/activation projections.
+- Specialized Staff work queues beyond the executable document-review, Staff-correction, Approver, contract, disbursement, and ordinary-repayment servicing queues, including verification/review and settlement/closure queues, plus direct application-number lookup.
+- Settlement and closure eligibility evidence/history beyond the executable CP4 verification/review, CP5 recommendation/decision, CP6 contract/readiness, CP7 disbursement/activation, and CP8 ordinary repayment-servicing projections.
 - Broader Dashboard aggregation beyond the narrow Customer indexes and action facts.
 - Additional workflow command suggestions beyond the proven Customer action categories.
 - Richer product-specific projections where the common reads are insufficient.

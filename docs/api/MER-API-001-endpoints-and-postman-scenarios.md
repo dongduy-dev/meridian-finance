@@ -206,6 +206,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/contract` | Staff `loan:contract:read` plus Accounting Officer role | Return one contract workspace for `CONTRACT_PENDING` or `DISBURSEMENT_PENDING`. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness/confirm` | `loan:disbursement:prepare` | Recompute and confirm readiness. |
 | GET | `/api/v1/staff/disbursement-work?productCode={productCode}&page=0&size=25` | Staff `loan:disburse` plus Accounting Officer role | Return the authoritative ready-disbursement queue. |
+| GET | `/api/v1/staff/servicing-work?productCode={productCode}&accountStatus={accountStatus}&page=0&size=25` | Staff `loan:read` | Return the authoritative ordinary-repayment servicing queue. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/disbursement` | Staff `loan:disburse` plus Accounting Officer role | Return one coherent pending or completed disbursement case. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/disbursement-destination/reveal` | `loan:disburse` | Reveal the full immutable ready-contract destination. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/disbursements` | `loan:disburse` | Confirm an external transfer and activate the LoanAccount. |
@@ -1221,7 +1222,19 @@ Important errors:
 - `FIRST_REPAYMENT_DATE_INVALID`
 - `PRODUCT_ACTIVATION_NOT_SUPPORTED`
 
-### 7.4 Query LoanAccount
+### 7.4 Staff servicing work
+
+```text
+GET /api/v1/staff/servicing-work?productCode=UNSECURED_CONSUMER_LOAN&accountStatus=OVERDUE&page=0&size=25
+```
+
+The read requires an authenticated `STAFF` actor with no Customer identity and exact `loan:read` authority. It does not require `repayment:update` or an Accounting Officer role. The optional `productCode` filter accepts an executable product code. The optional `accountStatus` filter accepts only `ACTIVE` or `OVERDUE`; when omitted, both serviceable states are returned. `page` must be non-negative, `size` must be from 1 through 100, and ordering is `activatedAt DESC` followed by LoanAccount ID descending.
+
+Loan owns queue membership. The persistence query filters and pages LoanAccounts directly, joins the linked LoanApplication only for application number and product facts, and never constructs membership by paging applications or calling known-ID account reads. Each returned row requires a positive outstanding balance, a linked `DISBURSED` LoanApplication, matching application/account identity, and an `ACTIVE` or `OVERDUE` account state. Contradictory evidence returns `SYSTEM_STATE_CONFLICT`; the read never repairs state or evaluates overdue status.
+
+Each row contains application/account IDs and numbers, product code/type, account status, activation time, originated principal, total paid/outstanding, servicing evaluation date, and optional last-payment value/recorded dates. The response excludes Customer identity, destination details, external payment reference, request UUID, Staff actor identity, product-exposure movement identifiers, encryption evidence, and audit identifiers. `SETTLED` and `CLOSED` accounts do not belong to ordinary repayment work; the application-scoped LoanAccount read may still return them when queried directly.
+
+### 7.5 Query LoanAccount
 
 The Customer LoanAccount index is:
 
