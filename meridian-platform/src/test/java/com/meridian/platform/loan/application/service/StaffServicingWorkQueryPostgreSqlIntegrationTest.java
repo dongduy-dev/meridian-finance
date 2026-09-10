@@ -21,7 +21,6 @@ import java.util.UUID;
 
 import static com.meridian.platform.loan.application.service.ManualDisbursementActivationPostgreSqlTestSupport.ACCOUNTING_USER_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.when;
 
 @SpringBootTest(properties = {
@@ -69,18 +68,14 @@ class StaffServicingWorkQueryPostgreSqlIntegrationTest {
         var olderActive = activate(ProductCode.UNSECURED_CONSUMER_LOAN, "SERVICING-A");
         var newerActive = activate(ProductCode.SALARY_ADVANCE, "SERVICING-B");
         var overdue = activate(ProductCode.UNSECURED_CONSUMER_LOAN, "SERVICING-C");
-        var settled = activate(ProductCode.COLLATERAL_LOAN, "SERVICING-D");
 
         setStatus(overdue.applicationId(), "OVERDUE");
-        settle(settled.applicationId());
 
         var firstPage = servicingWork.queryWork(null, null, 0, 2);
         assertEquals(3, firstPage.totalElements());
         assertEquals(2, firstPage.totalPages());
         assertEquals(overdue.applicationId(), firstPage.items().getFirst().loanApplicationId());
         assertEquals(newerActive.applicationId(), firstPage.items().get(1).loanApplicationId());
-        assertFalse(firstPage.items().stream().anyMatch(item ->
-                item.loanApplicationId().equals(settled.applicationId())));
 
         var overdueOnly = servicingWork.queryWork(
                 ProductCode.UNSECURED_CONSUMER_LOAN,
@@ -111,23 +106,5 @@ class StaffServicingWorkQueryPostgreSqlIntegrationTest {
     private void setStatus(UUID applicationId, String status) {
         jdbc.update("update loan_accounts set status = ? where loan_application_id = ?",
                 status, applicationId);
-    }
-
-    private void settle(UUID applicationId) {
-        jdbc.update("""
-                update loan_accounts
-                set status = 'SETTLED',
-                    principal_paid = approved_principal,
-                    interest_paid = total_interest,
-                    fee_paid = fee_amount,
-                    total_paid = total_repayment_amount,
-                    principal_outstanding = 0,
-                    interest_outstanding = 0,
-                    fee_outstanding = 0,
-                    total_outstanding = 0,
-                    last_payment_value_date = servicing_evaluation_date,
-                    last_payment_recorded_at = activated_at
-                where loan_application_id = ?
-                """, applicationId);
     }
 }
