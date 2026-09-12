@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.port.in.ConfirmManualDisbursementUseCase;
+import com.meridian.platform.loan.application.port.in.EvaluateLoanAccountOverdueUseCase;
 import com.meridian.platform.loan.application.port.in.QueryStaffServicingWorkUseCase;
 import com.meridian.platform.loan.domain.model.LoanAccountStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
@@ -10,16 +11,25 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.meridian.platform.loan.application.service.ManualDisbursementActivationPostgreSqlTestSupport.ACCOUNTING_USER_ID;
+import static com.meridian.platform.loan.application.service.ManualDisbursementActivationPostgreSqlTestSupport.FIRST_REPAYMENT_DATE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
@@ -34,9 +44,11 @@ class StaffServicingWorkQueryPostgreSqlIntegrationTest {
             + UUID.randomUUID().toString().replace("-", "");
 
     @Autowired ConfirmManualDisbursementUseCase disbursements;
+    @Autowired EvaluateLoanAccountOverdueUseCase overdueEvaluator;
     @Autowired QueryStaffServicingWorkUseCase servicingWork;
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager transactionManager;
+    @Autowired MutableClock clock;
     @MockitoBean CurrentUserProvider currentUserProvider;
 
     private ManualDisbursementActivationPostgreSqlTestSupport support;
@@ -52,6 +64,7 @@ class StaffServicingWorkQueryPostgreSqlIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        clock.set(Instant.parse("2026-07-28T10:00:00Z"));
         support = new ManualDisbursementActivationPostgreSqlTestSupport(jdbc, transactionManager);
         when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(
                 ACCOUNTING_USER_ID,
@@ -66,10 +79,12 @@ class StaffServicingWorkQueryPostgreSqlIntegrationTest {
     @Test
     void filtersAndPagesServiceableAccountsWithDeterministicPostgreSqlOrdering() {
         var olderActive = activate(ProductCode.UNSECURED_CONSUMER_LOAN, "SERVICING-A");
+        clock.set(Instant.parse("2026-07-28T10:00:01Z"));
         var newerActive = activate(ProductCode.SALARY_ADVANCE, "SERVICING-B");
+        clock.set(Instant.parse("2026-07-28T10:00:02Z"));
         var overdue = activate(ProductCode.UNSECURED_CONSUMER_LOAN, "SERVICING-C");
 
-        setStatus(overdue.applicationId(), "OVERDUE");
+        markOverdue(overdue);
 
         var firstPage = servicingWork.queryWork(null, null, 0, 2);
         assertEquals(3, firstPage.totalElements());
@@ -93,18 +108,68 @@ class StaffServicingWorkQueryPostgreSqlIntegrationTest {
         ));
     }
 
-    private ManualDisbursementActivationPostgreSqlTestSupport.Fixture activate(
+    private Activated activate(
             ProductCode productCode,
             String reference
     ) {
         var fixture = support.createFixture(true, productCode);
-        disbursements.confirm(support.command(fixture, UUID.randomUUID(),
-                reference + "-" + fixture.token()));
-        return fixture;
+        var activation = disbursements.confirm(support.command(
+                fixture,
+                UUID.randomUUID(),
+                reference + "-" + fixture.token()
+        ));
+        return new Activated(fixture.applicationId(), activation.loanAccountId());
     }
 
-    private void setStatus(UUID applicationId, String status) {
-        jdbc.update("update loan_accounts set status = ? where loan_application_id = ?",
-                status, applicationId);
+    private void markOverdue(Activated activated) {
+        var evaluationDate = FIRST_REPAYMENT_DATE.plusDays(1);
+        overdueEvaluator.evaluate(new EvaluateLoanAccountOverdueUseCase.Command(
+                activated.applicationId(),
+                activated.accountId(),
+                evaluationDate,
+                evaluationDate.atStartOfDay()
+        ));
+    }
+
+    private record Activated(UUID applicationId, UUID accountId) {
+    }
+
+    @TestConfiguration
+    static class ClockConfiguration {
+        @Bean
+        @Primary
+        MutableClock staffServicingWorkClock() {
+            return new MutableClock(Instant.parse("2026-07-28T10:00:00Z"));
+        }
+    }
+
+    static class MutableClock extends Clock {
+        private final AtomicReference<Instant> current;
+
+        MutableClock(Instant initial) {
+            current = new AtomicReference<>(initial);
+        }
+
+        void set(Instant value) {
+            current.set(value);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            if (!ZoneOffset.UTC.equals(zone)) {
+                throw new IllegalArgumentException("Only UTC is supported.");
+            }
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return current.get();
+        }
     }
 }

@@ -30,18 +30,12 @@ public class StaffLoanAccountWorkQueryAdapter implements StaffLoanAccountWorkQue
             int size
     ) {
         org.springframework.data.domain.Page<JpaLoanAccountRepository.StaffServicingWorkProjection>
-                selected = accountStatus == null
-                ? loanAccounts.findStaffServicingWork(
-                        productCode,
-                        SERVICEABLE_STATUSES,
-                        PageRequest.of(page, size)
-                )
-                : loanAccounts.findStaffServicingWorkByStatus(
-                        productCode,
-                        accountStatus,
-                        SERVICEABLE_STATUSES,
-                        PageRequest.of(page, size)
-                );
+                selected = loanAccounts.findStaffServicingWork(
+                productCode,
+                accountStatus,
+                SERVICEABLE_STATUSES,
+                PageRequest.of(page, size)
+        );
         return new Page(
                 selected.getNumber(),
                 selected.getSize(),

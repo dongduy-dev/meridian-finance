@@ -79,6 +79,7 @@ interface JpaLoanAccountRepository extends JpaRepository<LoanAccountJpaEntity, U
             from LoanAccountJpaEntity account, LoanApplicationJpaEntity application
             where account.loanApplicationId = application.id
               and account.status in :serviceableStatuses
+              and (:accountStatus is null or account.status = :accountStatus)
               and (:productCode is null or application.productCode = :productCode)
             order by account.activatedAt desc, account.id desc
             """,
@@ -87,46 +88,10 @@ interface JpaLoanAccountRepository extends JpaRepository<LoanAccountJpaEntity, U
             from LoanAccountJpaEntity account, LoanApplicationJpaEntity application
             where account.loanApplicationId = application.id
               and account.status in :serviceableStatuses
+              and (:accountStatus is null or account.status = :accountStatus)
               and (:productCode is null or application.productCode = :productCode)
             """)
     Page<StaffServicingWorkProjection> findStaffServicingWork(
-            @Param("productCode") ProductCode productCode,
-            @Param("serviceableStatuses") Collection<LoanAccountStatus> serviceableStatuses,
-            Pageable pageable
-    );
-
-    @Query(value = """
-            select application.id as loanApplicationId,
-                   account.id as loanAccountId,
-                   application.applicationNumber as applicationNumber,
-                   account.accountNumber as accountNumber,
-                   application.productCode as productCode,
-                   application.productType as productType,
-                   application.status as applicationStatus,
-                   account.status as accountStatus,
-                   account.activatedAt as activatedAt,
-                   account.approvedPrincipal as originatedPrincipal,
-                   account.totalPaid as totalPaid,
-                   account.totalOutstanding as totalOutstanding,
-                   account.servicingEvaluationDate as servicingEvaluationDate,
-                   account.lastPaymentValueDate as lastPaymentValueDate,
-                   account.lastPaymentRecordedAt as lastPaymentRecordedAt
-            from LoanAccountJpaEntity account, LoanApplicationJpaEntity application
-            where account.loanApplicationId = application.id
-              and account.status in :serviceableStatuses
-              and account.status = :accountStatus
-              and (:productCode is null or application.productCode = :productCode)
-            order by account.activatedAt desc, account.id desc
-            """,
-            countQuery = """
-            select count(account.id)
-            from LoanAccountJpaEntity account, LoanApplicationJpaEntity application
-            where account.loanApplicationId = application.id
-              and account.status in :serviceableStatuses
-              and account.status = :accountStatus
-              and (:productCode is null or application.productCode = :productCode)
-            """)
-    Page<StaffServicingWorkProjection> findStaffServicingWorkByStatus(
             @Param("productCode") ProductCode productCode,
             @Param("accountStatus") LoanAccountStatus accountStatus,
             @Param("serviceableStatuses") Collection<LoanAccountStatus> serviceableStatuses,
