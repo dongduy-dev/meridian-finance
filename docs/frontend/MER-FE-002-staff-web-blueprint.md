@@ -1088,7 +1088,7 @@ One disbursement confirmation uses one stable request UUID. Unknown Network or 5
 
 ### 25.4 Operational Read Dependencies
 
-The contract and disbursement operational queues and case projections are executable. Loan owns their membership, server paging, product filtering, consistency checks, and work stages. The browser must not derive membership or work stage by scanning or reinterpreting application statuses. Staff LoanAccount servicing, settlement, and closure indexes remain API dependencies.
+The contract, disbursement, and ordinary-repayment servicing queues and their case reads are executable. Loan owns membership, server paging, product filtering, consistency checks, and any projection stage. The servicing queue contains only `ACTIVE` and `OVERDUE` LoanAccounts and supports an optional serviceable-status filter. The browser must not derive membership or work stage by scanning or reinterpreting application statuses. Purpose-specific settlement and closure indexes remain API dependencies.
 
 ---
 
@@ -1109,7 +1109,7 @@ Staff Web never decrypts the destination from the account read, reconstructs bal
 
 ### 26.2 Repayment
 
-Accounting Officer repayment entry is a financial operation.
+Ordinary repayment entry is a financial operation. The intended seeded operator is Accounting Officer, while executable authorization remains an authenticated Staff actor with `repayment:update`; no additional Accounting role check exists for this command. Authoritative account and history reads separately require `loan:read`.
 
 - Load the latest account and require a serviceable server state.
 - Capture only `externalPaymentReference`, `amount`, and `paymentValueDate` plus stable `requestId`.
@@ -1142,9 +1142,9 @@ The page explains that closure:
 
 The final confirmation names the account and current `SETTLED` state. It does not ask for financial inputs.
 
-### 26.5 Servicing Discovery Dependency
+### 26.5 Servicing Discovery
 
-There is no Staff LoanAccount index, overdue queue, repayment queue, settlement queue, or closure queue. Customer `/api/v1/loan-accounts` is ownership-scoped and cannot be reused. Staff servicing delivery therefore begins with an authorized index/search projection.
+`GET /api/v1/staff/servicing-work` is the executable ordinary-repayment index. It uses server-owned `ACTIVE` / `OVERDUE` membership, optional product and serviceable-status filters, deterministic activation ordering, and server paging. Customer `/api/v1/loan-accounts` remains ownership-scoped and is not reused. `SETTLED` and `CLOSED` discovery belongs to the purpose-specific CP9 settlement and closure indexes.
 
 Overdue evaluation is backend-scheduled. Staff Web displays resulting `OVERDUE` and cure state but provides no manual “evaluate overdue” control.
 
@@ -1203,7 +1203,7 @@ Routes are conceptual implementation targets. “API dependency” means the rou
 | `/staff/work/approvals` | Pending independent decisions | Executable with `approval:decide` |
 | `/staff/work/contracts` | Contract preparation/readiness | Executable with `loan:contract:read`; operational read also requires Accounting Officer role |
 | `/staff/work/disbursements` | Ready external-transfer confirmations | Executable with `loan:disburse`; operational read also requires Accounting Officer role |
-| `/staff/work/servicing` | Active/overdue/settled operational accounts | API dependency |
+| `/staff/work/servicing` | Active/overdue ordinary repayment work | Executable with `loan:read`; server-owned membership and paging |
 | `/staff/applications` | Staff application search/filter | Executable |
 | `/staff/applications/:loanApplicationId` | Case overview | Executable with purpose-limited readiness and lifecycle history |
 | `/staff/applications/:loanApplicationId/verification` | Product verification | Executable with `loan:review`; does not require `loan:read` |
@@ -1213,8 +1213,8 @@ Routes are conceptual implementation targets. “API dependency” means the rou
 | `/staff/applications/:loanApplicationId/decision` | Independent decision | Executable with `approval:decide` |
 | `/staff/applications/:loanApplicationId/contract` | Current contract/readiness | Executable Staff case projection with `loan:contract:read`; operational read also requires Accounting Officer role |
 | `/staff/applications/:loanApplicationId/disbursement` | Reveal, external-transfer confirmation, and activation result | Executable with `loan:disburse`; operational read also requires Accounting Officer role |
-| `/staff/applications/:loanApplicationId/loan-account` | Account/schedule/history | Direct known-ID reads executable; Staff index dependency |
-| `/staff/applications/:loanApplicationId/repayments/new` | Record repayment | Command executable; discovery dependency |
+| `/staff/applications/:loanApplicationId/loan-account` | Account/schedule/history | Executable with `loan:read`; terminal accounts remain read-only |
+| `/staff/applications/:loanApplicationId/repayments/new` | Record repayment | Executable with `repayment:update`; authoritative reads require `loan:read` |
 | `/staff/applications/:loanApplicationId/settlement` | Exact full-balance settlement | Command executable; Approver and discovery dependency |
 | `/staff/applications/:loanApplicationId/closure` | Administrative closure | Command executable; Accounting and discovery dependency |
 | `/admin/*` | Back-Office Administration feature boundary | Reserved for MER-FE-003; no pages defined here |
@@ -1266,8 +1266,8 @@ Each protected route declares:
 | Decision | Executable | Latest recommendation, maker-checker relation, decision history, and resulting Loan state | Submit decision | maker-checker, stale recommendation or cycle, unresolved command |
 | Contract | Executable | Authoritative queue/case, current masked contract, accepted terms/items, and advisory readiness | Prepare/regenerate/confirm | stale version, acknowledgment or readiness blockers, replay conflict, contradictory or unknown evidence |
 | Disbursement | Executable | Authoritative queue/case, ready contract, memory-only reveal, transfer evidence, activated account, and final schedule | Confirm disbursement | reveal unavailable, stale contract, duplicate reference, invalid dates, result unknown/replay, confirmed refresh unavailable |
-| LoanAccount | Foundation exists but Staff index missing | Account, balances, schedule, history | Open servicing action | unavailable account, history paging failure, inconsistent state |
-| Repayment | Foundation exists but discovery projection missing | Authoritative account summary and entered payment | Record repayment | overpayment, invalid date, duplicate reference, replay/result unknown |
+| LoanAccount | Executable | Server-owned serviceable index, account, balances, final schedule, and history | Inspect account or open ordinary repayment | unavailable account, history paging failure, stale cached evidence, inconsistent state |
+| Repayment | Executable | Authoritative account summary, immutable history, and entered payment | Record repayment | overpayment, invalid date, duplicate reference, replay/result unknown, confirmed refresh unavailable |
 | Settlement | Foundation exists but discovery projection missing | Locked/current outstanding and entered payment evidence | Apply full-balance settlement | wrong role, changed amount, non-serviceable state, replay/result unknown |
 | Closure | Foundation exists but discovery projection missing | Reconciled settled account | Close account | wrong role, not settled, competing operation, replay/result unknown |
 | Generic audit page | Deferred | No authorized query exists | None | do not synthesize audit evidence |
@@ -1385,7 +1385,7 @@ An `OperationStatusPanel` is client recovery state, not audit evidence.
 |---|---|---|
 | Expanded Staff case projections | evidence context for CP3+ action workspaces | PII-minimized current facts composed across context-owned contracts beyond the CP2 header/readiness/history foundation |
 | Contract/disbursement operational indexes | Accounting discovery | Current version/status/readiness blockers and ready cases |
-| Staff LoanAccount/servicing index | repayment, overdue, settlement, closure discovery | Authorized balances/states with server paging/filtering |
+| Purpose-specific settlement/closure indexes | settlement and closure discovery | Authorized eligible states with server paging/filtering |
 | Expanded action histories beyond recommendation and decision evidence | later action timelines and reliable no-UUID reconciliation | Ordered safe immutable evidence beyond CP2 LoanApplication transitions and CP5 Approval history |
 
 ### 33.2 Useful but Non-Blocking Enhancements
@@ -1537,6 +1537,10 @@ The CP7 queue and workspace are executable in Internal Web. Loan owns exact `DIS
 - account, immutable schedule, installment progress, and paged repayment history;
 - Accounting repayment operation, returned allocation outcomes, replay, and refetch;
 - overdue state presentation without a manual evaluation command.
+
+The CP8 servicing queue, LoanAccount workspace, and ordinary repayment workspace are executable in Internal Web. Loan owns `ACTIVE` / `OVERDUE` membership, product/status filters, deterministic paging, current account evidence, immutable schedule/progress, immutable repayment history, and repayment allocation/outcome calculation. Staff Web never calculates overdue, allocation, overpayment, payoff, resulting balance, or product exposure. A fresh coherent account read gates the command UI; a later failed refetch keeps safe cached evidence visible but locks repayment.
+
+One repayment uses one stable request UUID bound to the application ID, canonical trimmed/uppercased external payment reference, exact whole-VND amount, and payment value date. Network and 5xx outcomes persist only actor-bound `REPAYMENT_RECORDING` metadata and a SHA-256 payload digest. The protected reference remains in same-page component memory only and never enters browser storage, query cache, URL, or history. A changed account or new history row cannot prove request identity. Exact same-request replay resolves the operation and is presented as a historical operation outcome separately from the refetched current LoanAccount.
 
 ### Staff FE-CP9 — Settlement and Administrative Closure
 

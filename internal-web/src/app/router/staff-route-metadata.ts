@@ -101,6 +101,24 @@ export const STAFF_DISBURSEMENT_CASE_ROUTE = {
   requiredPermissions: ['loan:disburse'],
 } as const satisfies StaffRouteDefinition
 
+export const STAFF_SERVICING_QUEUE_ROUTE = {
+  path: '/staff/work/servicing',
+  label: 'Account servicing',
+  requiredPermissions: ['loan:read'],
+} as const satisfies StaffRouteDefinition
+
+export const STAFF_LOAN_ACCOUNT_ROUTE = {
+  path: '/staff/applications/:loanApplicationId/loan-account',
+  label: 'LoanAccount servicing',
+  requiredPermissions: ['loan:read'],
+} as const satisfies StaffRouteDefinition
+
+export const STAFF_REPAYMENT_ENTRY_ROUTE = {
+  path: '/staff/applications/:loanApplicationId/repayments/new',
+  label: 'Record repayment',
+  requiredPermissions: ['repayment:update'],
+} as const satisfies StaffRouteDefinition
+
 export const STAFF_ROUTES = [
   STAFF_HOME_ROUTE,
   STAFF_APPLICATIONS_ROUTE,
@@ -109,6 +127,7 @@ export const STAFF_ROUTES = [
   STAFF_APPROVAL_QUEUE_ROUTE,
   STAFF_CONTRACT_QUEUE_ROUTE,
   STAFF_DISBURSEMENT_QUEUE_ROUTE,
+  STAFF_SERVICING_QUEUE_ROUTE,
 ] as const satisfies readonly StaffRouteDefinition[]
 
 export function canAccessStaffRoute(actor: StaffActor, route: StaffRouteDefinition): boolean {

@@ -21,6 +21,9 @@ import {
   STAFF_CONTRACT_CASE_ROUTE,
   STAFF_DISBURSEMENT_QUEUE_ROUTE,
   STAFF_DISBURSEMENT_CASE_ROUTE,
+  STAFF_SERVICING_QUEUE_ROUTE,
+  STAFF_LOAN_ACCOUNT_ROUTE,
+  STAFF_REPAYMENT_ENTRY_ROUTE,
 } from './staff-route-metadata'
 
 const LoginPage = lazy(() => import('@/features/auth/components/LoginPage').then((module) => ({ default: module.LoginPage })))
@@ -39,6 +42,9 @@ const StaffContractWorkQueuePage = lazy(() => import('@/features/staff-contracts
 const StaffContractWorkspacePage = lazy(() => import('@/features/staff-contracts/pages/StaffContractWorkspacePage').then((module) => ({ default: module.StaffContractWorkspacePage })))
 const StaffDisbursementWorkQueuePage = lazy(() => import('@/features/staff-disbursements/pages/StaffDisbursementWorkQueuePage').then((module) => ({ default: module.StaffDisbursementWorkQueuePage })))
 const StaffDisbursementWorkspacePage = lazy(() => import('@/features/staff-disbursements/pages/StaffDisbursementWorkspacePage').then((module) => ({ default: module.StaffDisbursementWorkspacePage })))
+const StaffServicingWorkQueuePage = lazy(() => import('@/features/staff-servicing/pages/StaffServicingWorkQueuePage').then((module) => ({ default: module.StaffServicingWorkQueuePage })))
+const StaffLoanAccountWorkspacePage = lazy(() => import('@/features/staff-servicing/pages/StaffLoanAccountWorkspacePage').then((module) => ({ default: module.StaffLoanAccountWorkspacePage })))
+const StaffRepaymentEntryPage = lazy(() => import('@/features/staff-servicing/pages/StaffRepaymentEntryPage').then((module) => ({ default: module.StaffRepaymentEntryPage })))
 const NotFoundPage = lazy(() => import('@/routes/NotFoundPage').then((module) => ({ default: module.NotFoundPage })))
 
 function RouteFrame() { return <><RouteFocus /><Outlet /></> }
@@ -94,6 +100,15 @@ export const routes: RouteObject[] = [{ element: <RouteFrame />, errorElement: <
     ] },
     { element: <StaffCapabilityRoute route={STAFF_DISBURSEMENT_CASE_ROUTE} />, children: [
       { path: STAFF_DISBURSEMENT_CASE_ROUTE.path, element: <Deferred><StaffDisbursementWorkspacePage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_SERVICING_QUEUE_ROUTE} />, children: [
+      { path: STAFF_SERVICING_QUEUE_ROUTE.path, element: <Deferred><StaffServicingWorkQueuePage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_LOAN_ACCOUNT_ROUTE} />, children: [
+      { path: STAFF_LOAN_ACCOUNT_ROUTE.path, element: <Deferred><StaffLoanAccountWorkspacePage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_REPAYMENT_ENTRY_ROUTE} />, children: [
+      { path: STAFF_REPAYMENT_ENTRY_ROUTE.path, element: <Deferred><StaffRepaymentEntryPage /></Deferred> },
     ] },
   ] }] },
   { path: '/admin/*', element: <Deferred><NotFoundPage /></Deferred> },

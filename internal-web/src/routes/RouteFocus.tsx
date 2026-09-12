@@ -9,10 +9,13 @@ function routeTitle(pathname: string): string {
   if (pathname === '/staff/work/corrections') return 'Staff corrections | Meridian'
   if (pathname === '/staff/work/contracts') return 'Contract and readiness queue | Meridian'
   if (pathname === '/staff/work/disbursements') return 'Ready-disbursement queue | Meridian'
+  if (pathname === '/staff/work/servicing') return 'LoanAccount servicing queue | Meridian'
   if (/^\/staff\/applications\/[^/]+\/documents$/.test(pathname)) return 'Application documents | Meridian'
   if (/^\/staff\/applications\/[^/]+\/corrections$/.test(pathname)) return 'Application corrections | Meridian'
   if (/^\/staff\/applications\/[^/]+\/contract$/.test(pathname)) return 'Contract and readiness | Meridian'
   if (/^\/staff\/applications\/[^/]+\/disbursement$/.test(pathname)) return 'Disbursement and activation | Meridian'
+  if (/^\/staff\/applications\/[^/]+\/loan-account$/.test(pathname)) return 'LoanAccount servicing | Meridian'
+  if (/^\/staff\/applications\/[^/]+\/repayments\/new$/.test(pathname)) return 'Record repayment | Meridian'
   if (pathname.startsWith('/staff/applications/')) return 'Application case | Meridian'
   return 'Page not found | Meridian'
 }

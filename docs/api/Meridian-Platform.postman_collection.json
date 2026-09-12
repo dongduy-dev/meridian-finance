@@ -5912,6 +5912,42 @@
                         }
                     ]
                 },
+                {
+                    "name": "11 Staff LoanAccount and Repayment Servicing",
+                    "item": [
+                        {
+                            "name": "Staff - list active and overdue servicing work",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {"raw": "{{baseUrl}}/api/v1/staff/servicing-work?page=0&size=25", "host": ["{{baseUrl}}"], "path": ["api", "v1", "staff", "servicing-work"], "query": [{"key": "page", "value": "0"}, {"key": "size", "value": "25"}]},
+                                "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{accountingAccessToken}}", "type": "string"}]},
+                                "description": "Lists only server-selected ACTIVE and OVERDUE LoanAccounts with positive outstanding balances. Results are newest activation first and expose no repayment references or protected destination evidence."
+                            },
+                            "response": [],
+                            "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                "pm.test(\"Membership is server-owned\", function () { const json = pm.response.json(); json.items.forEach(item => { pm.expect([\"ACTIVE\", \"OVERDUE\"]).to.include(item.accountStatus); pm.expect(item.totalOutstanding).to.be.above(0); }); });",
+                                "pm.test(\"Queue excludes protected evidence\", function () { const text = pm.response.text(); [\"externalPaymentReference\", \"requestId\", \"accountNumber\", \"ciphertext\", \"nonce\", \"keyId\"].forEach(field => pm.expect(text).not.to.include(field)); });"
+                            ]}}]
+                        },
+                        {
+                            "name": "Staff - filter overdue UCL servicing work",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {"raw": "{{baseUrl}}/api/v1/staff/servicing-work?productCode=UNSECURED_CONSUMER_LOAN&accountStatus=OVERDUE&page=0&size=25", "host": ["{{baseUrl}}"], "path": ["api", "v1", "staff", "servicing-work"], "query": [{"key": "productCode", "value": "UNSECURED_CONSUMER_LOAN"}, {"key": "accountStatus", "value": "OVERDUE"}, {"key": "page", "value": "0"}, {"key": "size", "value": "25"}]},
+                                "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{accountingAccessToken}}", "type": "string"}]},
+                                "description": "Applies exact product and serviceable-state filters. Overdue evaluation remains scheduler-owned; this read does not calculate or mutate overdue state."
+                            },
+                            "response": [],
+                            "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                "pm.test(\"Exact filters are applied\", function () { const json = pm.response.json(); json.items.forEach(item => { pm.expect(item.productCode).to.eql(\"UNSECURED_CONSUMER_LOAN\"); pm.expect(item.accountStatus).to.eql(\"OVERDUE\"); }); });"
+                            ]}}]
+                        }
+                    ]
+                },
                  {
                      "name":  "90 Negative Auth and Validation Checks",
                      "item":  [
