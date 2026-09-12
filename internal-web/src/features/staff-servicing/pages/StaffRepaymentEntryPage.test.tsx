@@ -66,6 +66,41 @@ function standardRead(path: unknown) {
   return String(path).includes('/repayments?') ? historyFixture() : accountFixture()
 }
 
+function payoffAccountFixture(status: 'ACTIVE' | 'SETTLED') {
+  const account = accountFixture(status)
+  const principalPaid = status === 'SETTLED' ? account.originatedPrincipal : account.originatedPrincipal - 100
+  const principalOutstanding = account.originatedPrincipal - principalPaid
+  const totalPaid = principalPaid + account.totalInterest + account.totalFee
+  const totalOutstanding = account.totalRepayment - totalPaid
+  const servicing = {
+    ...account.servicing,
+    principalPaid,
+    interestPaid: account.totalInterest,
+    feePaid: account.totalFee,
+    totalPaid,
+    principalOutstanding,
+    interestOutstanding: 0,
+    feeOutstanding: 0,
+    totalOutstanding,
+  }
+  return {
+    ...account,
+    servicing,
+    finalRepaymentSchedule: {
+      ...account.finalRepaymentSchedule,
+      items: account.finalRepaymentSchedule.items.map((item) => ({
+        ...item,
+        servicing: {
+          ...item.servicing,
+          ...servicing,
+          status: status === 'SETTLED' ? 'PAID' : 'PARTIALLY_PAID',
+          statusEvaluationDate: item.servicing.statusEvaluationDate,
+        },
+      })),
+    },
+  }
+}
+
 describe('Staff repayment entry', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -158,6 +193,50 @@ describe('Staff repayment entry', () => {
     expect(secondBody).toEqual(firstBody)
     expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
     expect(findUnresolvedOperation('REPAYMENT_RECORDING', applicationId)).toBeUndefined()
+  })
+
+  it('keeps a lost payoff unknown and allows exact replay after the account becomes SETTLED', async () => {
+    let attempts = 0
+    let accountStatus: 'ACTIVE' | 'SETTLED' = 'ACTIVE'
+    const settledAccount = payoffAccountFixture('SETTLED')
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (String(path).endsWith('/repayments') && (options as RequestInit | undefined)?.method === 'POST') {
+        attempts += 1
+        if (attempts === 1) {
+          accountStatus = 'SETTLED'
+          throw new NetworkError()
+        }
+        return repaymentResultFixture({
+          idempotentReplay: true,
+          resultingLoanAccountStatus: 'SETTLED',
+          accountBalance: { ...settledAccount.servicing, status: 'SETTLED' },
+        })
+      }
+      return String(path).includes('/repayments?')
+        ? historyFixture()
+        : payoffAccountFixture(accountStatus)
+    })
+    renderPage()
+    const user = userEvent.setup()
+    await enterEvidence(user)
+    await user.click(screen.getByRole('button', { name: 'Review repayment' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
+
+    expect(await screen.findByText(/Current account or history changes cannot prove this request identity/i)).toBeVisible()
+    expect(await screen.findByText(/backend reports SETTLED/i)).toBeVisible()
+    const retry = screen.getByRole('button', { name: 'Retry exact operation' })
+    expect(retry).toBeEnabled()
+    expect(repaymentPostCalls()).toHaveLength(1)
+
+    await user.click(retry)
+
+    expect(await screen.findByRole('heading', { name: 'Previously recorded repayment result' })).toBeVisible()
+    expect(repaymentPostCalls()).toHaveLength(2)
+    expect(repaymentPostCalls()[1]?.[1]?.body).toEqual(repaymentPostCalls()[0]?.[1]?.body)
+    expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
+    expect(findUnresolvedOperation('REPAYMENT_RECORDING', applicationId)).toBeUndefined()
+    expect(screen.getByRole('button', { name: 'Review repayment' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /settlement|closure/i })).not.toBeInTheDocument()
   })
 
   it('survives reload without the raw reference and blocks a mismatched candidate without generating R2', async () => {
