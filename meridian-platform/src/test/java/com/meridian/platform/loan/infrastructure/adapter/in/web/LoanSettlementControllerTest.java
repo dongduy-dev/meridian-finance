@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.in.web;
 
 import com.meridian.platform.loan.application.dto.ApproveLoanSettlementRequest;
+import com.meridian.platform.loan.application.dto.StaffApprovedSettlementEvidenceDto;
 import com.meridian.platform.loan.application.mapper.LoanSettlementApiMapper;
 import com.meridian.platform.loan.application.port.in.ApproveLoanSettlementUseCase;
 import com.meridian.platform.loan.domain.model.LoanAccountStatus;
@@ -20,6 +21,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -37,7 +39,14 @@ class LoanSettlementControllerTest {
         useCase = new StubSettlementUseCase();
         mockMvc = MockMvcBuilders.standaloneSetup(new LoanSettlementController(
                         useCase,
-                        new LoanSettlementApiMapper()
+                        new LoanSettlementApiMapper(),
+                        loanApplicationId -> new StaffApprovedSettlementEvidenceDto(
+                                loanApplicationId,
+                                UUID.fromString("20000000-0000-0000-0000-000000000001"),
+                                money("1230000"),
+                                LocalDate.of(2026, 9, 1),
+                                LocalDateTime.of(2026, 9, 1, 10, 0)
+                        )
                 ))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -125,6 +134,25 @@ class LoanSettlementControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.principalAllocated").value(1200000))
                 .andExpect(jsonPath("$.principalReleased").value(0));
+    }
+
+    @Test
+    void returnsOnlySafeImmutableSettlementRecoveryEvidence() throws Exception {
+        mockMvc.perform(get(
+                        "/api/v1/loan-applications/{id}/settlements/approved",
+                        APPLICATION_ID
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.loanApplicationId")
+                        .value(APPLICATION_ID.toString()))
+                .andExpect(jsonPath("$.settlementAmount").value(1230000))
+                .andExpect(jsonPath("$.paymentValueDate").value("2026-09-01"))
+                .andExpect(jsonPath("$.requestId").doesNotExist())
+                .andExpect(jsonPath("$.externalPaymentReference").doesNotExist())
+                .andExpect(jsonPath("$.repaymentTransactionId").doesNotExist())
+                .andExpect(jsonPath("$.approvedByUserId").doesNotExist())
+                .andExpect(jsonPath("$.settlementId").doesNotExist())
+                .andExpect(jsonPath("$.auditId").doesNotExist());
     }
 
     private static String validBody() {
