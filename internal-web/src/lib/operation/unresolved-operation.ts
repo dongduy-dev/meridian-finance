@@ -9,6 +9,8 @@ export type UnresolvedOperationType =
   | 'CONTRACT_READINESS_CONFIRMATION'
   | 'DISBURSEMENT_CONFIRMATION'
   | 'REPAYMENT_RECORDING'
+  | 'ADMINISTRATIVE_FULL_BALANCE_SETTLEMENT'
+  | 'LOAN_ACCOUNT_ADMINISTRATIVE_CLOSURE'
 export type UnresolvedOperation = {
   type: UnresolvedOperationType
   resource: string

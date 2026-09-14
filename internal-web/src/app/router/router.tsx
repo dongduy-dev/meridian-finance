@@ -24,6 +24,10 @@ import {
   STAFF_SERVICING_QUEUE_ROUTE,
   STAFF_LOAN_ACCOUNT_ROUTE,
   STAFF_REPAYMENT_ENTRY_ROUTE,
+  STAFF_SETTLEMENT_QUEUE_ROUTE,
+  STAFF_SETTLEMENT_CASE_ROUTE,
+  STAFF_CLOSURE_QUEUE_ROUTE,
+  STAFF_CLOSURE_CASE_ROUTE,
 } from './staff-route-metadata'
 
 const LoginPage = lazy(() => import('@/features/auth/components/LoginPage').then((module) => ({ default: module.LoginPage })))
@@ -45,6 +49,10 @@ const StaffDisbursementWorkspacePage = lazy(() => import('@/features/staff-disbu
 const StaffServicingWorkQueuePage = lazy(() => import('@/features/staff-servicing/pages/StaffServicingWorkQueuePage').then((module) => ({ default: module.StaffServicingWorkQueuePage })))
 const StaffLoanAccountWorkspacePage = lazy(() => import('@/features/staff-servicing/pages/StaffLoanAccountWorkspacePage').then((module) => ({ default: module.StaffLoanAccountWorkspacePage })))
 const StaffRepaymentEntryPage = lazy(() => import('@/features/staff-servicing/pages/StaffRepaymentEntryPage').then((module) => ({ default: module.StaffRepaymentEntryPage })))
+const StaffSettlementWorkQueuePage = lazy(() => import('@/features/staff-servicing/pages/StaffSettlementWorkQueuePage').then((module) => ({ default: module.StaffSettlementWorkQueuePage })))
+const StaffSettlementPage = lazy(() => import('@/features/staff-servicing/pages/StaffSettlementPage').then((module) => ({ default: module.StaffSettlementPage })))
+const StaffClosureWorkQueuePage = lazy(() => import('@/features/staff-servicing/pages/StaffClosureWorkQueuePage').then((module) => ({ default: module.StaffClosureWorkQueuePage })))
+const StaffClosurePage = lazy(() => import('@/features/staff-servicing/pages/StaffClosurePage').then((module) => ({ default: module.StaffClosurePage })))
 const NotFoundPage = lazy(() => import('@/routes/NotFoundPage').then((module) => ({ default: module.NotFoundPage })))
 
 function RouteFrame() { return <><RouteFocus /><Outlet /></> }
@@ -109,6 +117,18 @@ export const routes: RouteObject[] = [{ element: <RouteFrame />, errorElement: <
     ] },
     { element: <StaffCapabilityRoute route={STAFF_REPAYMENT_ENTRY_ROUTE} />, children: [
       { path: STAFF_REPAYMENT_ENTRY_ROUTE.path, element: <Deferred><StaffRepaymentEntryPage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_SETTLEMENT_QUEUE_ROUTE} />, children: [
+      { path: STAFF_SETTLEMENT_QUEUE_ROUTE.path, element: <Deferred><StaffSettlementWorkQueuePage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_SETTLEMENT_CASE_ROUTE} />, children: [
+      { path: STAFF_SETTLEMENT_CASE_ROUTE.path, element: <Deferred><StaffSettlementPage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_CLOSURE_QUEUE_ROUTE} />, children: [
+      { path: STAFF_CLOSURE_QUEUE_ROUTE.path, element: <Deferred><StaffClosureWorkQueuePage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_CLOSURE_CASE_ROUTE} />, children: [
+      { path: STAFF_CLOSURE_CASE_ROUTE.path, element: <Deferred><StaffClosurePage /></Deferred> },
     ] },
   ] }] },
   { path: '/admin/*', element: <Deferred><NotFoundPage /></Deferred> },
