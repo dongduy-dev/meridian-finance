@@ -207,7 +207,7 @@ All three products use Meridian's common application, approval, contract, activa
 ### Phase 3 — Customer and Internal Web Experience
 
 - [x] Customer Web for profile, applications, documents, offers, and loan tracking
-- [ ] Staff Web lending operations inside Internal Web for review, approval, correction, disbursement, and repayment
+- [x] Staff Web lending operations inside Internal Web for review, approval, correction, disbursement, repayment, settlement, and administrative closure
 - [ ] Back-Office Administration inside Internal Web for products, partners, users, and configuration
 
 ### Phase 4 — Operational Maturity
@@ -282,7 +282,7 @@ Frontend verification commands are `npm run lint`, `npm run typecheck`, `npm tes
 
 ## Internal Web
 
-`internal-web/` contains Meridian's shared Internal Web application. Staff FE-CP1 through Staff FE-CP5 establish Staff authentication, permission-scoped discovery and case evidence, document and correction operations, product verification and review, recommendation, and independent decision. Staff FE-CP6 provides Accounting-owned contract preparation and readiness operations. Staff FE-CP7 provides the ready-disbursement queue, controlled destination reveal, external-transfer confirmation, and durable LoanAccount/final-schedule reconciliation. Staff FE-CP8 provides server-owned `ACTIVE` / `OVERDUE` servicing discovery, the authoritative LoanAccount schedule/progress/history workspace, and ordinary repayment recording with exact replay and protected-reference recovery. Settlement and administrative closure remain scheduled for Staff FE-CP9, so the Phase 3 Staff Web roadmap item remains open.
+`internal-web/` contains Meridian's shared Internal Web application. Staff FE-CP1 through Staff FE-CP9 provide Staff authentication, permission-scoped discovery and case evidence, document and correction operations, product verification and review, recommendation and independent decision, Accounting-owned contract readiness and disbursement, LoanAccount repayment servicing, Approver-owned full-balance settlement, and Accounting-owned administrative closure. The financial operations preserve exact-request recovery, keep protected references out of browser persistence, and reconcile confirmed outcomes through authoritative Loan reads. The Phase 3 Staff Web lending-operations item is complete.
 
 Future Back-Office Administration will use the same application, primarily under `/admin/*`, and remains incomplete. [MER-FE-002](docs/frontend/MER-FE-002-staff-web-blueprint.md) governs Staff Web architecture and delivery; it does not define future Back-Office Administration behavior.
 

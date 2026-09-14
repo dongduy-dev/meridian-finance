@@ -207,6 +207,8 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness/confirm` | `loan:disbursement:prepare` | Recompute and confirm readiness. |
 | GET | `/api/v1/staff/disbursement-work?productCode={productCode}&page=0&size=25` | Staff `loan:disburse` plus Accounting Officer role | Return the authoritative ready-disbursement queue. |
 | GET | `/api/v1/staff/servicing-work?productCode={productCode}&accountStatus={accountStatus}&page=0&size=25` | Staff `loan:read` | Return the authoritative ordinary-repayment servicing queue. |
+| GET | `/api/v1/staff/settlement-work?productCode={productCode}&page=0&size=25` | Staff `loan:settlement:approve` plus Approver role | Return authoritative full-balance settlement candidates. |
+| GET | `/api/v1/staff/closure-work?productCode={productCode}&page=0&size=25` | Staff `loan:account:close` plus Accounting Officer role | Return authoritative administrative-closure candidates. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/disbursement` | Staff `loan:disburse` plus Accounting Officer role | Return one coherent pending or completed disbursement case. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/disbursement-destination/reveal` | `loan:disburse` | Reveal the full immutable ready-contract destination. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/disbursements` | `loan:disburse` | Confirm an external transfer and activate the LoanAccount. |
@@ -215,6 +217,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/loan-applications/{loanApplicationId}/repayments` | `repayment:update` | Record or replay a manual Salary Advance, UCL, or Collateral Loan repayment. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read:own` or `loan:read` | Return immutable paged repayment history. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/settlements` | `loan:settlement:approve` plus Approver role | Approve and apply an Administrative Full-Balance Settlement. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/settlements/approved` | `loan:settlement:approve` plus Approver role | Return PII-minimized immutable settlement facts for exact reload recovery. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/loan-account/closure` | `loan:account:close` plus Accounting Officer role | Close an eligible settled LoanAccount administratively. |
 
 ---
@@ -1234,7 +1237,31 @@ Loan owns queue membership. The persistence query filters and pages LoanAccounts
 
 Each row contains application/account IDs and numbers, product code/type, account status, activation time, originated principal, total paid/outstanding, servicing evaluation date, and optional last-payment value/recorded dates. The response excludes Customer identity, destination details, external payment reference, request UUID, Staff actor identity, product-exposure movement identifiers, encryption evidence, and audit identifiers. `SETTLED` and `CLOSED` accounts do not belong to ordinary repayment work; the application-scoped LoanAccount read may still return them when queried directly.
 
-### 7.5 Query LoanAccount
+### 7.5 Staff settlement work
+
+```text
+GET /api/v1/staff/settlement-work?productCode=UNSECURED_CONSUMER_LOAN&page=0&size=25
+```
+
+The read requires an authenticated `STAFF` actor with no Customer identity, exact `loan:settlement:approve`, and the `APPROVER` role. It accepts an optional executable `productCode`; `page` must be non-negative and `size` must be from 1 through 100. Ordering is `activatedAt DESC` followed by LoanAccount ID descending.
+
+Loan owns membership. A row represents a `DISBURSED` application with a coherent `ACTIVE` or `OVERDUE` LoanAccount, positive authoritative total outstanding, and matching final-schedule and installment-progress evidence. The query does not validate future payment date or reference input and performs no overdue evaluation or mutation. Contradictory candidate evidence returns `409 SYSTEM_STATE_CONFLICT`.
+
+Rows contain only application/account IDs and references, product code/type, account state, activation and servicing timing, and current total paid/outstanding. They exclude Customer identity, destination data, payment references, request UUIDs, settlement and exposure evidence IDs, actor IDs, audit IDs, and encryption details.
+
+### 7.6 Staff closure work
+
+```text
+GET /api/v1/staff/closure-work?productCode=SALARY_ADVANCE&page=0&size=25
+```
+
+The read requires an authenticated `STAFF` actor with no Customer identity, exact `loan:account:close`, and the `ACCOUNTING_OFFICER` role. Filtering, paging, and deterministic ordering follow the settlement-work contract.
+
+Loan owns membership. A row represents a `DISBURSED` application whose LoanAccount is exactly `SETTLED`, has zero contractual outstanding, fully paid final-schedule progress, a coherent terminal repayment outcome and status history, reconciled product-specific exposure evidence, and no administrative closure. `payoffProvenance` is `CONTRACTUAL_PAYOFF` or `APPROVED_SETTLEMENT`. `ACTIVE`, `OVERDUE`, and `CLOSED` accounts are excluded. Contradictory evidence returns `409 SYSTEM_STATE_CONFLICT`; the read performs no payment, balance, exposure, state, history, or audit mutation.
+
+The response uses the same restricted-field boundary as settlement work and does not expose payment, settlement, closure, request, actor, exposure, or audit identifiers.
+
+### 7.7 Query LoanAccount
 
 The Customer LoanAccount index is:
 
@@ -1335,6 +1362,14 @@ The caller must be an Approver with `loan:settlement:approve`. The Salary Advanc
 The response contains safe application/account/payment/schedule identifiers, amount and value date, approval time, principal allocated and released, resulting balances/status, and `idempotentReplay`. It excludes the request UUID, canonical external payment reference, actor and Customer identities, settlement evidence identity, limit/movement identities, audit/history identities, and internal reconciliation evidence.
 
 An identical request replay returns the original durable settlement result, including after later administrative closure, without new payment, allocation, exposure, history, settlement, or audit evidence. Reusing the request UUID with different logical content returns `409 IDEMPOTENCY_KEY_REUSED`. Other relevant outcomes are `422 SETTLEMENT_AMOUNT_INVALID`, `422 SETTLEMENT_VALUE_DATE_INVALID`, `409 DUPLICATE_PAYMENT_REFERENCE`, `409 SETTLEMENT_NOT_ALLOWED`, and safe `409 SYSTEM_STATE_CONFLICT`; missing permission or business role returns `403`.
+
+The purpose-limited reload-recovery read is:
+
+```text
+GET /api/v1/loan-applications/{loanApplicationId}/settlements/approved
+```
+
+It requires an authenticated `STAFF` Approver with exact `loan:settlement:approve`. The service verifies the application/account relationship, immutable approved settlement, matching payment amount and recording time, and a current `SETTLED` or `CLOSED` account. It returns application/account IDs, settlement amount, payment value date, and approval time only. The response excludes the request UUID, external payment reference, actor identity, settlement/payment evidence IDs, audit/history IDs, and product-exposure evidence. `404 APPROVED_LOAN_SETTLEMENT_NOT_FOUND` conceals absent evidence; inconsistent evidence returns `409 SYSTEM_STATE_CONFLICT`. This read reconstructs safe candidate fields but does not prove an unresolved request identity; only exact replay does.
 
 ### 8.4 Administrative LoanAccount closure
 

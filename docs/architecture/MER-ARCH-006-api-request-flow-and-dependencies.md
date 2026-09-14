@@ -520,10 +520,13 @@ The product activation policy revalidates the authoritative product evidence for
 | Request | Authorization | Runtime behavior |
 |---|---|---|
 | `GET /api/v1/staff/servicing-work` | Staff `loan:read` | Pages server-owned `ACTIVE` / `OVERDUE` LoanAccount work with optional product and serviceable-status filters. |
+| `GET /api/v1/staff/settlement-work` | Staff `loan:settlement:approve` plus Approver role | Pages server-owned `ACTIVE` / `OVERDUE` full-balance settlement candidates with positive authoritative outstanding. |
+| `GET /api/v1/staff/closure-work` | Staff `loan:account:close` plus Accounting Officer role | Pages fully reconciled `SETTLED` accounts with contractual-payoff or approved-settlement provenance. |
 | `GET /api/v1/loan-applications/{id}/loan-account` | `loan:read:own` or `loan:read` | Returns the activated account, masked contract destination, final schedule, and persisted servicing progress. |
 | `POST /api/v1/loan-applications/{id}/repayments` | `repayment:update` | Serializes request and payment-reference identity, locks authoritative aggregates, applies allocation and exposure effects, and records history and audit in one transaction. |
 | `GET /api/v1/loan-applications/{id}/repayments` | `loan:read:own` or `loan:read` | Reads immutable repayment and allocation evidence under a consistent read transaction. |
 | `POST /api/v1/loan-applications/{id}/settlements` | `loan:settlement:approve` plus Approver role | Performs an Administrative Full-Balance Settlement through an exact full-outstanding payment, applies product-specific exposure semantics, and records immutable settlement, payment, history, and audit evidence. |
+| `GET /api/v1/loan-applications/{id}/settlements/approved` | `loan:settlement:approve` plus Approver role | Returns only immutable settlement amount, value date, approval time, and application/account identity for exact reload recovery. |
 | `POST /api/v1/loan-applications/{id}/loan-account/closure` | `loan:account:close` plus Accounting Officer role | Verifies settled financial provenance and changes only administrative account status, closure evidence, history, and audit. |
 
 Customer ownership concealment belongs in the application service. A Customer receives the same not-found behavior for a missing, foreign-owned, or not-yet-activated account.
@@ -540,6 +543,10 @@ StaffServicingWorkController
 ```
 
 LoanAccount status owns queue membership. The purpose-limited persistence query filters and pages `ACTIVE` and `OVERDUE` accounts before projection and joins LoanApplication only for application identity and product facts. The read validates positive outstanding, `DISBURSED` application state, and coherent account/application evidence under a repeatable-read transaction. It does not access Customer persistence, calculate overdue state, or create a browser-owned queue. Ordinary repayment continues through the existing `RecordRepaymentService`; the discovery read neither invokes nor duplicates that command flow.
+
+Settlement and closure discovery use separate Loan-owned projections. Settlement work contains only coherent `DISBURSED` applications whose LoanAccounts are `ACTIVE` or `OVERDUE` with positive outstanding and authoritative final-schedule progress. Closure work contains only `SETTLED` accounts with zero outstanding, fully paid final progress, a coherent terminal repayment outcome, contractual-payoff or approved-settlement history, reconciled product-release evidence, and no existing closure. Both reads page before presentation, order by activation time and LoanAccount identifier, expose only operational facts, and return `SYSTEM_STATE_CONFLICT` instead of presenting a contradictory candidate.
+
+The approved-settlement recovery read is application-scoped and Approver-only. It verifies immutable settlement, payment, and terminal account evidence and excludes the request UUID, external payment reference, actor identity, audit identity, and internal settlement identity. This read reconstructs only non-sensitive semantic fields; an exact replay remains the authority for an unresolved request result.
 
 Activated Collateral LoanAccounts participate in the common safe read and the common repayment, overdue evaluation, contractual-payoff, Administrative Full-Balance Settlement, and administrative-closure services. The Collateral repayment policy validates product identity and requires zero product-exposure release; it has no Partner, Salary Advance limit, or post-activation verification dependency.
 
