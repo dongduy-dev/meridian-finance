@@ -81,12 +81,36 @@ const servicingQueueItemSchema = z.object({
   lastPaymentRecordedAt: nullableTimestampSchema,
 })
 
+const settlementWorkItemSchema = servicingQueueItemSchema.omit({ originatedPrincipal: true })
+
+const closureWorkItemSchema = settlementWorkItemSchema.extend({
+  totalOutstanding: z.literal(0),
+  accountStatus: z.literal('SETTLED'),
+  payoffProvenance: z.enum(['CONTRACTUAL_PAYOFF', 'APPROVED_SETTLEMENT']),
+})
+
 export const staffServicingWorkPageSchema = z.object({
   page: z.number().int().nonnegative(),
   size: z.number().int().min(1).max(100),
   totalElements: z.number().int().nonnegative(),
   totalPages: z.number().int().nonnegative(),
   items: z.array(servicingQueueItemSchema),
+})
+
+export const staffSettlementWorkPageSchema = z.object({
+  page: z.number().int().nonnegative(),
+  size: z.number().int().min(1).max(100),
+  totalElements: z.number().int().nonnegative(),
+  totalPages: z.number().int().nonnegative(),
+  items: z.array(settlementWorkItemSchema),
+})
+
+export const staffClosureWorkPageSchema = z.object({
+  page: z.number().int().nonnegative(),
+  size: z.number().int().min(1).max(100),
+  totalElements: z.number().int().nonnegative(),
+  totalPages: z.number().int().nonnegative(),
+  items: z.array(closureWorkItemSchema),
 })
 
 const allocationSchema = z.object({
@@ -140,6 +164,37 @@ export const recordRepaymentResultSchema = z.object({
   idempotentReplay: z.boolean(),
 })
 
+export const approvedSettlementResultSchema = z.object({
+  loanApplicationId: uuidSchema,
+  loanAccountId: uuidSchema,
+  repaymentTransactionId: uuidSchema,
+  finalScheduleId: uuidSchema,
+  settlementAmount: moneySchema.positive(),
+  paymentValueDate: dateSchema,
+  approvedAt: apiTimestampSchema,
+  principalAllocated: moneySchema,
+  principalReleased: moneySchema,
+  resultingLoanAccountStatus: z.literal('SETTLED'),
+  accountBalance: accountBalanceSchema.extend({ status: z.literal('SETTLED') }),
+  idempotentReplay: z.boolean(),
+})
+
+export const approvedSettlementEvidenceSchema = z.object({
+  loanApplicationId: uuidSchema,
+  loanAccountId: uuidSchema,
+  settlementAmount: moneySchema.positive(),
+  paymentValueDate: dateSchema,
+  approvedAt: apiTimestampSchema,
+})
+
+export const closedLoanAccountResultSchema = z.object({
+  loanApplicationId: uuidSchema,
+  loanAccountId: uuidSchema,
+  resultingStatus: z.literal('CLOSED'),
+  closedAt: apiTimestampSchema,
+  idempotentReplay: z.boolean(),
+})
+
 export const repaymentHistoryPageSchema = z.object({
   page: z.number().int().nonnegative(),
   size: z.number().int().min(1).max(100),
@@ -157,13 +212,26 @@ export const repaymentSemanticPayloadSchema = z.object({
 
 export type LoanAccount = z.infer<typeof loanAccountSchema>
 export type StaffServicingWorkPage = z.infer<typeof staffServicingWorkPageSchema>
+export type StaffSettlementWorkPage = z.infer<typeof staffSettlementWorkPageSchema>
+export type StaffClosureWorkPage = z.infer<typeof staffClosureWorkPageSchema>
 export type StaffServicingWorkFilters = {
   productCode?: string
   accountStatus?: 'ACTIVE' | 'OVERDUE'
   page: number
   size: number
 }
+export type StaffTerminalWorkFilters = { productCode?: string; page: number; size: number }
 export type RepaymentHistoryPage = z.infer<typeof repaymentHistoryPageSchema>
 export type RecordRepaymentResult = z.infer<typeof recordRepaymentResultSchema>
 export type RepaymentSemanticPayload = z.infer<typeof repaymentSemanticPayloadSchema>
 export type RecordRepaymentRequest = Omit<RepaymentSemanticPayload, 'loanApplicationId'> & { requestId: string }
+export type SettlementSemanticPayload = {
+  loanApplicationId: string
+  externalPaymentReference: string
+  expectedSettlementAmount: number
+  paymentValueDate: string
+}
+export type ApproveSettlementRequest = Omit<SettlementSemanticPayload, 'loanApplicationId'> & { requestId: string }
+export type ApprovedSettlementResult = z.infer<typeof approvedSettlementResultSchema>
+export type ApprovedSettlementEvidence = z.infer<typeof approvedSettlementEvidenceSchema>
+export type ClosedLoanAccountResult = z.infer<typeof closedLoanAccountResultSchema>

@@ -9,6 +9,7 @@ export type StaffRouteDefinition = {
   path: `/staff${string}`
   label: string
   requiredPermissions: readonly StaffOperationalPermission[]
+  requiredRoles?: readonly string[]
 }
 
 export const STAFF_HOME_ROUTE = {
@@ -119,6 +120,34 @@ export const STAFF_REPAYMENT_ENTRY_ROUTE = {
   requiredPermissions: ['repayment:update'],
 } as const satisfies StaffRouteDefinition
 
+export const STAFF_SETTLEMENT_QUEUE_ROUTE = {
+  path: '/staff/work/settlements',
+  label: 'Settlements',
+  requiredPermissions: ['loan:settlement:approve'],
+  requiredRoles: ['APPROVER'],
+} as const satisfies StaffRouteDefinition
+
+export const STAFF_SETTLEMENT_CASE_ROUTE = {
+  path: '/staff/applications/:loanApplicationId/settlement',
+  label: 'Administrative settlement',
+  requiredPermissions: ['loan:settlement:approve'],
+  requiredRoles: ['APPROVER'],
+} as const satisfies StaffRouteDefinition
+
+export const STAFF_CLOSURE_QUEUE_ROUTE = {
+  path: '/staff/work/closures',
+  label: 'Closures',
+  requiredPermissions: ['loan:account:close'],
+  requiredRoles: ['ACCOUNTING_OFFICER'],
+} as const satisfies StaffRouteDefinition
+
+export const STAFF_CLOSURE_CASE_ROUTE = {
+  path: '/staff/applications/:loanApplicationId/closure',
+  label: 'Administrative closure',
+  requiredPermissions: ['loan:account:close'],
+  requiredRoles: ['ACCOUNTING_OFFICER'],
+} as const satisfies StaffRouteDefinition
+
 export const STAFF_ROUTES = [
   STAFF_HOME_ROUTE,
   STAFF_APPLICATIONS_ROUTE,
@@ -128,10 +157,13 @@ export const STAFF_ROUTES = [
   STAFF_CONTRACT_QUEUE_ROUTE,
   STAFF_DISBURSEMENT_QUEUE_ROUTE,
   STAFF_SERVICING_QUEUE_ROUTE,
+  STAFF_SETTLEMENT_QUEUE_ROUTE,
+  STAFF_CLOSURE_QUEUE_ROUTE,
 ] as const satisfies readonly StaffRouteDefinition[]
 
 export function canAccessStaffRoute(actor: StaffActor, route: StaffRouteDefinition): boolean {
   return hasAnyPermission(actor, route.requiredPermissions)
+    && (!route.requiredRoles || route.requiredRoles.some((role) => actor.roles.includes(role)))
 }
 
 export function permittedStaffRoutes(actor: StaffActor): readonly StaffRouteDefinition[] {

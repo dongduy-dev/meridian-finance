@@ -23,12 +23,16 @@ describe('route focus', () => {
     ['/staff/work/contracts', 'Contract and readiness queue | Meridian'],
     ['/staff/work/disbursements', 'Ready-disbursement queue | Meridian'],
     ['/staff/work/servicing', 'LoanAccount servicing queue | Meridian'],
+    ['/staff/work/settlements', 'Settlement work queue | Meridian'],
+    ['/staff/work/closures', 'Closure work queue | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/documents', 'Application documents | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/corrections', 'Application corrections | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/contract', 'Contract and readiness | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/disbursement', 'Disbursement and activation | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/loan-account', 'LoanAccount servicing | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/repayments/new', 'Record repayment | Meridian'],
+    ['/staff/applications/11111111-1111-4111-8111-111111111111/settlement', 'Administrative Full-Balance Settlement | Meridian'],
+    ['/staff/applications/11111111-1111-4111-8111-111111111111/closure', 'Administrative closure | Meridian'],
   ])('publishes an accurate title for %s', async (path, title) => {
     render(<MemoryRouter initialEntries={[path]}><RouteFocus /><DeferredHeading /></MemoryRouter>)
     await waitFor(() => expect(document.title).toBe(title))

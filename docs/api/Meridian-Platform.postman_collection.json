@@ -7081,8 +7081,31 @@
                  },
                  {
                      "name":  "12 Administrative Settlement and LoanAccount Closure",
-                     "description":  "Run in order with settlementLoanApplicationId set to a separate DISBURSED Salary Advance whose LoanAccount is ACTIVE or OVERDUE. Set settlementPaymentValueDate within the disbursement-to-current-UTC range. The sequence proves pre-settlement closure rejection, permission boundaries, stale amount rejection, exact settlement and replay, post-settlement rejection, closure and replay, different-request rejection, and safe response fields. It intentionally does not reuse the payoff fixture from folder 11.",
+                     "description":  "Run in order with settlementLoanApplicationId set to a separate DISBURSED Salary Advance whose LoanAccount is ACTIVE or OVERDUE. Set settlementPaymentValueDate within the disbursement-to-current-UTC range. The sequence proves purpose-specific settlement and closure discovery, exact product filtering, server-owned membership, restricted-field exclusion, immutable settlement recovery evidence, pre-settlement closure rejection, permission boundaries, stale amount rejection, exact settlement and replay, post-settlement rejection, closure and replay, different-request rejection, and safe response fields. It intentionally does not reuse the payoff fixture from folder 11.",
                      "item":  [
+                                  {
+                                      "name":  "Staff - list Administrative Full-Balance Settlement work",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [],
+                                                      "url":  "{{baseUrl}}/api/v1/staff/settlement-work?page=0&size=25",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},
+                                                      "description":  "Reads the Approver-only server-owned settlement queue without deriving membership in the client."
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Server-paged settlement rows are serviceable with positive outstanding\", () => { pm.expect(json.page).to.eql(0); pm.expect(json.size).to.eql(25); json.items.forEach(item => { pm.expect([\"ACTIVE\",\"OVERDUE\"]).to.include(item.accountStatus); pm.expect(item.totalOutstanding).to.be.above(0); }); });","pm.test(\"Settlement queue excludes restricted evidence\", () => json.items.forEach(item => [\"customerId\",\"externalPaymentReference\",\"requestId\",\"actorId\",\"settlementId\",\"repaymentTransactionId\",\"exposureMovementId\",\"auditId\"].forEach(key => pm.expect(item).not.to.have.property(key))));"]}}]
+                                  },
+                                  {
+                                      "name":  "Staff - filter UCL Administrative Full-Balance Settlement work",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [],
+                                                      "url":  "{{baseUrl}}/api/v1/staff/settlement-work?productCode=UNSECURED_CONSUMER_LOAN&page=0&size=25",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]}
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Product filter is exact and membership stays server-owned\", () => json.items.forEach(item => { pm.expect(item.productCode).to.eql(\"UNSECURED_CONSUMER_LOAN\"); pm.expect([\"ACTIVE\",\"OVERDUE\"]).to.include(item.accountStatus); pm.expect(item.totalOutstanding).to.be.above(0); }));"]}}]
+                                  },
                                   {
                                       "name":  "Read serviceable account and initialize settlement run",
                                       "request":  {
@@ -7176,6 +7199,41 @@
                                                   },
                                       "response":  [],
                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Settlement is exact and final\", () => { pm.expect(json.idempotentReplay).to.eql(false); pm.expect(json.resultingLoanAccountStatus).to.eql(\"SETTLED\"); pm.expect(json.accountBalance.totalOutstanding).to.eql(0); pm.expect(json.settlementAmount).to.eql(Number(pm.collectionVariables.get(\"settlementExpectedAmount\"))); });","pm.test(\"Response excludes internal evidence\", () => { const text = pm.response.text(); pm.expect(text).not.to.include(pm.collectionVariables.get(\"settlementExternalReference\")); [\"requestId\",\"settlementId\",\"approvedByUserId\",\"salaryAdvanceLimitId\",\"movementId\",\"auditId\",\"historyId\"].forEach(key => pm.expect(json).not.to.have.property(key)); });"]}}]
+                                  },
+                                  {
+                                      "name":  "Staff - read approved settlement recovery evidence",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [],
+                                                      "url":  "{{baseUrl}}/api/v1/loan-applications/{{settlementLoanApplicationId}}/settlements/approved",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},
+                                                      "description":  "Reads only the immutable non-sensitive settlement fields needed to reconstruct an exact-replay candidate after reload."
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Recovery evidence matches the approved settlement\", () => { pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"settlementLoanApplicationId\")); pm.expect(json.settlementAmount).to.eql(Number(pm.collectionVariables.get(\"settlementExpectedAmount\"))); pm.expect(json.paymentValueDate).to.eql(pm.collectionVariables.get(\"settlementPaymentValueDate\")); pm.expect(json.approvedAt).to.be.a(\"string\"); });","pm.test(\"Recovery evidence excludes protected and internal fields\", () => { const text = pm.response.text(); pm.expect(text).not.to.include(pm.collectionVariables.get(\"settlementExternalReference\")); [\"externalPaymentReference\",\"requestId\",\"approvedByUserId\",\"settlementId\",\"repaymentTransactionId\",\"auditId\",\"historyId\"].forEach(key => pm.expect(json).not.to.have.property(key)); });"]}}]
+                                  },
+                                  {
+                                      "name":  "Staff - list administrative closure work",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [],
+                                                      "url":  "{{baseUrl}}/api/v1/staff/closure-work?page=0&size=25",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},
+                                                      "description":  "Reads the Accounting-only server-owned closure queue after the full-balance settlement creates eligible SETTLED evidence."
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Server-paged closure rows are settled with reconciled payoff provenance\", () => { pm.expect(json.page).to.eql(0); pm.expect(json.size).to.eql(25); json.items.forEach(item => { pm.expect(item.accountStatus).to.eql(\"SETTLED\"); pm.expect(item.totalOutstanding).to.eql(0); pm.expect([\"CONTRACTUAL_PAYOFF\",\"APPROVED_SETTLEMENT\"]).to.include(item.payoffProvenance); }); });","pm.test(\"Closure queue excludes restricted evidence\", () => json.items.forEach(item => [\"customerId\",\"externalPaymentReference\",\"requestId\",\"actorId\",\"settlementId\",\"closureId\",\"repaymentTransactionId\",\"exposureMovementId\",\"auditId\"].forEach(key => pm.expect(item).not.to.have.property(key))));"]}}]
+                                  },
+                                  {
+                                      "name":  "Staff - filter Salary Advance administrative closure work",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [],
+                                                      "url":  "{{baseUrl}}/api/v1/staff/closure-work?productCode=SALARY_ADVANCE&page=0&size=25",
+                                                      "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]}
+                                                  },
+                                      "response":  [],
+                                      "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Product filter is exact and membership stays server-owned\", () => json.items.forEach(item => { pm.expect(item.productCode).to.eql(\"SALARY_ADVANCE\"); pm.expect(item.accountStatus).to.eql(\"SETTLED\"); pm.expect(item.totalOutstanding).to.eql(0); }));"]}}]
                                   },
                                   {
                                       "name":  "Replay Administrative Full-Balance Settlement exactly",

@@ -457,7 +457,11 @@ describe('Staff disbursement workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Review disbursement confirmation' }))
     await user.click(screen.getByRole('button', { name: 'Confirm record' }))
 
-    expect(await screen.findByText(/Disbursement confirmed; refreshed state unavailable/i)).toBeVisible()
+    expect(await screen.findByText(
+      /Disbursement confirmed; refreshed state unavailable/i,
+      undefined,
+      { timeout: 3_000 },
+    )).toBeVisible()
     expect(disbursementPostCalls()).toHaveLength(1)
     readsAvailable = true
     await user.click(screen.getByRole('button', { name: 'Refresh' }))

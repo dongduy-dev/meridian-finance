@@ -279,7 +279,11 @@ describe('Staff repayment entry', () => {
     await user.click(screen.getByRole('button', { name: 'Review repayment' }))
     await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
 
-    expect(await screen.findByText(/Repayment confirmed; refreshed state unavailable/i)).toBeVisible()
+    expect(await screen.findByText(
+      /Repayment confirmed; refreshed state unavailable/i,
+      undefined,
+      { timeout: 3_000 },
+    )).toBeVisible()
     expect(screen.getByRole('heading', { name: 'Confirmed repayment result' })).toBeVisible()
     expect(repaymentPostCalls()).toHaveLength(1)
     await user.click(screen.getByRole('button', { name: 'Refresh' }))

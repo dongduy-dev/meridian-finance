@@ -8,7 +8,7 @@ import * as authApi from '@/features/auth/api/auth-api'
 import { AuthProvider } from '@/features/auth/model/auth-context'
 import * as api from '@/lib/api'
 import { createQueryClient } from '@/lib/query/query-client'
-import { accountFixture, applicationId, historyFixture } from '../api/contracts.test'
+import { accountFixture, applicationId, historyFixture, terminalAccountFixture } from '../api/contracts.test'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
   const actual = await vi.importActual<typeof import('@/features/auth/api/auth-api')>('@/features/auth/api/auth-api')
@@ -52,13 +52,29 @@ describe('Staff LoanAccount workspace', () => {
     expect(screen.queryByRole('button', { name: /Evaluate overdue/i })).not.toBeInTheDocument()
   })
 
-  it('keeps SETTLED known-ID accounts read-only without CP9 actions', async () => {
+  it('shows closure only to an authorized Accounting Officer for coherent SETTLED evidence', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue({
+      ...staff,
+      permissions: ['loan:read', 'loan:account:close'],
+    })
     vi.mocked(api.apiRequest).mockImplementation(async (path) =>
-      String(path).includes('/repayments?') ? historyFixture() : accountFixture('SETTLED'))
+      String(path).includes('/repayments?') ? historyFixture() : terminalAccountFixture('SETTLED'))
     renderPage()
 
-    expect(await screen.findByRole('heading', { name: 'Read-only terminal account' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Financially settled account' })).toBeVisible()
     expect(screen.queryByRole('link', { name: 'Record repayment' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /settlement|closure/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Administrative closure' })).toBeVisible()
+  })
+
+  it('shows settlement only to an Approver with the exact capability', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue({
+      ...staff,
+      roles: ['APPROVER'],
+      permissions: ['loan:read', 'loan:settlement:approve'],
+    })
+    renderPage()
+    expect(await screen.findByRole('link', { name: 'Administrative Full-Balance Settlement' }))
+      .toBeVisible()
+    expect(screen.queryByRole('link', { name: 'Administrative closure' })).not.toBeInTheDocument()
   })
 })

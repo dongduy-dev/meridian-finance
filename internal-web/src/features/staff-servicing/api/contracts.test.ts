@@ -4,6 +4,11 @@ import {
   recordRepaymentResultSchema,
   repaymentHistoryPageSchema,
   staffServicingWorkPageSchema,
+  staffSettlementWorkPageSchema,
+  staffClosureWorkPageSchema,
+  approvedSettlementResultSchema,
+  approvedSettlementEvidenceSchema,
+  closedLoanAccountResultSchema,
 } from './contracts'
 
 export const applicationId = '11111111-1111-4111-8111-111111111111'
@@ -100,6 +105,100 @@ export function queueFixture(page = 0, status = 'ACTIVE') {
   }
 }
 
+export function settlementQueueFixture(page = 0) {
+  const item = { ...queueFixture(page).items[0] }
+  delete (item as Partial<typeof item>).originatedPrincipal
+  return { page, size: 25, totalElements: 26, totalPages: 2, items: [item] }
+}
+
+export function closureQueueFixture(page = 0, provenance = 'APPROVED_SETTLEMENT') {
+  return {
+    ...settlementQueueFixture(page),
+    items: [{
+      ...settlementQueueFixture(page).items[0],
+      accountStatus: 'SETTLED',
+      totalPaid: 1200,
+      totalOutstanding: 0,
+      payoffProvenance: provenance,
+    }],
+  }
+}
+
+export function terminalAccountFixture(status: 'SETTLED' | 'CLOSED' = 'SETTLED') {
+  const account = accountFixture(status)
+  return {
+    ...account,
+    servicing: {
+      ...account.servicing,
+      principalPaid: 1000,
+      interestPaid: 100,
+      feePaid: 100,
+      totalPaid: 1200,
+      principalOutstanding: 0,
+      interestOutstanding: 0,
+      feeOutstanding: 0,
+      totalOutstanding: 0,
+    },
+    finalRepaymentSchedule: {
+      ...account.finalRepaymentSchedule,
+      items: account.finalRepaymentSchedule.items.map((item) => ({
+        ...item,
+        servicing: {
+          ...item.servicing,
+          principalPaid: 1000,
+          interestPaid: 100,
+          feePaid: 100,
+          totalPaid: 1200,
+          principalOutstanding: 0,
+          interestOutstanding: 0,
+          feeOutstanding: 0,
+          totalOutstanding: 0,
+          status: 'PAID',
+        },
+      })),
+    },
+  }
+}
+
+export function settlementResultFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    loanApplicationId: applicationId,
+    loanAccountId: accountId,
+    repaymentTransactionId: transactionId,
+    finalScheduleId: scheduleId,
+    settlementAmount: 1100,
+    paymentValueDate: '2026-09-10',
+    approvedAt: '2026-09-10T10:00:00',
+    principalAllocated: 1000,
+    principalReleased: 0,
+    resultingLoanAccountStatus: 'SETTLED',
+    accountBalance: { ...terminalAccountFixture().servicing, status: 'SETTLED' },
+    idempotentReplay: false,
+    ...overrides,
+  }
+}
+
+export function settlementEvidenceFixture() {
+  return {
+    loanApplicationId: applicationId,
+    loanAccountId: accountId,
+    settlementAmount: 1100,
+    paymentValueDate: '2026-09-10',
+    approvedAt: '2026-09-10T10:00:00',
+  }
+}
+
+export function closureResultFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    loanApplicationId: applicationId,
+    loanAccountId: accountId,
+    resultingStatus: 'CLOSED',
+    closedAt: '2026-09-10T11:00:00',
+    idempotentReplay: false,
+    ...overrides,
+  }
+}
+
 export function repaymentResultFixture(overrides: Record<string, unknown> = {}) {
   return {
     loanApplicationId: applicationId,
@@ -155,6 +254,13 @@ describe('Staff servicing contracts', () => {
     expect(loanAccountSchema.parse(accountFixture()).disbursementDestination.maskedAccountNumber).toBe('********')
     expect(repaymentHistoryPageSchema.parse(historyFixture()).items).toHaveLength(1)
     expect(recordRepaymentResultSchema.parse(repaymentResultFixture()).idempotentReplay).toBe(false)
+    expect(staffSettlementWorkPageSchema.parse(settlementQueueFixture()).items).toHaveLength(1)
+    expect(staffClosureWorkPageSchema.parse(closureQueueFixture()).items[0]?.payoffProvenance)
+      .toBe('APPROVED_SETTLEMENT')
+    expect(approvedSettlementResultSchema.parse(settlementResultFixture()).settlementAmount).toBe(1100)
+    expect(approvedSettlementEvidenceSchema.parse(settlementEvidenceFixture()).paymentValueDate)
+      .toBe('2026-09-10')
+    expect(closedLoanAccountResultSchema.parse(closureResultFixture()).resultingStatus).toBe('CLOSED')
   })
 
   it('rejects an unmasked destination and invalid serviceable queue balance', () => {
@@ -166,5 +272,20 @@ describe('Staff servicing contracts', () => {
       ...queueFixture(),
       items: [{ ...queueFixture().items[0], totalOutstanding: 0 }],
     })).toThrow()
+  })
+
+  it('rejects unsafe or contradictory CP9 queue and result evidence', () => {
+    expect(() => staffSettlementWorkPageSchema.parse({
+      ...settlementQueueFixture(),
+      items: [{ ...settlementQueueFixture().items[0], totalOutstanding: 0 }],
+    })).toThrow()
+    expect(() => staffClosureWorkPageSchema.parse({
+      ...closureQueueFixture(),
+      items: [{ ...closureQueueFixture().items[0], payoffProvenance: 'UNKNOWN' }],
+    })).toThrow()
+    expect(() => approvedSettlementEvidenceSchema.parse({
+      ...settlementEvidenceFixture(),
+      externalPaymentReference: 'SECRET',
+    })).not.toThrow()
   })
 })

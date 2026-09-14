@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuthResponse } from '@/features/auth/api/auth-api'
@@ -14,7 +14,7 @@ vi.mock('@/features/auth/api/auth-api', async () => {
   return { ...actual, refresh: vi.fn(), logout: vi.fn() }
 })
 
-const staff = (permissions: string[] = ['loan:read']): AuthResponse => ({
+const staff = (permissions: string[] = ['loan:read'], roles: string[] = ['LOAN_OFFICER']): AuthResponse => ({
   tokenType: 'Bearer',
   accessToken: 'staff-token',
   expiresAt: '2026-09-01T01:00:00Z',
@@ -22,7 +22,7 @@ const staff = (permissions: string[] = ['loan:read']): AuthResponse => ({
   email: 'staff@meridian.local',
   userType: 'STAFF',
   customerId: null,
-  roles: ['LOAN_OFFICER'],
+  roles,
   permissions,
 })
 
@@ -175,6 +175,21 @@ describe('internal router access contract', () => {
     renderRoute('/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/repayments/new')
     expect(await screen.findByRole('heading', { name: 'Repayment workspace unavailable' })).toBeVisible()
     expect(screen.getByRole('heading', { name: 'LoanAccount read authority required' })).toBeVisible()
+  })
+
+  it.each([
+    ['/staff/work/settlements', 'loan:settlement:approve', 'APPROVER', 'Settlement work queue'],
+    ['/staff/work/closures', 'loan:account:close', 'ACCOUNTING_OFFICER', 'Closure work queue'],
+  ] as const)('requires both the exact permission and business role for %s', async (path, permission, role, heading) => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff([permission], [role]))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 500 })))
+    renderRoute(path)
+    expect(await screen.findByRole('heading', { name: heading })).toBeVisible()
+
+    cleanup()
+    vi.mocked(authApi.refresh).mockResolvedValue(staff([permission], ['LOAN_OFFICER']))
+    renderRoute(path)
+    expect(await screen.findByRole('heading', { name: 'No operational access' })).toBeVisible()
   })
 
   it('rejects a Customer-shaped session before it can reach Staff routes', async () => {
