@@ -37,11 +37,18 @@ export const ADMIN_PRODUCTS_ROUTE = {
   requiredPermissions: ['loan:product:manage'],
 } as const satisfies AdminRouteDefinition
 
+export const ADMIN_USERS_ROUTE = {
+  path: '/admin/users',
+  label: 'Internal Users',
+  requiredPermissions: ['identity:user:manage'],
+} as const satisfies AdminRouteDefinition
+
 export const ADMIN_ROUTES = [
   ADMIN_HOME_ROUTE,
   ADMIN_PARTNERS_ROUTE,
   ADMIN_PARTNER_DETAIL_ROUTE,
   ADMIN_PRODUCTS_ROUTE,
+  ADMIN_USERS_ROUTE,
 ] as const satisfies readonly AdminRouteDefinition[]
 
 export function canAccessAdminRoute(actor: StaffActor, route: AdminRouteDefinition): boolean {
