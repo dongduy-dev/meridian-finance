@@ -303,7 +303,7 @@ Back-Office FE-CP4 covers:
 
 - discovery of internal `STAFF` users;
 - inspection of safe user status and assigned roles;
-- activation or deactivation of supported internal users;
+- supported internal-user status transitions among Identity's `ACTIVE`, `SUSPENDED`, and `DISABLED` states, subject to the management rules established by the FE-CP4 backend contract;
 - assignment and removal of predefined backend-owned roles.
 
 Identity owns User status, roles, permissions, credential state, and authorization facts. The frontend must not create arbitrary permissions, define arbitrary roles, or infer an actor's effective authority from a role label.
@@ -376,7 +376,7 @@ Each later checkpoint adds contract, query, command, error, responsive, and acce
 ### Back-Office FE-CP4 — Internal-User Administration
 
 - internal-user discovery and safe status presentation;
-- supported activation and deactivation;
+- supported internal-user status management;
 - predefined backend-owned role assignment;
 - required Identity management use cases and APIs.
 
