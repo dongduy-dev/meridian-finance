@@ -16,4 +16,16 @@ public interface PartnerEmployeeImportBatchRepository {
             UUID partnerCompanyId,
             String effectiveMonth
     );
+
+    default void acquireRequestLock(UUID requestId) {
+        throw new UnsupportedOperationException("Partner import request locking is not implemented.");
+    }
+
+    default Optional<PartnerEmployeeImportBatch> findByRequestId(UUID requestId) {
+        return Optional.empty();
+    }
+
+    default PartnerEmployeeImportBatch save(PartnerEmployeeImportBatch importBatch) {
+        throw new UnsupportedOperationException("Partner import batch save is not implemented.");
+    }
 }

@@ -150,6 +150,8 @@ Partner owns `partner_companies`, `partner_employee_import_batches`, `partner_em
 
 - A Partner Company has ordered employee-import batches and Partner Employee source rows.
 - The authoritative employment source is tied to its company and import batch.
+- A command-created import batch may carry one unique request identity, a SHA-256 semantic fingerprint, and a PII-safe rejection summary. Historical batches remain valid without replay metadata.
+- More than one batch may exist for the same Partner Company and effective month; deterministic latest-completed selection remains the authority rule.
 - A Customer–Partner Employee link records a reusable verified relationship; it is not a loan application and does not represent lending exposure.
 - Partner salary, employee code, source identity evidence, employment state, and import-batch evidence remain Partner-owned.
 

@@ -1,6 +1,7 @@
 package com.meridian.platform.partner.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.partner.domain.model.PartnerEmployeeStatus;
+import com.meridian.platform.partner.domain.model.PartnerEmployee;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -45,6 +46,18 @@ public class PartnerEmployeeJpaEntity {
     private boolean active;
 
     protected PartnerEmployeeJpaEntity() {
+    }
+
+    PartnerEmployeeJpaEntity(PartnerEmployee employee) {
+        this.id = employee.id();
+        this.partnerCompanyId = employee.partnerCompanyId();
+        this.importBatchId = employee.importBatchId();
+        this.employeeCode = employee.employeeCode();
+        this.identityReference = employee.identityReference();
+        this.salaryAmount = employee.salaryAmount();
+        this.salaryAdvanceLimit = employee.salaryAdvanceLimit();
+        this.employmentStatus = employee.employmentStatus();
+        this.active = employee.active();
     }
 
     public UUID getId() {

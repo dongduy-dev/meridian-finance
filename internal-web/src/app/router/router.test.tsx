@@ -113,6 +113,26 @@ describe('internal router access contract', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('exposes Partner navigation and list only through exact partner:read', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.mocked(authApi.refresh).mockResolvedValue(admin(['partner:read']))
+    renderRoute('/admin/partners')
+    expect(await screen.findByRole('heading', { name: 'Partner Companies' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Partners' })).toHaveAttribute('href', '/admin/partners')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('blocks partner:manage-only direct Partner entry before any Partner query runs', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.mocked(authApi.refresh).mockResolvedValue(admin(['partner:manage']))
+    renderRoute('/admin/partners')
+    expect(await screen.findByRole('heading', { name: 'No administrative access' })).toBeVisible()
+    expect(screen.queryByRole('link', { name: 'Partners' })).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('shows both authorized areas without creating a persona switcher', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue(admin(['loan:read', 'partner:read'], ['LOAN_OFFICER', 'BACK_OFFICE_ADMIN']))
     renderRoute('/admin')

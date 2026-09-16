@@ -44,7 +44,11 @@ class ManualDisbursementAuditV29MigrationTest {
                     || action == BusinessAuditAction.REPAYMENT_RECORDED
                     || action == BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED
                     || action == BusinessAuditAction.LOAN_SETTLEMENT_APPROVED
-                    || action == BusinessAuditAction.LOAN_ACCOUNT_CLOSED) {
+                    || action == BusinessAuditAction.LOAN_ACCOUNT_CLOSED
+                    || action == BusinessAuditAction.PARTNER_COMPANY_CREATED
+                    || action == BusinessAuditAction.PARTNER_COMPANY_UPDATED
+                    || action == BusinessAuditAction.PARTNER_COMPANY_STATUS_CHANGED
+                    || action == BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_COMPLETED) {
                 continue;
             }
             assertTrue(sql.contains("'" + action.name() + "'"));
@@ -77,7 +81,7 @@ class ManualDisbursementAuditV29MigrationTest {
                 "../docs/database/MER-DB-CURRENT-SCHEMA.sql"
         ));
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V52"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V53"));
         assertTrue(snapshot.contains("CREATE TABLE unsecured_consumer_loan_verifications"));
         assertTrue(snapshot.contains("ADD COLUMN reviewed_by_user_id UUID"));
         assertTrue(snapshot.contains("'UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED'"));

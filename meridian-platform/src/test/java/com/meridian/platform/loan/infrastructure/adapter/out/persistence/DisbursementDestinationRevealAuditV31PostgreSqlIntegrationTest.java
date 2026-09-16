@@ -56,7 +56,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     @Test
     void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
-        assertEquals("52", latestVersion(SCHEMA));
+        assertEquals("53", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -208,7 +208,11 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.REPAYMENT_RECORDED
                     && action != BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED
                     && action != BusinessAuditAction.LOAN_SETTLEMENT_APPROVED
-                    && action != BusinessAuditAction.LOAN_ACCOUNT_CLOSED) {
+                    && action != BusinessAuditAction.LOAN_ACCOUNT_CLOSED
+                    && action != BusinessAuditAction.PARTNER_COMPANY_CREATED
+                    && action != BusinessAuditAction.PARTNER_COMPANY_UPDATED
+                    && action != BusinessAuditAction.PARTNER_COMPANY_STATUS_CHANGED
+                    && action != BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_COMPLETED) {
                 insertAuditEvent(schema, action.name());
             }
         }
@@ -226,7 +230,11 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.REPAYMENT_RECORDED
                     && action != BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED
                     && action != BusinessAuditAction.LOAN_SETTLEMENT_APPROVED
-                    && action != BusinessAuditAction.LOAN_ACCOUNT_CLOSED) {
+                    && action != BusinessAuditAction.LOAN_ACCOUNT_CLOSED
+                    && action != BusinessAuditAction.PARTNER_COMPANY_CREATED
+                    && action != BusinessAuditAction.PARTNER_COMPANY_UPDATED
+                    && action != BusinessAuditAction.PARTNER_COMPANY_STATUS_CHANGED
+                    && action != BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_COMPLETED) {
                 insertAuditEvent(schema, action.name());
             }
         }

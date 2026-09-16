@@ -51,11 +51,14 @@ class CollateralServicingV47MigrationTest {
         String migration = normalized(MIGRATION).strip();
         String snapshot = normalized(CURRENT_SCHEMA);
         String marker = "-- Extend the common repayment, outcome, and closure reconciliation";
+        String nextMigrationMarker = "-- V53 add Partner administration command persistence";
         int start = snapshot.lastIndexOf(marker);
+        int end = snapshot.indexOf(nextMigrationMarker, start);
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V52"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V53"));
         assertTrue(start >= 0);
-        assertEquals(migration, snapshot.substring(start).strip());
+        assertTrue(end > start);
+        assertEquals(migration, snapshot.substring(start, end).strip());
     }
 
     private static String normalized(Path path) throws IOException {

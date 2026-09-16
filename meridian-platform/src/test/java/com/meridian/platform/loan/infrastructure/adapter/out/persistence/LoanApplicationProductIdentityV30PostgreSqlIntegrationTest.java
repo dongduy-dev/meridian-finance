@@ -44,7 +44,7 @@ class LoanApplicationProductIdentityV30PostgreSqlIntegrationTest {
 
     @Test
     void installedLatestAndV29UpgradeAcceptValidV30Identity() {
-        assertEquals("52", latestVersion(SCHEMA));
+        assertEquals("53", latestVersion(SCHEMA));
         UUID installedApplication = insertValidApplication(SCHEMA);
         assertTrue(applicationExists(SCHEMA, installedApplication));
 
@@ -55,7 +55,7 @@ class LoanApplicationProductIdentityV30PostgreSqlIntegrationTest {
 
             migrateLatest(schema);
 
-            assertEquals("52", latestVersion(schema));
+            assertEquals("53", latestVersion(schema));
             assertTrue(applicationExists(schema, applicationId));
         } finally {
             dropSchema(schema);

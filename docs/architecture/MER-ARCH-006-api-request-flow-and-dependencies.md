@@ -155,7 +155,23 @@ Detailed Partner Employee evidence and salary or limit fields remain restricted 
 
 ---
 
-## 5. Partner Employee Verification
+## 5. Partner Administration Commands
+
+Partner Company create, update, and status commands require exact `partner:manage`. Partner serializes update and status mutations through a locked company read. Company code remains stable after creation, database uniqueness is the final create boundary, and a same-status request produces no duplicate save or audit effect.
+
+The effective-month import command uses this transaction order:
+
+1. acquire the operation-scoped advisory lock for `requestId`;
+2. return the stored outcome for an exact semantic fingerprint, or reject conflicting reuse;
+3. lock the Partner Company and verify that it exists without treating inactive or suspended status as an import prohibition;
+4. validate rows independently and exclude invalid or duplicate employee-code rows;
+5. persist one completed batch, every valid employee row, the safe rejection summary, and one PII-safe business audit outcome atomically.
+
+Request replay evidence stores the UUID and a SHA-256 semantic fingerprint rather than the raw command. Multiple batches for the same company and month remain valid. The existing latest-completed selection determines authoritative eligibility evidence; neither the import command nor Internal Web refreshes Customer–Partner Employee links or changes Loan-owned state.
+
+---
+
+## 6. Partner Employee Verification
 
 `POST /api/v1/partner-companies/{partnerCompanyId}/employee-verifications` requires Bearer authentication and `partner:employee:verify:own`.
 
@@ -198,7 +214,7 @@ Runtime rules:
 
 ---
 
-## 6. Product Origination and Salary Advance Readiness
+## 7. Product Origination and Salary Advance Readiness
 
 ### Advisory Readiness Query
 
@@ -350,7 +366,7 @@ Because verification start/completion and review start have no client business U
 
 ---
 
-## 7. Approval, Review, and Correction Coordination
+## 8. Approval, Review, and Correction Coordination
 
 Approval owns the immutable recommendation or decision record. Loan owns the active review cycle, correction workflow, and LoanApplication transition.
 
@@ -432,7 +448,7 @@ The latest `VERIFIED` cycle opens Loan Officer review and recommendation and mus
 
 ---
 
-## 8. Contract Preparation and Readiness
+## 9. Contract Preparation and Readiness
 
 ```mermaid
 sequenceDiagram
@@ -468,7 +484,7 @@ Salary Advance validates its exact unreleased reservation. UCL and Collateral Lo
 
 ---
 
-## 9. Destination Reveal and Manual Disbursement
+## 10. Destination Reveal and Manual Disbursement
 
 Loan owns the Staff disbursement queue and case projection:
 
@@ -515,7 +531,7 @@ The product activation policy revalidates the authoritative product evidence for
 
 ---
 
-## 10. LoanAccount Servicing Flows
+## 11. LoanAccount Servicing Flows
 
 | Request | Authorization | Runtime behavior |
 |---|---|---|
@@ -578,7 +594,7 @@ Activation, repayment, and Administrative Full-Balance Settlement must not acqui
 
 ---
 
-## 11. Overdue Evaluation
+## 12. Overdue Evaluation
 
 The overdue batch samples the injected clock once and derives one UTC business date. It selects stale `ACTIVE` or `OVERDUE` accounts with positive outstanding balances for the authoritative Salary Advance, UCL, and Collateral product allow-list, in deterministic evaluation-date and LoanAccount-ID order.
 
@@ -602,7 +618,7 @@ The scheduler uses an explicit UTC zone, a positive batch size, and explicit ope
 
 ---
 
-## 12. Persistence and Flyway
+## 13. Persistence and Flyway
 
 ```mermaid
 flowchart LR
@@ -627,7 +643,7 @@ Released migrations are append-only. Runtime code must not depend on Hibernate s
 
 ---
 
-## 13. Runtime Rules Summary
+## 14. Runtime Rules Summary
 
 - Security authenticates the request before the controller.
 - Controllers invoke input ports and translate HTTP concerns.

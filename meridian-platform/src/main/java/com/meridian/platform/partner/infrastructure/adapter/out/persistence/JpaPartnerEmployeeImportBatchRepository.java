@@ -2,6 +2,8 @@ package com.meridian.platform.partner.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatchStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -23,4 +25,9 @@ public interface JpaPartnerEmployeeImportBatchRepository
                     String effectiveMonth,
                     PartnerEmployeeImportBatchStatus status
             );
+
+    @Query(value = "select pg_advisory_xact_lock(hashtextextended(cast(:lockKey as text), 0))", nativeQuery = true)
+    void acquireRequestLock(@Param("lockKey") String lockKey);
+
+    Optional<PartnerEmployeeImportBatchJpaEntity> findByRequestId(UUID requestId);
 }

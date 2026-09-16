@@ -41,6 +41,31 @@ public class PartnerCompanyJpaEntity {
     protected PartnerCompanyJpaEntity() {
     }
 
+    PartnerCompanyJpaEntity(
+            UUID id,
+            String companyCode,
+            String name,
+            PartnerCompanyStatus status,
+            BigDecimal salaryAdvancePolicyLimit,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt
+    ) {
+        this.id = id;
+        this.companyCode = companyCode;
+        this.name = name;
+        this.status = status;
+        this.salaryAdvancePolicyLimit = salaryAdvancePolicyLimit;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
+
+    void update(String name, PartnerCompanyStatus status, BigDecimal salaryAdvancePolicyLimit, LocalDateTime updatedAt) {
+        this.name = name;
+        this.status = status;
+        this.salaryAdvancePolicyLimit = salaryAdvancePolicyLimit;
+        this.updatedAt = updatedAt;
+    }
+
     public UUID getId() {
         return id;
     }
