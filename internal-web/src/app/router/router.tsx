@@ -29,10 +29,12 @@ import {
   STAFF_CLOSURE_QUEUE_ROUTE,
   STAFF_CLOSURE_CASE_ROUTE,
 } from './staff-route-metadata'
-import { ADMIN_HOME_ROUTE } from './admin-route-metadata'
+import { ADMIN_HOME_ROUTE, ADMIN_PARTNER_DETAIL_ROUTE, ADMIN_PARTNERS_ROUTE } from './admin-route-metadata'
 
 const LoginPage = lazy(() => import('@/features/auth/components/LoginPage').then((module) => ({ default: module.LoginPage })))
 const AdminLandingPage = lazy(() => import('@/features/admin/pages/AdminLandingPage').then((module) => ({ default: module.AdminLandingPage })))
+const PartnerCompanyListPage = lazy(() => import('@/features/admin-partners/pages/PartnerCompanyListPage').then((module) => ({ default: module.PartnerCompanyListPage })))
+const PartnerCompanyDetailPage = lazy(() => import('@/features/admin-partners/pages/PartnerCompanyDetailPage').then((module) => ({ default: module.PartnerCompanyDetailPage })))
 const StaffLandingPage = lazy(() => import('@/features/staff/pages/StaffLandingPage').then((module) => ({ default: module.StaffLandingPage })))
 const ApplicationSearchPage = lazy(() => import('@/features/staff-applications/pages/ApplicationSearchPage').then((module) => ({ default: module.ApplicationSearchPage })))
 const ApplicationCasePage = lazy(() => import('@/features/staff-applications/pages/ApplicationCasePage').then((module) => ({ default: module.ApplicationCasePage })))
@@ -137,6 +139,12 @@ export const routes: RouteObject[] = [{ element: <RouteFrame />, errorElement: <
     { element: <AdminCapabilityRoute route={ADMIN_HOME_ROUTE} />, children: [
       { element: <InternalShell area="admin" />, children: [
         { path: ADMIN_HOME_ROUTE.path, element: <Deferred><AdminLandingPage /></Deferred> },
+        { element: <AdminCapabilityRoute route={ADMIN_PARTNERS_ROUTE} />, children: [
+          { path: ADMIN_PARTNERS_ROUTE.path, element: <Deferred><PartnerCompanyListPage /></Deferred> },
+        ] },
+        { element: <AdminCapabilityRoute route={ADMIN_PARTNER_DETAIL_ROUTE} />, children: [
+          { path: ADMIN_PARTNER_DETAIL_ROUTE.path, element: <Deferred><PartnerCompanyDetailPage /></Deferred> },
+        ] },
       ] },
       { path: '/admin/*', element: <Deferred><NotFoundPage /></Deferred> },
     ] },
