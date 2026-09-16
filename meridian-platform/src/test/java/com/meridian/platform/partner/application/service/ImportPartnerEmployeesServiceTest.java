@@ -18,6 +18,8 @@ import com.meridian.platform.shared.domain.exception.BusinessStateConflictExcept
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
@@ -160,10 +162,20 @@ class ImportPartnerEmployeesServiceTest {
     }
 
     @Test
-    void rejectsImpossibleEffectiveMonthBeforeLocking() {
+    void acceptsExactFourDigitEffectiveMonth() {
+        var result = service.importEmployees(companyId, new ImportPartnerEmployeesRequest(
+                requestId, "2026-01", List.of(row("EMP-1", "ID-1", "ACTIVE", true))
+        ));
+
+        assertEquals("2026-01", result.effectiveMonth());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"2026-13", "+10000-01", "-0001-01"})
+    void rejectsInvalidOrNonFourDigitEffectiveMonthBeforeLocking(String effectiveMonth) {
         BusinessRuleViolationException error = assertThrows(BusinessRuleViolationException.class, () ->
                 service.importEmployees(companyId, new ImportPartnerEmployeesRequest(
-                        requestId, "2026-99", List.of(row("EMP-1", "ID-1", "ACTIVE", true))
+                        requestId, effectiveMonth, List.of(row("EMP-1", "ID-1", "ACTIVE", true))
                 )));
         assertEquals("INVALID_EFFECTIVE_MONTH", error.getErrorCode());
         verify(batches, never()).acquireRequestLock(any());

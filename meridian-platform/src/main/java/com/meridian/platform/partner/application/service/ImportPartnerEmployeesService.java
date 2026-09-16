@@ -44,9 +44,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseCase {
+
+    private static final Pattern EFFECTIVE_MONTH_PATTERN =
+            Pattern.compile("[0-9]{4}-(0[1-9]|1[0-2])");
 
     private final PartnerCompanyRepository companies;
     private final PartnerEmployeeImportBatchRepository batches;
@@ -127,14 +131,15 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
     }
 
     private static String validEffectiveMonth(String value) {
-        if (value == null) {
+        if (value == null || !EFFECTIVE_MONTH_PATTERN.matcher(value).matches()) {
             throw new BusinessRuleViolationException(
                     "INVALID_EFFECTIVE_MONTH",
                     "Effective month must be a valid year and month in YYYY-MM format."
             );
         }
         try {
-            return YearMonth.parse(value).toString();
+            YearMonth.parse(value);
+            return value;
         } catch (DateTimeParseException exception) {
             throw new BusinessRuleViolationException(
                     "INVALID_EFFECTIVE_MONTH",
