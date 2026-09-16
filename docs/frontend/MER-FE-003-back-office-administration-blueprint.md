@@ -151,7 +151,7 @@ Session restoration and refresh replace the actor's current permission set. A pe
 | `/admin/products` | Loan Product administration | Back-Office FE-CP3 |
 | `/admin/users` | Internal-user administration and predefined role assignment | Back-Office FE-CP4 |
 
-`/admin`, `/admin/partners`, `/admin/partners/:partnerCompanyId`, and `/admin/products` are executable. User and other unimplemented child paths return the normal safe not-found view. The client does not render placeholder pages, fake records, disabled forms, or speculative API contracts for later checkpoints.
+`/admin`, `/admin/partners`, `/admin/partners/:partnerCompanyId`, `/admin/products`, and `/admin/users` are executable. Other unimplemented child paths return the normal safe not-found view. The client does not render placeholder pages, fake records, disabled forms, or speculative API contracts for deferred capabilities.
 
 ### 5.2 Deferred Routes
 
@@ -301,20 +301,31 @@ Back-Office Administration does not provide an arbitrary JSON editor. Pricing al
 
 ---
 
-## 12. Internal-User Administration Target
+## 12. Internal-User Administration
 
-Back-Office FE-CP4 covers:
+Internal User Administration provides a narrow Identity-owned surface under `/admin/users` for:
 
 - discovery of internal `STAFF` users;
 - inspection of safe user status and assigned roles;
-- supported internal-user status transitions among Identity's `ACTIVE`, `SUSPENDED`, and `DISABLED` states, subject to the management rules established by the FE-CP4 backend contract;
+- target-state internal-user status changes among Identity's `ACTIVE`, `SUSPENDED`, and `DISABLED` states;
 - assignment and removal of predefined backend-owned roles.
 
 Identity owns User status, roles, permissions, credential state, and authorization facts. The frontend must not create arbitrary permissions, define arbitrary roles, or infer an actor's effective authority from a role label.
 
-The current Identity HTTP area contains authentication and Customer registration/recovery operations but no administrative user-management API. FE-CP4 therefore depends on purpose-limited user discovery, safe status commands, predefined role discovery, role-assignment commands, conflict behavior, and audit-safe responses.
+| Classification | Statement |
+|---|---|
+| Backend fact | Protected `GET /api/v1/admin/internal-users` requires exact `identity:user:manage` and returns only Staff Users in deterministic normalized-email and stable-ID order. |
+| Backend fact | Protected `GET /api/v1/admin/internal-users/assignable-roles` returns predefined non-Customer roles in deterministic role-code order; it does not expose a role or permission editor. |
+| Backend fact | Status and per-role target-state `PUT` commands require exact `identity:user:manage`, lock the target Staff User, and treat the same target state as a no-op without timestamp, authorization-version, refresh-session, or audit effects. |
+| Backend fact | A real status or role-assignment change increments Identity's authorization version. Older access JWTs fail as `401 INVALID_TOKEN` before their embedded authority is installed. |
+| Backend fact | Role changes leave active refresh sessions usable so refresh can issue current authority. Suspension or disablement revokes all target-User refresh sessions; reactivation does not restore them. |
+| Frontend decision | The page displays only User ID-bound safe facts, status, and backend-returned role codes. Email never enters URL state, query keys, browser persistence, operation recovery, logs, or telemetry. |
+| Frontend decision | User and assignable-role queries have zero retention after unmount and clear through the shared session boundary. Route authorization succeeds before either query runs. |
+| Frontend decision | Commands never update status or role assignment optimistically and never retry automatically. Confirmed success refreshes the protected User list; an unknown transport result preserves the last confirmed view and refreshes authoritative state before an explicit same-target retry. |
 
-`MER-FU-019` tracks the user-management UI and backend dependency. `MER-FU-022` keeps full permission management deferred.
+When the target is the current actor, the normal protected refresh path observes the authorization-version mismatch. A still-active actor may refresh once into current roles and permissions; an inactive actor cannot refresh and the shared session manager clears the session. Route and navigation access then re-evaluate from the replaced actor rather than from the command response.
+
+`MER-FU-019` records the delivered user-management surface. `MER-FU-022` keeps full permission management deferred.
 
 ---
 
@@ -384,7 +395,7 @@ Each later checkpoint adds contract, query, command, error, responsive, and acce
 - predefined backend-owned role assignment;
 - required Identity management use cases and APIs.
 
-The Back-Office milestone stops after FE-CP4. Generic permission, configuration, and audit products and advanced Loan Product policy builders require separate decisions.
+The delivered Back-Office milestone stops after FE-CP4. Generic permission, configuration, and audit products and advanced Loan Product policy builders require separate decisions.
 
 ---
 
@@ -414,7 +425,7 @@ OCR remains a separate milestone tracked by `MER-FU-033`. `admin:config` remains
 
 ## 17. Checkpoint Readiness
 
-A later Back-Office checkpoint is ready to implement when:
+An additional Back-Office capability is ready to implement only when:
 
 1. every list and detail view has a purpose-limited authorized response;
 2. every command has an executable use case, exact permission, validation rules, conflict behavior, audit outcome, and safe response;

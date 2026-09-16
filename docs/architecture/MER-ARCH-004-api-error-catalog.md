@@ -38,6 +38,8 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 403 | `SALARY_ADVANCE_READINESS_ACCESS_DENIED` | Salary Advance readiness access denied | Use an authenticated Customer principal with `loan:submit` |
 | 403 | `LOAN_REVIEW_ACCESS_DENIED` | Loan review access is denied. | Use a Staff principal with the exact `loan:review` permission |
 | 403 | `APPROVAL_WORK_ACCESS_DENIED` | Staff approval work access is denied. | Use a Staff principal with the exact `approval:recommend` or `approval:decide` permission required by the read |
+| 404 | `INTERNAL_USER_NOT_FOUND` | Internal User was not found. | Refresh the Staff User list and use an existing internal User ID |
+| 404 | `INTERNAL_ROLE_NOT_FOUND` | Internal role was not found. | Refresh assignable roles and use a predefined non-Customer role code |
 | 429 | `RATE_LIMIT_EXCEEDED` | Too many requests. | Retry after the number of seconds stated by the `Retry-After` response header |
 
 ---

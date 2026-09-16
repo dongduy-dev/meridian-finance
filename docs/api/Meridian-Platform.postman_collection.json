@@ -990,6 +990,639 @@
                               ]
                  },
                  {
+                     "name": "02B Internal User Administration - identity:user:manage",
+                     "item": [
+                         {
+                             "name": "GET /api/v1/admin/internal-users",
+                             "request": {
+                                 "method": "GET",
+                                 "header": [],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users",
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{backOfficeAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 },
+                                 "description": "Lists only internal Staff Users and captures the seeded Loan Officer ID without placing email in a request URL."
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                             "const json = pm.response.json();",
+                                             "pm.test(\"Staff users are deterministic and purpose-limited\", () => { const emails = json.map(item => item.email); pm.expect(emails).to.eql([...emails].sort()); json.forEach(item => { [\"userId\", \"email\", \"displayName\", \"status\", \"assignedRoleCodes\"].forEach(field => pm.expect(item).to.have.property(field)); [\"passwordHash\", \"failedLoginAttempts\", \"authorizationVersion\", \"customerId\"].forEach(field => pm.expect(item).not.to.have.property(field)); }); });",
+                                             "const target = json.find(item => item.email === pm.collectionVariables.get(\"loanOfficerEmail\"));",
+                                             "pm.test(\"Seeded Loan Officer is available for reversible scenarios\", () => { pm.expect(target).to.exist; pm.expect(target.status).to.eql(\"ACTIVE\"); pm.expect(target.assignedRoleCodes).to.include(\"LOAN_OFFICER\"); });",
+                                             "pm.collectionVariables.set(\"internalUserTargetId\", target.userId);"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "GET assignable predefined roles",
+                             "request": {
+                                 "method": "GET",
+                                 "header": [],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users/assignable-roles",
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{backOfficeAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                             "const json = pm.response.json();",
+                                             "pm.test(\"Roles are ordered and Customer is excluded\", () => { const codes = json.map(item => item.code); pm.expect(codes).to.eql([...codes].sort()); pm.expect(codes).not.to.include(\"CUSTOMER\"); json.forEach(item => pm.expect(item).to.have.all.keys(\"code\", \"name\")); });"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "PUT target status - suspend",
+                             "request": {
+                                 "method": "PUT",
+                                 "header": [
+                                     {
+                                         "key": "Content-Type",
+                                         "value": "application/json",
+                                         "type": "text"
+                                     }
+                                 ],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users/{{internalUserTargetId}}/status",
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{backOfficeAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 },
+                                 "description": "Temporarily suspends the seeded Loan Officer. The following requests restore the seeded state and credentials.",
+                                 "body": {
+                                     "mode": "raw",
+                                     "raw": "{\n  \"status\": \"SUSPENDED\"\n}",
+                                     "options": {
+                                         "raw": {
+                                             "language": "json"
+                                         }
+                                     }
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                             "pm.test(\"Target is suspended\", () => pm.expect(pm.response.json().status).to.eql(\"SUSPENDED\"));"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "Reject stale target access token after suspension",
+                             "request": {
+                                 "method": "GET",
+                                 "header": [],
+                                 "url": "{{baseUrl}}/api/v1/staff/loan-applications?page=0&size=1",
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{loanOfficerAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 401\", () => pm.response.to.have.status(401));",
+                                             "pm.test(\"Stale authorization is invalid\", () => pm.expect(pm.response.json().errorCode).to.eql(\"INVALID_TOKEN\"));"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "PUT target status - restore active",
+                             "request": {
+                                 "method": "PUT",
+                                 "header": [
+                                     {
+                                         "key": "Content-Type",
+                                         "value": "application/json",
+                                         "type": "text"
+                                     }
+                                 ],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users/{{internalUserTargetId}}/status",
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{backOfficeAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 },
+                                 "body": {
+                                     "mode": "raw",
+                                     "raw": "{\n  \"status\": \"ACTIVE\"\n}",
+                                     "options": {
+                                         "raw": {
+                                             "language": "json"
+                                         }
+                                     }
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                             "pm.test(\"Target is active again\", () => pm.expect(pm.response.json().status).to.eql(\"ACTIVE\"));"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "PUT target status - active no-op",
+                             "request": {
+                                 "method": "PUT",
+                                 "header": [
+                                     {
+                                         "key": "Content-Type",
+                                         "value": "application/json",
+                                         "type": "text"
+                                     }
+                                 ],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users/{{internalUserTargetId}}/status",
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{backOfficeAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 },
+                                 "body": {
+                                     "mode": "raw",
+                                     "raw": "{\n  \"status\": \"ACTIVE\"\n}",
+                                     "options": {
+                                         "raw": {
+                                             "language": "json"
+                                         }
+                                     }
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                             "pm.test(\"Same target remains active\", () => pm.expect(pm.response.json().status).to.eql(\"ACTIVE\"));"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "PUT predefined role - assign Approver",
+                             "request": {
+                                 "method": "PUT",
+                                 "header": [
+                                     {
+                                         "key": "Content-Type",
+                                         "value": "application/json",
+                                         "type": "text"
+                                     }
+                                 ],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users/{{internalUserTargetId}}/roles/APPROVER",
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{backOfficeAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 },
+                                 "body": {
+                                     "mode": "raw",
+                                     "raw": "{\n  \"assigned\": true\n}",
+                                     "options": {
+                                         "raw": {
+                                             "language": "json"
+                                         }
+                                     }
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                             "pm.test(\"Approver is assigned\", () => pm.expect(pm.response.json().assignedRoleCodes).to.include(\"APPROVER\"));"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "PUT predefined role - assigned no-op",
+                             "request": {
+                                 "method": "PUT",
+                                 "header": [
+                                     {
+                                         "key": "Content-Type",
+                                         "value": "application/json",
+                                         "type": "text"
+                                     }
+                                 ],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users/{{internalUserTargetId}}/roles/APPROVER",
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{backOfficeAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 },
+                                 "body": {
+                                     "mode": "raw",
+                                     "raw": "{\n  \"assigned\": true\n}",
+                                     "options": {
+                                         "raw": {
+                                             "language": "json"
+                                         }
+                                     }
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                             "pm.test(\"Same role target remains assigned\", () => pm.expect(pm.response.json().assignedRoleCodes.filter(code => code === \"APPROVER\")).to.have.length(1));"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "PUT predefined role - remove Approver",
+                             "request": {
+                                 "method": "PUT",
+                                 "header": [
+                                     {
+                                         "key": "Content-Type",
+                                         "value": "application/json",
+                                         "type": "text"
+                                     }
+                                 ],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users/{{internalUserTargetId}}/roles/APPROVER",
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{backOfficeAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 },
+                                 "body": {
+                                     "mode": "raw",
+                                     "raw": "{\n  \"assigned\": false\n}",
+                                     "options": {
+                                         "raw": {
+                                             "language": "json"
+                                         }
+                                     }
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                             "pm.test(\"Seeded role set is restored\", () => { const roles = pm.response.json().assignedRoleCodes; pm.expect(roles).to.include(\"LOAN_OFFICER\"); pm.expect(roles).not.to.include(\"APPROVER\"); });"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "Reject nonassignable Customer role",
+                             "request": {
+                                 "method": "PUT",
+                                 "header": [
+                                     {
+                                         "key": "Content-Type",
+                                         "value": "application/json",
+                                         "type": "text"
+                                     }
+                                 ],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users/{{internalUserTargetId}}/roles/CUSTOMER",
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{backOfficeAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 },
+                                 "body": {
+                                     "mode": "raw",
+                                     "raw": "{\n  \"assigned\": true\n}",
+                                     "options": {
+                                         "raw": {
+                                             "language": "json"
+                                         }
+                                     }
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));",
+                                             "pm.test(\"Stable error code\", () => pm.expect(pm.response.json().errorCode).to.eql(\"INTERNAL_ROLE_NOT_FOUND\"));"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "Reject unknown internal role",
+                             "request": {
+                                 "method": "PUT",
+                                 "header": [
+                                     {
+                                         "key": "Content-Type",
+                                         "value": "application/json",
+                                         "type": "text"
+                                     }
+                                 ],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users/{{internalUserTargetId}}/roles/NOT_A_ROLE",
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{backOfficeAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 },
+                                 "body": {
+                                     "mode": "raw",
+                                     "raw": "{\n  \"assigned\": true\n}",
+                                     "options": {
+                                         "raw": {
+                                             "language": "json"
+                                         }
+                                     }
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));",
+                                             "pm.test(\"Stable error code\", () => pm.expect(pm.response.json().errorCode).to.eql(\"INTERNAL_ROLE_NOT_FOUND\"));"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "Reject missing internal User",
+                             "request": {
+                                 "method": "PUT",
+                                 "header": [
+                                     {
+                                         "key": "Content-Type",
+                                         "value": "application/json",
+                                         "type": "text"
+                                     }
+                                 ],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users/ffffffff-ffff-4fff-8fff-ffffffffffff/status",
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{backOfficeAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 },
+                                 "body": {
+                                     "mode": "raw",
+                                     "raw": "{\n  \"status\": \"SUSPENDED\"\n}",
+                                     "options": {
+                                         "raw": {
+                                             "language": "json"
+                                         }
+                                     }
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 404\", () => pm.response.to.have.status(404));",
+                                             "pm.test(\"Stable error code\", () => pm.expect(pm.response.json().errorCode).to.eql(\"INTERNAL_USER_NOT_FOUND\"));"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "Reject Staff actor without identity:user:manage",
+                             "request": {
+                                 "method": "GET",
+                                 "header": [],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users",
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{approverAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 403\", () => pm.response.to.have.status(403));",
+                                             "pm.test(\"Stable error code\", () => pm.expect(pm.response.json().errorCode).to.eql(\"ACCESS_DENIED\"));"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "Restore seeded Loan Officer credentials",
+                             "request": {
+                                 "method": "POST",
+                                 "header": [
+                                     {
+                                         "key": "Content-Type",
+                                         "value": "application/json",
+                                         "type": "text"
+                                     }
+                                 ],
+                                 "url": "{{baseUrl}}/api/v1/auth/login",
+                                 "auth": {
+                                     "type": "noauth"
+                                 },
+                                 "description": "Creates a fresh credential family after the reversible suspension scenario revoked the prior family.",
+                                 "body": {
+                                     "mode": "raw",
+                                     "raw": "{\n  \"email\": \"{{loanOfficerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                     "options": {
+                                         "raw": {
+                                             "language": "json"
+                                         }
+                                     }
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                             "const json = pm.response.json();",
+                                             "pm.test(\"Seeded Loan Officer authority is restored\", () => { pm.expect(json.roles).to.include(\"LOAN_OFFICER\"); pm.expect(json.roles).not.to.include(\"APPROVER\"); });",
+                                             "pm.collectionVariables.set(\"loanOfficerAccessToken\", json.accessToken);"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         },
+                         {
+                             "name": "Restore Back-Office refresh cookie",
+                             "request": {
+                                 "method": "POST",
+                                 "header": [
+                                     {
+                                         "key": "Content-Type",
+                                         "value": "application/json",
+                                         "type": "text"
+                                     }
+                                 ],
+                                 "url": "{{baseUrl}}/api/v1/auth/login",
+                                 "auth": {
+                                     "type": "noauth"
+                                 },
+                                 "description": "Leaves the shared Postman cookie jar on the Back-Office demo session after restoring all mutated seeded User state.",
+                                 "body": {
+                                     "mode": "raw",
+                                     "raw": "{\n  \"email\": \"{{backOfficeAdminEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                     "options": {
+                                         "raw": {
+                                             "language": "json"
+                                         }
+                                     }
+                                 }
+                             },
+                             "response": [],
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                             "pm.collectionVariables.set(\"backOfficeAccessToken\", pm.response.json().accessToken);",
+                                             "pm.collectionVariables.unset(\"internalUserTargetId\");"
+                                         ]
+                                     }
+                                 }
+                             ]
+                         }
+                     ]
+                 },
+                 {
                      "name": "02 Partner Admin Commands - partner:manage",
                      "item": [
                                   {
