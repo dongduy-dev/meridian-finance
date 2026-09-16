@@ -19,6 +19,7 @@ describe('route focus', () => {
 
   it.each([
     ['/admin', 'Back-Office Administration | Meridian'],
+    ['/admin/products', 'Loan Product Administration | Meridian'],
     ['/staff/work/documents', 'Document review | Meridian'],
     ['/staff/work/corrections', 'Staff corrections | Meridian'],
     ['/staff/work/contracts', 'Contract and readiness queue | Meridian'],
