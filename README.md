@@ -27,7 +27,7 @@ All three products use Meridian's common application, approval, contract, activa
 * **Review, Correction, and Approval**: Loan owns application review and correction workflows. Loan Officers record recommendations, while Approvers make independent decisions under maker-checker controls.
 * **Offers, Contracts, and Disbursement**: Loan preserves accepted lending terms through immutable offers, versioned contracts, Customer acknowledgment, readiness checks, and controlled disbursement activation.
 * **Loan Servicing**: Salary Advance, UCL, and Collateral Loan share repayment, overdue evaluation and cure, contractual payoff, payment-backed Administrative Full-Balance Settlement, and separate administrative closure.
-* **Identity and Access Control**: Identity manages Customer and internal-user authentication, secure session lifecycle, account recovery, roles, permissions, and access boundaries. Permission-based RBAC, Customer ownership checks, and purpose-limited contracts protect Customer and internal operations.
+* **Identity and Access Control**: Identity manages Customer and internal-user authentication, session lifecycle, account recovery, roles, permissions, and access boundaries. Permission-based RBAC, Customer ownership checks, and purpose-limited contracts protect Customer and internal operations.
 * **Transactional Safety**: Critical financial commands use atomic state changes, operation-specific request identities, semantic replay validation, and concurrency controls.
 * **Immutable Audit Trail**: Ordered lifecycle history and append-only, PII-safe business audit evidence preserve traceability.
 * **Sensitive Data Protection**: AES-GCM protects selected Customer-sensitive values and immutable Loan disbursement bank-account snapshots at rest, while purpose-limited access and restricted or masked responses limit PII exposure.
@@ -59,7 +59,7 @@ meridian-finance/
 └── .github/workflows/       # Backend and frontend CI workflows
 ```
 
-The active backend modules under `com.meridian.platform` are:
+Backend modules under `com.meridian.platform` are:
 
 ```text
 shared · identity · customer · partner · loan · approval · document · audit · notification
@@ -90,7 +90,7 @@ Browser
                               UI   :8025
 ```
 
-The frontend development servers do not run inside the current Compose stack. Both use `VITE_API_BASE_URL=http://localhost:8080/api/v1`, and the backend local CORS configuration allows the Customer Web and Internal Web origins.
+Compose does not start the frontend development servers. Both use `VITE_API_BASE_URL=http://localhost:8080/api/v1`, and the backend local CORS configuration allows the Customer Web and Internal Web origins.
 
 ### Backend Environment
 
@@ -111,7 +111,7 @@ Useful local endpoints:
 
 ### Customer Web
 
-`customer-web/` contains Meridian's responsive Customer Web application. [MER-FE-001](docs/frontend/MER-FE-001-customer-web-blueprint.md) defines its frontend architecture, state ownership, visual language, accessibility baseline, and delivery sequence.
+`customer-web/` contains Meridian's responsive Customer Web application. [MER-FE-001](docs/frontend/MER-FE-001-customer-web-blueprint.md) defines its frontend architecture, state ownership, visual language, and accessibility baseline.
 
 ```bash
 cd customer-web
@@ -166,7 +166,7 @@ $rsa = [Security.Cryptography.RSA]::Create(2048)
 
 Keep both values from the same command run. Meridian rejects missing, malformed, mismatched, or weaker signing keys.
 
-The local backend allows `http://localhost:5173` and `http://localhost:5174` by default. Mailpit captures local verification and password-reset email without external SMTP credentials. Browser confirmation flows use the fragment token from the email as the JSON-body token for the corresponding confirmation endpoint; do not place the token in a backend query string.
+The local backend allows `http://localhost:5173` and `http://localhost:5174` by default. Mailpit captures local verification and password-reset email without external SMTP credentials.
 
 `.env` contains local secrets and must not be committed.
 
@@ -180,15 +180,15 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 
 ### Architecture Principles
 
-| Principle | Implementation |
-|---|---|
-| **Architecture Style** | Modular Monolith (Spring Modulith) |
-| **Internal Design** | Hexagonal Architecture (Ports & Adapters) |
-| **Domain Modeling** | Domain-Driven Design (Bounded Contexts) |
-| **Dependency Direction** | Inward-only — Infrastructure adapters → Application ports/services → Domain |
-| **Boundary Enforcement** | Architecture documents define the intended module law. Current ArchUnit tests enforce core layer, security, and shared-kernel rules. |
+| Principle | Implementation                                                                                                                                                                                                           |
+|---|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Architecture Style** | Modular Monolith (Spring Modulith)                                                                                                                                                                                       |
+| **Internal Design** | Hexagonal Architecture (Ports & Adapters)                                                                                                                                                                                |
+| **Domain Modeling** | Domain-Driven Design (Bounded Contexts)                                                                                                                                                                                  |
+| **Dependency Direction** | Inward-only — Infrastructure adapters → Application ports/services → Domain                                                                                                                                              |
+| **Boundary Enforcement** | Architecture documents define the intended module law. ArchUnit tests enforce core layer, security, and shared-kernel rules.                                                                                             |
 | **Module Communication** | Narrow public application contracts support synchronous collaboration. Transaction-aware coordination preserves atomic outcomes, while durable asynchronous delivery requires explicit retry, recovery, and idempotency. |
-| **Future Evolution** | Bounded contexts and published contracts preserve selective extraction options; services are extracted only when stable boundaries, scale, or operational ownership justify it |
+| **Selective Extraction** | Bounded contexts and published contracts preserve selective extraction options. A service is extracted only when stable boundaries, scale, or operational ownership justify it. |
 
 ### Complete Platform Architecture
 
@@ -251,7 +251,7 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 | **Approval Workflow** | Immutable Loan Officer recommendations, independent Approver decisions, decision authority, and maker-checker evidence. |
 | **Document Management** | Checklists, uploads, immutable versions, manual document review, readiness, storage, and advisory OCR-assisted processing. |
 | **Audit & Compliance Controls** | Append-only, PII-safe evidence of important business actions and compliance-oriented history. |
-| **Notification** | Controlled verification-email rendering and SMTP transport; broader channels, preferences, durable delivery status, and retry management remain future increments. |
+| **Notification** | Message templates, delivery requests, channels, and delivery status. |
 
 ---
 
