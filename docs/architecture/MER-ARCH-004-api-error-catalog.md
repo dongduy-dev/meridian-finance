@@ -101,6 +101,8 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 422 | `EMPLOYEE_INACTIVE` | Partner employee inactive | Use an active Partner Employee record |
 | 422 | `EMPLOYEE_NOT_VERIFIED` | Customer employee status not verified | Complete Salary Advance employee verification before creating an application |
 | 422 | `SALARY_ADVANCE_ELIGIBILITY_DATA_STALE` | Salary Advance eligibility data stale | Refresh the Partner Employee data before eligibility or limit use |
+| 409 | `PARTNER_COMPANY_CODE_ALREADY_EXISTS` | Partner company code is already in use | Use a different stable company code or open the existing company |
+| 422 | `INVALID_EFFECTIVE_MONTH` | Effective month is invalid | Supply a real year-month in `YYYY-MM` form |
 
 ---
 

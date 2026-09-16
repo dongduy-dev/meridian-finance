@@ -151,7 +151,7 @@ Session restoration and refresh replace the actor's current permission set. A pe
 | `/admin/products` | Loan Product administration | Back-Office FE-CP3 |
 | `/admin/users` | Internal-user administration and predefined role assignment | Back-Office FE-CP4 |
 
-Only `/admin` is executable in FE-CP1. Unimplemented child paths return the normal safe not-found view. The client does not render placeholder pages, fake records, disabled forms, or speculative API contracts for later checkpoints.
+`/admin`, `/admin/partners`, and `/admin/partners/:partnerCompanyId` are executable. Product, User, and other unimplemented child paths return the normal safe not-found view. The client does not render placeholder pages, fake records, disabled forms, or speculative API contracts for later checkpoints.
 
 ### 5.2 Deferred Routes
 
@@ -273,10 +273,12 @@ Partner owns company, employee, import-batch, employment, status, and freshness 
 | Backend fact | `partner:read` protects Partner Company list/detail, company employee list, and company import-batch history reads. |
 | Backend fact | Partner Company states are `ACTIVE`, `INACTIVE`, and `SUSPENDED`; Partner owns their effect on eligibility. |
 | Backend fact | Import-batch states are `PENDING`, `PROCESSING`, `COMPLETED`, and `FAILED`; Partner owns batch authority and freshness. |
-| API dependency | Partner Company create, edit, and status commands require supported application use cases and HTTP contracts. |
-| API dependency | Partner Employee effective-month import requires an upload/import command, validation outcome, replay behavior, and safe error contract. |
+| Backend fact | `partner:manage` protects Partner Company create, supported-fact update, status change, and effective-month employee import commands. |
+| Backend fact | Import is a synchronous structured JSON batch with partial row validation, durable `requestId` replay, and safe per-row rejection details. |
 
-The existing employee read includes sensitive employment evidence. FE-CP2 must verify the minimum Back-Office projection, purpose, masking, pagination, and cache treatment before exposing it broadly.
+The company list uses the existing deterministic backend order. The detail route loads the company, employee projection, and import history only after exact `partner:read` authorization. The employee projection displays employee code, identity reference, salary, Salary Advance limit, employment status, and active state because those facts are required for authorized source-data review. It uses a zero-retention Query cache after unmount, never places sensitive values in query keys, URLs, browser persistence, operation recovery, logs, or telemetry, and clears with the shared session boundary.
+
+Create, edit, status, and import controls appear only when the actor also has exact `partner:manage`. Consequential commands do not retry automatically. An unknown import result retains the exact `requestId` and unchanged payload in mounted page memory only and offers explicit exact replay. Confirmed import success refreshes employee and import-history reads. The browser does not label a batch authoritative or refresh Customer employment links.
 
 ---
 

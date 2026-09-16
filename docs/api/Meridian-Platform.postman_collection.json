@@ -910,6 +910,132 @@
                               ]
                  },
                  {
+                     "name": "02 Partner Admin Commands - partner:manage",
+                     "item": [
+                                  {
+                                      "name": "POST /api/v1/partner-companies",
+                                      "event": [{
+                                          "listen": "prerequest",
+                                          "script": {"type": "text/javascript", "exec": [
+                                              "pm.collectionVariables.set(\"partnerAdminCompanyCode\", `CP2-${Date.now()}`);"
+                                          ]}
+                                      }, {
+                                          "listen": "test",
+                                          "script": {"type": "text/javascript", "exec": [
+                                              "pm.test(\"Partner Company is created\", function () { pm.response.to.have.status(201); });",
+                                              "pm.collectionVariables.set(\"partnerAdminManagedCompanyId\", pm.response.json().id);"
+                                          ]}
+                                      }],
+                                      "request": {
+                                          "method": "POST",
+                                          "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+                                          "body": {"mode": "raw", "raw": "{\n  \"companyCode\": \"{{partnerAdminCompanyCode}}\",\n  \"name\": \"Meridian CP2 Demo Partner\",\n  \"status\": \"INACTIVE\",\n  \"salaryAdvancePolicyLimit\": 20000000\n}", "options": {"raw": {"language": "json"}}},
+                                          "url": {"raw": "{{baseUrl}}/api/v1/partner-companies", "host": ["{{baseUrl}}"], "path": ["api", "v1", "partner-companies"]},
+                                          "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{backOfficeAccessToken}}", "type": "string"}]},
+                                          "description": "Creates a fictional Partner Company with partner:manage."
+                                      },
+                                      "response": []
+                                  },
+                                  {
+                                      "name": "PUT /api/v1/partner-companies/{partnerCompanyId}",
+                                      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                          "pm.test(\"Mutable Partner facts are updated\", function () { pm.response.to.have.status(200); });"
+                                      ]}}],
+                                      "request": {
+                                          "method": "PUT",
+                                          "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+                                          "body": {"mode": "raw", "raw": "{\n  \"name\": \"Meridian CP2 Demo Partner Updated\",\n  \"salaryAdvancePolicyLimit\": 25000000\n}", "options": {"raw": {"language": "json"}}},
+                                          "url": {"raw": "{{baseUrl}}/api/v1/partner-companies/{{partnerAdminManagedCompanyId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "partner-companies", "{{partnerAdminManagedCompanyId}}"]},
+                                          "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{backOfficeAccessToken}}", "type": "string"}]},
+                                          "description": "Updates only the supported mutable Partner Company facts."
+                                      },
+                                      "response": []
+                                  },
+                                  {
+                                      "name": "POST /api/v1/partner-companies/{partnerCompanyId}/status",
+                                      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                          "pm.test(\"Partner Company status is changed\", function () { pm.response.to.have.status(200); });"
+                                      ]}}],
+                                      "request": {
+                                          "method": "POST",
+                                          "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+                                          "body": {"mode": "raw", "raw": "{\n  \"status\": \"SUSPENDED\"\n}", "options": {"raw": {"language": "json"}}},
+                                          "url": {"raw": "{{baseUrl}}/api/v1/partner-companies/{{partnerAdminManagedCompanyId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "v1", "partner-companies", "{{partnerAdminManagedCompanyId}}", "status"]},
+                                          "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{backOfficeAccessToken}}", "type": "string"}]},
+                                          "description": "Changes status through the distinct partner:manage command."
+                                      },
+                                      "response": []
+                                  },
+                                  {
+                                      "name": "POST Partner Employee import - first execution",
+                                      "event": [{
+                                          "listen": "prerequest",
+                                          "script": {"type": "text/javascript", "exec": [
+                                              "pm.collectionVariables.set(\"partnerImportRequestId\", pm.variables.replaceIn(\"{{$guid}}\"));",
+                                              "pm.collectionVariables.set(\"partnerImportEffectiveMonth\", new Date().toISOString().slice(0, 7));"
+                                          ]}
+                                      }, {
+                                          "listen": "test",
+                                          "script": {"type": "text/javascript", "exec": [
+                                              "pm.test(\"Import completes with partial-result counts\", function () {",
+                                              "    pm.response.to.have.status(201);",
+                                              "    const json = pm.response.json();",
+                                              "    pm.expect(json.status).to.eql(\"COMPLETED\");",
+                                              "    pm.expect(json.validRowCount).to.eql(1);",
+                                              "    pm.expect(json.invalidRowCount).to.eql(1);",
+                                              "    pm.collectionVariables.set(\"partnerImportBatchId\", json.importBatchId);",
+                                              "});"
+                                          ]}
+                                      }],
+                                      "request": {
+                                          "method": "POST",
+                                          "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+                                          "body": {"mode": "raw", "raw": "{\n  \"requestId\": \"{{partnerImportRequestId}}\",\n  \"effectiveMonth\": \"{{partnerImportEffectiveMonth}}\",\n  \"rows\": [\n    {\"employeeCode\": \"DEMO-001\", \"identityReference\": \"FICTIONAL-ID-001\", \"salaryAmount\": 12000000, \"salaryAdvanceLimit\": 4000000, \"employmentStatus\": \"ACTIVE\", \"active\": true},\n    {\"employeeCode\": \"DEMO-002\", \"identityReference\": \"FICTIONAL-ID-002\", \"salaryAmount\": -1, \"salaryAdvanceLimit\": 1000000, \"employmentStatus\": \"ACTIVE\", \"active\": true}\n  ]\n}", "options": {"raw": {"language": "json"}}},
+                                          "url": {"raw": "{{baseUrl}}/api/v1/partner-companies/{{partnerAdminManagedCompanyId}}/employee-import-batches", "host": ["{{baseUrl}}"], "path": ["api", "v1", "partner-companies", "{{partnerAdminManagedCompanyId}}", "employee-import-batches"]},
+                                          "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{backOfficeAccessToken}}", "type": "string"}]},
+                                          "description": "Creates a synchronous structured JSON import with one safe fictional valid row and one rejected row."
+                                      },
+                                      "response": []
+                                  },
+                                  {
+                                      "name": "POST Partner Employee import - exact replay",
+                                      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                          "pm.test(\"Exact replay returns the original outcome\", function () {",
+                                          "    pm.response.to.have.status(201);",
+                                          "    pm.expect(pm.response.json().importBatchId).to.eql(pm.collectionVariables.get(\"partnerImportBatchId\"));",
+                                          "});"
+                                      ]}}],
+                                      "request": {
+                                          "method": "POST",
+                                          "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+                                          "body": {"mode": "raw", "raw": "{\n  \"requestId\": \"{{partnerImportRequestId}}\",\n  \"effectiveMonth\": \"{{partnerImportEffectiveMonth}}\",\n  \"rows\": [\n    {\"employeeCode\": \"DEMO-001\", \"identityReference\": \"FICTIONAL-ID-001\", \"salaryAmount\": 12000000, \"salaryAdvanceLimit\": 4000000, \"employmentStatus\": \"ACTIVE\", \"active\": true},\n    {\"employeeCode\": \"DEMO-002\", \"identityReference\": \"FICTIONAL-ID-002\", \"salaryAmount\": -1, \"salaryAdvanceLimit\": 1000000, \"employmentStatus\": \"ACTIVE\", \"active\": true}\n  ]\n}", "options": {"raw": {"language": "json"}}},
+                                          "url": {"raw": "{{baseUrl}}/api/v1/partner-companies/{{partnerAdminManagedCompanyId}}/employee-import-batches", "host": ["{{baseUrl}}"], "path": ["api", "v1", "partner-companies", "{{partnerAdminManagedCompanyId}}", "employee-import-batches"]},
+                                          "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{backOfficeAccessToken}}", "type": "string"}]},
+                                          "description": "Reuses the same logical request identity and unchanged semantic payload."
+                                      },
+                                      "response": []
+                                  },
+                                  {
+                                      "name": "POST Partner Employee import - conflicting replay",
+                                      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                          "pm.test(\"Changed replay is rejected\", function () {",
+                                          "    pm.response.to.have.status(409);",
+                                          "    pm.expect(pm.response.json().code).to.eql(\"IDEMPOTENCY_KEY_REUSED\");",
+                                          "});"
+                                      ]}}],
+                                      "request": {
+                                          "method": "POST",
+                                          "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+                                          "body": {"mode": "raw", "raw": "{\n  \"requestId\": \"{{partnerImportRequestId}}\",\n  \"effectiveMonth\": \"{{partnerImportEffectiveMonth}}\",\n  \"rows\": [\n    {\"employeeCode\": \"DEMO-CHANGED\", \"identityReference\": \"FICTIONAL-ID-001\", \"salaryAmount\": 12000000, \"salaryAdvanceLimit\": 4000000, \"employmentStatus\": \"ACTIVE\", \"active\": true}\n  ]\n}", "options": {"raw": {"language": "json"}}},
+                                          "url": {"raw": "{{baseUrl}}/api/v1/partner-companies/{{partnerAdminManagedCompanyId}}/employee-import-batches", "host": ["{{baseUrl}}"], "path": ["api", "v1", "partner-companies", "{{partnerAdminManagedCompanyId}}", "employee-import-batches"]},
+                                          "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{backOfficeAccessToken}}", "type": "string"}]},
+                                          "description": "Proves that the same request ID cannot be reused for a different semantic payload."
+                                      },
+                                      "response": []
+                                  }
+                              ]
+                 },
+                 {
                      "name":  "00 Password Reset",
                      "description":  "Run after the generated Customer email has been verified. Request reset once, inspect http://localhost:8025, and copy only the fragment token into passwordResetToken before confirmation. The confirmation request skips itself when the variable is blank.",
                      "item":  [

@@ -98,6 +98,7 @@ Customer-owned read APIs may return the same generic `404` for a nonexistent res
 | Repayment posting | `requestId` | Returns the immutable operation outcome captured at first execution. |
 | Administrative Full-Balance Settlement | `requestId` | Returns the immutable settlement outcome without another payment, allocation, exposure, history, or audit effect. |
 | Administrative LoanAccount closure | `requestId` | Returns the immutable closure result without another status, closure-evidence, history, or audit effect. |
+| Partner Employee effective-month import | `requestId` | Returns the original committed batch and row-validation summary without another batch, employee row, or audit effect. |
 
 An identical logical replay returns the original result without another business effect. Reuse with different logical content returns `409 IDEMPOTENCY_KEY_REUSED` without identifying the protected field that differed.
 
@@ -151,6 +152,10 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/partner-companies/verification-options` | `partner:employee:verify:own` | List active Partner Companies as a Customer-safe employee-verification selector. |
 | GET | `/api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=false` | `partner:read` | List Partner Employees; `activeOnly` defaults to `false`. |
 | GET | `/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | `partner:read` | List employee import batches. |
+| POST | `/api/v1/partner-companies` | `partner:manage` | Create a Partner Company. |
+| PUT | `/api/v1/partner-companies/{partnerCompanyId}` | `partner:manage` | Update the company name and Salary Advance policy limit. |
+| POST | `/api/v1/partner-companies/{partnerCompanyId}/status` | `partner:manage` | Change Partner Company status. |
+| POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | `partner:manage` | Import Partner Employee source rows for an effective month. |
 | POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-verifications` | `partner:employee:verify:own` | Verify the authenticated Customer and create/reuse an eligible employee link. |
 
 ### 2.2 Origination, review, approval, corrections, and documents
@@ -456,7 +461,34 @@ This authenticated Customer read requires `partner:employee:verify:own`. It retu
 
 The Partner Company, employee, and import-batch reads require `partner:read`. Partner Company responses include the configured Salary Advance policy limit. Partner Employee responses include employee code, identity reference, salary amount, Salary Advance limit, employment status, active state, company identity, and import-batch identity. These are restricted Staff contracts and must not be reused as Customer response shapes. Import-batch responses contain company identity, effective month, status, and valid/invalid row counts.
 
-### 3.14 Employee verification
+### 3.14 Partner administration commands
+
+Partner administration commands require exact `partner:manage`. Company creation accepts `companyCode`, `name`, one of `ACTIVE`, `INACTIVE`, or `SUSPENDED`, and a nonnegative `salaryAdvancePolicyLimit`. Company code is a stable unique identifier. The update contract accepts only `name` and `salaryAdvancePolicyLimit`; status changes use the distinct `{ "status": "..." }` command. A same-status command returns the unchanged company without another audit effect.
+
+The employee import body uses a structured JSON batch:
+
+```json
+{
+  "requestId": "f3d0a51f-4e56-4a19-9a6f-f738113bc7db",
+  "effectiveMonth": "2026-09",
+  "rows": [
+    {
+      "employeeCode": "MER-EMP-101",
+      "identityReference": "MER-ID-101",
+      "salaryAmount": 12000000,
+      "salaryAdvanceLimit": 4000000,
+      "employmentStatus": "ACTIVE",
+      "active": true
+    }
+  ]
+}
+```
+
+`effectiveMonth` is a valid `YYYY-MM` year-month. Each row is validated independently. Valid rows become Partner Employee records in one `COMPLETED` batch; invalid rows are excluded and returned as `rowIndex`, `errorCode`, and safe `reason` values. Duplicate employee codes within the batch invalidate every conflicting row. The response returns `importBatchId`, `partnerCompanyId`, effective month, batch status, valid/invalid counts, and the safe rejection list. It does not echo employee codes, identity references, salaries, or employee limits in rejection details.
+
+The `requestId` is the durable import operation identity. Exact replay returns the original response. Reuse with different semantic content returns `409 IDEMPOTENCY_KEY_REUSED`. Multiple completed batches for one company and effective month remain legal; Partner selects the latest completed batch through its existing authority rules. Import does not refresh Customer–Partner Employee links or mutate lending state.
+
+### 3.15 Employee verification
 
 ```json
 {
