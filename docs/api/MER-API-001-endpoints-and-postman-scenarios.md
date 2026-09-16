@@ -141,6 +141,9 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/auth/logout` | Public at the Bearer layer; credentials optional | Invalidate the presented current-session credentials and clear the refresh cookie. |
 | GET | `/api/v1/loan-products` | Public | List active loan products. |
 | GET | `/api/v1/loan-products/{productCode}` | Public | Return one active loan product by code. |
+| GET | `/api/v1/admin/loan-products` | `loan:product:manage` | List active and inactive Loan Products through the protected administration projection. |
+| PUT | `/api/v1/admin/loan-products/{productCode}/limits` | `loan:product:manage` | Replace the minimum and maximum amount for future product validation. |
+| PUT | `/api/v1/admin/loan-products/{productCode}/activation` | `loan:product:manage` | Replace the product activation state for future discovery and submission. |
 | GET | `/api/v1/customers/me` | `customer:profile:read:own` | Return the authenticated Customer’s safe profile-readiness view. |
 | PUT | `/api/v1/customers/me/profile` | `customer:profile:write:own` | Create or update the authenticated Customer profile. |
 | GET | `/api/v1/customers/me/bank-accounts` | `customer:bank-account:read:own` | List masked owned bank accounts. |
@@ -419,7 +422,42 @@ Pricing, repayment, validity, and returned terms come from the active executable
 
 An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A recognized code with no active product returns `404 PRODUCT_NOT_FOUND`.
 
-### 3.10 Customer profile
+### 3.10 Protected Loan Product administration
+
+```text
+GET /api/v1/admin/loan-products
+PUT /api/v1/admin/loan-products/{productCode}/limits
+PUT /api/v1/admin/loan-products/{productCode}/activation
+```
+
+All three operations require exact `loan:product:manage`. They use the protected `/api/v1/admin/loan-products` namespace because `/api/v1/loan-products` and its descendants remain public catalogue routes.
+
+The list returns every persisted Loan Product, including inactive products, in deterministic product-code order. The purpose-specific response contains only `productCode`, `productType`, `name`, `description`, `active`, `minAmount`, and `maxAmount`. It does not depend on an active pricing or document policy and does not expose policy persistence identity.
+
+The limits request replaces only the two supported amount facts:
+
+```json
+{
+  "minAmount": 1000000.00,
+  "maxAmount": 50000000.00
+}
+```
+
+Both values are required, nonnegative, and constrained to the `NUMERIC(19,2)` representation. `maxAmount` must be greater than or equal to `minAmount`. Transport shape, precision, and scale violations return `400 VALIDATION_FAILED`; a backend-owned invalid range returns `422 INVALID_PRODUCT_LIMITS`.
+
+The activation request contains an explicit non-null target state:
+
+```json
+{
+  "active": false
+}
+```
+
+Deactivation removes the product from the public catalogue and preserves the existing inactive-product submission and Salary Advance readiness behavior. Neither command changes existing applications, offers, contracts, LoanAccounts, schedules, repayments, or Salary Advance exposure.
+
+An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A supported code whose product row is missing returns `404 PRODUCT_NOT_FOUND`. Each command locks the product row before applying the target state. Repeating identical limits or activation returns the current projection without another save, timestamp change, or audit event. The commands do not use a request UUID. A client must not automatically retry after an unknown transport result; it refreshes the protected list and may explicitly submit the same target state again.
+
+### 3.11 Customer profile
 
 ```json
 {
@@ -436,7 +474,7 @@ An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A recognized code with no 
 
 The safe Customer response contains `customerId`, `customerNumber`, Customer `status`, `verificationStatus`, `profileCompletionStatus`, `primaryActiveBankAccountPresent`, and the profile fields shown above except `identityReference`. Duplicate normalized identity evidence owned by another Customer returns `409 IDENTITY_REFERENCE_ALREADY_IN_USE` without echoing the submitted value.
 
-### 3.11 Customer bank accounts
+### 3.12 Customer bank accounts
 
 ```json
 {
@@ -449,7 +487,7 @@ The safe Customer response contains `customerId`, `customerNumber`, Customer `st
 
 The account number is normalized by removing spaces and hyphens and must contain at least six normalized characters. List, add, make-primary, and deactivate responses contain the account ID, bank code/name, account-holder name, masked account number, last four characters, status, primary flag, and lifecycle timestamps. They never return the full account number, ciphertext, fingerprint, or protection metadata.
 
-### 3.12 Customer Partner verification options
+### 3.13 Customer Partner verification options
 
 ```text
 GET /api/v1/partner-companies/verification-options
@@ -457,11 +495,11 @@ GET /api/v1/partner-companies/verification-options
 
 This authenticated Customer read requires `partner:employee:verify:own`. It returns active Partner Companies in deterministic company-code order with only `partnerCompanyId`, `companyCode`, and `name`. It excludes the Salary Advance policy limit, Partner Employees, salary and eligibility evidence, and import-batch facts. The selector does not itself verify employment or state that the Customer is eligible.
 
-### 3.13 Partner staff reads
+### 3.14 Partner staff reads
 
 The Partner Company, employee, and import-batch reads require `partner:read`. Partner Company responses include the configured Salary Advance policy limit. Partner Employee responses include employee code, identity reference, salary amount, Salary Advance limit, employment status, active state, company identity, and import-batch identity. These are restricted Staff contracts and must not be reused as Customer response shapes. Import-batch responses contain company identity, effective month, status, and valid/invalid row counts.
 
-### 3.14 Partner administration commands
+### 3.15 Partner administration commands
 
 Partner administration commands require exact `partner:manage`. Company creation accepts `companyCode`, `name`, one of `ACTIVE`, `INACTIVE`, or `SUSPENDED`, and a nonnegative `salaryAdvancePolicyLimit`. Company code is a stable unique identifier. The update contract accepts only `name` and `salaryAdvancePolicyLimit`; status changes use the distinct `{ "status": "..." }` command. A same-status command returns the unchanged company without another audit effect.
 

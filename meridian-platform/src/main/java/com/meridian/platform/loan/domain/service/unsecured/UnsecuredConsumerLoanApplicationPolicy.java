@@ -12,8 +12,6 @@ import java.util.Objects;
 public class UnsecuredConsumerLoanApplicationPolicy {
 
     private static final BigDecimal ZERO = BigDecimal.ZERO;
-    private static final BigDecimal MINIMUM_AMOUNT = new BigDecimal("2000000");
-    private static final BigDecimal MAXIMUM_AMOUNT = new BigDecimal("50000000");
 
     public void validateProduct(LoanProduct loanProduct) {
         Objects.requireNonNull(loanProduct, "loanProduct must not be null");
@@ -32,11 +30,12 @@ public class UnsecuredConsumerLoanApplicationPolicy {
         }
     }
 
-    public void validateRequestedAmount(BigDecimal requestedAmount) {
+    public void validateRequestedAmount(LoanProduct loanProduct, BigDecimal requestedAmount) {
+        Objects.requireNonNull(loanProduct, "loanProduct must not be null");
         Objects.requireNonNull(requestedAmount, "requestedAmount must not be null");
         if (requestedAmount.compareTo(ZERO) <= 0
-                || requestedAmount.compareTo(MINIMUM_AMOUNT) < 0
-                || requestedAmount.compareTo(MAXIMUM_AMOUNT) > 0) {
+                || requestedAmount.compareTo(loanProduct.minAmount()) < 0
+                || requestedAmount.compareTo(loanProduct.maxAmount()) > 0) {
             throw new BusinessRuleViolationException(
                     "INVALID_PRODUCT_AMOUNT",
                     "Requested amount is outside Unsecured Consumer Loan product limits."

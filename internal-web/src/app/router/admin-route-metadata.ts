@@ -31,7 +31,18 @@ export const ADMIN_PARTNER_DETAIL_ROUTE = {
   navigation: false,
 } as const satisfies AdminRouteDefinition
 
-export const ADMIN_ROUTES = [ADMIN_HOME_ROUTE, ADMIN_PARTNERS_ROUTE, ADMIN_PARTNER_DETAIL_ROUTE] as const satisfies readonly AdminRouteDefinition[]
+export const ADMIN_PRODUCTS_ROUTE = {
+  path: '/admin/products',
+  label: 'Loan Products',
+  requiredPermissions: ['loan:product:manage'],
+} as const satisfies AdminRouteDefinition
+
+export const ADMIN_ROUTES = [
+  ADMIN_HOME_ROUTE,
+  ADMIN_PARTNERS_ROUTE,
+  ADMIN_PARTNER_DETAIL_ROUTE,
+  ADMIN_PRODUCTS_ROUTE,
+] as const satisfies readonly AdminRouteDefinition[]
 
 export function canAccessAdminRoute(actor: StaffActor, route: AdminRouteDefinition): boolean {
   return hasAnyPermission(actor, route.requiredPermissions)

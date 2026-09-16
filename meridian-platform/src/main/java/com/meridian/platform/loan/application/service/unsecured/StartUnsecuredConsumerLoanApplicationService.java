@@ -111,7 +111,7 @@ public class StartUnsecuredConsumerLoanApplicationService
                         "Unsecured Consumer Loan product was not found."
                 ));
         applicationPolicy.validateProduct(product);
-        applicationPolicy.validateRequestedAmount(request.requestedAmount());
+        applicationPolicy.validateRequestedAmount(product, request.requestedAmount());
         applicationPolicy.validateRequestedTerm(request.requestedTermMonths());
 
         loanApplicationRepository.acquireCustomerProductLock(customerId, product.productCode());

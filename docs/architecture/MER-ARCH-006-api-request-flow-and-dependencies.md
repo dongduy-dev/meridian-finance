@@ -155,7 +155,9 @@ Detailed Partner Employee evidence and salary or limit fields remain restricted 
 
 ---
 
-## 5. Partner Administration Commands
+## 5. Administration Commands
+
+### 5.1 Partner Administration
 
 Partner Company create, update, and status commands require exact `partner:manage`. Partner serializes update and status mutations through a locked company read. Company code remains stable after creation, database uniqueness is the final create boundary, and a same-status request produces no duplicate save or audit effect.
 
@@ -168,6 +170,29 @@ The effective-month import command uses this transaction order:
 5. persist one completed batch, every valid employee row, the safe rejection summary, and one PII-safe business audit outcome atomically.
 
 Request replay evidence stores the UUID and a SHA-256 semantic fingerprint rather than the raw command. Multiple batches for the same company and month remain valid. The existing latest-completed selection determines authoritative eligibility evidence; neither the import command nor Internal Web refreshes Customer–Partner Employee links or changes Loan-owned state.
+
+### 5.2 Loan Product Administration
+
+Protected Loan Product discovery and commands use `/api/v1/admin/loan-products` and require exact `loan:product:manage`. The public `/api/v1/loan-products/**` matcher remains unchanged and exposes only active Customer-safe catalogue responses.
+
+```mermaid
+flowchart LR
+    Web["Internal Web"]
+    Controller["AdminLoanProductController"]
+    InPort["Loan Product administration input port"]
+    Service["Loan application service"]
+    RepoPort["LoanProductRepository"]
+    Adapter["Loan Product persistence adapter"]
+    Table["loan_products"]
+    Audit["Business audit"]
+
+    Web --> Controller --> InPort --> Service --> RepoPort --> Adapter --> Table
+    Service --> Audit
+```
+
+The administration query loads active and inactive products in deterministic product-code order without requiring an active pricing or checklist policy. The protected projection contains product identity and presentation facts plus activation and amount limits; it does not reuse the public policy assembly.
+
+An amount-limit or activation command opens one application transaction, locks the product row by stable product code, validates the target state, persists only the supported mutable facts, updates `updated_at`, and records the authenticated actor through the shared business-audit mechanism. A same-value target returns the locked current product without persistence, timestamp, or audit effects. Activation affects future catalogue discovery and submission only; historical lending evidence is not rewritten.
 
 ---
 

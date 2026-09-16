@@ -198,7 +198,10 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.PARTNER_COMPANY_CREATED
                     && action != BusinessAuditAction.PARTNER_COMPANY_UPDATED
                     && action != BusinessAuditAction.PARTNER_COMPANY_STATUS_CHANGED
-                    && action != BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_COMPLETED) {
+                    && action != BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_COMPLETED
+                    && action != BusinessAuditAction.LOAN_PRODUCT_LIMITS_UPDATED
+                    && action != BusinessAuditAction.LOAN_PRODUCT_ACTIVATED
+                    && action != BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED) {
                 insertAuditEvent(schema, action.name());
             }
         }
@@ -229,7 +232,10 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                     || action == BusinessAuditAction.PARTNER_COMPANY_CREATED
                     || action == BusinessAuditAction.PARTNER_COMPANY_UPDATED
                     || action == BusinessAuditAction.PARTNER_COMPANY_STATUS_CHANGED
-                    || action == BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_COMPLETED) {
+                    || action == BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_COMPLETED
+                    || action == BusinessAuditAction.LOAN_PRODUCT_LIMITS_UPDATED
+                    || action == BusinessAuditAction.LOAN_PRODUCT_ACTIVATED
+                    || action == BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED) {
                 continue;
             }
             insertAuditEvent(schema, action.name());

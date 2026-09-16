@@ -10,5 +10,17 @@ public interface LoanProductRepository {
 
     List<LoanProduct> findAllActive();
 
+    default List<LoanProduct> findAll() {
+        return findAllActive();
+    }
+
     Optional<LoanProduct> findByProductCode(ProductCode productCode);
+
+    default Optional<LoanProduct> findByProductCodeForUpdate(ProductCode productCode) {
+        return findByProductCode(productCode);
+    }
+
+    default LoanProduct save(LoanProduct loanProduct) {
+        throw new UnsupportedOperationException("Loan Product save is not implemented.");
+    }
 }

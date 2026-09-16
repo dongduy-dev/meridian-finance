@@ -910,6 +910,86 @@
                               ]
                  },
                  {
+                     "name": "02A Loan Product Administration - loan:product:manage",
+                     "item": [
+                                  {
+                                      "name": "GET /api/v1/admin/loan-products",
+                                      "request": {
+                                                     "method": "GET",
+                                                     "header": [],
+                                                     "url": "{{baseUrl}}/api/v1/admin/loan-products",
+                                                     "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{backOfficeAccessToken}}","type":"string"}]},
+                                                     "description": "Lists the deterministic Back-Office administration projection for all Loan Products."
+                                                 },
+                                      "response": [],
+                                      "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Products are ordered by code and expose the administration projection\", () => { const codes = json.map(item => item.productCode); pm.expect(codes).to.eql([...codes].sort()); json.forEach(item => [\"productCode\", \"productType\", \"name\", \"description\", \"active\", \"minAmount\", \"maxAmount\"].forEach(field => pm.expect(item).to.have.property(field))); });"]}}]
+                                  },
+                                  {
+                                      "name": "PUT UCL limits - safe target state",
+                                      "request": {
+                                                     "method": "PUT",
+                                                     "header": [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                     "url": "{{baseUrl}}/api/v1/admin/loan-products/UNSECURED_CONSUMER_LOAN/limits",
+                                                     "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{backOfficeAccessToken}}","type":"string"}]},
+                                                     "description": "Exercises the controlled limits command using the seeded UCL target state; repeating the same target state is a safe no-op that returns the current authoritative product with no additional save, timestamp change, or audit event.",
+                                                     "body": {"mode":"raw","raw":"{\n  \"minAmount\": 2000000.00,\n  \"maxAmount\": 50000000.00\n}","options":{"raw":{"language":"json"}}}
+                                                 },
+                                      "response": [],
+                                      "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Authoritative UCL limits are returned\", () => { pm.expect(json.productCode).to.eql(\"UNSECURED_CONSUMER_LOAN\"); pm.expect(json.minAmount).to.eql(2000000); pm.expect(json.maxAmount).to.eql(50000000); });"]}}]
+                                  },
+                                  {
+                                      "name": "PUT UCL activation - deactivate",
+                                      "request": {
+                                                     "method": "PUT",
+                                                     "header": [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                     "url": "{{baseUrl}}/api/v1/admin/loan-products/UNSECURED_CONSUMER_LOAN/activation",
+                                                     "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{backOfficeAccessToken}}","type":"string"}]},
+                                                     "description": "Deactivates UCL temporarily so the following request can prove explicit reactivation and restore the seeded state.",
+                                                     "body": {"mode":"raw","raw":"{\n  \"active\": false\n}","options":{"raw":{"language":"json"}}}
+                                                 },
+                                      "response": [],
+                                      "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"Product is inactive\", () => pm.expect(pm.response.json().active).to.eql(false));"]}}]
+                                  },
+                                  {
+                                      "name": "PUT UCL activation - restore active",
+                                      "request": {
+                                                     "method": "PUT",
+                                                     "header": [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                     "url": "{{baseUrl}}/api/v1/admin/loan-products/UNSECURED_CONSUMER_LOAN/activation",
+                                                     "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{backOfficeAccessToken}}","type":"string"}]},
+                                                     "description": "Restores UCL to its seeded active state.",
+                                                     "body": {"mode":"raw","raw":"{\n  \"active\": true\n}","options":{"raw":{"language":"json"}}}
+                                                 },
+                                      "response": [],
+                                      "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"Product is active again\", () => pm.expect(pm.response.json().active).to.eql(true));"]}}]
+                                  },
+                                  {
+                                      "name": "Reject invalid Loan Product limits",
+                                      "request": {
+                                                     "method": "PUT",
+                                                     "header": [{"key":"Content-Type","value":"application/json","type":"text"}],
+                                                     "url": "{{baseUrl}}/api/v1/admin/loan-products/UNSECURED_CONSUMER_LOAN/limits",
+                                                     "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{backOfficeAccessToken}}","type":"string"}]},
+                                                     "body": {"mode":"raw","raw":"{\n  \"minAmount\": 50000000.00,\n  \"maxAmount\": 2000000.00\n}","options":{"raw":{"language":"json"}}}
+                                                 },
+                                      "response": [],
+                                      "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 422\", () => pm.response.to.have.status(422));","pm.test(\"Stable error code\", () => pm.expect(pm.response.json().errorCode).to.eql(\"INVALID_PRODUCT_LIMITS\"));"]}}]
+                                  },
+                                  {
+                                      "name": "Reject Loan Product administration without capability",
+                                      "request": {
+                                                     "method": "GET",
+                                                     "header": [],
+                                                     "url": "{{baseUrl}}/api/v1/admin/loan-products",
+                                                     "auth": {"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},
+                                                     "description": "Proves that a Staff actor without loan:product:manage cannot read the administration projection."
+                                                 },
+                                      "response": [],
+                                      "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 403\", () => pm.response.to.have.status(403));","pm.test(\"Stable error code\", () => pm.expect(pm.response.json().errorCode).to.eql(\"ACCESS_DENIED\"));"]}}]
+                                  }
+                              ]
+                 },
+                 {
                      "name": "02 Partner Admin Commands - partner:manage",
                      "item": [
                                   {

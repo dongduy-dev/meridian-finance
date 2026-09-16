@@ -70,6 +70,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 422 | `PRODUCT_POLICY_INVALID` | Product policy invalid | Correct the product policy configuration before accepting applications |
 | 422 | `INVALID_PRODUCT_TERM` | Invalid product term | Select a term allowed by the product policy |
 | 422 | `INVALID_PRODUCT_AMOUNT` | Invalid product amount | Use an amount within the product and policy limits |
+| 422 | `INVALID_PRODUCT_LIMITS` | Loan product limits are invalid. | Supply nonnegative `NUMERIC(19,2)` limits with maximum greater than or equal to minimum |
 | 422 | `INVALID_COLLATERAL_DETAILS` | Invalid Collateral details | Supply complete Collateral facts within technical limits and use a positive whole-VND estimated value |
 | 409 | `BLOCKING_APPLICATION_EXISTS` | Blocking application exists | Wait for the existing application for this product to reach a terminal status |
 | 409 | `OUTSTANDING_LOAN_ACCOUNT_EXISTS` | Outstanding loan account exists | Fully repay the product-matching `ACTIVE` or `OVERDUE` LoanAccount. A zero-outstanding `SETTLED` account clears this guard for products that define it |
