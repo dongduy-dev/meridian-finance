@@ -286,7 +286,7 @@ The frontend must not implement an aggregated queue by polling every known appli
 
 ### 9.1 Decision
 
-Internal Web is one shared internal React application rooted at `internal-web/`. Staff Web occupies the `/staff/*` feature and route boundary. Back-Office Administration occupies the future `/admin/*` feature and route boundary. The two areas share only intentionally shared Internal Web foundations, and their feature internals remain separated.
+Internal Web is one shared internal React application rooted at `internal-web/`. Staff Web occupies the `/staff/*` feature and route boundary. Back-Office Administration occupies the `/admin/*` feature and route boundary defined by [MER-FE-003](MER-FE-003-back-office-administration-blueprint.md). The two areas share only intentionally shared Internal Web foundations, and their feature internals remain separated.
 
 Customer Web remains a separate application because its public/Customer trust boundary, ownership model, navigation, content exposure, and delivery character differ materially from internal operations.
 
@@ -315,7 +315,7 @@ internal-web/                         # shared Internal Web application root
     ├── app/                          # providers, router, internal shell, session
     ├── routes/
     │   ├── staff/                    # Staff Web route compositions
-    │   └── admin/                    # future Back-Office Administration boundary
+    │   └── admin/                    # Back-Office Administration boundary
     ├── features/
     │   ├── applications/
     │   ├── verification/
@@ -338,7 +338,7 @@ Rules:
 - Shared code contains technical primitives and genuinely repeated presentation, not permission-specific business policy.
 - Navigation groups are permission-aware, but direct routes remain guarded.
 - The client does not eagerly fetch all data for all visible role groups.
-- MER-FE-003 will own Back-Office Administration pages, route inventory, and delivery checkpoints when that blueprint is separately scheduled.
+- MER-FE-003 owns Back-Office Administration pages, route inventory, and delivery checkpoints.
 
 ### 9.5 Security Implications
 
@@ -736,7 +736,7 @@ The interface should feel calm, exact, and accountable:
 Desktop shell:
 
 - left navigation grouped into Work, Lending, Servicing, and Administration;
-- Back-Office Administration group appears only when future `/admin/*` routes and permissions exist;
+- Back-Office Administration appears only when executable `/admin/*` routes and exact permissions exist;
 - top bar contains current Staff identity summary, environment label when non-production, session menu, and optional global application search only after its API exists;
 - main content has a bounded readable width for forms and a wider mode for queues and side-by-side evidence.
 
@@ -1223,7 +1223,7 @@ Routes are conceptual implementation targets. “API dependency” means the rou
 | `/staff/applications/:loanApplicationId/repayments/new` | Record repayment | Executable with `repayment:update`; authoritative reads require `loan:read` |
 | `/staff/applications/:loanApplicationId/settlement` | Exact full-balance settlement | Executable with `loan:read`, `loan:settlement:approve`, and Approver role |
 | `/staff/applications/:loanApplicationId/closure` | Administrative closure | Executable with `loan:read`, `loan:account:close`, and Accounting Officer role |
-| `/admin/*` | Back-Office Administration feature boundary | Reserved for MER-FE-003; no pages defined here |
+| `/admin` | Back-Office Administration feature boundary | Capability-guarded foundation defined by MER-FE-003; child routes follow its delivery checkpoints |
 
 The current servicing APIs are application-scoped, so routes retain `loanApplicationId`. Do not pretend the path parameter is a LoanAccount ID. A future LoanAccount search may introduce a canonical account route with an explicit redirect strategy.
 

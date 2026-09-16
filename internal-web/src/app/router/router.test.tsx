@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuthResponse } from '@/features/auth/api/auth-api'
@@ -11,7 +12,7 @@ import { createTestRouter } from './router'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
   const actual = await vi.importActual<typeof import('@/features/auth/api/auth-api')>('@/features/auth/api/auth-api')
-  return { ...actual, refresh: vi.fn(), logout: vi.fn() }
+  return { ...actual, login: vi.fn(), refresh: vi.fn(), logout: vi.fn() }
 })
 
 const staff = (permissions: string[] = ['loan:read'], roles: string[] = ['LOAN_OFFICER']): AuthResponse => ({
@@ -25,6 +26,8 @@ const staff = (permissions: string[] = ['loan:read'], roles: string[] = ['LOAN_O
   roles,
   permissions,
 })
+
+const admin = (permissions: string[] = ['partner:read'], roles: string[] = ['BACK_OFFICE_ADMIN']): AuthResponse => staff(permissions, roles)
 
 function renderRoute(path: string) {
   const router = createTestRouter([path])
@@ -48,9 +51,43 @@ describe('internal router access contract', () => {
     await waitFor(() => expect(heading).toHaveFocus())
   })
 
+  it('redirects an anonymous direct /admin visit to login and preserves the destination safely', async () => {
+    vi.mocked(authApi.refresh).mockRejectedValue(new ApiError(401, 'INVALID_REFRESH_TOKEN', 'required', '/auth/refresh', 'now'))
+    const router = renderRoute('/admin')
+    await screen.findByRole('heading', { name: 'Staff sign in', level: 1 })
+    expect(router.state.location.pathname).toBe('/login')
+    expect(router.state.location.state).toEqual({ from: '/admin' })
+  })
+
+  it('returns an authorized admin login to the preserved /admin destination', async () => {
+    const user = userEvent.setup()
+    vi.mocked(authApi.refresh).mockRejectedValue(new ApiError(401, 'INVALID_REFRESH_TOKEN', 'required', '/auth/refresh', 'now'))
+    vi.mocked(authApi.login).mockResolvedValue(admin())
+    const router = renderRoute('/admin')
+    await user.type(await screen.findByLabelText('Email'), 'backoffice.admin@meridian.local')
+    await user.type(screen.getByLabelText('Password'), 'password')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(await screen.findByRole('heading', { name: 'Back-Office Administration' })).toBeVisible()
+    expect(router.state.location.pathname).toBe('/admin')
+  })
+
   it('redirects authenticated Staff away from login to the permitted Staff destination', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff())
     const router = renderRoute('/login')
+    expect(await screen.findByRole('heading', { name: 'Internal operations' })).toBeVisible()
+    expect(router.state.location.pathname).toBe('/staff')
+  })
+
+  it.each(['/login', '/'])('resolves %s to /admin for an authenticated admin-only actor', async (path) => {
+    vi.mocked(authApi.refresh).mockResolvedValue(admin())
+    const router = renderRoute(path)
+    expect(await screen.findByRole('heading', { name: 'Back-Office Administration' })).toBeVisible()
+    expect(router.state.location.pathname).toBe('/admin')
+  })
+
+  it('preserves /staff as the root default for a Staff-operational actor', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff())
+    const router = renderRoute('/')
     expect(await screen.findByRole('heading', { name: 'Internal operations' })).toBeVisible()
     expect(router.state.location.pathname).toBe('/staff')
   })
@@ -61,6 +98,29 @@ describe('internal router access contract', () => {
     expect(await screen.findByRole('heading', { name: 'Internal operations' })).toBeVisible()
     expect(screen.getByRole('link', { name: 'Internal operations' })).toHaveAttribute('href', '/staff')
     expect(screen.getByText('Secure session established')).toBeVisible()
+    expect(screen.queryByRole('link', { name: 'Back-Office Administration' })).not.toBeInTheDocument()
+  })
+
+  it('renders the administration foundation without Staff navigation or administration data requests', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.mocked(authApi.refresh).mockResolvedValue(admin())
+    renderRoute('/admin')
+    expect(await screen.findByRole('heading', { name: 'Back-Office Administration' })).toBeVisible()
+    expect(screen.getByRole('navigation', { name: 'Administration navigation' })).toBeVisible()
+    expect(screen.queryByRole('navigation', { name: 'Staff navigation' })).not.toBeInTheDocument()
+    expect(screen.getByText('Administrative session established')).toBeVisible()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('shows both authorized areas without creating a persona switcher', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(admin(['loan:read', 'partner:read'], ['LOAN_OFFICER', 'BACK_OFFICE_ADMIN']))
+    renderRoute('/admin')
+    expect(await screen.findByRole('heading', { name: 'Back-Office Administration' })).toBeVisible()
+    expect(screen.getByRole('navigation', { name: 'Internal areas' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Staff Operations' })).toHaveAttribute('href', '/staff')
+    expect(screen.getByRole('link', { name: 'Back-Office Administration' })).toHaveAttribute('href', '/admin')
+    expect(screen.getByRole('navigation', { name: 'Administration navigation' })).toBeVisible()
   })
 
   it('shows no operational access, no data, and no operational navigation for unsupported Staff', async () => {
@@ -69,7 +129,31 @@ describe('internal router access contract', () => {
     expect(await screen.findByRole('heading', { name: 'No operational access' })).toBeVisible()
     expect(screen.queryByRole('navigation', { name: 'Staff navigation' })).not.toBeInTheDocument()
     expect(screen.queryByText('Secure session established')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Go to Back-Office Administration' })).toHaveAttribute('href', '/admin')
     expect(screen.getAllByRole('button', { name: 'Sign out' }).length).toBeGreaterThan(0)
+  })
+
+  it('shows a safe administrative no-access state to a Staff-only actor without loading hidden data', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.mocked(authApi.refresh).mockResolvedValue(staff())
+    const router = renderRoute('/admin')
+    expect(await screen.findByRole('heading', { name: 'No administrative access' })).toBeVisible()
+    expect(router.state.location.pathname).toBe('/admin')
+    expect(screen.getByText(/No Partner, Product, User, configuration, or audit data has been loaded/)).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Return to Staff Operations' })).toHaveAttribute('href', '/staff')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [['partner:read:all'], []],
+    [['partner:*'], []],
+    [[], ['BACK_OFFICE_ADMIN']],
+  ] as const)('does not bypass the administration guard through permissions %j or roles %j', async (permissions, roles) => {
+    vi.mocked(authApi.refresh).mockResolvedValue(admin([...permissions], [...roles]))
+    renderRoute('/admin')
+    expect(await screen.findByRole('heading', { name: 'No administrative access' })).toBeVisible()
+    expect(screen.queryByRole('navigation', { name: 'Administration navigation' })).not.toBeInTheDocument()
   })
 
   it('does not grant navigation or direct-route access through a permission prefix', async () => {
@@ -203,10 +287,16 @@ describe('internal router access contract', () => {
     expect(router.state.location.pathname).toBe('/login')
   })
 
-  it.each(['/admin/users', '/not-a-route'])('renders the safe unavailable state for %s', async (path) => {
-    vi.mocked(authApi.refresh).mockResolvedValue(staff())
-    renderRoute(path)
+  it('renders the normal not-found state for an authorized admin visiting an unimplemented Admin child', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(admin())
+    renderRoute('/admin/users')
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeVisible()
     expect(screen.queryByText(/Admin workspace|User administration/)).not.toBeInTheDocument()
+  })
+
+  it('renders the safe unavailable state for an unrelated unknown route', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff())
+    renderRoute('/not-a-route')
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeVisible()
   })
 })

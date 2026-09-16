@@ -1,8 +1,8 @@
 import { lazy, Suspense, type ReactNode } from 'react'
-import { createBrowserRouter, createMemoryRouter, Navigate, Outlet, RouterProvider, type RouteObject } from 'react-router-dom'
+import { createBrowserRouter, createMemoryRouter, Outlet, RouterProvider, type RouteObject } from 'react-router-dom'
 
-import { OperationsShell } from '@/components/layout/OperationsShell'
-import { LoginRoute, ProtectedStaffRoute, StaffCapabilityRoute } from '@/routes/guards'
+import { InternalShell } from '@/components/layout/InternalShell'
+import { AdminCapabilityRoute, InternalHomeRoute, LoginRoute, ProtectedInternalRoute, StaffCapabilityRoute } from '@/routes/guards'
 import { RouteErrorPage } from '@/routes/RouteErrorPage'
 import { RouteFocus } from '@/routes/RouteFocus'
 import {
@@ -29,8 +29,10 @@ import {
   STAFF_CLOSURE_QUEUE_ROUTE,
   STAFF_CLOSURE_CASE_ROUTE,
 } from './staff-route-metadata'
+import { ADMIN_HOME_ROUTE } from './admin-route-metadata'
 
 const LoginPage = lazy(() => import('@/features/auth/components/LoginPage').then((module) => ({ default: module.LoginPage })))
+const AdminLandingPage = lazy(() => import('@/features/admin/pages/AdminLandingPage').then((module) => ({ default: module.AdminLandingPage })))
 const StaffLandingPage = lazy(() => import('@/features/staff/pages/StaffLandingPage').then((module) => ({ default: module.StaffLandingPage })))
 const ApplicationSearchPage = lazy(() => import('@/features/staff-applications/pages/ApplicationSearchPage').then((module) => ({ default: module.ApplicationSearchPage })))
 const ApplicationCasePage = lazy(() => import('@/features/staff-applications/pages/ApplicationCasePage').then((module) => ({ default: module.ApplicationCasePage })))
@@ -61,9 +63,10 @@ function Deferred({ children }: { children: ReactNode }) {
 }
 
 export const routes: RouteObject[] = [{ element: <RouteFrame />, errorElement: <RouteErrorPage />, children: [
-  { path: '/', element: <Navigate to={STAFF_HOME_ROUTE.path} replace /> },
   { element: <LoginRoute />, children: [{ path: '/login', element: <Deferred><LoginPage /></Deferred> }] },
-  { element: <ProtectedStaffRoute />, children: [{ element: <OperationsShell />, children: [
+  { element: <ProtectedInternalRoute />, children: [
+    { path: '/', element: <InternalHomeRoute /> },
+    { element: <InternalShell area="staff" />, children: [
     { element: <StaffCapabilityRoute route={STAFF_HOME_ROUTE} />, children: [
       { path: STAFF_HOME_ROUTE.path, element: <Deferred><StaffLandingPage /></Deferred> },
     ] },
@@ -130,8 +133,14 @@ export const routes: RouteObject[] = [{ element: <RouteFrame />, errorElement: <
     { element: <StaffCapabilityRoute route={STAFF_CLOSURE_CASE_ROUTE} />, children: [
       { path: STAFF_CLOSURE_CASE_ROUTE.path, element: <Deferred><StaffClosurePage /></Deferred> },
     ] },
-  ] }] },
-  { path: '/admin/*', element: <Deferred><NotFoundPage /></Deferred> },
+    ] },
+    { element: <AdminCapabilityRoute route={ADMIN_HOME_ROUTE} />, children: [
+      { element: <InternalShell area="admin" />, children: [
+        { path: ADMIN_HOME_ROUTE.path, element: <Deferred><AdminLandingPage /></Deferred> },
+      ] },
+      { path: '/admin/*', element: <Deferred><NotFoundPage /></Deferred> },
+    ] },
+  ] },
   { path: '*', element: <Deferred><NotFoundPage /></Deferred> },
 ] }]
 

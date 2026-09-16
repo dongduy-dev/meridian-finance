@@ -5,6 +5,7 @@ import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RequestCorrelation } from '@/components/common/RequestCorrelation'
+import { resolvePostLoginDestination } from '@/app/router/internal-destination'
 import { ApiError } from '@/lib/api'
 import { AuthCard } from './AuthCard'
 import { useAuth } from '../model/auth-context'
@@ -38,9 +39,9 @@ export function LoginPage() {
     setFeedback(undefined)
     setRequestId(undefined)
     try {
-      await manager.login(email, password)
+      const actor = await manager.login(email, password)
       const requested = (location.state as { from?: string } | null)?.from
-      navigate(requested?.startsWith('/staff') ? requested : '/staff', { replace: true })
+      navigate(resolvePostLoginDestination(actor, requested), { replace: true })
     } catch (error) {
       if (error instanceof InternalAccessRequiredError) setFeedback(error.message)
       else if (error instanceof ApiError && error.status === 429) {

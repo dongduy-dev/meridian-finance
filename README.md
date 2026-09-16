@@ -284,7 +284,7 @@ Frontend verification commands are `npm run lint`, `npm run typecheck`, `npm tes
 
 `internal-web/` contains Meridian's shared Internal Web application. Staff FE-CP1 through Staff FE-CP9 provide Staff authentication, permission-scoped discovery and case evidence, document and correction operations, product verification and review, recommendation and independent decision, Accounting-owned contract readiness and disbursement, LoanAccount repayment servicing, Approver-owned full-balance settlement, and Accounting-owned administrative closure. The financial operations preserve exact-request recovery, keep protected references out of browser persistence, and reconcile confirmed outcomes through authoritative Loan reads. The Phase 3 Staff Web lending-operations item is complete.
 
-Future Back-Office Administration will use the same application, primarily under `/admin/*`, and remains incomplete. [MER-FE-002](docs/frontend/MER-FE-002-staff-web-blueprint.md) governs Staff Web architecture and delivery; it does not define future Back-Office Administration behavior.
+Back-Office FE-CP1 provides the exact-capability-gated `/admin` foundation, shared Internal Web chrome, cross-area navigation, and safe no-access behavior. Partner, Loan Product, and internal-user administration remain scheduled for later checkpoints, so the Phase 3 Back-Office item remains incomplete. [MER-FE-002](docs/frontend/MER-FE-002-staff-web-blueprint.md) governs Staff Web; [MER-FE-003](docs/frontend/MER-FE-003-back-office-administration-blueprint.md) governs Back-Office Administration.
 
 ```bash
 cd internal-web
@@ -378,6 +378,7 @@ Stop the stack with `docker compose down`. This preserves the named PostgreSQL a
 
 - [Customer Web frontend blueprint](docs/frontend/MER-FE-001-customer-web-blueprint.md)
 - [Staff Web frontend blueprint](docs/frontend/MER-FE-002-staff-web-blueprint.md)
+- [Back-Office Administration frontend blueprint](docs/frontend/MER-FE-003-back-office-administration-blueprint.md)
 
 ### Project
 
