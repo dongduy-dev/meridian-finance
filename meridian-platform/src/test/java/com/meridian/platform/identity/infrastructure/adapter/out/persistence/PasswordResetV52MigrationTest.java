@@ -116,7 +116,7 @@ class PasswordResetV52MigrationTest {
         assertTrue(migration.contains("uq_password_reset_tokens_active_user"));
         assertTrue(migration.contains("chk_password_reset_tokens_digest_sha256_hex"));
         assertTrue(migration.contains("chk_password_reset_tokens_single_terminal_state"));
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V52"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V53"));
         assertTrue(snapshot.contains("CREATE TABLE password_reset_tokens"));
         assertTrue(snapshot.contains("uq_password_reset_tokens_active_user"));
     }

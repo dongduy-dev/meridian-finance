@@ -4,7 +4,11 @@ import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportB
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatch;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatchStatus;
 import org.springframework.stereotype.Repository;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,9 +17,17 @@ import java.util.UUID;
 public class PartnerEmployeeImportBatchRepositoryAdapter implements PartnerEmployeeImportBatchRepository {
 
     private final JpaPartnerEmployeeImportBatchRepository jpaRepository;
+    private final ObjectMapper objectMapper;
+    private final Clock clock;
 
-    public PartnerEmployeeImportBatchRepositoryAdapter(JpaPartnerEmployeeImportBatchRepository jpaRepository) {
+    public PartnerEmployeeImportBatchRepositoryAdapter(
+            JpaPartnerEmployeeImportBatchRepository jpaRepository,
+            ObjectMapper objectMapper,
+            Clock clock
+    ) {
         this.jpaRepository = jpaRepository;
+        this.objectMapper = objectMapper;
+        this.clock = clock;
     }
 
     @Override
@@ -49,14 +61,48 @@ public class PartnerEmployeeImportBatchRepositoryAdapter implements PartnerEmplo
                 .map(this::toDomain);
     }
 
+    @Override
+    public void acquireRequestLock(UUID requestId) {
+        jpaRepository.acquireRequestLock("partner-employee-import:" + requestId);
+    }
+
+    @Override
+    public Optional<PartnerEmployeeImportBatch> findByRequestId(UUID requestId) {
+        return jpaRepository.findByRequestId(requestId).map(this::toDomain);
+    }
+
+    @Override
+    public PartnerEmployeeImportBatch save(PartnerEmployeeImportBatch importBatch) {
+        try {
+            String rejectionSummary = objectMapper.writeValueAsString(importBatch.rejections());
+            return toDomain(jpaRepository.saveAndFlush(new PartnerEmployeeImportBatchJpaEntity(
+                    importBatch.id(), importBatch.partnerCompanyId(), importBatch.effectiveMonth(),
+                    importBatch.status(), importBatch.validRowCount(), importBatch.invalidRowCount(),
+                    LocalDateTime.now(clock), importBatch.requestId(), importBatch.requestFingerprint(),
+                    rejectionSummary
+            )));
+        } catch (JacksonException exception) {
+            throw new IllegalStateException("Partner import result could not be persisted.", exception);
+        }
+    }
+
     private PartnerEmployeeImportBatch toDomain(PartnerEmployeeImportBatchJpaEntity entity) {
-        return new PartnerEmployeeImportBatch(
-                entity.getId(),
-                entity.getPartnerCompanyId(),
-                entity.getEffectiveMonth(),
-                entity.getStatus(),
-                entity.getValidRowCount(),
-                entity.getInvalidRowCount()
-        );
+        try {
+            var rejectionType = objectMapper.getTypeFactory().constructCollectionType(
+                    List.class,
+                    com.meridian.platform.partner.domain.model.PartnerEmployeeImportRejection.class
+            );
+            List<com.meridian.platform.partner.domain.model.PartnerEmployeeImportRejection> rejections =
+                    entity.getRejectionSummary() == null
+                            ? List.of()
+                            : objectMapper.readValue(entity.getRejectionSummary(), rejectionType);
+            return new PartnerEmployeeImportBatch(
+                    entity.getId(), entity.getPartnerCompanyId(), entity.getEffectiveMonth(),
+                    entity.getStatus(), entity.getValidRowCount(), entity.getInvalidRowCount(),
+                    entity.getRequestId(), entity.getRequestFingerprint(), rejections
+            );
+        } catch (JacksonException exception) {
+            throw new IllegalStateException("Partner import result could not be read.", exception);
+        }
     }
 }

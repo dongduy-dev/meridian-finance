@@ -51,6 +51,8 @@ import com.meridian.platform.partner.application.port.in.QueryPartnerCompanyUseC
 import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeImportBatchUseCase;
 import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeUseCase;
 import com.meridian.platform.partner.application.port.in.VerifyPartnerEmployeeUseCase;
+import com.meridian.platform.partner.application.port.in.ManagePartnerCompanyUseCase;
+import com.meridian.platform.partner.application.port.in.ImportPartnerEmployeesUseCase;
 import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerCompanyController;
 import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerEmployeeController;
 import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerEmployeeImportBatchController;
@@ -212,10 +214,16 @@ class SecurityConfigTest {
     private QueryPartnerCompanyUseCase queryPartnerCompanyUseCase;
 
     @MockitoBean
+    private ManagePartnerCompanyUseCase managePartnerCompanyUseCase;
+
+    @MockitoBean
     private QueryPartnerEmployeeUseCase queryPartnerEmployeeUseCase;
 
     @MockitoBean
     private QueryPartnerEmployeeImportBatchUseCase queryPartnerEmployeeImportBatchUseCase;
+
+    @MockitoBean
+    private ImportPartnerEmployeesUseCase importPartnerEmployeesUseCase;
 
     @MockitoBean
     private VerifyPartnerEmployeeUseCase verifyPartnerEmployeeUseCase;

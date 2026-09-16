@@ -2,6 +2,8 @@ package com.meridian.platform.partner.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatchStatus;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -33,7 +35,41 @@ public class PartnerEmployeeImportBatchJpaEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "request_id", unique = true)
+    private UUID requestId;
+
+    @Column(name = "request_fingerprint", length = 64)
+    private String requestFingerprint;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "rejection_summary", nullable = false, columnDefinition = "jsonb")
+    private String rejectionSummary;
+
     protected PartnerEmployeeImportBatchJpaEntity() {
+    }
+
+    PartnerEmployeeImportBatchJpaEntity(
+            UUID id,
+            UUID partnerCompanyId,
+            String effectiveMonth,
+            PartnerEmployeeImportBatchStatus status,
+            int validRowCount,
+            int invalidRowCount,
+            LocalDateTime createdAt,
+            UUID requestId,
+            String requestFingerprint,
+            String rejectionSummary
+    ) {
+        this.id = id;
+        this.partnerCompanyId = partnerCompanyId;
+        this.effectiveMonth = effectiveMonth;
+        this.status = status;
+        this.validRowCount = validRowCount;
+        this.invalidRowCount = invalidRowCount;
+        this.createdAt = createdAt;
+        this.requestId = requestId;
+        this.requestFingerprint = requestFingerprint;
+        this.rejectionSummary = rejectionSummary;
     }
 
     public UUID getId() {
@@ -62,5 +98,17 @@ public class PartnerEmployeeImportBatchJpaEntity {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public UUID getRequestId() {
+        return requestId;
+    }
+
+    public String getRequestFingerprint() {
+        return requestFingerprint;
+    }
+
+    public String getRejectionSummary() {
+        return rejectionSummary;
     }
 }
