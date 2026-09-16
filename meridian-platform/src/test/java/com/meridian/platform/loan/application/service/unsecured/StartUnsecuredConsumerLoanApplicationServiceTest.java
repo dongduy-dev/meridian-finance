@@ -197,6 +197,25 @@ class StartUnsecuredConsumerLoanApplicationServiceTest {
     }
 
     @Test
+    void usesLoadedLoanProductLimitsForUclAmountValidation() {
+        when(readiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(snapshot(true, true, true)));
+        LoanProduct configured = new LoanProduct(
+                PRODUCT.id(), PRODUCT.productCode(), PRODUCT.productType(), PRODUCT.name(), PRODUCT.description(),
+                true, new BigDecimal("750000"), new BigDecimal("1250000")
+        );
+        when(products.findByProductCode(ProductCode.UNSECURED_CONSUMER_LOAN))
+                .thenReturn(Optional.of(configured));
+
+        assertEquals("INVALID_PRODUCT_AMOUNT", assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.startUnsecuredConsumerLoanApplication(
+                        new UnsecuredConsumerLoanApplicationRequest(new BigDecimal("1250001"), 6)
+                )
+        ).getErrorCode());
+        verify(applications, never()).acquireCustomerProductLock(any(), any());
+    }
+
+    @Test
     void blocksOutstandingUclAndFailsClosedForInconsistentAccountEvidence() {
         arrangeReadyCustomerAndProduct();
         when(outstandingLoanAccounts.inspect(CUSTOMER_ID, ProductCode.UNSECURED_CONSUMER_LOAN))

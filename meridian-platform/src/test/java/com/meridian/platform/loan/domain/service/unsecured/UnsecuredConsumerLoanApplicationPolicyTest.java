@@ -22,8 +22,8 @@ class UnsecuredConsumerLoanApplicationPolicyTest {
 
     @Test
     void acceptsMinimumAndMaximumWholeVndAmounts() {
-        assertDoesNotThrow(() -> policy.validateRequestedAmount(new BigDecimal("2000000")));
-        assertDoesNotThrow(() -> policy.validateRequestedAmount(new BigDecimal("50000000.00")));
+        assertDoesNotThrow(() -> policy.validateRequestedAmount(product(true), new BigDecimal("2000000")));
+        assertDoesNotThrow(() -> policy.validateRequestedAmount(product(true), new BigDecimal("50000000.00")));
     }
 
     @ParameterizedTest
@@ -31,10 +31,35 @@ class UnsecuredConsumerLoanApplicationPolicyTest {
     void rejectsAmountsOutsideBoundsOrWithFractionalVnd(String amount) {
         BusinessRuleViolationException exception = assertThrows(
                 BusinessRuleViolationException.class,
-                () -> policy.validateRequestedAmount(new BigDecimal(amount))
+                () -> policy.validateRequestedAmount(product(true), new BigDecimal(amount))
         );
 
         assertEquals("INVALID_PRODUCT_AMOUNT", exception.getErrorCode());
+    }
+
+    @Test
+    void usesSelectedLoanProductLimitsInsteadOfAProductSpecificConstant() {
+        LoanProduct configured = new LoanProduct(
+                UUID.randomUUID(),
+                ProductCode.UNSECURED_CONSUMER_LOAN,
+                ProductType.UNSECURED,
+                "Unsecured Consumer Loan",
+                null,
+                true,
+                new BigDecimal("750000"),
+                new BigDecimal("1250000")
+        );
+
+        assertDoesNotThrow(() -> policy.validateRequestedAmount(configured, new BigDecimal("750000")));
+        assertDoesNotThrow(() -> policy.validateRequestedAmount(configured, new BigDecimal("1250000")));
+        assertEquals("INVALID_PRODUCT_AMOUNT", assertThrows(
+                BusinessRuleViolationException.class,
+                () -> policy.validateRequestedAmount(configured, new BigDecimal("749999"))
+        ).getErrorCode());
+        assertEquals("INVALID_PRODUCT_AMOUNT", assertThrows(
+                BusinessRuleViolationException.class,
+                () -> policy.validateRequestedAmount(configured, new BigDecimal("1250001"))
+        ).getErrorCode());
     }
 
     @ParameterizedTest

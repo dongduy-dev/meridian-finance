@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -37,7 +38,20 @@ public class LoanProductJpaEntity {
     @Column(name = "max_amount", nullable = false)
     private BigDecimal maxAmount;
 
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
     protected LoanProductJpaEntity() {
+    }
+
+    void update(boolean active, BigDecimal minAmount, BigDecimal maxAmount, LocalDateTime updatedAt) {
+        this.active = active;
+        this.minAmount = minAmount;
+        this.maxAmount = maxAmount;
+        this.updatedAt = updatedAt;
     }
 
     public UUID getId() {
@@ -70,5 +84,13 @@ public class LoanProductJpaEntity {
 
     public BigDecimal getMaxAmount() {
         return maxAmount;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
     }
 }

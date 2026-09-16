@@ -460,7 +460,7 @@ public class ResubmitCustomerCorrectionService
             }
             case UNSECURED_CONSUMER_LOAN -> {
                 uclPolicy.validateProduct(product);
-                uclPolicy.validateRequestedAmount(application.requestedAmount());
+                uclPolicy.validateRequestedAmount(product, application.requestedAmount());
                 uclPolicy.validateRequestedTerm(application.requestedTermMonths());
             }
             case COLLATERAL_LOAN -> {
