@@ -141,7 +141,7 @@ Session restoration and refresh replace the actor's current permission set. A pe
 
 ## 5. Route Ownership
 
-### 5.1 Planned Administration Routes
+### 5.1 Administration Routes
 
 | Route | Purpose | Delivery |
 |---|---|---|
@@ -151,7 +151,7 @@ Session restoration and refresh replace the actor's current permission set. A pe
 | `/admin/products` | Loan Product administration | Back-Office FE-CP3 |
 | `/admin/users` | Internal-user administration and predefined role assignment | Back-Office FE-CP4 |
 
-`/admin`, `/admin/partners`, and `/admin/partners/:partnerCompanyId` are executable. Product, User, and other unimplemented child paths return the normal safe not-found view. The client does not render placeholder pages, fake records, disabled forms, or speculative API contracts for later checkpoints.
+`/admin`, `/admin/partners`, `/admin/partners/:partnerCompanyId`, and `/admin/products` are executable. User and other unimplemented child paths return the normal safe not-found view. The client does not render placeholder pages, fake records, disabled forms, or speculative API contracts for later checkpoints.
 
 ### 5.2 Deferred Routes
 
@@ -247,7 +247,7 @@ An authenticated Back-Office actor who enters `/staff` continues to receive the 
 
 The browser must not calculate Partner eligibility, choose the authoritative employee import batch, reinterpret Loan Product policy, derive user authority from role labels, or treat local state as an administrative record.
 
-Administrative pages must not place raw identity references, employee codes, salary, bank-account data, restricted notes, tokens, or command payloads in URLs, browser persistence, logs, or general telemetry. A later checkpoint must define the minimum authorized projection and cache boundary for every sensitive response it consumes.
+Administrative pages must not place raw identity references, employee codes, salary, bank-account data, restricted notes, tokens, or command payloads in URLs, browser persistence, logs, or general telemetry. Each executable feature defines the minimum authorized projection and cache boundary for every sensitive response it consumes.
 
 ---
 
@@ -282,17 +282,19 @@ Create, edit, status, and import controls appear only when the actor also has ex
 
 ---
 
-## 11. Loan Product Administration Target
+## 11. Loan Product Administration
 
-Back-Office FE-CP3 provides a narrow administrative product surface. The initial editable facts are limited to backend-supported activation state, minimum amount, and maximum amount after Loan defines their domain invariants and management contract.
+Loan Product Administration provides a narrow product-owned surface under `/admin/products`. Editable facts are limited to activation state, minimum amount, and maximum amount.
 
 | Classification | Statement |
 |---|---|
 | Backend fact | `LoanProduct` owns product code, product type, name, description, active state, minimum amount, and maximum amount. |
-| Backend fact | `LoanProductDto` also returns policy presentation such as terms, pricing presentation, interest and repayment methods, evidence requirements, and eligibility notes. |
-| Backend fact | The current Loan Product HTTP controller exposes active public product reads; it is not an administrative management API. |
+| Backend fact | Public `/api/v1/loan-products` reads return active products with Customer-safe policy presentation and remain separate from administration. |
+| Backend fact | Protected `GET /api/v1/admin/loan-products` requires exact `loan:product:manage` and returns active and inactive products in backend-owned product-code order. |
+| Backend fact | Protected limit and activation `PUT` commands require exact `loan:product:manage`, lock the product row, and treat the same target state as a no-op without another audit effect. |
 | Frontend decision | Product code and product type remain stable identifiers and do not become casual edit controls. |
-| API dependency | Administrative discovery, activation changes, and min/max changes require a protected management projection and command contract. |
+| Frontend decision | Name and description remain read-only. The amount form and activation action remain visually distinct and refresh the protected administration query after confirmed success. |
+| Frontend decision | Internal Web does not optimistically apply product commands or retry them automatically after an unknown transport result. The operator refreshes authoritative state before an explicit same-target retry. |
 | Deferred decision | Returned policy presentation may be shown read-only; its presence does not make the policy administratively editable. |
 
 Back-Office Administration does not provide an arbitrary JSON editor. Pricing algorithms, interest-calculation internals, repayment algorithms, exposure rules, settlement rules, overdue rules, allocation order, document-checklist builders, and generic workflow engines remain outside FE-CP3.
