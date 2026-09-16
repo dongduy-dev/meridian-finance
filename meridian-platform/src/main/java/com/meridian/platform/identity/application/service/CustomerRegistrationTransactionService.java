@@ -74,6 +74,7 @@ public class CustomerRegistrationTransactionService {
                 Set.of("CUSTOMER"),
                 Set.of(),
                 0,
+                0,
                 null,
                 null
         );

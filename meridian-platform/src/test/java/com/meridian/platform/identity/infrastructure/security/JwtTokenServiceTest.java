@@ -14,6 +14,7 @@ import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.Set;
 import java.util.UUID;
+import java.util.OptionalLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -30,6 +31,7 @@ class JwtTokenServiceTest {
         JwtKeyProvider keyProvider = new JwtKeyProvider(generateKeyPair());
         JwtTokenService tokenService = new JwtTokenService(
                 keyProvider,
+                userId -> OptionalLong.of(0),
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
 
@@ -53,10 +55,12 @@ class JwtTokenServiceTest {
         JwtKeyProvider keyProvider = new JwtKeyProvider(generateKeyPair());
         JwtTokenService issuer = new JwtTokenService(
                 keyProvider,
+                userId -> OptionalLong.of(0),
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
         JwtTokenService parserAfterExpiry = new JwtTokenService(
                 keyProvider,
+                userId -> OptionalLong.of(0),
                 Clock.fixed(NOW.plusSeconds(3601), ZoneOffset.UTC)
         );
 
@@ -74,6 +78,7 @@ class JwtTokenServiceTest {
     void rejectsMalformedToken() {
         JwtTokenService tokenService = new JwtTokenService(
                 new JwtKeyProvider(generateKeyPair()),
+                userId -> OptionalLong.of(0),
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
 
@@ -111,6 +116,29 @@ class JwtTokenServiceTest {
     }
 
     @Test
+    void rejectsTokenWhenCurrentAuthorizationVersionHasChanged() {
+        JwtKeyProvider keyProvider = new JwtKeyProvider(generateKeyPair());
+        JwtTokenService issuer = new JwtTokenService(
+                keyProvider,
+                userId -> OptionalLong.of(0),
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+        String token = issuer.issueAccessToken(customerUser()).tokenValue();
+        JwtTokenService parser = new JwtTokenService(
+                keyProvider,
+                userId -> OptionalLong.of(1),
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+
+        JwtAuthenticationException exception = assertThrows(
+                JwtAuthenticationException.class,
+                () -> parser.parseAccessToken(token)
+        );
+
+        assertEquals("INVALID_TOKEN", exception.getErrorCode());
+    }
+
+    @Test
     void loadsBase64Pkcs8AndX509Configuration() {
         KeyPair keyPair = generateKeyPair();
         JwtKeyProvider provider = new JwtKeyProvider(
@@ -142,6 +170,7 @@ class JwtTokenServiceTest {
     private JwtTokenService tokenService(JwtKeyProvider keyProvider) {
         return new JwtTokenService(
                 keyProvider,
+                userId -> OptionalLong.of(0),
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -174,6 +203,7 @@ class JwtTokenServiceTest {
                 CUSTOMER_ID,
                 Set.of("CUSTOMER"),
                 Set.of("loan:submit", "partner:employee:verify:own"),
+                0,
                 0,
                 null,
                 Instant.EPOCH

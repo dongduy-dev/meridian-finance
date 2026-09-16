@@ -1,4 +1,4 @@
-package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
+package com.meridian.platform.identity.infrastructure.adapter.out.persistence;
 
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
@@ -23,10 +23,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "meridian.loan.offer-expiry.enabled=false",
         "meridian.document.orphan-reconciliation.enabled=false"
 })
-class LoanProductAdministrationV54MigrationTest {
+class InternalUserAdministrationV55MigrationTest {
+
     private static final String CONTEXT_SCHEMA = schemaName("context");
     private static final Path MIGRATION = Path.of(
-            "src/main/resources/db/migration/V54__add_loan_product_administration_audit.sql"
+            "src/main/resources/db/migration/V55__add_internal_user_administration.sql"
     );
     private static final Path CURRENT_SCHEMA = Path.of("../docs/database/MER-DB-CURRENT-SCHEMA.sql");
 
@@ -42,41 +43,51 @@ class LoanProductAdministrationV54MigrationTest {
     }
 
     @Test
-    void upgradesV53WithoutInvalidatingHistoricalAuditAndAcceptsNewVocabulary() {
+    void upgradesV54WithZeroVersionAndPreservesExistingRoleAndAuditData() {
         String schema = schemaName("upgrade");
         try {
-            migrateTo(schema, "53");
+            migrateTo(schema, "54");
+            int rolesBefore = count(schema, "roles");
+            int assignmentsBefore = count(schema, "role_assignments");
             UUID historicalId = UUID.randomUUID();
-            insertAudit(schema, historicalId, "PARTNER_COMPANY", "PARTNER_COMPANY_UPDATED");
+            insertAudit(schema, historicalId, "LOAN_PRODUCT", "LOAN_PRODUCT_ACTIVATED");
 
-            assertEquals(1, migrateTo(schema, "54"));
+            assertEquals(1, migrateTo(schema, "55"));
+            assertEquals(0L, jdbcTemplate.queryForObject(
+                    "SELECT authorization_version FROM " + schema + ".users LIMIT 1", Long.class
+            ));
+            assertEquals(rolesBefore, count(schema, "roles"));
+            assertEquals(assignmentsBefore, count(schema, "role_assignments"));
             assertEquals(1, jdbcTemplate.queryForObject(
                     "SELECT COUNT(*) FROM " + schema + ".audit_events WHERE id = ?",
                     Integer.class,
                     historicalId
             ));
-            insertAudit(schema, UUID.randomUUID(), "LOAN_PRODUCT", "LOAN_PRODUCT_LIMITS_UPDATED");
-            insertAudit(schema, UUID.randomUUID(), "LOAN_PRODUCT", "LOAN_PRODUCT_ACTIVATED");
-            insertAudit(schema, UUID.randomUUID(), "LOAN_PRODUCT", "LOAN_PRODUCT_DEACTIVATED");
+            insertAudit(schema, UUID.randomUUID(), "IDENTITY_USER", "IDENTITY_USER_STATUS_CHANGED");
+            insertAudit(schema, UUID.randomUUID(), "IDENTITY_USER", "IDENTITY_USER_ROLE_ASSIGNED");
+            insertAudit(schema, UUID.randomUUID(), "IDENTITY_USER", "IDENTITY_USER_ROLE_REMOVED");
 
+            assertThrows(DataIntegrityViolationException.class, () -> jdbcTemplate.update(
+                    "UPDATE " + schema + ".users SET authorization_version = -1"
+            ));
             assertThrows(DataIntegrityViolationException.class, () ->
-                    insertAudit(schema, UUID.randomUUID(), "LOAN_PRODUCT_CONFIGURATION", "LOAN_PRODUCT_RENAMED"));
+                    insertAudit(schema, UUID.randomUUID(), "IDENTITY_CONFIGURATION", "ROLE_EDITED"));
         } finally {
             jdbcTemplate.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
         }
     }
 
     @Test
-    void migrationAndSnapshotDescribeTheSameV54Vocabulary() throws IOException {
+    void migrationAndSnapshotDescribeTheSameV55State() throws IOException {
         String migration = normalized(MIGRATION);
         String snapshot = normalized(CURRENT_SCHEMA);
 
-        assertTrue(migration.contains("'LOAN_PRODUCT'"));
-        assertTrue(migration.contains("'LOAN_PRODUCT_LIMITS_UPDATED'"));
-        assertTrue(migration.contains("'LOAN_PRODUCT_ACTIVATED'"));
-        assertTrue(migration.contains("'LOAN_PRODUCT_DEACTIVATED'"));
+        assertTrue(migration.contains("authorization_version BIGINT NOT NULL DEFAULT 0"));
+        assertTrue(migration.contains("'IDENTITY_USER'"));
+        assertTrue(migration.contains("'IDENTITY_USER_ROLE_REMOVED'"));
         assertTrue(snapshot.contains("Snapshot source: migrations V1 through V55"));
-        assertTrue(snapshot.contains("'LOAN_PRODUCT_LIMITS_UPDATED'"));
+        assertTrue(snapshot.contains("authorization_version BIGINT NOT NULL DEFAULT 0"));
+        assertTrue(snapshot.contains("'IDENTITY_USER_STATUS_CHANGED'"));
     }
 
     private void insertAudit(String schema, UUID id, String entityType, String action) {
@@ -87,6 +98,10 @@ class LoanProductAdministrationV54MigrationTest {
                         + "VALUES (?, ?, 1, 'SYSTEM', NULL, ?, ?, ?, '{}'::jsonb, CURRENT_TIMESTAMP)",
                 id, UUID.randomUUID(), entityType, UUID.randomUUID(), action
         );
+    }
+
+    private int count(String schema, String table) {
+        return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + schema + "." + table, Integer.class);
     }
 
     private int migrateTo(String schema, String target) {
@@ -106,6 +121,6 @@ class LoanProductAdministrationV54MigrationTest {
     }
 
     private static String schemaName(String suffix) {
-        return "meridian_v54_" + suffix + "_" + UUID.randomUUID().toString().replace("-", "");
+        return "meridian_v55_" + suffix + "_" + UUID.randomUUID().toString().replace("-", "");
     }
 }

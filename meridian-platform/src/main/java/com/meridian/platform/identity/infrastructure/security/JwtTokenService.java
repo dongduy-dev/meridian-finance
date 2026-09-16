@@ -1,6 +1,7 @@
 package com.meridian.platform.identity.infrastructure.security;
 
 import com.meridian.platform.identity.application.port.out.IssuedAccessToken;
+import com.meridian.platform.identity.application.port.out.AuthorizationVersionRepository;
 import com.meridian.platform.identity.application.port.out.TokenIssuerPort;
 import com.meridian.platform.identity.domain.model.User;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
@@ -30,15 +31,21 @@ public class JwtTokenService implements TokenIssuerPort {
     private static final Base64.Decoder BASE64_URL_DECODER = Base64.getUrlDecoder();
 
     private final JwtKeyProvider keyProvider;
+    private final AuthorizationVersionRepository authorizationVersions;
     private final Clock clock;
 
     @Autowired
-    public JwtTokenService(JwtKeyProvider keyProvider) {
-        this(keyProvider, Clock.systemUTC());
+    public JwtTokenService(JwtKeyProvider keyProvider, AuthorizationVersionRepository authorizationVersions) {
+        this(keyProvider, authorizationVersions, Clock.systemUTC());
     }
 
-    JwtTokenService(JwtKeyProvider keyProvider, Clock clock) {
+    JwtTokenService(
+            JwtKeyProvider keyProvider,
+            AuthorizationVersionRepository authorizationVersions,
+            Clock clock
+    ) {
         this.keyProvider = keyProvider;
+        this.authorizationVersions = authorizationVersions;
         this.clock = clock;
     }
 
@@ -51,7 +58,18 @@ public class JwtTokenService implements TokenIssuerPort {
     }
 
     public AuthenticatedUser parseAccessToken(String token) {
-        return parseAccessTokenDetails(token).authenticatedUser();
+        ParsedAccessToken parsedAccessToken = parseAccessTokenDetails(token);
+        verifyCurrentAuthorizationVersion(parsedAccessToken);
+        return parsedAccessToken.authenticatedUser();
+    }
+
+    public void verifyCurrentAuthorizationVersion(ParsedAccessToken parsedAccessToken) {
+        long currentAuthorizationVersion = authorizationVersions
+                .findAuthorizationVersion(parsedAccessToken.authenticatedUser().userId())
+                .orElseThrow(this::invalidToken);
+        if (parsedAccessToken.authorizationVersion() != currentAuthorizationVersion) {
+            throw invalidToken();
+        }
     }
 
     public ParsedAccessToken parseAccessTokenDetails(String token) {
@@ -87,9 +105,11 @@ public class JwtTokenService implements TokenIssuerPort {
                 extractStringArray(payload, "roles"),
                 extractStringArray(payload, "permissions")
         );
+        long tokenAuthorizationVersion = extractOptionalLong(payload, "authzVersion").orElse(0L);
         return new ParsedAccessToken(
                 authenticatedUser,
                 UUID.fromString(extractString(payload, "jti")),
+                tokenAuthorizationVersion,
                 expiresAt
         );
     }
@@ -103,6 +123,7 @@ public class JwtTokenService implements TokenIssuerPort {
                 + "\"customerId\":" + nullableJsonString(user.customerId()) + ","
                 + "\"roles\":" + stringArrayJson(user.roles()) + ","
                 + "\"permissions\":" + stringArrayJson(user.permissions()) + ","
+                + "\"authzVersion\":" + user.authorizationVersion() + ","
                 + "\"jti\":\"" + UUID.randomUUID() + "\","
                 + "\"iat\":" + issuedAt.getEpochSecond() + ","
                 + "\"exp\":" + expiresAt.getEpochSecond()
@@ -188,6 +209,15 @@ public class JwtTokenService implements TokenIssuerPort {
             throw invalidToken();
         }
         return Long.parseLong(matcher.group(1));
+    }
+
+    private java.util.OptionalLong extractOptionalLong(String payload, String fieldName) {
+        Pattern pattern = Pattern.compile("\"" + fieldName + "\"\\s*:\\s*(\\d+)");
+        Matcher matcher = pattern.matcher(payload);
+        if (!matcher.find()) {
+            return java.util.OptionalLong.empty();
+        }
+        return java.util.OptionalLong.of(Long.parseLong(matcher.group(1)));
     }
 
     private Set<String> extractStringArray(String payload, String fieldName) {

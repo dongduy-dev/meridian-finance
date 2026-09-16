@@ -94,6 +94,10 @@ public record BusinessAuditPayload(Map<String, String> values) {
             return putString(key, Objects.requireNonNull(value, "value must not be null").name());
         }
 
+        public Builder put(BusinessAuditPayloadKey key, String value) {
+            return putString(key, Objects.requireNonNull(value, "value must not be null"));
+        }
+
         private Builder putString(BusinessAuditPayloadKey key, String value) {
             Objects.requireNonNull(key, "key must not be null");
             String jsonName = key.jsonName();

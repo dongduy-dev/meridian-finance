@@ -64,6 +64,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (accessTokenRevocationRepository.isRevoked(parsedAccessToken.tokenId())) {
                 throw new JwtAuthenticationException("INVALID_TOKEN", "Invalid token.");
             }
+            jwtTokenService.verifyCurrentAuthorizationVersion(parsedAccessToken);
             AuthenticatedUser authenticatedUser = parsedAccessToken.authenticatedUser();
             MeridianPrincipal principal = new MeridianPrincipal(authenticatedUser);
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
