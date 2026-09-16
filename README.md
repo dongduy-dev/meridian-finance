@@ -27,7 +27,7 @@ All three products use Meridian's common application, approval, contract, activa
 * **Review, Correction, and Approval**: Loan owns application review and correction workflows. Loan Officers record recommendations, while Approvers make independent decisions under maker-checker controls.
 * **Offers, Contracts, and Disbursement**: Loan preserves accepted lending terms through immutable offers, versioned contracts, Customer acknowledgment, readiness checks, and controlled disbursement activation.
 * **Loan Servicing**: Salary Advance, UCL, and Collateral Loan share repayment, overdue evaluation and cure, contractual payoff, payment-backed Administrative Full-Balance Settlement, and separate administrative closure.
-* **Identity and Access Control**: Public Customer registration atomically creates an incomplete Customer account and an Identity User without issuing credentials. Digest-only email verification gates login and refresh until confirmation. Enumeration-safe password reset replaces BCrypt credentials, clears temporary login protection, and revokes every refresh family without changing administrative or Customer business state. Notification sends controlled SMTP email only after committed Identity state exists. RS256 access tokens use persistent configured signing keys, opaque HttpOnly refresh tokens rotate with reuse detection, and configurable login protection and independent public-auth rate limits protect the boundary. Current-session logout revokes the presented refresh family and durably invalidates the presented access token. Permission-based RBAC, Customer ownership checks, and purpose-limited cross-context contracts protect Customer and Staff operations.
+* **Identity and Access Control**: Identity manages Customer and internal-user authentication, session lifecycle, account recovery, roles, permissions, and access boundaries. Permission-based RBAC, Customer ownership checks, and purpose-limited contracts protect Customer and internal operations.
 * **Transactional Safety**: Critical financial commands use atomic state changes, operation-specific request identities, semantic replay validation, and concurrency controls.
 * **Immutable Audit Trail**: Ordered lifecycle history and append-only, PII-safe business audit evidence preserve traceability.
 * **Sensitive Data Protection**: AES-GCM protects selected Customer-sensitive values and immutable Loan disbursement bank-account snapshots at rest, while purpose-limited access and restricted or masked responses limit PII exposure.
@@ -44,19 +44,151 @@ All three products use Meridian's common application, approval, contract, activa
 
 ---
 
+## Run Meridian Locally
+
+Meridian local development uses one backend environment and two browser applications. Docker Compose runs the Java backend together with PostgreSQL and Mailpit. Customer Web and Internal Web run separately with Vite and call the same backend API at `http://localhost:8080/api/v1`.
+
+### Repository Layout
+
+```text
+meridian-finance/
+├── meridian-platform/       # Java/Spring backend, Flyway migrations, and local Compose environment
+├── customer-web/            # React/Vite Customer Web application
+├── internal-web/            # Shared React/Vite Internal Web application
+├── docs/                    # Business, architecture, API, database, frontend, and project documentation
+└── .github/workflows/       # Backend and frontend CI workflows
+```
+
+Backend modules under `com.meridian.platform` are:
+
+```text
+shared · identity · customer · partner · loan · approval · document · audit · notification
+```
+
+`shared` is a technical shared kernel, not a bounded context. [MER-ARCH-002](docs/architecture/MER-ARCH-002-project-structure.md) defines source and package structure; [MER-ARCH-003](docs/architecture/MER-ARCH-003-dependency-rules.md) defines legal dependencies and architecture enforcement.
+
+### Local Runtime Topology
+
+```text
+Browser
+  │
+  ├── Customer Web       http://localhost:5173
+  │        │
+  │        └──────────────┐
+  │                       │
+  └── Internal Web       http://localhost:5174
+           │              │
+           └──────────────┤
+                          ▼
+                 Meridian Platform
+                 http://localhost:8080
+                          │
+                 ┌────────┴────────┐
+                 ▼                 ▼
+            PostgreSQL          Mailpit
+              :5432          SMTP :1025
+                              UI   :8025
+```
+
+Compose does not start the frontend development servers. Both use `VITE_API_BASE_URL=http://localhost:8080/api/v1`, and the backend local CORS configuration allows the Customer Web and Internal Web origins.
+
+### Backend Environment
+
+Docker is the only runtime prerequisite for the backend Compose path. Compose builds Meridian with the Maven wrapper, starts PostgreSQL 16 and Mailpit, runs Flyway during normal Spring Boot startup, and persists PostgreSQL and Document filesystem data in named volumes.
+
+```bash
+cd meridian-platform
+# Copy .env.example to .env and fill the required local secrets.
+docker compose up --build
+```
+
+Useful local endpoints:
+
+- Backend health: `http://localhost:8080/api/v1/health`
+- OpenAPI: `http://localhost:8080/v3/api-docs`
+- Swagger UI: `http://localhost:8080/swagger-ui.html`
+- Mailpit UI: `http://localhost:8025`
+
+### Customer Web
+
+`customer-web/` contains Meridian's responsive Customer Web application. [MER-FE-001](docs/frontend/MER-FE-001-customer-web-blueprint.md) defines its frontend architecture, state ownership, visual language, and accessibility baseline.
+
+```bash
+cd customer-web
+npm ci
+# Copy .env.example to .env when local configuration is needed.
+npm run dev
+```
+
+Customer Web uses `http://localhost:5173` by default and calls the local backend through `VITE_API_BASE_URL=http://localhost:8080/api/v1`.
+
+### Internal Web
+
+`internal-web/` contains Meridian's shared Internal Web application. Staff Web handles lending operations under `/staff/*`, while Back-Office Administration handles administrative capabilities under `/admin/*`. The two areas share authentication, session management, protected transport, responsive Internal Web chrome, and common UI foundations while keeping their feature routes, queries, commands, and authorization boundaries separate.
+
+[MER-FE-002](docs/frontend/MER-FE-002-staff-web-blueprint.md) defines Staff Web. [MER-FE-003](docs/frontend/MER-FE-003-back-office-administration-blueprint.md) defines Back-Office Administration.
+
+```bash
+cd internal-web
+npm ci
+# Copy .env.example to .env when local configuration is needed.
+npm run dev
+```
+
+Internal Web uses `http://localhost:5174` and calls the same local backend through `VITE_API_BASE_URL=http://localhost:8080/api/v1`.
+
+For either frontend, verification commands are `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`.
+
+<details>
+<summary>Local secret generation and runtime notes</summary>
+
+`meridian-platform/.env.example` is the local backend configuration inventory. At minimum, set `POSTGRES_PASSWORD`, the three required Base64-encoded symmetric key values, and a matching JWT private/public key pair before starting the backend.
+
+Generate each local symmetric key with one of these commands and run the selected command three times:
+
+```bash
+openssl rand -base64 32
+```
+
+```powershell
+[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+```
+
+`MERIDIAN_CUSTOMER_ENCRYPTION_KEY` and `MERIDIAN_LOAN_DISBURSEMENT_SNAPSHOT_KEYS_LOCAL` must each decode to exactly 32 bytes. `MERIDIAN_CUSTOMER_FINGERPRINT_KEY` must decode to at least 32 bytes. The local disbursement-snapshot active key ID is `local`.
+
+Generate one matching RSA-2048 signing pair in PowerShell. The command emits the Base64-encoded PKCS#8 private key and X.509 SubjectPublicKeyInfo public key expected by Meridian:
+
+```powershell
+$rsa = [Security.Cryptography.RSA]::Create(2048)
+"MERIDIAN_JWT_PRIVATE_KEY=$([Convert]::ToBase64String($rsa.ExportPkcs8PrivateKey()))"
+"MERIDIAN_JWT_PUBLIC_KEY=$([Convert]::ToBase64String($rsa.ExportSubjectPublicKeyInfo()))"
+```
+
+Keep both values from the same command run. Meridian rejects missing, malformed, mismatched, or weaker signing keys.
+
+The local backend allows `http://localhost:5173` and `http://localhost:5174` by default. Mailpit captures local verification and password-reset email without external SMTP credentials.
+
+`.env` contains local secrets and must not be committed.
+
+Stop the backend environment with `docker compose down`. Named PostgreSQL and Document volumes are preserved. `docker compose down -v` removes them and should be used only for an intentionally disposable local environment.
+
+</details>
+
+---
+
 ## Architecture
 
 ### Architecture Principles
 
-| Principle | Implementation |
-|---|---|
-| **Architecture Style** | Modular Monolith (Spring Modulith) |
-| **Internal Design** | Hexagonal Architecture (Ports & Adapters) |
-| **Domain Modeling** | Domain-Driven Design (Bounded Contexts) |
-| **Dependency Direction** | Inward-only — Infrastructure adapters → Application ports/services → Domain |
-| **Boundary Enforcement** | Architecture documents define the intended module law. Current ArchUnit tests enforce core layer, security, and shared-kernel rules. |
+| Principle | Implementation                                                                                                                                                                                                           |
+|---|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Architecture Style** | Modular Monolith (Spring Modulith)                                                                                                                                                                                       |
+| **Internal Design** | Hexagonal Architecture (Ports & Adapters)                                                                                                                                                                                |
+| **Domain Modeling** | Domain-Driven Design (Bounded Contexts)                                                                                                                                                                                  |
+| **Dependency Direction** | Inward-only — Infrastructure adapters → Application ports/services → Domain                                                                                                                                              |
+| **Boundary Enforcement** | Architecture documents define the intended module law. ArchUnit tests enforce core layer, security, and shared-kernel rules.                                                                                             |
 | **Module Communication** | Narrow public application contracts support synchronous collaboration. Transaction-aware coordination preserves atomic outcomes, while durable asynchronous delivery requires explicit retry, recovery, and idempotency. |
-| **Future Evolution** | Bounded contexts and published contracts preserve selective extraction options; services are extracted only when stable boundaries, scale, or operational ownership justify it |
+| **Selective Extraction** | Bounded contexts and published contracts preserve selective extraction options. A service is extracted only when stable boundaries, scale, or operational ownership justify it. |
 
 ### Complete Platform Architecture
 
@@ -119,7 +251,7 @@ All three products use Meridian's common application, approval, contract, activa
 | **Approval Workflow** | Immutable Loan Officer recommendations, independent Approver decisions, decision authority, and maker-checker evidence. |
 | **Document Management** | Checklists, uploads, immutable versions, manual document review, readiness, storage, and advisory OCR-assisted processing. |
 | **Audit & Compliance Controls** | Append-only, PII-safe evidence of important business actions and compliance-oriented history. |
-| **Notification** | Controlled verification-email rendering and SMTP transport; broader channels, preferences, durable delivery status, and retry management remain future increments. |
+| **Notification** | Message templates, delivery requests, channels, and delivery status. |
 
 ---
 
@@ -242,110 +374,6 @@ All three products use Meridian's common application, approval, contract, activa
 - Automated disbursement and repayment posting
 - Financial reconciliation and balance validation
 - Accounting audit reports
-
----
-
-## Project Structure
-
-```text
-meridian-finance/
-├── meridian-platform/       # Java/Spring backend, Flyway migrations, and PostgreSQL Compose
-├── customer-web/            # React/Vite Customer Web application
-├── internal-web/            # Shared React/Vite Internal Web application
-├── docs/                    # Business, architecture, API, database, and project documentation
-└── .github/workflows/       # Continuous integration workflows
-```
-
-The active backend modules under `com.meridian.platform` are:
-
-```text
-shared · identity · customer · partner · loan · approval · document · audit · notification
-```
-
-`shared` is a technical shared kernel, not a bounded context. Feature modules use Meridian's Practical Hexagonal Architecture with only the packages each module needs. [MER-ARCH-002](docs/architecture/MER-ARCH-002-project-structure.md) defines source and package structure; [MER-ARCH-003](docs/architecture/MER-ARCH-003-dependency-rules.md) defines legal dependencies and architecture enforcement.
-
----
-
-## Customer Web
-
-`customer-web/` contains Meridian's responsive Customer Web application. [MER-FE-001](docs/frontend/MER-FE-001-customer-web-blueprint.md) defines its frontend architecture, state ownership, visual language, accessibility baseline, and delivery sequence.
-
-```bash
-cd customer-web
-npm ci
-npm run dev
-```
-
-Frontend verification commands are `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`. Copy `customer-web/.env.example` to `customer-web/.env` when needed and set the non-secret `VITE_API_BASE_URL`; local backend development uses `http://localhost:8080/api/v1`.
-
----
-
-## Internal Web
-
-`internal-web/` contains Meridian's shared Internal Web application. Staff FE-CP1 through Staff FE-CP9 provide Staff authentication, permission-scoped discovery and case evidence, document and correction operations, product verification and review, recommendation and independent decision, Accounting-owned contract readiness and disbursement, LoanAccount repayment servicing, Approver-owned full-balance settlement, and Accounting-owned administrative closure. The financial operations preserve exact-request recovery, keep protected references out of browser persistence, and reconcile confirmed outcomes through authoritative Loan reads. The Phase 3 Staff Web lending-operations item is complete.
-
-Back-Office FE-CP1 provides the exact-capability-gated `/admin` foundation, shared Internal Web chrome, cross-area navigation, and safe no-access behavior. Partner, Loan Product, and internal-user administration remain scheduled for later checkpoints, so the Phase 3 Back-Office item remains incomplete. [MER-FE-002](docs/frontend/MER-FE-002-staff-web-blueprint.md) governs Staff Web; [MER-FE-003](docs/frontend/MER-FE-003-back-office-administration-blueprint.md) governs Back-Office Administration.
-
-```bash
-cd internal-web
-npm ci
-npm run dev
-```
-
-The local server uses `http://localhost:5174`. The same lint, type-check, test, and build commands apply; see [the Internal Web README](internal-web/README.md) for its scope and security model.
-
----
-
-## Local Docker Compose
-
-Docker is the only runtime prerequisite for the local Compose path. Compose builds Meridian with the Maven wrapper, starts PostgreSQL 16 and pinned Mailpit SMTP capture, runs Flyway through normal Spring Boot startup, and persists PostgreSQL and Document filesystem data in named volumes.
-
-1. Change to `meridian-platform`.
-2. Copy `.env.example` to `.env`.
-3. Set `POSTGRES_PASSWORD`, the three Base64-encoded symmetric key values, and the matching JWT private/public key pair in `.env`.
-4. Run `docker compose up --build`.
-5. Verify `http://localhost:8080/api/v1/health`, `http://localhost:8080/v3/api-docs`, and `http://localhost:8080/swagger-ui.html`.
-6. Register a local Customer and inspect its controlled verification email in the Mailpit UI at `http://localhost:8025`. Copy the fragment token into the JSON body for `POST /api/v1/auth/email-verification/confirm`; do not place it in a backend query string. Password-reset email uses the same Mailpit service and the same fragment-token handoff to `POST /api/v1/auth/password-reset/confirm`.
-
-Generate each local symmetric key with one of these commands and run the selected command three times:
-
-```bash
-openssl rand -base64 32
-```
-
-```powershell
-[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
-```
-
-`MERIDIAN_CUSTOMER_ENCRYPTION_KEY` and `MERIDIAN_LOAN_DISBURSEMENT_SNAPSHOT_KEYS_LOCAL` must each decode to exactly 32 bytes. `MERIDIAN_CUSTOMER_FINGERPRINT_KEY` must decode to at least 32 bytes. The local disbursement-snapshot active key ID is `local`, and `MERIDIAN_LOAN_DISBURSEMENT_SNAPSHOT_KEYS_LOCAL` supplies that key-ring entry.
-
-Generate one matching RSA-2048 signing pair in PowerShell. The command emits the exact `.env` entries Meridian consumes: a Base64-encoded PKCS#8 private key and a Base64-encoded X.509 SubjectPublicKeyInfo public key.
-
-```powershell
-$rsa = [Security.Cryptography.RSA]::Create(2048)
-"MERIDIAN_JWT_PRIVATE_KEY=$([Convert]::ToBase64String($rsa.ExportPkcs8PrivateKey()))"
-"MERIDIAN_JWT_PUBLIC_KEY=$([Convert]::ToBase64String($rsa.ExportSubjectPublicKeyInfo()))"
-```
-
-Keep both lines from the same command run. Meridian fails startup when either value is missing, malformed, weaker than RSA-2048, or not part of the same key pair.
-
-`MERIDIAN_FRONTEND_ALLOWED_ORIGINS` accepts a comma-separated list of explicit frontend origins and defaults to `http://localhost:5173,http://localhost:5174` for the Customer Web and Internal Web development servers. Wildcard origins are rejected.
-
-`MERIDIAN_ACCOUNT_LOCKOUT_MAX_FAILED_ATTEMPTS` defaults to `5`, and `MERIDIAN_ACCOUNT_LOCKOUT_DURATION` defaults to `15m`. Both values must be positive. The policy applies to new Customer and Staff password logins; it does not revoke established access or refresh credentials.
-
-`MERIDIAN_LOGIN_RATE_LIMIT_MAX_REQUESTS` defaults to `10`, and `MERIDIAN_LOGIN_RATE_LIMIT_WINDOW` defaults to `1m`. `MERIDIAN_REFRESH_RATE_LIMIT_MAX_REQUESTS` defaults to `30`, and `MERIDIAN_REFRESH_RATE_LIMIT_WINDOW` defaults to `1m`. All four values must be positive. These policies throttle login and refresh requests per effective servlet remote address and application instance; the Phase 4 Redis evaluation continues to track distributed rate limiting.
-
-`MERIDIAN_REGISTRATION_RATE_LIMIT_MAX_REQUESTS` and `MERIDIAN_EMAIL_VERIFICATION_REQUEST_RATE_LIMIT_MAX_REQUESTS` each default to `5`; their independent window variables each default to `10m`. `MERIDIAN_EMAIL_VERIFICATION_LIFETIME` defaults to `24h` and must be positive. Registration, verification request, login, and refresh limits are independent and use the effective servlet remote address rather than caller-controlled forwarding headers.
-
-`MERIDIAN_PASSWORD_RESET_LIFETIME` defaults to `30m` and must be positive. `MERIDIAN_PASSWORD_RESET_REQUEST_RATE_LIMIT_MAX_REQUESTS` defaults to `5`, and `MERIDIAN_PASSWORD_RESET_REQUEST_RATE_LIMIT_WINDOW` defaults to `10m`; both values must be positive. The reset-request capacity is independent from registration, email-verification request, login, and refresh and uses the effective servlet remote address rather than caller-controlled forwarding headers.
-
-`MERIDIAN_FRONTEND_BASE_URL` defaults to `http://localhost:5173` for email-verification and password-reset links. Notification SMTP uses `MERIDIAN_SMTP_HOST`, `MERIDIAN_SMTP_PORT`, optional `MERIDIAN_SMTP_USERNAME` and `MERIDIAN_SMTP_PASSWORD`, `MERIDIAN_SMTP_AUTH`, `MERIDIAN_SMTP_STARTTLS`, and `MERIDIAN_NOTIFICATION_FROM_ADDRESS`. Compose defaults to the `mailpit` service on port `1025`; the capture UI is exposed through `MAILPIT_UI_PORT`, default `8025`. These local defaults require no external credentials.
-
-`MERIDIAN_REFRESH_TOKEN_LIFETIME` defaults to `7d`. The refresh cookie is HttpOnly, uses `SameSite=Strict`, and is restricted to `/api/v1/auth` so refresh and current-session logout can receive it. Local HTTP uses `MERIDIAN_REFRESH_TOKEN_COOKIE_SECURE=false`; deployed HTTPS environments must set it to `true`. Browser clients must send credentialed authentication requests from an explicitly allowed frontend origin.
-
-`.env` contains local secrets and must not be committed.
-
-Stop the stack with `docker compose down`. This preserves the named PostgreSQL and Document volumes. Adding `-v` deletes both local data volumes and should be reserved for an intentionally disposable environment.
 
 ---
 
