@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 
 function routeTitle(pathname: string): string {
   if (pathname === '/login') return 'Staff sign in | Meridian'
+  if (pathname === '/admin') return 'Back-Office Administration | Meridian'
   if (pathname === '/staff') return 'Internal operations | Meridian'
   if (pathname === '/staff/applications') return 'Applications | Meridian'
   if (pathname === '/staff/work/documents') return 'Document review | Meridian'

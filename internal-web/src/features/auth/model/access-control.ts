@@ -25,6 +25,16 @@ export const STAFF_OPERATIONAL_PERMISSIONS = [
 
 export type StaffOperationalPermission = (typeof STAFF_OPERATIONAL_PERMISSIONS)[number]
 
+export const BACK_OFFICE_ADMINISTRATION_PERMISSIONS = [
+  'loan:product:manage',
+  'partner:read',
+  'partner:manage',
+  'identity:user:manage',
+  'admin:config',
+] as const
+
+export type BackOfficeAdministrationPermission = (typeof BACK_OFFICE_ADMINISTRATION_PERMISSIONS)[number]
+
 export function hasRole(actor: StaffActor, role: string): boolean {
   return actor.roles.includes(role)
 }
@@ -43,4 +53,8 @@ export function hasAllPermissions(actor: StaffActor, permissions: readonly strin
 
 export function hasStaffWebAccess(actor: StaffActor): boolean {
   return hasAnyPermission(actor, STAFF_OPERATIONAL_PERMISSIONS)
+}
+
+export function hasBackOfficeAccess(actor: StaffActor): boolean {
+  return hasAnyPermission(actor, BACK_OFFICE_ADMINISTRATION_PERMISSIONS)
 }

@@ -1,12 +1,15 @@
 import { LockKeyhole, LogOut } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { hasBackOfficeAccess } from '@/features/auth/model/access-control'
 import { useAuth } from '@/features/auth/model/auth-context'
 
 export function NoOperationalAccessPage() {
   const { manager, state } = useAuth()
   if (state.status !== 'authenticated') return null
+  const hasAdministration = hasBackOfficeAccess(state.actor)
 
   return (
     <section className="mx-auto max-w-3xl space-y-5">
@@ -31,9 +34,12 @@ export function NoOperationalAccessPage() {
             <LockKeyhole className="size-5 shrink-0 text-warning" />
             No application or customer data has been loaded.
           </div>
-          <Button onClick={() => void manager.logout()}>
-            <LogOut aria-hidden="true" /> Sign out
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            {hasAdministration ? <Button asChild><Link to="/admin">Go to Back-Office Administration</Link></Button> : null}
+            <Button variant={hasAdministration ? 'outline' : 'default'} onClick={() => void manager.logout()}>
+              <LogOut aria-hidden="true" /> Sign out
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </section>
