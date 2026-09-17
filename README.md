@@ -2,9 +2,11 @@
 
 ## Meridian Lending Platform
 
-Meridian is a multi-product digital lending platform built around a common lending lifecycle and product-specific policies. Salary Advance is the flagship workflow, with streamlined Unsecured Consumer Loan and Collateral Loan workflows built on the same lending core.
+Meridian is a multi-product lending platform built around a common lending lifecycle and product-specific policies. Salary Advance uses Customer-digital origination, while Unsecured Consumer Loan and Collateral Loan use both Customer-digital and Staff-assisted paper origination on the same lending core.
 
-Meridian helps lending teams manage the full journey from application through servicing and closure. Product workflows combine automated processing with controlled human review where business decisions or document verification require it. The platform is designed around practical financial software concerns such as auditability, security, data integrity, controlled state transitions, maker-checker controls, document traceability, and clear operational ownership.
+Meridian helps lending teams manage the full journey from Customer or Staff-assisted intake through servicing and closure. Product workflows combine automated processing with controlled human review where business decisions or document verification require it. The platform is designed around practical financial software concerns such as auditability, security, data integrity, controlled state transitions, maker-checker controls, document traceability, and clear operational ownership.
+
+In Staff-assisted UCL and Collateral Loan workflows, the Customer remains the business subject while authenticated Staff record Customer-provided information, paper evidence, corrections, offer decisions, and contract acknowledgments. Meridian does not impersonate the Customer or require a branch-originated application to switch to Customer Web later.
 
 The complete Meridian platform combines a Java and Spring Boot modular monolith, backed by PostgreSQL, with React/Vite client applications and Python/FastAPI OCR processing. Meridian applies Domain-Driven Design and Practical Hexagonal Architecture within clearly defined bounded contexts. This approach enables rapid delivery within a cohesive platform while preserving clear boundaries and an evolutionary path toward selective distributed service extraction when justified by business requirements, scale, or operational ownership.
 
@@ -14,20 +16,21 @@ The complete Meridian platform combines a Java and Spring Boot modular monolith,
 
 ### Lending Products
 
-* **Salary Advance**: Uses Partner-linked employment evidence with a product-specific eligibility, limit, and exposure model.
-* **Unsecured Consumer Loan**: Uses income, bank-statement, and employment evidence with manual verification, correction, and flat-rate pricing.
-* **Collateral Loan**: Uses structured Collateral information with Document-owned ownership evidence and manual verification.
+* **Salary Advance**: Uses Customer-digital origination only, with Partner-linked employment evidence and a product-specific eligibility, limit, and exposure model.
+* **Unsecured Consumer Loan**: Uses Customer-digital or Staff-assisted paper origination with income, bank-statement, and employment evidence, manual verification, correction, and flat-rate pricing.
+* **Collateral Loan**: Uses Customer-digital or Staff-assisted paper origination with structured Collateral information, Document-owned ownership evidence, and manual verification.
 
-All three products use Meridian's common application, approval, contract, activation, servicing, and closure lifecycle while retaining product-specific rules.
+All three products use Meridian's common application, approval, contract, activation, servicing, and closure lifecycle while retaining product-specific rules. Origination channel changes who records Customer-sourced actions; it does not change product financial rules, review authority, or approval controls.
 
 ### Platform Capabilities
 
 * **Common Lending Lifecycle**: A shared `LoanApplication` lifecycle coordinates submission, verification, review, approval, Customer response, contract readiness, disbursement, and `LoanAccount` activation.
+* **Digital and Staff-Assisted Origination**: Customer Web handles direct Customer origination. Staff Web handles paper intake and origination for UCL and Collateral Loan, including Customer selection or creation, paper evidence capture, Customer-sourced correction, and evidenced Customer decisions. Salary Advance remains Customer-digital only.
 * **Document and OCR-Assisted Processing**: Document owns document checklists, uploads, immutable versions, review, replacement, waiver, and processing readiness. OCR-assisted processing remains advisory, while authorized Document review remains authoritative.
 * **Review, Correction, and Approval**: Loan owns application review and correction workflows. Loan Officers record recommendations, while Approvers make independent decisions under maker-checker controls.
 * **Offers, Contracts, and Disbursement**: Loan preserves accepted lending terms through immutable offers, versioned contracts, Customer acknowledgment, readiness checks, and controlled disbursement activation.
 * **Loan Servicing**: Salary Advance, UCL, and Collateral Loan share repayment, overdue evaluation and cure, contractual payoff, payment-backed Administrative Full-Balance Settlement, and separate administrative closure.
-* **Identity and Access Control**: Identity manages Customer and internal-user authentication, session lifecycle, account recovery, roles, permissions, and access boundaries. Permission-based RBAC, Customer ownership checks, and purpose-limited contracts protect Customer and internal operations.
+* **Identity and Access Control**: Identity manages Customer and internal-user authentication, session lifecycle, account recovery, roles, permissions, and access boundaries. A Staff-assisted Customer may exist without a Customer Web login; authorized Staff remain the authenticated actor while the Customer remains the business subject. Permission-based RBAC, Customer ownership checks, and purpose-limited contracts protect Customer and internal operations.
 * **Transactional Safety**: Critical financial commands use atomic state changes, operation-specific request identities, semantic replay validation, and concurrency controls.
 * **Immutable Audit Trail**: Ordered lifecycle history and append-only, PII-safe business audit evidence preserve traceability.
 * **Sensitive Data Protection**: AES-GCM protects selected Customer-sensitive values and immutable Loan disbursement bank-account snapshots at rest, while purpose-limited access and restricted or masked responses limit PII exposure.
@@ -36,8 +39,8 @@ All three products use Meridian's common application, approval, contract, activa
 
 | Role | Representative capabilities and responsibilities |
 |---|---|
-| **Customer** | Manages their own profile and bank accounts, verifies Salary Advance employment, submits applications, completes Customer-owned corrections, uploads documents, responds to offers, acknowledges contracts, and reads their own application and LoanAccount state. |
-| **Loan Officer** | Reviews application facts and documents, requests Customer or Staff correction, performs authorized document-review actions, and records the recommendation for independent decision. |
+| **Customer** | Owns profile and bank-account data and provides application facts, evidence, corrections, offer decisions, and contract acknowledgments. Customer-digital users record those actions directly; branch Customers provide them through authorized Staff. Salary Advance employment verification remains Customer-digital. |
+| **Loan Officer** | Performs authorized Staff-assisted UCL and Collateral Loan intake and origination, coordinates Customer-sourced branch corrections, reviews application facts and documents, performs authorized document-review actions, and records the recommendation for independent decision. |
 | **Approver** | Records the independent application decision, may return work for review or correction, and performs authorized Loan-owned Administrative Full-Balance Settlement. |
 | **Accounting Officer** | Prepares operational contracts, confirms readiness and external transfer evidence, records authorized repayments, and closes eligible settled LoanAccounts. |
 | **Back-Office Admin** | Administers products, Partner data and imports, internal users, and predefined role assignments. |
@@ -111,7 +114,7 @@ Useful local endpoints:
 
 ### Customer Web
 
-`customer-web/` contains Meridian's responsive Customer Web application. [MER-FE-001](docs/frontend/MER-FE-001-customer-web-blueprint.md) defines its frontend architecture, state ownership, visual language, and accessibility baseline.
+`customer-web/` contains Meridian's responsive Customer Web application for direct Customer origination and lifecycle actions. Salary Advance uses this digital channel exclusively; UCL and Collateral Loan may also originate through Staff-assisted paper workflows in Staff Web. [MER-FE-001](docs/frontend/MER-FE-001-customer-web-blueprint.md) defines its frontend architecture, state ownership, visual language, and accessibility baseline.
 
 ```bash
 cd customer-web
@@ -124,7 +127,7 @@ Customer Web uses `http://localhost:5173` by default and calls the local backend
 
 ### Internal Web
 
-`internal-web/` contains Meridian's shared Internal Web application. Staff Web handles lending operations under `/staff/*`, while Back-Office Administration handles administrative capabilities under `/admin/*`. The two areas share authentication, session management, protected transport, responsive Internal Web chrome, and common UI foundations while keeping their feature routes, queries, commands, and authorization boundaries separate.
+`internal-web/` contains Meridian's shared Internal Web application. Staff Web handles Staff-assisted UCL and Collateral Loan intake and origination plus review, approval, correction, contract, disbursement, and repayment under `/staff/*`, while Back-Office Administration handles administrative capabilities under `/admin/*`. The two areas share authentication, session management, protected transport, responsive Internal Web chrome, and common UI foundations while keeping their feature routes, queries, commands, and authorization boundaries separate.
 
 [MER-FE-002](docs/frontend/MER-FE-002-staff-web-blueprint.md) defines Staff Web. [MER-FE-003](docs/frontend/MER-FE-003-back-office-administration-blueprint.md) defines Back-Office Administration.
 
