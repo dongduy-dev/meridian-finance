@@ -33,7 +33,7 @@ graph TB
         NOTIF["Notification"]
     end
 
-    CUSTOMER -->|Customer identifier for account association| IAM
+    CUSTOMER -->|Customer identifier for optional account association| IAM
 
     IAM -->|Authenticated actor and authorization facts| LOAN
     IAM -->|Authenticated actor and authorization facts| APPROVAL
@@ -44,7 +44,7 @@ graph TB
     CUSTOMER -->|Customer readiness and purpose-limited bank-account facts| LOAN
     CUSTOMER -->|Identity evidence for employment verification| PARTNER
     PARTNER -->|Verified employee links and eligibility facts| LOAN
-    DOC -->|Checklist state and processing-readiness facts| LOAN
+    DOC -->|Intake-evidence references, checklist state, and processing-readiness facts| LOAN
 
     LOAN -->|Application and active review-cycle context| APPROVAL
     APPROVAL -->|Recommendation and decision outcomes| LOAN
@@ -77,7 +77,7 @@ Business contexts may publish notification-triggering events to Notification wit
 | **Consumes** | A Customer identity identifier when associating a user account with a Customer; administrative inputs used to create or manage Staff accounts and role assignments. |
 | **Must Not Own** | Customer profile data, Partner employee data, Loan applications, approval decisions, documents, or lending permissions implemented as domain rules outside the authorization model. |
 
-Identity remains the only owner of the login-to-Customer association. Customer owns the Customer aggregate and its business data and must not maintain a competing association.
+Identity remains the only owner of the login-to-Customer association. Customer owns the Customer aggregate and its business data and must not maintain a competing association. A Customer business record does not require a User account. Staff-assisted work authenticates the Staff user; Identity must not create a Customer login or impersonation session for that workflow.
 
 ---
 
@@ -85,14 +85,18 @@ Identity remains the only owner of the login-to-Customer association. Customer o
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Customer lifecycle, profile management, profile completeness, identity and verification status, bank-account management, Customer ownership checks, and protection of sensitive Customer data. |
+| **Responsibilities** | Customer lifecycle, profile management, profile completeness, identity and verification status, bank-account management, Customer ownership checks, Staff-assisted Customer intake support, and protection of sensitive Customer data. |
 | **Owns** | `Customer`, Customer profile information, verification state, Customer status, bank accounts, primary-account designation, and source identity or bank-account evidence. |
-| **Public Capabilities** | Manage a Customer's own profile and bank accounts; query Customer readiness for lending; resolve purpose-limited identity evidence for employment verification; provide eligible bank-account facts for contract preparation and disbursement. |
+| **Public Capabilities** | Manage Customer profile and bank-account data through Customer self-service or authorized Staff-assisted commands; select or create a Customer for Staff-assisted intake; query Customer readiness for lending; resolve purpose-limited identity evidence for employment verification; provide eligible bank-account facts for contract preparation and disbursement. |
 | **Publishes** | Representative events include Customer created, profile updated, verification status changed, bank account added or deactivated, primary bank account changed, and Customer suspended or reactivated. |
-| **Consumes** | Authenticated Customer identity and authorization facts from Identity & Access. |
+| **Consumes** | Authenticated Customer or Staff actor and authorization facts from Identity & Access. |
 | **Must Not Own** | User credentials, Partner employee relationships, `LoanApplication` state, lending exposure, operational contracts, approval decisions, or repayment servicing. |
 
 Customer owns source identity and bank-account information and protects sensitive values at rest. Other contexts receive only purpose-limited facts, masked representations, or explicitly protected values through narrow application contracts.
+
+A Customer business record is independent of a login account. Customer self-service resolves the Customer through the authenticated Customer identity. Staff-assisted commands instead authenticate the Staff user and identify the selected Customer as the business subject. They must use purpose-specific Staff capabilities and must not obtain Customer authority by treating Staff as the Customer.
+
+When Staff-assisted intake creates a new Customer, Customer owns the atomic creation of the Customer and required identity-bearing profile, including duplicate protected-identity checks. A failed duplicate-identity attempt must not leave a separate incomplete Customer created solely by that attempt.
 
 Audit records may contain only PII-safe identifiers, statuses, reason codes, and timestamps required for the audited action. Audit must not become a secondary store of unrestricted Customer evidence.
 
@@ -123,20 +127,30 @@ Salary Advance, Unsecured Consumer Loan, and Collateral Loan are product behavio
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Loan product definitions and policy configuration; `LoanApplication` lifecycle; product-specific application data, eligibility, and verification snapshots; Salary Advance limit and exposure; review-cycle and correction workflow state; approved offers; operational contracts and readiness; disbursement evidence; `LoanAccount` activation; final repayment schedules; repayment transactions and allocations; overdue servicing; contractual payoff; Administrative Full-Balance Settlement; administrative closure; and application, account, and installment histories. |
-| **Owns** | `LoanProduct`, product-policy configuration, `LoanApplication`, product-specific application details, product verification snapshots, `SalaryAdvanceLimit` and limit movements, review cycles, correction requests and tasks, approved offers, operational loan contracts, immutable contract-bound destinations, disbursement evidence, `LoanAccount`, final repayment schedules, repayment transactions, allocations, servicing progress, contractual-payoff evidence, Administrative Full-Balance Settlement evidence, administrative-closure evidence, and lifecycle histories. Product-specific application details include one Collateral Loan asset's type, description, estimated value, ownership status, and condition facts. |
-| **Public Capabilities** | Query products and eligibility; create or save drafts; submit applications; query application state and Salary Advance limits; start Loan Officer review; manage correction workflows and resubmit completed corrections; apply recommendation and approval outcomes; view and respond to offers; prepare and acknowledge contracts; confirm contract readiness; record manual disbursement; query LoanAccounts and schedules; record and query repayments; evaluate overdue state; perform contractual payoff or Administrative Full-Balance Settlement; and close eligible settled accounts administratively. |
-| **Publishes** | Representative events include application submitted, verification recorded, limit reserved or released, review started, correction requested, recommendation applied, application approved or rejected, offer generated or resolved, contract prepared or acknowledged, readiness confirmed, loan disbursed, repayment recorded, account status changed, account settled by contractual payoff or Administrative Full-Balance Settlement, and account closed administratively. |
-| **Consumes** | Customer readiness and eligible bank-account facts; Partner employee-link and eligibility facts; Document checklist and processing-readiness facts; Approval recommendation and decision outcomes; authenticated actor and authorization facts. |
+| **Responsibilities** | Loan product definitions and policy configuration; origination-channel policy; Staff-assisted pre-application intake; `LoanApplication` lifecycle; product-specific application data, eligibility, and verification snapshots; Salary Advance limit and exposure; review-cycle and correction workflow state; approved offers; operational contracts and readiness; disbursement evidence; `LoanAccount` activation; final repayment schedules; repayment transactions and allocations; overdue servicing; contractual payoff; Administrative Full-Balance Settlement; administrative closure; and application, account, and installment histories. |
+| **Owns** | `LoanProduct`, product-policy configuration, Staff-assisted intake state, origination-channel state, `LoanApplication`, product-specific application details, product verification snapshots, `SalaryAdvanceLimit` and limit movements, review cycles, correction requests and tasks, approved offers, operational loan contracts, immutable contract-bound destinations, disbursement evidence, `LoanAccount`, final repayment schedules, repayment transactions, allocations, servicing progress, contractual-payoff evidence, Administrative Full-Balance Settlement evidence, administrative-closure evidence, and lifecycle histories. Product-specific application details include one Collateral Loan asset's type, description, estimated value, ownership status, and condition facts. |
+| **Public Capabilities** | Query products and eligibility; manage Staff-assisted intake; create or save drafts; originate and submit applications through an allowed channel; query application state and Salary Advance limits; start Loan Officer review; manage correction workflows and resubmit completed corrections; apply recommendation and approval outcomes; view offers and record Customer-sourced responses through the allowed channel; prepare contracts and record Customer acknowledgment through the allowed channel; confirm contract readiness; record manual disbursement; query LoanAccounts and schedules; record and query repayments; evaluate overdue state; perform contractual payoff or Administrative Full-Balance Settlement; and close eligible settled accounts administratively. |
+| **Publishes** | Representative events include Staff-assisted intake confirmed, application submitted, verification recorded, limit reserved or released, review started, correction requested, recommendation applied, application approved or rejected, offer generated or resolved, contract prepared or acknowledged, readiness confirmed, loan disbursed, repayment recorded, account status changed, account settled by contractual payoff or Administrative Full-Balance Settlement, and account closed administratively. |
+| **Consumes** | Customer readiness and purpose-limited Customer intake or bank-account facts; Partner employee-link and eligibility facts; Document intake-evidence references, checklist state, and processing-readiness facts; Approval recommendation and decision outcomes; authenticated actor and authorization facts. |
 | **Must Not Own** | User credentials, Customer source profile or bank-account aggregates, Partner Employee source records, document binaries or document-review decisions, or Approval's immutable recommendation and decision records. |
 
 ### LoanApplication and LoanAccount State Ownership
 
-`LoanApplication` governs origination from draft or submission through verification, document readiness, controlled review, approval, Customer acceptance, contract readiness, disbursement, and pre-disbursement terminal outcomes.
+`LoanApplication` governs origination from draft or submission through verification, document readiness, controlled review, approval, Customer acceptance, contract readiness, disbursement, and pre-disbursement terminal outcomes. It preserves the origination channel so later Customer-sourced corrections, offer responses, and contract acknowledgments follow the permitted interaction path without changing financial or approval authority.
 
 After disbursement, `LoanAccount` becomes the authoritative servicing aggregate. It moves among `ACTIVE`, `OVERDUE`, `SETTLED`, and `CLOSED` according to repayment, overdue, contractual-payoff, Administrative Full-Balance Settlement, and administrative-closure policies.
 
 `LoanApplication` status must not become the source of truth for post-disbursement balances or servicing state.
+
+### Origination Channel and Staff-Assisted Intake Ownership
+
+Branch interaction is an origination channel, not a bounded context. `MER-BIZ-001` owns the exact product and channel rules; this document defines their ownership boundaries. Loan owns the channel policy and the temporary Staff-assisted intake lifecycle used before a UCL or Collateral Loan `LoanApplication` exists. Salary Advance permits only Customer-digital origination; UCL and Collateral Loan may use Customer-digital or Staff-assisted origination.
+
+Staff-assisted intake is not a `LoanApplication` draft. It creates no financial exposure and does not enter product verification, Loan Officer review, or Approval. It may reference a selected Customer and Document-owned paper evidence while Staff confirms the Customer-provided structured facts needed for origination.
+
+Identity authenticates the Staff actor. Customer owns the selected Customer's profile, bank accounts, consent state, and protected identity data. Document owns the paper evidence and immutable document versions. Loan coordinates those owners through public application contracts and stable identifiers; it must not duplicate their persistence as its own source of truth.
+
+When confirmed intake becomes a `LoanApplication`, Loan records the origination channel and applies the normal product lifecycle. The channel determines how Customer-sourced actions are recorded. It does not create a second lending lifecycle, transfer Customer ownership to Staff, or weaken product, review, approval, contract, disbursement, servicing, or maker-checker rules.
 
 ### Product-Specific Application Data
 
@@ -167,11 +181,13 @@ Loan owns the immutable, contract-bound disbursement destination used after Cust
 
 A material change to a contract-bound destination before readiness requires a new contract version. Supersession must not silently alter accepted financial terms, repayment items, or Customer acknowledgment evidence.
 
+For a Staff-assisted application, the Customer remains the source of the offer decision and contract acknowledgment while authorized Staff records the evidenced action. Loan owns the resulting offer-response and contract-acknowledgment state; Document owns any paper evidence that supports the recorded action. Staff must not be represented as the Customer actor.
+
 ### Product Policy Ownership
 
 Loan's common lifecycle remains generic. Product policies own only behavior that legitimately differs by product, including:
 
-- eligibility and required evidence;
+- eligibility, allowed origination channels, and required evidence;
 - amount and term constraints;
 - pricing and repayment construction;
 - activation effects;
@@ -206,28 +222,38 @@ A recommendation or decision must not directly mutate Loan-owned persistence.
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Application checklists, checklist items, document upload and storage, logical documents, immutable document versions, current-version selection, metadata, authorized content access, manual review, replacement, waiver, expiration, and processing readiness. |
-| **Owns** | Application document checklists, checklist items, logical documents, immutable versions, storage references, review decisions, review status, replacement and waiver evidence, and document-processing results. |
-| **Public Capabilities** | Create and query checklists; upload and retrieve authorized document content; review a document version; accept, waive, or request replacement; query upload completeness and processing readiness; provide narrow readiness facts to Loan. |
+| **Responsibilities** | Staff-assisted pre-application paper evidence; application checklists and checklist items; document upload and storage; logical documents; immutable document versions; current-version selection; metadata; authorized content access; manual review; replacement; waiver; expiration; and processing readiness. |
+| **Owns** | Staff-assisted paper intake evidence, application document checklists, checklist items, logical documents, immutable versions, storage references, review decisions, review status, replacement and waiver evidence, and document-processing results. |
+| **Public Capabilities** | Upload and retrieve authorized Staff-assisted intake evidence before `LoanApplication` creation; create and query application checklists; upload and retrieve authorized application document content; review a document version; accept, waive, or request replacement; query upload completeness and processing readiness; provide purpose-limited evidence references and readiness facts to Loan. |
 | **Publishes** | Representative events include document uploaded, version superseded, document reviewed, replacement requested, checklist upload-complete, and checklist processing-ready. |
-| **Consumes** | `LoanApplication` ownership and workflow facts, correction-task proof, and authenticated Customer or Staff authorization facts. |
-| **Must Not Own** | `LoanApplication` status, review cycles, correction requests or tasks, product eligibility, approval decisions, contract readiness, lending exposure, or the structured lending facts merely evidenced by uploaded documents. |
+| **Consumes** | Staff-assisted intake or `LoanApplication` ownership and workflow facts, correction-task proof, and authenticated Customer or Staff authorization facts. |
+| **Must Not Own** | Staff-assisted intake lifecycle state, `LoanApplication` status, review cycles, correction requests or tasks, product eligibility, approval decisions, contract readiness, lending exposure, or the structured Customer or lending facts merely evidenced by uploaded documents. |
+
+### Paper Intake Evidence Boundary
+
+Document Management owns paper evidence independently of whether a `LoanApplication` already exists. Staff-assisted intake may therefore reference immutable identity evidence and the signed paper loan application before application creation without transferring those document bytes or versions to Loan.
+
+Loan owns the Staff-assisted intake lifecycle and the structured lending facts confirmed from that evidence. Customer owns Customer profile, bank-account, identity, and consent state. A signed paper application may evidence Customer consent while Document owns the artifact and Customer owns the resulting consent state.
+
+Document must not create or submit a `LoanApplication`, mutate Staff-assisted intake lifecycle state, or make Customer or lending facts authoritative merely because they appear in an uploaded document. Confirmed facts flow through the public command of the context that owns those facts.
 
 ### OCR-Assisted Processing Boundary
 
 OCR-assisted processing belongs inside Document Management as an advisory document-processing capability rather than a separate top-level bounded context.
 
-Document Management may own OCR jobs, extracted text, parsed fields, confidence scores, and processing history. OCR results remain Document-owned evidence.
+Document Management may own OCR jobs, extracted text, parsed fields, confidence scores, and processing history for an exact immutable document version, whether the version belongs to Staff-assisted intake or an application workflow. OCR results remain Document-owned evidence.
 
 OCR must not independently:
 
+- create or submit a `LoanApplication`;
+- mutate Customer profile, bank-account, identity, or consent state;
 - approve or reject a `LoanApplication`;
 - mark a checklist item accepted;
 - waive required evidence;
 - decide processing readiness;
-- mutate `LoanApplication` state.
+- mutate Staff-assisted intake or `LoanApplication` state.
 
-Authorized review remains the source of checklist acceptance, replacement, waiver, and readiness decisions. Loan consumes checklist and readiness facts rather than raw OCR results. Document remains the owner of OCR evidence.
+Authorized review remains the source of checklist acceptance, replacement, waiver, and readiness decisions. Loan consumes purpose-limited evidence and readiness facts rather than treating raw OCR output as authoritative lending state. Staff confirmation of OCR transcription does not establish Customer verification, document acceptance, product verification, or approval. Confirmed values must pass through the owning Customer or Loan command. Document remains the owner of OCR evidence.
 
 ---
 
@@ -244,6 +270,8 @@ Authorized review remains the source of checklist acceptance, replacement, waive
 Audit recording must either participate in the originating transaction or use durable delivery with defined retry and reconciliation. The selected mechanism must prevent a completed business outcome from becoming permanently unaudited.
 
 Audit payloads must remain closed and purpose-limited. Audit is not a secondary document store, Customer evidence store, or financial ledger.
+
+For Staff-assisted actions, Audit records the authenticated Staff user as actor and the selected Customer, intake, application, or other business reference as the subject of the action. Audit must not rewrite the Staff actor as the Customer.
 
 ---
 
@@ -267,12 +295,13 @@ A notification failure must not rewrite or reverse the business outcome that tri
 |---|---|
 | User accounts, credentials, roles, permissions, sessions | Identity & Access |
 | Login-to-Customer association | Identity & Access |
-| Customer profile, verification state, source bank accounts | Customer Management |
+| Customer profile, verification state, source bank accounts, Customer consent state | Customer Management |
 | Partner Companies and Partner Employees | Partner Management |
 | Employee import batches and employment matching | Partner Management |
 | Reusable Customer–Partner Employee link | Partner Management |
 | Loan products and product policies | Loan Core |
-| `LoanApplication` lifecycle and status | Loan Core |
+| Staff-assisted intake lifecycle and origination-channel policy | Loan Core |
+| `LoanApplication` lifecycle, status, and origination channel | Loan Core |
 | Product-specific structured application and lending facts | Loan Core |
 | Salary Advance limit and exposure movements | Loan Core |
 | Application-level eligibility and verification snapshots | Loan Core |
@@ -282,7 +311,7 @@ A notification failure must not rewrite or reverse the business outcome that tri
 | Operational contracts and contract-bound destinations | Loan Core |
 | Contract readiness and disbursement evidence | Loan Core |
 | LoanAccounts, schedules, repayments, overdue state, contractual payoff, Administrative Full-Balance Settlement, administrative closure | Loan Core |
-| Checklists, document versions, review decisions, readiness | Document Management |
+| Staff-assisted paper evidence, application checklists, document versions, review decisions, readiness | Document Management |
 | OCR jobs and extracted document evidence | Document Management |
 | Immutable cross-cutting audit evidence | Audit & Compliance Controls |
 | Templates and message-delivery state | Notification |
@@ -310,13 +339,25 @@ Identity supplies authenticated actor and authorization facts to protected conte
 
 Each business context remains responsible for its own ownership and business-rule checks. A permission authorizes an attempted capability; it does not prove that the requested Customer, application, document, contract, or account belongs to the actor.
 
+Customer self-service resolves the Customer through the login-to-Customer association. Staff-assisted capabilities authenticate the Staff user and carry the selected Customer separately as the business subject. No context may satisfy a Customer-owned check by impersonating Staff as the Customer or by creating a synthetic Customer session.
+
+### Staff-Assisted Origination Coordination
+
+Staff-assisted origination spans existing bounded contexts; it does not introduce a Branch bounded context.
+
+Identity authenticates and authorizes the Staff actor. Customer owns the selected Customer and mutable Customer facts. Loan owns Staff-assisted intake state, allowed origination channels, and the resulting lending lifecycle. Document owns the paper evidence and later OCR evidence. The contexts exchange stable identifiers and purpose-limited facts through public application contracts.
+
+A Staff-assisted UCL or Collateral Loan remains Staff-assisted for Customer-sourced corrections, offer response, and contract acknowledgment. The Customer remains the source of those facts or decisions while authorized Staff records the evidenced action. This actor-versus-subject distinction must remain visible in authorization and audit evidence.
+
 ### Document and Correction Coordination
 
 Document owns checklist and document evidence, versions, review decisions, and processing readiness.
 
-Loan owns `LoanApplication` state, review cycles, correction requests and tasks, resubmission, and product revalidation. Approval owns immutable recommendation and decision records and may produce structured correction intent.
+Loan owns Staff-assisted intake state, `LoanApplication` state, review cycles, correction requests and tasks, resubmission, and product revalidation. Approval owns immutable recommendation and decision records and may produce structured correction intent.
 
-The contexts collaborate through identifiers and public application contracts. Document does not change `LoanApplication` status, and Loan does not decide document acceptance by modifying Document-owned evidence.
+For a Staff-assisted application, a Customer-sourced correction remains Customer-sourced even though authorized Staff coordinates the Customer contact, records or uploads the Customer-provided information, and performs resubmission. A Staff correction remains correction of Staff-controlled work; the two must not be collapsed into one ownership model.
+
+The contexts collaborate through identifiers and public application contracts. Document does not change Staff-assisted intake or `LoanApplication` status, and Loan does not decide document acceptance by modifying Document-owned evidence.
 
 ---
 

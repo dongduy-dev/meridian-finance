@@ -116,6 +116,10 @@ A permission authorizes an actor to attempt an operation. The owning context sti
 
 Customer-owned endpoints derive `customerId` from `CurrentUserProvider`. They must not trust a Customer identifier supplied in the request when ownership is implied by the endpoint.
 
+Staff-assisted endpoints resolve the authenticated Staff actor from `CurrentUserProvider` and may carry a selected `customerId` only when the contract explicitly represents a Staff operation on a Customer subject. The application service verifies Staff authority and Customer eligibility separately. It must not impersonate the Customer, create a synthetic Customer principal, or route the operation through Customer self-service input ports. A Staff-assisted Customer does not require an Identity User.
+
+Audit evidence preserves the same distinction: the Staff user is the actor, while the selected Customer, intake, application, or other business record is the subject.
+
 Access JWTs remain self-contained RS256 credentials, but embedded authority is accepted only while it is current:
 
 ```mermaid
@@ -285,6 +289,14 @@ Runtime rules:
 
 ## 7. Product Origination and Salary Advance Readiness
 
+### Origination Channel Boundary
+
+Customer-digital and Staff-assisted origination use separate inbound contracts because they resolve actor and Customer subject differently. Customer-digital commands derive the Customer from authentication. Staff-assisted commands authenticate Staff and carry the selected Customer as an explicit business subject. Both paths converge only after those trust-boundary checks and then apply the same Customer readiness, product policy, workflow, audit, and concurrency rules for the selected product.
+
+Salary Advance accepts only Customer-digital origination. UCL and Collateral Loan accept Customer-digital or Staff-assisted origination. A created `LoanApplication` records its origination channel so later Customer-sourced corrections, offer responses, and contract acknowledgments use the permitted interaction path without changing financial, review, approval, or maker-checker authority.
+
+A Customer self-service command must not be generalized by adding an optional Staff-selected `customerId`. Staff entry points use purpose-specific input ports and may share internal application or domain logic only after actor and subject resolution.
+
 ### Advisory Readiness Query
 
 `GET /api/v1/loan-products/salary-advance/readiness` requires an authenticated Customer with `loan:submit`. Loan derives the Customer from the actor, reads Customer readiness, product policy, the Partner-owned current eligibility assessment, current limit/exposure, blocking applications, and outstanding-account guard, then returns safe values and blocker codes. Partner owns the current-month authoritative-batch decision; Loan consumes only the purpose-limited status and eligible snapshot.
@@ -318,6 +330,59 @@ flowchart LR
 ```
 
 The index applies product/status predicates, `submittedAt DESC, id DESC` ordering, and page bounds in persistence. The case read is side-effect-free and composes the application header, the existing purpose-limited Customer readiness snapshot, and transitions loaded in authoritative sequence order. It neither reaches Customer persistence directly nor copies audit events into Loan's HTTP model. Exact fields, exclusions, and error behavior are defined in `MER-API-001`.
+
+### Staff-Assisted Customer Intake
+
+Staff Customer discovery and mutation belong to Customer-owned input ports rather than Loan or Identity persistence. Discovery returns a purpose-limited result suitable for selecting an existing Customer; it must not expose an unrestricted Customer directory or reuse Customer `/me` contracts.
+
+Creating a new Staff-assisted Customer and its required identity-bearing profile is one Customer transaction. Customer protects the identity reference, rejects a duplicate protected identity before committing a separate Customer, persists the Customer and profile, and records the Staff actor with the created Customer as the business subject. A duplicate-identity failure rolls back the complete command. Bank-account changes use separate purpose-specific Customer commands and retain Customer's existing sensitive-data protection rules.
+
+```mermaid
+flowchart LR
+    Web["Staff Web"]
+    Controller["Staff Customer intake controller"]
+    InPort["Customer Staff-intake input port"]
+    Service["Customer application service"]
+    Actor["CurrentUserProvider"]
+    Protector["Customer sensitive-value protection"]
+    Repo["Customer repository port"]
+    Persistence["Customer persistence adapter"]
+    Audit["Business audit"]
+
+    Web --> Controller --> InPort --> Service
+    Service --> Actor
+    Service --> Protector
+    Service --> Repo --> Persistence
+    Service --> Audit
+```
+
+### Staff-Assisted Pre-Application Intake and Paper Evidence
+
+Loan owns the temporary Staff-assisted intake lifecycle that exists before a UCL or Collateral Loan `LoanApplication`. The intake creates no financial exposure and does not enter product verification, review, or Approval. Loan may associate the intake with a selected Customer and product while Staff confirms Customer-provided structured facts.
+
+Document owns paper intake evidence independently of application checklists. A Staff upload to pre-application intake uses a Document-owned input port. Document asks Loan through a purpose-limited boundary whether the intake is valid for the requested operation, then stores the immutable document version under Document ownership. Initial intake upload must not reuse correction-task authorization because no application correction exists yet.
+
+```mermaid
+flowchart LR
+    Web["Staff Web"]
+    IntakeController["Loan assisted-intake controller"]
+    IntakePort["Loan assisted-intake input port"]
+    IntakeService["Loan application service"]
+    IntakeRepo["Loan assisted-intake repository"]
+    DocController["Document intake-upload controller"]
+    DocPort["Document intake-evidence input port"]
+    DocService["Document application service"]
+    LoanBoundary["Document-owned Loan intake output port / adapter"]
+    LoanContract["Loan intake public application contract"]
+    Storage["Document storage and version persistence"]
+
+    Web --> IntakeController --> IntakePort --> IntakeService --> IntakeRepo
+    Web --> DocController --> DocPort --> DocService
+    DocService --> LoanBoundary --> LoanContract --> IntakeService
+    DocService --> Storage
+```
+
+The intake-to-application command serializes the intake before application creation and permits one resulting `LoanApplication`. It revalidates the selected Customer, allowed product and channel, readiness, amount, term, blocking application, and product-specific outstanding-account rules rather than trusting values captured earlier in the intake. If application creation requires Document to associate intake evidence with the application workflow, Loan uses a Document public contract; it does not rewrite Document persistence. Failure of a required association rolls back the conversion business outcome.
 
 ### Staff Document Checklist and History Query
 
@@ -396,11 +461,15 @@ Submission does not lock an existing LoanAccount. When repayment and submission 
 
 ### UCL and Collateral Submission Variants
 
-UCL and Collateral submission use the same token-derived Customer identity, readiness checks, active product and policy validation, Customer-and-product advisory lock, blocking-application check, checklist creation, status history, and PII-safe audit boundary. Each transaction creates its application-owned pending manual-verification cycle atomically with the submitted product evidence.
+Customer-digital UCL and Collateral submission derive the Customer from the authenticated Customer actor. Staff-assisted submission authenticates Staff, resolves the selected Customer from the confirmed intake, and records `STAFF_ASSISTED` as the application channel. The Staff path must not call a Customer-owned submission input port or represent Staff as the Customer.
+
+After actor and subject resolution, both channels use the same Customer readiness checks, active product and policy validation, Customer-and-product advisory lock, blocking-application check, checklist creation, status history, and PII-safe audit boundary. Each transaction creates its application-owned pending manual-verification cycle atomically with the submitted product evidence. Staff-assisted audit records the Staff user as actor and carries the Customer and application identifiers as the affected business references.
 
 UCL also evaluates the product-scoped outstanding-LoanAccount guard under the Customer-and-product lock. Document creates the income and employment checklist, while Loan creates the application-owned pending verification; neither path acquires a Partner or Salary Advance exposure lock.
 
 Collateral validates and persists one structured asset with type, description, estimated value, ownership status, and condition facts, while Document creates the required ownership-evidence checklist item. It has no product-specific outstanding-LoanAccount guard and acquires no Partner or Salary Advance exposure lock.
+
+No Staff-assisted Salary Advance submission variant exists.
 
 ### UCL Manual Verification
 
@@ -468,7 +537,9 @@ flowchart LR
     LoanService --> Audit
 ```
 
-Customer correction endpoints derive the exact owner from `CurrentUserProvider`. Staff queue, task completion, upload, content-read, review, waiver, and resubmission endpoints require their narrow permissions. Application services recheck task ownership and maker-checker constraints.
+For `CUSTOMER_DIGITAL`, Customer-sourced correction endpoints derive the exact Customer owner from `CurrentUserProvider`. For `STAFF_ASSISTED`, a Customer-sourced correction uses a Staff-scoped input port: the application service authenticates Staff, verifies the application's channel and correction source, and records or accepts only information and evidence obtained from the Customer. The Staff user is the recording actor; the Customer remains the source and business subject.
+
+A Customer-via-Staff correction remains distinct from a Staff correction of Staff-controlled work. Task completion, upload authorization, and resubmission must preserve that distinction rather than treating every Staff-executed command as `REQUEST_STAFF_CORRECTION`. Staff queue, content-read, review, waiver, and resubmission endpoints retain their narrow permissions, and application services recheck task ownership and maker-checker constraints.
 
 The Staff correction case query remains inside Loan because Loan owns the correction lifecycle:
 
@@ -492,6 +563,29 @@ flowchart LR
 
 The service computes current-actor maker-checker evidence without serializing actor IDs. It derives Staff task proof through `LoanDocumentChecklistPort`; Loan does not query Document tables or adapters. The read is advisory presentation evidence, while completion and resubmission commands revalidate locked state.
 
+### Channel-Specific Customer Decisions
+
+After approval, Loan routes Customer-sourced actions by the persisted origination channel. `CUSTOMER_DIGITAL` uses Customer-owned input ports that derive the Customer from authentication. `STAFF_ASSISTED` uses purpose-specific Staff input ports that authenticate Staff, verify the selected application's Customer and channel, and record the evidenced Customer decision without impersonation.
+
+```mermaid
+flowchart LR
+    Application["Approved LoanApplication"]
+    Channel{"Origination channel"}
+    Customer["Authenticated Customer input port"]
+    Staff["Authorized Staff recording input port"]
+    Loan["Loan application service and domain transition"]
+    Document["Document public contract when an artifact is required"]
+    Audit["Actor and subject audit evidence"]
+
+    Application --> Channel
+    Channel -->|CUSTOMER_DIGITAL| Customer --> Loan
+    Channel -->|STAFF_ASSISTED| Staff --> Loan
+    Loan --> Document
+    Loan --> Audit
+```
+
+Offer acceptance or decline remains the Customer's decision. A Staff-assisted command records that decision only when supported by the required branch evidence; it must not let Staff choose on the Customer's behalf. Contract acknowledgment follows the same actor-versus-subject rule. Customer-digital and Staff-assisted entry points may share the same Loan-owned offer or contract transition logic after their channel-specific authorization and evidence checks.
+
 ### Collateral Verification and Approval Coordination
 
 Collateral manual-verification start and completion use the existing LoanApplication workflow serialization. Each command acquires the workflow lock, locks the application, and locks the authoritative latest `collateral_loan_verifications` row before it persists verification, status-history, correction, or audit effects. Start is a normal `SUBMITTED -> VERIFICATION_PENDING` transition: one concurrent request succeeds and later requests fail rather than replaying a successful response.
@@ -500,7 +594,7 @@ Completion carries `expectedVerificationId`. After locking the latest row, Loan 
 
 The latest `VERIFIED` cycle opens Loan Officer review and recommendation and must remain authoritative when an Approver acts. Approval writes the immutable decision before Loan handles the synchronous outcome in the same transaction. Loan rechecks the latest Collateral verification under the workflow/application lock. Missing or non-verified evidence, invalid or missing pricing policy, an invalid term, or a later mandatory write failure rolls back the ApprovalDecision together with every Loan transition, review-cycle, correction, audit, and ApprovedOffer effect.
 
-`APPROVE` loads the active Collateral default policy and creates one exact-request immutable offer plus its reconciled provisional monthly items before reaching `CUSTOMER_ACCEPTANCE_PENDING`. The other three actions use the common reject, return, or document-only correction paths and create no offer. Competing decisions serialize to one authoritative outcome, and Collateral paths acquire no Salary Advance exposure locks or create Salary Advance movements. Customer offer responses then use the common ApprovedOffer lock and terminal-action semantics; acceptance reaches `CONTRACT_PENDING` and opens the common operational-contract flow.
+`APPROVE` loads the active Collateral default policy and creates one exact-request immutable offer plus its reconciled provisional monthly items before reaching `CUSTOMER_ACCEPTANCE_PENDING`. The other three actions use the common reject, return, or document-only correction paths and create no offer. Competing decisions serialize to one authoritative outcome, and Collateral paths acquire no Salary Advance exposure locks or create Salary Advance movements. The channel-specific Customer-decision entry point then uses the common ApprovedOffer lock and terminal-action semantics; acceptance reaches `CONTRACT_PENDING` and opens the common operational-contract flow.
 
 ### Correction Locking and Idempotency
 
@@ -511,8 +605,8 @@ The latest `VERIFIED` cycle opens Loan Officer review and recommendation and mus
 5. Salary Advance resubmission rechecks Partner-owned current-month freshness; stale evidence rejects the operation before a new verification or workflow effect and preserves the existing reservation.
 6. One resubmission request is consumed exactly once.
 7. Collateral resubmission preserves the completed cycle and structured facts, returns the application to `SUBMITTED`, and creates one next pending cycle linked to the resubmitted correction. Concurrent resubmission permits one transition/cycle; a delayed completion carrying the prior cycle ID fails stale.
-8. Customer cancellation is defined only for Salary Advance and UCL returned corrections. It first serializes the request UUID, then locks the Loan workflow, application, and active correction request. Salary Advance additionally locks Customer-and-product scope, latest verification context, Customer-link scope, reservation movements, and the Salary Advance limit before recording its exact release. UCL proves that no Salary reservation or release evidence exists and records no exposure effect. Both products terminalize the correction and application and record history, audit, and immutable cancellation evidence.
-9. Cancellation intentionally does not recheck Partner freshness: a Customer must be able to abandon a returned correction after its Partner evidence becomes stale. Resubmission and cancellation share the workflow/application/correction lock order, so a PostgreSQL race permits exactly one operation to win.
+8. Customer-requested cancellation is defined only for Salary Advance and UCL returned corrections. Customer-digital requests derive the Customer owner from authentication. For Staff-assisted UCL, authorized Staff may record the Customer's evidenced cancellation request after verifying the application's channel and subject. The command first serializes the request UUID, then locks the Loan workflow, application, and active correction request. Salary Advance additionally locks Customer-and-product scope, latest verification context, Customer-link scope, reservation movements, and the Salary Advance limit before recording its exact release. UCL proves that no Salary reservation or release evidence exists and records no exposure effect. Both products terminalize the correction and application and record history, audit, and immutable cancellation evidence.
+9. Cancellation intentionally does not recheck Partner freshness: Customer abandonment must remain possible after Partner evidence becomes stale. Resubmission and cancellation share the workflow/application/correction lock order, so a PostgreSQL race permits exactly one operation to win.
 10. Failure in synchronous Approval-to-Loan coordination or any cancellation evidence write rolls back the entire transaction.
 
 ---
@@ -521,12 +615,13 @@ The latest `VERIFIED` cycle opens Loan Officer review and recommendation and mus
 
 ```mermaid
 sequenceDiagram
-    participant A as Authorized Staff
+    participant A as Authorized Accounting Staff
     participant L as Loan
     participant D as Document
     participant C as Customer boundary
     participant P as Product evidence
-    participant U as Customer
+    participant U as Customer Web
+    participant B as Authorized branch Staff
 
     A->>L: Prepare current contract
     L->>D: Query document processing readiness
@@ -534,7 +629,12 @@ sequenceDiagram
     C-->>L: Purpose-limited sensitive value
     L->>L: Protect contract-bound snapshot
     L-->>A: Masked contract DTO
-    U->>L: Read and acknowledge exact current version
+    alt CUSTOMER_DIGITAL
+        U->>L: Acknowledge exact current version
+    else STAFF_ASSISTED
+        B->>L: Record evidenced Customer acknowledgment
+        L->>D: Reference supporting paper evidence when required
+    end
     A->>L: Query advisory readiness blockers
     A->>L: Confirm readiness
     L->>D: Recheck processing readiness in transaction
@@ -545,11 +645,13 @@ sequenceDiagram
 
 The advisory readiness query uses non-locking reads and does not persist a readiness Boolean. Confirmation acquires the workflow locks and recomputes every blocker before changing state.
 
+Contract acknowledgment remains a Customer-sourced action in both channels. Customer-digital acknowledgment derives the Customer from authentication. Staff-assisted acknowledgment verifies the application channel, the Customer subject, the exact current contract version, and the required evidence before recording the acknowledgment. Loan must preserve the Customer as the source of acknowledgment and the Staff user as the recording actor; it must not store Staff as though Staff were the acknowledging Customer.
+
 Loan also owns the purpose-limited Staff contract-work projection. Its queue selects only `CONTRACT_PENDING` applications with server-side product filtering, paging, and deterministic ordering. Its case read admits only `CONTRACT_PENDING` and `DISBURSEMENT_PENDING`. Under one repeatable-read application transaction, the projection composes the application header, current Loan-owned contract, and the canonical readiness service result, then derives a work stage. Identity or lifecycle contradictions fail closed instead of being repaired in the controller or browser. The projection requires Staff `loan:contract:read` authority and Accounting Officer role; it does not transfer Customer acknowledgment ownership or expose the protected destination.
 
 Loan stores a protected contract-bound destination snapshot. Normal contract responses expose only the masked destination. Full destination data is available only through the dedicated audited reveal flow.
 
-Salary Advance validates its exact unreleased reservation. UCL and Collateral Loan require the authoritative latest application-owned verification to be `VERIFIED`; contract preparation performs this product-evidence validation before reading or protecting bank-account data. Collateral contract versions copy the accepted offer's 1.5% monthly flat-rate terms and provisional items exactly. Destination refresh supersedes the prior version without repricing and requires fresh Customer acknowledgment. UCL and Collateral paths do not acquire Salary Advance exposure locks or create Salary Advance movements.
+Salary Advance validates its exact unreleased reservation. UCL and Collateral Loan require the authoritative latest application-owned verification to be `VERIFIED`; contract preparation performs this product-evidence validation before reading or protecting bank-account data. Collateral contract versions copy the accepted offer's 1.5% monthly flat-rate terms and provisional items exactly. Destination refresh supersedes the prior version without repricing and requires a fresh Customer acknowledgment through the application's origination channel. UCL and Collateral paths do not acquire Salary Advance exposure locks or create Salary Advance movements.
 
 ---
 
@@ -722,6 +824,9 @@ Released migrations are append-only. Runtime code must not depend on Hibernate s
 - Boundary adapters implement consumer-owned ports and call provider public contracts.
 - Mappers produce DTOs after the application result is complete.
 - Customer-owned identity comes from authentication, not from trusted request fields.
+- Staff-assisted commands authenticate Staff and carry the selected Customer separately as the business subject; they must not impersonate Customer self-service.
+- Origination-channel checks happen before shared Loan mutation logic, and Salary Advance has no Staff-assisted origination path.
+- Document owns paper intake evidence and authorizes it through a purpose-limited Loan intake boundary rather than correction-task proof.
 - Reads remain side-effect-free unless the endpoint explicitly defines a command.
 - Commands define lock order, idempotency, failure mapping, and audit behavior.
 - Flyway owns database schema changes.
