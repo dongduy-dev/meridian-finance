@@ -1,8 +1,8 @@
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import {
-  assistedOriginationSchema, bankAccountSchema, intakeEvidenceSchema, staffCustomerSchema,
+  assistedOriginationSchema, bankAccountSchema, intakeEvidenceSchema, intakeVersionSchema, staffCustomerSchema,
   type AssistedOrigination, type BankAccount, type CustomerProfileInput,
-  type IntakeEvidence, type StaffCustomer,
+  type IntakeEvidence, type IntakeEvidenceVersion, type StaffCustomer,
 } from './contracts'
 
 export async function listOpenIntakes(manager: AuthSessionManager): Promise<AssistedOrigination[]> {
@@ -46,8 +46,8 @@ export async function bankAction(manager: AuthSessionManager, customerId: string
 export async function listEvidence(manager: AuthSessionManager, id: string): Promise<IntakeEvidence[]> {
   return intakeEvidenceSchema.array().parse(await manager.protectedRequest(`/staff/assisted-originations/${id}/evidence`))
 }
-export async function uploadEvidence(manager: AuthSessionManager, id: string, evidenceType: string, file: File, uploadRequestId: string, expected?: string): Promise<void> {
+export async function uploadEvidence(manager: AuthSessionManager, id: string, evidenceType: string, file: File, uploadRequestId: string, expected?: string): Promise<IntakeEvidenceVersion> {
   const data = new FormData(); data.set('file', file); data.set('uploadRequestId', uploadRequestId)
   if (expected) data.set('expectedCurrentVersionId', expected)
-  await manager.protectedRequest(`/staff/assisted-originations/${id}/evidence/${evidenceType}/versions`, { method: 'POST', body: data })
+  return intakeVersionSchema.parse(await manager.protectedRequest(`/staff/assisted-originations/${id}/evidence/${evidenceType}/versions`, { method: 'POST', body: data }))
 }

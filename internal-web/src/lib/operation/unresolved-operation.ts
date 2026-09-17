@@ -2,6 +2,7 @@ const STORAGE_KEY = 'meridian.staff.unresolved-operations.v1'
 
 export type UnresolvedOperationType =
   | 'DOCUMENT_REVIEW'
+  | 'INTAKE_EVIDENCE_UPLOAD'
   | 'STAFF_UPLOAD'
   | 'TASK_COMPLETION'
   | 'STAFF_RESUBMISSION'

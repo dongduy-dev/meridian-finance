@@ -545,6 +545,7 @@ Generate a fresh `X-Request-ID` for each HTTP attempt unless the transport repla
 
 | Command | Field |
 |---|---|
+| Intake evidence upload | `uploadRequestId` |
 | Staff document upload | `uploadRequestId` |
 | Document review | `reviewRequestId` |
 | Staff correction completion | `completionRequestId` |

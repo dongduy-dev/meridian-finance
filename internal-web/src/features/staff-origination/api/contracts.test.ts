@@ -37,11 +37,18 @@ describe('Staff-assisted origination contracts', () => {
   })
 
   it('sends replacement evidence as multipart data with replay and expected-version controls', async () => {
-    const protectedRequest = vi.fn().mockResolvedValue(undefined)
+    const protectedRequest = vi.fn().mockResolvedValue({
+      intakeDocumentVersionId: '66666666-6666-4666-8666-666666666666',
+      versionNumber: 2,
+      originalFilename: 'replacement.pdf',
+      detectedMimeType: 'application/pdf',
+      byteSize: 14,
+      uploadedAt: '2026-09-17T08:30:00',
+    })
     const manager = { protectedRequest } as unknown as AuthSessionManager
     const file = new File(['%PDF-fictional'], 'replacement.pdf', { type: 'application/pdf' })
 
-    await uploadEvidence(
+    const result = await uploadEvidence(
       manager,
       '11111111-1111-4111-8111-111111111111',
       'UCL_PAPER_APPLICATION',
@@ -58,5 +65,6 @@ describe('Staff-assisted origination contracts', () => {
     expect(options.body.get('file')).toBe(file)
     expect(options.body.get('uploadRequestId')).toBe('77777777-7777-4777-8777-777777777777')
     expect(options.body.get('expectedCurrentVersionId')).toBe('33333333-3333-4333-8333-333333333333')
+    expect(result.versionNumber).toBe(2)
   })
 })

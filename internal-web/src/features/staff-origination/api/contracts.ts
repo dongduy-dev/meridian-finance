@@ -33,7 +33,7 @@ export const bankAccountSchema = z.object({
   updatedAt: timestampSchema, deactivatedAt: timestampSchema.nullable(),
 })
 
-const intakeVersionSchema = z.object({
+export const intakeVersionSchema = z.object({
   intakeDocumentVersionId: uuidSchema, versionNumber: z.number().int().positive(),
   originalFilename: z.string(), detectedMimeType: z.string(), byteSize: z.number().positive(),
   uploadedAt: timestampSchema,
@@ -49,6 +49,7 @@ export type AssistedOrigination = z.infer<typeof assistedOriginationSchema>
 export type StaffCustomer = z.infer<typeof staffCustomerSchema>
 export type BankAccount = z.infer<typeof bankAccountSchema>
 export type IntakeEvidence = z.infer<typeof intakeEvidenceSchema>
+export type IntakeEvidenceVersion = z.infer<typeof intakeVersionSchema>
 
 export type CustomerProfileInput = {
   fullName: string; identityReference?: string; phoneNumber: string; residentialAddress: string;
