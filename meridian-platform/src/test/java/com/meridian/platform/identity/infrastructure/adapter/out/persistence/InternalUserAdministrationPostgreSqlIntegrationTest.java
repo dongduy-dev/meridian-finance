@@ -83,7 +83,6 @@ class InternalUserAdministrationPostgreSqlIntegrationTest {
                 Set.of("identity:user:manage")
         ));
         jdbcTemplate.update("DELETE FROM refresh_token_sessions WHERE user_id = ?", TARGET_ID);
-        jdbcTemplate.update("DELETE FROM audit_events WHERE entity_type = 'IDENTITY_USER'");
         jdbcTemplate.update("DELETE FROM role_assignments WHERE user_id = ?", TARGET_ID);
         jdbcTemplate.update(
                 "INSERT INTO role_assignments (id, user_id, role_id) VALUES (?, ?, ?)",
@@ -122,6 +121,7 @@ class InternalUserAdministrationPostgreSqlIntegrationTest {
     void statusMutationBumpsVersionUpdatesTimestampRevokesRefreshAndAuditsOnlyRealChanges() throws Exception {
         AuthenticationResult session = loginTarget();
         LocalDateTime originalUpdatedAt = updatedAt();
+        int statusAuditsBefore = auditCount("IDENTITY_USER_STATUS_CHANGED");
 
         var suspended = commands.changeStatus(TARGET_ID, new ChangeInternalUserStatusRequest(UserStatus.SUSPENDED));
         LocalDateTime changedUpdatedAt = updatedAt();
@@ -131,7 +131,7 @@ class InternalUserAdministrationPostgreSqlIntegrationTest {
         assertEquals(1L, authorizationVersion());
         assertNotEquals(originalUpdatedAt, changedUpdatedAt);
         assertEquals(changedUpdatedAt, updatedAt());
-        assertEquals(1, auditCount("IDENTITY_USER_STATUS_CHANGED"));
+        assertEquals(statusAuditsBefore + 1, auditCount("IDENTITY_USER_STATUS_CHANGED"));
         assertEquals(ACTOR_ID, auditActor("IDENTITY_USER_STATUS_CHANGED"));
         assertEquals("ACTIVE", auditPayload("IDENTITY_USER_STATUS_CHANGED", "previousUserStatus"));
         assertEquals("SUSPENDED", auditPayload("IDENTITY_USER_STATUS_CHANGED", "finalUserStatus"));
@@ -157,6 +157,8 @@ class InternalUserAdministrationPostgreSqlIntegrationTest {
     @Test
     void roleChangesInvalidateOldAccessAndRefreshIntoCurrentAuthority() throws Exception {
         AuthenticationResult original = loginTarget();
+        int assignedAuditsBefore = auditCount("IDENTITY_USER_ROLE_ASSIGNED");
+        int removedAuditsBefore = auditCount("IDENTITY_USER_ROLE_REMOVED");
         commands.changeRoleAssignment(
                 TARGET_ID, "BACK_OFFICE_ADMIN", new ChangeInternalUserRoleRequest(true)
         );
@@ -177,22 +179,24 @@ class InternalUserAdministrationPostgreSqlIntegrationTest {
         AuthenticationResult removed = authentication.refresh(added.refreshToken());
         assertFalse(removed.response().roles().contains("BACK_OFFICE_ADMIN"));
         assertFalse(removed.response().permissions().contains("identity:user:manage"));
-        assertEquals(1, auditCount("IDENTITY_USER_ROLE_ASSIGNED"));
-        assertEquals(1, auditCount("IDENTITY_USER_ROLE_REMOVED"));
+        assertEquals(assignedAuditsBefore + 1, auditCount("IDENTITY_USER_ROLE_ASSIGNED"));
+        assertEquals(removedAuditsBefore + 1, auditCount("IDENTITY_USER_ROLE_REMOVED"));
         assertEquals("BACK_OFFICE_ADMIN", auditPayload("IDENTITY_USER_ROLE_ASSIGNED", "roleCode"));
     }
 
     @Test
     void roleNoOpsDoNotMutateVersionTimestampOrAuditAndCustomerRoleIsRejected() {
         LocalDateTime originalUpdatedAt = updatedAt();
+        int assignedAuditsBefore = auditCount("IDENTITY_USER_ROLE_ASSIGNED");
+        int removedAuditsBefore = auditCount("IDENTITY_USER_ROLE_REMOVED");
 
         commands.changeRoleAssignment(TARGET_ID, "LOAN_OFFICER", new ChangeInternalUserRoleRequest(true));
         commands.changeRoleAssignment(TARGET_ID, "APPROVER", new ChangeInternalUserRoleRequest(false));
 
         assertEquals(0L, authorizationVersion());
         assertEquals(originalUpdatedAt, updatedAt());
-        assertEquals(0, auditCount("IDENTITY_USER_ROLE_ASSIGNED"));
-        assertEquals(0, auditCount("IDENTITY_USER_ROLE_REMOVED"));
+        assertEquals(assignedAuditsBefore, auditCount("IDENTITY_USER_ROLE_ASSIGNED"));
+        assertEquals(removedAuditsBefore, auditCount("IDENTITY_USER_ROLE_REMOVED"));
         assertEquals("INTERNAL_ROLE_NOT_FOUND", assertThrows(
                 com.meridian.platform.shared.domain.exception.EntityNotFoundException.class,
                 () -> commands.changeRoleAssignment(
@@ -225,18 +229,19 @@ class InternalUserAdministrationPostgreSqlIntegrationTest {
 
     @Test
     void concurrentSameTargetStatusAndRoleCommandsSerializeToOneEffect() throws Exception {
+        int statusAuditsBefore = auditCount("IDENTITY_USER_STATUS_CHANGED");
         runConcurrently(
                 () -> commands.changeStatus(TARGET_ID, new ChangeInternalUserStatusRequest(UserStatus.SUSPENDED)),
                 () -> commands.changeStatus(TARGET_ID, new ChangeInternalUserStatusRequest(UserStatus.SUSPENDED))
         );
         assertEquals(1L, authorizationVersion());
-        assertEquals(1, auditCount("IDENTITY_USER_STATUS_CHANGED"));
+        assertEquals(statusAuditsBefore + 1, auditCount("IDENTITY_USER_STATUS_CHANGED"));
 
         jdbcTemplate.update(
                 "UPDATE users SET status = 'ACTIVE', authorization_version = 0 WHERE id = ?",
                 TARGET_ID
         );
-        jdbcTemplate.update("DELETE FROM audit_events WHERE entity_type = 'IDENTITY_USER'");
+        int assignedAuditsBefore = auditCount("IDENTITY_USER_ROLE_ASSIGNED");
         runConcurrently(
                 () -> commands.changeRoleAssignment(
                         TARGET_ID, "APPROVER", new ChangeInternalUserRoleRequest(true)
@@ -246,7 +251,7 @@ class InternalUserAdministrationPostgreSqlIntegrationTest {
                 )
         );
         assertEquals(1L, authorizationVersion());
-        assertEquals(1, auditCount("IDENTITY_USER_ROLE_ASSIGNED"));
+        assertEquals(assignedAuditsBefore + 1, auditCount("IDENTITY_USER_ROLE_ASSIGNED"));
         assertEquals(1, jdbcTemplate.queryForObject(
                 """
                         SELECT COUNT(*) FROM role_assignments ra
@@ -260,6 +265,8 @@ class InternalUserAdministrationPostgreSqlIntegrationTest {
 
     @Test
     void statusAndRoleCommandsShareUserRowSerializationWithoutLostVersionBumps() throws Exception {
+        int statusAuditsBefore = auditCount("IDENTITY_USER_STATUS_CHANGED");
+        int assignedAuditsBefore = auditCount("IDENTITY_USER_ROLE_ASSIGNED");
         runConcurrently(
                 () -> commands.changeStatus(TARGET_ID, new ChangeInternalUserStatusRequest(UserStatus.SUSPENDED)),
                 () -> commands.changeRoleAssignment(
@@ -268,8 +275,8 @@ class InternalUserAdministrationPostgreSqlIntegrationTest {
         );
 
         assertEquals(2L, authorizationVersion());
-        assertEquals(1, auditCount("IDENTITY_USER_STATUS_CHANGED"));
-        assertEquals(1, auditCount("IDENTITY_USER_ROLE_ASSIGNED"));
+        assertEquals(statusAuditsBefore + 1, auditCount("IDENTITY_USER_STATUS_CHANGED"));
+        assertEquals(assignedAuditsBefore + 1, auditCount("IDENTITY_USER_ROLE_ASSIGNED"));
     }
 
     private AuthenticationResult loginTarget() {
@@ -329,21 +336,40 @@ class InternalUserAdministrationPostgreSqlIntegrationTest {
 
     private int auditCount(String action) {
         return jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM audit_events WHERE entity_type = 'IDENTITY_USER' AND action = ?",
+                """
+                        SELECT COUNT(*) FROM audit_events
+                        WHERE entity_type = 'IDENTITY_USER' AND entity_id = ? AND action = ?
+                        """,
                 Integer.class,
+                TARGET_ID,
                 action
         );
     }
 
     private UUID auditActor(String action) {
         return jdbcTemplate.queryForObject(
-                "SELECT actor_user_id FROM audit_events WHERE action = ?", UUID.class, action
+                """
+                        SELECT actor_user_id FROM audit_events
+                        WHERE entity_type = 'IDENTITY_USER' AND entity_id = ? AND action = ?
+                        ORDER BY occurred_at DESC, id DESC LIMIT 1
+                        """,
+                UUID.class,
+                TARGET_ID,
+                action
         );
     }
 
     private String auditPayload(String action, String key) {
         return jdbcTemplate.queryForObject(
-                "SELECT payload ->> ? FROM audit_events WHERE action = ?", String.class, key, action
+                """
+                        SELECT payload ->> ? FROM audit_events
+                        WHERE entity_type = 'IDENTITY_USER' AND entity_id = ? AND action = ?
+                        ORDER BY occurred_at DESC, id DESC LIMIT 1
+                        """,
+                String.class,
+                key,
+                TARGET_ID,
+                action
         );
     }
 }

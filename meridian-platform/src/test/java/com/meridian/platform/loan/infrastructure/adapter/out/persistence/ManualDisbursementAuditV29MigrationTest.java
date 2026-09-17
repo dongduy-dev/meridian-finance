@@ -1,19 +1,25 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
-import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.LinkedHashSet;
 import java.util.HexFormat;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ManualDisbursementAuditV29MigrationTest {
+
+    private static final Pattern AUDIT_ACTION_LITERAL =
+            Pattern.compile("'([A-Z][A-Z0-9_]*)'");
 
     private static final Path MIGRATION_DIRECTORY =
             Path.of("src/main/resources/db/migration");
@@ -31,31 +37,18 @@ class ManualDisbursementAuditV29MigrationTest {
         assertTrue(sql.contains("DROP CONSTRAINT chk_audit_events_action"));
         assertTrue(sql.contains("ADD CONSTRAINT chk_audit_events_action CHECK"));
         assertTrue(sql.contains("'MANUAL_DISBURSEMENT_CONFIRMED'"));
-        for (BusinessAuditAction action : BusinessAuditAction.values()) {
-            if (action == BusinessAuditAction
-                    .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED
-                    || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
-                    || action == BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED
-                    || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED
-                    || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED
-                    || action == BusinessAuditAction.COLLATERAL_LOAN_VERIFICATION_STARTED
-                    || action == BusinessAuditAction.COLLATERAL_LOAN_VERIFICATION_COMPLETED
-                    || action == BusinessAuditAction.LOAN_APPLICATION_CANCELLED
-                    || action == BusinessAuditAction.REPAYMENT_RECORDED
-                    || action == BusinessAuditAction.LOAN_ACCOUNT_STATUS_CHANGED
-                    || action == BusinessAuditAction.LOAN_SETTLEMENT_APPROVED
-                    || action == BusinessAuditAction.LOAN_ACCOUNT_CLOSED
-                    || action == BusinessAuditAction.PARTNER_COMPANY_CREATED
-                    || action == BusinessAuditAction.PARTNER_COMPANY_UPDATED
-                    || action == BusinessAuditAction.PARTNER_COMPANY_STATUS_CHANGED
-                    || action == BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_COMPLETED
-                    || action == BusinessAuditAction.LOAN_PRODUCT_LIMITS_UPDATED
-                    || action == BusinessAuditAction.LOAN_PRODUCT_ACTIVATED
-                    || action == BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED) {
-                continue;
-            }
-            assertTrue(sql.contains("'" + action.name() + "'"));
-        }
+
+        String expectedV28Section = sql.substring(
+                sql.indexOf("expected_actions CONSTANT"),
+                sql.indexOf("actual_actions TEXT[]")
+        );
+        String installedV29Section = sql.substring(
+                sql.lastIndexOf("ADD CONSTRAINT chk_audit_events_action CHECK")
+        );
+        Set<String> expectedV29Actions = auditActions(expectedV28Section);
+        expectedV29Actions.add("MANUAL_DISBURSEMENT_CONFIRMED");
+
+        assertEquals(expectedV29Actions, auditActions(installedV29Section));
         assertFalse(sql.contains(
                 "'LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED'"));
         assertFalse(sql.contains("'COLLATERAL_LOAN_APPLICATION_SUBMITTED'"));
@@ -103,5 +96,14 @@ class ManualDisbursementAuditV29MigrationTest {
         assertTrue(snapshot.contains("uq_loan_products_identity_tuple"));
         assertTrue(snapshot.contains("trg_loan_applications_product_identity_immutable"));
         assertTrue(snapshot.contains("'ON_SALARY_DATE', 'MONTHLY_INSTALLMENT'"));
+    }
+
+    private static Set<String> auditActions(String sql) {
+        Set<String> actions = new LinkedHashSet<>();
+        Matcher matcher = AUDIT_ACTION_LITERAL.matcher(sql);
+        while (matcher.find()) {
+            actions.add(matcher.group(1));
+        }
+        return actions;
     }
 }
