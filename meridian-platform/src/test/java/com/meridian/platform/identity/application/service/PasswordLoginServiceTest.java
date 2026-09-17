@@ -137,6 +137,7 @@ class PasswordLoginServiceTest {
                 verifiedShape.customerId(),
                 verifiedShape.roles(),
                 verifiedShape.permissions(),
+                verifiedShape.authorizationVersion(),
                 verifiedShape.failedLoginAttempts(),
                 verifiedShape.lockedUntil(),
                 null
@@ -257,6 +258,7 @@ class PasswordLoginServiceTest {
                 userType == UserType.CUSTOMER ? CUSTOMER_ID : null,
                 userType == UserType.CUSTOMER ? Set.of("CUSTOMER") : Set.of("LOAN_OFFICER"),
                 userType == UserType.CUSTOMER ? Set.of("loan:submit") : Set.of("loan:read"),
+                0,
                 attempts,
                 lockedUntil,
                 Instant.EPOCH
@@ -314,6 +316,7 @@ class PasswordLoginServiceTest {
                     user.customerId(),
                     user.roles(),
                     user.permissions(),
+                    user.authorizationVersion(),
                     failedLoginAttempts,
                     lockedUntil,
                     user.emailVerifiedAt()

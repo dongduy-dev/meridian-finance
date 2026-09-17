@@ -56,7 +56,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     @Test
     void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
-        assertEquals("54", latestVersion(SCHEMA));
+        assertEquals("55", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -215,10 +215,14 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_COMPLETED
                     && action != BusinessAuditAction.LOAN_PRODUCT_LIMITS_UPDATED
                     && action != BusinessAuditAction.LOAN_PRODUCT_ACTIVATED
-                    && action != BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED) {
+                    && action != BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
+                    && action != BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
+                    && action != BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
+                    && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED) {
                 insertAuditEvent(schema, action.name());
             }
         }
+        assertV55IdentityActionsRejected(schema);
     }
 
     private void assertThroughV31ActionsAccepted(String schema) {
@@ -240,13 +244,29 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_COMPLETED
                     && action != BusinessAuditAction.LOAN_PRODUCT_LIMITS_UPDATED
                     && action != BusinessAuditAction.LOAN_PRODUCT_ACTIVATED
-                    && action != BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED) {
+                    && action != BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
+                    && action != BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
+                    && action != BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
+                    && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED) {
                 insertAuditEvent(schema, action.name());
             }
         }
         assertThrows(DataAccessException.class, () -> insertAuditEvent(
                 schema,
                 BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED.name()
+        ));
+        assertV55IdentityActionsRejected(schema);
+    }
+
+    private void assertV55IdentityActionsRejected(String schema) {
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema, BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED.name()
+        ));
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema, BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED.name()
+        ));
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema, BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED.name()
         ));
     }
 

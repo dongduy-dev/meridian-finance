@@ -332,9 +332,25 @@ describe('internal router access contract', () => {
     expect(router.state.location.pathname).toBe('/login')
   })
 
+  it('protects Internal User administration with exact identity:user:manage without querying on denial', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.mocked(authApi.refresh).mockResolvedValue(admin(['identity:user:manage']))
+    renderRoute('/admin/users')
+    expect(await screen.findByRole('heading', { name: 'Internal Users' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Internal Users' })).toHaveAttribute('href', '/admin/users')
+
+    cleanup()
+    fetchMock.mockClear()
+    vi.mocked(authApi.refresh).mockResolvedValue(admin(['identity:user:manage:all'], ['BACK_OFFICE_ADMIN']))
+    renderRoute('/admin/users')
+    expect(await screen.findByRole('heading', { name: 'No administrative access' })).toBeVisible()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('renders the normal not-found state for an authorized admin visiting an unimplemented Admin child', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue(admin())
-    renderRoute('/admin/users')
+    renderRoute('/admin/configuration')
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeVisible()
     expect(screen.queryByText(/Admin workspace|User administration/)).not.toBeInTheDocument()
   })

@@ -9,12 +9,16 @@ import java.util.UUID;
 public record ParsedAccessToken(
         AuthenticatedUser authenticatedUser,
         UUID tokenId,
+        long authorizationVersion,
         Instant expiresAt
 ) {
 
     public ParsedAccessToken {
         Objects.requireNonNull(authenticatedUser, "authenticatedUser must not be null");
         Objects.requireNonNull(tokenId, "tokenId must not be null");
+        if (authorizationVersion < 0) {
+            throw new IllegalArgumentException("authorizationVersion must not be negative");
+        }
         Objects.requireNonNull(expiresAt, "expiresAt must not be null");
     }
 }

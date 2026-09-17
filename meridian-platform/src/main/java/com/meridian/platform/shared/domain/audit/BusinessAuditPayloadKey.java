@@ -43,7 +43,10 @@ public enum BusinessAuditPayloadKey {
     PARTNER_COMPANY_ID("partnerCompanyId", ValueType.UUID),
     PARTNER_COMPANY_STATUS("partnerCompanyStatus", ValueType.CODE),
     PARTNER_EMPLOYEE_IMPORT_BATCH_ID("partnerEmployeeImportBatchId", ValueType.UUID),
-    PARTNER_EMPLOYEE_IMPORT_BATCH_STATUS("partnerEmployeeImportBatchStatus", ValueType.CODE);
+    PARTNER_EMPLOYEE_IMPORT_BATCH_STATUS("partnerEmployeeImportBatchStatus", ValueType.CODE),
+    PREVIOUS_USER_STATUS("previousUserStatus", ValueType.CODE),
+    FINAL_USER_STATUS("finalUserStatus", ValueType.CODE),
+    ROLE_CODE("roleCode", ValueType.CODE);
 
     private final String jsonName;
     private final ValueType valueType;

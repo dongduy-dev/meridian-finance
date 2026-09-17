@@ -293,7 +293,7 @@ Problem:
 Flyway migrations are growing and current schema is harder to inspect from migrations alone.
 
 Resolution:
-`MER-DB-CURRENT-SCHEMA.sql` is the checked-in human-readable current physical-schema snapshot through V54; Flyway V1-V54 remains the executable schema authority. Focused PostgreSQL migration and snapshot verification confirms their alignment.
+`MER-DB-CURRENT-SCHEMA.sql` is the checked-in human-readable current physical-schema snapshot through V55; Flyway V1-V55 remains the executable schema authority. Focused PostgreSQL migration and snapshot verification confirms their alignment.
 
 ### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
 
@@ -373,16 +373,16 @@ Suggested future branch name:
 
 Area: Identity / Back Office
 
-Type: Deferred feature
+Type: Delivered feature
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocking: No current blocker.
 
-Recommendation:
-Implement admin user management UI after backend user-management use cases exist.
+Outcome:
+Identity exposes purpose-limited Staff User and assignable-role discovery plus controlled User-status and per-role target-state commands under exact `identity:user:manage`. Real authority changes serialize on the User row, invalidate older access-token authority through a monotonic authorization version, revoke all refresh sessions when a User becomes inactive, and append actor-bound PII-safe business audit evidence. Internal Web provides the executable `/admin/users` workspace with non-optimistic commands, authoritative refresh after confirmed or unknown results, and zero retained query state after unmount.
 
 Suggested future branch name:
 `feature/admin-user-management-ui`

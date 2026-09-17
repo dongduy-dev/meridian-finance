@@ -116,6 +116,27 @@ A permission authorizes an actor to attempt an operation. The owning context sti
 
 Customer-owned endpoints derive `customerId` from `CurrentUserProvider`. They must not trust a Customer identifier supplied in the request when ownership is implied by the endpoint.
 
+Access JWTs remain self-contained RS256 credentials, but embedded authority is accepted only while it is current:
+
+```mermaid
+flowchart LR
+    Request["Protected request"]
+    Jwt["Verify JWT signature and expiry"]
+    Revocation["Check exact jti revocation"]
+    Version["Read current User authorization version"]
+    Compare{"Token authzVersion matches?"}
+    Context["Install SecurityContext"]
+    Invalid["401 INVALID_TOKEN"]
+    Refresh["Internal Web single refresh"]
+    Current["Current roles and permissions"]
+
+    Request --> Jwt --> Revocation --> Version --> Compare
+    Compare -->|yes| Context
+    Compare -->|no| Invalid --> Refresh --> Current
+```
+
+The version read is a purpose-limited User-ID lookup; authentication does not rehydrate password, role, permission, or other credential rows on every request. A mismatch is an invalid authentication credential, not a forbidden operation, and fails before embedded authorities enter the `SecurityContext`. An active User's established refresh session may rotate into a token with current authority. Suspension or disablement revokes all refresh sessions, so an inactive User cannot recover through refresh.
+
 ---
 
 ## 4. Representative Query Flows
@@ -193,6 +214,29 @@ flowchart LR
 The administration query loads active and inactive products in deterministic product-code order without requiring an active pricing or checklist policy. The protected projection contains product identity and presentation facts plus activation and amount limits; it does not reuse the public policy assembly.
 
 An amount-limit or activation command opens one application transaction, locks the product row by stable product code, validates the target state, persists only the supported mutable facts, updates `updated_at`, and records the authenticated actor through the shared business-audit mechanism. A same-value target returns the locked current product without persistence, timestamp, or audit effects. Activation affects future catalogue discovery and submission only; historical lending evidence is not rewritten.
+
+### 5.3 Internal User Administration
+
+Protected Staff User and predefined-role discovery plus status and role-assignment commands use `/api/v1/admin/internal-users` and require exact `identity:user:manage`. Identity returns a purpose-limited Staff projection and excludes Customer Users and credential internals.
+
+```mermaid
+flowchart LR
+    Web["Internal Web"]
+    Controller["InternalUserAdministrationController"]
+    InPort["Identity administration input port"]
+    Service["Identity application service"]
+    UserLock["Locked users row"]
+    State["Status or role assignment persistence"]
+    Version["Authorization-version increment"]
+    Refresh["Optional user-wide refresh revocation"]
+    Audit["PII-safe business audit"]
+
+    Web --> Controller --> InPort --> Service --> UserLock --> State --> Version
+    Version --> Refresh
+    Version --> Audit
+```
+
+Every status and role command locks the target User before validating that it is internal Staff and before touching `role_assignments`. A same-target request returns the current projection without persistence, timestamp, version, session, or audit effects. A real change updates `users.updated_at` and increments `authorization_version` once. Role changes retain refresh sessions for an active User; a status change to `SUSPENDED` or `DISABLED` revokes all target-User refresh sessions in the same transaction. Reactivation increments the version but never restores a revoked token family. The audit entry records the authenticated actor, `IDENTITY_USER` target ID, controlled action, and status or role code without email or credential data.
 
 ---
 

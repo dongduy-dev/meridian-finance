@@ -54,8 +54,8 @@ public class UserRepositoryAdapter implements UserRepository {
                         INSERT INTO users (
                             id, email, normalized_email, password_hash, user_type, status,
                             display_name, customer_id, failed_login_attempts, locked_until,
-                            email_verified_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            email_verified_at, authorization_version
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT ON CONSTRAINT uq_users_normalized_email DO NOTHING
                         """,
                 user.id(),
@@ -68,7 +68,8 @@ public class UserRepositoryAdapter implements UserRepository {
                 user.customerId(),
                 user.failedLoginAttempts(),
                 toLocalDateTime(user.lockedUntil()),
-                toLocalDateTime(user.emailVerifiedAt())
+                toLocalDateTime(user.emailVerifiedAt()),
+                user.authorizationVersion()
         );
         if (inserted != 1) {
             throw new com.meridian.platform.shared.domain.exception.BusinessStateConflictException(
@@ -113,7 +114,7 @@ public class UserRepositoryAdapter implements UserRepository {
         List<UserRow> rows = jdbcTemplate.query(
                 """
                         SELECT id, email, password_hash, user_type, status, display_name, customer_id,
-                               failed_login_attempts, locked_until, email_verified_at
+                               authorization_version, failed_login_attempts, locked_until, email_verified_at
                         FROM users
                         WHERE id = ?
                         """ + lockClause,
@@ -163,7 +164,7 @@ public class UserRepositoryAdapter implements UserRepository {
         List<UserRow> rows = jdbcTemplate.query(
                 """
                         SELECT id, email, password_hash, user_type, status, display_name, customer_id,
-                               failed_login_attempts, locked_until, email_verified_at
+                               authorization_version, failed_login_attempts, locked_until, email_verified_at
                         FROM users
                         WHERE normalized_email = ?
                         """ + lockClause,
@@ -185,6 +186,7 @@ public class UserRepositoryAdapter implements UserRepository {
                 row.customerId(),
                 findRoles(row.id()),
                 findPermissions(row.id()),
+                row.authorizationVersion(),
                 row.failedLoginAttempts(),
                 row.lockedUntil(),
                 row.emailVerifiedAt()
@@ -229,6 +231,7 @@ public class UserRepositoryAdapter implements UserRepository {
                 resultSet.getString("status"),
                 resultSet.getString("display_name"),
                 resultSet.getObject("customer_id", UUID.class),
+                resultSet.getLong("authorization_version"),
                 resultSet.getInt("failed_login_attempts"),
                 toInstant(resultSet.getObject("locked_until", LocalDateTime.class)),
                 toInstant(resultSet.getObject("email_verified_at", LocalDateTime.class))
@@ -251,6 +254,7 @@ public class UserRepositoryAdapter implements UserRepository {
             String status,
             String displayName,
             UUID customerId,
+            long authorizationVersion,
             int failedLoginAttempts,
             Instant lockedUntil,
             Instant emailVerifiedAt

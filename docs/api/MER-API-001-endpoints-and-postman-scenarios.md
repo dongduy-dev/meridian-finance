@@ -457,7 +457,44 @@ Deactivation removes the product from the public catalogue and preserves the exi
 
 An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A supported code whose product row is missing returns `404 PRODUCT_NOT_FOUND`. Each command locks the product row before applying the target state. Repeating identical limits or activation returns the current projection without another save, timestamp change, or audit event. The commands do not use a request UUID. A client must not automatically retry after an unknown transport result; it refreshes the protected list and may explicitly submit the same target state again.
 
-### 3.11 Customer profile
+### 3.11 Protected Internal User administration
+
+```text
+GET /api/v1/admin/internal-users
+GET /api/v1/admin/internal-users/assignable-roles
+PUT /api/v1/admin/internal-users/{userId}/status
+PUT /api/v1/admin/internal-users/{userId}/roles/{roleCode}
+```
+
+All four operations require exact `identity:user:manage`. A role name, permission prefix, `admin:config`, or generic Staff authentication does not authorize them.
+
+The User list contains only internal Users whose `userType` is `STAFF` and whose Customer association is absent, ordered by normalized email and stable User ID. Each purpose-limited response contains `userId`, `email`, `displayName`, User `status`, and ordered `assignedRoleCodes`. It excludes password and recovery state, failed-login or temporary-lock state, refresh/access-token metadata, authorization version, and Customer identity. Missing IDs and non-Staff targets share `404 INTERNAL_USER_NOT_FOUND` so the contract does not reveal whether an arbitrary Customer User exists.
+
+Assignable-role discovery returns `code` and `name` in role-code order for the predefined backend-owned internal roles. `CUSTOMER` is excluded. An unknown role or any nonassignable role code returns `404 INTERNAL_ROLE_NOT_FOUND`; the API does not expose role, permission, or role-to-permission editing.
+
+Status uses an explicit existing Identity target state:
+
+```json
+{
+  "status": "SUSPENDED"
+}
+```
+
+Role assignment changes one role only:
+
+```json
+{
+  "assigned": true
+}
+```
+
+Both commands use target-state `PUT` semantics and lock the target User before validation and mutation. A target equal to current state returns the current safe projection without changing `updatedAt`, authorization freshness, refresh sessions, or audit evidence. A real status or role-assignment change updates the User timestamp, increments authorization freshness once, and records one actor-bound PII-safe audit outcome. Suspension and disablement also revoke every refresh-token session for the target User in the same transaction; reactivation never restores those sessions. A real role change for an active User preserves its refresh sessions.
+
+Access JWTs carry a private `authzVersion` claim. For a protected request, Meridian verifies signature and expiry, checks exact `jti` revocation, compares that claim with the current lightweight User authorization version, and only then installs the embedded roles and permissions. A mismatch returns `401 INVALID_TOKEN`. Internal Web may perform its established single refresh: an active User receives a replacement token with current roles and permissions, while a suspended or disabled User cannot refresh. The authorization version is never returned in an administration response.
+
+The commands do not use a request UUID and clients must not retry automatically after an unknown transport result. The client preserves its last confirmed view, refreshes protected User state, and may explicitly send the same target state again after review.
+
+### 3.12 Customer profile
 
 ```json
 {
@@ -474,7 +511,7 @@ An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A supported code whose pro
 
 The safe Customer response contains `customerId`, `customerNumber`, Customer `status`, `verificationStatus`, `profileCompletionStatus`, `primaryActiveBankAccountPresent`, and the profile fields shown above except `identityReference`. Duplicate normalized identity evidence owned by another Customer returns `409 IDENTITY_REFERENCE_ALREADY_IN_USE` without echoing the submitted value.
 
-### 3.12 Customer bank accounts
+### 3.13 Customer bank accounts
 
 ```json
 {
@@ -487,7 +524,7 @@ The safe Customer response contains `customerId`, `customerNumber`, Customer `st
 
 The account number is normalized by removing spaces and hyphens and must contain at least six normalized characters. List, add, make-primary, and deactivate responses contain the account ID, bank code/name, account-holder name, masked account number, last four characters, status, primary flag, and lifecycle timestamps. They never return the full account number, ciphertext, fingerprint, or protection metadata.
 
-### 3.13 Customer Partner verification options
+### 3.14 Customer Partner verification options
 
 ```text
 GET /api/v1/partner-companies/verification-options
@@ -495,11 +532,11 @@ GET /api/v1/partner-companies/verification-options
 
 This authenticated Customer read requires `partner:employee:verify:own`. It returns active Partner Companies in deterministic company-code order with only `partnerCompanyId`, `companyCode`, and `name`. It excludes the Salary Advance policy limit, Partner Employees, salary and eligibility evidence, and import-batch facts. The selector does not itself verify employment or state that the Customer is eligible.
 
-### 3.14 Partner staff reads
+### 3.15 Partner staff reads
 
 The Partner Company, employee, and import-batch reads require `partner:read`. Partner Company responses include the configured Salary Advance policy limit. Partner Employee responses include employee code, identity reference, salary amount, Salary Advance limit, employment status, active state, company identity, and import-batch identity. These are restricted Staff contracts and must not be reused as Customer response shapes. Import-batch responses contain company identity, effective month, status, and valid/invalid row counts.
 
-### 3.15 Partner administration commands
+### 3.16 Partner administration commands
 
 Partner administration commands require exact `partner:manage`. Company creation accepts `companyCode`, `name`, one of `ACTIVE`, `INACTIVE`, or `SUSPENDED`, and a nonnegative `salaryAdvancePolicyLimit`. Company code is a stable unique identifier. The update contract accepts only `name` and `salaryAdvancePolicyLimit`; status changes use the distinct `{ "status": "..." }` command. A same-status command returns the unchanged company without another audit effect.
 
@@ -526,7 +563,7 @@ The employee import body uses a structured JSON batch:
 
 The `requestId` is the durable import operation identity. Exact replay returns the original response. Reuse with different semantic content returns `409 IDEMPOTENCY_KEY_REUSED`. Multiple completed batches for one company and effective month remain legal; Partner selects the latest completed batch through its existing authority rules. Import does not refresh Customer–Partner Employee links or mutate lending state.
 
-### 3.15 Employee verification
+### 3.17 Employee verification
 
 ```json
 {
@@ -1469,7 +1506,7 @@ Collection:
 docs/api/Meridian-Platform.postman_collection.json
 ```
 
-It authenticates role-specific demo actors, stores Bearer tokens, exercises refresh and current-session logout through the cookie jar, and covers the catalogue above, including advisory Salary Advance readiness, durable LoanApplication status recovery, returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. UCL scenarios include all three verification outcomes, correction and re-verification, cancellation, outstanding-debt rejection, and product-generic servicing through closure. The Collateral folder covers prepared ownership evidence, exact-cycle manual verification, Loan Officer recommendation, all four Approver actions, exact offer assertions, Customer acceptance/decline, protected contract preparation, acknowledgment, readiness, destination reveal, activation replay, final schedule reads, ownership concealment, partial repayment and history, Administrative Full-Balance Settlement, and closure.
+It authenticates role-specific demo actors, stores Bearer tokens, exercises refresh and current-session logout through the cookie jar, and covers the catalogue above, including protected Loan Product and Internal User administration, advisory Salary Advance readiness, durable LoanApplication status recovery, returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. Internal User scenarios cover discovery, predefined roles, reversible status and role targets, safe no-ops, stale-token rejection, missing/nonassignable targets, exact permission denial, and restoration of seeded status, role, access-token, and cookie state. UCL scenarios include all three verification outcomes, correction and re-verification, cancellation, outstanding-debt rejection, and product-generic servicing through closure. The Collateral folder covers prepared ownership evidence, exact-cycle manual verification, Loan Officer recommendation, all four Approver actions, exact offer assertions, Customer acceptance/decline, protected contract preparation, acknowledgment, readiness, destination reveal, activation replay, final schedule reads, ownership concealment, partial repayment and history, Administrative Full-Balance Settlement, and closure.
 
 Complex correction scenarios require prepared application, review-cycle, checklist, and version variables. The optional cancellation folder requires `returnedCancellationScenarioEnabled=true` and a separate Customer-owned `cancellationLoanApplicationId` in `RETURNED_FOR_REVISION`; it confirms the command, exact replay, and terminal application GET without exposing internal evidence IDs. Seed fixtures and scenario-specific IDs belong to the collection or its environment, not this API contract.
 

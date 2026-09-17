@@ -40,7 +40,7 @@ All three products use Meridian's common application, approval, contract, activa
 | **Loan Officer** | Reviews application facts and documents, requests Customer or Staff correction, performs authorized document-review actions, and records the recommendation for independent decision. |
 | **Approver** | Records the independent application decision, may return work for review or correction, and performs authorized Loan-owned Administrative Full-Balance Settlement. |
 | **Accounting Officer** | Prepares operational contracts, confirms readiness and external transfer evidence, records authorized repayments, and closes eligible settled LoanAccounts. |
-| **Back-Office Admin** | Administers products, Partner data and imports, internal users, role assignments, and operational configuration. |
+| **Back-Office Admin** | Administers products, Partner data and imports, internal users, and predefined role assignments. |
 
 ---
 
@@ -340,7 +340,8 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 
 - [x] Customer Web for profile, applications, documents, offers, and loan tracking
 - [x] Staff Web lending operations inside Internal Web for review, approval, correction, disbursement, repayment, settlement, and administrative closure
-- [ ] Back-Office Administration inside Internal Web for products, partners, users, and configuration
+- [x] Back-Office Administration inside Internal Web for products, Partner administration, and internal users
+- [ ] Generic Back-Office configuration administration after an approved use case and contract exist
 
 ### Phase 4 — Operational Maturity
 

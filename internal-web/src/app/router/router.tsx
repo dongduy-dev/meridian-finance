@@ -29,13 +29,14 @@ import {
   STAFF_CLOSURE_QUEUE_ROUTE,
   STAFF_CLOSURE_CASE_ROUTE,
 } from './staff-route-metadata'
-import { ADMIN_HOME_ROUTE, ADMIN_PARTNER_DETAIL_ROUTE, ADMIN_PARTNERS_ROUTE, ADMIN_PRODUCTS_ROUTE } from './admin-route-metadata'
+import { ADMIN_HOME_ROUTE, ADMIN_PARTNER_DETAIL_ROUTE, ADMIN_PARTNERS_ROUTE, ADMIN_PRODUCTS_ROUTE, ADMIN_USERS_ROUTE } from './admin-route-metadata'
 
 const LoginPage = lazy(() => import('@/features/auth/components/LoginPage').then((module) => ({ default: module.LoginPage })))
 const AdminLandingPage = lazy(() => import('@/features/admin/pages/AdminLandingPage').then((module) => ({ default: module.AdminLandingPage })))
 const PartnerCompanyListPage = lazy(() => import('@/features/admin-partners/pages/PartnerCompanyListPage').then((module) => ({ default: module.PartnerCompanyListPage })))
 const PartnerCompanyDetailPage = lazy(() => import('@/features/admin-partners/pages/PartnerCompanyDetailPage').then((module) => ({ default: module.PartnerCompanyDetailPage })))
 const LoanProductAdministrationPage = lazy(() => import('@/features/admin-products/pages/LoanProductAdministrationPage').then((module) => ({ default: module.LoanProductAdministrationPage })))
+const InternalUserAdministrationPage = lazy(() => import('@/features/admin-users/pages/InternalUserAdministrationPage').then((module) => ({ default: module.InternalUserAdministrationPage })))
 const StaffLandingPage = lazy(() => import('@/features/staff/pages/StaffLandingPage').then((module) => ({ default: module.StaffLandingPage })))
 const ApplicationSearchPage = lazy(() => import('@/features/staff-applications/pages/ApplicationSearchPage').then((module) => ({ default: module.ApplicationSearchPage })))
 const ApplicationCasePage = lazy(() => import('@/features/staff-applications/pages/ApplicationCasePage').then((module) => ({ default: module.ApplicationCasePage })))
@@ -148,6 +149,9 @@ export const routes: RouteObject[] = [{ element: <RouteFrame />, errorElement: <
         ] },
         { element: <AdminCapabilityRoute route={ADMIN_PRODUCTS_ROUTE} />, children: [
           { path: ADMIN_PRODUCTS_ROUTE.path, element: <Deferred><LoanProductAdministrationPage /></Deferred> },
+        ] },
+        { element: <AdminCapabilityRoute route={ADMIN_USERS_ROUTE} />, children: [
+          { path: ADMIN_USERS_ROUTE.path, element: <Deferred><InternalUserAdministrationPage /></Deferred> },
         ] },
       ] },
       { path: '/admin/*', element: <Deferred><NotFoundPage /></Deferred> },

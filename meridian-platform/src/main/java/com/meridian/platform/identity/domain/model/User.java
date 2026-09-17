@@ -14,6 +14,7 @@ public record User(
         UUID customerId,
         Set<String> roles,
         Set<String> permissions,
+        long authorizationVersion,
         int failedLoginAttempts,
         Instant lockedUntil,
         Instant emailVerifiedAt
@@ -22,6 +23,9 @@ public record User(
     public User {
         roles = Set.copyOf(roles);
         permissions = Set.copyOf(permissions);
+        if (authorizationVersion < 0) {
+            throw new IllegalArgumentException("authorizationVersion must not be negative");
+        }
         if (failedLoginAttempts < 0) {
             throw new IllegalArgumentException("failedLoginAttempts must not be negative");
         }

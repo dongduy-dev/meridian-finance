@@ -7,7 +7,7 @@ export function AdminLandingPage() {
       <div>
         <p className="text-sm font-semibold text-muted-foreground">MERIDIAN INTERNAL WEB</p>
         <h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Back-Office Administration</h1>
-        <p className="mt-2 max-w-2xl text-muted-foreground">Administrative workspaces are exposed only when your session has their exact capability. Partner and Loan Product administration are available to authorized operators; internal-user administration remains unavailable.</p>
+        <p className="mt-2 max-w-2xl text-muted-foreground">Administrative workspaces are exposed only when your session has their exact capability. Partner, Loan Product, and Internal User administration are available to authorized operators.</p>
       </div>
       <Card>
         <CardHeader>
