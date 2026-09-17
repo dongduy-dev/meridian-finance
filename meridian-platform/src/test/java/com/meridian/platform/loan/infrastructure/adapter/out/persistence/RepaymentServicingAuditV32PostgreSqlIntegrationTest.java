@@ -204,7 +204,8 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
                     && action != BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
-                    && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED) {
+                    && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
+                    && !isStaffAssistedOriginationAction(action)) {
                 insertAuditEvent(schema, action.name());
             }
         }
@@ -242,7 +243,8 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                     || action == BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
                     || action == BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     || action == BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
-                    || action == BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED) {
+                    || action == BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
+                    || isStaffAssistedOriginationAction(action)) {
                 continue;
             }
             insertAuditEvent(schema, action.name());
@@ -266,6 +268,14 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
         assertThrows(DataAccessException.class, () -> insertAuditEvent(
                 schema, BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED.name()
         ));
+    }
+
+    private boolean isStaffAssistedOriginationAction(BusinessAuditAction action) {
+        return action == BusinessAuditAction.STAFF_ASSISTED_CUSTOMER_CREATED
+                || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_CREATED
+                || action == BusinessAuditAction.ASSISTED_ORIGINATION_CUSTOMER_ASSOCIATED
+                || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_ABANDONED
+                || action == BusinessAuditAction.INTAKE_DOCUMENT_VERSION_UPLOADED;
     }
 
     private void executeV32(String schema) throws Exception {

@@ -56,7 +56,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     @Test
     void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
-        assertEquals("55", latestVersion(SCHEMA));
+        assertEquals("56", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -218,7 +218,8 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
                     && action != BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
-                    && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED) {
+                    && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
+                    && !isStaffAssistedOriginationAction(action)) {
                 insertAuditEvent(schema, action.name());
             }
         }
@@ -247,7 +248,8 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
                     && action != BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
-                    && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED) {
+                    && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
+                    && !isStaffAssistedOriginationAction(action)) {
                 insertAuditEvent(schema, action.name());
             }
         }
@@ -268,6 +270,14 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
         assertThrows(DataAccessException.class, () -> insertAuditEvent(
                 schema, BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED.name()
         ));
+    }
+
+    private boolean isStaffAssistedOriginationAction(BusinessAuditAction action) {
+        return action == BusinessAuditAction.STAFF_ASSISTED_CUSTOMER_CREATED
+                || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_CREATED
+                || action == BusinessAuditAction.ASSISTED_ORIGINATION_CUSTOMER_ASSOCIATED
+                || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_ABANDONED
+                || action == BusinessAuditAction.INTAKE_DOCUMENT_VERSION_UPLOADED;
     }
 
     private void assertV32ActionsRejected(String schema) {

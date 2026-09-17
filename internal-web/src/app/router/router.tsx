@@ -8,6 +8,8 @@ import { RouteFocus } from '@/routes/RouteFocus'
 import {
   STAFF_APPLICATION_CASE_ROUTE,
   STAFF_APPLICATIONS_ROUTE,
+  STAFF_ORIGINATION_ROUTE,
+  STAFF_ORIGINATION_CASE_ROUTE,
   STAFF_HOME_ROUTE,
   STAFF_DOCUMENT_QUEUE_ROUTE,
   STAFF_CORRECTION_QUEUE_ROUTE,
@@ -39,6 +41,8 @@ const LoanProductAdministrationPage = lazy(() => import('@/features/admin-produc
 const InternalUserAdministrationPage = lazy(() => import('@/features/admin-users/pages/InternalUserAdministrationPage').then((module) => ({ default: module.InternalUserAdministrationPage })))
 const StaffLandingPage = lazy(() => import('@/features/staff/pages/StaffLandingPage').then((module) => ({ default: module.StaffLandingPage })))
 const ApplicationSearchPage = lazy(() => import('@/features/staff-applications/pages/ApplicationSearchPage').then((module) => ({ default: module.ApplicationSearchPage })))
+const AssistedOriginationListPage = lazy(() => import('@/features/staff-origination/pages/AssistedOriginationListPage').then((module) => ({ default: module.AssistedOriginationListPage })))
+const AssistedOriginationWorkspacePage = lazy(() => import('@/features/staff-origination/pages/AssistedOriginationWorkspacePage').then((module) => ({ default: module.AssistedOriginationWorkspacePage })))
 const ApplicationCasePage = lazy(() => import('@/features/staff-applications/pages/ApplicationCasePage').then((module) => ({ default: module.ApplicationCasePage })))
 const DocumentReviewQueuePage = lazy(() => import('@/features/staff-documents/pages/DocumentReviewQueuePage').then((module) => ({ default: module.DocumentReviewQueuePage })))
 const StaffDocumentWorkspacePage = lazy(() => import('@/features/staff-documents/pages/StaffDocumentWorkspacePage').then((module) => ({ default: module.StaffDocumentWorkspacePage })))
@@ -76,6 +80,12 @@ export const routes: RouteObject[] = [{ element: <RouteFrame />, errorElement: <
     ] },
     { element: <StaffCapabilityRoute route={STAFF_APPLICATIONS_ROUTE} />, children: [
       { path: STAFF_APPLICATIONS_ROUTE.path, element: <Deferred><ApplicationSearchPage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_ORIGINATION_ROUTE} />, children: [
+      { path: STAFF_ORIGINATION_ROUTE.path, element: <Deferred><AssistedOriginationListPage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_ORIGINATION_CASE_ROUTE} />, children: [
+      { path: STAFF_ORIGINATION_CASE_ROUTE.path, element: <Deferred><AssistedOriginationWorkspacePage /></Deferred> },
     ] },
     { element: <StaffCapabilityRoute route={STAFF_APPLICATION_CASE_ROUTE} />, children: [
       { path: STAFF_APPLICATION_CASE_ROUTE.path, element: <Deferred><ApplicationCasePage /></Deferred> },

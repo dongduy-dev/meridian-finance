@@ -1,7 +1,7 @@
 {
     "info":  {
                  "name":  "Meridian Platform API - v1 Scenario Collection",
-                 "description":  "JWT/RBAC Postman companion for the Meridian HTTP API v1 contract.\n\nRecommended run order:\n1. Optionally run Customer Registration and Email Verification. Registration generates a fresh fictional email. Copy the raw token manually from local Mailpit into emailVerificationToken before running confirmation; no token is stored in the collection.\n2. Run the Auth folder to capture role-specific Bearer tokens.\n3. Run Public and Partner Admin requests.\n4. Run Customer Profile and Bank Accounts, then Customer Employee Verification, then Salary Advance Application.\n5. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n6. For UCL, prepare and accept the required evidence, enable uclOfferScenarioEnabled, then run the UCL verification-through-offer requests in order. Separate prepared fixture variables enable FAILED, REQUIRES_MORE_INFORMATION, correction/re-verification, cancellation, and outstanding-debt examples.\n7. For Collateral Loan, originate the application, use the returned ownership checklist item with the common upload/review/completion requests, enable collateralVerificationScenarioEnabled, then run the lifecycle sequence through approval, exact offer and contract assertions, Customer acknowledgment, readiness, destination reveal, activation, replay, final schedule, partial repayment, history, exact settlement, and closure. Separate prepared fixture variables exercise the other Approver and offer-terminal outcomes.\n\nThe Salary Advance, UCL, and Collateral happy paths are duplicate-sensitive because the authenticated demo customer can have only one active application per product. Run them on a fresh local database, or reset test data before repeating a full happy-path flow.",
+                 "description":  "JWT/RBAC Postman companion for the Meridian HTTP API v1 contract.\n\nRecommended run order:\n1. Optionally run Customer Registration and Email Verification. Registration generates a fresh fictional email. Copy the raw token manually from local Mailpit into emailVerificationToken before running confirmation; no token is stored in the collection.\n2. Run the Auth folder to capture role-specific Bearer tokens.\n3. Run Paper Intake CP1 to exercise the staff-assisted UCL intake foundation; choose a fictional local PDF for paperIntakeEvidenceFile before the upload request.\n4. Run Public and Partner Admin requests.\n5. Run Customer Profile and Bank Accounts, then Customer Employee Verification, then Salary Advance Application.\n6. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n7. For UCL, prepare and accept the required evidence, enable uclOfferScenarioEnabled, then run the UCL verification-through-offer requests in order. Separate prepared fixture variables enable FAILED, REQUIRES_MORE_INFORMATION, correction/re-verification, cancellation, and outstanding-debt examples.\n8. For Collateral Loan, originate the application, use the returned ownership checklist item with the common upload/review/completion requests, enable collateralVerificationScenarioEnabled, then run the lifecycle sequence through approval, exact offer and contract assertions, Customer acknowledgment, readiness, destination reveal, activation, replay, final schedule, partial repayment, history, exact settlement, and closure. Separate prepared fixture variables exercise the other Approver and offer-terminal outcomes.\n\nThe Salary Advance, UCL, and Collateral happy paths are duplicate-sensitive because the authenticated demo customer can have only one active application per product. Run them on a fresh local database, or reset test data before repeating a full happy-path flow.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "auth":  {
@@ -773,9 +773,316 @@
                           "key":  "uclClosureRequestId",
                           "value":  "70000000-0000-0000-0000-000000000003",
                           "type":  "default"
+                      },
+                      {
+                          "key":  "assistedOriginationCaseId",
+                          "value":  "",
+                          "type":  "string"
+                      },
+                      {
+                          "key":  "staffAssistedCustomerId",
+                          "value":  "",
+                          "type":  "string"
+                      },
+                      {
+                          "key":  "staffAssistedCustomerNumber",
+                          "value":  "",
+                          "type":  "string"
+                      },
+                      {
+                          "key":  "paperIntakeIdentityReference",
+                          "value":  "",
+                          "type":  "string",
+                          "description":  "Generated fictional identity reference for the Paper Intake CP1 scenario."
+                      },
+                      {
+                          "key":  "paperIntakeUploadRequestId",
+                          "value":  "",
+                          "type":  "string"
+                      },
+                      {
+                          "key":  "paperIntakeEvidenceFile",
+                          "value":  "",
+                          "type":  "string",
+                          "description":  "Select a local fictional PDF in Postman before running the intake-evidence upload request."
                       }
                  ],
     "item":  [
+                 {
+                     "name":  "00 Paper Intake CP1 - Staff-Assisted Origination",
+                     "description":  "Loan Officer scenario for the CP1 foundation only: open an intake case, discover or create a Customer, associate it, upload immutable intake evidence, and abandon the case. It does not submit a LoanApplication, complete OCR, or enter the ordinary lending workflow.",
+                     "auth":  {
+                                  "type":  "bearer",
+                                  "bearer":  [
+                                                 {
+                                                     "key":  "token",
+                                                     "value":  "{{loanOfficerAccessToken}}",
+                                                     "type":  "string"
+                                                 }
+                                             ]
+                              },
+                     "item":  [
+                                  {
+                                      "name":  "Start UCL assisted-origination case",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Open UCL case has no Customer yet\", function () {",
+                                                                                    "    pm.expect(json.productCode).to.eql(\"UNSECURED_CONSUMER_LOAN\");",
+                                                                                    "    pm.expect(json.status).to.eql(\"OPEN\");",
+                                                                                    "    pm.expect(json.customerId).to.eql(null);",
+                                                                                    "});",
+                                                                                    "pm.collectionVariables.set(\"assistedOriginationCaseId\", json.assistedOriginationCaseId);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":  "Content-Type", "value":  "application/json", "type":  "text"}],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"productCode\": \"UNSECURED_CONSUMER_LOAN\",\n  \"customerId\": null\n}",
+                                                                   "options":  {"raw":  {"language":  "json"}}
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/assisted-originations",
+                                                                  "host":  ["{{baseUrl}}"],
+                                                                  "path":  ["api", "v1", "staff", "assisted-originations"]
+                                                              }
+                                                  },
+                                      "response":  []
+                                  },
+                                  {
+                                      "name":  "Create staff-assisted Customer",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const suffix = String(Date.now()).slice(-10);",
+                                                                                    "pm.collectionVariables.set(\"paperIntakeIdentityReference\", `PAPER-${suffix}`);"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Response is masked and Customer remains unverified\", function () {",
+                                                                                    "    pm.expect(json.verificationStatus).to.eql(\"UNVERIFIED\");",
+                                                                                    "    pm.expect(json).not.to.have.property(\"identityReference\");",
+                                                                                    "    pm.expect(JSON.stringify(json)).not.to.include(pm.collectionVariables.get(\"paperIntakeIdentityReference\"));",
+                                                                                    "});",
+                                                                                    "pm.collectionVariables.set(\"staffAssistedCustomerId\", json.customerId);",
+                                                                                    "pm.collectionVariables.set(\"staffAssistedCustomerNumber\", json.customerNumber);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":  "Content-Type", "value":  "application/json", "type":  "text"}],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"fullName\": \"Paper Intake Customer\",\n  \"identityReference\": \"{{paperIntakeIdentityReference}}\",\n  \"phoneNumber\": \"0900000000\",\n  \"residentialAddress\": \"1 Fictional Meridian Street\",\n  \"employmentStatus\": \"EMPLOYED\",\n  \"employerName\": \"Meridian Fictional Employer\",\n  \"termsConsentAccepted\": true,\n  \"dataProcessingConsentAccepted\": true\n}",
+                                                                   "options":  {"raw":  {"language":  "json"}}
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/customers",
+                                                                  "host":  ["{{baseUrl}}"],
+                                                                  "path":  ["api", "v1", "staff", "customers"]
+                                                              }
+                                                  },
+                                      "response":  []
+                                  },
+                                  {
+                                      "name":  "Discover Customer by exact Customer number",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "pm.test(\"Exact search returns the created Customer without raw identity\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.customerId).to.eql(pm.collectionVariables.get(\"staffAssistedCustomerId\"));",
+                                                                                    "    pm.expect(json).not.to.have.property(\"identityReference\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [{"key":  "Content-Type", "value":  "application/json", "type":  "text"}],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"customerNumber\": \"{{staffAssistedCustomerNumber}}\"\n}",
+                                                                   "options":  {"raw":  {"language":  "json"}}
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/customers/search",
+                                                                  "host":  ["{{baseUrl}}"],
+                                                                  "path":  ["api", "v1", "staff", "customers", "search"]
+                                                              }
+                                                  },
+                                      "response":  []
+                                  },
+                                  {
+                                      "name":  "Associate Customer with assisted-origination case",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "pm.test(\"Case is still open and references the selected Customer\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.status).to.eql(\"OPEN\");",
+                                                                                    "    pm.expect(json.customerId).to.eql(pm.collectionVariables.get(\"staffAssistedCustomerId\"));",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "header":  [{"key":  "Content-Type", "value":  "application/json", "type":  "text"}],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"customerId\": \"{{staffAssistedCustomerId}}\"\n}",
+                                                                   "options":  {"raw":  {"language":  "json"}}
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/customer",
+                                                                  "host":  ["{{baseUrl}}"],
+                                                                  "path":  ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}", "customer"]
+                                                              }
+                                                  },
+                                      "response":  []
+                                  },
+                                  {
+                                      "name":  "Upload UCL paper-application intake evidence",
+                                      "description":  "In Postman, choose a fictional local PDF for the file field before sending. The request id is generated once per send; reuse it unchanged only when testing exact replay.",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "if (!pm.collectionVariables.get(\"paperIntakeUploadRequestId\")) {",
+                                                                                    "    pm.collectionVariables.set(\"paperIntakeUploadRequestId\", pm.variables.replaceIn(\"{{$guid}}\"));",
+                                                                                    "}"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "pm.test(\"Version metadata excludes storage internals\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.versionNumber).to.eql(1);",
+                                                                                    "    pm.expect(json).not.to.have.property(\"storageKey\");",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [],
+                                                      "body":  {
+                                                                   "mode":  "formdata",
+                                                                   "formdata":  [
+                                                                                     {"key":  "file", "type":  "file", "src":  "{{paperIntakeEvidenceFile}}"}
+                                                                                 ]
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/evidence/UCL_PAPER_APPLICATION/versions?uploadRequestId={{paperIntakeUploadRequestId}}",
+                                                                  "host":  ["{{baseUrl}}"],
+                                                                  "path":  ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}", "evidence", "UCL_PAPER_APPLICATION", "versions"],
+                                                                  "query":  [{"key":  "uploadRequestId", "value":  "{{paperIntakeUploadRequestId}}"}]
+                                                              }
+                                                  },
+                                      "response":  []
+                                  },
+                                  {
+                                      "name":  "Read intake evidence metadata",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "pm.test(\"UCL evidence metadata contains one current immutable version\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json).to.have.lengthOf(1);",
+                                                                                    "    pm.expect(json[0].evidenceType).to.eql(\"UCL_PAPER_APPLICATION\");",
+                                                                                    "    pm.expect(json[0].versions).to.have.lengthOf(1);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/evidence",
+                                                                  "host":  ["{{baseUrl}}"],
+                                                                  "path":  ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}", "evidence"]
+                                                              }
+                                                  },
+                                      "response":  []
+                                  },
+                                  {
+                                      "name":  "Abandon assisted-origination case",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "pm.test(\"Case is terminal and no LoanApplication was created\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.status).to.eql(\"ABANDONED\");",
+                                                                                    "    pm.expect(json.terminalAt).to.be.a(\"string\");",
+                                                                                    "});",
+                                                                                    "pm.collectionVariables.unset(\"paperIntakeUploadRequestId\");"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/abandon",
+                                                                  "host":  ["{{baseUrl}}"],
+                                                                  "path":  ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}", "abandon"]
+                                                              }
+                                                  },
+                                      "response":  []
+                                  }
+                              ]
+                 },
                  {
                      "name":  "00 Customer Registration and Email Verification",
                      "description":  "Safe local scenario. Run registration and resend once, inspect http://localhost:8025, copy only the fragment token into emailVerificationToken, then run confirmation. The confirmation request skips itself when the variable is blank.",

@@ -11,6 +11,8 @@ import java.util.UUID;
 
 public interface JpaCustomerRepository extends JpaRepository<CustomerJpaEntity, UUID> {
 
+    Optional<CustomerJpaEntity> findByCustomerNumber(String customerNumber);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select customer from CustomerJpaEntity customer where customer.id = :customerId")
     Optional<CustomerJpaEntity> findByIdForUpdate(@Param("customerId") UUID customerId);

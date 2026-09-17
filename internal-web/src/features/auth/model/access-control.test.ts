@@ -52,4 +52,9 @@ describe('staff access control', () => {
   it('keeps administration capabilities outside Staff operational access', () => {
     expect(hasStaffWebAccess({ ...actor, permissions: [...BACK_OFFICE_ADMINISTRATION_PERMISSIONS] })).toBe(false)
   })
+
+  it.each(['customer:intake:manage', 'loan:originate:staff', 'document:upload:intake'])(
+    'recognizes assisted-origination capability %s as Staff operational access',
+    (permission) => expect(hasStaffWebAccess({ ...actor, permissions: [permission] })).toBe(true),
+  )
 })
