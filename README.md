@@ -2,11 +2,9 @@
 
 ## Meridian Lending Platform
 
-Meridian is a multi-product lending platform built around a common lending lifecycle and product-specific policies. Salary Advance uses Customer-digital origination, while Unsecured Consumer Loan and Collateral Loan use both Customer-digital and Staff-assisted paper origination on the same lending core.
+Meridian is a multi-product lending platform built around a common lending lifecycle and product-specific policies. Salary Advance is the flagship workflow, with streamlined Unsecured Consumer Loan and Collateral Loan workflows built on the same lending core.
 
-Meridian helps lending teams manage the full journey from Customer or Staff-assisted intake through servicing and closure. Product workflows combine automated processing with controlled human review where business decisions or document verification require it. The platform is designed around practical financial software concerns such as auditability, security, data integrity, controlled state transitions, maker-checker controls, document traceability, and clear operational ownership.
-
-In Staff-assisted UCL and Collateral Loan workflows, the Customer remains the business subject while authenticated Staff record Customer-provided information, paper evidence, corrections, offer decisions, and contract acknowledgments. Meridian does not impersonate the Customer or require a branch-originated application to switch to Customer Web later.
+Meridian helps lending teams manage the full journey from application through servicing and closure. Product workflows combine automated processing with controlled human review where business decisions or document verification require it. The platform is designed around practical financial software concerns such as auditability, security, data integrity, controlled state transitions, maker-checker controls, document traceability, and clear operational ownership.
 
 The complete Meridian platform combines a Java and Spring Boot modular monolith, backed by PostgreSQL, with React/Vite client applications and Python/FastAPI OCR processing. Meridian applies Domain-Driven Design and Practical Hexagonal Architecture within clearly defined bounded contexts. This approach enables rapid delivery within a cohesive platform while preserving clear boundaries and an evolutionary path toward selective distributed service extraction when justified by business requirements, scale, or operational ownership.
 
@@ -16,16 +14,16 @@ The complete Meridian platform combines a Java and Spring Boot modular monolith,
 
 ### Lending Products
 
-* **Salary Advance**: Uses Customer-digital origination only, with Partner-linked employment evidence and a product-specific eligibility, limit, and exposure model.
-* **Unsecured Consumer Loan**: Uses Customer-digital or Staff-assisted paper origination with income, bank-statement, and employment evidence, manual verification, correction, and flat-rate pricing.
-* **Collateral Loan**: Uses Customer-digital or Staff-assisted paper origination with structured Collateral information, Document-owned ownership evidence, and manual verification.
+* **Salary Advance**: Uses Partner-linked employment evidence with a product-specific eligibility, limit, and exposure model.
+* **Unsecured Consumer Loan**: Uses income, bank-statement, and employment evidence with manual verification, correction, and flat-rate pricing.
+* **Collateral Loan**: Uses structured Collateral information with Document-owned ownership evidence and manual verification.
 
-All three products use Meridian's common application, approval, contract, activation, servicing, and closure lifecycle while retaining product-specific rules. Origination channel changes who records Customer-sourced actions; it does not change product financial rules, review authority, or approval controls.
+All three products use Meridian's common application, approval, contract, activation, servicing, and closure lifecycle while retaining product-specific rules.
 
 ### Platform Capabilities
 
 * **Common Lending Lifecycle**: A shared `LoanApplication` lifecycle coordinates submission, verification, review, approval, Customer response, contract readiness, disbursement, and `LoanAccount` activation.
-* **Digital and Staff-Assisted Origination**: Customer Web handles direct Customer origination. Staff Web handles paper intake and origination for UCL and Collateral Loan, including Customer selection or creation, paper evidence capture, Customer-sourced correction, and evidenced Customer decisions. Salary Advance remains Customer-digital only.
+* **Digital and Staff-Assisted Origination**: Customer Web supports direct Customer origination for all three products. Staff Web supports paper-originated UCL and Collateral Loan through assisted Customer intake, paper evidence capture, Customer-sourced corrections, and evidenced Customer decisions. The authenticated Staff user remains the actor while the Customer remains the business subject, and a branch-originated application remains Staff-assisted rather than switching to Customer Web. Salary Advance origination remains Customer-digital only.
 * **Document and OCR-Assisted Processing**: Document owns document checklists, uploads, immutable versions, review, replacement, waiver, and processing readiness. OCR-assisted processing remains advisory, while authorized Document review remains authoritative.
 * **Review, Correction, and Approval**: Loan owns application review and correction workflows. Loan Officers record recommendations, while Approvers make independent decisions under maker-checker controls.
 * **Offers, Contracts, and Disbursement**: Loan preserves accepted lending terms through immutable offers, versioned contracts, Customer acknowledgment, readiness checks, and controlled disbursement activation.
@@ -114,7 +112,7 @@ Useful local endpoints:
 
 ### Customer Web
 
-`customer-web/` contains Meridian's responsive Customer Web application for direct Customer origination and lifecycle actions. Salary Advance uses this digital channel exclusively; UCL and Collateral Loan may also originate through Staff-assisted paper workflows in Staff Web. [MER-FE-001](docs/frontend/MER-FE-001-customer-web-blueprint.md) defines its frontend architecture, state ownership, visual language, and accessibility baseline.
+`customer-web/` contains Meridian's responsive Customer Web application. [MER-FE-001](docs/frontend/MER-FE-001-customer-web-blueprint.md) defines its frontend architecture, state ownership, visual language, and accessibility baseline.
 
 ```bash
 cd customer-web
