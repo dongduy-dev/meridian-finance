@@ -10,7 +10,7 @@
 | Version | 1.0 |
 | Status | Authoritative living specification |
 | Author | Dong Duy |
-| Scope | MVP multi-product digital lending platform centered on Salary Advance, with streamlined Unsecured Consumer Loan and Collateral Loan workflows |
+| Scope | MVP multi-product lending platform centered on digital Salary Advance, with digital and Staff-assisted paper origination for Unsecured Consumer Loan and Collateral Loan |
 
 ---
 
@@ -44,17 +44,28 @@ Meridian uses one lending lifecycle with product-specific policy behavior.
 
 | Component | MVP Responsibility |
 |---|---|
-| Backend | Business rules, security, persistence, workflow control, product-policy selection, and audit evidence |
-| Customer Web | Registration, profile completion, product selection, application submission, document upload, offer response, and status tracking |
-| Internal Web | Permission-scoped internal capabilities: Staff Web for review, approval, correction, contract, disbursement, and repayment; Back-Office Administration for product, Partner, import, internal-user, role, permission, and configuration administration; audit operations within the relevant area |
+| Backend | Business rules, security, persistence, workflow control, product-policy selection, channel enforcement, and audit evidence |
+| Customer Web | Customer-direct registration, profile completion, product selection, application submission, document upload, offer response, contract acknowledgment, and status tracking |
+| Internal Web | Permission-scoped internal capabilities: Staff Web for Staff-assisted UCL and Collateral Loan intake and origination, review, approval, correction, contract, disbursement, and repayment; Back-Office Administration for product, Partner, import, internal-user, role, permission, and configuration administration; audit operations within the relevant area |
 | Mobile App | Outside the MVP |
 
 Customer Web and Internal Web use the same backend and database.
 
+Loan origination is channel-scoped by product:
+
+| Product | `CUSTOMER_DIGITAL` | `STAFF_ASSISTED` |
+|---|---|---|
+| `SALARY_ADVANCE` | Allowed | Not allowed |
+| `UNSECURED_CONSUMER_LOAN` | Allowed | Allowed |
+| `COLLATERAL_LOAN` | Allowed | Allowed |
+
+`CUSTOMER_DIGITAL` means the authenticated Customer operates Customer Web directly. `STAFF_ASSISTED` means the Customer supplies information, paper evidence, and required decisions through branch interaction while an authorized Staff user operates Meridian as the authenticated actor. A Staff-assisted Customer does not require a Customer Web login, and Meridian does not require a Staff-assisted application to switch to the Customer-digital channel later in its lifecycle.
+
 ### 3.3 MVP In Scope
 
-- Customer registration, authentication, profile completion, controlled profile changes, and bank-account management.
+- Customer business records, profile completion, controlled profile changes, and bank-account management, with Customer Web registration and authentication for digital Customers and no login requirement for Staff-assisted Customers.
 - Staff authentication, role-based permissions, internal-user administration, and actor traceability.
+- Staff-assisted paper intake and origination for Unsecured Consumer Loan and Collateral Loan, including Customer selection or creation, paper evidence capture, Customer-sourced correction, and recorded Customer decisions without Customer impersonation.
 - Loan-product catalog, activation, deactivation, policy configuration, and product selection.
 - One controlled LoanApplication lifecycle shared by all supported products.
 - Salary Advance Partner Company setup, monthly Partner Employee imports, reusable employee verification, limit calculation, exposure reservation, disbursement conversion, and repayment release.
@@ -78,8 +89,8 @@ Meridian is delivered as a modular-monolith backend with one database and multip
 
 | Actor | Business Responsibilities |
 |---|---|
-| Customer | Maintains their own profile and bank accounts, selects products, verifies Salary Advance employment, creates and submits applications, completes Customer-owned corrections, uploads documents, accepts or declines offers, acknowledges contracts, and views their own application and LoanAccount state |
-| Loan Officer | Reviews application facts and documents, records recommendations, requests Customer or Staff correction, and performs authorized document review or waiver actions |
+| Customer | Maintains their own profile and bank accounts, selects products, verifies Salary Advance employment, and provides application facts, corrections, documents, offer decisions, and contract acknowledgments. In the Customer-digital channel, the Customer records those actions directly and views their own application and LoanAccount state. In the Staff-assisted channel, the Customer supplies UCL or Collateral Loan information, evidence, and decisions through branch interaction and Staff records the evidenced action. |
+| Loan Officer | Performs authorized Staff-assisted UCL and Collateral Loan intake and origination, reviews application facts and documents, records recommendations, coordinates Customer-sourced branch corrections, requests Staff correction, and performs authorized document review or waiver actions |
 | Approver | Records the independent final application decision, returns an application to review, requests structured correction, and performs authorized Loan-owned Administrative Full-Balance Settlement |
 | Accounting Officer | Prepares operational contracts, confirms readiness, reveals a protected destination only for disbursement, confirms the external transfer, records authorized repayment updates, and closes eligible settled LoanAccounts |
 | Back-Office Admin | Manages product configuration, Partner Companies, Partner Employee imports, internal users, role assignments, and operational configuration |
@@ -91,15 +102,17 @@ Meridian is delivered as a modular-monolith backend with one database and multip
 |---|---|---|---|---|---|---|
 | Register and authenticate to Customer Web | Own account | No | No | No | No | Validate |
 | Authenticate to Internal Web | No | Yes | Yes | Yes | Yes | Validate |
-| Maintain Customer profile | Own profile | View or review | View | View purpose-limited destination facts | Support as configured | Validate and audit |
+| Maintain Customer profile and bank accounts | Own profile and bank accounts | Staff-assisted selected Customer when authorized; otherwise view or review | View | View purpose-limited destination facts | Support as configured | Validate and audit |
 | Manage products | No | No | No | No | Yes | Enforce active policy |
 | Manage Partner Companies and imports | No | No | No | No | Yes | Validate and store |
-| Create, save, submit, or cancel application | Own application under allowed rules | No | No | No | No | Validate and transition |
-| Upload Customer-required documents | Own authorized checklist items | Assist when authorized | No | No | Assist when authorized | Store and version |
+| Perform Staff-assisted Customer intake | No | UCL and Collateral Loan when authorized | No | No | No | Validate and audit |
+| Create, save, submit, or cancel application | Own application under allowed rules | Staff-assisted UCL and Collateral Loan under allowed rules; Customer-requested cancellation only where product policy permits | No | No | No | Validate and transition |
+| Upload Customer-required documents | Own authorized checklist items | Upload or replace Staff-assisted intake and application evidence when authorized | No | No | Assist when authorized | Store and version |
 | Review or waive documents | No | Yes with required authority | View | Confirm readiness facts | Correct administratively when authorized | Calculate readiness |
 | Record recommendation | No | Yes | No | No | No | Validate and audit |
 | Record final approval decision | No | No | Yes | No | No | Validate and audit |
-| Prepare or confirm contract readiness | Acknowledge own contract | View | View | Yes | No | Validate and transition |
+| Respond to approved offer | Own application | Record evidenced Customer response for Staff-assisted UCL and Collateral Loan when authorized | No | No | No | Validate and transition |
+| Prepare or confirm contract readiness | Acknowledge own contract | Record evidenced Customer acknowledgment for Staff-assisted UCL and Collateral Loan when authorized; otherwise view | View | Yes | No | Validate and transition |
 | Reveal full disbursement destination | No | No | No | Yes with `loan:disburse` | No | Authorize and audit |
 | Confirm manual disbursement | No | No | No | Yes | No | Activate account atomically |
 | Record repayment | No | No | No | Yes | No | Allocate and update servicing |
@@ -107,7 +120,7 @@ Meridian is delivered as a modular-monolith backend with one database and multip
 | Close an eligible settled LoanAccount | No | No | No | Yes | No | Verify evidence and close administratively |
 | View audit evidence | No | Authorized | Authorized | Authorized | Authorized | Record |
 
-Authentication and permission are necessary but not sufficient. The owning business capability also verifies resource ownership, status, maker-checker separation, and every applicable business rule. All Staff business actions record the authenticated actor.
+Authentication and permission are necessary but not sufficient. The owning business capability also verifies resource ownership, status, maker-checker separation, and every applicable business rule. All Staff business actions record the authenticated Staff actor and the affected business subject. Staff-assisted processing never authenticates, impersonates, or acts as the Customer.
 
 ---
 
@@ -136,6 +149,7 @@ A `LoanApplication` represents one Customer request for one selected product. It
 The application preserves:
 
 - Customer and product identity;
+- origination channel;
 - requested amount and term;
 - product-specific facts and verification evidence;
 - checklist and correction state;
@@ -143,7 +157,7 @@ The application preserves:
 - offer, contract, and disbursement lifecycle state;
 - status history and audit correlation.
 
-`LoanApplication` governs origination through disbursement. It is not the source of truth for post-disbursement balances or servicing state.
+`LoanApplication` governs origination through disbursement. `CUSTOMER_DIGITAL` and `STAFF_ASSISTED` applications enter the same product lifecycle after submission; the channel changes who records Customer-sourced actions, not the financial or approval authority. `LoanApplication` is not the source of truth for post-disbursement balances or servicing state.
 
 ### 5.3 LoanAccount
 
@@ -191,7 +205,7 @@ These concepts must remain separate:
 
 An approved offer is the immutable Customer-facing financial-terms snapshot generated after approval.
 
-An operational Loan Contract copies the accepted offer terms and binds the disbursement destination. It is versioned operational evidence, not a PDF, uploaded agreement, electronic signature, digital signature, or legal execution of a contract.
+An operational Loan Contract copies the accepted offer terms and binds the disbursement destination. It is versioned operational evidence, not a PDF, uploaded agreement, electronic signature, digital signature, or legal execution of a contract. Paper evidence used to record a Staff-assisted Customer acknowledgment supports the acknowledgment action but does not replace the operational Loan Contract or turn it into a legal-execution artifact.
 
 Customer owns the mutable source bank account. Loan owns only the protected, immutable destination snapshot bound to the contract.
 
@@ -209,7 +223,7 @@ Meridian separates five controls:
 | Document processing readiness | Determines whether every required item is accepted or validly waived | Document | Processing-ready result |
 | Correction workflow | Assigns and tracks Customer- or Staff-owned remediation before resubmission | Loan, using Document evidence where required | Correction request and tasks |
 
-Upload completeness does not imply acceptance. OCR output remains advisory evidence and does not replace authorized review.
+Upload completeness does not imply acceptance. A Customer-sourced correction and a Staff correction are distinct: the former requires new information or evidence from the Customer, while the latter corrects Staff-controlled work. For a Staff-assisted application, authorized Staff may coordinate and record a Customer-sourced correction, but the Customer remains the source of the corrected information or evidence. OCR output remains advisory evidence; Staff confirmation of extracted data does not by itself establish Customer verification, document acceptance, product verification, or approval.
 
 ### 5.8 Collateral
 
@@ -231,7 +245,17 @@ Estimated value supports manual assessment. It does not trigger an automated loa
 
 ### 5.9 Customer Profile and Bank Account
 
-Customer owns the mutable source profile and bank-account data. Sensitive identity and bank-account values must remain protected. The Customer identity reference becomes immutable after the profile first becomes complete. Bank-account identity is replaced rather than edited in place. Permitted changes are audited and must not rewrite historical contract or disbursement evidence.
+Customer owns the mutable source profile and bank-account data. A Customer business record may exist without a Customer Web User or login. Sensitive identity and bank-account values must remain protected. The Customer identity reference becomes immutable after the profile first becomes complete. Bank-account identity is replaced rather than edited in place. Permitted changes are audited and must not rewrite historical contract or disbursement evidence.
+
+For Staff-assisted intake, Staff records Customer-provided profile, bank-account, and consent facts as the authenticated actor. Consent belongs to the Customer and must be supported by the signed paper loan application; Meridian does not treat Staff confirmation as Customer consent and does not require a separate consent document for that application.
+
+### 5.10 Staff-Assisted Intake
+
+Staff-assisted intake is the temporary branch workflow that converts Customer-provided paper information and evidence into structured Meridian data before a UCL or Collateral Loan `LoanApplication` exists. It is not a loan decision, does not create financial exposure, and does not enter product verification, review, or approval.
+
+Authorized Staff must select an existing Customer or create a new Customer before application submission. When intake creates a new Customer, Customer creation and the required identity-bearing profile must succeed as one business outcome; a duplicate protected identity must not leave a separate incomplete Customer created solely by the failed attempt.
+
+Staff-assisted intake may capture the signed paper loan application and identity-document evidence before `LoanApplication` creation. Staff confirms the structured Customer and loan facts before Meridian applies them to Customer or Loan. OCR may propose extracted values, but manual intake remains valid without OCR and no OCR proposal is authoritative.
 
 ---
 
@@ -241,8 +265,8 @@ All products use the same lifecycle authority but may enter document and verific
 
 | Phase | Business Outcome |
 |---|---|
-| Readiness and selection | Customer and product are eligible to begin |
-| Draft and submission | The request becomes a controlled LoanApplication |
+| Readiness and selection | Customer, channel, and product are eligible to begin |
+| Intake, draft, and submission | Any Staff-assisted paper intake is confirmed and the request becomes a controlled LoanApplication |
 | Product verification | Product-specific facts are recorded and evaluated |
 | Documents and correction | Required evidence becomes complete and processing-ready |
 | Loan Officer review | A recommendation or correction outcome is recorded |
@@ -254,9 +278,9 @@ All products use the same lifecycle authority but may enter document and verific
 
 ### 6.1 Pre-Submission Readiness and Guards
 
-**Customer readiness.** Before submission, the Customer must be active, the required profile must be complete, required consent must be satisfied, and the selected product's bank-account readiness requirement must be satisfied. Customer profile completeness and bank-account readiness are separate controls.
+**Customer readiness.** Before submission, the Customer must be active, the required profile must be complete, required consent must be satisfied, and the selected product's bank-account readiness requirement must be satisfied. Customer profile completeness and bank-account readiness are separate controls. A Staff-assisted Customer does not need a Customer Web login to satisfy Customer readiness.
 
-Submission evaluates the Customer's current authoritative profile and eligible bank-account facts. Section 5.9 defines Customer source-data ownership and mutation rules.
+Submission evaluates the Customer's current authoritative profile and eligible bank-account facts. For Staff-assisted origination, consent may be recorded only from Customer-provided signed application evidence as defined in Section 5.9. Section 5.9 defines Customer source-data ownership and mutation rules.
 
 **Common submission guards.** Before submission, Loan validates:
 
@@ -279,9 +303,11 @@ UCL and Collateral do not require completion of their application-specific manua
 
 A draft does not create financial exposure.
 
-Submission occurs only after every required profile, product, amount, term, eligibility, product-specific, document, and concurrency check passes. A saved draft transitions from `DRAFT`; a product flow may also create the application directly in its initial submitted or document-pending state.
+Submission occurs only after every required profile, product, channel, amount, term, eligibility, product-specific, document, and concurrency check passes. A saved draft transitions from `DRAFT`; a product flow may also create the application directly in its initial submitted or document-pending state.
 
-Submission records a stable application reference, Customer, product, requested amount and term, product-specific facts, submission time, initial status, and audit evidence.
+Customer-digital submission is performed by the authenticated Customer owner. Staff-assisted UCL and Collateral Loan submission is performed by authorized Staff for the selected Customer after the Customer-provided paper intake facts are confirmed. Salary Advance cannot be submitted through `STAFF_ASSISTED`.
+
+Submission records a stable application reference, Customer, product, origination channel, requested amount and term, product-specific facts, submission time, initial status, and audit evidence.
 
 Salary Advance submission additionally reserves limit and records the application verification snapshot in the same controlled outcome.
 
@@ -320,13 +346,13 @@ When evidence is missing or requires correction, the application uses:
 | `DOCUMENTS_PENDING` | Required Customer or Staff uploads are incomplete |
 | `RETURNED_FOR_REVISION` | Structured Customer or Staff correction is required |
 
-Every correction task has one owner: Customer or Staff. Mixed correction plans use separate tasks. Restricted Staff notes must not appear in Customer instructions. A Staff actor who requested a Staff correction must not complete that task.
+Every correction task has one operational owner: Customer or Staff. Mixed correction plans use separate tasks. Restricted Staff notes must not appear in Customer instructions. A Staff actor who requested a Staff correction must not complete that task.
 
-Task completion requires the requested evidence. Customer-only corrections are resubmitted by the Customer owner. Staff-only and mixed corrections are resubmitted by authorized Staff. For UCL, verification, Loan Officer review, and Approver review may each produce a permitted structured correction over `INCOME_PROOF`, `BANK_STATEMENT`, or `EMPLOYMENT_PROOF`. Requested amount and term remain immutable, and correction resubmission returns to `SUBMITTED` for a fresh product-verification cycle before another review begins.
+Task completion requires the requested evidence. For `CUSTOMER_DIGITAL`, Customer-only corrections are resubmitted by the Customer owner. For `STAFF_ASSISTED`, a Customer-sourced correction is operationally assigned to authorized Staff: Staff contacts the Customer, records or uploads the Customer-provided correction, and resubmits when the requested evidence is complete. This does not convert the correction into a Staff correction. Staff-only and mixed corrections are resubmitted by authorized Staff. For UCL, verification, Loan Officer review, and Approver review may each produce a permitted structured correction over `INCOME_PROOF`, `BANK_STATEMENT`, or `EMPLOYMENT_PROOF`. Requested amount and term remain immutable, and correction resubmission returns to `SUBMITTED` for a fresh product-verification cycle before another review begins.
 
 For Collateral Loan, verification, Loan Officer review, or Approver decision may require only replacement or Staff review of the existing `COLLATERAL_OWNERSHIP_EVIDENCE` checklist item. The submitted Collateral type, description, estimated value, ownership status, condition note, requested amount, and requested term remain immutable. Correction cannot create another Collateral asset or supporting checklist item. Resubmission returns to `SUBMITTED` and requires a new linked manual-verification cycle before Loan Officer review.
 
-An authenticated Customer owner may instead terminate a Salary Advance or UCL application while it is `RETURNED_FOR_REVISION`. This narrow cancellation ends the active correction request and changes the application to `CANCELLED`. Salary Advance releases the existing pre-disbursement reservation exactly once in the same transaction; UCL creates no product-exposure effect. It does not require current Partner eligibility because abandonment must remain possible when correction re-verification cannot succeed. Cancellation from other states and Staff or administrative cancellation require separately approved policies.
+An authenticated Customer owner may instead terminate a Salary Advance or UCL application while it is `RETURNED_FOR_REVISION`. For a Staff-assisted UCL, authorized Staff may record the Customer's evidenced cancellation request from the same state. This narrow cancellation ends the active correction request and changes the application to `CANCELLED`. Salary Advance releases the existing pre-disbursement reservation exactly once in the same transaction; UCL creates no product-exposure effect. It does not require current Partner eligibility because abandonment must remain possible when correction re-verification cannot succeed. Cancellation from other states and Staff-initiated or administrative cancellation require separately approved policies.
 
 Resubmission revalidates every affected business condition and routes the application to the earliest stage that still requires work. Salary Advance amount and term remain immutable through correction, and the existing reservation is preserved unless a defined terminal or release rule applies.
 
@@ -341,7 +367,9 @@ The Loan Officer reviews Customer readiness, product verification, document read
 | `RETURN_TO_CUSTOMER_REVISION` | `RETURNED_FOR_REVISION` |
 | `REQUEST_STAFF_CORRECTION` | `RETURNED_FOR_REVISION` |
 
-A revision action requires a controlled reason and task ownership. The recommendation and LoanApplication transition form one business outcome with the correction plan for a revision action and audit evidence for every action.
+A revision action requires a controlled reason and task ownership. `RETURN_TO_CUSTOMER_REVISION` routes directly to the Customer for `CUSTOMER_DIGITAL` and through authorized Staff coordination for `STAFF_ASSISTED`; `REQUEST_STAFF_CORRECTION` remains a correction of Staff-controlled work. The recommendation and LoanApplication transition form one business outcome with the correction plan for a revision action and audit evidence for every action.
+
+Staff-assisted origination does not add a second maker-checker layer. A Staff actor who performed intake may perform later verification or Loan Officer review when otherwise authorized; the mandatory separation remains between the recommending Loan Officer and final Approver.
 
 ### 6.6 Approval Decision
 
@@ -375,11 +403,13 @@ Each LoanApplication has at most one approved offer in the MVP.
 
 Once generated, the offer's principal, term, pricing, fees, total repayment, repayment method, provisional items, generation time, and expiry time are immutable. Later product or policy changes must not alter an offer already generated. Viewing the offer is read-only.
 
-The authenticated Customer owner may:
+For `CUSTOMER_DIGITAL`, the authenticated Customer owner may:
 
 - accept a valid pending offer, moving the application to `CONTRACT_PENDING`;
 - decline it, moving the application to `CUSTOMER_DECLINED`;
 - take no action until System expiry moves it to `EXPIRED`.
+
+For `STAFF_ASSISTED`, the Customer makes the offer decision through branch interaction and authorized Staff records the evidenced Customer acceptance or decline. Staff does not make the decision for the Customer. If no decision is recorded before expiry, System expiry moves the application to `EXPIRED`.
 
 Customer decline and expiry release a Salary Advance reservation exactly once in the same business outcome as the terminal transition. Identical retries return the existing result. Contradictory terminal actions are conflicts.
 
@@ -387,9 +417,9 @@ Customer decline and expiry release a Salary Advance reservation exactly once in
 
 After acceptance, Accounting prepares the current operational contract from the approved offer and an eligible disbursement destination.
 
-The Customer owner acknowledges the exact current contract version. Acknowledgment is immutable operational evidence and cannot be withdrawn.
+The Customer acknowledges the exact current contract version. For `CUSTOMER_DIGITAL`, the authenticated Customer records the acknowledgment directly. For `STAFF_ASSISTED`, the Customer acknowledges through branch interaction and authorized Staff records the evidenced Customer acknowledgment. Staff does not acknowledge the contract for the Customer. Acknowledgment is immutable operational evidence and cannot be withdrawn.
 
-Before readiness, Accounting may regenerate a `PREPARED` or `ACKNOWLEDGED` contract only for `DISBURSEMENT_ACCOUNT_REFRESH`. The previous version becomes `SUPERSEDED`; financial terms and repayment items remain unchanged; the new destination is captured; and the Customer must acknowledge the new version.
+Before readiness, Accounting may regenerate a `PREPARED` or `ACKNOWLEDGED` contract only for `DISBURSEMENT_ACCOUNT_REFRESH`. The previous version becomes `SUPERSEDED`; financial terms and repayment items remain unchanged; the new destination is captured; and the Customer must acknowledge the new version through the application's allowed channel.
 
 Readiness is calculated from current authoritative facts. Confirmation requires:
 
@@ -470,7 +500,7 @@ All product workflows inherit Section 6. This section adds only the product-spec
 
 ### 7.1 Salary Advance
 
-Salary Advance is Meridian's flagship MVP product. It is a limit-based product in which reusable employment verification and current exposure capacity exist before application submission.
+Salary Advance is Meridian's flagship MVP product. It is a limit-based product in which reusable employment verification and current exposure capacity exist before application submission. Salary Advance origination is `CUSTOMER_DIGITAL` only; Staff-assisted paper intake or origination is not allowed for this product.
 
 #### Partner Setup and Employee Imports
 
@@ -588,32 +618,32 @@ Salary Advance excludes automated payroll deduction and real employer, payroll, 
 
 ### 7.2 Unsecured Consumer Loan
 
-Unsecured Consumer Loan is a streamlined document-based product. It requires income and employment evidence but no collateral.
+Unsecured Consumer Loan is a streamlined document-based product. It requires income and employment evidence but no collateral. UCL may originate through `CUSTOMER_DIGITAL` or `STAFF_ASSISTED`.
 
-Required evidence is defined in Section 11.4. Loan purpose may be an optional product-policy field or document.
+Required evidence is defined in Section 11.4. Loan purpose may be an optional product-policy field or document. Staff-assisted UCL uses the same product, verification, review, approval, pricing, contract, activation, and servicing rules after submission; only the permitted intake and Customer-interaction path differs.
 
 The common blocking-application rule applies. Separately, a matching `ACTIVE` or `OVERDUE` UCL `LoanAccount` with positive contractual outstanding blocks new UCL creation or correction resubmission. Product-matching `SETTLED` or `CLOSED` accounts with zero outstanding do not block, unrelated products do not satisfy the UCL outstanding-account guard, and inconsistent account/status/outstanding evidence fails closed. See `BR-004` and `BR-020B`.
 
-A Customer may cancel an owned UCL only from `RETURNED_FOR_REVISION`. Cancellation terminalizes the active correction and application without creating, releasing, converting, or otherwise changing product exposure. Salary Advance cancellation retains its exact reservation-release behavior.
+A Customer may request cancellation of a UCL only from `RETURNED_FOR_REVISION`. The authenticated Customer records that request directly for `CUSTOMER_DIGITAL`; for `STAFF_ASSISTED`, authorized Staff may record the Customer's evidenced cancellation request. Cancellation terminalizes the active correction and application without creating, releasing, converting, or otherwise changing product exposure. Salary Advance cancellation retains its exact reservation-release behavior.
 
 UCL financial policy is defined in Section 11.3.
 
 End-to-end workflow:
 
-1. Customer completes the required profile and primary bank-account setup.
-2. Customer selects an active Unsecured Consumer Loan product.
-3. Customer enters requested amount, term, income, employment, and other required product facts.
-4. Customer uploads the required income and employment evidence.
-5. System validates Customer readiness, product rules, requested amount and term, required fields, checklist upload completeness, and blocking applications.
-6. Customer submits the application.
+1. The Customer completes readiness directly in Customer Web, or authorized Staff selects or creates the Customer through Staff-assisted intake and records the Customer-provided profile, bank-account, and signed application consent facts.
+2. The Customer selects the active UCL in Customer Web, or authorized Staff selects UCL for the Staff-assisted intake.
+3. The Customer enters requested amount, term, income, employment, and other required product facts, or Staff records those Customer-provided facts from the paper application and confirms them before use.
+4. The Customer uploads required income and employment evidence, or Staff captures the Customer-provided paper evidence and associates the required evidence with the application.
+5. System validates Customer readiness, allowed origination channel, product rules, requested amount and term, required fields, checklist upload completeness, and blocking applications.
+6. The authenticated Customer submits a Customer-digital application, or authorized Staff submits the Staff-assisted application for the selected Customer. The resulting `LoanApplication` records its origination channel.
 7. System records an initial `PENDING_MANUAL_REVIEW` verification cycle.
 8. An authorized Staff reviewer records `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION`, authoritative actor and time, and restricted internal assessment evidence for income and employment consistency and basic repayment capacity. A `VERIFIED` outcome permits review entry but is not credit approval; `FAILED` ends the application as `VERIFICATION_FAILED`; `REQUIRES_MORE_INFORMATION` creates a structured correction atomically.
-9. Document replacement and correction follow Section 6.4. Resubmission after completed verification creates a linked pending cycle and requires re-verification before review. The Customer may instead cancel an owned application from `RETURNED_FOR_REVISION` without an exposure effect.
-10. The Loan Officer records a recommendation or permitted Customer or Staff correction outcome.
+9. Document replacement and correction follow Section 6.4. Resubmission after completed verification creates a linked pending cycle and requires re-verification before review. A Customer-digital owner may cancel from `RETURNED_FOR_REVISION`; for Staff-assisted UCL, authorized Staff may record the Customer's evidenced cancellation request from the same state. Neither path creates a product-exposure effect.
+10. The Loan Officer records a recommendation or permitted Customer or Staff correction outcome. Customer-sourced correction follows the application's origination channel.
 11. The Approver records the independent decision or a permitted mixed Customer/Staff correction outcome.
 12. Approval generates one immutable offer under the configured UCL pricing and repayment policy.
-13. Customer accepts, declines, or allows the offer to expire.
-14. Accounting prepares the operational contract and Customer acknowledges the current version.
+13. The Customer accepts, declines, or allows the offer to expire. Customer-digital response is recorded directly; Staff-assisted response is a Customer decision recorded by authorized Staff with evidence.
+14. Accounting prepares the operational contract and the Customer acknowledges the current version through the application's allowed channel.
 15. Accounting confirms document, Customer, destination, and product readiness.
 16. Accounting performs and confirms the external transfer.
 17. System creates the LoanAccount and final schedule and moves the application to `DISBURSED`.
@@ -623,28 +653,28 @@ The UCL MVP excludes credit-bureau integration, automated income verification, b
 
 ### 7.3 Collateral Loan
 
-Collateral Loan is a streamlined secured product based on one Customer-submitted structured Collateral fact, required ownership evidence, and manual assessment.
+Collateral Loan is a streamlined secured product based on one Customer-provided structured Collateral fact, required ownership evidence, and manual assessment. Collateral Loan may originate through `CUSTOMER_DIGITAL` or `STAFF_ASSISTED`; both channels use the same submitted Collateral invariants and downstream lending lifecycle.
 
 The common blocking-application rule applies, but an existing Collateral LoanAccount does not create an additional product-specific origination restriction. See `BR-004` and `BR-021I`. Collateral origination, activation, and servicing are independent of Salary Advance limit and exposure; no Collateral action creates a Salary Advance limit or movement effect.
 
 End-to-end workflow:
 
-1. Customer completes the required profile and primary bank-account setup.
-2. Customer selects an active Collateral Loan product.
-3. Customer enters requested amount and term.
-4. Customer records collateral type, description, estimated value, ownership status, and condition information.
-5. Customer uploads the required ownership evidence.
-6. System validates Customer readiness, product rules, requested amount and term, required collateral facts, checklist upload completeness, and blocking applications.
-7. Customer submits the application.
+1. The Customer completes readiness directly in Customer Web, or authorized Staff selects or creates the Customer through Staff-assisted intake and records the Customer-provided profile, bank-account, and signed application consent facts.
+2. The Customer selects the active Collateral Loan in Customer Web, or authorized Staff selects Collateral Loan for the Staff-assisted intake.
+3. The Customer enters requested amount and term, or Staff records those Customer-provided values from the paper application and confirms them before use.
+4. The Customer records collateral type, description, estimated value, ownership status, and condition information, or Staff records and confirms those Customer-provided facts from the paper application.
+5. The Customer uploads required ownership evidence, or Staff captures the Customer-provided paper evidence and associates the required evidence with the application.
+6. System validates Customer readiness, allowed origination channel, product rules, requested amount and term, required collateral facts, checklist upload completeness, and blocking applications.
+7. The authenticated Customer submits a Customer-digital application, or authorized Staff submits the Staff-assisted application for the selected Customer. The resulting `LoanApplication` records its origination channel.
 8. System records the initial numbered `PENDING_MANUAL_REVIEW` verification cycle.
 9. After required ownership evidence is processing-ready, an authorized Staff reviewer records `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION` with a restricted assessment note. Verification is not credit approval.
-10. `REQUIRES_MORE_INFORMATION` permits only replacement or Staff review of the existing ownership-evidence item. Resubmission preserves the completed cycle, returns the application to `SUBMITTED`, and creates a linked pending cycle for re-verification. Submitted structured Collateral facts and requested terms are not editable.
-11. Only the authoritative latest `VERIFIED` cycle permits Loan Officer review. The Loan Officer records a recommendation or a permitted document-only correction outcome; any correction must return through re-verification.
+10. `REQUIRES_MORE_INFORMATION` permits only replacement or Staff review of the existing ownership-evidence item. For `STAFF_ASSISTED`, Staff coordinates any Customer-sourced replacement with the Customer and records the Customer-provided evidence. Resubmission preserves the completed cycle, returns the application to `SUBMITTED`, and creates a linked pending cycle for re-verification. Submitted structured Collateral facts and requested terms are not editable.
+11. Only the authoritative latest `VERIFIED` cycle permits Loan Officer review. The Loan Officer records a recommendation or a permitted document-only correction outcome; any correction must return through re-verification and follow the application's origination channel for Customer-sourced work.
 12. The application enters `APPROVAL_PENDING` after a valid Loan Officer recommendation.
 13. The Approver approves, rejects, returns the application to Loan Officer review, or requests the permitted document-only correction while the authoritative latest Collateral verification remains `VERIFIED`.
 14. After a valid approval decision, Loan generates one immutable offer under the configured Collateral Loan pricing and repayment policy.
-15. Customer accepts, declines, or allows the offer to expire.
-16. Accounting prepares the operational contract and Customer acknowledges the current version.
+15. The Customer accepts, declines, or allows the offer to expire. Customer-digital response is recorded directly; Staff-assisted response is a Customer decision recorded by authorized Staff with evidence.
+16. Accounting prepares the operational contract and the Customer acknowledges the current version through the application's allowed channel.
 17. Accounting confirms document, Customer, destination, and product readiness.
 18. Accounting performs and confirms the external transfer.
 19. System creates the LoanAccount and final schedule and moves the application to `DISBURSED`, with zero product-exposure effect.
@@ -668,7 +698,7 @@ Status names are namespace-scoped. Similar labels in different concepts do not c
 | `VERIFICATION_FAILED` | Product verification failed |
 | `DOCUMENTS_PENDING` | Required upload or replacement work remains |
 | `UNDER_REVIEW` | Loan Officer review is active |
-| `RETURNED_FOR_REVISION` | Customer or Staff correction is required |
+| `RETURNED_FOR_REVISION` | Customer-sourced or Staff correction is required; Staff-assisted Customer work is coordinated and recorded by authorized Staff |
 | `RETURNED_TO_REVIEW` | Approver returned the application to Loan Officer review |
 | `APPROVAL_PENDING` | Recommendation is complete and the application awaits an Approver decision |
 | `APPROVED` | Approval is recorded and offer generation must complete |
@@ -713,7 +743,7 @@ Upload completeness and processing readiness are calculated results. They must n
 
 | Current Status | Trigger or Action | Actor | Guard | Next Status | Reason Required |
 |---|---|---|---|---|---|
-| `DRAFT` | Submit application | Customer | All submission checks pass | `SUBMITTED` or `DOCUMENTS_PENDING` | No |
+| `DRAFT` | Submit application | Customer or authorized Staff | All submission checks and product-channel rules pass | `SUBMITTED` or `DOCUMENTS_PENDING` | No |
 | `SUBMITTED` | Start product verification when required | System or authorized reviewer | Product policy requires a separate verification stage | `VERIFICATION_PENDING` | No |
 | `SUBMITTED` | Start Loan Officer review | Loan Officer | Product verification is complete and documents meet the review-entry rule | `UNDER_REVIEW` | No |
 | `VERIFICATION_PENDING` | Verification passes | System or authorized reviewer | Result is `VERIFIED` | `DOCUMENTS_PENDING` or `SUBMITTED` | No |
@@ -729,14 +759,14 @@ Upload completeness and processing readiness are calculated results. They must n
 | `APPROVAL_PENDING` | Return to Loan Officer review | Approver | Further review is required | `RETURNED_TO_REVIEW` | Yes |
 | `APPROVAL_PENDING` | Request structured correction | Approver | Correctable issue exists | `RETURNED_FOR_REVISION` | Yes |
 | `APPROVED` | Generate approved offer | System | Offer generation succeeds | `CUSTOMER_ACCEPTANCE_PENDING` | No |
-| `CUSTOMER_ACCEPTANCE_PENDING` | Accept pending offer | Customer | Authenticated owner and offer is unexpired | `CONTRACT_PENDING` | No |
-| `CUSTOMER_ACCEPTANCE_PENDING` | Decline pending offer | Customer | Authenticated owner | `CUSTOMER_DECLINED` | No |
+| `CUSTOMER_ACCEPTANCE_PENDING` | Accept pending offer | Customer or authorized Staff recorder | Customer-digital owner is authenticated, or Staff-assisted Customer acceptance is evidenced; offer is unexpired | `CONTRACT_PENDING` | No |
+| `CUSTOMER_ACCEPTANCE_PENDING` | Decline pending offer | Customer or authorized Staff recorder | Customer-digital owner is authenticated, or Staff-assisted Customer decline is evidenced | `CUSTOMER_DECLINED` | No |
 | `CUSTOMER_ACCEPTANCE_PENDING` | Expire pending offer | System | Current time is at or after expiry | `EXPIRED` | No |
 | `CONTRACT_PENDING` | Confirm readiness | Accounting Officer | Current contract acknowledged and every blocker is cleared | `DISBURSEMENT_PENDING` | No |
 | `DISBURSEMENT_PENDING` | Confirm manual disbursement | Accounting Officer | Ready contract and valid transfer evidence | `DISBURSED` | No |
-| `RETURNED_FOR_REVISION` | Cancel returned correction | Customer | Authenticated owner; product is Salary Advance or UCL; active correction exists; any Salary Advance reservation remains consistent | `CANCELLED` | No |
+| `RETURNED_FOR_REVISION` | Cancel returned correction | Customer or authorized Staff recorder | Customer-digital owner is authenticated, or Staff-assisted UCL Customer cancellation is evidenced; product is Salary Advance or UCL; active correction exists; any Salary Advance reservation remains consistent | `CANCELLED` | No |
 
-Customer cancellation from other pre-disbursement states and every Staff or administrative cancellation require a separately approved policy with defined authority, reason, and financial effects.
+Customer cancellation from other pre-disbursement states and every Staff-initiated or administrative cancellation require a separately approved policy with defined authority, reason, and financial effects. Recording a permitted Staff-assisted Customer cancellation is not Staff-initiated cancellation.
 
 A transition and its financial, correction, document, offer, contract, exposure, history, and audit effects must commit as one business outcome where the rule requires atomicity.
 
@@ -748,6 +778,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 |---|---|
 | FR-CUST-001 | The system shall let Customers register, authenticate, maintain their own profile, manage their own bank accounts, and provide the identity, contact, residential, employment, consent, and destination facts required by supported products. |
 | FR-CUST-002 | The system shall restrict and audit identity, profile, and bank-account changes according to business state and historical-data rules. |
+| FR-CUST-003 | The system shall permit a Customer business record to exist without a Customer Web login and shall let authorized Staff select, create, and maintain that Customer only through Staff-assisted business capabilities that preserve Staff as actor and Customer as subject. |
 | FR-IAM-001 | The system shall authenticate Customer and Staff actors before protected Customer Web or Internal Web access. |
 | FR-IAM-002 | The system shall enforce role and action permissions and preserve the authenticated actor for Staff business actions. |
 | FR-PROD-001 | The system shall store and display active products with amount limits, terms, pricing, repayment method, required documents, and eligibility notes. |
@@ -755,6 +786,8 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | FR-APP-001 | The system shall support draft creation, submission, permitted cancellation, status tracking, and transition control through one common LoanApplication lifecycle. |
 | FR-APP-002 | The system shall validate Customer readiness, active product, amount, term, product-specific facts, checklist requirements, exposure, and concurrency rules before submission. |
 | FR-APP-003 | The system shall prevent a new submitted application for a product while the Customer has another blocking non-terminal application for that product. |
+| FR-APP-004 | The system shall record each LoanApplication origination channel and enforce `CUSTOMER_DIGITAL` for Salary Advance and either `CUSTOMER_DIGITAL` or `STAFF_ASSISTED` for UCL and Collateral Loan. |
+| FR-INTAKE-001 | The system shall support Staff-assisted pre-application intake for UCL and Collateral Loan so authorized Staff can capture Customer-provided paper application and identity evidence, confirm structured facts, and create or submit the normal LoanApplication without creating financial exposure or entering review before submission. |
 | FR-SA-001 | The system shall let Back-Office Admins manage Partner Companies and monthly Partner Employee imports for Salary Advance. |
 | FR-SA-002 | The system shall validate import rows, track batches, enforce freshness, and prevent invalid, stale, inactive, or unresolved duplicate employee evidence from normal eligibility. |
 | FR-SA-003 | The system shall verify Salary Advance employment before normal application creation and maintain a reusable Customer–Partner Employee link after successful verification or authorized manual-review approval. |
@@ -764,24 +797,25 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | FR-SA-007 | The system shall reserve limit at successful submission, release it exactly once on defined pre-disbursement outcomes, convert it to used exposure at disbursement, and release used exposure through allocated principal or another approved policy. |
 | FR-SA-008 | The system shall refresh employee links and Salary Advance limit when eligible Partner Employee data changes. |
 | FR-SA-009 | The system shall record one Salary Advance verification snapshot for each submitted Salary Advance application. |
-| FR-UCL-001 | The system shall support Unsecured Consumer Loan submission, income and employment evidence, positive and negative manual verification, structured correction and re-verification, review, approval, offer response, correction cancellation, contract readiness, disbursement, activation, repayment, overdue servicing, contractual payoff, Administrative Full-Balance Settlement, administrative closure, zero product exposure, and product-scoped outstanding-debt protection. |
-| FR-CL-001 | The system shall support Collateral Loan submission with one structured Collateral fact, required ownership evidence, manual verification and re-verification, document-only correction, review, approval, offer response, contract readiness, disbursement, activation, repayment, overdue servicing, contractual payoff, Administrative Full-Balance Settlement, administrative closure, zero product exposure, and no Salary Advance movement. |
-| FR-DOC-001 | The system shall let Customers and authorized Staff upload and retrieve purpose-authorized documents associated with Customer, application, collateral, contract, or disbursement requirements. |
+| FR-UCL-001 | The system shall support Customer-digital and Staff-assisted Unsecured Consumer Loan submission, income and employment evidence, positive and negative manual verification, structured correction and re-verification, review, approval, Customer offer response through the allowed channel, correction cancellation, contract readiness, disbursement, activation, repayment, overdue servicing, contractual payoff, Administrative Full-Balance Settlement, administrative closure, zero product exposure, and product-scoped outstanding-debt protection. |
+| FR-CL-001 | The system shall support Customer-digital and Staff-assisted Collateral Loan submission with one structured Collateral fact, required ownership evidence, manual verification and re-verification, document-only correction, review, approval, Customer offer response through the allowed channel, contract readiness, disbursement, activation, repayment, overdue servicing, contractual payoff, Administrative Full-Balance Settlement, administrative closure, zero product exposure, and no Salary Advance movement. |
+| FR-DOC-001 | The system shall let Customers and authorized Staff upload and retrieve purpose-authorized documents associated with Staff-assisted intake, Customer, application, collateral, contract, or disbursement requirements. |
 | FR-DOC-002 | The system shall calculate upload completeness separately from processing readiness and document-review outcomes. |
 | FR-DOC-003 | The system shall support immutable document versions, acceptance, waiver, replacement, controlled reasons, and readiness queries. |
 | FR-REV-001 | The system shall let Loan Officers recommend approval or rejection and request Customer or Staff correction. |
+| FR-REV-002 | The system shall route Customer-sourced correction directly to the Customer for Customer-digital applications and through authorized Staff coordination for Staff-assisted applications, while keeping Customer-sourced correction distinct from Staff correction. |
 | FR-APR-001 | The system shall let Approvers approve, reject, return to Loan Officer review, or request structured Customer or Staff correction. |
 | FR-APR-002 | The system shall enforce maker-checker separation between the Loan Officer recommendation and final Approver decision. |
-| FR-OFFER-001 | The system shall generate one immutable approved offer after approval, present it to the authenticated Customer owner, support idempotent acceptance or decline, and expire pending offers after the configured validity period. |
-| FR-CON-001 | The system shall let Accounting prepare an immutable operational contract from the accepted offer and a protected destination snapshot, let the Customer owner acknowledge the exact current version, and expose a structured readiness result containing readiness status and blocker codes. |
+| FR-OFFER-001 | The system shall generate one immutable approved offer after approval, present it through the application's allowed channel, support idempotent Customer acceptance or decline recorded directly by the authenticated Customer or as an evidenced Staff-assisted Customer decision, and expire pending offers after the configured validity period. |
+| FR-CON-001 | The system shall let Accounting prepare an immutable operational contract from the accepted offer and a protected destination snapshot, let the Customer acknowledge the exact current version directly or through an evidenced Staff-assisted branch interaction, and expose a structured readiness result containing readiness status and blocker codes. |
 | FR-CON-002 | The system shall permit contract regeneration before readiness only for a controlled destination refresh and shall confirm readiness without performing disbursement. |
 | FR-DIS-001 | The system shall expose the full destination only through a dedicated authorized and audited disbursement operation and shall let Accounting confirm an external transfer only against a ready contract. |
 | FR-DIS-002 | The system shall create the LoanAccount, final schedule, disbursement evidence, exposure effects, application transition, history, and audit as one atomic activation outcome. |
 | FR-REP-001 | The system shall preserve the final schedule, record payments and allocations, track installment and account servicing state, support contractual payoff and Administrative Full-Balance Settlement, and close eligible settled accounts through a separate administrative action. |
 | FR-REP-002 | The system shall make repayment idempotent by logical request and payment reference and shall prevent duplicate evidence from creating duplicate allocation, exposure, history, or audit effects. |
 | FR-PORTAL-001 | The system shall provide Customer Web capabilities for registration, authentication, profile and bank-account maintenance, product browsing, eligibility, application submission, document upload, offer response, contract acknowledgment, and status viewing. |
-| FR-PORTAL-002 | The system shall provide permission-scoped Internal Web capabilities: Staff Web contains review, approval, correction, contract, disbursement, and repayment operations; Back-Office Administration contains product, Partner, import, internal-user, role, permission, and configuration administration; audit operations remain scoped to the relevant area. |
-| FR-AUD-001 | The system shall record auditable business actions and transitions with actor, action, time, affected business reference, status change, reason, and operation correlation where applicable. |
+| FR-PORTAL-002 | The system shall provide permission-scoped Internal Web capabilities: Staff Web contains Staff-assisted UCL and Collateral Loan intake and origination plus review, approval, correction, contract, disbursement, and repayment operations; Back-Office Administration contains product, Partner, import, internal-user, role, permission, and configuration administration; audit operations remain scoped to the relevant area. |
+| FR-AUD-001 | The system shall record auditable business actions and transitions with actor, affected business subject or reference, action, time, status change, reason, and operation correlation where applicable. |
 | FR-AUD-002 | The system shall keep audit evidence append-only for normal users, PII-safe, and sufficient for maker-checker and business-operation traceability. |
 
 ---
@@ -790,12 +824,12 @@ A transition and its financial, correction, document, offer, contract, exposure,
 
 | ID | Rule |
 |---|---|
-| BR-001 | A Customer can submit an application only for an active `LoanProduct`. |
+| BR-001 | An application may be submitted only for an active `LoanProduct` through an origination channel allowed for that product. |
 | BR-002 | The Customer profile must satisfy the selected product's completeness rule before submission. |
 | BR-003 | A LoanApplication must pass every required submission validation before becoming submitted. |
 | BR-004 | A Customer may keep multiple drafts but cannot submit the same product while another blocking non-terminal application for that product exists. |
-| BR-005 | A Customer may cancel their own Salary Advance or UCL application from `RETURNED_FOR_REVISION`; the active correction ends, Salary Advance releases its reservation atomically, and UCL creates no product-exposure effect. |
-| BR-006 | Customer cancellation from another pre-disbursement state or Staff cancellation requires a separately approved policy defining actor authority, reason, permitted state, and financial effects. |
+| BR-005 | A Customer may cancel their own Salary Advance or UCL application from `RETURNED_FOR_REVISION`; for a Staff-assisted UCL, authorized Staff may record the Customer's evidenced cancellation request from the same state. The active correction ends, Salary Advance releases its reservation atomically, and UCL creates no product-exposure effect. |
+| BR-006 | Customer cancellation from another pre-disbursement state or Staff-initiated cancellation requires a separately approved policy defining actor authority, reason, permitted state, and financial effects. Recording a permitted Staff-assisted Customer cancellation under `BR-005` is not Staff-initiated cancellation. |
 | BR-007 | A `DISBURSED` application cannot be cancelled. |
 | BR-008 | Normal Salary Advance creation requires an active verified Customer–Partner Employee link. |
 | BR-009 | Salary Advance requested principal must not exceed active available limit. |
@@ -826,11 +860,11 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-023 | Upload completeness, manual document review and processing readiness, and product verification are separate controls. |
 | BR-024 | Product policy defines which checklist items must be upload-complete before submission. |
 | BR-025 | Contract readiness requires every required document item to be accepted, not required, or validly waived. |
-| BR-026 | Missing, rejected, expired, or replacement-required evidence must route to the correct Customer or Staff task. |
+| BR-026 | Missing, rejected, expired, or replacement-required evidence must route to the correct operational task. Customer-sourced work routes directly to the Customer for `CUSTOMER_DIGITAL` and through authorized Staff coordination for `STAFF_ASSISTED`; Staff correction remains Staff-owned. |
 | BR-027 | Loan Officer review and Approver decision are separate responsibilities. |
 | BR-028 | One Staff actor cannot record both the recommendation and final decision for the same application. |
 | BR-029 | Rejection, return, Staff cancellation, request-more-information, Staff correction, manual override, waiver, and other controlled exception actions require a reason where defined. |
-| BR-030 | The authenticated Customer owner must accept valid approved terms before contract preparation and disbursement. |
+| BR-030 | The Customer must accept valid approved terms before contract preparation and disbursement. Customer-digital acceptance is recorded by the authenticated Customer owner; Staff-assisted acceptance is an evidenced Customer decision recorded by authorized Staff. |
 | BR-031 | A pending approved offer expires when the current time reaches its generated time plus the configured positive calendar-day validity period; the default is seven days. |
 | BR-032 | Approval and disbursement are separate responsibilities. |
 | BR-033 | Disbursement may be confirmed only after offer acceptance, current-contract acknowledgment, document readiness, destination validity, and product-specific readiness. |
@@ -845,7 +879,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-041 | Every important transition and financial outcome records the required audit evidence. |
 | BR-042 | MVP approval accepts the exact submitted amount and term; a change returns through review or correction and is not a counteroffer. |
 | BR-043 | Each LoanApplication has at most one approved offer in the MVP; financial terms are immutable after generation. |
-| BR-044 | Offer viewing and response derive Customer identity from authentication and verify ownership through the LoanApplication. |
+| BR-044 | Customer-digital offer viewing and response derive Customer identity from authentication and verify ownership through the LoanApplication. Staff-assisted offer response uses the selected application Customer as subject and the authenticated Staff user as recorder; it must not impersonate or authenticate as the Customer. |
 | BR-045 | Viewing an offer is read-only; expiry is performed by System processing or a guarded state-changing action. |
 | BR-046 | Repeating the same offer action is idempotent; contradictory terminal actions are conflicts. |
 | BR-047 | Salary Advance approved principal equals submitted principal, and approved term equals the submitted allowed term of 1, 2, or 3 months. |
@@ -855,7 +889,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-051 | Salary Advance provisional principal and interest are allocated in whole VND, remainders go to the final item, fee due is zero for every item, each item's total due equals its principal due plus interest due plus fee due, and all item sums reconcile exactly to the approved offer totals. |
 | BR-052 | Salary Advance requested principal must be mathematically whole VND; scale-only trailing zeros are valid and non-zero fractional VND is rejected before financial persistence. |
 | BR-053 | An operational contract copies accepted offer terms and provisional items exactly and does not treat mutable Customer data as historical financial authority. |
-| BR-054 | Contract acknowledgment is immutable evidence for the exact current version and is not an electronic signature, digital signature, or legal execution. |
+| BR-054 | Contract acknowledgment is immutable evidence for the exact current version and is not an electronic signature, digital signature, or legal execution. Customer-digital acknowledgment is recorded directly by the authenticated Customer; Staff-assisted acknowledgment records the Customer's evidenced branch acknowledgment with the authenticated Staff user as actor. |
 | BR-055 | Contract regeneration before readiness is allowed only for `DISBURSEMENT_ACCOUNT_REFRESH`; it supersedes the current version and requires fresh acknowledgment. |
 | BR-056 | The full destination account number remains protected at rest and is excluded from ordinary APIs, logs, audits, errors, and history. It may be returned only through the dedicated authorized, audited, non-cacheable disbursement reveal operation. |
 | BR-057 | Readiness confirmation recomputes blockers and atomically marks the contract ready and application `DISBURSEMENT_PENDING` with PII-safe history and audit. |
@@ -868,6 +902,13 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-064 | Read operations do not evaluate overdue state, alter servicing results, or publish new business evidence. |
 | BR-065 | UCL repayment and Administrative Full-Balance Settlement may allocate contractual principal but release zero product exposure and create no Salary Advance movement. |
 | BR-066 | UCL supports date-driven `ACTIVE` and `OVERDUE` servicing, exact contractual payoff or Administrative Full-Balance Settlement to `SETTLED`, and separate administrative closure to `CLOSED`. |
+| BR-067 | Salary Advance permits only `CUSTOMER_DIGITAL` origination. UCL and Collateral Loan permit `CUSTOMER_DIGITAL` and `STAFF_ASSISTED` origination. |
+| BR-068 | A Staff-assisted Customer may exist without a Customer Web User. The authenticated Staff user remains the actor and the selected Customer remains the business subject for every Staff-assisted action; Staff must not impersonate or authenticate as the Customer. |
+| BR-069 | Staff-assisted intake precedes UCL or Collateral Loan `LoanApplication` creation. Intake may hold Customer-provided application and identity evidence but creates no financial exposure and does not enter verification, review, or approval. |
+| BR-070 | Staff-assisted Customer consent must be supported by the Customer's signed paper loan application. Staff records that consent was obtained; Staff does not provide the consent, and Meridian does not require a separate consent document for that application. |
+| BR-071 | A Customer-sourced correction remains Customer-sourced even when authorized Staff coordinates it for a Staff-assisted application. Staff must obtain the requested information or evidence from the Customer before recording, uploading, and resubmitting it. |
+| BR-072 | OCR may propose data from paper evidence, but an authorized Staff user must confirm or correct proposed values before they mutate authoritative Customer or Loan state. OCR output and transcription confirmation do not establish Customer verification, document acceptance, product verification, or approval. |
+| BR-073 | When Staff-assisted intake creates a new Customer, creation of the Customer and required identity-bearing profile must fail as one business outcome when protected identity evidence duplicates another Customer; the failed attempt must not leave a separate incomplete Customer shell. |
 
 ---
 
@@ -980,6 +1021,8 @@ This table defines product-specific LoanApplication checklist evidence. Customer
 
 Product policy determines which evidence must exist before submission and which may be introduced through correction.
 
+For `STAFF_ASSISTED` UCL and Collateral Loan, the signed paper loan application is intake evidence and contains the Customer declaration and consent required for Staff-assisted submission. Identity-document evidence may also be captured during intake before a `LoanApplication` exists. These intake artifacts do not become separate LoanApplication checklist requirements unless product policy explicitly requires them; consent is not represented as a separate paper document.
+
 ### 11.5 Collateral Loan Policy Values
 
 | Policy Item | Value |
@@ -1035,13 +1078,13 @@ Sections 5 through 8 define Meridian's business concepts and required evidence. 
 
 | Category | Requirement |
 |---|---|
-| Security | Protected actions require authenticated identity and narrow permissions; Customer-owned operations also enforce ownership |
+| Security | Protected actions require authenticated identity and narrow permissions; Customer-digital operations enforce ownership, while Staff-assisted operations authorize the Staff actor and selected Customer subject separately |
 | Privacy | APIs, logs, errors, audit, and history disclose only the minimum purpose-authorized personal, employment, financial, collateral, and document data |
 | Integrity | Status, offer, contract, disbursement, schedule, payment, and exposure rules must preserve their stated invariants |
 | Atomicity | A business outcome that combines workflow, financial, document, exposure, history, or audit effects must not commit partially |
 | Idempotency | Retried offer, contract, disbursement, correction, and repayment commands must not duplicate business effects |
 | Concurrency | Competing requests must preserve one blocking application, one active workflow outcome, one disbursement, and consistent financial evidence |
-| Auditability | Important actions are attributable to actor, time, business reference, reason, and operation |
+| Auditability | Important actions are attributable to actor, business subject or reference, time, reason, and operation; Staff-assisted actions preserve Staff actor and Customer subject separately |
 | Availability | Failure of an external provider or worker must not corrupt business state; any permitted manual fallback remains visible and controlled |
 
 ---
@@ -1052,7 +1095,7 @@ Sections 5 through 8 define Meridian's business concepts and required evidence. 
 
 The MVP business target includes every capability defined as in scope in Section 3.3 and every requirement in Sections 9 and 10.
 
-Salary Advance receives full product depth. UCL and Collateral Loan retain the same common lifecycle but use streamlined product-specific verification and manual review.
+Salary Advance receives full product depth through Customer-digital origination. UCL and Collateral Loan retain the same common lifecycle and streamlined product-specific verification and manual review while supporting both Customer-digital and Staff-assisted paper origination.
 
 ### 13.2 Optional Enhancements
 
@@ -1060,11 +1103,11 @@ The following capabilities may be added without changing the core lending lifecy
 
 - Customer application-history and Staff queue dashboards beyond the minimum operational views;
 - notification delivery;
-- OCR-assisted document extraction;
+- OCR-assisted Staff intake and document extraction;
 - lightweight analytics;
 - a mobile client after Customer Web is stable.
 
-OCR remains advisory to Document review. Notification remains observational and does not own workflow decisions.
+OCR remains advisory. It may propose intake or document data, but authorized human confirmation and the owning business command remain authoritative. Notification remains observational and does not own workflow decisions.
 
 ### 13.3 Excluded from the MVP
 
@@ -1075,6 +1118,8 @@ OCR remains advisory to Document review. Notification remains observational and 
 - double-entry ledger, unapplied cash, suspense, reversal, refund, write-off, or production accounting;
 - production compliance case management;
 - full electronic signature or legal agreement-execution platform;
+- Customer-account claiming or automatic conversion of a Staff-assisted application into the Customer-digital channel;
+- integrated scanner hardware, a generic paper-form designer, or arbitrary document-template management;
 - microservice deployment requirements;
 - full mobile delivery;
 - savings, entrusted, corporate, or other non-lending products.
@@ -1091,10 +1136,10 @@ Post-MVP product work may introduce multi-level approval, automated repayment si
 
 ## 14. Design Principles
 
-1. Use one common lending lifecycle for every supported product.
-2. Keep product variation explicit in product policies.
-3. Treat Salary Advance as the flagship and deepest MVP product.
-4. Keep UCL and Collateral Loan streamlined but complete at the common-lifecycle level.
+1. Use one common lending lifecycle for every supported product and allowed origination channel.
+2. Keep product and origination-channel variation explicit in business policy.
+3. Treat Salary Advance as the flagship and deepest MVP product, with Customer-digital origination only.
+4. Keep UCL and Collateral Loan streamlined but complete at the common-lifecycle level, with Customer-digital and Staff-assisted paper origination.
 5. Preserve clear ownership among Customer, Partner, Loan, Approval, Document, Audit, and Notification.
 6. Separate upload completeness, manual document review, processing readiness, product verification, review recommendation, and approval decision.
 7. Separate approval, Customer acceptance, contract readiness, and disbursement.
@@ -1103,3 +1148,5 @@ Post-MVP product work may introduce multi-level approval, automated repayment si
 10. Keep real integrations and production banking features outside the MVP.
 11. Make retries, concurrency, and failure behavior part of the business rule rather than an implementation afterthought.
 12. Keep Customer-facing steps understandable without weakening business control.
+13. Preserve actor and subject separately: Staff-assisted processing records Staff as actor and Customer as business subject without impersonation.
+14. Treat paper evidence and OCR extraction as inputs to human-confirmed business actions, not as authoritative Customer, document, verification, or approval state by themselves.
