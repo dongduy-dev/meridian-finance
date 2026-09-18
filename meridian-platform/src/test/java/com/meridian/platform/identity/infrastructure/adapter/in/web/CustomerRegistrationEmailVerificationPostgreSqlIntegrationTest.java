@@ -343,7 +343,11 @@ class CustomerRegistrationEmailVerificationPostgreSqlIntegrationTest {
                 """
                         INSERT INTO refresh_token_sessions (
                             id, user_id, family_id, token_digest, issued_at, expires_at
-                        ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '1 day')
+                        ) VALUES (
+                            ?, ?, ?, ?,
+                            CURRENT_TIMESTAMP - INTERVAL '1 second',
+                            CURRENT_TIMESTAMP + INTERVAL '1 day'
+                        )
                         """,
                 UUID.randomUUID(),
                 userId,

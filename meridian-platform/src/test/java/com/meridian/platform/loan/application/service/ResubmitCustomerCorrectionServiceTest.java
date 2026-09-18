@@ -34,12 +34,14 @@ import com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus;
 import com.meridian.platform.loan.domain.model.LoanProduct;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanManualVerificationOutcome;
 import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanVerification;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.exception.AuthorizationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -131,18 +133,18 @@ class ResubmitCustomerCorrectionServiceTest {
                 Set.of("loan:correction:resubmit:own")
         ));
         when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(application));
-        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
+        lenient().when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
                 .thenReturn(Optional.of(correction));
-        when(corrections.findActiveRequestByApplicationIdForUpdate(APPLICATION_ID))
+        lenient().when(corrections.findActiveRequestByApplicationIdForUpdate(APPLICATION_ID))
                 .thenReturn(Optional.of(correction));
-        when(corrections.findTasksByRequestIdForUpdate(CORRECTION_ID))
+        lenient().when(corrections.findTasksByRequestIdForUpdate(CORRECTION_ID))
                 .thenReturn(List.of(completedCustomerTask()));
-        when(readiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+        lenient().when(readiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
                 new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "UNVERIFIED")
         ));
         lenient().when(products.findByProductCode(ProductCode.UNSECURED_CONSUMER_LOAN))
                 .thenReturn(Optional.of(product()));
-        when(documents.readiness(APPLICATION_ID))
+        lenient().when(documents.readiness(APPLICATION_ID))
                 .thenReturn(new LoanDocumentChecklistPort.ChecklistReadinessSnapshot(true, true));
         lenient().when(outstandingAccounts.inspect(CUSTOMER_ID, ProductCode.UNSECURED_CONSUMER_LOAN))
                 .thenReturn(OutstandingLoanAccountQuery.GuardResult.CLEAR);
@@ -176,6 +178,22 @@ class ResubmitCustomerCorrectionServiceTest {
         assertEquals("PENDING_MANUAL_REVIEW",
                 nextCycle.getValue().productVerificationResult().name());
         verifyNoInteractions(partnerEligibility, salaryLimits, salaryMovements, salaryVerifications);
+    }
+
+    @Test
+    void customerCannotResubmitStaffAssistedCorrection() {
+        LoanApplication assisted = new LoanApplication(
+                APPLICATION_ID, CUSTOMER_ID, UUID.randomUUID(), "UCL-ASSISTED-1",
+                ProductCode.UNSECURED_CONSUMER_LOAN, ProductType.UNSECURED,
+                OriginationChannel.STAFF_ASSISTED, LoanApplicationStatus.RETURNED_FOR_REVISION,
+                new BigDecimal("5000000.00"), 6, NOW.minusDays(2));
+        when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(assisted));
+
+        AuthorizationException error = assertThrows(AuthorizationException.class,
+                () -> service.resubmit(APPLICATION_ID, new CorrectionResubmissionRequest(RESUBMISSION_ID)));
+
+        assertEquals("CUSTOMER_DIRECT_ACTION_NOT_ALLOWED", error.getErrorCode());
+        verify(corrections, never()).findLatestRequestByApplicationId(any());
     }
 
     @Test

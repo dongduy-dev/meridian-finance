@@ -46,7 +46,8 @@ describe('Customer application API boundary', () => {
     const requestId = '22222222-2222-4222-8222-222222222222'
     const detail = {
       loanApplicationId: applicationId, applicationNumber: 'SA-20260830-000001',
-      productCode: 'SALARY_ADVANCE', productType: 'SALARY_BASED', requestedAmount: 2_000_000,
+      productCode: 'SALARY_ADVANCE', productType: 'SALARY_BASED', originationChannel: 'CUSTOMER_DIGITAL',
+      requestedAmount: 2_000_000,
       requestedTermMonths: 1, status: 'RETURNED_FOR_REVISION', submittedAt: '2026-08-30T08:00:00',
     }
     const cancellation = {

@@ -270,6 +270,27 @@ class LoanContractReadinessServiceTest {
         verify(contracts, never()).save(any());
     }
 
+    @Test void customerCannotAcknowledgeStaffAssistedContract() {
+        UclFixture f = uclFixture();
+        LoanApplication assisted = new LoanApplication(
+                f.application.id(), f.application.customerId(), f.application.loanProductId(),
+                f.application.applicationNumber(), f.application.productCode(), f.application.productType(),
+                OriginationChannel.STAFF_ASSISTED, f.application.status(), f.application.requestedAmount(),
+                f.application.requestedTermMonths(), f.application.submittedAt());
+        when(users.currentUser()).thenReturn(new AuthenticatedUser(
+                UUID.randomUUID(), "owner@meridian.test", "CUSTOMER", assisted.customerId(),
+                Set.of("CUSTOMER"), Set.of("loan:contract:acknowledge:own")));
+        when(contracts.findByAcknowledgmentRequestId(any())).thenReturn(Optional.empty());
+        when(applications.findByIdForUpdate(assisted.id())).thenReturn(Optional.of(assisted));
+
+        AuthorizationException error = assertThrows(AuthorizationException.class,
+                () -> service.acknowledge(new AcknowledgeLoanContractUseCase.Command(
+                        UUID.randomUUID(), assisted.id(), 1)));
+
+        assertEquals("CUSTOMER_DIRECT_ACTION_NOT_ALLOWED", error.getErrorCode());
+        verify(contracts, never()).findCurrentByApplicationIdForUpdate(any());
+    }
+
     @Test void currentContractQueryEnforcesCustomerOwnershipAndAccountingAuthority() {
         Fixture f = fixture();
         LoanContract current = contract(f, 1, LoanContractStatus.PREPARED);

@@ -8,9 +8,18 @@ public record AssistedOriginationCaseDto(
         String productCode,
         UUID customerId,
         String status,
+        UUID loanApplicationId,
         UUID createdByStaffUserId,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         LocalDateTime terminalAt
 ) {
+    public AssistedOriginationCaseDto(
+            UUID assistedOriginationCaseId, String productCode, UUID customerId,
+            String status, UUID createdByStaffUserId, LocalDateTime createdAt,
+            LocalDateTime updatedAt, LocalDateTime terminalAt
+    ) {
+        this(assistedOriginationCaseId, productCode, customerId, status, null,
+                createdByStaffUserId, createdAt, updatedAt, terminalAt);
+    }
 }

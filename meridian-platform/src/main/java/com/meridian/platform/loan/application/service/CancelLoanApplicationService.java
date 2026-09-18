@@ -105,6 +105,7 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
         if (!application.customerId().equals(customerId)) {
             throw notFound();
         }
+        CustomerDigitalApplicationAccess.require(application);
 
         LoanApplicationCancellation existing = cancellations
                 .findByRequestId(command.requestId())

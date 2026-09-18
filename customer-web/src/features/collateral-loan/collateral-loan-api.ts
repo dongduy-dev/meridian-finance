@@ -38,6 +38,7 @@ export const collateralLoanApplicationSchema = z.object({
   applicationNumber: nonEmptyString,
   productCode: nonEmptyString,
   productType: nonEmptyString,
+  originationChannel: z.enum(['CUSTOMER_DIGITAL', 'STAFF_ASSISTED']).default('CUSTOMER_DIGITAL'),
   status: nonEmptyString,
   requestedAmount: z.number().finite().positive(),
   requestedTermMonths: z.number().int().positive(),

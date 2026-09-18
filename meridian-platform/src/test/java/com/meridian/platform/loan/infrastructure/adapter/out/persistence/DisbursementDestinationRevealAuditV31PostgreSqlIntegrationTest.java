@@ -56,7 +56,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     @Test
     void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
-        assertEquals("56", latestVersion(SCHEMA));
+        assertEquals("57", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -277,6 +277,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                 || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_CREATED
                 || action == BusinessAuditAction.ASSISTED_ORIGINATION_CUSTOMER_ASSOCIATED
                 || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_ABANDONED
+                || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_COMPLETED
                 || action == BusinessAuditAction.INTAKE_DOCUMENT_VERSION_UPLOADED;
     }
 

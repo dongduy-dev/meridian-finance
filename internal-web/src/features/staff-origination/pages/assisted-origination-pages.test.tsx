@@ -26,6 +26,7 @@ vi.mock('@/lib/api', async () => {
 const caseId = '11111111-1111-4111-8111-111111111111'
 const customerId = '22222222-2222-4222-8222-222222222222'
 const versionId = '33333333-3333-4333-8333-333333333333'
+const loanApplicationId = '77777777-7777-4777-8777-777777777777'
 
 const staff = (permissions = [
   'loan:originate:staff', 'customer:read', 'customer:intake:manage', 'document:upload:intake',
@@ -181,6 +182,115 @@ describe('assisted origination pages', () => {
     expect(await screen.findByRole('button', { name: 'Save profile' })).toBeDisabled()
     expect(await screen.findByRole('button', { name: 'Replace evidence' })).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Abandon intake' })).not.toBeInTheDocument()
+  })
+
+  it('offers UCL conversion only when the authoritative prerequisites are present', async () => {
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return { ...customer, primaryActiveBankAccountPresent: true }
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return evidence
+      throw new Error(`Unexpected request ${path}`)
+    })
+    renderRoute(`/staff/origination/${caseId}`)
+
+    expect(await screen.findByRole('heading', { name: 'Create UCL application' })).toBeVisible()
+    expect(await screen.findByText('Primary active bank account: present')).toBeVisible()
+    expect(await screen.findByText('Signed UCL paper application: present')).toBeVisible()
+    expect(screen.getByLabelText('Requested amount')).toBeEnabled()
+    expect(screen.getByLabelText('Requested term months')).toBeEnabled()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create UCL application' })).toBeEnabled())
+  })
+
+  it('keeps Collateral conversion explicitly unavailable', async () => {
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake({ productCode: 'COLLATERAL_LOAN' })
+      if (path === `/staff/customers/${customerId}`) return customer
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return []
+      throw new Error(`Unexpected request ${path}`)
+    })
+    renderRoute(`/staff/origination/${caseId}`)
+
+    expect(await screen.findByText('Collateral application creation is not available in this workflow yet.')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Create UCL application' })).not.toBeInTheDocument()
+  })
+
+  it('submits amount and term once and makes the completed application link authoritative', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    let posts = 0
+    let converted = false
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (path === `/staff/assisted-originations/${caseId}/unsecured-consumer-loan/submit`) {
+        posts += 1
+        expect(options?.body).toEqual({ requestedAmount: 10_000_000, requestedTermMonths: 12 })
+        converted = true
+        return intake({ status: 'COMPLETED', loanApplicationId, terminalAt: '2026-09-17T09:00:00' })
+      }
+      if (path === `/staff/assisted-originations/${caseId}`) return converted
+        ? intake({ status: 'COMPLETED', loanApplicationId, terminalAt: '2026-09-17T09:00:00' })
+        : intake()
+      if (path === `/staff/customers/${customerId}`) return { ...customer, primaryActiveBankAccountPresent: true }
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return evidence
+      if (path === '/staff/assisted-originations?status=OPEN') return []
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+    await user.type(await screen.findByLabelText('Requested amount'), '10000000')
+    await user.type(screen.getByLabelText('Requested term months'), '12')
+    const submit = screen.getByRole('button', { name: 'Create UCL application' })
+    await waitFor(() => expect(submit).toBeEnabled())
+    await user.click(submit)
+
+    expect(await screen.findByRole('link', { name: 'Open application documents' })).toHaveAttribute(
+      'href', `/staff/applications/${loanApplicationId}/documents`,
+    )
+    expect(screen.getByRole('button', { name: 'Save profile' })).toBeDisabled()
+    expect(posts).toBe(1)
+  })
+
+  it.each([
+    ['COMPLETED', loanApplicationId, /confirmed from the authoritative intake/i],
+    ['OPEN', null, /requires explicit operator confirmation|review the intake and confirm a new attempt explicitly/i],
+  ])('reconciles a lost conversion as %s without automatically repeating POST', async (status, resultId, message) => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    let caseReads = 0
+    let posts = 0
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}/unsecured-consumer-loan/submit`) {
+        posts += 1
+        throw new NetworkError()
+      }
+      if (path === `/staff/assisted-originations/${caseId}`) {
+        caseReads += 1
+        return caseReads === 1 ? intake() : intake({
+          status, loanApplicationId: resultId, terminalAt: status === 'COMPLETED' ? '2026-09-17T09:00:00' : null,
+        })
+      }
+      if (path === `/staff/customers/${customerId}`) return { ...customer, primaryActiveBankAccountPresent: true }
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return evidence
+      if (path === '/staff/assisted-originations?status=OPEN') return []
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+    await user.type(await screen.findByLabelText('Requested amount'), '10000000')
+    await user.type(screen.getByLabelText('Requested term months'), '12')
+    const submit = screen.getByRole('button', { name: 'Create UCL application' })
+    await waitFor(() => expect(submit).toBeEnabled())
+    await user.click(submit)
+
+    if (status === 'COMPLETED') {
+      expect(await screen.findByRole('link', { name: 'Open application documents' })).toHaveAttribute(
+        'href', `/staff/applications/${loanApplicationId}/documents`,
+      )
+    } else {
+      expect(await screen.findByText(message)).toBeVisible()
+    }
+    expect(posts).toBe(1)
   })
 
   it('does not issue hidden Customer or Document queries without their capabilities', async () => {

@@ -2,6 +2,7 @@ package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import jakarta.persistence.Column;
@@ -42,6 +43,10 @@ public class LoanApplicationJpaEntity {
     private ProductType productType;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "origination_channel", nullable = false, updatable = false)
+    private OriginationChannel originationChannel;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private LoanApplicationStatus status;
 
@@ -75,6 +80,7 @@ public class LoanApplicationJpaEntity {
         this.loanProductId = source.loanProductId();
         this.productCode = source.productCode();
         this.productType = source.productType();
+        this.originationChannel = source.originationChannel();
         applyMutableFields(source);
     }
 
@@ -114,6 +120,10 @@ public class LoanApplicationJpaEntity {
 
     public ProductType getProductType() {
         return productType;
+    }
+
+    public OriginationChannel getOriginationChannel() {
+        return originationChannel;
     }
 
     public LoanApplicationStatus getStatus() {

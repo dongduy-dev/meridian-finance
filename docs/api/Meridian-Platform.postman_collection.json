@@ -1,7 +1,7 @@
 {
     "info":  {
                  "name":  "Meridian Platform API - v1 Scenario Collection",
-                 "description":  "JWT/RBAC Postman companion for the Meridian HTTP API v1 contract.\n\nRecommended run order:\n1. Optionally run Customer Registration and Email Verification. Registration generates a fresh fictional email. Copy the raw token manually from local Mailpit into emailVerificationToken before running confirmation; no token is stored in the collection.\n2. Run the Auth folder to capture role-specific Bearer tokens.\n3. Run Paper Intake CP1 to exercise the staff-assisted UCL intake foundation; choose a fictional local PDF for paperIntakeEvidenceFile before the upload request.\n4. Run Public and Partner Admin requests.\n5. Run Customer Profile and Bank Accounts, then Customer Employee Verification, then Salary Advance Application.\n6. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n7. For UCL, prepare and accept the required evidence, enable uclOfferScenarioEnabled, then run the UCL verification-through-offer requests in order. Separate prepared fixture variables enable FAILED, REQUIRES_MORE_INFORMATION, correction/re-verification, cancellation, and outstanding-debt examples.\n8. For Collateral Loan, originate the application, use the returned ownership checklist item with the common upload/review/completion requests, enable collateralVerificationScenarioEnabled, then run the lifecycle sequence through approval, exact offer and contract assertions, Customer acknowledgment, readiness, destination reveal, activation, replay, final schedule, partial repayment, history, exact settlement, and closure. Separate prepared fixture variables exercise the other Approver and offer-terminal outcomes.\n\nThe Salary Advance, UCL, and Collateral happy paths are duplicate-sensitive because the authenticated demo customer can have only one active application per product. Run them on a fresh local database, or reset test data before repeating a full happy-path flow.",
+                 "description":  "JWT/RBAC Postman companion for the Meridian HTTP API v1 contract.\n\nRecommended run order:\n1. Optionally run Customer Registration and Email Verification. Registration generates a fresh fictional email. Copy the raw token manually from local Mailpit into emailVerificationToken before running confirmation; no token is stored in the collection.\n2. Run the Auth folder to capture role-specific Bearer tokens.\n3. Run Paper Origination CP2 to exercise Staff-assisted UCL intake, atomic conversion, completed-case reconciliation, and initial checklist upload; choose fictional local PDFs for paperIntakeEvidenceFile and assistedApplicationEvidenceFile.\n4. Run Public and Partner Admin requests.\n5. Run Customer Profile and Bank Accounts, then Customer Employee Verification, then Salary Advance Application.\n6. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n7. For UCL, prepare and accept the required evidence, enable uclOfferScenarioEnabled, then run the UCL verification-through-offer requests in order. Separate prepared fixture variables enable FAILED, REQUIRES_MORE_INFORMATION, correction/re-verification, cancellation, and outstanding-debt examples.\n8. For Collateral Loan, originate the application, use the returned ownership checklist item with the common upload/review/completion requests, enable collateralVerificationScenarioEnabled, then run the lifecycle sequence through approval, exact offer and contract assertions, Customer acknowledgment, readiness, destination reveal, activation, replay, final schedule, partial repayment, history, exact settlement, and closure. Separate prepared fixture variables exercise the other Approver and offer-terminal outcomes.\n\nThe Salary Advance, UCL, and Collateral happy paths are duplicate-sensitive because the authenticated demo customer can have only one active application per product. Run them on a fresh local database, or reset test data before repeating a full happy-path flow.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "auth":  {
@@ -805,12 +805,33 @@
                           "value":  "",
                           "type":  "string",
                           "description":  "Select a local fictional PDF in Postman before running the intake-evidence upload request."
+                      },
+                      {
+                          "key":  "staffAssistedLoanApplicationId",
+                          "value":  "",
+                          "type":  "string"
+                      },
+                      {
+                          "key":  "staffAssistedChecklistItemId",
+                          "value":  "",
+                          "type":  "string"
+                      },
+                      {
+                          "key":  "staffAssistedApplicationUploadRequestId",
+                          "value":  "",
+                          "type":  "string"
+                      },
+                      {
+                          "key":  "assistedApplicationEvidenceFile",
+                          "value":  "",
+                          "type":  "string",
+                          "description":  "Select a local fictional PDF for the initial Staff-assisted application checklist upload."
                       }
                  ],
     "item":  [
                  {
-                     "name":  "00 Paper Intake CP1 - Staff-Assisted Origination",
-                     "description":  "Loan Officer scenario for the CP1 foundation only: open an intake case, discover or create a Customer, associate it, upload immutable intake evidence, and abandon the case. It does not submit a LoanApplication, complete OCR, or enter the ordinary lending workflow.",
+                     "name":  "00 Paper Origination CP2 - Manual UCL",
+                     "description":  "Loan Officer scenario for Staff-assisted UCL: open an intake case, create and associate a Customer, upload immutable paper evidence, atomically convert the case, reconcile the completed case through GET, and upload one initial application checklist document. It does not run OCR, convert Collateral intake, or perform a Customer-owned downstream action.",
                      "auth":  {
                                   "type":  "bearer",
                                   "bearer":  [
@@ -1052,33 +1073,93 @@
                                       "response":  []
                                   },
                                   {
-                                      "name":  "Abandon assisted-origination case",
+                                      "name":  "Convert assisted intake to UCL application",
                                       "event":  [
                                                     {
                                                         "listen":  "test",
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
-                                                                                    "pm.test(\"Case is terminal and no LoanApplication was created\", function () {",
+                                                                                    "pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });",
+                                                                                    "pm.test(\"Case is completed and linked once\", function () {",
                                                                                     "    const json = pm.response.json();",
-                                                                                    "    pm.expect(json.status).to.eql(\"ABANDONED\");",
+                                                                                    "    pm.expect(json.status).to.eql(\"COMPLETED\");",
+                                                                                    "    pm.expect(json.loanApplicationId).to.be.a(\"string\");",
                                                                                     "    pm.expect(json.terminalAt).to.be.a(\"string\");",
                                                                                     "});",
-                                                                                    "pm.collectionVariables.unset(\"paperIntakeUploadRequestId\");"
+                                                                                    "pm.collectionVariables.set(\"staffAssistedLoanApplicationId\", pm.response.json().loanApplicationId);"
                                                                                 ]
                                                                    }
                                                     }
                                                 ],
                                       "request":  {
                                                       "method":  "POST",
-                                                      "header":  [],
+                                                      "header":  [{"key":  "Content-Type", "value":  "application/json", "type":  "text"}],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"requestedAmount\": 10000000,\n  \"requestedTermMonths\": 12\n}",
+                                                                   "options":  {"raw":  {"language":  "json"}}
+                                                               },
                                                       "url":  {
-                                                                  "raw":  "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/abandon",
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/unsecured-consumer-loan/submit",
                                                                   "host":  ["{{baseUrl}}"],
-                                                                  "path":  ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}", "abandon"]
+                                                                  "path":  ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}", "unsecured-consumer-loan", "submit"]
                                                               }
                                                   },
+                                      "response":  []
+                                  },
+                                  {
+                                      "name":  "Reconcile completed assisted-origination case",
+                                      "event":  [{"listen":  "test", "script":  {"type":  "text/javascript", "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "pm.test(\"GET proves the completed conversion\", function () {",
+                                                                                    "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json.status).to.eql(\"COMPLETED\");",
+                                                                                    "    pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"staffAssistedLoanApplicationId\"));",
+                                                                                    "});"
+                                                                                ]}}],
+                                      "request":  {"method":  "GET", "header":  [], "description":  "Use this GET after an uncertain conversion response. Never automatically repeat the POST.", "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}",
+                                                                  "host":  ["{{baseUrl}}"],
+                                                                  "path":  ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}"]
+                                                              }},
+                                      "response":  []
+                                  },
+                                  {
+                                      "name":  "Read Staff-assisted application checklist",
+                                      "event":  [{"listen":  "test", "script":  {"type":  "text/javascript", "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Checklist exposes assisted channel and pending documents\", function () { pm.expect(json.originationChannel).to.eql(\"STAFF_ASSISTED\"); pm.expect(json.applicationStatus).to.eql(\"DOCUMENTS_PENDING\"); });",
+                                                                                    "pm.collectionVariables.set(\"staffAssistedChecklistItemId\", json.items[0].checklistItemId);"
+                                                                                ]}}],
+                                      "request":  {"method":  "GET", "header":  [], "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/loan-applications/{{staffAssistedLoanApplicationId}}/documents",
+                                                                  "host":  ["{{baseUrl}}"],
+                                                                  "path":  ["api", "v1", "staff", "loan-applications", "{{staffAssistedLoanApplicationId}}", "documents"]
+                                                              }},
+                                      "response":  []
+                                  },
+                                  {
+                                      "name":  "Upload initial Staff-assisted application document",
+                                      "description":  "Choose a fictional local PDF. The request UUID may be reused only for an exact retry with the same file and predecessor baseline.",
+                                      "event":  [
+                                                    {"listen":  "prerequest", "script":  {"type":  "text/javascript", "exec":  [
+                                                                                    "if (!pm.collectionVariables.get(\"staffAssistedApplicationUploadRequestId\")) { pm.collectionVariables.set(\"staffAssistedApplicationUploadRequestId\", pm.variables.replaceIn(\"{{$guid}}\")); }"
+                                                                                ]}},
+                                                    {"listen":  "test", "script":  {"type":  "text/javascript", "exec":  [
+                                                                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                                                                    "pm.test(\"Upload response excludes storage internals\", function () { const json = pm.response.json(); pm.expect(json.versionNumber).to.eql(1); pm.expect(json).not.to.have.property(\"storageKey\"); });"
+                                                                                ]}}
+                                                ],
+                                      "request":  {"method":  "POST", "header":  [], "body":  {"mode":  "formdata", "formdata":  [
+                                                                                     {"key":  "file", "type":  "file", "src":  "{{assistedApplicationEvidenceFile}}"}
+                                                                                 ]}, "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/staff/loan-applications/{{staffAssistedLoanApplicationId}}/documents/{{staffAssistedChecklistItemId}}/versions?uploadRequestId={{staffAssistedApplicationUploadRequestId}}",
+                                                                  "host":  ["{{baseUrl}}"],
+                                                                  "path":  ["api", "v1", "staff", "loan-applications", "{{staffAssistedLoanApplicationId}}", "documents", "{{staffAssistedChecklistItemId}}", "versions"],
+                                                                  "query":  [{"key":  "uploadRequestId", "value":  "{{staffAssistedApplicationUploadRequestId}}"}]
+                                                              }},
                                       "response":  []
                                   }
                               ]

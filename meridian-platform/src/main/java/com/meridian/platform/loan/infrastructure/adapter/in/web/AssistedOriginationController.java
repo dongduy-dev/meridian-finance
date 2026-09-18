@@ -3,7 +3,9 @@ package com.meridian.platform.loan.infrastructure.adapter.in.web;
 import com.meridian.platform.loan.application.dto.AssistedOriginationCaseDto;
 import com.meridian.platform.loan.application.dto.AssociateAssistedOriginationCustomerRequest;
 import com.meridian.platform.loan.application.dto.CreateAssistedOriginationCaseRequest;
+import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicationRequest;
 import com.meridian.platform.loan.application.port.in.ManageAssistedOriginationUseCase;
+import com.meridian.platform.loan.application.port.in.StartAssistedUnsecuredConsumerLoanUseCase;
 import com.meridian.platform.loan.domain.model.AssistedOriginationCaseStatus;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -27,9 +29,14 @@ import java.util.UUID;
 public class AssistedOriginationController {
 
     private final ManageAssistedOriginationUseCase useCase;
+    private final StartAssistedUnsecuredConsumerLoanUseCase assistedUclUseCase;
 
-    public AssistedOriginationController(ManageAssistedOriginationUseCase useCase) {
+    public AssistedOriginationController(
+            ManageAssistedOriginationUseCase useCase,
+            StartAssistedUnsecuredConsumerLoanUseCase assistedUclUseCase
+    ) {
         this.useCase = useCase;
+        this.assistedUclUseCase = assistedUclUseCase;
     }
 
     @GetMapping
@@ -61,5 +68,14 @@ public class AssistedOriginationController {
     @PostMapping("/{caseId}/abandon")
     public AssistedOriginationCaseDto abandon(@PathVariable UUID caseId) {
         return useCase.abandon(caseId);
+    }
+
+    @PostMapping("/{caseId}/unsecured-consumer-loan/submit")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AssistedOriginationCaseDto submitUnsecuredConsumerLoan(
+            @PathVariable UUID caseId,
+            @Valid @RequestBody UnsecuredConsumerLoanApplicationRequest request
+    ) {
+        return assistedUclUseCase.submit(caseId, request);
     }
 }

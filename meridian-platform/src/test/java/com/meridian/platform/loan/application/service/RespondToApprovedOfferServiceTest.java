@@ -19,6 +19,7 @@ import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
 import com.meridian.platform.loan.domain.model.RepaymentMethod;
 import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceEmployeeVerificationOutcome;
@@ -283,6 +284,22 @@ class RespondToApprovedOfferServiceTest {
 
         assertEquals("ACCESS_DENIED", exception.getErrorCode());
         assertNull(approvedOfferRepository.savedOffer);
+    }
+
+    @Test
+    void customerCannotRespondToOfferForStaffAssistedApplication() {
+        loanApplicationRepository.application = new LoanApplication(
+                LOAN_APPLICATION_ID, CUSTOMER_ID,
+                UUID.fromString("13131313-1313-1313-1313-131313131313"),
+                "UCL-ASSISTED-1", ProductCode.UNSECURED_CONSUMER_LOAN, ProductType.UNSECURED,
+                OriginationChannel.STAFF_ASSISTED, LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING,
+                money(5_000_000), 6, NOW.minusDays(2));
+
+        AuthorizationException error = assertThrows(AuthorizationException.class,
+                () -> service.acceptOffer(LOAN_APPLICATION_ID));
+
+        assertEquals("CUSTOMER_DIRECT_ACTION_NOT_ALLOWED", error.getErrorCode());
+        assertNoOfferResponseEffects();
     }
 
     private void assertNoOfferResponseEffects() {

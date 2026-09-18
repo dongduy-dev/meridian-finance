@@ -13,6 +13,7 @@ import com.meridian.platform.loan.domain.model.LoanContractStatus;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus;
 import com.meridian.platform.loan.domain.model.LoanCorrectionResponsibility;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.AuthorizationException;
@@ -79,6 +80,7 @@ public class QueryLoanApplicationService implements QueryLoanApplicationUseCase 
                 application.applicationNumber(),
                 application.productCode().name(),
                 application.productType().name(),
+                application.originationChannel().name(),
                 application.requestedAmount(),
                 application.requestedTermMonths(),
                 application.status().name(),
@@ -93,6 +95,9 @@ public class QueryLoanApplicationService implements QueryLoanApplicationUseCase 
             UUID customerId,
             LocalDateTime now
     ) {
+        if (application.originationChannel() != OriginationChannel.CUSTOMER_DIGITAL) {
+            return CustomerLoanApplicationSummaryDto.CustomerApplicationAction.NONE;
+        }
         return switch (application.status()) {
             case DOCUMENTS_PENDING ->
                     CustomerLoanApplicationSummaryDto.CustomerApplicationAction.UPLOAD_DOCUMENTS;
@@ -151,6 +156,7 @@ public class QueryLoanApplicationService implements QueryLoanApplicationUseCase 
                 application.applicationNumber(),
                 application.productCode().name(),
                 application.productType().name(),
+                application.originationChannel().name(),
                 application.requestedAmount(),
                 application.requestedTermMonths(),
                 application.status().name(),

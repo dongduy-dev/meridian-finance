@@ -19,6 +19,7 @@ import com.meridian.platform.document.domain.model.DocumentUploaderActorType;
 import com.meridian.platform.document.domain.model.DocumentVersion;
 import com.meridian.platform.document.domain.model.StoredDocument;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -93,6 +94,7 @@ public class TransactionalDocumentUploadService {
                 command.loanApplicationId()
         );
         validateOwnership(command, workflow);
+        validateChannel(command, currentUser, workflow);
         DocumentChecklist checklist = checklistRepository.findByLoanApplicationIdAndStage(
                         command.loanApplicationId(),
                         DocumentChecklistStage.SUBMISSION
@@ -143,10 +145,13 @@ public class TransactionalDocumentUploadService {
                 && workflow.status() == LoanApplicationStatus.DOCUMENTS_PENDING
                 && document.currentVersionId() == null
                 && command.expectedCurrentVersionId() == null;
+        boolean assistedInitialUpload = command.uploaderActorType() == DocumentUploaderActorType.STAFF
+                && workflow.originationChannel() == OriginationChannel.STAFF_ASSISTED
+                && workflow.status() == LoanApplicationStatus.DOCUMENTS_PENDING;
         if (command.uploaderActorType() == DocumentUploaderActorType.CUSTOMER && !initialCustomerUpload) {
             correctionPort.authorizeCustomerUpload(
                     command.loanApplicationId(), item.id(), command.expectedCurrentVersionId());
-        } else if (command.uploaderActorType() == DocumentUploaderActorType.STAFF) {
+        } else if (command.uploaderActorType() == DocumentUploaderActorType.STAFF && !assistedInitialUpload) {
             correctionPort.authorizeStaffUpload(
                     command.loanApplicationId(), item.id(), command.expectedCurrentVersionId());
         }
@@ -230,6 +235,16 @@ public class TransactionalDocumentUploadService {
                 && !currentUser.requireCustomerId().equals(command.uploaderCustomerId())) {
             throw new AuthorizationException("DOCUMENT_ACCESS_DENIED", "Document customer does not match authentication.");
         }
+        if (command.uploaderActorType() == DocumentUploaderActorType.CUSTOMER
+                && (!"CUSTOMER".equals(currentUser.userType())
+                || !currentUser.hasPermission("document:upload:own"))) {
+            throw new AuthorizationException("DOCUMENT_ACCESS_DENIED", "Customer document upload is denied.");
+        }
+        if (command.uploaderActorType() == DocumentUploaderActorType.STAFF
+                && (!"STAFF".equals(currentUser.userType())
+                || currentUser.optionalCustomerId().isPresent())) {
+            throw new AuthorizationException("DOCUMENT_ACCESS_DENIED", "Staff document upload is denied.");
+        }
     }
 
     private void validateOwnership(
@@ -242,6 +257,32 @@ public class TransactionalDocumentUploadService {
                     "DOCUMENT_ACCESS_DENIED",
                     "Customer cannot upload documents for another Loan Application."
             );
+        }
+    }
+
+    private void validateChannel(
+            UploadDocumentCommand command,
+            AuthenticatedUser actor,
+            LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot workflow
+    ) {
+        if (command.uploaderActorType() == DocumentUploaderActorType.CUSTOMER
+                && workflow.originationChannel() != OriginationChannel.CUSTOMER_DIGITAL) {
+            throw new AuthorizationException(
+                    "CUSTOMER_DIRECT_ACTION_NOT_ALLOWED",
+                    "Customer-direct document upload is not allowed for this application."
+            );
+        }
+        if (command.uploaderActorType() == DocumentUploaderActorType.STAFF) {
+            boolean assistedInitial = workflow.originationChannel() == OriginationChannel.STAFF_ASSISTED
+                    && workflow.status() == LoanApplicationStatus.DOCUMENTS_PENDING;
+            String requiredPermission = assistedInitial
+                    ? "document:upload:assisted" : "document:upload:staff";
+            if (!actor.hasPermission(requiredPermission)) {
+                throw new AuthorizationException(
+                        "DOCUMENT_ACCESS_DENIED",
+                        "Staff document upload is denied."
+                );
+            }
         }
     }
 

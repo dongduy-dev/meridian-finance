@@ -196,6 +196,7 @@ public class LoanApplicationRepositoryAdapter implements LoanApplicationReposito
                 entity.getApplicationNumber(),
                 entity.getProductCode(),
                 entity.getProductType(),
+                entity.getOriginationChannel(),
                 entity.getStatus(),
                 entity.getRequestedAmount(),
                 entity.getRequestedTermMonths(),

@@ -29,12 +29,29 @@ class LoanApplicationTest {
         );
 
         assertEquals(LoanApplicationStatus.SUBMITTED, result.loanApplication().status());
+        assertEquals(OriginationChannel.CUSTOMER_DIGITAL, result.loanApplication().originationChannel());
         assertTransition(
                 result,
                 null,
                 LoanApplicationStatus.SUBMITTED,
                 LoanApplicationTransitionAction.SUBMIT_APPLICATION
         );
+    }
+
+    @Test
+    void staffAssistedChannelSurvivesTransitionsAndSalaryAdvanceRejectsIt() {
+        LoanProduct ucl = new LoanProduct(
+                UUID.randomUUID(), ProductCode.UNSECURED_CONSUMER_LOAN, ProductType.UNSECURED,
+                "UCL", null, true, BigDecimal.ONE, BigDecimal.TEN);
+        LoanApplication assisted = LoanApplication.submit(
+                UUID.randomUUID(), UUID.randomUUID(), ucl, "UCL-1", BigDecimal.TEN, 6,
+                OriginationChannel.STAFF_ASSISTED, LocalDateTime.now()).loanApplication();
+        assertEquals(OriginationChannel.STAFF_ASSISTED,
+                assisted.startReview().loanApplication().originationChannel());
+
+        assertThrows(IllegalArgumentException.class, () -> LoanApplication.submit(
+                UUID.randomUUID(), UUID.randomUUID(), loanProduct(), "SA-1", BigDecimal.ONE, 1,
+                OriginationChannel.STAFF_ASSISTED, LocalDateTime.now()));
     }
 
     @Test

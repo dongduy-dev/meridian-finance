@@ -43,6 +43,9 @@ public class AssistedOriginationCaseJpaEntity {
     @Column(name = "terminal_at")
     private LocalDateTime terminalAt;
 
+    @Column(name = "loan_application_id")
+    private UUID loanApplicationId;
+
     protected AssistedOriginationCaseJpaEntity() {
     }
 
@@ -59,12 +62,13 @@ public class AssistedOriginationCaseJpaEntity {
         createdAt = value.createdAt();
         updatedAt = value.updatedAt();
         terminalAt = value.terminalAt();
+        loanApplicationId = value.loanApplicationId();
     }
 
     AssistedOriginationCase toDomain() {
         return new AssistedOriginationCase(
                 id, productCode, customerId, status, createdByStaffUserId,
-                createdAt, updatedAt, terminalAt
+                createdAt, updatedAt, terminalAt, loanApplicationId
         );
     }
 }

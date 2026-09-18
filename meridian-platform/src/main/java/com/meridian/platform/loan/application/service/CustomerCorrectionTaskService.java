@@ -141,6 +141,7 @@ public class CustomerCorrectionTaskService implements QueryOwnCorrectionTasksUse
             throw new AuthorizationException(
                     "CORRECTION_ACCESS_DENIED", "Customer cannot access another Loan Application correction.");
         }
+        CustomerDigitalApplicationAccess.require(application);
         return application;
     }
 

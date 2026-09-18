@@ -293,7 +293,7 @@ Problem:
 Flyway migrations are growing and current schema is harder to inspect from migrations alone.
 
 Resolution:
-`MER-DB-CURRENT-SCHEMA.sql` is the checked-in human-readable current physical-schema snapshot through V56; Flyway V1-V56 remains the executable schema authority. Focused PostgreSQL migration and snapshot verification confirms their alignment.
+`MER-DB-CURRENT-SCHEMA.sql` is the checked-in human-readable current physical-schema snapshot through V57; Flyway V1-V57 remains the executable schema authority. Focused PostgreSQL migration and snapshot verification confirms their alignment.
 
 ### MER-FU-015 - Replace temporary HTTP Basic authenticated gate with JWT/RBAC endpoint permissions
 
@@ -971,6 +971,48 @@ Login and refresh use separate configurable, bounded, single-instance request th
 
 Suggested future branch name:
 `feature/iam-auth-rate-limiting`
+
+### MER-FU-045 - Add Staff-assisted Collateral Loan conversion
+
+Area: Loan / Document / Staff Web
+
+Type: Lending checkpoint
+
+Priority: P1
+
+Status: Open
+
+Blocking: Requires an approved paper Collateral conversion contract.
+
+Problem:
+Staff-assisted intake supports UCL conversion into a `STAFF_ASSISTED` LoanApplication, but Collateral intake remains pre-application only. Reusing the UCL command would omit the structured Collateral facts, ownership-evidence boundary, and product-specific verification requirements.
+
+Recommendation:
+Define and implement a Collateral-specific atomic conversion that preserves the assisted-case lock and one-case/one-application invariant, captures the authoritative submitted asset facts, creates the Collateral checklist and pending verification, keeps intake evidence Document-owned, and provides the same GET-only uncertain-result recovery. Do not introduce automated valuation or LTV behavior.
+
+Suggested future branch name:
+`feature/paper-collateral-origination`
+
+### MER-FU-046 - Add Staff-mediated downstream actions for assisted applications
+
+Area: Loan / Document / Staff Web
+
+Type: Lending workflow contract
+
+Priority: P1
+
+Status: Open
+
+Blocking: Requires approved evidence and authority rules for Staff acting on Customer-provided paper instructions.
+
+Problem:
+A `STAFF_ASSISTED` UCL can enter ordinary verification and review, but Customer-owned correction completion/resubmission, cancellation, offer response, contract acknowledgment, and direct Customer checklist mutation fail closed. A Customer without a Customer Web login therefore has no authorized downstream action path yet.
+
+Recommendation:
+Define purpose-specific Staff-mediated commands with explicit paper evidence, actor/subject separation, exact permissions, audit rules, idempotency or reconciliation behavior, and Customer-visible consequences. Do not impersonate the Customer or reopen the existing Customer-owned endpoints to Staff.
+
+Suggested future branch name:
+`feature/paper-assisted-downstream-actions`
 
 ## Roadmap Boundary
 

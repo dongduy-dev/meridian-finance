@@ -1,8 +1,10 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.MeridianPlatformApplication;
+import com.meridian.platform.loan.application.dto.AssistedOriginationCaseDto;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicationDto;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicationRequest;
+import com.meridian.platform.loan.application.port.in.StartAssistedUnsecuredConsumerLoanUseCase;
 import com.meridian.platform.loan.application.port.in.StartUnsecuredConsumerLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
 import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanVerification;
@@ -53,6 +55,7 @@ class UnsecuredConsumerLoanOriginationPostgreSqlIntegrationTest {
             new UnsecuredConsumerLoanApplicationRequest(new BigDecimal("5000000"), 6);
 
     @Autowired private StartUnsecuredConsumerLoanApplicationUseCase useCase;
+    @Autowired private StartAssistedUnsecuredConsumerLoanUseCase assistedUseCase;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private MutableCurrentUserProvider currentUserProvider;
     @Autowired private FailingVerificationRepository verificationRepository;
@@ -185,6 +188,80 @@ class UnsecuredConsumerLoanOriginationPostgreSqlIntegrationTest {
                 customerId));
     }
 
+    @Test
+    void assistedConversionRollsBackAndLeavesCaseOpenWhenVerificationPersistenceFails() {
+        UUID staffId = createStaff();
+        UUID caseId = createAssistedCaseWithPaperApplication(staffId, customerId);
+        currentUserProvider.useStaff(staffId);
+        verificationRepository.failWrites = true;
+
+        assertThrows(IllegalStateException.class, () -> assistedUseCase.submit(caseId, REQUEST));
+
+        assertEquals(0, count("SELECT count(*) FROM loan_applications "
+                + "WHERE customer_id = ? AND product_code = 'UNSECURED_CONSUMER_LOAN'", customerId));
+        assertEquals(0, count("SELECT count(*) FROM unsecured_consumer_loan_verifications verification "
+                + "JOIN loan_applications application ON application.id = verification.loan_application_id "
+                + "WHERE application.customer_id = ?", customerId));
+        assertEquals(0, count("SELECT count(*) FROM document_checklists checklist "
+                + "JOIN loan_applications application ON application.id = checklist.loan_application_id "
+                + "WHERE application.customer_id = ?", customerId));
+        assertEquals(1, count("SELECT count(*) FROM assisted_origination_cases "
+                + "WHERE id = ? AND status = 'OPEN' AND terminal_at IS NULL AND loan_application_id IS NULL", caseId));
+        assertEquals(0, count("SELECT count(*) FROM audit_events "
+                + "WHERE entity_id = ? AND action = 'ASSISTED_ORIGINATION_CASE_COMPLETED'", caseId));
+    }
+
+    @Test
+    void concurrentAssistedConversionsOfSameCaseCreateExactlyOneCompleteResult() throws Exception {
+        UUID staffId = createStaff();
+        UUID caseId = createAssistedCaseWithPaperApplication(staffId, customerId);
+        currentUserProvider.useStaff(staffId);
+        CountDownLatch start = new CountDownLatch(1);
+        List<AssistedSubmissionOutcome> outcomes;
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<AssistedSubmissionOutcome> first = executor.submit(() -> submitAssistedAfter(start, caseId));
+            Future<AssistedSubmissionOutcome> second = executor.submit(() -> submitAssistedAfter(start, caseId));
+            start.countDown();
+            outcomes = List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS));
+        }
+
+        assertEquals(1, outcomes.stream().filter(AssistedSubmissionOutcome::successful).count());
+        Throwable failure = outcomes.stream().filter(outcome -> !outcome.successful())
+                .map(AssistedSubmissionOutcome::failure).findFirst().orElseThrow();
+        BusinessStateConflictException conflict = assertInstanceOf(BusinessStateConflictException.class, failure);
+        assertEquals("ASSISTED_ORIGINATION_CASE_NOT_OPEN", conflict.getErrorCode());
+        UUID applicationId = outcomes.stream().filter(AssistedSubmissionOutcome::successful)
+                .map(AssistedSubmissionOutcome::result).map(AssistedOriginationCaseDto::loanApplicationId)
+                .findFirst().orElseThrow();
+
+        assertEquals(1, count("SELECT count(*) FROM loan_applications WHERE id = ? AND customer_id = ? "
+                + "AND product_code = 'UNSECURED_CONSUMER_LOAN' AND product_type = 'UNSECURED' "
+                + "AND origination_channel = 'STAFF_ASSISTED' AND status = 'DOCUMENTS_PENDING'",
+                applicationId, customerId));
+        assertEquals(1, count("SELECT count(*) FROM assisted_origination_cases "
+                + "WHERE id = ? AND status = 'COMPLETED' AND loan_application_id = ? AND terminal_at IS NOT NULL",
+                caseId, applicationId));
+        assertEquals(1, count("SELECT count(*) FROM unsecured_consumer_loan_verifications "
+                + "WHERE loan_application_id = ? AND product_verification_result = 'PENDING_MANUAL_REVIEW'",
+                applicationId));
+        assertEquals(3, count("SELECT count(*) FROM document_checklist_items item "
+                + "JOIN document_checklists checklist ON checklist.id = item.checklist_id "
+                + "WHERE checklist.loan_application_id = ? AND item.requirement_status = 'REQUIRED' "
+                + "AND item.document_type IN ('INCOME_PROOF', 'BANK_STATEMENT', 'EMPLOYMENT_PROOF')",
+                applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND from_status IS NULL AND to_status = 'DOCUMENTS_PENDING'",
+                applicationId));
+        assertEquals(1, count("SELECT count(*) FROM audit_events WHERE entity_id = ? "
+                + "AND action = 'UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED'", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM audit_events WHERE entity_id = ? "
+                + "AND action = 'ASSISTED_ORIGINATION_CASE_COMPLETED'", caseId));
+        assertEquals(0, count("SELECT count(*) FROM salary_advance_verifications WHERE loan_application_id = ?",
+                applicationId));
+        assertEquals(0, count("SELECT count(*) FROM collateral_loan_verifications WHERE loan_application_id = ?",
+                applicationId));
+    }
+
     private SubmissionOutcome submitAfter(CountDownLatch start) {
         try {
             assertTrue(start.await(5, TimeUnit.SECONDS));
@@ -193,6 +270,50 @@ class UnsecuredConsumerLoanOriginationPostgreSqlIntegrationTest {
         } catch (Throwable failure) {
             return SubmissionOutcome.failure(failure);
         }
+    }
+
+    private AssistedSubmissionOutcome submitAssistedAfter(CountDownLatch start, UUID caseId) {
+        try {
+            assertTrue(start.await(5, TimeUnit.SECONDS));
+            return AssistedSubmissionOutcome.success(assistedUseCase.submit(caseId, REQUEST));
+        } catch (Throwable failure) {
+            return AssistedSubmissionOutcome.failure(failure);
+        }
+    }
+
+    private UUID createStaff() {
+        UUID staffId = UUID.randomUUID();
+        String suffix = staffId.toString().replace("-", "");
+        jdbcTemplate.update("INSERT INTO users "
+                        + "(id, email, normalized_email, password_hash, user_type, status, display_name, customer_id) "
+                        + "VALUES (?, ?, ?, 'test-password-hash', 'STAFF', 'ACTIVE', 'Assisted UCL Officer', NULL)",
+                staffId, "assisted-" + suffix + "@meridian.test", "assisted-" + suffix + "@meridian.test");
+        return staffId;
+    }
+
+    private UUID createAssistedCaseWithPaperApplication(UUID staffId, UUID selectedCustomerId) {
+        UUID caseId = UUID.randomUUID();
+        UUID documentId = UUID.randomUUID();
+        UUID versionId = UUID.randomUUID();
+        jdbcTemplate.update("INSERT INTO assisted_origination_cases "
+                        + "(id, product_code, customer_id, status, created_by_staff_user_id, created_at, updated_at) "
+                        + "VALUES (?, 'UNSECURED_CONSUMER_LOAN', ?, 'OPEN', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                caseId, selectedCustomerId, staffId);
+        jdbcTemplate.update("INSERT INTO intake_documents "
+                        + "(id, assisted_origination_case_id, evidence_type, current_version_id, created_at, updated_at) "
+                        + "VALUES (?, ?, 'UCL_PAPER_APPLICATION', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                documentId, caseId);
+        jdbcTemplate.update("INSERT INTO intake_document_versions "
+                        + "(id, intake_document_id, version_number, upload_request_id, baseline_version_id, "
+                        + "original_filename, declared_mime_type, detected_mime_type, byte_size, sha256_hex, "
+                        + "storage_key, uploader_staff_user_id, uploaded_at, created_at) "
+                        + "VALUES (?, ?, 1, ?, NULL, 'signed-ucl.pdf', 'application/pdf', 'application/pdf', 128, "
+                        + "?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                versionId, documentId, UUID.randomUUID(), "a".repeat(64),
+                "intake/" + caseId + "/signed-ucl.pdf", staffId);
+        jdbcTemplate.update("UPDATE intake_documents SET current_version_id = ?, updated_at = CURRENT_TIMESTAMP "
+                + "WHERE id = ?", versionId, documentId);
+        return caseId;
     }
 
     private void createReadyCustomer(UUID createdUserId, UUID createdCustomerId) {
@@ -241,6 +362,20 @@ class UnsecuredConsumerLoanOriginationPostgreSqlIntegrationTest {
         }
     }
 
+    private record AssistedSubmissionOutcome(AssistedOriginationCaseDto result, Throwable failure) {
+        static AssistedSubmissionOutcome success(AssistedOriginationCaseDto result) {
+            return new AssistedSubmissionOutcome(result, null);
+        }
+
+        static AssistedSubmissionOutcome failure(Throwable failure) {
+            return new AssistedSubmissionOutcome(null, failure);
+        }
+
+        boolean successful() {
+            return result != null;
+        }
+    }
+
     @TestConfiguration(proxyBeanMethods = false)
     static class UclTestConfiguration {
 
@@ -270,6 +405,17 @@ class UnsecuredConsumerLoanOriginationPostgreSqlIntegrationTest {
                     customerId,
                     Set.of("CUSTOMER"),
                     Set.of("loan:submit")
+            ));
+        }
+
+        void useStaff(UUID userId) {
+            currentUser.set(new AuthenticatedUser(
+                    userId,
+                    "assisted-ucl-test@meridian.test",
+                    "STAFF",
+                    null,
+                    Set.of("LOAN_OFFICER"),
+                    Set.of("loan:originate:staff")
             ));
         }
 

@@ -92,6 +92,7 @@ public class RespondToApprovedOfferService implements RespondToApprovedOfferUseC
                         "Loan application was not found."
                 ));
         assertOwnApplication(loanApplication, customerId);
+        CustomerDigitalApplicationAccess.require(loanApplication);
 
         ApprovedOffer approvedOffer = approvedOfferRepository.findByLoanApplicationIdForUpdate(loanApplicationId)
                 .orElseThrow(() -> new EntityNotFoundException(

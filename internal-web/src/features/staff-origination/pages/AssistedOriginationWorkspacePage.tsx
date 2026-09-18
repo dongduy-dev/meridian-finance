@@ -19,7 +19,7 @@ import {
 } from '@/lib/operation/unresolved-operation'
 import {
   abandonIntake, addBankAccount, attachCustomer, bankAction, createCustomer, getCustomer,
-  getIntake, listBankAccounts, searchCustomer, updateCustomer, uploadEvidence,
+  getIntake, listBankAccounts, searchCustomer, submitUclIntake, updateCustomer, uploadEvidence,
 } from '../api/staff-origination-api'
 import { banksQuery, customerQuery, evidenceQuery, intakeCaseQuery, originationKeys } from '../api/queries'
 import type { CustomerProfileInput, StaffCustomer } from '../api/contracts'
@@ -352,6 +352,44 @@ export function AssistedOriginationWorkspacePage() {
     form.reset()
   }
 
+  const submitUcl = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const form = event.currentTarget
+    const data = new FormData(form)
+    const input = {
+      requestedAmount: Number(data.get('requestedAmount')),
+      requestedTermMonths: Number(data.get('requestedTermMonths')),
+    }
+    const key = 'ucl-conversion'
+    if (!window.confirm('Create the real UCL Loan Application for this Customer?')) return
+    setAction(key, { status: 'IN_FLIGHT' })
+    try {
+      const completed = await submitUclIntake(manager, assistedOriginationCaseId, input)
+      client.setQueryData(originationKeys.case(assistedOriginationCaseId), completed)
+      await refreshConfirmed()
+      setAction(key, { status: 'RESOLVED' })
+    } catch (caught) {
+      if (!(caught instanceof NetworkError)) {
+        setAction(key, { status: 'BLOCKED', error: caught as Error })
+        return
+      }
+      setAction(key, { status: 'RECONCILING' })
+      try {
+        const authoritative = await readCase()
+        if (authoritative.status === 'COMPLETED' && authoritative.loanApplicationId) {
+          await refreshConfirmed()
+          setAction(key, { status: 'RESOLVED', message: 'Application creation was confirmed from the authoritative intake.' })
+        } else if (authoritative.status === 'OPEN') {
+          setAction(key, { status: 'RESULT_UNKNOWN', message: 'The conversion result is unresolved. No submission was repeated; review the intake and confirm a new attempt explicitly.' })
+        } else {
+          setAction(key, { status: 'BLOCKED', message: 'The intake became terminal without a resulting Loan Application.' })
+        }
+      } catch {
+        setAction(key, { status: 'RESULT_UNKNOWN', message: 'The conversion result is unknown. No submission was repeated.' })
+      }
+    }
+  }
+
   const abandon = async () => {
     const key = 'abandon-intake'
     setAction(key, { status: 'IN_FLIGHT' })
@@ -381,7 +419,7 @@ export function AssistedOriginationWorkspacePage() {
   }
 
   return <section className="mx-auto max-w-6xl space-y-6">
-    <div><Button asChild variant="link"><Link to="/staff/origination">← Paper intake</Link></Button><h1 data-route-heading tabIndex={-1} className="text-2xl font-semibold sm:text-3xl">{intake.data.productCode === 'UNSECURED_CONSUMER_LOAN' ? 'UCL' : 'Collateral Loan'} intake</h1><p className="mt-1 text-muted-foreground">Status: {intake.data.status} · No LoanApplication exists for this intake.</p></div>
+    <div><Button asChild variant="link"><Link to="/staff/origination">← Paper intake</Link></Button><h1 data-route-heading tabIndex={-1} className="text-2xl font-semibold sm:text-3xl">{intake.data.productCode === 'UNSECURED_CONSUMER_LOAN' ? 'UCL' : 'Collateral Loan'} intake</h1><p className="mt-1 text-muted-foreground">Status: {intake.data.status}{intake.data.loanApplicationId ? ` · Loan Application ${intake.data.loanApplicationId}` : ' · No LoanApplication exists for this intake.'}</p>{intake.data.loanApplicationId ? <Button className="mt-3" asChild><Link to={`/staff/applications/${intake.data.loanApplicationId}/documents`}>Open application documents</Link></Button> : null}</div>
     {!open ? <div className="rounded-lg border border-warning/40 bg-warning/10 p-4">This intake is terminal. Customer association and evidence upload are disabled.</div> : null}
 
     {canCustomer ? <div className="grid gap-6 lg:grid-cols-2">
@@ -396,6 +434,9 @@ export function AssistedOriginationWorkspacePage() {
     {customer.data ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Bank accounts</h2>{banks.isPending ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading bank accounts…</p> : null}{banks.isError ? <div><p role="alert">Bank accounts could not be loaded.</p><Button className="mt-2" variant="outline" onClick={() => void banks.refetch()}>Retry bank accounts</Button></div> : null}{banks.data?.length === 0 ? <p className="text-sm text-muted-foreground">No bank accounts have been recorded.</p> : null}{banks.data?.map((bank) => <div key={bank.customerBankAccountId} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"><span>{bank.bankNameSnapshot} · {bank.maskedAccountNumber} · {bank.status}{bank.primaryAccount ? ' · Primary' : ''}</span><div className="flex gap-2">{bank.status === 'ACTIVE' && !bank.primaryAccount ? <Button size="sm" variant="outline" disabled={!open || locked(actions['bank-mutation'])} onClick={() => void mutateBank(bank.customerBankAccountId, 'make-primary')}>Make primary</Button> : null}<Button size="sm" variant="outline" disabled={!open || bank.status !== 'ACTIVE' || locked(actions['bank-mutation'])} onClick={() => void mutateBank(bank.customerBankAccountId, 'deactivate')}>Deactivate</Button></div></div>)}<form onSubmit={(event) => void submitBank(event)} className="grid gap-3 sm:grid-cols-2"><Input name="bankCode" required aria-label="Bank code" placeholder="Bank code" /><Input name="bankNameSnapshot" required aria-label="Bank name" placeholder="Bank name" /><Input name="accountHolderName" required aria-label="Account holder" placeholder="Account holder" /><Input name="accountNumber" required aria-label="Account number" placeholder="Account number" autoComplete="off" /><Button disabled={!open || locked(actions['bank-mutation'])}>Add bank account</Button></form><ActionNotice action={actions['bank-mutation']} /></article> : null}
 
     {canEvidence ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Paper intake evidence</h2>{evidence.isPending ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading evidence metadata…</p> : null}{evidence.isError ? <div><p role="alert">Evidence metadata could not be loaded.</p><Button className="mt-2" variant="outline" onClick={() => void evidence.refetch()}>Retry evidence</Button></div> : null}{evidence.isSuccess ? ['CUSTOMER_IDENTITY', selectedEvidenceType].map((type) => { const item = evidence.data.find((candidate) => candidate.evidenceType === type); const label = type === 'CUSTOMER_IDENTITY' ? 'Customer identity / CCCD' : 'Signed paper application'; const resource = evidenceRecoveryResource(assistedOriginationCaseId, type); const unresolved = findUnresolvedOperation('INTAKE_EVIDENCE_UPLOAD', resource); return <div key={type} className="space-y-3 rounded-md border p-3"><h3 className="font-medium">{label}</h3><p className="text-sm text-muted-foreground">{item ? `${item.versions.length} version(s); current ${item.currentVersionId}` : 'No evidence uploaded'}</p>{unresolved ? <p className="text-sm font-medium text-warning">A prior upload result is unresolved. Reselect the exact file to retry it.</p> : null}<form className="flex flex-col gap-2 sm:flex-row" onSubmit={submitEvidence(type)}><Input aria-label={`${label} file`} type="file" name="file" required accept="application/pdf,image/jpeg,image/png" /><Button type="submit" disabled={!open || busy(actions[resource])}>{item ? 'Replace evidence' : 'Upload evidence'}</Button></form><ActionNotice action={actions[resource]} /></div> }) : null}</article> : null}
+
+    {open && intake.data.productCode === 'UNSECURED_CONSUMER_LOAN' ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Create UCL application</h2><p className="text-sm text-muted-foreground">This consequential action creates the real Staff-assisted Loan Application and its required application-document checklist.</p><ul className="text-sm"><li>Selected Customer: {customer.data ? 'ready to evaluate' : 'not available'}</li><li>Profile: {customer.data?.profileCompletionStatus === 'COMPLETE' ? 'complete' : 'incomplete'}</li><li>Primary active bank account: {customer.data?.primaryActiveBankAccountPresent ? 'present' : 'missing'}</li><li>Signed UCL paper application: {evidence.data?.some((item) => item.evidenceType === 'UCL_PAPER_APPLICATION' && item.currentVersionId) ? 'present' : 'missing'}</li></ul><form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submitUcl(event)}><label className="grid gap-1 text-sm font-medium">Requested amount<Input name="requestedAmount" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Requested term months<Input name="requestedTermMonths" type="number" min="1" step="1" required /></label><Button className="sm:col-span-2" disabled={locked(actions['ucl-conversion']) || !customer.data || customer.data.status !== 'ACTIVE' || customer.data.profileCompletionStatus !== 'COMPLETE' || !customer.data.primaryActiveBankAccountPresent || !evidence.data?.some((item) => item.evidenceType === 'UCL_PAPER_APPLICATION' && item.currentVersionId)}>Create UCL application</Button></form><ActionNotice action={actions['ucl-conversion']} /></article> : null}
+    {open && intake.data.productCode === 'COLLATERAL_LOAN' ? <article className="rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Collateral application creation</h2><p className="mt-2 text-sm text-muted-foreground">Collateral application creation is not available in this workflow yet.</p></article> : null}
 
     {open ? <div className="space-y-3 rounded-lg border border-danger/30 p-4"><h2 className="font-semibold">Abandon intake</h2><p className="mt-1 text-sm text-muted-foreground">Abandonment is terminal and blocks further Customer association and paper-evidence changes.</p><Button className="mt-3" variant="destructive" disabled={locked(actions['abandon-intake'])} onClick={() => { if (window.confirm('Abandon this intake permanently?')) void abandon() }}>Abandon intake</Button><ActionNotice action={actions['abandon-intake']} /></div> : null}
   </section>
