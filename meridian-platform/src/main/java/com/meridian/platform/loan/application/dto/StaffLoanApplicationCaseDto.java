@@ -10,6 +10,7 @@ public record StaffLoanApplicationCaseDto(
         String applicationNumber,
         String productCode,
         String productType,
+        String originationChannel,
         BigDecimal requestedAmount,
         int requestedTermMonths,
         String status,
@@ -19,6 +20,17 @@ public record StaffLoanApplicationCaseDto(
 ) {
     public StaffLoanApplicationCaseDto {
         lifecycleHistory = List.copyOf(lifecycleHistory);
+    }
+
+    public StaffLoanApplicationCaseDto(
+            UUID loanApplicationId, String applicationNumber, String productCode,
+            String productType, BigDecimal requestedAmount, int requestedTermMonths,
+            String status, LocalDateTime submittedAt, CustomerReadinessDto customerReadiness,
+            List<LifecycleItemDto> lifecycleHistory
+    ) {
+        this(loanApplicationId, applicationNumber, productCode, productType,
+                "CUSTOMER_DIGITAL", requestedAmount, requestedTermMonths, status,
+                submittedAt, customerReadiness, lifecycleHistory);
     }
 
     public record CustomerReadinessDto(

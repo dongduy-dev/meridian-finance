@@ -21,10 +21,19 @@ public record StaffLoanApplicationPageDto(
             String applicationNumber,
             String productCode,
             String productType,
+            String originationChannel,
             BigDecimal requestedAmount,
             int requestedTermMonths,
             String status,
             LocalDateTime submittedAt
     ) {
+        public ItemDto(
+                UUID loanApplicationId, String applicationNumber, String productCode,
+                String productType, BigDecimal requestedAmount, int requestedTermMonths,
+                String status, LocalDateTime submittedAt
+        ) {
+            this(loanApplicationId, applicationNumber, productCode, productType,
+                    "CUSTOMER_DIGITAL", requestedAmount, requestedTermMonths, status, submittedAt);
+        }
     }
 }

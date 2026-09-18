@@ -19,6 +19,7 @@ import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceEmployeeVerificationOutcome;
 import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovement;
 import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovementType;
@@ -223,6 +224,22 @@ class CancelLoanApplicationServiceTest {
 
         assertEquals("LOAN_APPLICATION_CANCELLATION_ACCESS_DENIED", exception.getErrorCode());
         verify(applications, never()).acquireWorkflowLock(any());
+    }
+
+    @Test
+    void customerCannotCancelStaffAssistedApplication() {
+        LoanApplication assisted = new LoanApplication(
+                APPLICATION_ID, CUSTOMER_ID, UUID.randomUUID(), "UCL-ASSISTED-1",
+                ProductCode.UNSECURED_CONSUMER_LOAN, ProductType.UNSECURED,
+                OriginationChannel.STAFF_ASSISTED, LoanApplicationStatus.RETURNED_FOR_REVISION,
+                new BigDecimal("5000000.00"), 6, NOW.minusDays(2));
+        when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(assisted));
+
+        AuthorizationException error = assertThrows(AuthorizationException.class,
+                () -> service.cancel(new CancelLoanApplicationUseCase.Command(UUID.randomUUID(), APPLICATION_ID)));
+
+        assertEquals("CUSTOMER_DIRECT_ACTION_NOT_ALLOWED", error.getErrorCode());
+        verify(corrections, never()).findActiveRequestByApplicationIdForUpdate(any());
     }
 
     @Test

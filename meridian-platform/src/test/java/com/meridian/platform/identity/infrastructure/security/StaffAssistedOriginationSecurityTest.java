@@ -5,6 +5,7 @@ import com.meridian.platform.customer.infrastructure.adapter.in.web.StaffCustome
 import com.meridian.platform.document.application.port.in.ManageIntakeEvidenceUseCase;
 import com.meridian.platform.document.infrastructure.adapter.in.web.StaffIntakeEvidenceController;
 import com.meridian.platform.loan.application.port.in.ManageAssistedOriginationUseCase;
+import com.meridian.platform.loan.application.port.in.StartAssistedUnsecuredConsumerLoanUseCase;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.AssistedOriginationController;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,7 @@ class StaffAssistedOriginationSecurityTest {
     @MockitoBean com.meridian.platform.identity.application.port.out.AccessTokenRevocationRepository accessTokenRevocationRepository;
     @MockitoBean StaffCustomerIntakeUseCase customers;
     @MockitoBean ManageAssistedOriginationUseCase cases;
+    @MockitoBean StartAssistedUnsecuredConsumerLoanUseCase assistedUcl;
     @MockitoBean ManageIntakeEvidenceUseCase evidence;
 
     @Test
@@ -82,5 +84,27 @@ class StaffAssistedOriginationSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"identityReference\":\"012345678901\"}"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void assistedUclSubmissionRequiresExactOriginationAuthority() throws Exception {
+        UUID caseId = UUID.randomUUID();
+        String body = "{\"requestedAmount\":10000000,\"requestedTermMonths\":12}";
+
+        mockMvc.perform(post("/api/v1/staff/assisted-originations/{id}/unsecured-consumer-loan/submit", caseId)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/v1/staff/assisted-originations/{id}/unsecured-consumer-loan/submit", caseId)
+                        .with(user("customer").authorities(new SimpleGrantedAuthority("loan:submit")))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/staff/assisted-originations/{id}/unsecured-consumer-loan/submit", caseId)
+                        .with(user("staff").authorities(new SimpleGrantedAuthority("document:upload:intake")))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/staff/assisted-originations/{id}/unsecured-consumer-loan/submit", caseId)
+                        .with(user("staff").authorities(new SimpleGrantedAuthority("loan:originate:staff")))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated());
     }
 }

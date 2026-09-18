@@ -275,6 +275,7 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                 || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_CREATED
                 || action == BusinessAuditAction.ASSISTED_ORIGINATION_CUSTOMER_ASSOCIATED
                 || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_ABANDONED
+                || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_COMPLETED
                 || action == BusinessAuditAction.INTAKE_DOCUMENT_VERSION_UPLOADED;
     }
 

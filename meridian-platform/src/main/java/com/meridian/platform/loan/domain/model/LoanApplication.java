@@ -15,16 +15,50 @@ public record LoanApplication(
         String applicationNumber,
         ProductCode productCode,
         ProductType productType,
+        OriginationChannel originationChannel,
         LoanApplicationStatus status,
         BigDecimal requestedAmount,
         int requestedTermMonths,
         LocalDateTime submittedAt
 ) {
 
+    public LoanApplication {
+        Objects.requireNonNull(id, "id must not be null");
+        Objects.requireNonNull(customerId, "customerId must not be null");
+        Objects.requireNonNull(loanProductId, "loanProductId must not be null");
+        Objects.requireNonNull(applicationNumber, "applicationNumber must not be null");
+        Objects.requireNonNull(productCode, "productCode must not be null");
+        Objects.requireNonNull(productType, "productType must not be null");
+        Objects.requireNonNull(originationChannel, "originationChannel must not be null");
+        Objects.requireNonNull(status, "status must not be null");
+        Objects.requireNonNull(requestedAmount, "requestedAmount must not be null");
+        Objects.requireNonNull(submittedAt, "submittedAt must not be null");
+        if (productCode == ProductCode.SALARY_ADVANCE
+                && originationChannel != OriginationChannel.CUSTOMER_DIGITAL) {
+            throw new IllegalArgumentException("Salary Advance permits only Customer-digital origination.");
+        }
+    }
+
     private static final Set<LoanApplicationStatus> LOAN_OFFICER_RECOMMENDATION_SOURCE_STATUSES = Set.of(
             LoanApplicationStatus.UNDER_REVIEW,
             LoanApplicationStatus.RETURNED_TO_REVIEW
     );
+
+    public LoanApplication(
+            UUID id,
+            UUID customerId,
+            UUID loanProductId,
+            String applicationNumber,
+            ProductCode productCode,
+            ProductType productType,
+            LoanApplicationStatus status,
+            BigDecimal requestedAmount,
+            int requestedTermMonths,
+            LocalDateTime submittedAt
+    ) {
+        this(id, customerId, loanProductId, applicationNumber, productCode, productType,
+                OriginationChannel.CUSTOMER_DIGITAL, status, requestedAmount, requestedTermMonths, submittedAt);
+    }
 
     public static LoanApplicationTransitionResult submit(
             UUID id,
@@ -35,6 +69,34 @@ public record LoanApplication(
             int requestedTermMonths,
             LocalDateTime submittedAt
     ) {
+        return submit(id, customerId, loanProduct, applicationNumber, requestedAmount,
+                requestedTermMonths, OriginationChannel.CUSTOMER_DIGITAL, submittedAt);
+    }
+
+    public static LoanApplicationTransitionResult submit(
+            UUID id,
+            UUID customerId,
+            LoanProduct loanProduct,
+            String applicationNumber,
+            BigDecimal requestedAmount,
+            int requestedTermMonths,
+            LocalDateTime submittedAt,
+            LoanApplicationStatus initialStatus
+    ) {
+        return submit(id, customerId, loanProduct, applicationNumber, requestedAmount,
+                requestedTermMonths, OriginationChannel.CUSTOMER_DIGITAL, submittedAt, initialStatus);
+    }
+
+    public static LoanApplicationTransitionResult submit(
+            UUID id,
+            UUID customerId,
+            LoanProduct loanProduct,
+            String applicationNumber,
+            BigDecimal requestedAmount,
+            int requestedTermMonths,
+            OriginationChannel originationChannel,
+            LocalDateTime submittedAt
+    ) {
         return submit(
                 id,
                 customerId,
@@ -42,6 +104,7 @@ public record LoanApplication(
                 applicationNumber,
                 requestedAmount,
                 requestedTermMonths,
+                originationChannel,
                 submittedAt,
                 LoanApplicationStatus.SUBMITTED
         );
@@ -54,6 +117,7 @@ public record LoanApplication(
             String applicationNumber,
             BigDecimal requestedAmount,
             int requestedTermMonths,
+            OriginationChannel originationChannel,
             LocalDateTime submittedAt,
             LoanApplicationStatus initialStatus
     ) {
@@ -72,6 +136,7 @@ public record LoanApplication(
                 Objects.requireNonNull(applicationNumber, "applicationNumber must not be null"),
                 loanProduct.productCode(),
                 loanProduct.productType(),
+                Objects.requireNonNull(originationChannel, "originationChannel must not be null"),
                 initialStatus,
                 Objects.requireNonNull(requestedAmount, "requestedAmount must not be null"),
                 requestedTermMonths,
@@ -342,6 +407,7 @@ public record LoanApplication(
                 applicationNumber,
                 productCode,
                 productType,
+                originationChannel,
                 nextStatus,
                 requestedAmount,
                 requestedTermMonths,

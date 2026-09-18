@@ -10,6 +10,7 @@ public record LoanApplicationStatusDto(
         String applicationNumber,
         String productCode,
         String productType,
+        String originationChannel,
         BigDecimal requestedAmount,
         int requestedTermMonths,
         String status,
@@ -21,12 +22,22 @@ public record LoanApplicationStatusDto(
         applicationNumber = requireText(applicationNumber, "applicationNumber");
         productCode = requireText(productCode, "productCode");
         productType = requireText(productType, "productType");
+        originationChannel = requireText(originationChannel, "originationChannel");
         Objects.requireNonNull(requestedAmount, "requestedAmount must not be null");
         if (requestedTermMonths <= 0) {
             throw new IllegalArgumentException("requestedTermMonths must be positive");
         }
         status = requireText(status, "status");
         Objects.requireNonNull(submittedAt, "submittedAt must not be null");
+    }
+
+    public LoanApplicationStatusDto(
+            UUID loanApplicationId, String applicationNumber, String productCode,
+            String productType, BigDecimal requestedAmount, int requestedTermMonths,
+            String status, LocalDateTime submittedAt
+    ) {
+        this(loanApplicationId, applicationNumber, productCode, productType,
+                "CUSTOMER_DIGITAL", requestedAmount, requestedTermMonths, status, submittedAt);
     }
 
     private static String requireText(String value, String fieldName) {

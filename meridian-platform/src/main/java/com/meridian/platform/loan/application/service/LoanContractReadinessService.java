@@ -155,6 +155,7 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
             throw new com.meridian.platform.shared.domain.exception.AuthorizationException(
                     "LOAN_APPLICATION_ACCESS_DENIED", "Loan application does not belong to the authenticated customer.");
         }
+        CustomerDigitalApplicationAccess.require(application);
         LoanContract current = requireCurrentContractForUpdate(application.id());
         requireContractVersion(current, command.expectedContractVersion());
         replay = contracts.findByAcknowledgmentRequestId(command.requestId()).orElse(null);

@@ -122,6 +122,7 @@ class StartSalaryAdvanceApplicationServiceTest {
         assertEquals(customerId, result.customerId());
         assertEquals("SALARY_ADVANCE", result.productCode());
         assertEquals("SALARY_BASED", result.productType());
+        assertEquals("CUSTOMER_DIGITAL", result.originationChannel());
         assertEquals("SUBMITTED", result.status());
         assertTrue(documentChecklistPort.checklistCreated);
         assertEquals(limit(3_000_000), result.requestedAmount());

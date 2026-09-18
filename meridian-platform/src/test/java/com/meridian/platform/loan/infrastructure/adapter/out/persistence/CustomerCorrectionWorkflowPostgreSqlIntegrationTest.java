@@ -1281,7 +1281,8 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                         "loan:read:own",
                         "loan:offer:respond:own",
                         "loan:correction:own",
-                        "loan:cancel:own"
+                        "loan:cancel:own",
+                        "document:upload:own"
                 )
         ));
     }

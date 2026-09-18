@@ -9,6 +9,7 @@ public record CustomerLoanApplicationSummaryDto(
         String applicationNumber,
         String productCode,
         String productType,
+        String originationChannel,
         BigDecimal requestedAmount,
         int requestedTermMonths,
         String status,
@@ -16,6 +17,17 @@ public record CustomerLoanApplicationSummaryDto(
         boolean lifecycleActive,
         CustomerApplicationAction requiredAction
 ) {
+    public CustomerLoanApplicationSummaryDto(
+            UUID loanApplicationId, String applicationNumber, String productCode,
+            String productType, BigDecimal requestedAmount, int requestedTermMonths,
+            String status, LocalDateTime submittedAt, boolean lifecycleActive,
+            CustomerApplicationAction requiredAction
+    ) {
+        this(loanApplicationId, applicationNumber, productCode, productType,
+                "CUSTOMER_DIGITAL", requestedAmount, requestedTermMonths, status,
+                submittedAt, lifecycleActive, requiredAction);
+    }
+
     public enum CustomerApplicationAction {
         UPLOAD_DOCUMENTS,
         COMPLETE_CORRECTIONS,

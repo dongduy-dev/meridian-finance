@@ -16,6 +16,7 @@ import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanProduct;
 import com.meridian.platform.loan.domain.model.ProductCode;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
 import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanVerification;
@@ -120,12 +121,14 @@ class StartUnsecuredConsumerLoanApplicationServiceTest {
         assertEquals("UCL-20260811-000042", result.applicationNumber());
         assertEquals("UNSECURED_CONSUMER_LOAN", result.productCode());
         assertEquals("UNSECURED", result.productType());
+        assertEquals("CUSTOMER_DIGITAL", result.originationChannel());
         assertEquals("DOCUMENTS_PENDING", result.status());
         assertEquals("PENDING_MANUAL_REVIEW", result.productVerificationResult());
 
         ArgumentCaptor<LoanApplication> applicationCaptor = ArgumentCaptor.forClass(LoanApplication.class);
         verify(applications).save(applicationCaptor.capture());
         assertEquals(CUSTOMER_ID, applicationCaptor.getValue().customerId());
+        assertEquals(OriginationChannel.CUSTOMER_DIGITAL, applicationCaptor.getValue().originationChannel());
         assertEquals(LoanApplicationStatus.DOCUMENTS_PENDING, applicationCaptor.getValue().status());
         verify(applications).acquireCustomerProductLock(CUSTOMER_ID, ProductCode.UNSECURED_CONSUMER_LOAN);
         verify(checklists).createSubmissionChecklist(any(),

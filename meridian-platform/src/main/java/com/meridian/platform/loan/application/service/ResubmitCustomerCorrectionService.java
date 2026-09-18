@@ -192,6 +192,9 @@ public class ResubmitCustomerCorrectionService
                     "Customer cannot resubmit another Loan Application."
             );
         }
+        if (actor == ResubmissionActor.CUSTOMER) {
+            CustomerDigitalApplicationAccess.require(application);
+        }
 
         LoanCorrectionRequest latest = correctionRepository
                 .findLatestRequestByApplicationId(loanApplicationId)

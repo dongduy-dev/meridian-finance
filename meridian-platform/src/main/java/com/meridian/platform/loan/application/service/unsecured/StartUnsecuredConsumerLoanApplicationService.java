@@ -17,6 +17,7 @@ import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
 import com.meridian.platform.loan.domain.model.LoanProduct;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanVerification;
 import com.meridian.platform.loan.domain.service.unsecured.UnsecuredConsumerLoanApplicationPolicy;
@@ -57,6 +58,7 @@ public class StartUnsecuredConsumerLoanApplicationService
     private final LoanApplicationStatusTransitionRecorder transitionRecorder;
     private final BusinessAuditPublisher businessAuditPublisher;
     private final Clock clock;
+    private final UnsecuredConsumerLoanOrigination origination;
     private final UnsecuredConsumerLoanApplicationPolicy applicationPolicy =
             new UnsecuredConsumerLoanApplicationPolicy();
 
@@ -84,6 +86,16 @@ public class StartUnsecuredConsumerLoanApplicationService
         this.transitionRecorder = transitionRecorder;
         this.businessAuditPublisher = businessAuditPublisher;
         this.clock = clock;
+        this.origination = new UnsecuredConsumerLoanOrigination(
+                loanProductRepository,
+                loanApplicationRepository,
+                documentChecklistPort,
+                verificationRepository,
+                customerReadinessPort,
+                outstandingLoanAccounts,
+                transitionRecorder,
+                businessAuditPublisher
+        );
     }
 
     @Override
@@ -103,60 +115,16 @@ public class StartUnsecuredConsumerLoanApplicationService
                 currentUser.userId(),
                 now
         );
-        validateCustomerReadiness(customerId);
-
-        LoanProduct product = loanProductRepository.findByProductCode(ProductCode.UNSECURED_CONSUMER_LOAN)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "PRODUCT_NOT_FOUND",
-                        "Unsecured Consumer Loan product was not found."
-                ));
-        applicationPolicy.validateProduct(product);
-        applicationPolicy.validateRequestedAmount(product, request.requestedAmount());
-        applicationPolicy.validateRequestedTerm(request.requestedTermMonths());
-
-        loanApplicationRepository.acquireCustomerProductLock(customerId, product.productCode());
-        assertNoBlockingApplicationExists(customerId);
-        assertNoOutstandingLoanAccountExists(customerId);
-
-        LoanDocumentChecklistPort.SubmissionChecklistInitialState checklistInitialState =
-                documentChecklistPort.resolveSubmissionInitialState(product.productCode());
-        LoanApplicationStatus initialStatus = checklistInitialState.uploadComplete()
-                ? LoanApplicationStatus.SUBMITTED : LoanApplicationStatus.DOCUMENTS_PENDING;
-        LoanApplicationTransitionResult submission = LoanApplication.submit(
-                UUID.randomUUID(),
+        UnsecuredConsumerLoanOrigination.Result result = origination.create(
                 customerId,
-                product,
-                formatApplicationNumber(loanApplicationRepository.nextApplicationNumberSequence(), now),
                 request.requestedAmount(),
                 request.requestedTermMonths(),
-                now,
-                initialStatus
-        );
-
-        LoanApplication savedApplication = loanApplicationRepository.save(submission.loanApplication());
-        documentChecklistPort.createSubmissionChecklist(
-                savedApplication.id(),
-                savedApplication.productCode(),
-                operationContext
-        );
-        UnsecuredConsumerLoanVerification savedVerification = verificationRepository.save(
-                UnsecuredConsumerLoanVerification.pendingManualReview(
-                        UUID.randomUUID(),
-                        savedApplication,
-                        now
-                )
-        );
-        transitionRecorder.record(operationContext, submission.facts(), null);
-        businessAuditPublisher.publish(BusinessAuditEvent.single(
+                OriginationChannel.CUSTOMER_DIGITAL,
                 operationContext,
-                BusinessAuditEntry.of(
-                        BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED,
-                        BusinessAuditEntityType.LOAN_APPLICATION,
-                        savedApplication.id()
-                )
-        ));
-
-        return loanMapper.toUnsecuredConsumerLoanApplicationDto(savedApplication, savedVerification);
+                now
+        );
+        return loanMapper.toUnsecuredConsumerLoanApplicationDto(
+                result.application(), result.verification());
     }
 
     private void validateCustomerReadiness(UUID customerId) {

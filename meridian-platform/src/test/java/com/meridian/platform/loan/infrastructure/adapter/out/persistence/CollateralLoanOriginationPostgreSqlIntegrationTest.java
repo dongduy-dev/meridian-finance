@@ -417,7 +417,7 @@ class CollateralLoanOriginationPostgreSqlIntegrationTest {
                     "CUSTOMER",
                     currentCustomerId,
                     Set.of("CUSTOMER"),
-                    Set.of("loan:submit")
+                    Set.of("loan:submit", "document:upload:own")
             ));
         }
 

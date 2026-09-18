@@ -18,6 +18,7 @@ import com.meridian.platform.loan.domain.model.LoanCorrectionTask;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.AuthorizationException;
@@ -142,6 +143,24 @@ class QueryLoanApplicationServiceTest {
         assertEquals(true, result.getFirst().lifecycleActive());
         assertEquals("NONE", result.getLast().requiredAction().name());
         assertEquals(false, result.getLast().lifecycleActive());
+    }
+
+    @Test
+    void staffAssistedApplicationNeverAdvertisesCustomerDirectAction() {
+        when(currentUserProvider.currentUser()).thenReturn(customer(CUSTOMER_ID));
+        LoanApplication assisted = new LoanApplication(
+                UUID.randomUUID(), CUSTOMER_ID, UUID.randomUUID(), "UCL-ASSISTED-1",
+                ProductCode.UNSECURED_CONSUMER_LOAN, ProductType.UNSECURED,
+                OriginationChannel.STAFF_ASSISTED, LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING,
+                BigDecimal.valueOf(5_000_000).setScale(2), 6,
+                LocalDateTime.of(2026, 8, 12, 8, 0));
+        when(applications.findByCustomerIdOrderBySubmittedAtDesc(CUSTOMER_ID)).thenReturn(List.of(assisted));
+
+        var result = service.queryOwnApplications().getFirst();
+
+        assertEquals("NONE", result.requiredAction().name());
+        assertEquals("STAFF_ASSISTED", result.originationChannel());
+        verify(offers, never()).findByLoanApplicationId(any());
     }
 
     @Test

@@ -83,7 +83,7 @@ public class AssistedOriginationService
         LocalDateTime now = LocalDateTime.now(clock);
         AssistedOriginationCase saved = cases.save(new AssistedOriginationCase(
                 UUID.randomUUID(), request.productCode(), request.customerId(),
-                AssistedOriginationCaseStatus.OPEN, actor.userId(), now, now, null
+                AssistedOriginationCaseStatus.OPEN, actor.userId(), now, now, null, null
         ));
         publish(actor, now, BusinessAuditAction.ASSISTED_ORIGINATION_CASE_CREATED, saved);
         return toDto(saved);
@@ -182,6 +182,7 @@ public class AssistedOriginationService
     private static AssistedOriginationCaseDto toDto(AssistedOriginationCase value) {
         return new AssistedOriginationCaseDto(
                 value.id(), value.productCode().name(), value.customerId(), value.status().name(),
+                value.loanApplicationId(),
                 value.createdByStaffUserId(), value.createdAt(), value.updatedAt(), value.terminalAt()
         );
     }

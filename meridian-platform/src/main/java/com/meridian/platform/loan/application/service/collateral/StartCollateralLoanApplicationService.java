@@ -20,6 +20,7 @@ import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
 import com.meridian.platform.loan.domain.model.LoanProduct;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.service.collateral.CollateralLoanApplicationPolicy;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
@@ -139,6 +140,7 @@ public class StartCollateralLoanApplicationService implements StartCollateralLoa
                 formatApplicationNumber(loanApplicationRepository.nextApplicationNumberSequence(), now),
                 request.requestedAmount(),
                 request.requestedTermMonths(),
+                OriginationChannel.CUSTOMER_DIGITAL,
                 now,
                 initialStatus
         );

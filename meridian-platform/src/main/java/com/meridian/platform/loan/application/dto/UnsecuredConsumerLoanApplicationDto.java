@@ -9,10 +9,20 @@ public record UnsecuredConsumerLoanApplicationDto(
         String applicationNumber,
         String productCode,
         String productType,
+        String originationChannel,
         String status,
         BigDecimal requestedAmount,
         int requestedTermMonths,
         String productVerificationResult,
         LocalDateTime submittedAt
 ) {
+    public UnsecuredConsumerLoanApplicationDto(
+            UUID loanApplicationId, String applicationNumber, String productCode,
+            String productType, String status, BigDecimal requestedAmount,
+            int requestedTermMonths, String productVerificationResult, LocalDateTime submittedAt
+    ) {
+        this(loanApplicationId, applicationNumber, productCode, productType,
+                "CUSTOMER_DIGITAL", status, requestedAmount, requestedTermMonths,
+                productVerificationResult, submittedAt);
+    }
 }
