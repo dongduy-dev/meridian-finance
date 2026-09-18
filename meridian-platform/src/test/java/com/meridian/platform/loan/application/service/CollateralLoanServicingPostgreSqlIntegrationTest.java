@@ -1,16 +1,21 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.dto.CollateralDetailsRequest;
+import com.meridian.platform.loan.application.dto.CollateralLoanApplicationDto;
+import com.meridian.platform.loan.application.dto.CollateralLoanApplicationRequest;
 import com.meridian.platform.loan.application.port.in.ApproveLoanSettlementUseCase;
 import com.meridian.platform.loan.application.port.in.CloseLoanAccountUseCase;
 import com.meridian.platform.loan.application.port.in.ConfirmManualDisbursementUseCase;
 import com.meridian.platform.loan.application.port.in.EvaluateLoanAccountOverdueUseCase;
 import com.meridian.platform.loan.application.port.in.QueryRepaymentsUseCase;
 import com.meridian.platform.loan.application.port.in.RecordRepaymentUseCase;
+import com.meridian.platform.loan.application.port.in.StartCollateralLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.out.CollateralLoanVerificationRepository;
 import com.meridian.platform.loan.application.port.out.OverdueEvaluationCandidateQuery;
 import com.meridian.platform.loan.domain.model.LoanAccountStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.RepaymentAllocationComponent;
+import com.meridian.platform.loan.domain.model.collateral.CollateralType;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
@@ -79,6 +84,7 @@ class CollateralLoanServicingPostgreSqlIntegrationTest {
     );
 
     @Autowired ConfirmManualDisbursementUseCase disbursements;
+    @Autowired StartCollateralLoanApplicationUseCase collateralOrigination;
     @Autowired RecordRepaymentUseCase repayments;
     @Autowired QueryRepaymentsUseCase repaymentQueries;
     @Autowired EvaluateLoanAccountOverdueUseCase overdueEvaluator;
@@ -244,6 +250,33 @@ class CollateralLoanServicingPostgreSqlIntegrationTest {
                 activated.customerId()
         ));
         verifyNoInteractions(collateralVerifications);
+    }
+
+    @Test
+    void existingActiveCollateralAccountDoesNotBlockAnotherCollateralOrigination() {
+        Activated existing = activateCollateral();
+        makeCustomerOriginationReady(existing);
+        customerActor(existing.customerUserId(), existing.customerId());
+
+        CollateralLoanApplicationDto created = collateralOrigination.startCollateralLoanApplication(
+                new CollateralLoanApplicationRequest(
+                        new BigDecimal("25000000"),
+                        12,
+                        new CollateralDetailsRequest(
+                                CollateralType.MOTORBIKE,
+                                "Customer-owned motorbike",
+                                new BigDecimal("35000000"),
+                                "Customer-provided ownership statement",
+                                "Normal used condition"
+                        )
+                )
+        );
+
+        assertEquals("DOCUMENTS_PENDING", created.status());
+        assertEquals(1, count("select count(*) from loan_accounts "
+                + "where customer_id = ? and status = 'ACTIVE'", existing.customerId()));
+        assertEquals(2, count("select count(*) from loan_applications "
+                + "where customer_id = ? and product_code = 'COLLATERAL_LOAN'", existing.customerId()));
     }
 
     @Test
@@ -509,6 +542,24 @@ class CollateralLoanServicingPostgreSqlIntegrationTest {
         return new Activated(
                 fixture.customerId(), customerUserId, fixture.applicationId(),
                 result.loanAccountId(), fixture.token()
+        );
+    }
+
+    private void makeCustomerOriginationReady(Activated activated) {
+        String token = activated.customerId().toString().replace("-", "");
+        jdbc.update(
+                "insert into customer_profiles "
+                        + "(id,customer_id,full_name,identity_reference_ciphertext,"
+                        + "identity_reference_fingerprint,identity_reference_last_four,phone_number,"
+                        + "residential_address,employment_status,employer_name,"
+                        + "terms_consent_accepted,data_processing_consent_accepted) "
+                        + "values (?,?,'Existing Collateral Customer','protected-test-value',?,"
+                        + "'1234','0900000000','Test Address','EMPLOYED','Test Employer',true,true)",
+                UUID.randomUUID(), activated.customerId(), "identity-" + token
+        );
+        jdbc.update(
+                "update customers set profile_completion_status = 'COMPLETE' where id = ?",
+                activated.customerId()
         );
     }
 

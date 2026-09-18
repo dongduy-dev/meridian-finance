@@ -2,9 +2,11 @@ package com.meridian.platform.loan.infrastructure.adapter.in.web;
 
 import com.meridian.platform.loan.application.dto.AssistedOriginationCaseDto;
 import com.meridian.platform.loan.application.dto.AssociateAssistedOriginationCustomerRequest;
+import com.meridian.platform.loan.application.dto.CollateralLoanApplicationRequest;
 import com.meridian.platform.loan.application.dto.CreateAssistedOriginationCaseRequest;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanApplicationRequest;
 import com.meridian.platform.loan.application.port.in.ManageAssistedOriginationUseCase;
+import com.meridian.platform.loan.application.port.in.StartAssistedCollateralLoanUseCase;
 import com.meridian.platform.loan.application.port.in.StartAssistedUnsecuredConsumerLoanUseCase;
 import com.meridian.platform.loan.domain.model.AssistedOriginationCaseStatus;
 import jakarta.validation.Valid;
@@ -30,13 +32,16 @@ public class AssistedOriginationController {
 
     private final ManageAssistedOriginationUseCase useCase;
     private final StartAssistedUnsecuredConsumerLoanUseCase assistedUclUseCase;
+    private final StartAssistedCollateralLoanUseCase assistedCollateralUseCase;
 
     public AssistedOriginationController(
             ManageAssistedOriginationUseCase useCase,
-            StartAssistedUnsecuredConsumerLoanUseCase assistedUclUseCase
+            StartAssistedUnsecuredConsumerLoanUseCase assistedUclUseCase,
+            StartAssistedCollateralLoanUseCase assistedCollateralUseCase
     ) {
         this.useCase = useCase;
         this.assistedUclUseCase = assistedUclUseCase;
+        this.assistedCollateralUseCase = assistedCollateralUseCase;
     }
 
     @GetMapping
@@ -77,5 +82,14 @@ public class AssistedOriginationController {
             @Valid @RequestBody UnsecuredConsumerLoanApplicationRequest request
     ) {
         return assistedUclUseCase.submit(caseId, request);
+    }
+
+    @PostMapping("/{caseId}/collateral-loan/submit")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AssistedOriginationCaseDto submitCollateralLoan(
+            @PathVariable UUID caseId,
+            @Valid @RequestBody CollateralLoanApplicationRequest request
+    ) {
+        return assistedCollateralUseCase.submit(caseId, request);
     }
 }
