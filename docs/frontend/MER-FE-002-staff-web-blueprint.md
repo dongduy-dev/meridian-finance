@@ -192,6 +192,11 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 
 | Capability | Endpoint | Authority | Current limit |
 |---|---|---|---|
+| Assisted-intake discovery | `GET /api/v1/staff/assisted-originations?status=OPEN` | Staff `loan:originate:staff` | UCL and Collateral pre-application cases; no LoanApplication or financial facts |
+| Assisted-intake case | `GET /api/v1/staff/assisted-originations/{assistedOriginationCaseId}` | Staff `loan:originate:staff` | Product, selected Customer ID, lifecycle state, creator, and timestamps |
+| Staff Customer discovery | `POST /api/v1/staff/customers/search` | Staff `customer:read` | Exact Customer number or exact protected-identity match; no raw identity response |
+| Staff Customer intake read | `GET /api/v1/staff/customers/{customerId}` | Staff `customer:read` | Purpose-limited profile/readiness projection without protected identity material |
+| Intake evidence metadata | `GET /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence` | Staff `document:upload:intake` plus valid Loan intake authority | Controlled logical evidence and immutable version metadata; no storage keys or content |
 | Staff application discovery | `GET /api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20` | Staff `loan:read` | Cross-product safe facts, exact filters, deterministic page envelope |
 | Staff case foundation | `GET /api/v1/staff/loan-applications/{loanApplicationId}` | Staff `loan:read` | Safe header, purpose-limited Customer readiness, and ordered lifecycle transitions only |
 | Staff document evidence | `GET /api/v1/staff/loan-applications/{loanApplicationId}/documents` | `document:review` | Checklist/readiness, exact current version, immutable version history, and safe review history |
@@ -211,6 +216,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 
 | Workspace | Commands available now |
 |---|---|
+| Assisted origination | Create/reopen/associate/abandon UCL or Collateral intake; create and maintain the selected Customer; manage masked bank accounts; upload or replace controlled paper intake evidence |
 | Verification | Start and complete UCL verification; start and complete exact numbered Collateral verification |
 | Review and approval | Start review; submit recommendation; submit independent decision |
 | Documents | Review the exact current version; waive with added permission; request replacement; stream known content; upload for an open Staff task with `document:upload:staff` |
@@ -225,7 +231,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 - Customer-owned document checklist reads remain separate from the dedicated Staff document checklist/history projection.
 - Customer approved-offer reads do not provide a Staff approval-evidence view.
 - `audit:read` has no generic audit-query controller.
-- `customer:read` does not currently expose a Staff Customer-review endpoint.
+- Staff Customer reads are purpose-limited to exact assisted-intake discovery and selected-Customer maintenance; they do not expose a broad Customer directory.
 - overdue evaluation is a scheduler-owned backend operation, not a manual Staff command.
 - Partner read endpoints are administration-oriented and do not form a safe lending case snapshot.
 
@@ -539,6 +545,7 @@ Generate a fresh `X-Request-ID` for each HTTP attempt unless the transport repla
 
 | Command | Field |
 |---|---|
+| Intake evidence upload | `uploadRequestId` |
 | Staff document upload | `uploadRequestId` |
 | Document review | `reviewRequestId` |
 | Staff correction completion | `completionRequestId` |
@@ -1200,6 +1207,8 @@ Routes are conceptual implementation targets. “API dependency” means the rou
 |---|---|---|
 | `/login` | Internal authentication | Executable foundation |
 | `/staff` | Redirect to first permitted work area | Executable after shell exists; no invented dashboard |
+| `/staff/origination` | Open assisted-origination intake | Executable with `loan:originate:staff` |
+| `/staff/origination/:assistedOriginationCaseId` | Customer selection/maintenance and paper intake evidence | Executable with capability-gated Customer and Document operations; no LoanApplication conversion |
 | `/staff/work/documents` | Document-review queue | Executable narrow queue |
 | `/staff/work/corrections` | Staff-correction queue | Executable narrow queue |
 | `/staff/work/verifications` | Pending UCL/Collateral verification | API dependency |
@@ -1231,6 +1240,7 @@ The current servicing APIs are application-scoped, so routes retain `loanApplica
 
 | Route family | Intended actor/capability | Backend authority | Primary task | Important states and action ownership |
 |---|---|---|---|---|
+| Assisted origination | Loan Officer with `loan:originate:staff`; Customer mutation also needs `customer:intake:manage`; evidence needs `document:upload:intake` | Loan intake, Customer intake, and Document intake-evidence endpoints | Select or create the Customer and capture controlled paper evidence | `OPEN`, `ABANDONED`; `COMPLETED` is reserved for later conversion; Staff is actor and Customer is subject |
 | Document work | Loan Officer with `document:review`; waiver also needs `document:waive` | Document review queue, content, and review endpoints | Inspect and decide the exact current version | `AWAITING_REVIEW`; Loan Officer owns review, Back-Office Admin may own Staff-task upload only with `document:upload:staff` |
 | Correction work | Loan Officer with `loan:correction:staff`; uploader also needs `document:upload:staff` | Staff correction queue, task completion, upload, and resubmission endpoints | Satisfy Staff proof and return an eligible request to workflow | `OPEN`, proof incomplete/complete, mixed work incomplete, resubmitted; backend owns maker-checker |
 | Verification and review | Loan Officer with `loan:review`; recommendation additionally needs `approval:recommend` | Purpose-limited verification/review reads, Approval-owned recommendation read, and existing commands | Verify product evidence, start review, and record a recommendation when separately authorized | Submitted/pending verification, verified/failed/more information, under review; Loan Officer acts, Approver does not verify |
@@ -1261,6 +1271,8 @@ Each protected route declares:
 | Page | Delivery class | Primary data | Primary action | Required exceptional states |
 |---|---|---|---|---|
 | Login | Executable now | Session status | Authenticate | invalid credentials, throttled, unverified/inactive safe response, session restore |
+| Assisted origination index | Executable | Open UCL and Collateral intake | Start or reopen intake | empty, loading, forbidden, query failure |
+| Assisted origination workspace | Executable | Intake, selected Customer/profile, masked bank accounts, and intake evidence versions | Select/create/maintain Customer, upload/replace evidence, abandon | exact-search miss, duplicate identity/account, stale evidence version, terminal case, partial permission, loading/error |
 | Document queue | Executable now | Awaiting-review list | Open exact version | empty, best-effort continuation, row no longer pending |
 | Document review | Foundation exists but projection missing | Exact version metadata/content and safe case facts | Record review outcome | content failure, stale version, waiver forbidden, result unknown |
 | Staff correction queue | Executable now | Open Staff tasks | Open task | empty, task completed elsewhere, pagination uncertainty |

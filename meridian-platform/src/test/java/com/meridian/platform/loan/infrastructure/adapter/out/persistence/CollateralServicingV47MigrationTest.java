@@ -55,7 +55,7 @@ class CollateralServicingV47MigrationTest {
         int start = snapshot.lastIndexOf(marker);
         int end = snapshot.indexOf(nextMigrationMarker, start);
 
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V55"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V56"));
         assertTrue(start >= 0);
         assertTrue(end > start);
         assertEquals(migration, snapshot.substring(start, end).strip());

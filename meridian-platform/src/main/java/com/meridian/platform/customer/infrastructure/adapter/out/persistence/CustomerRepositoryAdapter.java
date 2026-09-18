@@ -75,6 +75,23 @@ public class CustomerRepositoryAdapter implements CustomerRepository {
     }
 
     @Override
+    public Optional<Customer> findByCustomerNumber(String customerNumber) {
+        return customerRepository.findByCustomerNumber(customerNumber)
+                .map(customer -> toDomain(customer, false));
+    }
+
+    @Override
+    public Optional<Customer> findByIdentityReferenceFingerprint(String fingerprint) {
+        return profileRepository.findByIdentityReferenceFingerprint(fingerprint)
+                .flatMap(profile -> findById(profile.getCustomerId()));
+    }
+
+    @Override
+    public boolean existsByIdentityReferenceFingerprint(String fingerprint) {
+        return profileRepository.existsByIdentityReferenceFingerprint(fingerprint);
+    }
+
+    @Override
     public boolean existsByIdentityReferenceFingerprintAndCustomerIdNot(String fingerprint, UUID customerId) {
         return profileRepository.existsByIdentityReferenceFingerprintAndCustomerIdNot(fingerprint, customerId);
     }

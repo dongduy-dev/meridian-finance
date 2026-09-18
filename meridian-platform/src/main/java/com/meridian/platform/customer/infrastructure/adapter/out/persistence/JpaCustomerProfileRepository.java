@@ -13,6 +13,10 @@ public interface JpaCustomerProfileRepository extends JpaRepository<CustomerProf
 
     Optional<CustomerProfileJpaEntity> findByCustomerId(UUID customerId);
 
+    Optional<CustomerProfileJpaEntity> findByIdentityReferenceFingerprint(String fingerprint);
+
+    boolean existsByIdentityReferenceFingerprint(String fingerprint);
+
     boolean existsByIdentityReferenceFingerprintAndCustomerIdNot(String fingerprint, UUID customerId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

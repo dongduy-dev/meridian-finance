@@ -26,11 +26,11 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V55. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, protected Partner, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
+The physical schema is the result of Flyway migrations V1 through V56. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted pre-application intake, protected Partner, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
-The V55 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
+The V56 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
 
 The physical `event_publication` table is Spring Modulith infrastructure. It is omitted from the business ERD because it does not own lending state or redefine the synchronous transaction boundaries documented in `MER-ARCH-006-api-request-flow-and-dependencies.md`.
 
@@ -71,6 +71,10 @@ erDiagram
     PRODUCT_POLICY ||--o{ POLICY_TERM : permits
     CUSTOMER ||--o{ LOAN_APPLICATION : submits
     LOAN_PRODUCT ||--o{ LOAN_APPLICATION : selected_for
+    CUSTOMER o|--o{ ASSISTED_ORIGINATION_CASE : selected_for
+    LOAN_PRODUCT ||--o{ ASSISTED_ORIGINATION_CASE : selected_for
+    ASSISTED_ORIGINATION_CASE ||--o{ INTAKE_DOCUMENT : has
+    INTAKE_DOCUMENT ||--|{ INTAKE_DOCUMENT_VERSION : versions
 
     LOAN_APPLICATION ||--o{ PRODUCT_VERIFICATION : records
     LOAN_APPLICATION ||--o{ COLLATERAL_FACT : secures
@@ -160,11 +164,13 @@ Loan consumes a purpose-limited eligibility snapshot for Salary Advance. Loan ow
 
 ### 6.4 Loan Product, Application, and Product Evidence
 
-Loan owns `loan_products`, `loan_product_policies`, `loan_product_policy_terms`, and `loan_applications`.
+Loan owns `loan_products`, `loan_product_policies`, `loan_product_policy_terms`, `assisted_origination_cases`, and `loan_applications`.
 
 - The product records define the active catalogue, amount range, pricing/configuration values, allowed terms, repayment method, and offer validity used by executable policies.
 - A LoanApplication preserves product code/type and requested terms as historical application facts.
 - Common application state is not split into product-specific application aggregates.
+- An assisted-origination case is an `OPEN`, `COMPLETED`, or `ABANDONED` UCL or Collateral Loan intake. Its Customer association is nullable while open. It records the creating Staff user and timestamps but has no application number, requested terms, verification, review, approval, offer, contract, or financial exposure.
+- The current pre-application contract creates and abandons cases. `COMPLETED` is reserved for the atomic intake-to-LoanApplication conversion contract.
 
 Product-specific Loan records preserve distinct evidence:
 
@@ -203,7 +209,7 @@ Approval owns `review_recommendations` and `approval_decisions`.
 
 ### 6.7 Document
 
-Document owns `document_checklists`, `document_checklist_items`, `documents`, `document_versions`, and `document_review_decisions`.
+Document owns `document_checklists`, `document_checklist_items`, `documents`, `document_versions`, `document_review_decisions`, `intake_documents`, and `intake_document_versions`.
 
 - A checklist belongs to one LoanApplication and checklist stage and contains product-resolved items.
 - One logical document belongs to a checklist item and points to its current immutable version.
@@ -211,6 +217,8 @@ Document owns `document_checklists`, `document_checklist_items`, `documents`, `d
 - A review decision targets an exact immutable version and records accept, waive, or replacement outcome with its request identity and restricted evidence.
 - Replacement is represented by a review decision plus the Loan-owned correction request/task; there is no separate document-replacement table.
 - Waiver is represented by an authorized review decision; there is no separate document-waiver table.
+- An intake document belongs to one assisted-origination case and controlled evidence type. Its immutable versions preserve request identity, expected predecessor, safe content metadata/hash, opaque storage key, uploader Staff user, and upload time.
+- Intake documents are separate from LoanApplication checklists and correction tasks. The product-specific paper application types are constrained to the matching UCL or Collateral intake by the Document application boundary.
 
 Upload completeness and processing readiness are separate. Document owns document/version/review state; Loan owns product verification and application progression.
 
@@ -253,6 +261,7 @@ Audit events preserve operation, actor, action, entity, time, and a controlled P
 - Partner owns the reusable employment relationship and source evidence. Loan owns Salary Advance application verification, limits, movements, and lending exposure.
 - Customer owns mutable source bank accounts. Loan owns only the immutable destination snapshot bound to a contract version.
 - Document owns checklist, logical document, version, and review state. Loan owns application verification, correction orchestration, and lifecycle state.
+- Loan owns assisted-origination lifecycle and product eligibility. Document owns the associated paper evidence and asks Loan through a purpose-limited authorization contract before reads or mutations.
 - Approval owns recommendation and decision evidence. Loan owns review cycles, application transitions, offers, contracts, activation, and servicing.
 - Audit observes important outcomes without becoming the owner of those outcomes.
 - Cross-context actor and aggregate identifiers provide traceability. They do not authorize direct repository, JPA entity, or table access by another context.
@@ -281,6 +290,7 @@ Audit events preserve operation, actor, action, entity, time, and a controlled P
 - UCL and Collateral verification sequences are positive and unique per application; only the highest sequence is authoritative.
 - A later verification cycle links to one resubmitted correction for the same application and follows a completed earlier cycle.
 - Collateral fact text is trimmed and nonblank, type is controlled, and estimated value is positive whole VND.
+- Assisted-origination product codes permit only UCL and Collateral Loan. Terminal status requires a terminal timestamp, and only an open case may omit one.
 
 ### 8.3 Review, Correction, Document, and Approval
 
@@ -291,6 +301,7 @@ Audit events preserve operation, actor, action, entity, time, and a controlled P
 - Logical documents have ordered immutable versions and one current-version pointer.
 - Upload, review, completion, resubmission, and cancellation request identities cannot represent conflicting logical content.
 - Review decisions target the exact current version where the operation requires current evidence.
+- Intake evidence types are controlled, one logical intake document exists per case and type, version numbers are unique and positive, upload request identities and storage keys are unique, and immutable versions cannot be updated or deleted.
 
 ### 8.4 Offer, Contract, and Activation
 

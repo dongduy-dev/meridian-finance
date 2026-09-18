@@ -360,4 +360,20 @@ describe('internal router access contract', () => {
     renderRoute('/not-a-route')
     expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeVisible()
   })
+
+  it('exposes assisted origination only through exact loan:originate:staff', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    vi.mocked(authApi.refresh).mockResolvedValue(staff(['loan:originate:staff']))
+    renderRoute('/staff/origination')
+    expect(await screen.findByRole('heading', { name: 'Paper intake' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Assisted origination' })).toHaveAttribute('href', '/staff/origination')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    cleanup(); fetchMock.mockClear()
+    vi.mocked(authApi.refresh).mockResolvedValue(staff(['loan:originate:staff:all']))
+    renderRoute('/staff/origination')
+    expect(await screen.findByRole('heading', { name: 'No operational access' })).toBeVisible()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 })

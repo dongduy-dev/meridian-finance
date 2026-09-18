@@ -148,4 +148,22 @@ describe('unresolved operation recovery', () => {
       operation: { operationId: 'retained-contract-id' },
     })
   })
+
+  it('retains only the baseline and digest for an unresolved intake evidence upload', () => {
+    saveUnresolvedOperation({
+      type: 'INTAKE_EVIDENCE_UPLOAD',
+      resource: 'intake-evidence:case-one:CUSTOMER_IDENTITY',
+      operationId: '44444444-4444-4444-8444-444444444444',
+      payloadDigest: 'file-and-baseline-digest',
+      semanticPayload: { baseline: null },
+      unresolvedAt: '2026-09-18T01:00:00Z',
+    })
+
+    expect(findUnresolvedOperation(
+      'INTAKE_EVIDENCE_UPLOAD', 'intake-evidence:case-one:CUSTOMER_IDENTITY',
+    )).toMatchObject({
+      operationId: '44444444-4444-4444-8444-444444444444',
+      semanticPayload: { baseline: null },
+    })
+  })
 })

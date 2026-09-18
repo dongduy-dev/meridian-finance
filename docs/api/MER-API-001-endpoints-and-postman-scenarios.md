@@ -160,12 +160,27 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/partner-companies/{partnerCompanyId}/status` | `partner:manage` | Change Partner Company status. |
 | POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | `partner:manage` | Import Partner Employee source rows for an effective month. |
 | POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-verifications` | `partner:employee:verify:own` | Verify the authenticated Customer and create/reuse an eligible employee link. |
+| POST | `/api/v1/staff/customers/search` | Staff with `customer:read` | Find one Customer by exact Customer number or protected identity match. |
+| GET | `/api/v1/staff/customers/{customerId}` | Staff with `customer:read` | Return one purpose-limited Customer intake projection. |
+| POST | `/api/v1/staff/customers` | Staff with `customer:intake:manage` | Atomically create a Customer and required identity-bearing profile. |
+| PUT | `/api/v1/staff/customers/{customerId}/profile` | Staff with `customer:intake:manage` | Maintain the selected Customer profile. |
+| GET | `/api/v1/staff/customers/{customerId}/bank-accounts` | Staff with `customer:intake:manage` | List the selected Customer's masked bank accounts. |
+| POST | `/api/v1/staff/customers/{customerId}/bank-accounts` | Staff with `customer:intake:manage` | Add a protected bank account. |
+| POST | `/api/v1/staff/customers/{customerId}/bank-accounts/{customerBankAccountId}/make-primary` | Staff with `customer:intake:manage` | Make an active selected-Customer account primary. |
+| POST | `/api/v1/staff/customers/{customerId}/bank-accounts/{customerBankAccountId}/deactivate` | Staff with `customer:intake:manage` | Deactivate a selected-Customer account subject to aggregate rules. |
 
 ### 2.2 Origination, review, approval, corrections, and documents
 
 | Method | Path | Authorization | Summary |
 |---|---|---|---|
 | GET | `/api/v1/loan-products/salary-advance/readiness` | Customer with `loan:submit` | Return the authenticated Customer's advisory Salary Advance eligibility and safe limit view. |
+| GET | `/api/v1/staff/assisted-originations?status={status}` | Staff with `loan:originate:staff` | List assisted-origination cases, optionally by exact status. |
+| POST | `/api/v1/staff/assisted-originations` | Staff with `loan:originate:staff` | Create an open UCL or Collateral Loan assisted-origination case. |
+| GET | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}` | Staff with `loan:originate:staff` | Reopen one assisted-origination case. |
+| PUT | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/customer` | Staff with `loan:originate:staff` | Associate or replace the selected active Customer while open. |
+| POST | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/abandon` | Staff with `loan:originate:staff` | Terminally abandon an open intake. |
+| GET | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence` | Staff with `document:upload:intake` and `loan:originate:staff` | Return controlled intake-evidence version metadata without storage keys. |
+| POST | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence/{evidenceType}/versions` | Staff with `document:upload:intake` and `loan:originate:staff` | Upload or replace a controlled intake-evidence version for an open case. |
 | POST | `/api/v1/loan-applications/salary-advance` | `loan:submit` | Submit a Salary Advance application and reserve eligible limit. |
 | POST | `/api/v1/loan-applications/unsecured-consumer-loan` | Customer with `loan:submit` | Submit an Unsecured Consumer Loan application for manual verification and required evidence collection. |
 | POST | `/api/v1/loan-applications/collateral-loan` | Customer with `loan:submit` | Submit a Collateral Loan application with one structured asset and required ownership-evidence collection. |
@@ -576,6 +591,52 @@ The body does not accept `customerId` or `identityReference`.
 Safe response fields: `customerId`, `partnerCompanyId`, `partnerEmployeeId`, `customerPartnerEmployeeLinkId`, `outcome`, `linkStatus`, and `manualReviewRequired`.
 
 Responses exclude salary, limit values, employee code, identity evidence, and raw matching evidence.
+
+### 3.18 Staff-assisted Customer and pre-application intake
+
+Every endpoint in this section authenticates a Staff User with no Customer context. Customer is the selected business subject; Staff never calls a `/customers/me` capability or authenticates as that Customer.
+
+Exact Customer discovery accepts one and only one JSON field:
+
+```json
+{ "customerNumber": "CUS-000000042" }
+```
+
+or:
+
+```json
+{ "identityReference": "012345678901" }
+```
+
+Identity reference is accepted only in the `POST /api/v1/staff/customers/search` body. Customer protects it and performs an exact fingerprint lookup. It does not appear in a URL, response, error, or audit payload. A successful Customer response contains `customerId`, Customer number, aggregate status, `UNVERIFIED`/other verification status, profile-completion status, primary-bank-account readiness, and the maintainable profile fields. It excludes raw/protected identity material and bank-account numbers.
+
+`POST /api/v1/staff/customers` accepts required `fullName`, `identityReference`, `phoneNumber`, `residentialAddress`, `employmentStatus`, nullable `employerName`, and both consent booleans. Customer creation and the identity-bearing profile commit in one transaction. The created Customer is `ACTIVE` and `UNVERIFIED`; the command creates no Identity User. Duplicate protected identity returns `409 IDENTITY_REFERENCE_ALREADY_IN_USE` and leaves no Customer shell. Profile update uses the same fields, permits omission of an unchanged identity reference, and preserves the identity-immutability rule after completion.
+
+Staff bank-account requests and masked responses match Section 3.13. The explicit `customerId` identifies the authorized Staff-selected subject; aggregate duplicate, primary, inactive, and deactivation rules are unchanged.
+
+Assisted-origination creation accepts:
+
+```json
+{
+  "productCode": "UNSECURED_CONSUMER_LOAN",
+  "customerId": null
+}
+```
+
+`productCode` is `UNSECURED_CONSUMER_LOAN` or `COLLATERAL_LOAN`. `SALARY_ADVANCE` returns `422 ASSISTED_ORIGINATION_PRODUCT_NOT_ALLOWED`. `customerId` is optional at creation but, when present, must resolve to an active Customer. The response contains `assistedOriginationCaseId`, `productCode`, nullable `customerId`, `status`, creator Staff User ID, and lifecycle timestamps. Creation always returns `OPEN`. This contract exposes no complete command; `COMPLETED` is reserved for the atomic intake-to-LoanApplication conversion contract.
+
+Customer association uses `{ "customerId": "..." }`. Association and abandonment lock the intake row and require `OPEN`. Abandonment transitions to `ABANDONED`, records `terminalAt`, and blocks later Customer association or evidence mutation with `409 ASSISTED_ORIGINATION_CASE_NOT_OPEN`. None of these commands creates a LoanApplication, application number, checklist, product verification, review cycle, Approval evidence, offer, contract, or exposure.
+
+The controlled intake evidence types are `CUSTOMER_IDENTITY`, `UCL_PAPER_APPLICATION`, and `COLLATERAL_PAPER_APPLICATION`. Identity evidence is allowed for either supported product. The UCL and Collateral paper application forms are accepted only for the matching intake product; mismatch returns `422 INTAKE_EVIDENCE_PRODUCT_MISMATCH`.
+
+Upload is `multipart/form-data` with:
+
+- path `evidenceType`;
+- required UUID `uploadRequestId`;
+- optional UUID `expectedCurrentVersionId`;
+- required `file` with `application/pdf`, `image/jpeg`, or `image/png`, maximum 10 MiB.
+
+The first upload omits `expectedCurrentVersionId`. Replacement supplies the current version returned by the metadata read. Exact `uploadRequestId` replay returns the existing version. Reuse for different content returns `409 IDEMPOTENCY_KEY_REUSED`; a changed current pointer returns `409 STALE_DOCUMENT_VERSION`. The response contains version ID, sequence, safe original filename, detected media type, byte size, and upload time. Evidence metadata contains logical intake-document ID, case ID, evidence type, current-version ID, and ordered immutable versions. It never exposes storage keys. Intake upload does not require or create an application checklist or correction task and is not authorized by `document:upload:staff`.
 
 ---
 

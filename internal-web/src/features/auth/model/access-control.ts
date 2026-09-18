@@ -6,6 +6,9 @@ export type StaffActor = {
 }
 
 export const STAFF_OPERATIONAL_PERMISSIONS = [
+  'customer:intake:manage',
+  'loan:originate:staff',
+  'document:upload:intake',
   'loan:read',
   'loan:review',
   'approval:recommend',

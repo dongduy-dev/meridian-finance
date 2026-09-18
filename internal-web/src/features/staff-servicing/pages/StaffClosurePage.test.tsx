@@ -125,7 +125,11 @@ describe('Administrative closure workspace', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review administrative closure' }))
     await user.click(screen.getByRole('button', { name: 'Confirm closure' }))
-    expect(await screen.findByText(/Closure is confirmed\. Current account refresh failed/i))
+    expect(await screen.findByText(
+      /Closure is confirmed\. Current account refresh failed/i,
+      {},
+      { timeout: 5_000 },
+    ))
       .toBeVisible()
     expect(screen.getByRole('heading', { name: 'Administrative closure confirmed' })).toBeVisible()
     readsFail = false

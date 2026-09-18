@@ -24,6 +24,18 @@ export const STAFF_APPLICATIONS_ROUTE = {
   requiredPermissions: ['loan:read'],
 } as const satisfies StaffRouteDefinition
 
+export const STAFF_ORIGINATION_ROUTE = {
+  path: '/staff/origination',
+  label: 'Assisted origination',
+  requiredPermissions: ['loan:originate:staff'],
+} as const satisfies StaffRouteDefinition
+
+export const STAFF_ORIGINATION_CASE_ROUTE = {
+  path: '/staff/origination/:assistedOriginationCaseId',
+  label: 'Assisted origination case',
+  requiredPermissions: ['loan:originate:staff'],
+} as const satisfies StaffRouteDefinition
+
 export const STAFF_APPLICATION_CASE_ROUTE = {
   path: '/staff/applications/:loanApplicationId',
   label: 'Application case',
@@ -150,6 +162,7 @@ export const STAFF_CLOSURE_CASE_ROUTE = {
 
 export const STAFF_ROUTES = [
   STAFF_HOME_ROUTE,
+  STAFF_ORIGINATION_ROUTE,
   STAFF_APPLICATIONS_ROUTE,
   STAFF_DOCUMENT_QUEUE_ROUTE,
   STAFF_CORRECTION_QUEUE_ROUTE,
