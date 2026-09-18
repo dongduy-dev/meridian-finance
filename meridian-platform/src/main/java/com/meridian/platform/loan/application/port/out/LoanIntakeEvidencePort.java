@@ -5,4 +5,6 @@ import java.util.UUID;
 public interface LoanIntakeEvidencePort {
 
     void requireCurrentUclPaperApplication(UUID assistedOriginationCaseId);
+
+    void requireCurrentCollateralPaperApplication(UUID assistedOriginationCaseId);
 }

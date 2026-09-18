@@ -6,9 +6,11 @@ import com.meridian.platform.document.application.port.in.UploadDocumentUseCase;
 import com.meridian.platform.document.application.service.DocumentChecklistService;
 import com.meridian.platform.document.domain.model.DocumentUploaderActorType;
 import com.meridian.platform.loan.application.dto.CollateralDetailsRequest;
+import com.meridian.platform.loan.application.dto.AssistedOriginationCaseDto;
 import com.meridian.platform.loan.application.dto.CollateralLoanApplicationDto;
 import com.meridian.platform.loan.application.dto.CollateralLoanApplicationRequest;
 import com.meridian.platform.loan.application.port.in.StartCollateralLoanApplicationUseCase;
+import com.meridian.platform.loan.application.port.in.StartAssistedCollateralLoanUseCase;
 import com.meridian.platform.loan.application.port.out.CollateralLoanVerificationRepository;
 import com.meridian.platform.loan.application.port.out.CollateralRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
@@ -89,6 +91,7 @@ class CollateralLoanOriginationPostgreSqlIntegrationTest {
     );
 
     @Autowired private StartCollateralLoanApplicationUseCase useCase;
+    @Autowired private StartAssistedCollateralLoanUseCase assistedUseCase;
     @Autowired private UploadDocumentUseCase uploadDocumentUseCase;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private MutableCurrentUserProvider currentUserProvider;
@@ -274,6 +277,109 @@ class CollateralLoanOriginationPostgreSqlIntegrationTest {
                 customerId));
     }
 
+    @Test
+    void assistedConversionCreatesOneCollateralAndExistingStaffUploadCompletesSubmission() {
+        UUID staffId = createStaff();
+        UUID caseId = createAssistedCaseWithPaperApplication(staffId, customerId);
+        currentUserProvider.useStaff(staffId, Set.of("loan:originate:staff", "document:upload:assisted"));
+
+        AssistedOriginationCaseDto completed = assistedUseCase.submit(caseId, REQUEST);
+        UUID applicationId = completed.loanApplicationId();
+        UUID checklistItemId = jdbcTemplate.queryForObject(
+                "SELECT item.id FROM document_checklist_items item "
+                        + "JOIN document_checklists checklist ON checklist.id = item.checklist_id "
+                        + "WHERE checklist.loan_application_id = ?",
+                UUID.class, applicationId);
+
+        assertEquals("COMPLETED", completed.status());
+        assertEquals(1, count("SELECT count(*) FROM loan_applications WHERE id = ? AND customer_id = ? "
+                        + "AND product_code = 'COLLATERAL_LOAN' AND product_type = 'SECURED' "
+                        + "AND origination_channel = 'STAFF_ASSISTED' AND status = 'DOCUMENTS_PENDING'",
+                applicationId, customerId));
+        assertEquals(1, count("SELECT count(*) FROM collaterals WHERE loan_application_id = ? "
+                        + "AND collateral_type = 'MOTORBIKE' AND description = '2024 Honda motorbike' "
+                        + "AND estimated_value = 35000000 AND ownership_status = ? "
+                        + "AND condition_note = 'Normal used condition'",
+                applicationId, "Customer-provided ownership statement"));
+        assertEquals(1, count("SELECT count(*) FROM collateral_loan_verifications "
+                        + "WHERE loan_application_id = ? AND verification_sequence = 1 "
+                        + "AND product_verification_result = 'PENDING_MANUAL_REVIEW'",
+                applicationId));
+        assertEquals(1, count("SELECT count(*) FROM document_checklist_items item "
+                        + "JOIN document_checklists checklist ON checklist.id = item.checklist_id "
+                        + "WHERE checklist.loan_application_id = ? "
+                        + "AND item.document_type = 'COLLATERAL_OWNERSHIP_EVIDENCE' "
+                        + "AND item.requirement_status = 'REQUIRED'",
+                applicationId));
+        assertEquals(0, count("SELECT count(*) FROM document_checklist_items item "
+                        + "JOIN document_checklists checklist ON checklist.id = item.checklist_id "
+                        + "WHERE checklist.loan_application_id = ? "
+                        + "AND item.document_type IN ('COLLATERAL_PAPER_APPLICATION', 'CUSTOMER_IDENTITY')",
+                applicationId));
+        assertEquals(1, count("SELECT count(*) FROM audit_events WHERE entity_id = ? "
+                + "AND action = 'COLLATERAL_LOAN_APPLICATION_SUBMITTED'", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM audit_events WHERE entity_id = ? "
+                + "AND action = 'ASSISTED_ORIGINATION_CASE_COMPLETED'", caseId));
+
+        uploadDocumentUseCase.upload(new UploadDocumentCommand(
+                applicationId, checklistItemId, UUID.randomUUID(), null,
+                "ownership-evidence.pdf", "application/pdf",
+                new ByteArrayInputStream("%PDF-1.4 assisted-collateral".getBytes(StandardCharsets.UTF_8)),
+                DocumentUploaderActorType.STAFF, staffId, null));
+
+        assertEquals("SUBMITTED", jdbcTemplate.queryForObject(
+                "SELECT status FROM loan_applications WHERE id = ?", String.class, applicationId));
+    }
+
+    @Test
+    void assistedConversionRollsBackAndLeavesCaseOpenWhenVerificationPersistenceFails() {
+        UUID staffId = createStaff();
+        UUID caseId = createAssistedCaseWithPaperApplication(staffId, customerId);
+        currentUserProvider.useStaff(staffId, Set.of("loan:originate:staff"));
+        verificationRepository.failWrites = true;
+
+        assertThrows(IllegalStateException.class, () -> assistedUseCase.submit(caseId, REQUEST));
+
+        assertNoOriginationRows();
+        assertEquals(1, count("SELECT count(*) FROM assisted_origination_cases "
+                + "WHERE id = ? AND status = 'OPEN' AND loan_application_id IS NULL AND terminal_at IS NULL", caseId));
+        assertEquals(0, count("SELECT count(*) FROM audit_events WHERE entity_id = ? "
+                + "AND action = 'ASSISTED_ORIGINATION_CASE_COMPLETED'", caseId));
+    }
+
+    @Test
+    void concurrentAssistedConversionsOfSameCaseCreateExactlyOneCompleteResult() throws Exception {
+        UUID staffId = createStaff();
+        UUID caseId = createAssistedCaseWithPaperApplication(staffId, customerId);
+        currentUserProvider.useStaff(staffId, Set.of("loan:originate:staff"));
+        CountDownLatch start = new CountDownLatch(1);
+        List<AssistedSubmissionOutcome> outcomes;
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<AssistedSubmissionOutcome> first = executor.submit(() -> submitAssistedAfter(start, caseId));
+            Future<AssistedSubmissionOutcome> second = executor.submit(() -> submitAssistedAfter(start, caseId));
+            start.countDown();
+            outcomes = List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS));
+        }
+
+        assertEquals(1, outcomes.stream().filter(AssistedSubmissionOutcome::successful).count());
+        Throwable failure = outcomes.stream().filter(outcome -> !outcome.successful())
+                .map(AssistedSubmissionOutcome::failure).findFirst().orElseThrow();
+        BusinessStateConflictException conflict = assertInstanceOf(BusinessStateConflictException.class, failure);
+        assertEquals("ASSISTED_ORIGINATION_CASE_NOT_OPEN", conflict.getErrorCode());
+        UUID applicationId = outcomes.stream().filter(AssistedSubmissionOutcome::successful)
+                .map(AssistedSubmissionOutcome::result).map(AssistedOriginationCaseDto::loanApplicationId)
+                .findFirst().orElseThrow();
+        assertEquals(1, count("SELECT count(*) FROM loan_applications WHERE id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM collaterals WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM collateral_loan_verifications "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM document_checklists WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND from_status IS NULL", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM assisted_origination_cases "
+                + "WHERE id = ? AND status = 'COMPLETED' AND loan_application_id = ?", caseId, applicationId));
+    }
+
     private void assertRollbackWhen(Runnable configureFailure) {
         resetFailures();
         configureFailure.run();
@@ -316,6 +422,52 @@ class CollateralLoanOriginationPostgreSqlIntegrationTest {
         }
     }
 
+    private AssistedSubmissionOutcome submitAssistedAfter(CountDownLatch start, UUID caseId) {
+        try {
+            assertTrue(start.await(5, TimeUnit.SECONDS));
+            return AssistedSubmissionOutcome.success(assistedUseCase.submit(caseId, REQUEST));
+        } catch (Throwable failure) {
+            return AssistedSubmissionOutcome.failure(failure);
+        }
+    }
+
+    private UUID createStaff() {
+        UUID staffId = UUID.randomUUID();
+        String suffix = staffId.toString().replace("-", "");
+        jdbcTemplate.update("INSERT INTO users "
+                        + "(id, email, normalized_email, password_hash, user_type, status, display_name, customer_id) "
+                        + "VALUES (?, ?, ?, 'test-password-hash', 'STAFF', 'ACTIVE', "
+                        + "'Assisted Collateral Officer', NULL)",
+                staffId, "assisted-cl-" + suffix + "@meridian.test",
+                "assisted-cl-" + suffix + "@meridian.test");
+        return staffId;
+    }
+
+    private UUID createAssistedCaseWithPaperApplication(UUID staffId, UUID selectedCustomerId) {
+        UUID caseId = UUID.randomUUID();
+        UUID documentId = UUID.randomUUID();
+        UUID versionId = UUID.randomUUID();
+        jdbcTemplate.update("INSERT INTO assisted_origination_cases "
+                        + "(id, product_code, customer_id, status, created_by_staff_user_id, created_at, updated_at) "
+                        + "VALUES (?, 'COLLATERAL_LOAN', ?, 'OPEN', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                caseId, selectedCustomerId, staffId);
+        jdbcTemplate.update("INSERT INTO intake_documents "
+                        + "(id, assisted_origination_case_id, evidence_type, current_version_id, created_at, updated_at) "
+                        + "VALUES (?, ?, 'COLLATERAL_PAPER_APPLICATION', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                documentId, caseId);
+        jdbcTemplate.update("INSERT INTO intake_document_versions "
+                        + "(id, intake_document_id, version_number, upload_request_id, baseline_version_id, "
+                        + "original_filename, declared_mime_type, detected_mime_type, byte_size, sha256_hex, "
+                        + "storage_key, uploader_staff_user_id, uploaded_at, created_at) "
+                        + "VALUES (?, ?, 1, ?, NULL, 'signed-collateral.pdf', 'application/pdf', "
+                        + "'application/pdf', 128, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                versionId, documentId, UUID.randomUUID(), "b".repeat(64),
+                "intake/" + caseId + "/signed-collateral.pdf", staffId);
+        jdbcTemplate.update("UPDATE intake_documents SET current_version_id = ?, updated_at = CURRENT_TIMESTAMP "
+                + "WHERE id = ?", versionId, documentId);
+        return caseId;
+    }
+
     private void createReadyCustomer(UUID createdUserId, UUID createdCustomerId) {
         String suffix = createdCustomerId.toString().replace("-", "");
         jdbcTemplate.update("INSERT INTO customers "
@@ -356,6 +508,20 @@ class CollateralLoanOriginationPostgreSqlIntegrationTest {
 
         static SubmissionOutcome failure(Throwable failure) {
             return new SubmissionOutcome(null, failure);
+        }
+
+        boolean successful() {
+            return result != null;
+        }
+    }
+
+    private record AssistedSubmissionOutcome(AssistedOriginationCaseDto result, Throwable failure) {
+        static AssistedSubmissionOutcome success(AssistedOriginationCaseDto result) {
+            return new AssistedSubmissionOutcome(result, null);
+        }
+
+        static AssistedSubmissionOutcome failure(Throwable failure) {
+            return new AssistedSubmissionOutcome(null, failure);
         }
 
         boolean successful() {
@@ -429,6 +595,17 @@ class CollateralLoanOriginationPostgreSqlIntegrationTest {
                     null,
                     Set.of("ACCOUNTING_OFFICER"),
                     Set.of("loan:contract:prepare")
+            ));
+        }
+
+        void useStaff(UUID currentUserId, Set<String> permissions) {
+            currentUser.set(new AuthenticatedUser(
+                    currentUserId,
+                    "collateral-assisted-test@meridian.test",
+                    "STAFF",
+                    null,
+                    Set.of("LOAN_OFFICER"),
+                    permissions
             ));
         }
 

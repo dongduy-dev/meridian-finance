@@ -980,15 +980,21 @@ Type: Lending checkpoint
 
 Priority: P1
 
-Status: Open
+Status: Done
 
-Blocking: Requires an approved paper Collateral conversion contract.
+Blocking: No current blocker.
 
 Problem:
 Staff-assisted intake supports UCL conversion into a `STAFF_ASSISTED` LoanApplication, but Collateral intake remains pre-application only. Reusing the UCL command would omit the structured Collateral facts, ownership-evidence boundary, and product-specific verification requirements.
 
 Recommendation:
 Define and implement a Collateral-specific atomic conversion that preserves the assisted-case lock and one-case/one-application invariant, captures the authoritative submitted asset facts, creates the Collateral checklist and pending verification, keeps intake evidence Document-owned, and provides the same GET-only uncertain-result recovery. Do not introduce automated valuation or LTV behavior.
+
+Completed in Paper CP3:
+
+- Staff uses a Collateral-specific input contract and remains the authenticated actor while the selected Customer remains the business subject.
+- Atomic conversion requires the current signed paper application, creates one `STAFF_ASSISTED` Collateral Loan application with one structured Collateral fact, the ownership-evidence checklist, pending manual verification, lifecycle/audit evidence, and the completed-case link.
+- Staff Web uses GET-only uncertain-result reconciliation and reuses the existing `document:upload:assisted` application-document workflow; PostgreSQL tests cover rollback and competing conversion attempts.
 
 Suggested future branch name:
 `feature/paper-collateral-origination`

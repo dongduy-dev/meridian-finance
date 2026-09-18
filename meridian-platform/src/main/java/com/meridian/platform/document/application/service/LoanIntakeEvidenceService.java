@@ -30,4 +30,18 @@ public class LoanIntakeEvidenceService implements LoanIntakeEvidencePort {
             );
         }
     }
+
+    @Override
+    public void requireCurrentCollateralPaperApplication(UUID assistedOriginationCaseId) {
+        boolean present = documents.findByCaseAndTypeForUpdate(
+                        assistedOriginationCaseId, IntakeEvidenceType.COLLATERAL_PAPER_APPLICATION)
+                .filter(document -> document.currentVersionId() != null)
+                .isPresent();
+        if (!present) {
+            throw new BusinessRuleViolationException(
+                    "COLLATERAL_PAPER_APPLICATION_REQUIRED",
+                    "A current signed Collateral paper application is required before conversion."
+            );
+        }
+    }
 }

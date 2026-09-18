@@ -59,3 +59,15 @@ export type CustomerProfileInput = {
   employmentStatus: string; employerName?: string; termsConsentAccepted: boolean;
   dataProcessingConsentAccepted: boolean
 }
+
+export type CollateralLoanInput = {
+  requestedAmount: number
+  requestedTermMonths: number
+  collateral: {
+    type: 'MOTORBIKE' | 'CAR' | 'ELECTRONICS' | 'PROPERTY_DOCUMENT' | 'OTHER'
+    description: string
+    estimatedValue: number
+    ownershipStatus: string
+    conditionNote: string
+  }
+}

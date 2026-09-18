@@ -216,10 +216,10 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 
 | Workspace | Commands available now |
 |---|---|
-| Assisted origination | Create/reopen/associate/abandon UCL or Collateral intake; create and maintain the selected Customer; manage masked bank accounts; upload or replace controlled paper intake evidence; convert an eligible UCL case into one Staff-assisted LoanApplication |
+| Assisted origination | Create/reopen/associate/abandon UCL or Collateral intake; create and maintain the selected Customer; manage masked bank accounts; upload or replace controlled paper intake evidence; convert an eligible UCL or Collateral case into one Staff-assisted LoanApplication |
 | Verification | Start and complete UCL verification; start and complete exact numbered Collateral verification |
 | Review and approval | Start review; submit recommendation; submit independent decision |
-| Documents | Review the exact current version; waive with added permission; request replacement; stream known content; upload an initial Staff-assisted UCL checklist document with `document:upload:assisted`; upload for an open correction task with `document:upload:staff` |
+| Documents | Review the exact current version; waive with added permission; request replacement; stream known content; upload an initial Staff-assisted UCL or Collateral checklist document with `document:upload:assisted`; upload for an open correction task with `document:upload:staff` |
 | Corrections | Complete an eligible Staff task and resubmit an eligible Staff-only or mixed correction |
 | Contract | Prepare or regenerate a contract; recompute advisory readiness; confirm readiness |
 | Disbursement | Reveal the exact ready-contract destination; confirm an externally completed transfer and activate the LoanAccount |
@@ -235,13 +235,15 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 - overdue evaluation is a scheduler-owned backend operation, not a manual Staff command.
 - Partner read endpoints are administration-oriented and do not form a safe lending case snapshot.
 
-### 7.4 Staff-Assisted UCL Conversion and Upload Recovery
+### 7.4 Staff-Assisted UCL and Collateral Conversion
 
 `POST /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/unsecured-consumer-loan/submit` requires an open UCL case, a selected ready Customer, current `UCL_PAPER_APPLICATION` evidence, and valid backend-owned UCL terms and submission guards. Success returns the completed case with its `loanApplicationId`; the intake evidence remains separately owned and is not represented as an application checklist upload.
 
+`POST /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/collateral-loan/submit` requires an open Collateral case, a selected ready Customer, current `COLLATERAL_PAPER_APPLICATION` evidence, valid backend-owned amount and term, and exactly one structured Collateral fact containing type, description, estimated value, ownership status, and condition note. Success creates the ordinary ownership-evidence checklist and pending manual verification. Staff Web does not infer the structured fact from paper metadata and does not calculate valuation or loan-to-value outcomes.
+
 The conversion has no client-generated business request identity. After a network or 5xx result, Staff Web performs only the case GET. `COMPLETED` with a linked application proves the outcome. `OPEN` does not prove failure and requires an explicit operator confirmation before any new POST; the client never automatically repeats the conversion.
 
-The linked document workspace exposes initial upload only when the application channel is `STAFF_ASSISTED`, the status is `DOCUMENTS_PENDING`, and the actor has `document:upload:assisted`. The browser retains an unresolved upload request UUID and the displayed predecessor baseline, but no filename, bytes, or digest derived from file contents in persistent storage. An exact replay requires the operator to reselect the same file and the semantic baseline to remain unchanged; a changed file or current version requires a new operation. Success always refetches the authoritative checklist. Final required upload continues to trigger the established checklist-completion transition and pending-verification behavior.
+The linked document workspace exposes initial upload only when the application channel is `STAFF_ASSISTED`, the status is `DOCUMENTS_PENDING`, and the actor has `document:upload:assisted`. UCL uses its ordinary income, bank-statement, and employment checklist; Collateral uses `COLLATERAL_OWNERSHIP_EVIDENCE`. The browser retains an unresolved upload request UUID and the displayed predecessor baseline, but no filename, bytes, or digest derived from file contents in persistent storage. An exact replay requires the operator to reselect the same file and the semantic baseline to remain unchanged; a changed file or current version requires a new operation. Success always refetches the authoritative checklist. Final required upload continues to trigger the established checklist-completion transition and pending-verification behavior.
 
 ---
 
@@ -1217,7 +1219,7 @@ Routes are conceptual implementation targets. “API dependency” means the rou
 | `/login` | Internal authentication | Executable foundation |
 | `/staff` | Redirect to first permitted work area | Executable after shell exists; no invented dashboard |
 | `/staff/origination` | Open assisted-origination intake | Executable with `loan:originate:staff` |
-| `/staff/origination/:assistedOriginationCaseId` | Customer selection/maintenance, paper intake evidence, and UCL conversion | Executable with capability-gated Customer and Document operations; completed UCL intake links to the application document workspace |
+| `/staff/origination/:assistedOriginationCaseId` | Customer selection/maintenance, paper intake evidence, and UCL or Collateral conversion | Executable with capability-gated Customer and Document operations; completed intake links to the application document workspace |
 | `/staff/work/documents` | Document-review queue | Executable narrow queue |
 | `/staff/work/corrections` | Staff-correction queue | Executable narrow queue |
 | `/staff/work/verifications` | Pending UCL/Collateral verification | API dependency |
@@ -1249,7 +1251,7 @@ The current servicing APIs are application-scoped, so routes retain `loanApplica
 
 | Route family | Intended actor/capability | Backend authority | Primary task | Important states and action ownership |
 |---|---|---|---|---|
-| Assisted origination | Loan Officer with `loan:originate:staff`; Customer mutation also needs `customer:intake:manage`; intake evidence needs `document:upload:intake` | Loan intake, Customer intake, Document intake-evidence, and assisted UCL submission endpoints | Select or create the Customer, capture controlled paper evidence, and convert an eligible UCL case | `OPEN`, `ABANDONED`, `COMPLETED`; completion atomically links one `STAFF_ASSISTED` UCL application; Staff is actor and Customer is subject |
+| Assisted origination | Loan Officer with `loan:originate:staff`; Customer mutation also needs `customer:intake:manage`; intake evidence needs `document:upload:intake` | Loan intake, Customer intake, Document intake-evidence, and assisted UCL/Collateral submission endpoints | Select or create the Customer, capture controlled paper evidence, and convert an eligible UCL or Collateral case | `OPEN`, `ABANDONED`, `COMPLETED`; completion atomically links one `STAFF_ASSISTED` application; Staff is actor and Customer is subject |
 | Document work | Loan Officer with `document:review`; waiver also needs `document:waive`; initial assisted upload needs `document:upload:assisted` | Document checklist, upload, review queue, content, and review endpoints | Upload the initial assisted checklist document or inspect and decide the exact current version | `DOCUMENTS_PENDING` assisted initial upload or `AWAITING_REVIEW`; correction upload remains separate under `document:upload:staff` |
 | Correction work | Loan Officer with `loan:correction:staff`; uploader also needs `document:upload:staff` | Staff correction queue, task completion, upload, and resubmission endpoints | Satisfy Staff proof and return an eligible request to workflow | `OPEN`, proof incomplete/complete, mixed work incomplete, resubmitted; backend owns maker-checker |
 | Verification and review | Loan Officer with `loan:review`; recommendation additionally needs `approval:recommend` | Purpose-limited verification/review reads, Approval-owned recommendation read, and existing commands | Verify product evidence, start review, and record a recommendation when separately authorized | Submitted/pending verification, verified/failed/more information, under review; Loan Officer acts, Approver does not verify |
@@ -1502,7 +1504,7 @@ Staff FE checkpoints deliver the Staff Web feature area inside `internal-web/`. 
 - block Customer-owned correction, cancellation, offer-response, contract-acknowledgment, and checklist-mutation commands for Staff-assisted applications until a Staff-mediated contract is delivered;
 - reconcile conversion uncertainty through GET without automatic POST retry, and preserve exact document-upload replay only for the unchanged operation and file.
 
-This checkpoint is executable for UCL. Collateral assisted conversion, OCR execution, and Staff-mediated downstream Customer decisions remain deferred and are tracked separately.
+This checkpoint is executable for UCL. Paper Origination CP3 extends the same controlled workflow to Collateral Loan conversion; OCR execution and Staff-mediated downstream Customer decisions remain deferred and are tracked separately.
 
 ### Staff FE-CP1 — Internal Foundation
 
