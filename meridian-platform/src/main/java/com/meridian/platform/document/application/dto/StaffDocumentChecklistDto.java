@@ -6,6 +6,7 @@ import java.util.UUID;
 
 public record StaffDocumentChecklistDto(
         UUID loanApplicationId,
+        String originationChannel,
         String applicationStatus,
         String checklistStage,
         boolean uploadComplete,
@@ -14,6 +15,14 @@ public record StaffDocumentChecklistDto(
 ) {
     public StaffDocumentChecklistDto {
         items = List.copyOf(items);
+    }
+
+    public StaffDocumentChecklistDto(
+            UUID loanApplicationId, String applicationStatus, String checklistStage,
+            boolean uploadComplete, boolean processingReady, List<ChecklistItemDto> items
+    ) {
+        this(loanApplicationId, "CUSTOMER_DIGITAL", applicationStatus, checklistStage,
+                uploadComplete, processingReady, items);
     }
 
     public record ChecklistItemDto(

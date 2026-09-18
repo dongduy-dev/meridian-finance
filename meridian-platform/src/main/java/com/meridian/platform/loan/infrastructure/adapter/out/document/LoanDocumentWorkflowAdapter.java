@@ -28,6 +28,7 @@ public class LoanDocumentWorkflowAdapter implements LoanDocumentWorkflowPort {
         return new LoanDocumentWorkflowSnapshot(
                 loanApplication.id(),
                 loanApplication.customerId(),
+                loanApplication.originationChannel(),
                 loanApplication.status()
         );
     }
@@ -42,6 +43,7 @@ public class LoanDocumentWorkflowAdapter implements LoanDocumentWorkflowPort {
         return new LoanDocumentWorkflowSnapshot(
                 loanApplication.id(),
                 loanApplication.customerId(),
+                loanApplication.originationChannel(),
                 loanApplication.status()
         );
     }

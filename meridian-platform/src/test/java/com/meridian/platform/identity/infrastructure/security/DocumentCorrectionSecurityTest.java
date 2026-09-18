@@ -193,6 +193,24 @@ class DocumentCorrectionSecurityTest {
                         .with(user("staff").authorities(
                                 new SimpleGrantedAuthority("document:upload:staff"))))
                 .andExpect(status().isOk());
+
+        mockMvc.perform(multipart(
+                        "/api/v1/staff/loan-applications/{id}/documents/{item}/versions",
+                        APPLICATION_ID, ITEM_ID)
+                        .file("file", new byte[]{1, 2, 3})
+                        .param("uploadRequestId", UUID.randomUUID().toString())
+                        .with(user("assisted-staff").authorities(
+                                new SimpleGrantedAuthority("document:upload:assisted"))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(multipart(
+                        "/api/v1/staff/loan-applications/{id}/documents/{item}/versions",
+                        APPLICATION_ID, ITEM_ID)
+                        .file("file", new byte[]{1, 2, 3})
+                        .param("uploadRequestId", UUID.randomUUID().toString())
+                        .with(user("intake-staff").authorities(
+                                new SimpleGrantedAuthority("document:upload:intake"))))
+                .andExpect(status().isForbidden());
     }
 
     @Test
