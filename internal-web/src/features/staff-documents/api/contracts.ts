@@ -31,6 +31,7 @@ const reviewHistorySchema = z.object({
 
 export const staffDocumentChecklistSchema = z.object({
   loanApplicationId: uuidSchema,
+  originationChannel: z.enum(['CUSTOMER_DIGITAL', 'STAFF_ASSISTED']).default('CUSTOMER_DIGITAL'),
   applicationStatus: rawValue,
   checklistStage: rawValue,
   uploadComplete: z.boolean(),

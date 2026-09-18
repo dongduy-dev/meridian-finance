@@ -114,6 +114,7 @@ export function ApplicationCasePage() {
           <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Requested amount</dt><dd className="financial-value mt-1 font-semibold">{formatVnd(data.requestedAmount)}</dd></div>
           <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Requested term</dt><dd className="mt-1 font-semibold">{data.requestedTermMonths} months</dd></div>
           <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Product type</dt><dd className="mt-1 font-semibold">{humanizeKnownValue(data.productType)}</dd></div>
+          <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Origination channel</dt><dd className="mt-1 font-semibold">{humanizeKnownValue(data.originationChannel)}</dd></div>
           <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Submitted</dt><dd className="mt-1 font-semibold">{formatTimestamp(data.submittedAt)}</dd></div>
         </dl>
       </header>

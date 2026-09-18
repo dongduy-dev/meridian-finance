@@ -26,6 +26,7 @@ export const staffLoanApplicationItemSchema = z.object({
   applicationNumber: z.string().trim().min(1),
   productCode: rawEnumValueSchema,
   productType: rawEnumValueSchema,
+  originationChannel: z.enum(['CUSTOMER_DIGITAL', 'STAFF_ASSISTED']).default('CUSTOMER_DIGITAL'),
   requestedAmount: moneySchema,
   requestedTermMonths: z.number().int().positive(),
   status: rawEnumValueSchema,

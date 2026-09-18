@@ -22,6 +22,16 @@ export async function attachCustomer(manager: AuthSessionManager, id: string, cu
 export async function abandonIntake(manager: AuthSessionManager, id: string): Promise<AssistedOrigination> {
   return assistedOriginationSchema.parse(await manager.protectedRequest(`/staff/assisted-originations/${id}/abandon`, { method: 'POST' }))
 }
+export async function submitUclIntake(
+  manager: AuthSessionManager,
+  id: string,
+  input: { requestedAmount: number; requestedTermMonths: number },
+): Promise<AssistedOrigination> {
+  return assistedOriginationSchema.parse(await manager.protectedRequest(
+    `/staff/assisted-originations/${id}/unsecured-consumer-loan/submit`,
+    { method: 'POST', body: input },
+  ))
+}
 export async function searchCustomer(manager: AuthSessionManager, input: { customerNumber?: string; identityReference?: string }): Promise<StaffCustomer> {
   return staffCustomerSchema.parse(await manager.protectedRequest('/staff/customers/search', { method: 'POST', body: input }))
 }

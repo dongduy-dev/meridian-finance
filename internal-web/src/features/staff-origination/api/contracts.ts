@@ -8,11 +8,14 @@ export const assistedOriginationSchema = z.object({
   productCode: z.enum(['UNSECURED_CONSUMER_LOAN', 'COLLATERAL_LOAN']),
   customerId: uuidSchema.nullable(),
   status: z.enum(['OPEN', 'COMPLETED', 'ABANDONED']),
+  loanApplicationId: uuidSchema.nullable().default(null),
   createdByStaffUserId: uuidSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   terminalAt: timestampSchema.nullable(),
 })
+
+export const originationChannelSchema = z.enum(['CUSTOMER_DIGITAL', 'STAFF_ASSISTED'])
 
 const customerProfileSchema = z.object({
   fullName: z.string(), phoneNumber: z.string(), residentialAddress: z.string(),
