@@ -110,7 +110,7 @@ class PartnerAdministrationV53MigrationTest {
         assertTrue(migration.contains("uq_partner_employee_import_batches_request_id"));
         assertTrue(migration.contains("chk_partner_employee_import_batches_replay_pair"));
         assertTrue(migration.contains("PARTNER_EMPLOYEE_IMPORT_COMPLETED"));
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V57"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V58"));
         assertTrue(snapshot.contains("uq_partner_employee_import_batches_request_id"));
         assertTrue(snapshot.contains("PARTNER_EMPLOYEE_IMPORT_COMPLETED"));
     }

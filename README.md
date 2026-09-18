@@ -47,17 +47,18 @@ All three products use Meridian's common application, approval, contract, activa
 
 ## Run Meridian Locally
 
-Meridian local development uses one backend environment and two browser applications. Docker Compose runs the Java backend together with PostgreSQL and Mailpit. Customer Web and Internal Web run separately with Vite and call the same backend API at `http://localhost:8080/api/v1`.
+Meridian local development uses one backend environment and two browser applications. Docker Compose runs the Java backend together with PostgreSQL and Mailpit; an opt-in `ocr` profile adds the Python OCR worker without making Google credentials a prerequisite for the default environment. Customer Web and Internal Web run separately with Vite and call the same backend API at `http://localhost:8080/api/v1`.
 
 ### Repository Layout
 
 ```text
 meridian-finance/
 ├── meridian-platform/       # Java/Spring backend, Flyway migrations, and local Compose environment
+├── ocr-service/             # Python/FastAPI OCR worker and provider adapters
 ├── customer-web/            # React/Vite Customer Web application
 ├── internal-web/            # Shared React/Vite Internal Web application
 ├── docs/                    # Business, architecture, API, database, frontend, and project documentation
-└── .github/workflows/       # Backend and frontend CI workflows
+└── .github/workflows/       # Backend, frontend, and OCR CI workflows
 ```
 
 Backend modules under `com.meridian.platform` are:
@@ -84,11 +85,11 @@ Browser
                  Meridian Platform
                  http://localhost:8080
                           │
-                 ┌────────┴────────┐
-                 ▼                 ▼
-            PostgreSQL          Mailpit
-              :5432          SMTP :1025
-                              UI   :8025
+              ┌───────────┬────────────┐
+              ▼           ▼            ▼
+         PostgreSQL    Mailpit    OCR worker (opt-in)
+           :5432     SMTP :1025       :8090
+                      UI   :8025
 ```
 
 Compose does not start the frontend development servers. Both use `VITE_API_BASE_URL=http://localhost:8080/api/v1`, and the backend local CORS configuration allows the Customer Web and Internal Web origins.
@@ -109,6 +110,14 @@ Useful local endpoints:
 - OpenAPI: `http://localhost:8080/v3/api-docs`
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
 - Mailpit UI: `http://localhost:8025`
+
+The OCR worker is opt-in:
+
+```bash
+docker compose --profile ocr up --build
+```
+
+The profile mounts the Document volume read-only and remains not-ready without the dedicated `MERIDIAN_OCR_RESULT_ENCRYPTION_KEY`, Google project/location/processor configuration, and Application Default Credentials. Local credentials are mounted through a developer-owned Compose override; credential files are never committed. Manual Staff intake remains available while the worker is absent or not ready.
 
 ### Customer Web
 
@@ -143,9 +152,9 @@ For either frontend, verification commands are `npm run lint`, `npm run typechec
 <details>
 <summary>Local secret generation and runtime notes</summary>
 
-`meridian-platform/.env.example` is the local backend configuration inventory. At minimum, set `POSTGRES_PASSWORD`, the three required Base64-encoded symmetric key values, and a matching JWT private/public key pair before starting the backend.
+`meridian-platform/.env.example` is the local backend configuration inventory. At minimum, set `POSTGRES_PASSWORD`, the three required Base64-encoded symmetric key values, and a matching JWT private/public key pair before starting the default backend. The optional OCR profile also requires a separate Base64-encoded 32-byte `MERIDIAN_OCR_RESULT_ENCRYPTION_KEY`.
 
-Generate each local symmetric key with one of these commands and run the selected command three times:
+Generate each local symmetric key with one of these commands and run the selected command three times for the default environment, or four times when configuring OCR:
 
 ```bash
 openssl rand -base64 32
@@ -155,7 +164,7 @@ openssl rand -base64 32
 [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 ```
 
-`MERIDIAN_CUSTOMER_ENCRYPTION_KEY` and `MERIDIAN_LOAN_DISBURSEMENT_SNAPSHOT_KEYS_LOCAL` must each decode to exactly 32 bytes. `MERIDIAN_CUSTOMER_FINGERPRINT_KEY` must decode to at least 32 bytes. The local disbursement-snapshot active key ID is `local`.
+`MERIDIAN_CUSTOMER_ENCRYPTION_KEY`, `MERIDIAN_LOAN_DISBURSEMENT_SNAPSHOT_KEYS_LOCAL`, and `MERIDIAN_OCR_RESULT_ENCRYPTION_KEY` must each decode to exactly 32 bytes. `MERIDIAN_CUSTOMER_FINGERPRINT_KEY` must decode to at least 32 bytes. The local disbursement-snapshot active key ID is `local`.
 
 Generate one matching RSA-2048 signing pair in PowerShell. The command emits the Base64-encoded PKCS#8 private key and X.509 SubjectPublicKeyInfo public key expected by Meridian:
 
@@ -236,8 +245,8 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
       ┌──────────────────┐   ┌────────────────┐   ┌──────────────────────┐
       │ PostgreSQL       │   │ File Storage   │   │ OCR Service          │
       │ Module data      │   │ Document       │   │ Python + FastAPI     │
-      │ Event evidence   │   │ uploads and    │   │ Vietnamese TrOCR     │
-      │ Audit evidence   │   │ OCR inputs     │   │ Advisory processing  │
+      │ Event evidence   │   │ uploads and    │   │ Provider-neutral     │
+      │ Audit evidence   │   │ OCR inputs     │   │ Google Document AI   │
       └──────────────────┘   └────────────────┘   └──────────────────────┘
 ```
 
@@ -284,8 +293,8 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 
 | Technology | Purpose                                                        |
 |---|----------------------------------------------------------------|
-| **Python + FastAPI** | OCR service and asynchronous document-processing worker        |
-| **Vietnamese TrOCR** | Advisory OCR-assisted extraction for uploaded documents        |
+| **Python + FastAPI** | Provider-neutral OCR service, operational health API, and PostgreSQL-backed worker |
+| **Google Document AI Enterprise Document OCR** | Selected advisory OCR provider adapter for controlled intake evidence |
 
 ### Database
 
@@ -297,7 +306,7 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 
 | Technology | Purpose                                              |
 |---|------------------------------------------------------|
-| **Docker Compose** | Local application, PostgreSQL, and Mailpit SMTP-capture environment |
+| **Docker Compose** | Local application, PostgreSQL, Mailpit SMTP capture, and opt-in OCR worker profile |
 | **GitHub Actions** | CI pipeline (build, test, architecture verification) |
 | **SLF4J + Logback** | Structured JSON logging                              |
 
@@ -331,11 +340,12 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 
 ### Phase 2 — OCR-Assisted Document Processing
 
-- [ ] Containerized Python FastAPI OCR service
-- [ ] Vietnamese TrOCR model integration
-- [ ] Whole-page text detection, line segmentation, and reading-order reconstruction
-- [ ] PostgreSQL-backed asynchronous OCR jobs and result persistence
-- [ ] Authorized manual review experience for OCR-assisted document results
+- [x] Containerized provider-neutral Python FastAPI OCR service with health/readiness endpoints
+- [x] Google Document AI Enterprise Document OCR provider adapter
+- [x] Provider-normalized page, line, token, confidence, and layout preservation
+- [x] Explicit Staff request for an exact current intake version with PostgreSQL-backed claim, lease, retry, and encrypted result persistence
+- [ ] Authorized Staff review/correction experience for OCR-assisted results
+- [ ] Application of explicitly reviewed suggestions through existing Customer and Loan commands
 
 ### Phase 3 — Customer and Internal Web Experience
 

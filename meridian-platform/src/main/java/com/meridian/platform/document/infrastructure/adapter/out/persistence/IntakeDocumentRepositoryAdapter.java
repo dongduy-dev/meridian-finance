@@ -38,6 +38,12 @@ public class IntakeDocumentRepositoryAdapter implements IntakeDocumentRepository
     }
 
     @Override
+    public Optional<IntakeDocument> findByCaseAndType(UUID caseId, IntakeEvidenceType evidenceType) {
+        return documents.findByAssistedOriginationCaseIdAndEvidenceType(caseId, evidenceType)
+                .map(IntakeDocumentJpaEntity::toDomain);
+    }
+
+    @Override
     public List<IntakeDocument> findByCase(UUID caseId) {
         return documents.findAllByAssistedOriginationCaseIdOrderByEvidenceTypeAsc(caseId)
                 .stream().map(IntakeDocumentJpaEntity::toDomain).toList();

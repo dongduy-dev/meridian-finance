@@ -18,7 +18,7 @@ The logical model covers:
 - the common LoanApplication lifecycle for Salary Advance, Unsecured Consumer Loan, and Collateral Loan;
 - product-specific application facts, verification, and Salary Advance exposure;
 - review, correction, recommendation, and approval evidence;
-- document checklists, logical documents, immutable versions, and review decisions;
+- document checklists, logical documents, immutable versions, review decisions, and intake OCR jobs/results;
 - approved offers, operational contracts, protected contract-bound destinations, manual disbursement, LoanAccounts, final schedules, repayment, overdue state, settlement, and closure;
 - append-only business audit and lifecycle histories.
 
@@ -26,11 +26,11 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V57. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion, protected Partner, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
+The physical schema is the result of Flyway migrations V1 through V58. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion, Document-owned OCR processing, protected Partner, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
-The V57 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
+The V58 physical schema contains OCR processing jobs and encrypted results, but not Staff OCR review records. It does not contain a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
 
 The physical `event_publication` table is Spring Modulith infrastructure. It is omitted from the business ERD because it does not own lending state or redefine the synchronous transaction boundaries documented in `MER-ARCH-006-api-request-flow-and-dependencies.md`.
 
@@ -211,7 +211,7 @@ Approval owns `review_recommendations` and `approval_decisions`.
 
 ### 6.7 Document
 
-Document owns `document_checklists`, `document_checklist_items`, `documents`, `document_versions`, `document_review_decisions`, `intake_documents`, and `intake_document_versions`.
+Document owns `document_checklists`, `document_checklist_items`, `documents`, `document_versions`, `document_review_decisions`, `intake_documents`, `intake_document_versions`, `ocr_jobs`, and `ocr_results`.
 
 - A checklist belongs to one LoanApplication and checklist stage and contains product-resolved items.
 - One logical document belongs to a checklist item and points to its current immutable version.
@@ -221,6 +221,9 @@ Document owns `document_checklists`, `document_checklist_items`, `documents`, `d
 - Waiver is represented by an authorized review decision; there is no separate document-waiver table.
 - An intake document belongs to one assisted-origination case and controlled evidence type. Its immutable versions preserve request identity, expected predecessor, safe content metadata/hash, opaque storage key, uploader Staff user, and upload time.
 - Intake documents are separate from LoanApplication checklists and correction tasks. The product-specific paper application types are constrained to the matching UCL or Collateral intake by the Document application boundary.
+- One OCR job may exist for one immutable intake-document version. The job snapshots only the assigned source object's opaque key, media type, SHA-256, controlled evidence type, queue/lease/retry state, and PII-free trace identifier.
+- One encrypted OCR result may exist for one job. It preserves provider/processor metadata, normalized confidence, disposition, processing duration, and AES-256-GCM envelopes for extracted text, normalized layout, and structured suggestions.
+- Pending and expired-lease indexes support atomic `SKIP LOCKED` claims and abandoned-worker recovery. Result insertion and the job's `COMPLETED` transition commit atomically.
 
 Upload completeness and processing readiness are separate. Document owns document/version/review state; Loan owns product verification and application progression.
 
@@ -332,7 +335,7 @@ Exact constraint and trigger definitions remain in Flyway and the current schema
 - Customer identity references and source bank-account numbers use Customer-owned encryption envelopes. Deterministic fingerprints are internal duplicate-detection evidence.
 - Loan contract destinations use a separate Loan-owned, purpose-bound protection envelope. Loan must not reuse Customer ciphertext or fingerprint as contract evidence.
 - Partner salary, employee code, identity evidence, and import-source data are restricted Partner records.
-- Document binaries remain behind the storage abstraction. Database records contain an opaque storage key and safe integrity/metadata fields, not document content or extracted OCR text.
+- Document binaries remain behind the storage abstraction. Database records contain opaque storage keys and safe integrity/metadata fields, not document content. OCR result contents use a dedicated Document/OCR AES-256-GCM key and versioned envelopes rather than plaintext.
 - UCL and Collateral assessment notes, internal recommendation/decision notes, correction contents, canonical transfer/payment references, and operation actors are restricted evidence.
 - Audit payloads use controlled identifiers, states, reason codes, and safe snapshots rather than raw sensitive values.
 
@@ -351,6 +354,7 @@ Physical indexes belong in Flyway and the schema snapshot. The logical model req
 - Customer/product application serialization and lifecycle queues;
 - authoritative product-verification and active review/correction lookup;
 - current document versions and bounded document/Staff correction queues;
+- pending OCR jobs and expired processing leases;
 - offer, current contract, LoanAccount, and final-schedule reads by application;
 - repayment history ordered by recording time and transaction identity;
 - bounded overdue candidates and account/installment progress;
@@ -360,9 +364,9 @@ Physical indexes belong in Flyway and the schema snapshot. The logical model req
 
 Planned concepts remain outside the current ERD and physical-schema claim.
 
-### 11.1 OCR-Assisted Document Processing
+### 11.1 OCR Review and Application
 
-Document may later own OCR job and result records for claim/lease state, attempts, extracted fields, confidence, model metadata, and trace correlation. OCR remains advisory and asynchronous. Manual Document review remains authoritative for acceptance, waiver, replacement, and processing readiness.
+OCR job execution and encrypted result persistence are part of the current Document model. Staff review/correction records and purpose-limited application of reviewed suggestions into Customer or Loan commands remain planned. OCR remains advisory and asynchronous; no OCR job, result, or future review record is authoritative for Customer consent, identity verification, document acceptance, waiver, checklist readiness, product verification, or lending decisions.
 
 ### 11.2 External Financial and Operational Records
 

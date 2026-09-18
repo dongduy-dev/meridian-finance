@@ -690,13 +690,19 @@ Status: Open
 Blocking: No current blocker.
 
 Problem:
-V22-V24 intentionally implement manual review only; no OCR job, extracted text,
-confidence contract, provider, retry lease, or secure result retention exists.
+V58 provides explicit intake-version OCR requests, PostgreSQL job/lease/retry
+coordination, encrypted result retention, safe Staff job status, and the
+provider-neutral Python worker with a Google Document AI Enterprise Document OCR
+adapter. Staff cannot yet inspect or correct extracted suggestions, and reviewed
+suggestions cannot yet prefill the controlled Customer, UCL, or Collateral forms.
 
 Recommendation:
-Design OCR as an outbound port with explicit job state, retry/idempotency, manual
-fallback, field-level encryption, restricted access, PII-safe audit, and no raw OCR
-text in broad DTOs, logs, URLs, or exceptions.
+Add the purpose-limited Staff OCR review/correction experience, then apply only
+explicitly reviewed suggestions through the owning Customer and Loan commands.
+Preserve manual fallback, restricted access, encrypted Document-owned results,
+PII-safe audit, and the prohibition on raw OCR text in broad DTOs, logs, URLs,
+or exceptions. OCR must not assert consent, identity verification, document
+acceptance, checklist readiness, product verification, or a lending decision.
 
 ### MER-FU-034 - Add correction deadlines and notifications
 

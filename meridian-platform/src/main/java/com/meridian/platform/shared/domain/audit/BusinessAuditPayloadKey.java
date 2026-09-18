@@ -50,7 +50,8 @@ public enum BusinessAuditPayloadKey {
     ASSISTED_ORIGINATION_CASE_ID("assistedOriginationCaseId", ValueType.UUID),
     ASSISTED_ORIGINATION_STATUS("assistedOriginationStatus", ValueType.CODE),
     INTAKE_DOCUMENT_VERSION_ID("intakeDocumentVersionId", ValueType.UUID),
-    INTAKE_EVIDENCE_TYPE("intakeEvidenceType", ValueType.CODE);
+    INTAKE_EVIDENCE_TYPE("intakeEvidenceType", ValueType.CODE),
+    OCR_JOB_ID("ocrJobId", ValueType.UUID);
 
     private final String jsonName;
     private final ValueType valueType;

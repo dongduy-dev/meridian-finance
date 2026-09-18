@@ -21,5 +21,10 @@ public interface JpaIntakeDocumentRepository extends JpaRepository<IntakeDocumen
             @Param("evidenceType") IntakeEvidenceType evidenceType
     );
 
+    Optional<IntakeDocumentJpaEntity> findByAssistedOriginationCaseIdAndEvidenceType(
+            UUID caseId,
+            IntakeEvidenceType evidenceType
+    );
+
     List<IntakeDocumentJpaEntity> findAllByAssistedOriginationCaseIdOrderByEvidenceTypeAsc(UUID caseId);
 }

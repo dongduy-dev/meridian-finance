@@ -205,6 +205,7 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
+                    && action != BusinessAuditAction.OCR_JOB_CREATED
                     && !isStaffAssistedOriginationAction(action)) {
                 insertAuditEvent(schema, action.name());
             }
@@ -244,6 +245,7 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                     || action == BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     || action == BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
                     || action == BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
+                    || action == BusinessAuditAction.OCR_JOB_CREATED
                     || isStaffAssistedOriginationAction(action)) {
                 continue;
             }
