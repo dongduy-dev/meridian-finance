@@ -151,7 +151,7 @@ These examples show placement, not a required file inventory. The Java source tr
 | Partner | `PartnerCompany`, `PartnerEmployee`, `PartnerEmployeeImportBatch`, `CustomerPartnerEmployeeLink`, `VerifyPartnerEmployeeService` |
 | Loan | `LoanApplication`, `SalaryAdvanceLimit`, `SalaryAdvanceVerification`, `UnsecuredConsumerLoanVerification`, `Collateral`, `CollateralLoanVerification`, `ApprovedOffer`, `LoanContract`, `LoanAccount`, `ManualDisbursement`, `RepaymentSchedule` |
 | Approval | `ReviewRecommendation`, `ApprovalDecision`, `SubmitApprovalDecisionService` |
-| Document | `DocumentChecklist`, `DocumentChecklistItem`, logical document/version models, review decisions, `DocumentChecklistService` |
+| Document | `DocumentChecklist`, `DocumentChecklistItem`, logical document/version models, `OcrJob`, review decisions, `DocumentChecklistService`, `IntakeOcrService` |
 | Audit | `AuditEvent`, `RecordAuditEventsUseCase`, `RecordAuditEventsService`, `BusinessAuditEventListener` |
 | Notification | `EmailVerificationMessage`, `SendEmailVerificationUseCase`, controlled template service, `EmailSenderPort`, SMTP adapter |
 
@@ -206,7 +206,7 @@ Approval owns recommendation and decision records. Loan owns `LoanApplication` t
 
 Document storage implementations belong under `document.infrastructure.adapter.out.storage`.
 
-Backend OCR clients belong under an OCR-specific output-adapter package and implement a Document-owned output port. The external OCR service's source tree remains outside this document.
+Document-owned OCR job models, input ports, application services, and persistence adapters follow the normal module layers. The provider-neutral Python worker and Google Document AI adapter live in the repository-level `ocr-service/`; their internal source tree remains outside this backend package blueprint.
 
 ### Audit and Notification
 

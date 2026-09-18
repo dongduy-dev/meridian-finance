@@ -3,7 +3,9 @@ package com.meridian.platform.identity.infrastructure.security;
 import com.meridian.platform.customer.application.port.in.StaffCustomerIntakeUseCase;
 import com.meridian.platform.customer.infrastructure.adapter.in.web.StaffCustomerIntakeController;
 import com.meridian.platform.document.application.port.in.ManageIntakeEvidenceUseCase;
+import com.meridian.platform.document.application.port.in.ManageIntakeOcrUseCase;
 import com.meridian.platform.document.infrastructure.adapter.in.web.StaffIntakeEvidenceController;
+import com.meridian.platform.document.infrastructure.adapter.in.web.StaffIntakeOcrController;
 import com.meridian.platform.loan.application.port.in.ManageAssistedOriginationUseCase;
 import com.meridian.platform.loan.application.port.in.StartAssistedCollateralLoanUseCase;
 import com.meridian.platform.loan.application.port.in.StartAssistedUnsecuredConsumerLoanUseCase;
@@ -32,7 +34,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = {
         StaffCustomerIntakeController.class,
         AssistedOriginationController.class,
-        StaffIntakeEvidenceController.class
+        StaffIntakeEvidenceController.class,
+        StaffIntakeOcrController.class
 })
 @Import({
         SecurityConfig.class, JwtAuthenticationFilter.class, SecurityErrorResponseWriter.class,
@@ -47,6 +50,7 @@ class StaffAssistedOriginationSecurityTest {
     @MockitoBean StartAssistedUnsecuredConsumerLoanUseCase assistedUcl;
     @MockitoBean StartAssistedCollateralLoanUseCase assistedCollateral;
     @MockitoBean ManageIntakeEvidenceUseCase evidence;
+    @MockitoBean ManageIntakeOcrUseCase ocr;
 
     @Test
     void exactPermissionsProtectEachBoundary() throws Exception {
@@ -85,6 +89,29 @@ class StaffAssistedOriginationSecurityTest {
                         .with(user("staff").authorities(new SimpleGrantedAuthority("customer:read")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"identityReference\":\"012345678901\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void intakeOcrRequiresAuthenticationAndExactIntakeEvidenceAuthority() throws Exception {
+        UUID caseId = UUID.randomUUID();
+        UUID versionId = UUID.randomUUID();
+        String path = "/api/v1/staff/assisted-originations/{caseId}/evidence/"
+                + "CUSTOMER_IDENTITY/versions/{versionId}/ocr";
+
+        mockMvc.perform(post(path, caseId, versionId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post(path, caseId, versionId)
+                        .with(user("customer").authorities(new SimpleGrantedAuthority("loan:submit"))))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(path, caseId, versionId)
+                        .with(user("staff").authorities(new SimpleGrantedAuthority("document:upload:staff"))))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(path, caseId, versionId)
+                        .with(user("staff").authorities(new SimpleGrantedAuthority("document:upload:intake"))))
+                .andExpect(status().isOk());
+        mockMvc.perform(get(path, caseId, versionId)
+                        .with(user("staff").authorities(new SimpleGrantedAuthority("document:upload:intake"))))
                 .andExpect(status().isOk());
     }
 

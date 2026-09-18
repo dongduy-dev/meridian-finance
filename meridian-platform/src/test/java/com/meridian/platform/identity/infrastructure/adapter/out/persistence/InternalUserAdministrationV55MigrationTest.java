@@ -85,7 +85,7 @@ class InternalUserAdministrationV55MigrationTest {
         assertTrue(migration.contains("authorization_version BIGINT NOT NULL DEFAULT 0"));
         assertTrue(migration.contains("'IDENTITY_USER'"));
         assertTrue(migration.contains("'IDENTITY_USER_ROLE_REMOVED'"));
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V57"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V58"));
         assertTrue(snapshot.contains("authorization_version BIGINT NOT NULL DEFAULT 0"));
         assertTrue(snapshot.contains("'IDENTITY_USER_STATUS_CHANGED'"));
     }

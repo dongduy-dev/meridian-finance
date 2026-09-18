@@ -801,6 +801,26 @@
                           "type":  "string"
                       },
                       {
+                          "key":  "paperIntakeVersionId",
+                          "value":  "",
+                          "type":  "string"
+                      },
+                      {
+                          "key":  "paperIntakeOcrJobId",
+                          "value":  "",
+                          "type":  "string"
+                      },
+                      {
+                          "key":  "paperIntakeReplacementUploadRequestId",
+                          "value":  "",
+                          "type":  "string"
+                      },
+                      {
+                          "key":  "paperIntakeCurrentVersionId",
+                          "value":  "",
+                          "type":  "string"
+                      },
+                      {
                           "key":  "paperIntakeEvidenceFile",
                           "value":  "",
                           "type":  "string",
@@ -867,7 +887,7 @@
     "item":  [
                  {
                      "name":  "00 Paper Origination CP2 - Manual UCL",
-                     "description":  "Loan Officer scenario for Staff-assisted UCL: open an intake case, create and associate a Customer, upload immutable paper evidence, atomically convert the case, reconcile the completed case through GET, and upload one initial application checklist document. It does not run OCR or perform a Customer-owned downstream action.",
+                     "description":  "Loan Officer scenario for Staff-assisted UCL: open an intake case, create and associate a Customer, upload immutable paper evidence, explicitly start and reconcile a safe OCR job, prove exact replay and stale-version rejection, atomically convert the case, reconcile the completed case through GET, and upload one initial application checklist document. OCR remains advisory and the scenario performs no Customer-owned downstream action.",
                      "auth":  {
                                   "type":  "bearer",
                                   "bearer":  [
@@ -1055,7 +1075,9 @@
                                                                                     "    const json = pm.response.json();",
                                                                                     "    pm.expect(json.versionNumber).to.eql(1);",
                                                                                     "    pm.expect(json).not.to.have.property(\"storageKey\");",
-                                                                                    "});"
+                                                                                    "});",
+                                                                                    "pm.collectionVariables.set(\"paperIntakeVersionId\", pm.response.json().intakeDocumentVersionId);",
+                                                                                    "pm.collectionVariables.set(\"paperIntakeCurrentVersionId\", pm.response.json().intakeDocumentVersionId);"
                                                                                 ]
                                                                    }
                                                     }
@@ -1107,6 +1129,44 @@
                                                               }
                                                   },
                                       "response":  []
+                                  },
+                                  {
+                                      "name": "Start intake OCR denied without Staff intake authority",
+                                      "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{customerAccessToken}}", "type": "string"}]},
+                                      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test(\"Status is 403\", function () { pm.response.to.have.status(403); });"]}}],
+                                      "request": {"method": "POST", "header": [], "url": {"raw": "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/evidence/UCL_PAPER_APPLICATION/versions/{{paperIntakeVersionId}}/ocr", "host": ["{{baseUrl}}"], "path": ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}", "evidence", "UCL_PAPER_APPLICATION", "versions", "{{paperIntakeVersionId}}", "ocr"]}},
+                                      "response": []
+                                  },
+                                  {
+                                      "name": "Start OCR for current immutable intake version",
+                                      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });", "const json = pm.response.json();", "pm.test(\"OCR job DTO is safe and pending\", function () {", "    pm.expect(json.state).to.eql(\"PENDING\");", "    pm.expect(json.intakeDocumentVersionId).to.eql(pm.collectionVariables.get(\"paperIntakeVersionId\"));", "    pm.expect(json).not.to.have.property(\"storageKey\");", "    pm.expect(json).not.to.have.property(\"extractedText\");", "    pm.expect(json).not.to.have.property(\"provider\");", "});", "pm.collectionVariables.set(\"paperIntakeOcrJobId\", json.ocrJobId);"]}}],
+                                      "request": {"method": "POST", "header": [], "url": {"raw": "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/evidence/UCL_PAPER_APPLICATION/versions/{{paperIntakeVersionId}}/ocr", "host": ["{{baseUrl}}"], "path": ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}", "evidence", "UCL_PAPER_APPLICATION", "versions", "{{paperIntakeVersionId}}", "ocr"]}},
+                                      "response": []
+                                  },
+                                  {
+                                      "name": "Replay OCR start returns the same logical job",
+                                      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });", "pm.test(\"Replay returns the original OCR job\", function () { pm.expect(pm.response.json().ocrJobId).to.eql(pm.collectionVariables.get(\"paperIntakeOcrJobId\")); });"]}}],
+                                      "request": {"method": "POST", "header": [], "url": {"raw": "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/evidence/UCL_PAPER_APPLICATION/versions/{{paperIntakeVersionId}}/ocr", "host": ["{{baseUrl}}"], "path": ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}", "evidence", "UCL_PAPER_APPLICATION", "versions", "{{paperIntakeVersionId}}", "ocr"]}},
+                                      "response": []
+                                  },
+                                  {
+                                      "name": "Read safe OCR job status",
+                                      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });", "pm.test(\"Status excludes OCR contents and storage internals\", function () {", "    const json = pm.response.json();", "    pm.expect(json.ocrJobId).to.eql(pm.collectionVariables.get(\"paperIntakeOcrJobId\"));", "    pm.expect(json).not.to.have.property(\"storageKey\");", "    pm.expect(json).not.to.have.property(\"extractedText\");", "    pm.expect(json).not.to.have.property(\"normalizedPayload\");", "});"]}}],
+                                      "request": {"method": "GET", "header": [], "url": {"raw": "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/evidence/UCL_PAPER_APPLICATION/versions/{{paperIntakeVersionId}}/ocr", "host": ["{{baseUrl}}"], "path": ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}", "evidence", "UCL_PAPER_APPLICATION", "versions", "{{paperIntakeVersionId}}", "ocr"]}},
+                                      "response": []
+                                  },
+                                  {
+                                      "name": "Replace UCL intake evidence after OCR request",
+                                      "description": "Uses the same fictional local PDF to create a new immutable version and make the first OCR source version stale for new OCR creation.",
+                                      "event": [{"listen": "prerequest", "script": {"type": "text/javascript", "exec": ["if (!pm.collectionVariables.get(\"paperIntakeReplacementUploadRequestId\")) {", "    pm.collectionVariables.set(\"paperIntakeReplacementUploadRequestId\", pm.variables.replaceIn(\"{{$guid}}\"));", "}"]}}, {"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });", "pm.test(\"Replacement creates version two\", function () { pm.expect(pm.response.json().versionNumber).to.eql(2); });", "pm.collectionVariables.set(\"paperIntakeCurrentVersionId\", pm.response.json().intakeDocumentVersionId);"]}}],
+                                      "request": {"method": "POST", "header": [], "body": {"mode": "formdata", "formdata": [{"key": "file", "type": "file", "src": "{{paperIntakeEvidenceFile}}"}]}, "url": {"raw": "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/evidence/UCL_PAPER_APPLICATION/versions?uploadRequestId={{paperIntakeReplacementUploadRequestId}}&expectedCurrentVersionId={{paperIntakeVersionId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}", "evidence", "UCL_PAPER_APPLICATION", "versions"], "query": [{"key": "uploadRequestId", "value": "{{paperIntakeReplacementUploadRequestId}}"}, {"key": "expectedCurrentVersionId", "value": "{{paperIntakeVersionId}}"}]}},
+                                      "response": []
+                                  },
+                                  {
+                                      "name": "Reject new OCR creation for replaced intake version",
+                                      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test(\"Status is 409\", function () { pm.response.to.have.status(409); });", "pm.test(\"Error identifies stale OCR source\", function () { pm.expect(pm.response.json().errorCode).to.eql(\"OCR_REQUIRES_CURRENT_INTAKE_VERSION\"); });"]}}],
+                                      "request": {"method": "POST", "header": [], "url": {"raw": "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/evidence/UCL_PAPER_APPLICATION/versions/{{paperIntakeVersionId}}/ocr", "host": ["{{baseUrl}}"], "path": ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}", "evidence", "UCL_PAPER_APPLICATION", "versions", "{{paperIntakeVersionId}}", "ocr"]}},
+                                      "response": []
                                   },
                                   {
                                       "name":  "Convert assisted intake to UCL application",
