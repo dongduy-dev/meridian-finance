@@ -176,9 +176,10 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/loan-products/salary-advance/readiness` | Customer with `loan:submit` | Return the authenticated Customer's advisory Salary Advance eligibility and safe limit view. |
 | GET | `/api/v1/staff/assisted-originations?status={status}` | Staff with `loan:originate:staff` | List assisted-origination cases, optionally by exact status. |
 | POST | `/api/v1/staff/assisted-originations` | Staff with `loan:originate:staff` | Create an open UCL or Collateral Loan assisted-origination case. |
-| GET | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}` | Staff with `loan:originate:staff` | Reopen one assisted-origination case. |
+| GET | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}` | Staff with `loan:originate:staff` | Reopen one assisted-origination case or reconcile its completed LoanApplication result. |
 | PUT | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/customer` | Staff with `loan:originate:staff` | Associate or replace the selected active Customer while open. |
 | POST | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/abandon` | Staff with `loan:originate:staff` | Terminally abandon an open intake. |
+| POST | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/unsecured-consumer-loan/submit` | Staff with `loan:originate:staff` | Atomically convert an eligible open UCL intake into one Staff-assisted UCL application. |
 | GET | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence` | Staff with `document:upload:intake` and `loan:originate:staff` | Return controlled intake-evidence version metadata without storage keys. |
 | POST | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence/{evidenceType}/versions` | Staff with `document:upload:intake` and `loan:originate:staff` | Upload or replace a controlled intake-evidence version for an open case. |
 | POST | `/api/v1/loan-applications/salary-advance` | `loan:submit` | Submit a Salary Advance application and reserve eligible limit. |
@@ -211,7 +212,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/staff-corrections/tasks?status=OPEN&page=0&size=20` | `loan:correction:staff` | List Staff-owned correction tasks. |
 | POST | `/api/v1/staff-corrections/tasks/{taskId}/complete` | `loan:correction:staff` | Complete a Staff task with proof and maker-checker enforcement. |
 | POST | `/api/v1/staff-corrections/loan-applications/{loanApplicationId}/resubmit` | `loan:correction:staff` | Resubmit an eligible Staff-only or mixed correction. |
-| POST | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions` | `document:upload:staff` | Upload for an open Staff upload task. |
+| POST | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions` | `document:upload:assisted` for initial Staff-assisted `DOCUMENTS_PENDING` evidence; otherwise `document:upload:staff` | Upload initial assisted application evidence or upload for an authorized Staff correction task. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | `document:review` | Stream a review-authorized immutable version. |
 
 ### 2.3 Offers, contracts, disbursement, account, and servicing
@@ -623,7 +624,7 @@ Assisted-origination creation accepts:
 }
 ```
 
-`productCode` is `UNSECURED_CONSUMER_LOAN` or `COLLATERAL_LOAN`. `SALARY_ADVANCE` returns `422 ASSISTED_ORIGINATION_PRODUCT_NOT_ALLOWED`. `customerId` is optional at creation but, when present, must resolve to an active Customer. The response contains `assistedOriginationCaseId`, `productCode`, nullable `customerId`, `status`, creator Staff User ID, and lifecycle timestamps. Creation always returns `OPEN`. This contract exposes no complete command; `COMPLETED` is reserved for the atomic intake-to-LoanApplication conversion contract.
+`productCode` is `UNSECURED_CONSUMER_LOAN` or `COLLATERAL_LOAN`. `SALARY_ADVANCE` returns `422 ASSISTED_ORIGINATION_PRODUCT_NOT_ALLOWED`. `customerId` is optional at creation but, when present, must resolve to an active Customer. The response contains `assistedOriginationCaseId`, `productCode`, nullable `customerId`, `status`, nullable `loanApplicationId`, creator Staff User ID, and lifecycle timestamps. Creation always returns `OPEN`; a successful UCL conversion returns `COMPLETED` with the durable resulting `loanApplicationId`.
 
 Customer association uses `{ "customerId": "..." }`. Association and abandonment lock the intake row and require `OPEN`. Abandonment transitions to `ABANDONED`, records `terminalAt`, and blocks later Customer association or evidence mutation with `409 ASSISTED_ORIGINATION_CASE_NOT_OPEN`. None of these commands creates a LoanApplication, application number, checklist, product verification, review cycle, Approval evidence, offer, contract, or exposure.
 
@@ -637,6 +638,23 @@ Upload is `multipart/form-data` with:
 - required `file` with `application/pdf`, `image/jpeg`, or `image/png`, maximum 10 MiB.
 
 The first upload omits `expectedCurrentVersionId`. Replacement supplies the current version returned by the metadata read. Exact `uploadRequestId` replay returns the existing version. Reuse for different content returns `409 IDEMPOTENCY_KEY_REUSED`; a changed current pointer returns `409 STALE_DOCUMENT_VERSION`. The response contains version ID, sequence, safe original filename, detected media type, byte size, and upload time. Evidence metadata contains logical intake-document ID, case ID, evidence type, current-version ID, and ordered immutable versions. It never exposes storage keys. Intake upload does not require or create an application checklist or correction task and is not authorized by `document:upload:staff`.
+
+UCL conversion is:
+
+```text
+POST /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/unsecured-consumer-loan/submit
+```
+
+```json
+{
+  "requestedAmount": 10000000,
+  "requestedTermMonths": 12
+}
+```
+
+The command locks the case and requires an `OPEN` UCL intake, a selected Customer, current authoritative Customer readiness, a current signed `UCL_PAPER_APPLICATION`, an active UCL product, valid product amount and term, no blocking UCL application, and no outstanding UCL LoanAccount. Success returns `201 Created` and atomically creates one `STAFF_ASSISTED` UCL application in `DOCUMENTS_PENDING`, the normal `INCOME_PROOF`, `BANK_STATEMENT`, and `EMPLOYMENT_PROOF` checklist, the initial `PENDING_MANUAL_REVIEW` verification, lifecycle/audit evidence, and the completed-case application link. The intake paper evidence remains Document-owned and is not copied into the application checklist. Collateral conversion is not exposed by this contract.
+
+The case GET is the authoritative uncertain-result reconciliation read. `COMPLETED` plus a non-null `loanApplicationId` proves success. A client must not automatically repeat the conversion POST after network loss; an authoritative `OPEN` result requires explicit operator confirmation before a new attempt.
 
 ---
 
@@ -662,7 +680,7 @@ Important blockers include Customer/profile/bank readiness, `EMPLOYEE_NOT_VERIFI
 GET /api/v1/loan-applications
 ```
 
-The index requires `loan:read:own`, derives Customer identity from the Bearer token, accepts no `customerId`, and returns only that Customer's applications newest first. Each item contains `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `requestedAmount`, `requestedTermMonths`, `status`, `submittedAt`, `lifecycleActive`, and `requiredAction`.
+The index requires `loan:read:own`, derives Customer identity from the Bearer token, accepts no `customerId`, and returns only that Customer's applications newest first. Each item contains `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `originationChannel`, `requestedAmount`, `requestedTermMonths`, `status`, `submittedAt`, `lifecycleActive`, and `requiredAction`. Existing applications and all Customer submissions are `CUSTOMER_DIGITAL`; converted UCL applications are `STAFF_ASSISTED`.
 
 `lifecycleActive` is false for `VERIFICATION_FAILED`, `REJECTED`, `CUSTOMER_DECLINED`, `DISBURSED`, `CANCELLED`, and `EXPIRED`; it is true for other lifecycle states. `requiredAction` is a server-owned finite value:
 
@@ -1187,6 +1205,10 @@ Upload is multipart with:
 - `file`
 
 Accepted types are PDF, JPEG, and PNG, up to 10 MiB, with signature-to-media-type matching. A stale replacement baseline returns `409 STALE_DOCUMENT_VERSION`.
+
+For a `STAFF_ASSISTED` application in `DOCUMENTS_PENDING`, exact `document:upload:assisted` authority permits initial checklist upload without a correction task. It does not authorize Customer-digital application upload, later correction upload, or another workflow state. `document:upload:staff` retains its correction-task meaning and cannot bypass the initial assisted rule; `document:upload:intake` remains limited to pre-application intake evidence. Exact `uploadRequestId` replay returns the existing logical upload, different logical content returns `409 IDEMPOTENCY_KEY_REUSED`, and replacement must retain the authoritative `expectedCurrentVersionId`. The final missing required upload publishes the established completion event and advances the application from `DOCUMENTS_PENDING` to `SUBMITTED` through the existing Loan workflow.
+
+Customer-owned document upload, correction task/query and resubmission, cancellation, offer response, and contract acknowledgment require `originationChannel = CUSTOMER_DIGITAL`. A Customer attempting those mutations against a `STAFF_ASSISTED` application receives `403 CUSTOMER_DIRECT_ACTION_NOT_ALLOWED`; Customer projections do not advertise those direct actions. Staff-mediated replacements for those later Customer decisions are outside the current contract.
 
 Review targets the exact `documentVersionId` and supports:
 

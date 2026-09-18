@@ -26,11 +26,11 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V56. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted pre-application intake, protected Partner, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
+The physical schema is the result of Flyway migrations V1 through V57. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL intake conversion, protected Partner, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
-The V56 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
+The V57 physical schema does not contain OCR tables, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
 
 The physical `event_publication` table is Spring Modulith infrastructure. It is omitted from the business ERD because it does not own lending state or redefine the synchronous transaction boundaries documented in `MER-ARCH-006-api-request-flow-and-dependencies.md`.
 
@@ -73,6 +73,7 @@ erDiagram
     LOAN_PRODUCT ||--o{ LOAN_APPLICATION : selected_for
     CUSTOMER o|--o{ ASSISTED_ORIGINATION_CASE : selected_for
     LOAN_PRODUCT ||--o{ ASSISTED_ORIGINATION_CASE : selected_for
+    ASSISTED_ORIGINATION_CASE o|--o| LOAN_APPLICATION : completes_as
     ASSISTED_ORIGINATION_CASE ||--o{ INTAKE_DOCUMENT : has
     INTAKE_DOCUMENT ||--|{ INTAKE_DOCUMENT_VERSION : versions
 
@@ -167,10 +168,11 @@ Loan consumes a purpose-limited eligibility snapshot for Salary Advance. Loan ow
 Loan owns `loan_products`, `loan_product_policies`, `loan_product_policy_terms`, `assisted_origination_cases`, and `loan_applications`.
 
 - The product records define the active catalogue, amount range, pricing/configuration values, allowed terms, repayment method, and offer validity used by executable policies.
-- A LoanApplication preserves product code/type and requested terms as historical application facts.
+- A LoanApplication preserves product code/type, `CUSTOMER_DIGITAL` or `STAFF_ASSISTED` origination channel, and requested terms as historical application facts. Salary Advance is constrained to `CUSTOMER_DIGITAL`.
 - Common application state is not split into product-specific application aggregates.
-- An assisted-origination case is an `OPEN`, `COMPLETED`, or `ABANDONED` UCL or Collateral Loan intake. Its Customer association is nullable while open. It records the creating Staff user and timestamps but has no application number, requested terms, verification, review, approval, offer, contract, or financial exposure.
-- The current pre-application contract creates and abandons cases. `COMPLETED` is reserved for the atomic intake-to-LoanApplication conversion contract.
+- An assisted-origination case is an `OPEN`, `COMPLETED`, or `ABANDONED` UCL or Collateral Loan intake. Its Customer association is nullable while open. It records the creating Staff user and timestamps but has no application number, requested terms, verification, review, approval, offer, contract, or financial exposure while open.
+- UCL conversion links one `COMPLETED` case to exactly one `STAFF_ASSISTED` LoanApplication. `OPEN` and `ABANDONED` cases have no application link, completed cases require one, and the linked application cannot be reused by another intake case.
+- The conversion transaction locks the case before creating the application, checklist, pending UCL verification, lifecycle history, link, and audit evidence. Intake-document metadata remains Document-owned evidence and is not copied into Loan persistence.
 
 Product-specific Loan records preserve distinct evidence:
 
