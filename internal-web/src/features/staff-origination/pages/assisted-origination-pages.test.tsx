@@ -62,6 +62,11 @@ const evidence = [{
   }],
 }]
 
+const collateralEvidence = [{
+  ...evidence[0],
+  evidenceType: 'COLLATERAL_PAPER_APPLICATION',
+}]
+
 const uploadedVersion = {
   intakeDocumentVersionId: '66666666-6666-4666-8666-666666666666', versionNumber: 2,
   originalFilename: 'replacement.pdf', detectedMimeType: 'application/pdf', byteSize: 16,
@@ -202,18 +207,127 @@ describe('assisted origination pages', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Create UCL application' })).toBeEnabled())
   })
 
-  it('keeps Collateral conversion explicitly unavailable', async () => {
+  it('offers all Collateral conversion fields only when authoritative prerequisites are present', async () => {
     vi.mocked(api.apiRequest).mockImplementation(async (path) => {
       if (path === `/staff/assisted-originations/${caseId}`) return intake({ productCode: 'COLLATERAL_LOAN' })
-      if (path === `/staff/customers/${customerId}`) return customer
+      if (path === `/staff/customers/${customerId}`) return { ...customer, primaryActiveBankAccountPresent: true }
       if (path === `/staff/customers/${customerId}/bank-accounts`) return []
-      if (path === `/staff/assisted-originations/${caseId}/evidence`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return collateralEvidence
       throw new Error(`Unexpected request ${path}`)
     })
     renderRoute(`/staff/origination/${caseId}`)
 
-    expect(await screen.findByText('Collateral application creation is not available in this workflow yet.')).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Create Collateral Loan application' })).toBeVisible()
+    expect(screen.queryByText('Collateral application creation is not available in this workflow yet.')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Requested amount')).toBeEnabled()
+    expect(screen.getByLabelText('Requested term months')).toBeEnabled()
+    expect(screen.getByLabelText('Collateral type')).toBeEnabled()
+    expect(screen.getByLabelText('Description')).toBeEnabled()
+    expect(screen.getByLabelText('Estimated value')).toBeEnabled()
+    expect(screen.getByLabelText('Ownership status')).toBeEnabled()
+    expect(screen.getByLabelText('Condition note')).toBeEnabled()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create Collateral Loan application' })).toBeEnabled())
     expect(screen.queryByRole('button', { name: 'Create UCL application' })).not.toBeInTheDocument()
+  })
+
+  it('keeps Collateral conversion unavailable while readiness or paper evidence is missing', async () => {
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake({ productCode: 'COLLATERAL_LOAN' })
+      if (path === `/staff/customers/${customerId}`) return customer
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return evidence
+      throw new Error(`Unexpected request ${path}`)
+    })
+    renderRoute(`/staff/origination/${caseId}`)
+
+    expect(await screen.findByText('Primary active bank account: missing')).toBeVisible()
+    expect(screen.getByText('Signed Collateral paper application: missing')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Create Collateral Loan application' })).toBeDisabled()
+  })
+
+  it('submits exactly one structured Collateral after confirmation and exposes the completed application', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    let posts = 0
+    let converted = false
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (path === `/staff/assisted-originations/${caseId}/collateral-loan/submit`) {
+        posts += 1
+        expect(options?.body).toEqual({
+          requestedAmount: 25_000_000,
+          requestedTermMonths: 12,
+          collateral: {
+            type: 'MOTORBIKE', description: '2024 motorbike', estimatedValue: 35_000_000,
+            ownershipStatus: 'Owned by Customer', conditionNote: 'Normal used condition',
+          },
+        })
+        expect(options?.body).not.toHaveProperty('customerId')
+        expect(options?.body).not.toHaveProperty('originationChannel')
+        converted = true
+        return intake({ productCode: 'COLLATERAL_LOAN', status: 'COMPLETED', loanApplicationId, terminalAt: '2026-09-17T09:00:00' })
+      }
+      if (path === `/staff/assisted-originations/${caseId}`) return converted
+        ? intake({ productCode: 'COLLATERAL_LOAN', status: 'COMPLETED', loanApplicationId, terminalAt: '2026-09-17T09:00:00' })
+        : intake({ productCode: 'COLLATERAL_LOAN' })
+      if (path === `/staff/customers/${customerId}`) return { ...customer, primaryActiveBankAccountPresent: true }
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return collateralEvidence
+      if (path === '/staff/assisted-originations?status=OPEN') return []
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+    await user.type(await screen.findByLabelText('Requested amount'), '25000000')
+    await user.type(screen.getByLabelText('Requested term months'), '12')
+    await user.type(screen.getByLabelText('Description'), '2024 motorbike')
+    await user.type(screen.getByLabelText('Estimated value'), '35000000')
+    await user.type(screen.getByLabelText('Ownership status'), 'Owned by Customer')
+    await user.type(screen.getByLabelText('Condition note'), 'Normal used condition')
+    await user.click(screen.getByRole('button', { name: 'Create Collateral Loan application' }))
+
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(await screen.findByRole('link', { name: 'Open application documents' })).toHaveAttribute(
+      'href', `/staff/applications/${loanApplicationId}/documents`,
+    )
+    expect(screen.getByRole('button', { name: 'Save profile' })).toBeDisabled()
+    expect(posts).toBe(1)
+  })
+
+  it('reconciles a lost Collateral conversion without automatically repeating the POST', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    let caseReads = 0
+    let posts = 0
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}/collateral-loan/submit`) {
+        posts += 1
+        throw new NetworkError()
+      }
+      if (path === `/staff/assisted-originations/${caseId}`) {
+        caseReads += 1
+        return caseReads === 1 ? intake({ productCode: 'COLLATERAL_LOAN' }) : intake({
+          productCode: 'COLLATERAL_LOAN', status: 'COMPLETED', loanApplicationId,
+          terminalAt: '2026-09-17T09:00:00',
+        })
+      }
+      if (path === `/staff/customers/${customerId}`) return { ...customer, primaryActiveBankAccountPresent: true }
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return collateralEvidence
+      if (path === '/staff/assisted-originations?status=OPEN') return []
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+    await user.type(await screen.findByLabelText('Requested amount'), '25000000')
+    await user.type(screen.getByLabelText('Requested term months'), '12')
+    await user.type(screen.getByLabelText('Description'), '2024 motorbike')
+    await user.type(screen.getByLabelText('Estimated value'), '35000000')
+    await user.type(screen.getByLabelText('Ownership status'), 'Owned by Customer')
+    await user.type(screen.getByLabelText('Condition note'), 'Normal used condition')
+    await user.click(screen.getByRole('button', { name: 'Create Collateral Loan application' }))
+
+    expect(await screen.findByRole('link', { name: 'Open application documents' })).toHaveAttribute(
+      'href', `/staff/applications/${loanApplicationId}/documents`,
+    )
+    expect(posts).toBe(1)
   })
 
   it('submits amount and term once and makes the completed application link authoritative', async () => {

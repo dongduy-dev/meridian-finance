@@ -2,7 +2,7 @@ import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import {
   assistedOriginationSchema, bankAccountSchema, intakeEvidenceSchema, intakeVersionSchema, staffCustomerSchema,
   type AssistedOrigination, type BankAccount, type CustomerProfileInput,
-  type IntakeEvidence, type IntakeEvidenceVersion, type StaffCustomer,
+  type CollateralLoanInput, type IntakeEvidence, type IntakeEvidenceVersion, type StaffCustomer,
 } from './contracts'
 
 export async function listOpenIntakes(manager: AuthSessionManager): Promise<AssistedOrigination[]> {
@@ -29,6 +29,16 @@ export async function submitUclIntake(
 ): Promise<AssistedOrigination> {
   return assistedOriginationSchema.parse(await manager.protectedRequest(
     `/staff/assisted-originations/${id}/unsecured-consumer-loan/submit`,
+    { method: 'POST', body: input },
+  ))
+}
+export async function submitCollateralIntake(
+  manager: AuthSessionManager,
+  id: string,
+  input: CollateralLoanInput,
+): Promise<AssistedOrigination> {
+  return assistedOriginationSchema.parse(await manager.protectedRequest(
+    `/staff/assisted-originations/${id}/collateral-loan/submit`,
     { method: 'POST', body: input },
   ))
 }
