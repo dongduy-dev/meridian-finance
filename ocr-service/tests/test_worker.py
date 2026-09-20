@@ -8,6 +8,7 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 from meridian_ocr.crypto import OcrResultCipher
+from meridian_ocr.intake_extractor import IntakeFieldExtractor
 from meridian_ocr.models import ClaimedJob, FailureCategory, OcrProviderResult
 from meridian_ocr.storage import DocumentObjectStore
 from meridian_ocr.worker import OcrWorker
@@ -50,7 +51,6 @@ def test_success_encrypts_all_sensitive_payloads_before_persistence(tmp_path: Pa
     provider.process.return_value = OcrProviderResult(
         extracted_text="identity 123456789",
         normalized_layout={"pages": [{"text": "identity 123456789"}]},
-        structured_suggestions=[],
         confidence=0.9,
         provider="TEST",
         processor_name="test-provider",
@@ -75,6 +75,7 @@ def _worker(repository: Mock, provider: Mock, storage_root: Path) -> OcrWorker:
         repository,
         DocumentObjectStore(storage_root),
         provider,
+        IntakeFieldExtractor(),
         cipher,
         "worker",
         60,

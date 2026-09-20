@@ -113,7 +113,7 @@ describe('assisted origination pages', () => {
         accountNumberLastFour: '7890', status: 'ACTIVE', primaryAccount: true,
         createdAt: '2026-09-17T08:20:00', updatedAt: '2026-09-17T08:20:00', deactivatedAt: null,
       }
-      if (path.includes('/evidence/UCL_PAPER_APPLICATION/versions')) return {
+      if (path.endsWith('/evidence/UCL_PAPER_APPLICATION/versions')) return {
         intakeDocumentVersionId: '66666666-6666-4666-8666-666666666666', versionNumber: 2,
         originalFilename: 'replacement.pdf', detectedMimeType: 'application/pdf', byteSize: 16,
         uploadedAt: '2026-09-17T08:30:00',
@@ -417,6 +417,38 @@ describe('assisted origination pages', () => {
     expect(vi.mocked(api.apiRequest).mock.calls.map(requestPath)).toEqual([`/staff/assisted-originations/${caseId}`])
   })
 
+  it('keeps reviewed OCR suggestions separate from existing Customer and Loan forms', async () => {
+    const ocrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return customer
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return evidence
+      if (path === ocrBase) return {
+        ocrJobId: '44444444-4444-4444-8444-444444444445', intakeDocumentVersionId: versionId,
+        state: 'COMPLETED', disposition: 'PENDING_REVIEW', attemptCount: 1, failureCategory: null,
+        createdAt: '2026-09-20T08:00:00', updatedAt: '2026-09-20T08:01:00',
+        completedAt: '2026-09-20T08:01:00', failedAt: null,
+      }
+      if (path === `${ocrBase}/review`) return {
+        ocrResultId: '55555555-5555-4555-8555-555555555555', evidenceType: 'UCL_PAPER_APPLICATION',
+        disposition: 'PENDING_REVIEW', suggestions: [
+          { fieldName: 'fullName', proposedValue: 'OCR Applicant', confidence: 0.95 },
+          { fieldName: 'requestedAmount', proposedValue: '9999999', confidence: 0.94 },
+        ], reviewedFields: {}, reviewedAt: null,
+      }
+      throw new Error(`Unexpected request ${path}`)
+    })
+    renderRoute(`/staff/origination/${caseId}`)
+
+    await waitFor(() => expect(screen.getAllByLabelText('Full name')).toHaveLength(2))
+    const fullNames = screen.getAllByLabelText('Full name')
+    expect(fullNames[0]).toHaveValue('Paper Customer')
+    expect(fullNames[1]).toHaveValue('OCR Applicant')
+    const requestedAmounts = screen.getAllByLabelText('Requested amount')
+    expect(requestedAmounts.find((input) => input.getAttribute('type') === 'number')).toHaveValue(null)
+  })
+
   it('renders a safe retryable load error without exposing backend detail', async () => {
     vi.mocked(api.apiRequest).mockRejectedValue(new ApiError(
       503, 'SERVICE_UNAVAILABLE', 'unsafe database detail', `/staff/assisted-originations/${caseId}`,
@@ -435,7 +467,7 @@ describe('assisted origination pages', () => {
       if (path === `/staff/customers/${customerId}`) return customer
       if (path === `/staff/customers/${customerId}/bank-accounts`) return []
       if (path === `/staff/assisted-originations/${caseId}/evidence`) return uploads.length ? evidence : []
-      if (path.includes('/evidence/UCL_PAPER_APPLICATION/versions')) {
+      if (path.endsWith('/evidence/UCL_PAPER_APPLICATION/versions')) {
         uploads.push((options as { body: FormData }).body)
         if (uploads.length === 1) throw new NetworkError()
         return uploadedVersion
@@ -473,7 +505,7 @@ describe('assisted origination pages', () => {
         evidenceReads += 1
         return evidenceReads === 1 ? [] : evidence
       }
-      if (path.includes('/evidence/UCL_PAPER_APPLICATION/versions')) {
+      if (path.endsWith('/evidence/UCL_PAPER_APPLICATION/versions')) {
         uploads.push((options as { body: FormData }).body)
         if (uploads.length === 1) throw new NetworkError()
         return uploadedVersion
@@ -510,7 +542,7 @@ describe('assisted origination pages', () => {
       if (path === `/staff/customers/${customerId}`) return customer
       if (path === `/staff/customers/${customerId}/bank-accounts`) return []
       if (path === `/staff/assisted-originations/${caseId}/evidence`) return []
-      if (path.includes('/evidence/UCL_PAPER_APPLICATION/versions')) {
+      if (path.endsWith('/evidence/UCL_PAPER_APPLICATION/versions')) {
         uploads.push((options as { body: FormData }).body)
         throw new NetworkError()
       }
@@ -538,7 +570,7 @@ describe('assisted origination pages', () => {
       if (path === `/staff/customers/${customerId}`) return customer
       if (path === `/staff/customers/${customerId}/bank-accounts`) return []
       if (path === `/staff/assisted-originations/${caseId}/evidence`) { evidenceReads += 1; return evidence }
-      if (path.includes('/evidence/UCL_PAPER_APPLICATION/versions')) {
+      if (path.endsWith('/evidence/UCL_PAPER_APPLICATION/versions')) {
         const body = (options as { body: FormData }).body
         ids.push(body.get('uploadRequestId'))
         throw new ApiError(409, stale ? 'STALE_DOCUMENT_VERSION' : 'IDEMPOTENCY_KEY_REUSED', 'Conflict', String(path), '2026-09-17T08:00:00Z')

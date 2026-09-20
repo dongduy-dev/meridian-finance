@@ -152,7 +152,7 @@ For either frontend, verification commands are `npm run lint`, `npm run typechec
 <details>
 <summary>Local secret generation and runtime notes</summary>
 
-`meridian-platform/.env.example` is the local backend configuration inventory. At minimum, set `POSTGRES_PASSWORD`, the three required Base64-encoded symmetric key values, and a matching JWT private/public key pair before starting the default backend. The optional OCR profile also requires a separate Base64-encoded 32-byte `MERIDIAN_OCR_RESULT_ENCRYPTION_KEY`.
+`meridian-platform/.env.example` is the local backend configuration inventory. At minimum, set `POSTGRES_PASSWORD`, the three required Base64-encoded symmetric key values, and a matching JWT private/public key pair before starting the default backend. Optional OCR processing and Staff review use a separate Base64-encoded 32-byte `MERIDIAN_OCR_RESULT_ENCRYPTION_KEY`; its absence keeps manual intake and backend startup available while OCR review fails closed.
 
 Generate each local symmetric key with one of these commands and run the selected command three times for the default environment, or four times when configuring OCR:
 
@@ -344,7 +344,7 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 - [x] Google Document AI Enterprise Document OCR provider adapter
 - [x] Provider-normalized page, line, token, confidence, and layout preservation
 - [x] Explicit Staff request for an exact current intake version with PostgreSQL-backed claim, lease, retry, and encrypted result persistence
-- [ ] Authorized Staff review/correction experience for OCR-assisted results
+- [x] Authorized Staff review/correction experience for OCR-assisted results
 - [ ] Application of explicitly reviewed suggestions through existing Customer and Loan commands
 
 ### Phase 3 — Customer and Internal Web Experience

@@ -84,7 +84,7 @@ This blueprint does not define or authorize:
 - Staff Web source code, React scaffolding, package installation, or deployment;
 - Back-Office Administration product, Partner, user, role, permission, or configuration screens;
 - backend endpoint or schema changes;
-- OCR execution or OCR-result screens;
+- a separate enterprise OCR console or application of OCR-reviewed values to Customer or Loan forms;
 - automated credit, collateral valuation, loan-to-value, or risk decisions;
 - Customer Web screens;
 - bank, payment-provider, payroll, reconciliation, ledger, or collections integrations;
@@ -216,7 +216,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 
 | Workspace | Commands available now |
 |---|---|
-| Assisted origination | Create/reopen/associate/abandon UCL or Collateral intake; create and maintain the selected Customer; manage masked bank accounts; upload or replace controlled paper intake evidence; convert an eligible UCL or Collateral case into one Staff-assisted LoanApplication |
+| Assisted origination | Create/reopen/associate/abandon UCL or Collateral intake; create and maintain the selected Customer; manage masked bank accounts; upload or replace controlled paper intake evidence; explicitly request OCR, monitor safe status, and finalize corrected structured suggestions beside the current evidence version; convert an eligible UCL or Collateral case into one Staff-assisted LoanApplication |
 | Verification | Start and complete UCL verification; start and complete exact numbered Collateral verification |
 | Review and approval | Start review; submit recommendation; submit independent decision |
 | Documents | Review the exact current version; waive with added permission; request replacement; stream known content; upload an initial Staff-assisted UCL or Collateral checklist document with `document:upload:assisted`; upload for an open correction task with `document:upload:staff` |
@@ -657,7 +657,7 @@ Staff Web must not expose or log raw:
 
 - salary, identity references, employee codes, or protected verification evidence;
 - bank-account numbers except in the explicit destination-reveal surface;
-- document binary content, OCR text, or extracted identity evidence;
+- document binary content, raw OCR text, normalized OCR layout, or provider response content; allowlisted OCR suggestions and reviewed values remain confined to the zero-retention assisted-intake review projection;
 - correction contents or internal reviewer notes outside the authorized workspace;
 - canonical external transfer/payment references after submission;
 - request UUIDs, internal operation IDs, actor IDs, audit IDs, encryption details, fingerprints, storage keys, or provider paths unless an API deliberately exposes a safe operational identifier.
@@ -1504,7 +1504,7 @@ Staff FE checkpoints deliver the Staff Web feature area inside `internal-web/`. 
 - block Customer-owned correction, cancellation, offer-response, contract-acknowledgment, and checklist-mutation commands for Staff-assisted applications until a Staff-mediated contract is delivered;
 - reconcile conversion uncertainty through GET without automatic POST retry, and preserve exact document-upload replay only for the unchanged operation and file.
 
-This checkpoint is executable for UCL. Paper Origination CP3 extends the same controlled workflow to Collateral Loan conversion. The Document backend owns explicit OCR execution separately; Staff extraction controls, OCR review/correction, application of reviewed suggestions, and Staff-mediated downstream Customer decisions remain deferred and are tracked separately.
+This checkpoint is executable for UCL. Paper Origination CP3 extends the same controlled workflow to Collateral Loan conversion. The assisted-intake workspace also places explicit OCR extraction, active-only polling, controlled failure/manual fallback, and immutable Staff review/correction beside each current evidence version. Reviewed values remain separate from Customer, bank-account, UCL, and Collateral forms until the tracked application checkpoint.
 
 ### Staff FE-CP1 — Internal Foundation
 

@@ -87,7 +87,6 @@ def test_result_insert_and_completion_are_atomic_and_exactly_once(database_repos
     result = OcrProviderResult(
         extracted_text="not persisted directly",
         normalized_layout={"pages": []},
-        structured_suggestions=[],
         confidence=0.91,
         provider="TEST",
         processor_name="synthetic",
@@ -127,7 +126,6 @@ def test_expired_worker_cannot_complete_or_record_failure(database_repository) -
     result = OcrProviderResult(
         extracted_text="not persisted directly",
         normalized_layout={"pages": []},
-        structured_suggestions=[],
         confidence=0.91,
         provider="TEST",
         processor_name="synthetic",
