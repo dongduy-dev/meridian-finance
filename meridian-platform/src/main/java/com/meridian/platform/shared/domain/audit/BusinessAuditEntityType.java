@@ -27,5 +27,6 @@ public enum BusinessAuditEntityType {
     IDENTITY_USER,
     ASSISTED_ORIGINATION_CASE,
     INTAKE_DOCUMENT_VERSION,
-    OCR_JOB
+    OCR_JOB,
+    OCR_REVIEW
 }

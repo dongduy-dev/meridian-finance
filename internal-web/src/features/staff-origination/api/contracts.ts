@@ -48,11 +48,39 @@ export const intakeEvidenceSchema = z.object({
   currentVersionId: uuidSchema.nullable(), versions: z.array(intakeVersionSchema),
 })
 
+export const intakeOcrJobSchema = z.object({
+  ocrJobId: uuidSchema,
+  intakeDocumentVersionId: uuidSchema,
+  state: z.enum(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED']),
+  disposition: z.enum(['HIGH_CONFIDENCE', 'PENDING_REVIEW', 'REVIEWED']).nullable(),
+  attemptCount: z.number().int().nonnegative(),
+  failureCategory: z.string().nullable(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+  completedAt: timestampSchema.nullable(),
+  failedAt: timestampSchema.nullable(),
+}).strict()
+
+const intakeOcrSuggestionSchema = z.object({
+  fieldName: z.string(), proposedValue: z.string(), confidence: z.number().min(0).max(1).nullable(),
+}).strict()
+
+export const intakeOcrReviewSchema = z.object({
+  ocrResultId: uuidSchema,
+  evidenceType: z.enum(['CUSTOMER_IDENTITY', 'UCL_PAPER_APPLICATION', 'COLLATERAL_PAPER_APPLICATION']),
+  disposition: z.enum(['HIGH_CONFIDENCE', 'PENDING_REVIEW', 'REVIEWED']),
+  suggestions: z.array(intakeOcrSuggestionSchema),
+  reviewedFields: z.record(z.string(), z.string()),
+  reviewedAt: timestampSchema.nullable(),
+}).strict()
+
 export type AssistedOrigination = z.infer<typeof assistedOriginationSchema>
 export type StaffCustomer = z.infer<typeof staffCustomerSchema>
 export type BankAccount = z.infer<typeof bankAccountSchema>
 export type IntakeEvidence = z.infer<typeof intakeEvidenceSchema>
 export type IntakeEvidenceVersion = z.infer<typeof intakeVersionSchema>
+export type IntakeOcrJob = z.infer<typeof intakeOcrJobSchema>
+export type IntakeOcrReview = z.infer<typeof intakeOcrReviewSchema>
 
 export type CustomerProfileInput = {
   fullName: string; identityReference?: string; phoneNumber: string; residentialAddress: string;

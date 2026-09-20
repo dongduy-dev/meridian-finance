@@ -31,7 +31,7 @@ def test_maps_google_document_to_provider_neutral_result() -> None:
     client.process_document.return_value = documentai.ProcessResponse(document=document)
     provider = GoogleDocumentAiProvider("project", "us", "processor", client=client)
 
-    result = provider.process(b"%PDF-test", "application/pdf", "CUSTOMER_IDENTITY", "trace")
+    result = provider.process(b"%PDF-test", "application/pdf", "trace")
 
     assert result.provider == "GOOGLE_DOCUMENT_AI"
     assert result.processor_name == "Enterprise Document OCR"
@@ -39,7 +39,6 @@ def test_maps_google_document_to_provider_neutral_result() -> None:
     assert result.extracted_text == "Xin chao Meridian"
     assert result.normalized_layout["pages"][0]["lines"][0]["text"] == "Xin chao"
     assert result.confidence == pytest.approx(0.96)
-    assert result.structured_suggestions == []
     request = client.process_document.call_args.kwargs["request"]
     assert request.name == "projects/project/locations/us/processors/processor"
 

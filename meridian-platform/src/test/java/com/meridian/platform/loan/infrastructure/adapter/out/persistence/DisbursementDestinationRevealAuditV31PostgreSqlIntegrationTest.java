@@ -56,7 +56,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     @Test
     void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
-        assertEquals("58", latestVersion(SCHEMA));
+        assertEquals("59", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -220,6 +220,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
                     && action != BusinessAuditAction.OCR_JOB_CREATED
+                    && action != BusinessAuditAction.OCR_RESULT_REVIEWED
                     && !isStaffAssistedOriginationAction(action)) {
                 insertAuditEvent(schema, action.name());
             }
@@ -251,6 +252,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
                     && action != BusinessAuditAction.OCR_JOB_CREATED
+                    && action != BusinessAuditAction.OCR_RESULT_REVIEWED
                     && !isStaffAssistedOriginationAction(action)) {
                 insertAuditEvent(schema, action.name());
             }

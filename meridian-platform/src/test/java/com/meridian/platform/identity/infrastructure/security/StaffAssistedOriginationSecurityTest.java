@@ -4,6 +4,7 @@ import com.meridian.platform.customer.application.port.in.StaffCustomerIntakeUse
 import com.meridian.platform.customer.infrastructure.adapter.in.web.StaffCustomerIntakeController;
 import com.meridian.platform.document.application.port.in.ManageIntakeEvidenceUseCase;
 import com.meridian.platform.document.application.port.in.ManageIntakeOcrUseCase;
+import com.meridian.platform.document.application.port.in.ManageIntakeOcrReviewUseCase;
 import com.meridian.platform.document.infrastructure.adapter.in.web.StaffIntakeEvidenceController;
 import com.meridian.platform.document.infrastructure.adapter.in.web.StaffIntakeOcrController;
 import com.meridian.platform.loan.application.port.in.ManageAssistedOriginationUseCase;
@@ -51,6 +52,7 @@ class StaffAssistedOriginationSecurityTest {
     @MockitoBean StartAssistedCollateralLoanUseCase assistedCollateral;
     @MockitoBean ManageIntakeEvidenceUseCase evidence;
     @MockitoBean ManageIntakeOcrUseCase ocr;
+    @MockitoBean ManageIntakeOcrReviewUseCase ocrReview;
 
     @Test
     void exactPermissionsProtectEachBoundary() throws Exception {
@@ -112,6 +114,22 @@ class StaffAssistedOriginationSecurityTest {
                 .andExpect(status().isOk());
         mockMvc.perform(get(path, caseId, versionId)
                         .with(user("staff").authorities(new SimpleGrantedAuthority("document:upload:intake"))))
+                .andExpect(status().isOk());
+
+        String reviewPath = path + "/review";
+        mockMvc.perform(get(reviewPath, caseId, versionId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get(reviewPath, caseId, versionId)
+                        .with(user("staff").authorities(new SimpleGrantedAuthority("document:upload:staff"))))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(reviewPath, caseId, versionId)
+                        .with(user("staff").authorities(new SimpleGrantedAuthority("document:upload:intake"))))
+                .andExpect(status().isOk());
+        mockMvc.perform(post(reviewPath, caseId, versionId)
+                        .with(user("staff").authorities(new SimpleGrantedAuthority("document:upload:intake")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedOcrResultId\":\"" + UUID.randomUUID()
+                                + "\",\"reviewedFields\":{}}"))
                 .andExpect(status().isOk());
     }
 

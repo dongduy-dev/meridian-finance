@@ -33,7 +33,6 @@ class ClaimedJob:
 class OcrProviderResult:
     extracted_text: str
     normalized_layout: dict[str, Any]
-    structured_suggestions: list[dict[str, Any]]
     confidence: float | None
     provider: str
     processor_name: str

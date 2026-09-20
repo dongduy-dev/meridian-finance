@@ -1,8 +1,10 @@
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import {
-  assistedOriginationSchema, bankAccountSchema, intakeEvidenceSchema, intakeVersionSchema, staffCustomerSchema,
+  assistedOriginationSchema, bankAccountSchema, intakeEvidenceSchema, intakeOcrJobSchema,
+  intakeOcrReviewSchema, intakeVersionSchema, staffCustomerSchema,
   type AssistedOrigination, type BankAccount, type CustomerProfileInput,
-  type CollateralLoanInput, type IntakeEvidence, type IntakeEvidenceVersion, type StaffCustomer,
+  type CollateralLoanInput, type IntakeEvidence, type IntakeEvidenceVersion, type IntakeOcrJob,
+  type IntakeOcrReview, type StaffCustomer,
 } from './contracts'
 
 export async function listOpenIntakes(manager: AuthSessionManager): Promise<AssistedOrigination[]> {
@@ -70,4 +72,31 @@ export async function uploadEvidence(manager: AuthSessionManager, id: string, ev
   const data = new FormData(); data.set('file', file); data.set('uploadRequestId', uploadRequestId)
   if (expected) data.set('expectedCurrentVersionId', expected)
   return intakeVersionSchema.parse(await manager.protectedRequest(`/staff/assisted-originations/${id}/evidence/${evidenceType}/versions`, { method: 'POST', body: data }))
+}
+
+const ocrPath = (caseId: string, evidenceType: string, versionId: string) =>
+  `/staff/assisted-originations/${caseId}/evidence/${evidenceType}/versions/${versionId}/ocr`
+
+export async function getIntakeOcrStatus(manager: AuthSessionManager, caseId: string, evidenceType: string, versionId: string): Promise<IntakeOcrJob> {
+  return intakeOcrJobSchema.parse(await manager.protectedRequest(ocrPath(caseId, evidenceType, versionId)))
+}
+
+export async function startIntakeOcr(manager: AuthSessionManager, caseId: string, evidenceType: string, versionId: string): Promise<IntakeOcrJob> {
+  return intakeOcrJobSchema.parse(await manager.protectedRequest(ocrPath(caseId, evidenceType, versionId), { method: 'POST' }))
+}
+
+export async function getIntakeOcrReview(manager: AuthSessionManager, caseId: string, evidenceType: string, versionId: string): Promise<IntakeOcrReview> {
+  return intakeOcrReviewSchema.parse(await manager.protectedRequest(`${ocrPath(caseId, evidenceType, versionId)}/review`))
+}
+
+export async function finalizeIntakeOcrReview(
+  manager: AuthSessionManager,
+  caseId: string,
+  evidenceType: string,
+  versionId: string,
+  input: { expectedOcrResultId: string; reviewedFields: Record<string, string> },
+): Promise<IntakeOcrReview> {
+  return intakeOcrReviewSchema.parse(await manager.protectedRequest(
+    `${ocrPath(caseId, evidenceType, versionId)}/review`, { method: 'POST', body: input },
+  ))
 }

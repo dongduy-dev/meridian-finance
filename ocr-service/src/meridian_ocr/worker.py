@@ -4,6 +4,7 @@ import hashlib
 import json
 
 from .crypto import OcrResultCipher
+from .intake_extractor import IntakeFieldExtractor
 from .models import FailureCategory, OcrProcessingError
 from .provider import OcrProvider
 from .repository import OcrJobRepository
@@ -16,6 +17,7 @@ class OcrWorker:
         repository: OcrJobRepository,
         storage: DocumentObjectStore,
         provider: OcrProvider,
+        extractor: IntakeFieldExtractor,
         cipher: OcrResultCipher,
         worker_id: str,
         lease_seconds: int,
@@ -26,6 +28,7 @@ class OcrWorker:
         self._repository = repository
         self._storage = storage
         self._provider = provider
+        self._extractor = extractor
         self._cipher = cipher
         self._worker_id = worker_id
         self._lease_seconds = lease_seconds
@@ -51,8 +54,10 @@ class OcrWorker:
             result = self._provider.process(
                 document_bytes,
                 job.source_mime_type,
-                job.evidence_type,
                 str(job.trace_id),
+            )
+            structured_suggestions = self._extractor.extract(
+                job.evidence_type, result.normalized_layout
             )
             confidence = result.confidence
             disposition = (
@@ -65,7 +70,7 @@ class OcrWorker:
                 result,
                 self._cipher.encrypt(result.extracted_text),
                 self._cipher.encrypt(_json(result.normalized_layout)),
-                self._cipher.encrypt(_json(result.structured_suggestions)),
+                self._cipher.encrypt(_json(structured_suggestions)),
                 disposition,
             )
         except OcrProcessingError as exc:

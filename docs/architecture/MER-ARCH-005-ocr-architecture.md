@@ -59,6 +59,8 @@ Document application
     ← Python OCR worker
     → provider-neutral OcrProvider
     → Google Document AI Enterprise Document OCR adapter
+    → provider-neutral IntakeFieldExtractor
+    → encrypted structured suggestions
 ```
 
 The worker may process Document-owned OCR jobs and results. It must not access another context's tables, repositories, or business state.
@@ -112,7 +114,7 @@ The client communicates only with the Spring Boot API. The OCR worker has no pub
 
 Direct worker access is limited to the Document-owned OCR queue, OCR result records, and assigned storage objects. Document Management remains authoritative for the resulting document workflow.
 
-The worker invokes OCR through `OcrProvider`. `GoogleDocumentAiProvider` is the selected MVP adapter for Google Document AI Enterprise Document OCR. A later provider may replace that adapter without changing the job lifecycle, persistence ownership, Staff API, review contract, Customer, or Loan.
+The worker invokes OCR through `OcrProvider`. `GoogleDocumentAiProvider` is the selected MVP adapter for Google Document AI Enterprise Document OCR. After provider normalization, `IntakeFieldExtractor` applies conservative Meridian form labels and normalized-layout evidence to produce the canonical intake-field suggestions. A later provider may replace the Google adapter without changing extraction rules, job lifecycle, persistence ownership, Staff API, review contract, Customer, or Loan.
 
 ---
 
@@ -198,7 +200,9 @@ OCR results remain evidence attached to a document version. They must not direct
 - decide document-processing readiness
 - approve, reject, or transition a LoanApplication
 
-An authorized reviewer may use OCR output to inspect a document faster, correct extracted fields, and support a Document-owned review decision.
+An authorized Staff reviewer receives only the allowlisted structured suggestions for the controlled evidence type. The reviewer may correct a suggestion, enter a missing value, omit an unusable value, and finalize one immutable review per OCR result. Document encrypts the reviewed field map with the dedicated OCR key, preserves the result's pre-review disposition, and transitions the result to `REVIEWED` in the same transaction. Exact replay returns the existing review; a changed replay conflicts.
+
+The browser contract does not disclose raw OCR text, normalized layout, ciphertext, storage keys, or provider response content. A historical result remains readable through its case/evidence/version relationship, but only the current version of an open assisted-intake case may receive a new review. Reviewed values remain advisory Document evidence; applying them through Customer or Loan commands is a separate workflow.
 
 ---
 

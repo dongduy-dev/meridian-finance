@@ -12,6 +12,5 @@ class OcrProvider(Protocol):
         self,
         document_bytes: bytes,
         mime_type: str,
-        evidence_type: str,
         trace_id: str,
     ) -> OcrProviderResult: ...

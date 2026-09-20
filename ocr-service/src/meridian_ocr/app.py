@@ -10,6 +10,7 @@ from fastapi import FastAPI, Response, status
 from .config import Settings
 from .crypto import OcrResultCipher
 from .google_provider import GoogleDocumentAiProvider
+from .intake_extractor import IntakeFieldExtractor
 from .repository import OcrJobRepository
 from .storage import DocumentObjectStore
 from .worker import OcrWorker
@@ -37,6 +38,7 @@ class Runtime:
                 repository,
                 DocumentObjectStore(settings.document_storage_root),
                 provider,
+                IntakeFieldExtractor(),
                 cipher,
                 settings.worker_id,
                 settings.lease_seconds,

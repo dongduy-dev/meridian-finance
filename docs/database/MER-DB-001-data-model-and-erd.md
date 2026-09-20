@@ -18,7 +18,7 @@ The logical model covers:
 - the common LoanApplication lifecycle for Salary Advance, Unsecured Consumer Loan, and Collateral Loan;
 - product-specific application facts, verification, and Salary Advance exposure;
 - review, correction, recommendation, and approval evidence;
-- document checklists, logical documents, immutable versions, review decisions, and intake OCR jobs/results;
+- document checklists, logical documents, immutable versions, review decisions, and intake OCR jobs/results/reviews;
 - approved offers, operational contracts, protected contract-bound destinations, manual disbursement, LoanAccounts, final schedules, repayment, overdue state, settlement, and closure;
 - append-only business audit and lifecycle histories.
 
@@ -26,11 +26,11 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V58. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion, Document-owned OCR processing, protected Partner, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
+The physical schema is the result of Flyway migrations V1 through V59. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion, Document-owned OCR processing and Staff review, protected Partner, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
-The V58 physical schema contains OCR processing jobs and encrypted results, but not Staff OCR review records. It does not contain a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
+The V59 physical schema contains OCR processing jobs, encrypted results, and encrypted immutable Staff reviews. It does not contain application of reviewed values to Customer or Loan, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
 
 The physical `event_publication` table is Spring Modulith infrastructure. It is omitted from the business ERD because it does not own lending state or redefine the synchronous transaction boundaries documented in `MER-ARCH-006-api-request-flow-and-dependencies.md`.
 
@@ -211,7 +211,7 @@ Approval owns `review_recommendations` and `approval_decisions`.
 
 ### 6.7 Document
 
-Document owns `document_checklists`, `document_checklist_items`, `documents`, `document_versions`, `document_review_decisions`, `intake_documents`, `intake_document_versions`, `ocr_jobs`, and `ocr_results`.
+Document owns `document_checklists`, `document_checklist_items`, `documents`, `document_versions`, `document_review_decisions`, `intake_documents`, `intake_document_versions`, `ocr_jobs`, `ocr_results`, and `ocr_reviews`.
 
 - A checklist belongs to one LoanApplication and checklist stage and contains product-resolved items.
 - One logical document belongs to a checklist item and points to its current immutable version.
@@ -364,9 +364,9 @@ Physical indexes belong in Flyway and the schema snapshot. The logical model req
 
 Planned concepts remain outside the current ERD and physical-schema claim.
 
-### 11.1 OCR Review and Application
+### 11.1 Application of Reviewed OCR Suggestions
 
-OCR job execution and encrypted result persistence are part of the current Document model. Staff review/correction records and purpose-limited application of reviewed suggestions into Customer or Loan commands remain planned. OCR remains advisory and asynchronous; no OCR job, result, or future review record is authoritative for Customer consent, identity verification, document acceptance, waiver, checklist readiness, product verification, or lending decisions.
+OCR job execution, encrypted result persistence, and immutable encrypted Staff review/correction records are part of the current Document model. Purpose-limited application of reviewed suggestions through Customer or Loan commands remains planned. OCR remains advisory and asynchronous; no OCR job, result, or review record is authoritative for Customer consent, identity verification, document acceptance, waiver, checklist readiness, product verification, or lending decisions.
 
 ### 11.2 External Financial and Operational Records
 

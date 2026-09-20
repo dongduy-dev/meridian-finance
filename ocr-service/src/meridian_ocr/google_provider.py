@@ -52,10 +52,9 @@ class GoogleDocumentAiProvider:
         self,
         document_bytes: bytes,
         mime_type: str,
-        evidence_type: str,
         trace_id: str,
     ) -> OcrProviderResult:
-        del evidence_type, trace_id
+        del trace_id
         if not self.is_ready():
             raise OcrProcessingError(FailureCategory.PROVIDER_UNAVAILABLE, retryable=True)
         request = documentai.ProcessRequest(
@@ -81,7 +80,6 @@ class GoogleDocumentAiProvider:
         return OcrProviderResult(
             extracted_text=document.text or "",
             normalized_layout={"pages": pages},
-            structured_suggestions=[],
             confidence=confidence,
             provider=self.PROVIDER,
             processor_name=self.PROCESSOR_MODEL,
