@@ -986,7 +986,7 @@ Document review workspace composition:
 
 `WAIVE_DOCUMENT` appears only with `document:waive`. Replacement requires the controlled replacement reason and Customer-visible instruction. Restricted Staff notes are labeled separately. Reviewing a stale version never switches to the new version automatically.
 
-Manual review is the current process. `MER-FU-033` tracks OCR; no OCR confidence, extracted text, retry, or override controls belong in this blueprint.
+Manual review remains authoritative. The backend can start OCR for an exact current intake-evidence version and return safe job status, but Staff Web exposes no extraction trigger, job status, OCR confidence, extracted text, review, retry, or override controls in this blueprint. `MER-FU-033` tracks the remaining review and application experience.
 
 ### 23.3 Staff Correction Tasks
 
@@ -1427,7 +1427,7 @@ An `OperationStatusPanel` is client recovery state, not audit evidence.
 
 ### 33.3 Explicitly Deferred
 
-- OCR job/result UI (`MER-FU-033`);
+- OCR extraction controls and job/result review UI (`MER-FU-033`);
 - generic audit search;
 - assignment, reassignment, workload, and SLA tracking;
 - configurable approval workflow;
@@ -1504,7 +1504,7 @@ Staff FE checkpoints deliver the Staff Web feature area inside `internal-web/`. 
 - block Customer-owned correction, cancellation, offer-response, contract-acknowledgment, and checklist-mutation commands for Staff-assisted applications until a Staff-mediated contract is delivered;
 - reconcile conversion uncertainty through GET without automatic POST retry, and preserve exact document-upload replay only for the unchanged operation and file.
 
-This checkpoint is executable for UCL. Paper Origination CP3 extends the same controlled workflow to Collateral Loan conversion; OCR execution and Staff-mediated downstream Customer decisions remain deferred and are tracked separately.
+This checkpoint is executable for UCL. Paper Origination CP3 extends the same controlled workflow to Collateral Loan conversion. The Document backend owns explicit OCR execution separately; Staff extraction controls, OCR review/correction, application of reviewed suggestions, and Staff-mediated downstream Customer decisions remain deferred and are tracked separately.
 
 ### Staff FE-CP1 — Internal Foundation
 
@@ -1607,7 +1607,7 @@ Uncertain settlement and closure results retain one actor-bound UUID plus a SHA-
 The Staff Web planning baseline deliberately defers:
 
 - Back-Office Administration screens for product, Partner, Identity, role, permission, and configuration;
-- OCR-assisted review and OCR operations;
+- OCR extraction controls, job-status presentation, review/correction, and application of reviewed suggestions;
 - assignment, reassignment, SLA, escalation, and workload management;
 - global dashboards, analytics, reporting, exports, and generic audit search;
 - saved operational views until query contracts stabilize;

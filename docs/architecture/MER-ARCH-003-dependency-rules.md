@@ -186,7 +186,7 @@ Authorization permits an actor to attempt a capability. The owning context still
 
 Product-specific lending code remains inside `loan`. Top-level feature modules for Salary Advance, Unsecured Consumer Loan, or Collateral Loan are forbidden.
 
-External OCR integration remains behind a Document-owned output port and Document infrastructure adapter. Loan may consume Document's published readiness contract but must not import or call an OCR provider directly.
+Document application code owns OCR job creation through Document ports and persistence adapters. The external Python worker keeps Google Document AI behind its provider-neutral `OcrProvider` boundary. Loan may consume Document's published readiness contract but must not import, call, or persist an OCR provider or OCR result directly.
 
 Audit and Notification consume published event schemas through their own inbound adapters. They must not import producer internals or command the workflow that produced an event.
 

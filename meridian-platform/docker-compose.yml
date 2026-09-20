@@ -72,6 +72,33 @@ services:
     volumes:
       - meridian_document_data:${MERIDIAN_DOCUMENT_STORAGE_ROOT:-/var/lib/meridian/documents}
 
+  ocr-service:
+    profiles: ["ocr"]
+    build:
+      context: ../ocr-service
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      OCR_DATABASE_URL: postgresql://${POSTGRES_USER:-meridian_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-meridian_db}
+      MERIDIAN_DOCUMENT_STORAGE_ROOT: ${MERIDIAN_DOCUMENT_STORAGE_ROOT:-/var/lib/meridian/documents}
+      MERIDIAN_OCR_RESULT_ENCRYPTION_KEY: ${MERIDIAN_OCR_RESULT_ENCRYPTION_KEY:-}
+      MERIDIAN_OCR_WORKER_ID: ${MERIDIAN_OCR_WORKER_ID:-ocr-worker-local}
+      MERIDIAN_OCR_LEASE_SECONDS: ${MERIDIAN_OCR_LEASE_SECONDS:-120}
+      MERIDIAN_OCR_MAX_ATTEMPTS: ${MERIDIAN_OCR_MAX_ATTEMPTS:-3}
+      MERIDIAN_OCR_INITIAL_BACKOFF_SECONDS: ${MERIDIAN_OCR_INITIAL_BACKOFF_SECONDS:-15}
+      MERIDIAN_OCR_POLLING_INTERVAL_SECONDS: ${MERIDIAN_OCR_POLLING_INTERVAL_SECONDS:-2}
+      MERIDIAN_OCR_CONFIDENCE_THRESHOLD: ${MERIDIAN_OCR_CONFIDENCE_THRESHOLD:-0.85}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_DOCUMENT_AI_LOCATION: ${GOOGLE_DOCUMENT_AI_LOCATION:-}
+      GOOGLE_DOCUMENT_AI_PROCESSOR_ID: ${GOOGLE_DOCUMENT_AI_PROCESSOR_ID:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
+    ports:
+      - "${MERIDIAN_OCR_PORT:-8090}:8090"
+    volumes:
+      - meridian_document_data:${MERIDIAN_DOCUMENT_STORAGE_ROOT:-/var/lib/meridian/documents}:ro
+
 volumes:
   meridian_postgres_data:
   meridian_document_data:

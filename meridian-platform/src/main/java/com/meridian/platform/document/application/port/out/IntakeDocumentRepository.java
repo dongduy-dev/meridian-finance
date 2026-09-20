@@ -14,6 +14,8 @@ public interface IntakeDocumentRepository {
 
     Optional<IntakeDocument> findByCaseAndTypeForUpdate(UUID caseId, IntakeEvidenceType evidenceType);
 
+    Optional<IntakeDocument> findByCaseAndType(UUID caseId, IntakeEvidenceType evidenceType);
+
     List<IntakeDocument> findByCase(UUID caseId);
 
     IntakeDocumentVersion saveVersion(IntakeDocumentVersion version);

@@ -6,7 +6,7 @@ This document defines Meridian's intended OCR-assisted document-processing archi
 
 OCR belongs to Document Management. This document owns the OCR service topology, job lifecycle, result handling, failure model, security boundary, and observability requirements. `MER-ARCH-001-bounded-contexts.md` remains authoritative for bounded-context ownership, while API documents define any external HTTP contracts.
 
-OCR is a planned capability. Implementation status belongs in the project roadmap and follow-up register.
+Implementation status belongs in the project roadmap and follow-up register.
 
 ---
 
@@ -14,9 +14,9 @@ OCR is a planned capability. Implementation status belongs in the project roadma
 
 ### In Scope
 
-- OCR job creation for uploaded document versions
+- explicit OCR job creation for the current immutable version of `CUSTOMER_IDENTITY`, `UCL_PAPER_APPLICATION`, or `COLLATERAL_PAPER_APPLICATION` intake evidence
 - asynchronous OCR processing
-- a Python service for model execution
+- a provider-neutral Python service for model execution
 - OCR result and confidence persistence
 - authorized review of OCR-assisted results
 - retry and worker-recovery behavior
@@ -30,6 +30,9 @@ OCR is a planned capability. Implementation status belongs in the project roadma
 - a full MLOps platform
 - Kafka or RabbitMQ orchestration
 - OCR ownership outside Document Management
+- automatic OCR job creation during upload
+- ordinary application-checklist evidence, operational Loan Contracts, or arbitrary document types
+- direct Customer or Loan mutation from OCR output
 
 ---
 
@@ -50,9 +53,12 @@ The Spring Boot backend remains Meridian's public application and document-workf
 
 ```text
 Document application
+    → explicit Staff OCR request for an exact immutable intake version
     → Document-owned OCR job port
     → PostgreSQL-backed OCR queue
     ← Python OCR worker
+    → provider-neutral OcrProvider
+    → Google Document AI Enterprise Document OCR adapter
 ```
 
 The worker may process Document-owned OCR jobs and results. It must not access another context's tables, repositories, or business state.
@@ -66,11 +72,13 @@ OCR output is advisory evidence. Authorized Document review remains authoritativ
 | Decision | Direction | Reason |
 |---|---|---|
 | Business ownership | Document Management | OCR processes document evidence and does not own lending decisions |
-| Model runtime | Separate Python service | Python provides the required OCR libraries, model loading, and CPU/GPU execution support |
+| Provider execution | Separate Python service | Python owns provider clients, response normalization, encryption, and queue execution without coupling Java business modules to provider types |
 | Processing model | Asynchronous | Document upload must not wait for OCR completion |
 | Job coordination | PostgreSQL-backed queue | The expected workload does not require a separate message broker |
 | Worker access | Purpose-limited OCR tables and document objects | The worker needs only the job, source file, and result boundary |
-| Operational API | REST for health, model readiness, and controlled administration | Operational calls remain simple to inspect and secure; job execution stays queue-driven |
+| Provider boundary | Python `OcrProvider` protocol | Job lifecycle, persistence, API, review, Customer, and Loan contracts do not depend on one OCR provider |
+| MVP provider adapter | Google Document AI Enterprise Document OCR | Google-specific clients and response types remain inside the Python adapter |
+| Operational API | REST for health and readiness | Job execution stays queue-driven; the worker exposes no document-processing or result API |
 | Low-confidence handling | Authorized manual review | OCR does not decide document acceptance or checklist readiness |
 | Traceability | Shared trace and model-version metadata | A result must be traceable to its upload, worker execution, and model version |
 
@@ -88,10 +96,12 @@ flowchart LR
     OCR[Python OCR worker]
     Review[Authorized document review]
 
-    Client -->|Upload document| API
+    Client -->|Upload intake evidence| API
     API --> Document
-    Document -->|Store metadata and OCR job| DB
     Document -->|Store original file| Storage
+    Client -->|Request extraction for exact current version| API
+    API --> Document
+    Document -->|Store one pending OCR job| DB
     OCR -->|Claim pending OCR job| DB
     OCR -->|Read assigned document| Storage
     OCR -->|Write OCR result and status| DB
@@ -101,6 +111,8 @@ flowchart LR
 The client communicates only with the Spring Boot API. The OCR worker has no public lending or document-management API responsibility.
 
 Direct worker access is limited to the Document-owned OCR queue, OCR result records, and assigned storage objects. Document Management remains authoritative for the resulting document workflow.
+
+The worker invokes OCR through `OcrProvider`. `GoogleDocumentAiProvider` is the selected MVP adapter for Google Document AI Enterprise Document OCR. A later provider may replace that adapter without changing the job lifecycle, persistence ownership, Staff API, review contract, Customer, or Loan.
 
 ---
 
@@ -127,7 +139,7 @@ These dispositions describe OCR evidence handling. They do not replace document-
 
 ---
 
-## 6. Upload-to-Result Flow
+## 6. Request-to-Result Flow
 
 ```mermaid
 sequenceDiagram
@@ -139,11 +151,15 @@ sequenceDiagram
     participant OCR as Python OCR worker
     participant Review as Authorized review
 
-    Client->>API: Upload document
-    API->>Document: Create document version
+    Client->>API: Upload controlled intake evidence
+    API->>Document: Create immutable intake document version
     Document->>Storage: Store original file
-    Document->>DB: Store metadata and pending OCR job
-    API-->>Client: Document accepted for processing
+    API-->>Client: Evidence version stored
+
+    Client->>API: Request OCR for exact current version
+    API->>Document: Authorize case, evidence type, and current version
+    Document->>DB: Return existing job or store one pending OCR job
+    API-->>Client: Safe job status
 
     OCR->>DB: Claim pending job with processing lease
     OCR->>Storage: Read assigned document
@@ -157,7 +173,7 @@ sequenceDiagram
     end
 ```
 
-The upload request returns after the document version and OCR job are stored. It does not wait for OCR completion.
+Upload does not create an OCR job. An authorized Staff user explicitly requests extraction for an already uploaded current immutable intake version. Repeating the request for the same version returns the same logical job and does not wait for OCR completion.
 
 ---
 
@@ -171,6 +187,8 @@ Document Management owns:
 - model and version metadata
 - reviewer corrections to OCR output
 - OCR processing and review history
+
+OCR result content uses a versioned AES-256-GCM envelope under a dedicated Document/OCR key. Extracted text, normalized layout, and structured suggestion payloads are not stored in plaintext.
 
 OCR results remain evidence attached to a document version. They must not directly:
 
@@ -206,7 +224,8 @@ The OCR capability requires conceptual records for:
 ### OCR Job
 
 - job identifier
-- document and document-version identifiers
+- immutable intake-document-version identifier and controlled evidence type
+- snapshotted opaque storage key, media type, and source SHA-256
 - processing state
 - processing lease owner and expiry
 - attempt count and retry timing
@@ -222,7 +241,7 @@ The OCR capability requires conceptual records for:
 - structured extracted fields
 - confidence measures
 - result disposition
-- model and model-version metadata
+- provider and processor/model metadata, including a version only when the provider supplies one
 - processing duration
 - creation timestamp
 
@@ -247,6 +266,7 @@ Exact tables, columns, constraints, and indexes belong in database design and mi
 - Errors must not expose storage keys, model internals, credentials, or unrestricted extracted evidence.
 - Trace identifiers correlate processing without carrying sensitive payloads.
 - Temporary files must be deleted after processing or retained only under an explicit secure-retention rule.
+- Extracted text, normalized layout, and structured suggestions must use the dedicated OCR AES-256-GCM key and versioned envelopes at rest.
 
 The OCR service does not expose document content directly to clients. Authorized access remains through the Spring Boot Document boundary.
 
@@ -254,7 +274,7 @@ The OCR service does not expose document content directly to clients. Authorized
 
 ## 11. Observability
 
-Spring Boot creates or propagates a trace identifier when accepting a document upload. The OCR job retains that identifier so API, database, storage, and worker activity can be correlated.
+Spring Boot creates a PII-free trace identifier when accepting the explicit OCR request. The OCR job retains that identifier so API, database, storage, provider, and worker activity can be correlated.
 
 Operational monitoring includes:
 
