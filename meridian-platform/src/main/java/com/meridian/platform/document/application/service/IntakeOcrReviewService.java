@@ -1,8 +1,5 @@
 package com.meridian.platform.document.application.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.meridian.platform.document.application.dto.FinalizeIntakeOcrReviewRequest;
 import com.meridian.platform.document.application.dto.IntakeOcrFieldSuggestionDto;
 import com.meridian.platform.document.application.dto.IntakeOcrReviewDto;
@@ -37,6 +34,9 @@ import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import com.meridian.platform.shared.domain.exception.ServiceUnavailableException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -263,7 +263,7 @@ public class IntakeOcrReviewService implements ManageIntakeOcrReviewUseCase {
                     cipher.decrypt(result.encryptedStructuredSuggestions()),
                     new TypeReference<ArrayList<StoredSuggestion>>() { }
             );
-        } catch (JsonProcessingException | IllegalArgumentException exception) {
+        } catch (JacksonException | IllegalArgumentException exception) {
             throw unavailable(exception);
         }
     }
@@ -275,7 +275,7 @@ public class IntakeOcrReviewService implements ManageIntakeOcrReviewUseCase {
                     new TypeReference<TreeMap<String, String>>() { }
             );
             return Collections.unmodifiableMap(fields);
-        } catch (JsonProcessingException | IllegalArgumentException exception) {
+        } catch (JacksonException | IllegalArgumentException exception) {
             throw unavailable(exception);
         }
     }
@@ -283,7 +283,7 @@ public class IntakeOcrReviewService implements ManageIntakeOcrReviewUseCase {
     private String writeJson(Map<String, String> fields) {
         try {
             return objectMapper.writeValueAsString(fields);
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             throw unavailable(exception);
         }
     }

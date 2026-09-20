@@ -1,6 +1,5 @@
 package com.meridian.platform.document.application.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.meridian.platform.document.application.dto.FinalizeIntakeOcrReviewRequest;
 import com.meridian.platform.document.application.port.out.IntakeDocumentRepository;
 import com.meridian.platform.document.application.port.out.LoanAssistedOriginationPort;
@@ -27,6 +26,7 @@ import com.meridian.platform.shared.domain.exception.BusinessStateConflictExcept
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Clock;
 import java.time.Instant;
