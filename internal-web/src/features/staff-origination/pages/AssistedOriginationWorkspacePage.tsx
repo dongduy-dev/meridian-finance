@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { OperationStatusPanel, type OperationStatus } from '@/components/operations/OperationStatusPanel'
@@ -31,6 +31,30 @@ import {
 import { IntakeOcrReviewPanel } from '../components/IntakeOcrReviewPanel'
 
 type ActionState = { status: OperationStatus; message?: string; error?: Error }
+type IntakeEvidenceType = 'CUSTOMER_IDENTITY' | 'UCL_PAPER_APPLICATION' | 'COLLATERAL_PAPER_APPLICATION'
+type OcrFormTarget = 'create-customer' | 'profile' | 'bank' | 'ucl' | 'collateral'
+type MutableFormControl = HTMLInputElement | HTMLSelectElement
+type AppliedOcrControl = {
+  target: OcrFormTarget
+  name: string
+  evidenceType: IntakeEvidenceType
+  versionId: string
+  appliedValue: string
+  previousValue: string
+}
+
+const collateralTypes = new Set(['MOTORBIKE', 'CAR', 'ELECTRONICS', 'PROPERTY_DOCUMENT', 'OTHER'])
+
+function safePositiveInteger(value: string | undefined): string | undefined {
+  if (!value || !/^[1-9]\d*$/.test(value.trim())) return undefined
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? value.trim() : undefined
+}
+
+function formControl(form: HTMLFormElement | null, name: string): MutableFormControl | undefined {
+  const control = form?.elements.namedItem(name)
+  return control instanceof HTMLInputElement || control instanceof HTMLSelectElement ? control : undefined
+}
 
 const profileFromForm = (form: HTMLFormElement): CustomerProfileInput & { identityReference?: string } => {
   const data = new FormData(form)
@@ -86,7 +110,42 @@ export function AssistedOriginationWorkspacePage() {
   const evidence = useQuery(evidenceQuery(manager, assistedOriginationCaseId, canEvidence && Boolean(assistedOriginationCaseId)))
   const [searchResult, setSearchResult] = useState<StaffCustomer>()
   const [actions, setActions] = useState<Record<string, ActionState>>({})
+  const [ocrFreshnessMessage, setOcrFreshnessMessage] = useState<string>()
+  const createCustomerForm = useRef<HTMLFormElement>(null)
+  const profileForm = useRef<HTMLFormElement>(null)
+  const bankForm = useRef<HTMLFormElement>(null)
+  const uclForm = useRef<HTMLFormElement>(null)
+  const collateralForm = useRef<HTMLFormElement>(null)
+  const appliedOcrControls = useRef(new Map<string, AppliedOcrControl>())
   const search = useMutation({ mutationFn: (input: { customerNumber?: string; identityReference?: string }) => searchCustomer(manager, input), onSuccess: setSearchResult })
+
+  const ocrTargetForm = useCallback((target: OcrFormTarget): HTMLFormElement | null => ({
+    'create-customer': createCustomerForm.current,
+    profile: profileForm.current,
+    bank: bankForm.current,
+    ucl: uclForm.current,
+    collateral: collateralForm.current,
+  })[target], [])
+
+  const clearStaleAppliedOcr = useCallback((evidenceType: string, currentVersionId: string | null) => {
+    let removed = false
+    for (const [key, applied] of appliedOcrControls.current) {
+      if (applied.evidenceType === evidenceType && applied.versionId !== currentVersionId) {
+        const control = formControl(ocrTargetForm(applied.target), applied.name)
+        if (control?.value === applied.appliedValue) control.value = applied.previousValue
+        appliedOcrControls.current.delete(key)
+        removed = true
+      }
+    }
+    return removed
+  }, [ocrTargetForm])
+
+  useEffect(() => {
+    if (!evidence.data) return
+    for (const item of evidence.data) {
+      clearStaleAppliedOcr(item.evidenceType, item.currentVersionId)
+    }
+  }, [clearStaleAppliedOcr, evidence.data])
 
   const setAction = (key: string, action: ActionState) => setActions((value) => ({ ...value, [key]: action }))
   const refresh = async (nextCustomerId = customerId) => {
@@ -123,6 +182,59 @@ export function AssistedOriginationWorkspacePage() {
     const value = await listBankAccounts(manager, id)
     client.setQueryData(originationKeys.banks(id), value)
     return value
+  }
+
+  const applyReviewedOcrValues = (source: {
+    evidenceType: IntakeEvidenceType
+    versionId: string
+    reviewedFields: Record<string, string>
+  }): number => {
+    const targetProfile: OcrFormTarget = customer.data ? 'profile' : 'create-customer'
+    let appliedCount = 0
+    const apply = (target: OcrFormTarget, name: string, value: string | undefined) => {
+      if (value === undefined) return
+      const control = formControl(ocrTargetForm(target), name)
+      if (!control) return
+      const key = `${target}:${name}`
+      const previous = appliedOcrControls.current.get(key)
+      appliedOcrControls.current.set(key, {
+        target,
+        name,
+        evidenceType: source.evidenceType,
+        versionId: source.versionId,
+        appliedValue: value,
+        previousValue: previous?.previousValue ?? control.value,
+      })
+      control.value = value
+      appliedCount += 1
+    }
+
+    for (const field of ['fullName', 'phoneNumber', 'residentialAddress', 'employmentStatus', 'employerName'] as const) {
+      apply(targetProfile, field, source.reviewedFields[field])
+    }
+    if (!customer.data || customer.data.profileCompletionStatus !== 'COMPLETE') {
+      apply(targetProfile, 'identityReference', source.reviewedFields.identityReference)
+    }
+    for (const field of ['bankCode', 'bankNameSnapshot', 'accountHolderName', 'accountNumber'] as const) {
+      apply('bank', field, source.reviewedFields[field])
+    }
+
+    if (source.evidenceType === 'UCL_PAPER_APPLICATION') {
+      apply('ucl', 'requestedAmount', safePositiveInteger(source.reviewedFields.requestedAmount))
+      apply('ucl', 'requestedTermMonths', safePositiveInteger(source.reviewedFields.requestedTermMonths))
+    }
+    if (source.evidenceType === 'COLLATERAL_PAPER_APPLICATION') {
+      apply('collateral', 'requestedAmount', safePositiveInteger(source.reviewedFields.requestedAmount))
+      apply('collateral', 'requestedTermMonths', safePositiveInteger(source.reviewedFields.requestedTermMonths))
+      const collateralType = source.reviewedFields['collateral.type']
+      apply('collateral', 'collateralType', collateralType && collateralTypes.has(collateralType) ? collateralType : undefined)
+      apply('collateral', 'description', source.reviewedFields['collateral.description'])
+      apply('collateral', 'estimatedValue', safePositiveInteger(source.reviewedFields['collateral.estimatedValue']))
+      apply('collateral', 'ownershipStatus', source.reviewedFields['collateral.ownershipStatus'])
+      apply('collateral', 'conditionNote', source.reviewedFields['collateral.conditionNote'])
+    }
+    setOcrFreshnessMessage(undefined)
+    return appliedCount
   }
 
   if (intake.isPending) return <p className="flex items-center gap-2"><Spinner /> Loading intake workspace…</p>
@@ -321,7 +433,10 @@ export function AssistedOriginationWorkspacePage() {
     const operationId = decision.operationId
     setAction(resource, { status: 'IN_FLIGHT' })
     try {
-      await uploadEvidence(manager, assistedOriginationCaseId, evidenceType, file, operationId, baseline ?? undefined)
+      const uploaded = await uploadEvidence(manager, assistedOriginationCaseId, evidenceType, file, operationId, baseline ?? undefined)
+      if (clearStaleAppliedOcr(evidenceType, uploaded.intakeDocumentVersionId)) {
+        setOcrFreshnessMessage('OCR-applied values from a replaced evidence version were removed. Review the current evidence before applying again.')
+      }
     } catch (caught) {
       const error = caught as Error
       if (error instanceof NetworkError || (error instanceof ApiError && error.errorCode === 'IDEMPOTENCY_KEY_REUSED')) {
@@ -470,19 +585,19 @@ export function AssistedOriginationWorkspacePage() {
 
     {canCustomer ? <div className="grid gap-6 lg:grid-cols-2">
       <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Find Customer</h2><form onSubmit={submitSearch} className="space-y-3"><label className="grid gap-1 text-sm font-medium">Exact search<select name="mode" className="h-11 rounded-md border bg-background px-3"><option value="number">Customer number</option><option value="identity">Identity reference</option></select></label><label className="grid gap-1 text-sm font-medium">Exact value<Input name="value" required autoComplete="off" /></label><Button disabled={!open || search.isPending}>Search</Button></form>{searchResult ? <div className="rounded-md border p-3"><p className="font-semibold">{searchResult.customerNumber} · {searchResult.profile?.fullName}</p><Button className="mt-2" disabled={!open || locked(actions['customer-association'])} onClick={() => void associate(searchResult.customerId)}>Select Customer</Button></div> : null}<ActionNotice action={actions['customer-association']} /></article>
-      {!customerId ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Create Customer</h2><form onSubmit={(event) => void submitCreate(event)} className="space-y-4"><ProfileFields /><Button disabled={!open || locked(actions['customer-creation']) || actions['customer-creation']?.status === 'RESOLVED'}>Create and select Customer</Button></form><ActionNotice action={actions['customer-creation']} /></article> : null}
+      {!customerId ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Create Customer</h2><form ref={createCustomerForm} onSubmit={(event) => void submitCreate(event)} className="space-y-4"><ProfileFields /><Button disabled={!open || locked(actions['customer-creation']) || actions['customer-creation']?.status === 'RESOLVED'}>Create and select Customer</Button></form><ActionNotice action={actions['customer-creation']} /></article> : null}
     </div> : <p className="rounded-lg border p-4 text-sm">Customer intake permissions are required to find or maintain the selected Customer.</p>}
 
     {customer.isPending && customerId && canCustomer ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading selected Customer…</p> : null}
     {customer.isError ? <div className="rounded-lg border border-danger/30 p-4"><p role="alert">The selected Customer could not be loaded.</p><Button className="mt-3" variant="outline" onClick={() => void customer.refetch()}>Retry Customer</Button></div> : null}
-    {customer.data ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Selected Customer · {customer.data.customerNumber}</h2><form onSubmit={(event) => void submitProfile(event)} className="space-y-4"><ProfileFields customer={customer.data} /><Button disabled={!open || locked(actions['customer-profile'])}>Save profile</Button></form><ActionNotice action={actions['customer-profile']} /></article> : null}
+    {customer.data ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Selected Customer · {customer.data.customerNumber}</h2><form ref={profileForm} onSubmit={(event) => void submitProfile(event)} className="space-y-4"><ProfileFields customer={customer.data} /><Button disabled={!open || locked(actions['customer-profile'])}>Save profile</Button></form><ActionNotice action={actions['customer-profile']} /></article> : null}
 
-    {customer.data ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Bank accounts</h2>{banks.isPending ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading bank accounts…</p> : null}{banks.isError ? <div><p role="alert">Bank accounts could not be loaded.</p><Button className="mt-2" variant="outline" onClick={() => void banks.refetch()}>Retry bank accounts</Button></div> : null}{banks.data?.length === 0 ? <p className="text-sm text-muted-foreground">No bank accounts have been recorded.</p> : null}{banks.data?.map((bank) => <div key={bank.customerBankAccountId} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"><span>{bank.bankNameSnapshot} · {bank.maskedAccountNumber} · {bank.status}{bank.primaryAccount ? ' · Primary' : ''}</span><div className="flex gap-2">{bank.status === 'ACTIVE' && !bank.primaryAccount ? <Button size="sm" variant="outline" disabled={!open || locked(actions['bank-mutation'])} onClick={() => void mutateBank(bank.customerBankAccountId, 'make-primary')}>Make primary</Button> : null}<Button size="sm" variant="outline" disabled={!open || bank.status !== 'ACTIVE' || locked(actions['bank-mutation'])} onClick={() => void mutateBank(bank.customerBankAccountId, 'deactivate')}>Deactivate</Button></div></div>)}<form onSubmit={(event) => void submitBank(event)} className="grid gap-3 sm:grid-cols-2"><Input name="bankCode" required aria-label="Bank code" placeholder="Bank code" /><Input name="bankNameSnapshot" required aria-label="Bank name" placeholder="Bank name" /><Input name="accountHolderName" required aria-label="Account holder" placeholder="Account holder" /><Input name="accountNumber" required aria-label="Account number" placeholder="Account number" autoComplete="off" /><Button disabled={!open || locked(actions['bank-mutation'])}>Add bank account</Button></form><ActionNotice action={actions['bank-mutation']} /></article> : null}
+    {customer.data ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Bank accounts</h2>{banks.isPending ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading bank accounts…</p> : null}{banks.isError ? <div><p role="alert">Bank accounts could not be loaded.</p><Button className="mt-2" variant="outline" onClick={() => void banks.refetch()}>Retry bank accounts</Button></div> : null}{banks.data?.length === 0 ? <p className="text-sm text-muted-foreground">No bank accounts have been recorded.</p> : null}{banks.data?.map((bank) => <div key={bank.customerBankAccountId} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"><span>{bank.bankNameSnapshot} · {bank.maskedAccountNumber} · {bank.status}{bank.primaryAccount ? ' · Primary' : ''}</span><div className="flex gap-2">{bank.status === 'ACTIVE' && !bank.primaryAccount ? <Button size="sm" variant="outline" disabled={!open || locked(actions['bank-mutation'])} onClick={() => void mutateBank(bank.customerBankAccountId, 'make-primary')}>Make primary</Button> : null}<Button size="sm" variant="outline" disabled={!open || bank.status !== 'ACTIVE' || locked(actions['bank-mutation'])} onClick={() => void mutateBank(bank.customerBankAccountId, 'deactivate')}>Deactivate</Button></div></div>)}<form ref={bankForm} onSubmit={(event) => void submitBank(event)} className="grid gap-3 sm:grid-cols-2"><Input name="bankCode" required aria-label="Bank code" placeholder="Bank code" /><Input name="bankNameSnapshot" required aria-label="Bank name" placeholder="Bank name" /><Input name="accountHolderName" required aria-label="Account holder" placeholder="Account holder" /><Input name="accountNumber" required aria-label="Account number" placeholder="Account number" autoComplete="off" /><Button disabled={!open || locked(actions['bank-mutation'])}>Add bank account</Button></form><ActionNotice action={actions['bank-mutation']} /></article> : null}
 
-    {canEvidence ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Paper intake evidence</h2>{evidence.isPending ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading evidence metadata…</p> : null}{evidence.isError ? <div><p role="alert">Evidence metadata could not be loaded.</p><Button className="mt-2" variant="outline" onClick={() => void evidence.refetch()}>Retry evidence</Button></div> : null}{evidence.isSuccess ? ['CUSTOMER_IDENTITY', selectedEvidenceType].map((type) => { const item = evidence.data.find((candidate) => candidate.evidenceType === type); const label = type === 'CUSTOMER_IDENTITY' ? 'Customer identity / CCCD' : 'Signed paper application'; const resource = evidenceRecoveryResource(assistedOriginationCaseId, type); const unresolved = findUnresolvedOperation('INTAKE_EVIDENCE_UPLOAD', resource); return <div key={type} className="space-y-3 rounded-md border p-3"><h3 className="font-medium">{label}</h3><p className="text-sm text-muted-foreground">{item ? `${item.versions.length} version(s); current ${item.currentVersionId}` : 'No evidence uploaded'}</p>{unresolved ? <p className="text-sm font-medium text-warning">A prior upload result is unresolved. Reselect the exact file to retry it.</p> : null}<form className="flex flex-col gap-2 sm:flex-row" onSubmit={submitEvidence(type)}><Input aria-label={`${label} file`} type="file" name="file" required accept="application/pdf,image/jpeg,image/png" /><Button type="submit" disabled={!open || busy(actions[resource])}>{item ? 'Replace evidence' : 'Upload evidence'}</Button></form><ActionNotice action={actions[resource]} />{item?.currentVersionId ? <IntakeOcrReviewPanel manager={manager} caseId={assistedOriginationCaseId} evidenceType={type} versionId={item.currentVersionId} intakeOpen={open} /> : null}</div> }) : null}</article> : null}
+    {canEvidence ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Paper intake evidence</h2>{ocrFreshnessMessage ? <p role="alert" className="text-sm text-warning">{ocrFreshnessMessage}</p> : null}{evidence.isPending ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading evidence metadata…</p> : null}{evidence.isError ? <div><p role="alert">Evidence metadata could not be loaded.</p><Button className="mt-2" variant="outline" onClick={() => void evidence.refetch()}>Retry evidence</Button></div> : null}{evidence.isSuccess ? ['CUSTOMER_IDENTITY', selectedEvidenceType].map((type) => { const item = evidence.data.find((candidate) => candidate.evidenceType === type); const label = type === 'CUSTOMER_IDENTITY' ? 'Customer identity / CCCD' : 'Signed paper application'; const resource = evidenceRecoveryResource(assistedOriginationCaseId, type); const unresolved = findUnresolvedOperation('INTAKE_EVIDENCE_UPLOAD', resource); return <div key={type} className="space-y-3 rounded-md border p-3"><h3 className="font-medium">{label}</h3><p className="text-sm text-muted-foreground">{item ? `${item.versions.length} version(s); current ${item.currentVersionId}` : 'No evidence uploaded'}</p>{unresolved ? <p className="text-sm font-medium text-warning">A prior upload result is unresolved. Reselect the exact file to retry it.</p> : null}<form className="flex flex-col gap-2 sm:flex-row" onSubmit={submitEvidence(type)}><Input aria-label={`${label} file`} type="file" name="file" required accept="application/pdf,image/jpeg,image/png" /><Button type="submit" disabled={!open || busy(actions[resource])}>{item ? 'Replace evidence' : 'Upload evidence'}</Button></form><ActionNotice action={actions[resource]} />{item?.currentVersionId ? <IntakeOcrReviewPanel key={`${type}:${item.currentVersionId}`} manager={manager} caseId={assistedOriginationCaseId} evidenceType={type} versionId={item.currentVersionId} intakeOpen={open} onApplyReviewedValues={applyReviewedOcrValues} /> : null}</div> }) : null}</article> : null}
 
-    {open && intake.data.productCode === 'UNSECURED_CONSUMER_LOAN' ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Create UCL application</h2><p className="text-sm text-muted-foreground">This consequential action creates the real Staff-assisted Loan Application and its required application-document checklist.</p><ul className="text-sm"><li>Selected Customer: {customer.data ? 'ready to evaluate' : 'not available'}</li><li>Profile: {customer.data?.profileCompletionStatus === 'COMPLETE' ? 'complete' : 'incomplete'}</li><li>Primary active bank account: {customer.data?.primaryActiveBankAccountPresent ? 'present' : 'missing'}</li><li>Signed UCL paper application: {evidence.data?.some((item) => item.evidenceType === 'UCL_PAPER_APPLICATION' && item.currentVersionId) ? 'present' : 'missing'}</li></ul><form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submitUcl(event)}><label className="grid gap-1 text-sm font-medium">Requested amount<Input name="requestedAmount" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Requested term months<Input name="requestedTermMonths" type="number" min="1" step="1" required /></label><Button className="sm:col-span-2" disabled={locked(actions['ucl-conversion']) || !customer.data || customer.data.status !== 'ACTIVE' || customer.data.profileCompletionStatus !== 'COMPLETE' || !customer.data.primaryActiveBankAccountPresent || !evidence.data?.some((item) => item.evidenceType === 'UCL_PAPER_APPLICATION' && item.currentVersionId)}>Create UCL application</Button></form><ActionNotice action={actions['ucl-conversion']} /></article> : null}
-    {open && intake.data.productCode === 'COLLATERAL_LOAN' ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Create Collateral Loan application</h2><p className="text-sm text-muted-foreground">This consequential action creates the real Staff-assisted Loan Application, one structured Collateral fact, and its ownership-evidence checklist.</p><ul className="text-sm"><li>Selected Customer: {customer.data ? 'ready to evaluate' : 'not available'}</li><li>Profile: {customer.data?.profileCompletionStatus === 'COMPLETE' ? 'complete' : 'incomplete'}</li><li>Primary active bank account: {customer.data?.primaryActiveBankAccountPresent ? 'present' : 'missing'}</li><li>Signed Collateral paper application: {evidence.data?.some((item) => item.evidenceType === 'COLLATERAL_PAPER_APPLICATION' && item.currentVersionId) ? 'present' : 'missing'}</li></ul><form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submitCollateral(event)}><label className="grid gap-1 text-sm font-medium">Requested amount<Input name="requestedAmount" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Requested term months<Input name="requestedTermMonths" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Collateral type<select name="collateralType" required className="h-11 rounded-md border bg-background px-3"><option value="MOTORBIKE">Motorbike</option><option value="CAR">Car</option><option value="ELECTRONICS">Electronics</option><option value="PROPERTY_DOCUMENT">Property document</option><option value="OTHER">Other</option></select></label><label className="grid gap-1 text-sm font-medium">Estimated value<Input name="estimatedValue" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium sm:col-span-2">Description<Input name="description" maxLength={500} required /></label><label className="grid gap-1 text-sm font-medium">Ownership status<Input name="ownershipStatus" maxLength={200} required /></label><label className="grid gap-1 text-sm font-medium">Condition note<Input name="conditionNote" maxLength={500} required /></label><Button className="sm:col-span-2" disabled={locked(actions['collateral-conversion']) || !customer.data || customer.data.status !== 'ACTIVE' || customer.data.profileCompletionStatus !== 'COMPLETE' || !customer.data.primaryActiveBankAccountPresent || !evidence.data?.some((item) => item.evidenceType === 'COLLATERAL_PAPER_APPLICATION' && item.currentVersionId)}>Create Collateral Loan application</Button></form><ActionNotice action={actions['collateral-conversion']} /></article> : null}
+    {open && intake.data.productCode === 'UNSECURED_CONSUMER_LOAN' ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Create UCL application</h2><p className="text-sm text-muted-foreground">This consequential action creates the real Staff-assisted Loan Application and its required application-document checklist.</p><ul className="text-sm"><li>Selected Customer: {customer.data ? 'ready to evaluate' : 'not available'}</li><li>Profile: {customer.data?.profileCompletionStatus === 'COMPLETE' ? 'complete' : 'incomplete'}</li><li>Primary active bank account: {customer.data?.primaryActiveBankAccountPresent ? 'present' : 'missing'}</li><li>Signed UCL paper application: {evidence.data?.some((item) => item.evidenceType === 'UCL_PAPER_APPLICATION' && item.currentVersionId) ? 'present' : 'missing'}</li></ul><form ref={uclForm} className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submitUcl(event)}><label className="grid gap-1 text-sm font-medium">Requested amount<Input name="requestedAmount" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Requested term months<Input name="requestedTermMonths" type="number" min="1" step="1" required /></label><Button className="sm:col-span-2" disabled={locked(actions['ucl-conversion']) || !customer.data || customer.data.status !== 'ACTIVE' || customer.data.profileCompletionStatus !== 'COMPLETE' || !customer.data.primaryActiveBankAccountPresent || !evidence.data?.some((item) => item.evidenceType === 'UCL_PAPER_APPLICATION' && item.currentVersionId)}>Create UCL application</Button></form><ActionNotice action={actions['ucl-conversion']} /></article> : null}
+    {open && intake.data.productCode === 'COLLATERAL_LOAN' ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Create Collateral Loan application</h2><p className="text-sm text-muted-foreground">This consequential action creates the real Staff-assisted Loan Application, one structured Collateral fact, and its ownership-evidence checklist.</p><ul className="text-sm"><li>Selected Customer: {customer.data ? 'ready to evaluate' : 'not available'}</li><li>Profile: {customer.data?.profileCompletionStatus === 'COMPLETE' ? 'complete' : 'incomplete'}</li><li>Primary active bank account: {customer.data?.primaryActiveBankAccountPresent ? 'present' : 'missing'}</li><li>Signed Collateral paper application: {evidence.data?.some((item) => item.evidenceType === 'COLLATERAL_PAPER_APPLICATION' && item.currentVersionId) ? 'present' : 'missing'}</li></ul><form ref={collateralForm} className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submitCollateral(event)}><label className="grid gap-1 text-sm font-medium">Requested amount<Input name="requestedAmount" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Requested term months<Input name="requestedTermMonths" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Collateral type<select name="collateralType" required className="h-11 rounded-md border bg-background px-3"><option value="MOTORBIKE">Motorbike</option><option value="CAR">Car</option><option value="ELECTRONICS">Electronics</option><option value="PROPERTY_DOCUMENT">Property document</option><option value="OTHER">Other</option></select></label><label className="grid gap-1 text-sm font-medium">Estimated value<Input name="estimatedValue" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium sm:col-span-2">Description<Input name="description" maxLength={500} required /></label><label className="grid gap-1 text-sm font-medium">Ownership status<Input name="ownershipStatus" maxLength={200} required /></label><label className="grid gap-1 text-sm font-medium">Condition note<Input name="conditionNote" maxLength={500} required /></label><Button className="sm:col-span-2" disabled={locked(actions['collateral-conversion']) || !customer.data || customer.data.status !== 'ACTIVE' || customer.data.profileCompletionStatus !== 'COMPLETE' || !customer.data.primaryActiveBankAccountPresent || !evidence.data?.some((item) => item.evidenceType === 'COLLATERAL_PAPER_APPLICATION' && item.currentVersionId)}>Create Collateral Loan application</Button></form><ActionNotice action={actions['collateral-conversion']} /></article> : null}
 
     {open ? <div className="space-y-3 rounded-lg border border-danger/30 p-4"><h2 className="font-semibold">Abandon intake</h2><p className="mt-1 text-sm text-muted-foreground">Abandonment is terminal and blocks further Customer association and paper-evidence changes.</p><Button className="mt-3" variant="destructive" disabled={locked(actions['abandon-intake'])} onClick={() => { if (window.confirm('Abandon this intake permanently?')) void abandon() }}>Abandon intake</Button><ActionNotice action={actions['abandon-intake']} /></div> : null}
   </section>

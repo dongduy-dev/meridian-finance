@@ -685,23 +685,31 @@ Type: Deferred integration
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocking: No current blocker.
 
-Problem:
-V59 provides explicit intake-version OCR requests, PostgreSQL job/lease/retry
-coordination, encrypted result retention, provider-neutral structured extraction,
-safe Staff status, and immutable encrypted Staff review/correction. Reviewed
-suggestions do not yet prefill the controlled Customer, UCL, or Collateral forms.
+Completion:
+The assisted-intake workspace copies only finalized `REVIEWED` values into the
+existing route-local Customer, bank-account, UCL, and Collateral form inputs after
+an explicit Staff action. Staff verifies or edits the ephemeral values and then
+invokes the existing owning Customer or Loan command. The apply action does not
+submit a command, persist browser state, or establish hidden priority between OCR
+sources. Replacing the reviewed evidence version removes untouched applied values.
 
-Recommendation:
-Apply only explicitly reviewed suggestions through the existing owning Customer
-and Loan commands. Preserve manual fallback, restricted access, encrypted
-Document-owned results/reviews, PII-safe audit, and the prohibition on raw OCR
-text in broad DTOs, logs, URLs, or exceptions. OCR must not assert consent,
-identity verification, document acceptance, checklist readiness, product
-verification, or a lending decision.
+Consent, identity verification, document acceptance or waiver, checklist
+readiness, product verification, recommendation, approval, offer response,
+contract acknowledgment, and lending decisions remain excluded. Manual intake
+remains available when OCR is absent, fails, produces no usable values, or is not
+applied. Document retains encrypted OCR result and review ownership; Customer and
+Loan remain authoritative for validation and mutation.
+
+Proof:
+Internal Web component tests cover finalized-only explicit application, Customer
+identity mutability, consent exclusion, bank/UCL/Collateral form mapping,
+conservative structured-value handling, multiple-source ordering, empty reviews,
+evidence replacement, zero-retention review caching, and existing uncertain-result
+reconciliation.
 
 ### MER-FU-034 - Add correction deadlines and notifications
 

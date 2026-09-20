@@ -45,13 +45,18 @@ function sameFields(first: Record<string, string>, second: Record<string, string
 }
 
 export function IntakeOcrReviewPanel({
-  manager, caseId, evidenceType, versionId, intakeOpen,
+  manager, caseId, evidenceType, versionId, intakeOpen, onApplyReviewedValues,
 }: {
   manager: AuthSessionManager
   caseId: string
   evidenceType: string
   versionId: string
   intakeOpen: boolean
+  onApplyReviewedValues?: (source: {
+    evidenceType: IntakeOcrReview['evidenceType']
+    versionId: string
+    reviewedFields: Record<string, string>
+  }) => number
 }) {
   const client = useQueryClient()
   const status = useQuery(intakeOcrStatusQuery(manager, caseId, evidenceType, versionId, true))
@@ -124,10 +129,21 @@ export function IntakeOcrReviewPanel({
     }
     setUnknown(false)
   }
-  return <ReviewFields data={review.data} intakeOpen={intakeOpen} submitting={submitting} submit={submit} message={message} unknown={unknown} reconcile={reconcile} />
+  const apply = () => {
+    if (review.data?.disposition !== 'REVIEWED' || !onApplyReviewedValues) return
+    const applied = onApplyReviewedValues({
+      evidenceType: review.data.evidenceType,
+      versionId,
+      reviewedFields: review.data.reviewedFields,
+    })
+    setMessage(applied > 0
+      ? 'Reviewed values copied to the intake forms. Verify them before saving or creating the application.'
+      : 'No supported reviewed values were available to copy. Manual entry remains available.')
+  }
+  return <ReviewFields data={review.data} intakeOpen={intakeOpen} submitting={submitting} submit={submit} message={message} unknown={unknown} reconcile={reconcile} apply={onApplyReviewedValues ? apply : undefined} />
 }
 
-function ReviewFields({ data, intakeOpen, submitting, submit, message, unknown, reconcile }: {
+function ReviewFields({ data, intakeOpen, submitting, submit, message, unknown, reconcile, apply }: {
   data: IntakeOcrReview
   intakeOpen: boolean
   submitting: boolean
@@ -135,12 +151,13 @@ function ReviewFields({ data, intakeOpen, submitting, submit, message, unknown, 
   message?: string
   unknown: boolean
   reconcile: () => Promise<void>
+  apply?: () => void
 }) {
   const reviewed = data.disposition === 'REVIEWED'
   const suggestions = new Map(data.suggestions.map((item) => [item.fieldName, item]))
   return <div className="space-y-3 border-t pt-3">
     <h4 className="font-medium">OCR field review</h4>
-    <p className="text-sm text-muted-foreground">OCR is advisory. These values remain Document-owned and are not applied to Customer or Loan forms.</p>
+    <p className="text-sm text-muted-foreground">OCR is advisory. Only a finalized review can be copied into the existing intake forms, and the existing Save, Add, or Create action is still required.</p>
     <form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submit(event)}>
       {expectedFields(data.evidenceType).map(([name, label]) => {
         const suggestion = suggestions.get(name)
@@ -153,6 +170,7 @@ function ReviewFields({ data, intakeOpen, submitting, submit, message, unknown, 
       {!reviewed ? <Button className="sm:col-span-2" disabled={!intakeOpen || unknown || submitting}>{submitting ? 'Confirming OCR review…' : 'Confirm final OCR review'}</Button> : null}
     </form>
     {reviewed ? <p className="text-sm font-medium">Final OCR review completed.</p> : null}
+    {reviewed && apply ? <Button type="button" variant="outline" disabled={!intakeOpen} onClick={apply}>Apply reviewed values</Button> : null}
     {message ? <p role="alert" className="text-sm text-muted-foreground">{message}</p> : null}
     {unknown ? <Button type="button" variant="outline" onClick={() => void reconcile()}>Refresh authoritative OCR review</Button> : null}
   </div>
