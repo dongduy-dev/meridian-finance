@@ -666,7 +666,7 @@ POST /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence/{e
 
 `POST` accepts `expectedOcrResultId` and a `reviewedFields` map. Keys must belong to the canonical vocabulary for the evidence type; consent, verification, document-decision, readiness, and lending-decision fields are prohibited. Values use generic size bounds rather than duplicated Customer or Loan business validation, and the map may be empty. The case must remain `OPEN`, and the version must remain current. A stale version returns `409 OCR_REVIEW_REQUIRES_CURRENT_INTAKE_VERSION`; a different expected result returns `409 OCR_RESULT_CHANGED`; an unknown field returns `422 OCR_REVIEW_FIELD_NOT_ALLOWED`. The first successful command inserts one encrypted review and changes the result disposition to `REVIEWED` transactionally. Exact replay returns the existing review; a different replay returns `409 OCR_RESULT_ALREADY_REVIEWED`.
 
-OCR state and reviewed values are advisory. `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, or `REVIEWED` does not create or modify Customer or Loan state, establish consent or verification, accept or waive evidence, or block manual intake. Application of reviewed suggestions is a separate contract.
+OCR state and reviewed values are advisory. `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, or `REVIEWED` does not create or modify Customer or Loan state, establish consent or verification, accept or waive evidence, or block manual intake. Staff Web may explicitly copy finalized `reviewedFields` into its existing route-local intake forms. No additional HTTP endpoint applies those values: persistence occurs only when Staff invokes the existing authorized Customer or Loan command.
 
 UCL conversion is:
 

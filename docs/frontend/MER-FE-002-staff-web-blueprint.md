@@ -84,7 +84,7 @@ This blueprint does not define or authorize:
 - Staff Web source code, React scaffolding, package installation, or deployment;
 - Back-Office Administration product, Partner, user, role, permission, or configuration screens;
 - backend endpoint or schema changes;
-- a separate enterprise OCR console or application of OCR-reviewed values to Customer or Loan forms;
+- a separate enterprise OCR console or direct OCR mutation of Customer or Loan state;
 - automated credit, collateral valuation, loan-to-value, or risk decisions;
 - Customer Web screens;
 - bank, payment-provider, payroll, reconciliation, ledger, or collections integrations;
@@ -216,7 +216,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 
 | Workspace | Commands available now |
 |---|---|
-| Assisted origination | Create/reopen/associate/abandon UCL or Collateral intake; create and maintain the selected Customer; manage masked bank accounts; upload or replace controlled paper intake evidence; explicitly request OCR, monitor safe status, and finalize corrected structured suggestions beside the current evidence version; convert an eligible UCL or Collateral case into one Staff-assisted LoanApplication |
+| Assisted origination | Create/reopen/associate/abandon UCL or Collateral intake; create and maintain the selected Customer; manage masked bank accounts; upload or replace controlled paper intake evidence; explicitly request OCR, monitor safe status, finalize corrected structured suggestions beside the current evidence version, and copy finalized reviewed values into the existing unsaved forms; convert an eligible UCL or Collateral case into one Staff-assisted LoanApplication |
 | Verification | Start and complete UCL verification; start and complete exact numbered Collateral verification |
 | Review and approval | Start review; submit recommendation; submit independent decision |
 | Documents | Review the exact current version; waive with added permission; request replacement; stream known content; upload an initial Staff-assisted UCL or Collateral checklist document with `document:upload:assisted`; upload for an open correction task with `document:upload:staff` |
@@ -657,7 +657,7 @@ Staff Web must not expose or log raw:
 
 - salary, identity references, employee codes, or protected verification evidence;
 - bank-account numbers except in the explicit destination-reveal surface;
-- document binary content, raw OCR text, normalized OCR layout, or provider response content; allowlisted OCR suggestions and reviewed values remain confined to the zero-retention assisted-intake review projection;
+- document binary content, raw OCR text, normalized OCR layout, or provider response content; allowlisted OCR suggestions use the zero-retention assisted-intake review projection, and explicitly applied reviewed values remain only in route-local existing form inputs until an owning command is invoked;
 - correction contents or internal reviewer notes outside the authorized workspace;
 - canonical external transfer/payment references after submission;
 - request UUIDs, internal operation IDs, actor IDs, audit IDs, encryption details, fingerprints, storage keys, or provider paths unless an API deliberately exposes a safe operational identifier.
@@ -986,7 +986,7 @@ Document review workspace composition:
 
 `WAIVE_DOCUMENT` appears only with `document:waive`. Replacement requires the controlled replacement reason and Customer-visible instruction. Restricted Staff notes are labeled separately. Reviewing a stale version never switches to the new version automatically.
 
-Manual review remains authoritative. The backend can start OCR for an exact current intake-evidence version and return safe job status, but Staff Web exposes no extraction trigger, job status, OCR confidence, extracted text, review, retry, or override controls in this blueprint. `MER-FU-033` tracks the remaining review and application experience.
+Manual review remains authoritative. Staff Web can explicitly request OCR for an exact current intake-evidence version, monitor the safe job status, review allowlisted suggestions with confidence, correct or omit values, and finalize one immutable review. Only a `REVIEWED` result exposes the explicit application action. That action copies permitted values into existing route-local Customer, bank-account, UCL, or Collateral form inputs; it does not invoke a mutation, alter consent, or bypass the existing Save, Add, Create, validation, permission, confirmation, or uncertain-result behavior.
 
 ### 23.3 Staff Correction Tasks
 
@@ -1427,7 +1427,6 @@ An `OperationStatusPanel` is client recovery state, not audit evidence.
 
 ### 33.3 Explicitly Deferred
 
-- OCR extraction controls and job/result review UI (`MER-FU-033`);
 - generic audit search;
 - assignment, reassignment, workload, and SLA tracking;
 - configurable approval workflow;
@@ -1504,7 +1503,7 @@ Staff FE checkpoints deliver the Staff Web feature area inside `internal-web/`. 
 - block Customer-owned correction, cancellation, offer-response, contract-acknowledgment, and checklist-mutation commands for Staff-assisted applications until a Staff-mediated contract is delivered;
 - reconcile conversion uncertainty through GET without automatic POST retry, and preserve exact document-upload replay only for the unchanged operation and file.
 
-This checkpoint is executable for UCL. Paper Origination CP3 extends the same controlled workflow to Collateral Loan conversion. The assisted-intake workspace also places explicit OCR extraction, active-only polling, controlled failure/manual fallback, and immutable Staff review/correction beside each current evidence version. Reviewed values remain separate from Customer, bank-account, UCL, and Collateral forms until the tracked application checkpoint.
+This checkpoint is executable for UCL. Paper Origination CP3 extends the same controlled workflow to Collateral Loan conversion. The assisted-intake workspace also places explicit OCR extraction, active-only polling, controlled failure/manual fallback, and immutable Staff review/correction beside each current evidence version. Staff may explicitly copy finalized reviewed values into the existing unsaved Customer, bank-account, UCL, and Collateral forms. Replacing the source evidence removes untouched OCR-applied values, and persistence still requires the existing owning command.
 
 ### Staff FE-CP1 — Internal Foundation
 
@@ -1607,7 +1606,6 @@ Uncertain settlement and closure results retain one actor-bound UUID plus a SHA-
 The Staff Web planning baseline deliberately defers:
 
 - Back-Office Administration screens for product, Partner, Identity, role, permission, and configuration;
-- OCR extraction controls, job-status presentation, review/correction, and application of reviewed suggestions;
 - assignment, reassignment, SLA, escalation, and workload management;
 - global dashboards, analytics, reporting, exports, and generic audit search;
 - saved operational views until query contracts stabilize;

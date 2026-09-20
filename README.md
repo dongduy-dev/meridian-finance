@@ -345,7 +345,7 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 - [x] Provider-normalized page, line, token, confidence, and layout preservation
 - [x] Explicit Staff request for an exact current intake version with PostgreSQL-backed claim, lease, retry, and encrypted result persistence
 - [x] Authorized Staff review/correction experience for OCR-assisted results
-- [ ] Application of explicitly reviewed suggestions through existing Customer and Loan commands
+- [x] Application of explicitly reviewed suggestions through existing Customer and Loan commands
 
 ### Phase 3 — Customer and Internal Web Experience
 

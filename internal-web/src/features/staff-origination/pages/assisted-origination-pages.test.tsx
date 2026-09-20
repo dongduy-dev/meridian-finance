@@ -73,6 +73,25 @@ const uploadedVersion = {
   uploadedAt: '2026-09-17T08:30:00',
 }
 
+const ocrJob = (intakeDocumentVersionId: string, disposition = 'REVIEWED') => ({
+  ocrJobId: '44444444-4444-4444-8444-444444444445', intakeDocumentVersionId,
+  state: 'COMPLETED', disposition, attemptCount: 1, failureCategory: null,
+  createdAt: '2026-09-20T08:00:00', updatedAt: '2026-09-20T08:01:00',
+  completedAt: '2026-09-20T08:01:00', failedAt: null,
+})
+
+const ocrReview = (
+  evidenceType: 'CUSTOMER_IDENTITY' | 'UCL_PAPER_APPLICATION' | 'COLLATERAL_PAPER_APPLICATION',
+  reviewedFields: Record<string, string>,
+  disposition = 'REVIEWED',
+) => ({
+  ocrResultId: '55555555-5555-4555-8555-555555555555', evidenceType, disposition,
+  suggestions: disposition === 'REVIEWED' ? [] : [
+    { fieldName: 'fullName', proposedValue: 'OCR Applicant', confidence: 0.95 },
+    { fieldName: 'requestedAmount', proposedValue: '9999999', confidence: 0.94 },
+  ], reviewedFields, reviewedAt: disposition === 'REVIEWED' ? '2026-09-20T08:05:00' : null,
+})
+
 function renderRoute(path: string) {
   const router = createTestRouter([path])
   const view = render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
@@ -85,6 +104,7 @@ describe('assisted origination pages', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     sessionStorage.clear()
+    localStorage.clear()
     vi.mocked(authApi.refresh).mockResolvedValue(staff())
   })
 
@@ -417,26 +437,15 @@ describe('assisted origination pages', () => {
     expect(vi.mocked(api.apiRequest).mock.calls.map(requestPath)).toEqual([`/staff/assisted-originations/${caseId}`])
   })
 
-  it('keeps reviewed OCR suggestions separate from existing Customer and Loan forms', async () => {
+  it('keeps unfinalized OCR suggestions separate from existing Customer and Loan forms', async () => {
     const ocrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`
     vi.mocked(api.apiRequest).mockImplementation(async (path) => {
       if (path === `/staff/assisted-originations/${caseId}`) return intake()
       if (path === `/staff/customers/${customerId}`) return customer
       if (path === `/staff/customers/${customerId}/bank-accounts`) return []
       if (path === `/staff/assisted-originations/${caseId}/evidence`) return evidence
-      if (path === ocrBase) return {
-        ocrJobId: '44444444-4444-4444-8444-444444444445', intakeDocumentVersionId: versionId,
-        state: 'COMPLETED', disposition: 'PENDING_REVIEW', attemptCount: 1, failureCategory: null,
-        createdAt: '2026-09-20T08:00:00', updatedAt: '2026-09-20T08:01:00',
-        completedAt: '2026-09-20T08:01:00', failedAt: null,
-      }
-      if (path === `${ocrBase}/review`) return {
-        ocrResultId: '55555555-5555-4555-8555-555555555555', evidenceType: 'UCL_PAPER_APPLICATION',
-        disposition: 'PENDING_REVIEW', suggestions: [
-          { fieldName: 'fullName', proposedValue: 'OCR Applicant', confidence: 0.95 },
-          { fieldName: 'requestedAmount', proposedValue: '9999999', confidence: 0.94 },
-        ], reviewedFields: {}, reviewedAt: null,
-      }
+      if (path === ocrBase) return ocrJob(versionId, 'PENDING_REVIEW')
+      if (path === `${ocrBase}/review`) return ocrReview('UCL_PAPER_APPLICATION', {}, 'PENDING_REVIEW')
       throw new Error(`Unexpected request ${path}`)
     })
     renderRoute(`/staff/origination/${caseId}`)
@@ -447,6 +456,331 @@ describe('assisted origination pages', () => {
     expect(fullNames[1]).toHaveValue('OCR Applicant')
     const requestedAmounts = screen.getAllByLabelText('Requested amount')
     expect(requestedAmounts.find((input) => input.getAttribute('type') === 'number')).toHaveValue(null)
+    expect(screen.queryByRole('button', { name: 'Apply reviewed values' })).not.toBeInTheDocument()
+  })
+
+  it('explicitly applies reviewed Customer, bank, and UCL values without consent or automatic commands', async () => {
+    const ocrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`
+    const sensitiveAccount = '1234567890123456'
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return { ...customer, primaryActiveBankAccountPresent: true }
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return evidence
+      if (path === ocrBase) return ocrJob(versionId)
+      if (path === `${ocrBase}/review`) return ocrReview('UCL_PAPER_APPLICATION', {
+        fullName: 'Reviewed Customer', identityReference: '999999999999', phoneNumber: '0911222333',
+        residentialAddress: '9 Reviewed Street', employmentStatus: 'SELF_EMPLOYED', employerName: 'Reviewed Employer',
+        bankCode: 'REV', bankNameSnapshot: 'Reviewed Bank', accountHolderName: 'Reviewed Customer',
+        accountNumber: sensitiveAccount, requestedAmount: '15000000', requestedTermMonths: '18',
+        termsConsentAccepted: 'false', dataProcessingConsentAccepted: 'false',
+      })
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+
+    const apply = await screen.findByRole('button', { name: 'Apply reviewed values' })
+    expect(screen.getAllByLabelText('Full name').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('Paper Customer')
+    await user.click(apply)
+
+    expect(screen.getAllByLabelText('Full name').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('Reviewed Customer')
+    expect(screen.getAllByLabelText('Identity reference').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('')
+    expect(screen.getByLabelText('Phone')).toHaveValue('0911222333')
+    expect(screen.getByLabelText('Signed application consent recorded')).toBeChecked()
+    expect(screen.getByLabelText('Data processing consent recorded')).toBeChecked()
+    expect(screen.getAllByLabelText('Bank code').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('REV')
+    expect(screen.getAllByLabelText('Bank name').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('Reviewed Bank')
+    expect(screen.getAllByLabelText('Account holder').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('Reviewed Customer')
+    expect(screen.getAllByLabelText('Account number').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue(sensitiveAccount)
+    expect(screen.getAllByLabelText('Requested amount').find((field) => field.getAttribute('type') === 'number')).toHaveValue(15000000)
+    expect(screen.getAllByLabelText('Requested term months').find((field) => field.getAttribute('type') === 'number')).toHaveValue(18)
+    expect(vi.mocked(api.apiRequest).mock.calls.some((call) => (call[1] as { method?: string } | undefined)?.method === 'POST')).toBe(false)
+    expect(sessionStorage.getItem('meridian.staff.unresolved-operations.v1') ?? '').not.toContain(sensitiveAccount)
+    expect(JSON.stringify(localStorage)).not.toContain(sensitiveAccount)
+  })
+
+  it('applies reviewed identity to Create Customer while leaving both consent choices unchecked', async () => {
+    const identityVersionId = '88888888-8888-4888-8888-888888888888'
+    const identityEvidence = [{ ...evidence[0]!, evidenceType: 'CUSTOMER_IDENTITY', currentVersionId: identityVersionId,
+      versions: [{ ...evidence[0]!.versions[0]!, intakeDocumentVersionId: identityVersionId }] }]
+    const ocrBase = `/staff/assisted-originations/${caseId}/evidence/CUSTOMER_IDENTITY/versions/${identityVersionId}/ocr`
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake({ customerId: null })
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return identityEvidence
+      if (path === ocrBase) return ocrJob(identityVersionId)
+      if (path === `${ocrBase}/review`) return ocrReview('CUSTOMER_IDENTITY', {
+        fullName: 'New Reviewed Customer', identityReference: '012345678901',
+      })
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+
+    await user.click(await screen.findByRole('button', { name: 'Apply reviewed values' }))
+
+    expect(screen.getAllByLabelText('Full name').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('New Reviewed Customer')
+    expect(screen.getAllByLabelText('Identity reference').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('012345678901')
+    expect(screen.getByLabelText('Signed application consent recorded')).not.toBeChecked()
+    expect(screen.getByLabelText('Data processing consent recorded')).not.toBeChecked()
+    expect(vi.mocked(api.apiRequest).mock.calls.some((call) => requestPath(call) === '/staff/customers')).toBe(false)
+  })
+
+  it('allows reviewed identity reference only for an existing INCOMPLETE Customer profile', async () => {
+    const ocrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return { ...customer, profileCompletionStatus: 'INCOMPLETE' }
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return evidence
+      if (path === ocrBase) return ocrJob(versionId)
+      if (path === `${ocrBase}/review`) return ocrReview('UCL_PAPER_APPLICATION', {
+        identityReference: '012345678901',
+      })
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+
+    await user.click(await screen.findByRole('button', { name: 'Apply reviewed values' }))
+
+    expect(screen.getAllByLabelText('Identity reference').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('012345678901')
+  })
+
+  it('applies all supported Collateral fields and ignores invalid structured values conservatively', async () => {
+    const ocrBase = `/staff/assisted-originations/${caseId}/evidence/COLLATERAL_PAPER_APPLICATION/versions/${versionId}/ocr`
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake({ productCode: 'COLLATERAL_LOAN' })
+      if (path === `/staff/customers/${customerId}`) return { ...customer, primaryActiveBankAccountPresent: true }
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return collateralEvidence
+      if (path === ocrBase) return ocrJob(versionId)
+      if (path === `${ocrBase}/review`) return ocrReview('COLLATERAL_PAPER_APPLICATION', {
+        requestedAmount: '25000000', requestedTermMonths: '24', 'collateral.type': 'CAR',
+        'collateral.description': 'Reviewed vehicle', 'collateral.estimatedValue': '50000000',
+        'collateral.ownershipStatus': 'CUSTOMER_OWNED', 'collateral.conditionNote': 'Good condition',
+      })
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+    await user.click(await screen.findByRole('button', { name: 'Apply reviewed values' }))
+
+    expect(screen.getAllByLabelText('Requested amount').find((field) => field.getAttribute('type') === 'number')).toHaveValue(25000000)
+    expect(screen.getAllByLabelText('Collateral type').find((field) => field.tagName === 'SELECT')).toHaveValue('CAR')
+    expect(screen.getAllByLabelText('Description').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('Reviewed vehicle')
+    expect(screen.getAllByLabelText('Estimated value').find((field) => field.getAttribute('type') === 'number')).toHaveValue(50000000)
+    expect(screen.getAllByLabelText('Ownership status').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('CUSTOMER_OWNED')
+    expect(screen.getAllByLabelText('Condition note').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('Good condition')
+    expect(vi.mocked(api.apiRequest).mock.calls.some((call) => requestPath(call).endsWith('/collateral-loan/submit'))).toBe(false)
+  })
+
+  it('does not guess invalid structured OCR values and keeps manual entry usable', async () => {
+    const ocrBase = `/staff/assisted-originations/${caseId}/evidence/COLLATERAL_PAPER_APPLICATION/versions/${versionId}/ocr`
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake({ productCode: 'COLLATERAL_LOAN' })
+      if (path === `/staff/customers/${customerId}`) return { ...customer, primaryActiveBankAccountPresent: true }
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return collateralEvidence
+      if (path === ocrBase) return ocrJob(versionId)
+      if (path === `${ocrBase}/review`) return ocrReview('COLLATERAL_PAPER_APPLICATION', {
+        requestedAmount: 'not-a-number', requestedTermMonths: '12 months',
+        'collateral.type': 'BICYCLE', 'collateral.estimatedValue': '999999999999999999999',
+      })
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+    const numericAmount = (await screen.findAllByLabelText('Requested amount')).find((field) => field.getAttribute('type') === 'number')!
+    await user.type(numericAmount, '123')
+    const collateralType = screen.getAllByLabelText('Collateral type').find((field) => field.tagName === 'SELECT')!
+    await user.selectOptions(collateralType, 'CAR')
+    await user.click(screen.getByRole('button', { name: 'Apply reviewed values' }))
+
+    expect(numericAmount).toHaveValue(123)
+    expect(screen.getAllByLabelText('Requested term months').find((field) => field.getAttribute('type') === 'number')).toHaveValue(null)
+    expect(collateralType).toHaveValue('CAR')
+    expect(screen.getAllByLabelText('Estimated value').find((field) => field.getAttribute('type') === 'number')).toHaveValue(null)
+    const description = screen.getAllByLabelText('Description').find((field) => !(field as HTMLInputElement).readOnly)!
+    await user.type(description, 'Manual description')
+    expect(description).toHaveValue('Manual description')
+  })
+
+  it('treats an empty reviewed map as a no-op and keeps manual UCL entry usable', async () => {
+    const ocrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return customer
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return evidence
+      if (path === ocrBase) return ocrJob(versionId)
+      if (path === `${ocrBase}/review`) return ocrReview('UCL_PAPER_APPLICATION', {})
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+    await user.click(await screen.findByRole('button', { name: 'Apply reviewed values' }))
+    expect(screen.getByText(/No supported reviewed values were available/i)).toBeVisible()
+    const amount = screen.getAllByLabelText('Requested amount').find((field) => field.getAttribute('type') === 'number')!
+    await user.type(amount, '9000000')
+    expect(amount).toHaveValue(9000000)
+  })
+
+  it('lets a later explicit reviewed source replace overlapping unsaved values without hidden priority', async () => {
+    const identityVersionId = '88888888-8888-4888-8888-888888888888'
+    const bothEvidence = [
+      { ...evidence[0]!, evidenceType: 'CUSTOMER_IDENTITY', currentVersionId: identityVersionId,
+        versions: [{ ...evidence[0]!.versions[0]!, intakeDocumentVersionId: identityVersionId }] },
+      evidence[0]!,
+    ]
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return customer
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return bothEvidence
+      if (path.includes(`/CUSTOMER_IDENTITY/versions/${identityVersionId}/ocr/review`)) return ocrReview('CUSTOMER_IDENTITY', { fullName: 'Identity Review' })
+      if (path.includes(`/CUSTOMER_IDENTITY/versions/${identityVersionId}/ocr`)) return ocrJob(identityVersionId)
+      if (path.includes(`/UCL_PAPER_APPLICATION/versions/${versionId}/ocr/review`)) return ocrReview('UCL_PAPER_APPLICATION', { fullName: 'Application Review' })
+      if (path.includes(`/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`)) return ocrJob(versionId)
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+
+    const buttons = await screen.findAllByRole('button', { name: 'Apply reviewed values' })
+    const editableName = screen.getAllByLabelText('Full name').find((field) => !(field as HTMLInputElement).readOnly)
+    await user.click(buttons[0]!)
+    expect(editableName).toHaveValue('Identity Review')
+    await user.click(buttons[1]!)
+    expect(editableName).toHaveValue('Application Review')
+  })
+
+  it('uses an intervening Staff edit as the restoration baseline for a later OCR source', async () => {
+    const identityVersionId = '88888888-8888-4888-8888-888888888888'
+    const identityEvidence = { ...evidence[0]!, evidenceType: 'CUSTOMER_IDENTITY', currentVersionId: identityVersionId,
+      versions: [{ ...evidence[0]!.versions[0]!, intakeDocumentVersionId: identityVersionId }] }
+    const replacementApplicationEvidence = { ...evidence[0]!, currentVersionId: uploadedVersion.intakeDocumentVersionId,
+      versions: [...evidence[0]!.versions, uploadedVersion] }
+    const identityOcrBase = `/staff/assisted-originations/${caseId}/evidence/CUSTOMER_IDENTITY/versions/${identityVersionId}/ocr`
+    const applicationOcrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`
+    const replacementOcrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${uploadedVersion.intakeDocumentVersionId}/ocr`
+    let replaced = false
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return customer
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) {
+        return [identityEvidence, replaced ? replacementApplicationEvidence : evidence[0]!]
+      }
+      if (path === identityOcrBase) return ocrJob(identityVersionId)
+      if (path === `${identityOcrBase}/review`) return ocrReview('CUSTOMER_IDENTITY', { fullName: 'Identity Review' })
+      if (path === applicationOcrBase) return ocrJob(versionId)
+      if (path === `${applicationOcrBase}/review`) return ocrReview('UCL_PAPER_APPLICATION', { fullName: 'Application Review' })
+      if (path === replacementOcrBase) throw new ApiError(404, 'OCR_JOB_NOT_FOUND', 'Missing', path, '2026-09-20T08:00:00Z')
+      if (path.endsWith('/evidence/UCL_PAPER_APPLICATION/versions')) { replaced = true; return uploadedVersion }
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+
+    const buttons = await screen.findAllByRole('button', { name: 'Apply reviewed values' })
+    const editableName = screen.getAllByLabelText('Full name').find((field) => !(field as HTMLInputElement).readOnly)!
+    await user.click(buttons[0]!)
+    expect(editableName).toHaveValue('Identity Review')
+    await user.clear(editableName)
+    await user.type(editableName, 'Staff Corrected Customer')
+    await user.click(buttons[1]!)
+    expect(editableName).toHaveValue('Application Review')
+
+    const file = new File(['replacement'], 'replacement.pdf', { type: 'application/pdf' })
+    const fileInput = screen.getByLabelText('Signed paper application file')
+    await user.upload(fileInput, file)
+    fireEvent.submit(fileInput.closest('form')!)
+
+    await waitFor(() => expect(replaced).toBe(true))
+    expect(await screen.findByText(new RegExp(uploadedVersion.intakeDocumentVersionId))).toBeVisible()
+    expect(editableName).toHaveValue('Staff Corrected Customer')
+  })
+
+  it('does not restore pre-OCR profile data after the reviewed value is authoritatively saved', async () => {
+    const oldOcrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`
+    const newOcrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${uploadedVersion.intakeDocumentVersionId}/ocr`
+    const savedCustomer = { ...customer, profile: { ...customer.profile, fullName: 'Reviewed Customer' } }
+    const replacementEvidence = [{ ...evidence[0]!, currentVersionId: uploadedVersion.intakeDocumentVersionId,
+      versions: [...evidence[0]!.versions, uploadedVersion] }]
+    let profilePuts = 0
+    let saved = false
+    let replaced = false
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return saved ? savedCustomer : customer
+      if (path === `/staff/customers/${customerId}/profile` && options?.method === 'PUT') {
+        profilePuts += 1
+        saved = true
+        return savedCustomer
+      }
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return replaced ? replacementEvidence : evidence
+      if (path === oldOcrBase) return ocrJob(versionId)
+      if (path === `${oldOcrBase}/review`) return ocrReview('UCL_PAPER_APPLICATION', { fullName: 'Reviewed Customer' })
+      if (path === newOcrBase) throw new ApiError(404, 'OCR_JOB_NOT_FOUND', 'Missing', path, '2026-09-20T08:00:00Z')
+      if (path.endsWith('/evidence/UCL_PAPER_APPLICATION/versions')) { replaced = true; return uploadedVersion }
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+
+    await user.click(await screen.findByRole('button', { name: 'Apply reviewed values' }))
+    const editableName = screen.getAllByLabelText('Full name').find((field) => !(field as HTMLInputElement).readOnly)!
+    expect(editableName).toHaveValue('Reviewed Customer')
+    await user.click(screen.getByRole('button', { name: 'Save profile' }))
+    expect(await screen.findByText('Operation confirmed')).toBeVisible()
+    expect(profilePuts).toBe(1)
+
+    const file = new File(['replacement'], 'replacement.pdf', { type: 'application/pdf' })
+    const fileInput = screen.getByLabelText('Signed paper application file')
+    await user.upload(fileInput, file)
+    fireEvent.submit(fileInput.closest('form')!)
+
+    await waitFor(() => expect(replaced).toBe(true))
+    expect(await screen.findByText(new RegExp(uploadedVersion.intakeDocumentVersionId))).toBeVisible()
+    expect(editableName).toHaveValue('Reviewed Customer')
+    expect(editableName).not.toHaveValue('Paper Customer')
+    expect(profilePuts).toBe(1)
+  })
+
+  it('removes untouched OCR-applied values when the source evidence version is replaced', async () => {
+    const oldOcrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`
+    const newOcrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${uploadedVersion.intakeDocumentVersionId}/ocr`
+    let replaced = false
+    const replacementEvidence = [{ ...evidence[0]!, currentVersionId: uploadedVersion.intakeDocumentVersionId,
+      versions: [...evidence[0]!.versions, uploadedVersion] }]
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return customer
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return replaced ? replacementEvidence : evidence
+      if (path === oldOcrBase) return ocrJob(versionId)
+      if (path === `${oldOcrBase}/review`) return ocrReview('UCL_PAPER_APPLICATION', { requestedAmount: '17000000' })
+      if (path === newOcrBase) throw new ApiError(404, 'OCR_JOB_NOT_FOUND', 'Missing', path, '2026-09-20T08:00:00Z')
+      if (path.endsWith('/evidence/UCL_PAPER_APPLICATION/versions')) { replaced = true; return uploadedVersion }
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+    await user.click(await screen.findByRole('button', { name: 'Apply reviewed values' }))
+    const amount = screen.getAllByLabelText('Requested amount').find((field) => field.getAttribute('type') === 'number')!
+    expect(amount).toHaveValue(17000000)
+
+    const file = new File(['replacement'], 'replacement.pdf', { type: 'application/pdf' })
+    const fileInput = screen.getByLabelText('Signed paper application file')
+    await user.upload(fileInput, file)
+    fireEvent.submit(fileInput.closest('form')!)
+
+    await waitFor(() => expect(replaced).toBe(true))
+    expect(await screen.findByText(new RegExp(uploadedVersion.intakeDocumentVersionId))).toBeVisible()
+    expect(await screen.findByText(/values from a replaced evidence version were removed/i)).toBeVisible()
+    expect(amount).toHaveValue(null)
   })
 
   it('renders a safe retryable load error without exposing backend detail', async () => {

@@ -27,12 +27,19 @@ const projection = (overrides: Record<string, unknown> = {}) => ({
   reviewedFields: {}, reviewedAt: null, ...overrides,
 })
 
-function renderPanel(protectedRequest: ReturnType<typeof vi.fn>) {
+function renderPanel(
+  protectedRequest: ReturnType<typeof vi.fn>,
+  onApplyReviewedValues?: (source: {
+    evidenceType: 'CUSTOMER_IDENTITY' | 'UCL_PAPER_APPLICATION' | 'COLLATERAL_PAPER_APPLICATION'
+    versionId: string
+    reviewedFields: Record<string, string>
+  }) => number,
+) {
   const client = createQueryClient()
   const manager = { protectedRequest } as unknown as AuthSessionManager
   const view = render(<QueryClientProvider client={client}><IntakeOcrReviewPanel
     manager={manager} caseId={caseId} evidenceType="UCL_PAPER_APPLICATION"
-    versionId={versionId} intakeOpen
+    versionId={versionId} intakeOpen onApplyReviewedValues={onApplyReviewedValues}
   /></QueryClientProvider>)
   return { client, ...view }
 }
@@ -68,6 +75,41 @@ describe('IntakeOcrReviewPanel', () => {
 
     expect(await screen.findByText(/OCR failed: PROVIDER_UNAVAILABLE/i)).toBeVisible()
     expect(screen.getByText(/Continue the manual intake workflow/i)).toBeVisible()
+  })
+
+  it('offers no apply action for an unfinalized review', async () => {
+    const request = vi.fn(async (path: string) => {
+      if (path === base) return job('COMPLETED')
+      if (path === `${base}/review`) return projection()
+      throw new Error(`Unexpected request ${path}`)
+    })
+    renderPanel(request, vi.fn())
+
+    expect(await screen.findByDisplayValue('OCR Applicant')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Apply reviewed values' })).not.toBeInTheDocument()
+  })
+
+  it('applies only finalized reviewed fields after the explicit Staff action', async () => {
+    const reviewedFields = { fullName: 'Final Applicant', requestedAmount: '12000000' }
+    const request = vi.fn(async (path: string) => {
+      if (path === base) return job('COMPLETED', { disposition: 'REVIEWED' })
+      if (path === `${base}/review`) return projection({
+        disposition: 'REVIEWED', suggestions: [], reviewedFields, reviewedAt: '2026-09-20T08:05:00',
+      })
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const apply = vi.fn().mockReturnValue(2)
+    const user = userEvent.setup()
+    renderPanel(request, apply)
+
+    const button = await screen.findByRole('button', { name: 'Apply reviewed values' })
+    expect(apply).not.toHaveBeenCalled()
+    await user.click(button)
+
+    expect(apply).toHaveBeenCalledWith({
+      evidenceType: 'UCL_PAPER_APPLICATION', versionId, reviewedFields,
+    })
+    expect(screen.getByText(/copied to the intake forms/i)).toBeVisible()
   })
 
   it('renders confidence, submits Staff corrections, excludes consent, and drops sensitive cache on unmount', async () => {
