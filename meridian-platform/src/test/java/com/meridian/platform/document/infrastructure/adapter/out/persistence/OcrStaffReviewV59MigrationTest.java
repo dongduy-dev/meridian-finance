@@ -67,7 +67,7 @@ class OcrStaffReviewV59MigrationTest {
             jdbc.update("INSERT INTO " + schema + ".audit_events "
                             + "(id, operation_id, sequence_number, actor_type, actor_user_id, entity_type, "
                             + "entity_id, action, payload, occurred_at) "
-                            + "VALUES (?, ?, 1, 'STAFF', ?, 'OCR_REVIEW', ?, 'OCR_RESULT_REVIEWED', "
+                            + "VALUES (?, ?, 1, 'USER', ?, 'OCR_REVIEW', ?, 'OCR_RESULT_REVIEWED', "
                             + "'{}'::jsonb, CURRENT_TIMESTAMP)",
                     UUID.randomUUID(), UUID.randomUUID(), seed.staffId(), UUID.randomUUID());
         } finally {

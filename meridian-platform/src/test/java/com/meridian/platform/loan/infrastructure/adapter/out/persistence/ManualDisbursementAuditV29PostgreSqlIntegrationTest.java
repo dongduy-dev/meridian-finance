@@ -58,7 +58,7 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
 
     @Test
     void installedLatestRetainsEveryKnownAuditActionAndRejectsUnknownAction() {
-        assertEquals("58", latestVersion(SCHEMA));
+        assertEquals("59", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -264,6 +264,7 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
                     || action == BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
                     || action == BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
                     || action == BusinessAuditAction.OCR_JOB_CREATED
+                    || action == BusinessAuditAction.OCR_RESULT_REVIEWED
                     || isStaffAssistedOriginationAction(action)) {
                 continue;
             }
