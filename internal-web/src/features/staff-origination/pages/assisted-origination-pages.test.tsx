@@ -655,6 +655,100 @@ describe('assisted origination pages', () => {
     expect(editableName).toHaveValue('Application Review')
   })
 
+  it('uses an intervening Staff edit as the restoration baseline for a later OCR source', async () => {
+    const identityVersionId = '88888888-8888-4888-8888-888888888888'
+    const identityEvidence = { ...evidence[0]!, evidenceType: 'CUSTOMER_IDENTITY', currentVersionId: identityVersionId,
+      versions: [{ ...evidence[0]!.versions[0]!, intakeDocumentVersionId: identityVersionId }] }
+    const replacementApplicationEvidence = { ...evidence[0]!, currentVersionId: uploadedVersion.intakeDocumentVersionId,
+      versions: [...evidence[0]!.versions, uploadedVersion] }
+    const identityOcrBase = `/staff/assisted-originations/${caseId}/evidence/CUSTOMER_IDENTITY/versions/${identityVersionId}/ocr`
+    const applicationOcrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`
+    const replacementOcrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${uploadedVersion.intakeDocumentVersionId}/ocr`
+    let replaced = false
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return customer
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) {
+        return [identityEvidence, replaced ? replacementApplicationEvidence : evidence[0]!]
+      }
+      if (path === identityOcrBase) return ocrJob(identityVersionId)
+      if (path === `${identityOcrBase}/review`) return ocrReview('CUSTOMER_IDENTITY', { fullName: 'Identity Review' })
+      if (path === applicationOcrBase) return ocrJob(versionId)
+      if (path === `${applicationOcrBase}/review`) return ocrReview('UCL_PAPER_APPLICATION', { fullName: 'Application Review' })
+      if (path === replacementOcrBase) throw new ApiError(404, 'OCR_JOB_NOT_FOUND', 'Missing', path, '2026-09-20T08:00:00Z')
+      if (path.endsWith('/evidence/UCL_PAPER_APPLICATION/versions')) { replaced = true; return uploadedVersion }
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+
+    const buttons = await screen.findAllByRole('button', { name: 'Apply reviewed values' })
+    const editableName = screen.getAllByLabelText('Full name').find((field) => !(field as HTMLInputElement).readOnly)!
+    await user.click(buttons[0]!)
+    expect(editableName).toHaveValue('Identity Review')
+    await user.clear(editableName)
+    await user.type(editableName, 'Staff Corrected Customer')
+    await user.click(buttons[1]!)
+    expect(editableName).toHaveValue('Application Review')
+
+    const file = new File(['replacement'], 'replacement.pdf', { type: 'application/pdf' })
+    const fileInput = screen.getByLabelText('Signed paper application file')
+    await user.upload(fileInput, file)
+    fireEvent.submit(fileInput.closest('form')!)
+
+    await waitFor(() => expect(replaced).toBe(true))
+    expect(await screen.findByText(new RegExp(uploadedVersion.intakeDocumentVersionId))).toBeVisible()
+    expect(editableName).toHaveValue('Staff Corrected Customer')
+  })
+
+  it('does not restore pre-OCR profile data after the reviewed value is authoritatively saved', async () => {
+    const oldOcrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`
+    const newOcrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${uploadedVersion.intakeDocumentVersionId}/ocr`
+    const savedCustomer = { ...customer, profile: { ...customer.profile, fullName: 'Reviewed Customer' } }
+    const replacementEvidence = [{ ...evidence[0]!, currentVersionId: uploadedVersion.intakeDocumentVersionId,
+      versions: [...evidence[0]!.versions, uploadedVersion] }]
+    let profilePuts = 0
+    let saved = false
+    let replaced = false
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return saved ? savedCustomer : customer
+      if (path === `/staff/customers/${customerId}/profile` && options?.method === 'PUT') {
+        profilePuts += 1
+        saved = true
+        return savedCustomer
+      }
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return replaced ? replacementEvidence : evidence
+      if (path === oldOcrBase) return ocrJob(versionId)
+      if (path === `${oldOcrBase}/review`) return ocrReview('UCL_PAPER_APPLICATION', { fullName: 'Reviewed Customer' })
+      if (path === newOcrBase) throw new ApiError(404, 'OCR_JOB_NOT_FOUND', 'Missing', path, '2026-09-20T08:00:00Z')
+      if (path.endsWith('/evidence/UCL_PAPER_APPLICATION/versions')) { replaced = true; return uploadedVersion }
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+
+    await user.click(await screen.findByRole('button', { name: 'Apply reviewed values' }))
+    const editableName = screen.getAllByLabelText('Full name').find((field) => !(field as HTMLInputElement).readOnly)!
+    expect(editableName).toHaveValue('Reviewed Customer')
+    await user.click(screen.getByRole('button', { name: 'Save profile' }))
+    expect(await screen.findByText('Operation confirmed')).toBeVisible()
+    expect(profilePuts).toBe(1)
+
+    const file = new File(['replacement'], 'replacement.pdf', { type: 'application/pdf' })
+    const fileInput = screen.getByLabelText('Signed paper application file')
+    await user.upload(fileInput, file)
+    fireEvent.submit(fileInput.closest('form')!)
+
+    await waitFor(() => expect(replaced).toBe(true))
+    expect(await screen.findByText(new RegExp(uploadedVersion.intakeDocumentVersionId))).toBeVisible()
+    expect(editableName).toHaveValue('Reviewed Customer')
+    expect(editableName).not.toHaveValue('Paper Customer')
+    expect(profilePuts).toBe(1)
+  })
+
   it('removes untouched OCR-applied values when the source evidence version is replaced', async () => {
     const oldOcrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`
     const newOcrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${uploadedVersion.intakeDocumentVersionId}/ocr`

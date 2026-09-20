@@ -140,6 +140,12 @@ export function AssistedOriginationWorkspacePage() {
     return removed
   }, [ocrTargetForm])
 
+  const clearAppliedOcrTarget = (target: OcrFormTarget) => {
+    for (const [key, applied] of appliedOcrControls.current) {
+      if (applied.target === target) appliedOcrControls.current.delete(key)
+    }
+  }
+
   useEffect(() => {
     if (!evidence.data) return
     for (const item of evidence.data) {
@@ -197,13 +203,16 @@ export function AssistedOriginationWorkspacePage() {
       if (!control) return
       const key = `${target}:${name}`
       const previous = appliedOcrControls.current.get(key)
+      const previousValue = previous && control.value === previous.appliedValue
+        ? previous.previousValue
+        : control.value
       appliedOcrControls.current.set(key, {
         target,
         name,
         evidenceType: source.evidenceType,
         versionId: source.versionId,
         appliedValue: value,
-        previousValue: previous?.previousValue ?? control.value,
+        previousValue,
       })
       control.value = value
       appliedCount += 1
@@ -249,6 +258,7 @@ export function AssistedOriginationWorkspacePage() {
       const value = await attachCustomer(manager, assistedOriginationCaseId, targetCustomerId)
       client.setQueryData(originationKeys.case(assistedOriginationCaseId), value)
       const refreshed = await refreshConfirmed(targetCustomerId)
+      clearAppliedOcrTarget('create-customer')
       setAction(key, { status: 'RESOLVED', message: refreshed ? undefined : 'The association was confirmed, but refreshed state is temporarily unavailable.' })
       setActions((valueActions) => ({ ...valueActions, 'customer-creation': { status: 'RESOLVED' } }))
     } catch (caught) {
@@ -261,6 +271,7 @@ export function AssistedOriginationWorkspacePage() {
         const authoritative = await readCase()
         if (authoritative.customerId === targetCustomerId) {
           await refreshConfirmed(targetCustomerId)
+          clearAppliedOcrTarget('create-customer')
           setAction(key, { status: 'RESOLVED', message: 'The selected Customer was confirmed from the authoritative intake.' })
         } else {
           setAction(key, { status: 'RESULT_UNKNOWN', message: 'The association result is unresolved. The command was not repeated.' })
@@ -308,6 +319,7 @@ export function AssistedOriginationWorkspacePage() {
       const selected = await attachCustomer(manager, assistedOriginationCaseId, created.customerId)
       client.setQueryData(originationKeys.case(assistedOriginationCaseId), selected)
       const refreshed = await refreshConfirmed(created.customerId)
+      clearAppliedOcrTarget('create-customer')
       setAction(key, { status: 'RESOLVED', message: refreshed ? undefined : 'The Customer was created and selected, but refreshed state is temporarily unavailable.' })
     } catch (caught) {
       if (!(caught instanceof NetworkError)) {
@@ -320,6 +332,7 @@ export function AssistedOriginationWorkspacePage() {
         const authoritative = await readCase()
         if (authoritative.customerId === created.customerId) {
           await refreshConfirmed(created.customerId)
+          clearAppliedOcrTarget('create-customer')
           setAction(key, { status: 'RESOLVED' })
           setAction('customer-association', { status: 'RESOLVED' })
         } else {
@@ -341,6 +354,7 @@ export function AssistedOriginationWorkspacePage() {
     try {
       const value = await updateCustomer(manager, customerId, input)
       client.setQueryData(originationKeys.customer(customerId), value)
+      clearAppliedOcrTarget('profile')
       const refreshed = await refreshConfirmed()
       setAction(key, { status: 'RESOLVED', message: refreshed ? undefined : 'The profile update was confirmed, but refreshed state is temporarily unavailable.' })
     } catch (caught) {
@@ -351,9 +365,12 @@ export function AssistedOriginationWorkspacePage() {
       setAction(key, { status: 'RECONCILING' })
       try {
         const authoritative = await readCustomer(customerId)
-        setAction(key, profileMatches(authoritative, input)
-          ? { status: 'RESOLVED', message: 'The saved profile was confirmed from authoritative safe fields.' }
-          : { status: 'RESULT_UNKNOWN', message: 'The profile result cannot be proven from the safe projection. The update was not repeated.' })
+        if (profileMatches(authoritative, input)) {
+          clearAppliedOcrTarget('profile')
+          setAction(key, { status: 'RESOLVED', message: 'The saved profile was confirmed from authoritative safe fields.' })
+        } else {
+          setAction(key, { status: 'RESULT_UNKNOWN', message: 'The profile result cannot be proven from the safe projection. The update was not repeated.' })
+        }
       } catch {
         setAction(key, { status: 'RESULT_UNKNOWN', message: 'The profile result is unresolved. The update was not repeated.' })
       }
@@ -368,6 +385,7 @@ export function AssistedOriginationWorkspacePage() {
     setAction(key, { status: 'IN_FLIGHT' })
     try {
       await addBankAccount(manager, customerId, data)
+      clearAppliedOcrTarget('bank')
       form.reset()
       const refreshed = await refreshConfirmed()
       setAction(key, { status: 'RESOLVED', message: refreshed ? undefined : 'The bank account was confirmed, but refreshed state is temporarily unavailable.' })
@@ -483,6 +501,7 @@ export function AssistedOriginationWorkspacePage() {
     try {
       const completed = await submitUclIntake(manager, assistedOriginationCaseId, input)
       client.setQueryData(originationKeys.case(assistedOriginationCaseId), completed)
+      clearAppliedOcrTarget('ucl')
       await refreshConfirmed()
       setAction(key, { status: 'RESOLVED' })
     } catch (caught) {
@@ -494,6 +513,7 @@ export function AssistedOriginationWorkspacePage() {
       try {
         const authoritative = await readCase()
         if (authoritative.status === 'COMPLETED' && authoritative.loanApplicationId) {
+          clearAppliedOcrTarget('ucl')
           await refreshConfirmed()
           setAction(key, { status: 'RESOLVED', message: 'Application creation was confirmed from the authoritative intake.' })
         } else if (authoritative.status === 'OPEN') {
@@ -527,6 +547,7 @@ export function AssistedOriginationWorkspacePage() {
     try {
       const completed = await submitCollateralIntake(manager, assistedOriginationCaseId, input)
       client.setQueryData(originationKeys.case(assistedOriginationCaseId), completed)
+      clearAppliedOcrTarget('collateral')
       await refreshConfirmed()
       setAction(key, { status: 'RESOLVED' })
     } catch (caught) {
@@ -538,6 +559,7 @@ export function AssistedOriginationWorkspacePage() {
       try {
         const authoritative = await readCase()
         if (authoritative.status === 'COMPLETED' && authoritative.loanApplicationId) {
+          clearAppliedOcrTarget('collateral')
           await refreshConfirmed()
           setAction(key, { status: 'RESOLVED', message: 'Application creation was confirmed from the authoritative intake.' })
         } else if (authoritative.status === 'OPEN') {
