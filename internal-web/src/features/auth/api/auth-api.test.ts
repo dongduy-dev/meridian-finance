@@ -21,6 +21,11 @@ describe('auth API', () => {
       `${environment.apiBaseUrl}/auth/refresh`,
       `${environment.apiBaseUrl}/auth/logout`,
     ])
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1].body))).toEqual({
+      email: 'staff@meridian.local',
+      password: 'secret',
+      expectedUserType: 'STAFF',
+    })
     expect(fetchMock.mock.calls.every(([, options]) => options.credentials === 'include')).toBe(true)
     expect(new Headers(fetchMock.mock.calls[2]?.[1].headers).get('Authorization')).toBe('Bearer token')
   })

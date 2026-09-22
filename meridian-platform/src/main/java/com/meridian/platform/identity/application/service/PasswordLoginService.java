@@ -113,6 +113,10 @@ public class PasswordLoginService {
             return PasswordLoginOutcome.invalidCredentials();
         }
 
+        if (request.expectedUserType() != null && request.expectedUserType() != user.userType()) {
+            return PasswordLoginOutcome.invalidCredentials();
+        }
+
         if (!user.isActive()) {
             if (expiredLock) {
                 userRepository.updateLoginProtection(user.id(), 0, null);

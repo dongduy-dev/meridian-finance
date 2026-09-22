@@ -82,7 +82,7 @@ export function createAuthApi(client: ApiClient = apiClient): AuthApi {
       const response = await client.request('/auth/login', {
         method: 'POST',
         credentials: 'include',
-        json: input,
+        json: { ...input, expectedUserType: 'CUSTOMER' },
       })
       return authResponseSchema.parse(response)
     },
