@@ -116,8 +116,12 @@ class StaffAssistedDownstreamV60MigrationTest {
     void migrationAndSnapshotDescribeTheSameV60Boundary() throws IOException {
         String migration = Files.readString(MIGRATION).replace("\r\n", "\n");
         String snapshot = Files.readString(CURRENT_SCHEMA).replace("\r\n", "\n");
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V62"));
-        assertTrue(snapshot.contains(migration.trim()));
+        String snapshotWithoutV63AuditActions = snapshot
+                .replace(",\n        'PARTNER_ELIGIBILITY_REVIEW'", "")
+                .replace(",\n        'PARTNER_ELIGIBILITY_REVIEW_APPROVED',\n"
+                        + "        'PARTNER_ELIGIBILITY_REVIEW_REJECTED'", "");
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V63"));
+        assertTrue(snapshotWithoutV63AuditActions.contains(migration.trim()));
         assertTrue(migration.contains("loan:offer:respond:staff"));
         assertTrue(migration.contains("loan:contract:acknowledge:staff"));
         assertTrue(migration.contains("document:upload:assisted-action"));

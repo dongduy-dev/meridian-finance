@@ -56,7 +56,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     @Test
     void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
-        assertEquals("62", latestVersion(SCHEMA));
+        assertEquals("63", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -221,7 +221,8 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
                     && action != BusinessAuditAction.OCR_JOB_CREATED
                     && action != BusinessAuditAction.OCR_RESULT_REVIEWED
-                    && !isStaffAssistedOriginationAction(action)) {
+                    && !isStaffAssistedOriginationAction(action)
+                    && !isPartnerEligibilityReviewAction(action)) {
                 insertAuditEvent(schema, action.name());
             }
         }
@@ -253,7 +254,8 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
                     && action != BusinessAuditAction.OCR_JOB_CREATED
                     && action != BusinessAuditAction.OCR_RESULT_REVIEWED
-                    && !isStaffAssistedOriginationAction(action)) {
+                    && !isStaffAssistedOriginationAction(action)
+                    && !isPartnerEligibilityReviewAction(action)) {
                 insertAuditEvent(schema, action.name());
             }
         }
@@ -284,6 +286,11 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                 || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_COMPLETED
                 || action == BusinessAuditAction.INTAKE_DOCUMENT_VERSION_UPLOADED
                 || action == BusinessAuditAction.ASSISTED_ACTION_DOCUMENT_VERSION_UPLOADED;
+    }
+
+    private boolean isPartnerEligibilityReviewAction(BusinessAuditAction action) {
+        return action == BusinessAuditAction.PARTNER_ELIGIBILITY_REVIEW_APPROVED
+                || action == BusinessAuditAction.PARTNER_ELIGIBILITY_REVIEW_REJECTED;
     }
 
     private void assertV32ActionsRejected(String schema) {
