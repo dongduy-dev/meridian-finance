@@ -23,7 +23,7 @@ export function contractFixture(status = 'ACKNOWLEDGED') {
       { installmentNumber: 2, principalDue: 5_000_000, interestDue: 150_000, feeDue: 0, totalDue: 5_150_000 },
     ],
     disbursementBankAccount: {
-      bankCode: 'VCB', bankName: 'Vietcombank', accountHolderName: 'MERIDIAN CUSTOMER',
+      bankCode: 'VCB', bankNameSnapshot: 'Vietcombank', accountHolderName: 'MERIDIAN CUSTOMER',
       maskedAccountNumber: '****7890', primaryAtCapture: true, activeAtCapture: true,
       capturedAt: '2026-09-07T08:00:00',
     },

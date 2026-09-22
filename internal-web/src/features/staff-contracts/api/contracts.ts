@@ -49,7 +49,7 @@ export const loanContractSchema = z.object({
   repaymentPreview: z.array(contractRepaymentItemSchema),
   disbursementBankAccount: z.object({
     bankCode: z.string().trim().min(1),
-    bankName: z.string().trim().min(1),
+    bankNameSnapshot: z.string().trim().min(1),
     accountHolderName: z.string().trim().min(1),
     maskedAccountNumber: z.string().trim().regex(/^\*{4}\S+$/),
     primaryAtCapture: z.boolean(),
