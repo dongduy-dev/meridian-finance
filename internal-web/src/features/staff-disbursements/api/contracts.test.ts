@@ -84,7 +84,7 @@ export function queueFixture(page = 0, overrides: Record<string, unknown> = {}) 
         readinessConfirmedAt: contract.readinessConfirmedAt,
         disbursementDestination: {
           bankCode: contract.disbursementBankAccount.bankCode,
-          bankName: contract.disbursementBankAccount.bankName,
+          bankName: contract.disbursementBankAccount.bankNameSnapshot,
           accountHolderName: contract.disbursementBankAccount.accountHolderName,
           maskedAccountNumber: contract.disbursementBankAccount.maskedAccountNumber,
         },

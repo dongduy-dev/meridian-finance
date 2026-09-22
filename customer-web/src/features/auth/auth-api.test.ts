@@ -38,7 +38,14 @@ describe('auth API boundary', () => {
     expect(request).toHaveBeenNthCalledWith(
       1,
       '/auth/login',
-      expect.objectContaining({ credentials: 'include' }),
+      expect.objectContaining({
+        credentials: 'include',
+        json: {
+          email: 'customer@example.com',
+          password: 'not-retained',
+          expectedUserType: 'CUSTOMER',
+        },
+      }),
     )
     expect(request).toHaveBeenNthCalledWith(
       2,

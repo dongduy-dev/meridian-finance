@@ -53,6 +53,50 @@ class PasswordLoginServiceTest {
     }
 
     @Test
+    void wrongPortalReturnsInvalidCredentialsBeforeIssuingTokensOrCreatingRefreshSessions() {
+        for (User user : Set.of(
+                user(UserType.CUSTOMER, UserStatus.ACTIVE, 0, null),
+                user(UserType.STAFF, UserStatus.ACTIVE, 0, null)
+        )) {
+            InMemoryUserRepository users = new InMemoryUserRepository(user);
+            CapturingRefreshTokenRepository refreshTokens = new CapturingRefreshTokenRepository();
+            UserType expectedUserType = user.userType() == UserType.CUSTOMER ? UserType.STAFF : UserType.CUSTOMER;
+            PasswordLoginService service = new PasswordLoginService(
+                    users,
+                    (rawPassword, passwordHash) -> rawPassword.equals("valid-password"),
+                    ignored -> {
+                        throw new AssertionError("Access token issuance should not be called.");
+                    },
+                    new RefreshTokenCodecPort() {
+                        @Override
+                        public GeneratedRefreshToken generate() {
+                            throw new AssertionError("Refresh token generation should not be called.");
+                        }
+
+                        @Override
+                        public String digest(String rawToken) {
+                            throw new AssertionError("Refresh digest should not be called.");
+                        }
+                    },
+                    refreshTokens,
+                    Duration.ofDays(7),
+                    3,
+                    LOCK_DURATION,
+                    Clock.fixed(NOW, ZoneOffset.UTC)
+            );
+
+            PasswordLoginOutcome outcome = service.login(new LoginRequest(
+                    "customer.demo@meridian.local",
+                    "valid-password",
+                    expectedUserType
+            ));
+
+            assertEquals(PasswordLoginOutcome.Failure.INVALID_CREDENTIALS, outcome.failure());
+            assertNull(refreshTokens.created);
+        }
+    }
+
+    @Test
     void wrongPasswordRecordsFailure() {
         InMemoryUserRepository users = new InMemoryUserRepository(activeUser());
 

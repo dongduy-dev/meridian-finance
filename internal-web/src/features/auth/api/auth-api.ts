@@ -22,7 +22,10 @@ function parseAuthResponse(payload: unknown): AuthResponse {
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
-  return parseAuthResponse(await apiRequest('/auth/login', { method: 'POST', body: { email, password } }))
+  return parseAuthResponse(await apiRequest('/auth/login', {
+    method: 'POST',
+    body: { email, password, expectedUserType: 'STAFF' },
+  }))
 }
 
 export async function refresh(): Promise<AuthResponse> {
