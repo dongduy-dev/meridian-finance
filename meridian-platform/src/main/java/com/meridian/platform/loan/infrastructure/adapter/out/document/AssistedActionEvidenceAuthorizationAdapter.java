@@ -24,4 +24,9 @@ public class AssistedActionEvidenceAuthorizationAdapter implements LoanAssistedA
     public void authorizeContractEvidence(UUID loanApplicationId, UUID loanContractId, int contractVersion) {
         useCase.authorizeContractEvidence(loanApplicationId, loanContractId, contractVersion);
     }
+
+    @Override
+    public void authorizeCancellationEvidence(UUID loanApplicationId, UUID correctionRequestId) {
+        useCase.authorizeCancellationEvidence(loanApplicationId, correctionRequestId);
+    }
 }

@@ -3,7 +3,9 @@ package com.meridian.platform.loan.application.service;
 import com.meridian.platform.loan.application.port.in.AuthorizeAssistedActionEvidenceUseCase;
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.port.out.LoanApplicationCancellationRepository;
 import com.meridian.platform.loan.application.port.out.LoanContractRepository;
+import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.StaffAssistedContractAcknowledgmentRepository;
 import com.meridian.platform.loan.application.port.out.StaffAssistedOfferResponseRepository;
 import com.meridian.platform.loan.domain.model.*;
@@ -25,6 +27,8 @@ public class AssistedActionEvidenceAuthorizationService implements AuthorizeAssi
     private final LoanApplicationRepository applications;
     private final ApprovedOfferRepository offers;
     private final LoanContractRepository contracts;
+    private final LoanCorrectionRepository corrections;
+    private final LoanApplicationCancellationRepository cancellations;
     private final StaffAssistedOfferResponseRepository offerResponses;
     private final StaffAssistedContractAcknowledgmentRepository acknowledgments;
     private final CurrentUserProvider currentUsers;
@@ -34,6 +38,8 @@ public class AssistedActionEvidenceAuthorizationService implements AuthorizeAssi
             LoanApplicationRepository applications,
             ApprovedOfferRepository offers,
             LoanContractRepository contracts,
+            LoanCorrectionRepository corrections,
+            LoanApplicationCancellationRepository cancellations,
             StaffAssistedOfferResponseRepository offerResponses,
             StaffAssistedContractAcknowledgmentRepository acknowledgments,
             CurrentUserProvider currentUsers,
@@ -42,6 +48,8 @@ public class AssistedActionEvidenceAuthorizationService implements AuthorizeAssi
         this.applications = applications;
         this.offers = offers;
         this.contracts = contracts;
+        this.corrections = corrections;
+        this.cancellations = cancellations;
         this.offerResponses = offerResponses;
         this.acknowledgments = acknowledgments;
         this.currentUsers = currentUsers;
@@ -97,6 +105,32 @@ public class AssistedActionEvidenceAuthorizationService implements AuthorizeAssi
             throw notAllowed("Recorded contract-acknowledgment evidence cannot be replaced.");
         }
         requireRole(actor, "ACCOUNTING_OFFICER");
+    }
+
+    @Override
+    @Transactional
+    public void authorizeCancellationEvidence(UUID loanApplicationId, UUID correctionRequestId) {
+        AuthenticatedUser actor = requireStaff("loan:cancel:staff", "LOAN_OFFICER");
+        applications.acquireWorkflowLock(loanApplicationId);
+        LoanApplication application = lockApplication(loanApplicationId);
+        if (application.originationChannel() != OriginationChannel.STAFF_ASSISTED
+                || application.productCode() != ProductCode.UNSECURED_CONSUMER_LOAN
+                || application.status() != LoanApplicationStatus.RETURNED_FOR_REVISION) {
+            throw notAllowed("Cancellation evidence is available only for an eligible Staff-assisted UCL correction.");
+        }
+        LoanCorrectionRequest correction = corrections
+                .findActiveRequestByApplicationIdForUpdate(loanApplicationId)
+                .orElseThrow(() -> notAllowed("An active correction request is required."));
+        if (!correction.id().equals(correctionRequestId)) {
+            throw new BusinessStateConflictException(
+                    "CORRECTION_REQUEST_CONFLICT",
+                    "The cancellation evidence target is not the active correction request."
+            );
+        }
+        if (cancellations.findByLoanApplicationId(loanApplicationId).isPresent()) {
+            throw notAllowed("Recorded cancellation evidence cannot be replaced.");
+        }
+        requireRole(actor, "LOAN_OFFICER");
     }
 
     private LoanApplication lockApplication(UUID loanApplicationId) {

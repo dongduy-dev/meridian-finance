@@ -12,6 +12,7 @@ public record AssistedActionDocument(
         AssistedOfferDecision declaredOfferDecision,
         UUID loanContractId,
         Integer contractVersion,
+        UUID correctionRequestId,
         UUID currentVersionId,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
@@ -22,19 +23,27 @@ public record AssistedActionDocument(
         Objects.requireNonNull(evidenceType);
         Objects.requireNonNull(createdAt);
         Objects.requireNonNull(updatedAt);
-        boolean offerEvidence = evidenceType == AssistedActionEvidenceType.CUSTOMER_OFFER_RESPONSE;
         boolean validOfferTarget = approvedOfferId != null && declaredOfferDecision != null
-                && loanContractId == null && contractVersion == null;
+                && loanContractId == null && contractVersion == null && correctionRequestId == null;
         boolean validContractTarget = approvedOfferId == null && declaredOfferDecision == null
-                && loanContractId != null && contractVersion != null && contractVersion > 0;
-        if (offerEvidence ? !validOfferTarget : !validContractTarget) {
+                && loanContractId != null && contractVersion != null && contractVersion > 0
+                && correctionRequestId == null;
+        boolean validCancellationTarget = approvedOfferId == null && declaredOfferDecision == null
+                && loanContractId == null && contractVersion == null && correctionRequestId != null;
+        boolean validTarget = switch (evidenceType) {
+            case CUSTOMER_OFFER_RESPONSE -> validOfferTarget;
+            case CUSTOMER_CONTRACT_ACKNOWLEDGMENT -> validContractTarget;
+            case CUSTOMER_CANCELLATION_REQUEST -> validCancellationTarget;
+        };
+        if (!validTarget) {
             throw new IllegalArgumentException("Assisted-action evidence target is invalid.");
         }
     }
 
     public AssistedActionDocument withCurrentVersion(UUID versionId, LocalDateTime now) {
         return new AssistedActionDocument(id, loanApplicationId, evidenceType, approvedOfferId,
-                declaredOfferDecision, loanContractId, contractVersion, Objects.requireNonNull(versionId),
+                declaredOfferDecision, loanContractId, contractVersion, correctionRequestId,
+                Objects.requireNonNull(versionId),
                 createdAt, Objects.requireNonNull(now));
     }
 }

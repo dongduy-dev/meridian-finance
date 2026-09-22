@@ -15,6 +15,7 @@ public record LoanApplicationCancellation(
         UUID reservationReleaseMovementId,
         UUID requestId,
         UUID cancelledByUserId,
+        UUID assistedEvidenceDocumentVersionId,
         LocalDateTime cancelledAt
 ) {
 
@@ -54,7 +55,30 @@ public record LoanApplicationCancellation(
                 null,
                 Objects.requireNonNull(requestId, "requestId must not be null"),
                 Objects.requireNonNull(cancelledByUserId, "cancelledByUserId must not be null"),
+                null,
                 cancelledAt
+        );
+    }
+
+    public static LoanApplicationCancellation recordedAssistedWithoutExposureEffect(
+            UUID id,
+            LoanApplication cancelledApplication,
+            LoanCorrectionRequest cancelledCorrection,
+            UUID requestId,
+            UUID cancelledByUserId,
+            UUID assistedEvidenceDocumentVersionId,
+            LocalDateTime cancelledAt
+    ) {
+        LoanApplicationCancellation cancellation = recordedWithoutExposureEffect(
+                id, cancelledApplication, cancelledCorrection, requestId, cancelledByUserId, cancelledAt);
+        return new LoanApplicationCancellation(
+                cancellation.id(), cancellation.loanApplicationId(), cancellation.correctionRequestId(),
+                null, cancellation.requestId(), cancellation.cancelledByUserId(),
+                Objects.requireNonNull(
+                        assistedEvidenceDocumentVersionId,
+                        "assistedEvidenceDocumentVersionId must not be null"
+                ),
+                cancellation.cancelledAt()
         );
     }
 
@@ -93,6 +117,7 @@ public record LoanApplicationCancellation(
                 releaseMovement.id(),
                 Objects.requireNonNull(requestId, "requestId must not be null"),
                 Objects.requireNonNull(cancelledByUserId, "cancelledByUserId must not be null"),
+                null,
                 cancelledAt
         );
     }

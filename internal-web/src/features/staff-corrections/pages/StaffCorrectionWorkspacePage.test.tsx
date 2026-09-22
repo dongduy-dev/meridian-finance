@@ -32,14 +32,23 @@ const taskId = '33333333-3333-4333-8333-333333333333'
 const itemId = '44444444-4444-4444-8444-444444444444'
 const operationId = '55555555-5555-4555-8555-555555555555'
 const baselineId = '77777777-7777-4777-8777-777777777777'
+const cancellationEvidenceVersionId = '88888888-8888-4888-8888-888888888888'
 const staff: AuthResponse = {
   tokenType: 'Bearer', accessToken: 'staff-token', expiresAt: '2026-09-04T10:00:00Z',
   userId: '66666666-6666-4666-8666-666666666666', email: 'staff@meridian.local',
   userType: 'STAFF', customerId: null, roles: ['LOAN_OFFICER'],
   permissions: ['loan:correction:staff', 'document:upload:staff', 'document:upload:assisted-correction'],
 }
+const cancellationStaff: AuthResponse = {
+  ...staff,
+  permissions: [
+    ...staff.permissions,
+    'loan:cancel:staff',
+    'document:upload:assisted-action',
+  ],
+}
 
-function caseFixture(proofState: string, assisted = false) {
+function caseFixture(proofState: string, assisted = false, withCancellationEvidence = false) {
   return {
     loanApplicationId: applicationId,
     applicationNumber: 'UCL-20260904-000001',
@@ -72,6 +81,30 @@ function caseFixture(proofState: string, assisted = false) {
         uploadActionAvailable: true,
         completionActionAvailable: true,
       }],
+    },
+    assistedCancellation: assisted ? {
+      available: true,
+      correctionRequestId: requestId,
+      evidence: withCancellationEvidence ? {
+        documentId: '99999999-9999-4999-8999-999999999999',
+        documentVersionId: cancellationEvidenceVersionId,
+        evidenceType: 'CUSTOMER_CANCELLATION_REQUEST',
+        declaredOfferDecision: null,
+        targetId: requestId,
+        targetVersion: null,
+        versionNumber: 1,
+        detectedMimeType: 'application/pdf',
+        byteSize: 120,
+        uploadedAt: '2026-09-04T08:30:00',
+      } : null,
+      evidenceUploadAvailable: true,
+      cancellationCommandAvailable: withCancellationEvidence,
+    } : {
+      available: false,
+      correctionRequestId: null,
+      evidence: null,
+      evidenceUploadAvailable: false,
+      cancellationCommandAvailable: false,
     },
   }
 }
@@ -183,6 +216,76 @@ describe('Staff correction operation recovery', () => {
       expect(uploadCall).toBeDefined()
       const body = (uploadCall?.[1] as { body?: FormData } | undefined)?.body
       expect(body?.get('expectedCurrentVersionId')).toBe(baselineId)
+    })
+  })
+
+  it('uploads a signed Customer cancellation request against the exact correction target', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(cancellationStaff)
+    await bindUnresolvedOperations(cancellationStaff)
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (String(path).includes('CUSTOMER_CANCELLATION_REQUEST/versions')) {
+        return {
+          documentVersionId: cancellationEvidenceVersionId,
+          versionNumber: 1,
+          detectedMimeType: 'application/pdf',
+          byteSize: 120,
+          uploadedAt: '2026-09-04T08:30:00',
+        }
+      }
+      return caseFixture('MISSING', true)
+    })
+    renderWorkspace()
+    const user = userEvent.setup()
+
+    expect(await screen.findByRole('heading', { name: 'Customer-requested cancellation' })).toBeVisible()
+    expect(screen.getByText(/this is not a Staff decision to cancel/i)).toBeVisible()
+    await user.upload(
+      screen.getByLabelText('Signed request'),
+      new File(['signed request'], 'cancellation.pdf', { type: 'application/pdf' }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Upload signed request' }))
+
+    await waitFor(() => {
+      const uploadCall = vi.mocked(api.apiRequest).mock.calls.find(([path]) =>
+        String(path).includes('CUSTOMER_CANCELLATION_REQUEST/versions'))
+      expect(uploadCall).toBeDefined()
+      const body = (uploadCall?.[1] as { body?: FormData } | undefined)?.body
+      expect(body?.get('correctionRequestId')).toBe(requestId)
+      expect(body?.get('file')).toBeInstanceOf(File)
+    })
+  })
+
+  it('records the Customer-requested cancellation with exact correction and evidence identities', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(cancellationStaff)
+    await bindUnresolvedOperations(cancellationStaff)
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (String(path).endsWith(`/staff/loan-applications/${applicationId}/cancellation`)) {
+        return {
+          loanApplicationId: applicationId,
+          resultingStatus: 'CANCELLED',
+          cancelledAt: '2026-09-04T09:00:00',
+          idempotentReplay: false,
+        }
+      }
+      return caseFixture('SATISFIED', true, true)
+    })
+    renderWorkspace()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', {
+      name: 'Review Customer-requested cancellation',
+    }))
+    expect(screen.getByText(/Customer requested and signed this cancellation/i)).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Record Customer request' }))
+
+    await waitFor(() => {
+      const commandCall = vi.mocked(api.apiRequest).mock.calls.find(([path]) =>
+        String(path).endsWith(`/staff/loan-applications/${applicationId}/cancellation`))
+      const body = (commandCall?.[1] as {
+        body?: { expectedCorrectionRequestId?: string; evidenceDocumentVersionId?: string }
+      } | undefined)?.body
+      expect(body?.expectedCorrectionRequestId).toBe(requestId)
+      expect(body?.evidenceDocumentVersionId).toBe(cancellationEvidenceVersionId)
     })
   })
 })

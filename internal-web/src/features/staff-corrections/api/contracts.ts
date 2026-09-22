@@ -4,6 +4,34 @@ import { apiTimestampSchema, uuidSchema } from '@/features/staff-applications/ap
 const rawValue = z.string().trim().min(1)
 const nullableTimestamp = apiTimestampSchema.nullable()
 
+export const assistedCancellationEvidenceSchema = z.object({
+  documentId: uuidSchema,
+  documentVersionId: uuidSchema,
+  evidenceType: z.literal('CUSTOMER_CANCELLATION_REQUEST'),
+  declaredOfferDecision: z.null(),
+  targetId: uuidSchema,
+  targetVersion: z.null(),
+  versionNumber: z.number().int().positive(),
+  detectedMimeType: z.enum(['application/pdf', 'image/jpeg', 'image/png']),
+  byteSize: z.number().int().positive(),
+  uploadedAt: apiTimestampSchema,
+})
+
+export const uploadedCancellationEvidenceVersionSchema = z.object({
+  documentVersionId: uuidSchema,
+  versionNumber: z.number().int().positive(),
+  detectedMimeType: z.enum(['application/pdf', 'image/jpeg', 'image/png']),
+  byteSize: z.number().int().positive(),
+  uploadedAt: apiTimestampSchema,
+})
+
+export const cancelledLoanApplicationSchema = z.object({
+  loanApplicationId: uuidSchema,
+  resultingStatus: z.literal('CANCELLED'),
+  cancelledAt: apiTimestampSchema,
+  idempotentReplay: z.boolean(),
+})
+
 export const staffCorrectionTaskSchema = z.object({
   taskId: uuidSchema,
   correctionRequestId: uuidSchema,
@@ -52,6 +80,13 @@ export const staffCorrectionCaseSchema = z.object({
       completionActionAvailable: z.boolean(),
     })),
   }).nullable(),
+  assistedCancellation: z.object({
+    available: z.boolean(),
+    correctionRequestId: uuidSchema.nullable(),
+    evidence: assistedCancellationEvidenceSchema.nullable(),
+    evidenceUploadAvailable: z.boolean(),
+    cancellationCommandAvailable: z.boolean(),
+  }),
 })
 
 export type StaffCorrectionTask = z.infer<typeof staffCorrectionTaskSchema>

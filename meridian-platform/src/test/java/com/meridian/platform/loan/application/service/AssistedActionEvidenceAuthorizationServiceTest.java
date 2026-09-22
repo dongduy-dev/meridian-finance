@@ -31,17 +31,21 @@ class AssistedActionEvidenceAuthorizationServiceTest {
     @Mock LoanApplicationRepository applications;
     @Mock ApprovedOfferRepository offers;
     @Mock LoanContractRepository contracts;
+    @Mock LoanCorrectionRepository corrections;
+    @Mock LoanApplicationCancellationRepository cancellations;
     @Mock StaffAssistedOfferResponseRepository offerResponses;
     @Mock StaffAssistedContractAcknowledgmentRepository acknowledgments;
     @Mock CurrentUserProvider users;
     private AssistedActionEvidenceAuthorizationService service;
     private final UUID applicationId = UUID.randomUUID();
     private final UUID offerId = UUID.randomUUID();
+    private final UUID correctionId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
         service = new AssistedActionEvidenceAuthorizationService(
-                applications, offers, contracts, offerResponses, acknowledgments, users,
+                applications, offers, contracts, corrections, cancellations,
+                offerResponses, acknowledgments, users,
                 Clock.fixed(Instant.parse("2026-09-22T00:00:00Z"), ZoneOffset.UTC));
     }
 
@@ -86,6 +90,64 @@ class AssistedActionEvidenceAuthorizationServiceTest {
 
         assertEquals("ASSISTED_ACTION_ROLE_REQUIRED", error.getErrorCode());
         verifyNoInteractions(applications, offers);
+    }
+
+    @Test
+    void authorizesCancellationEvidenceForExactActiveAssistedUclCorrection() {
+        when(users.currentUser()).thenReturn(staff("LOAN_OFFICER", "loan:cancel:staff"));
+        when(applications.findByIdForUpdate(applicationId)).thenReturn(Optional.of(
+                application(OriginationChannel.STAFF_ASSISTED,
+                        LoanApplicationStatus.RETURNED_FOR_REVISION)));
+        when(corrections.findActiveRequestByApplicationIdForUpdate(applicationId))
+                .thenReturn(Optional.of(correction()));
+        when(cancellations.findByLoanApplicationId(applicationId)).thenReturn(Optional.empty());
+
+        service.authorizeCancellationEvidence(applicationId, correctionId);
+
+        verify(applications).acquireWorkflowLock(applicationId);
+        verify(corrections).findActiveRequestByApplicationIdForUpdate(applicationId);
+    }
+
+    @Test
+    void rejectsCancellationEvidenceForAnotherCorrection() {
+        when(users.currentUser()).thenReturn(staff("LOAN_OFFICER", "loan:cancel:staff"));
+        when(applications.findByIdForUpdate(applicationId)).thenReturn(Optional.of(
+                application(OriginationChannel.STAFF_ASSISTED,
+                        LoanApplicationStatus.RETURNED_FOR_REVISION)));
+        when(corrections.findActiveRequestByApplicationIdForUpdate(applicationId))
+                .thenReturn(Optional.of(correction()));
+
+        BusinessStateConflictException error = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.authorizeCancellationEvidence(applicationId, UUID.randomUUID()));
+
+        assertEquals("CORRECTION_REQUEST_CONFLICT", error.getErrorCode());
+    }
+
+    @Test
+    void rejectsCancellationEvidenceReplacementAfterCancellationRecorded() {
+        when(users.currentUser()).thenReturn(staff("LOAN_OFFICER", "loan:cancel:staff"));
+        when(applications.findByIdForUpdate(applicationId)).thenReturn(Optional.of(
+                application(OriginationChannel.STAFF_ASSISTED,
+                        LoanApplicationStatus.RETURNED_FOR_REVISION)));
+        when(corrections.findActiveRequestByApplicationIdForUpdate(applicationId))
+                .thenReturn(Optional.of(correction()));
+        when(cancellations.findByLoanApplicationId(applicationId))
+                .thenReturn(Optional.of(mock(LoanApplicationCancellation.class)));
+
+        BusinessStateConflictException error = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.authorizeCancellationEvidence(applicationId, correctionId));
+
+        assertEquals("ASSISTED_ACTION_NOT_ALLOWED", error.getErrorCode());
+    }
+
+    private LoanCorrectionRequest correction() {
+        return new LoanCorrectionRequest(
+                correctionId, applicationId, null, "COMPLETE_PRODUCT_VERIFICATION",
+                com.meridian.platform.approval.domain.model.CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                UUID.randomUUID(), LoanCorrectionRequestStatus.OPEN, null,
+                LocalDateTime.of(2026, 9, 21, 0, 0), null, null);
     }
 
     private LoanApplication application(OriginationChannel channel, LoanApplicationStatus status) {

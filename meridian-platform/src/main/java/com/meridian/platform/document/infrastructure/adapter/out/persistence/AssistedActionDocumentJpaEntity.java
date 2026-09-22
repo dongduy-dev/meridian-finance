@@ -20,6 +20,7 @@ public class AssistedActionDocumentJpaEntity {
     private AssistedOfferDecision declaredOfferDecision;
     @Column(name = "loan_contract_id") private UUID loanContractId;
     @Column(name = "contract_version") private Integer contractVersion;
+    @Column(name = "correction_request_id") private UUID correctionRequestId;
     @Column(name = "current_version_id") private UUID currentVersionId;
     @Column(name = "created_at", nullable = false) private LocalDateTime createdAt;
     @Column(name = "updated_at", nullable = false) private LocalDateTime updatedAt;
@@ -31,11 +32,13 @@ public class AssistedActionDocumentJpaEntity {
         id = value.id(); loanApplicationId = value.loanApplicationId(); evidenceType = value.evidenceType();
         approvedOfferId = value.approvedOfferId(); declaredOfferDecision = value.declaredOfferDecision();
         loanContractId = value.loanContractId(); contractVersion = value.contractVersion();
+        correctionRequestId = value.correctionRequestId();
         currentVersionId = value.currentVersionId(); createdAt = value.createdAt(); updatedAt = value.updatedAt();
     }
 
     AssistedActionDocument toDomain() {
         return new AssistedActionDocument(id, loanApplicationId, evidenceType, approvedOfferId,
-                declaredOfferDecision, loanContractId, contractVersion, currentVersionId, createdAt, updatedAt);
+                declaredOfferDecision, loanContractId, contractVersion, correctionRequestId,
+                currentVersionId, createdAt, updatedAt);
     }
 }

@@ -20,6 +20,12 @@ public interface AssistedActionDocumentRepository {
     Optional<AssistedActionDocument> findContractDocument(
             UUID loanApplicationId, UUID loanContractId, int contractVersion);
 
+    Optional<AssistedActionDocument> findCancellationDocumentForUpdate(
+            UUID loanApplicationId, UUID correctionRequestId);
+
+    Optional<AssistedActionDocument> findCancellationDocument(
+            UUID loanApplicationId, UUID correctionRequestId);
+
     AssistedActionDocumentVersion saveVersion(AssistedActionDocumentVersion version);
 
     Optional<AssistedActionDocumentVersion> findVersionById(UUID versionId);

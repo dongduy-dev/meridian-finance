@@ -29,4 +29,15 @@ public interface JpaAssistedActionDocumentRepository extends JpaRepository<Assis
 
     Optional<AssistedActionDocumentJpaEntity> findByLoanApplicationIdAndLoanContractIdAndContractVersion(
             UUID applicationId, UUID contractId, int version);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select document from AssistedActionDocumentJpaEntity document "
+            + "where document.loanApplicationId = :applicationId "
+            + "and document.correctionRequestId = :correctionRequestId")
+    Optional<AssistedActionDocumentJpaEntity> findCancellationForUpdate(
+            @Param("applicationId") UUID applicationId,
+            @Param("correctionRequestId") UUID correctionRequestId);
+
+    Optional<AssistedActionDocumentJpaEntity> findByLoanApplicationIdAndCorrectionRequestId(
+            UUID applicationId, UUID correctionRequestId);
 }

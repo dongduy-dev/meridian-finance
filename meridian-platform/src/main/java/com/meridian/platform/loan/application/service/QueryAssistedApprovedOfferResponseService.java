@@ -85,7 +85,9 @@ public class QueryAssistedApprovedOfferResponseService implements QueryAssistedA
     }
 
     public static AssistedActionEvidenceMetadataDto toDto(LoanAssistedActionEvidencePort.EvidenceSnapshot value) {
-        UUID targetId = value.approvedOfferId() != null ? value.approvedOfferId() : value.loanContractId();
+        UUID targetId = value.approvedOfferId() != null
+                ? value.approvedOfferId()
+                : value.loanContractId() != null ? value.loanContractId() : value.correctionRequestId();
         return new AssistedActionEvidenceMetadataDto(
                 value.documentId(), value.documentVersionId(), value.evidenceType(),
                 value.declaredOfferDecision(), targetId, value.contractVersion(), value.versionNumber(),

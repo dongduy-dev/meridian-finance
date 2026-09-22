@@ -4,6 +4,8 @@ import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
 import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
+import com.meridian.platform.loan.application.port.out.LoanApplicationCancellationRepository;
+import com.meridian.platform.loan.application.port.out.LoanAssistedActionEvidencePort;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
@@ -46,6 +48,8 @@ class QueryStaffCorrectionCaseServiceTest {
 
     @Mock LoanApplicationRepository applications;
     @Mock LoanCorrectionRepository corrections;
+    @Mock LoanApplicationCancellationRepository cancellations;
+    @Mock LoanAssistedActionEvidencePort assistedEvidence;
     @Mock LoanDocumentChecklistPort documents;
     @Mock CurrentUserProvider currentUserProvider;
     private QueryStaffCorrectionCaseService service;
@@ -53,7 +57,7 @@ class QueryStaffCorrectionCaseServiceTest {
     @BeforeEach
     void setUp() {
         service = new QueryStaffCorrectionCaseService(
-                applications, corrections, documents,
+                applications, corrections, cancellations, assistedEvidence, documents,
                 new CustomerCorrectionDocumentProof(documents), currentUserProvider);
         when(currentUserProvider.currentUser()).thenReturn(staff(CREATOR_ID));
         when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application()));
@@ -186,6 +190,52 @@ class QueryStaffCorrectionCaseServiceTest {
                 List.of(task(1, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.COMPLETED)),
                 true
         );
+    }
+
+    @Test
+    void projectsBackendDerivedAssistedCancellationAvailabilityAndEvidence() {
+        when(applications.findById(APPLICATION_ID))
+                .thenReturn(Optional.of(application(OriginationChannel.STAFF_ASSISTED)));
+        when(currentUserProvider.currentUser()).thenReturn(staff(
+                CREATOR_ID,
+                Set.of(
+                        "loan:correction:staff",
+                        "loan:cancel:staff",
+                        "document:upload:assisted-action"
+                )));
+        LoanCorrectionRequest request = request(LoanCorrectionRequestStatus.OPEN);
+        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
+                .thenReturn(Optional.of(request));
+        when(corrections.findTasksByRequestId(REQUEST_ID)).thenReturn(List.of(task(
+                1, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.OPEN)));
+        UUID evidenceVersionId = UUID.randomUUID();
+        when(assistedEvidence.findCancellationEvidence(APPLICATION_ID, REQUEST_ID))
+                .thenReturn(Optional.of(new LoanAssistedActionEvidencePort.EvidenceSnapshot(
+                        UUID.randomUUID(), evidenceVersionId, "CUSTOMER_CANCELLATION_REQUEST",
+                        null, null, null, null, REQUEST_ID, 1,
+                        "application/pdf", 100, NOW)));
+
+        var cancellation = service.query(APPLICATION_ID).assistedCancellation();
+
+        assertEquals(true, cancellation.available());
+        assertEquals(REQUEST_ID, cancellation.correctionRequestId());
+        assertEquals(evidenceVersionId, cancellation.evidence().documentVersionId());
+        assertEquals(true, cancellation.evidenceUploadAvailable());
+        assertEquals(true, cancellation.cancellationCommandAvailable());
+    }
+
+    @Test
+    void keepsAssistedCancellationUnavailableForCustomerDigitalApplication() {
+        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
+                .thenReturn(Optional.of(request(LoanCorrectionRequestStatus.OPEN)));
+        when(corrections.findTasksByRequestId(REQUEST_ID)).thenReturn(List.of(task(
+                1, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.OPEN)));
+
+        var cancellation = service.query(APPLICATION_ID).assistedCancellation();
+
+        assertEquals(false, cancellation.available());
+        assertNull(cancellation.correctionRequestId());
+        assertNull(cancellation.evidence());
     }
 
     @Test

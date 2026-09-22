@@ -37,6 +37,7 @@ public class LoanApplicationCancellationRepositoryAdapter
                 cancellation.reservationReleaseMovementId(),
                 cancellation.requestId(),
                 cancellation.cancelledByUserId(),
+                cancellation.assistedEvidenceDocumentVersionId(),
                 cancellation.cancelledAt()
         ) == 1;
     }

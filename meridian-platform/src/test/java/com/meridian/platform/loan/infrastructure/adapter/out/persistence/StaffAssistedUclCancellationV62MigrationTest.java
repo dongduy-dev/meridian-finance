@@ -21,11 +21,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         "meridian.loan.offer-expiry.enabled=false",
         "meridian.document.orphan-reconciliation.enabled=false"
 })
-class StaffAssistedDownstreamV60MigrationTest {
+class StaffAssistedUclCancellationV62MigrationTest {
 
     private static final String CONTEXT_SCHEMA = schemaName("context");
     private static final Path MIGRATION = Path.of(
-            "src/main/resources/db/migration/V60__add_staff_assisted_downstream_actions.sql");
+            "src/main/resources/db/migration/V62__add_staff_assisted_ucl_cancellation.sql");
     private static final Path CURRENT_SCHEMA = Path.of("../docs/database/MER-DB-CURRENT-SCHEMA.sql");
 
     @Autowired DataSource dataSource;
@@ -41,61 +41,40 @@ class StaffAssistedDownstreamV60MigrationTest {
     }
 
     @Test
-    void upgradesV59WithActionEvidenceRecordsPermissionsAndImmutableTriggers() {
+    void upgradesV61WithNarrowPermissionTargetsAndCrossContextReferences() {
         String schema = schemaName("upgrade");
         try {
-            migrateTo(schema, "59");
-            assertEquals(1, migrateTo(schema, "60"));
-            assertEquals(4, jdbc.queryForObject(
-                    "SELECT count(*) FROM information_schema.tables WHERE table_schema = ? "
-                            + "AND table_name IN ('assisted_action_documents', "
-                            + "'assisted_action_document_versions', 'staff_assisted_offer_responses', "
-                            + "'staff_assisted_contract_acknowledgments')",
-                    Integer.class, schema));
-            assertEquals(3, jdbc.queryForObject(
-                    "SELECT count(*) FROM " + schema + ".permissions WHERE code IN "
-                            + "('loan:offer:respond:staff', 'loan:contract:acknowledge:staff', "
-                            + "'document:upload:assisted-action')",
+            migrateTo(schema, "61");
+            assertEquals(1, migrateTo(schema, "62"));
+            assertEquals(1, jdbc.queryForObject(
+                    "SELECT count(*) FROM " + schema + ".permissions "
+                            + "WHERE code = 'loan:cancel:staff'",
                     Integer.class));
-            assertEquals(4, jdbc.queryForObject(
+            assertEquals(1, jdbc.queryForObject(
                     "SELECT count(*) FROM " + schema + ".role_permissions rp "
                             + "JOIN " + schema + ".roles r ON r.id = rp.role_id "
                             + "JOIN " + schema + ".permissions p ON p.id = rp.permission_id "
-                            + "WHERE (r.code = 'LOAN_OFFICER' AND p.code IN "
-                            + "('loan:offer:respond:staff', 'document:upload:assisted-action')) "
-                            + "OR (r.code = 'ACCOUNTING_OFFICER' AND p.code IN "
-                            + "('loan:contract:acknowledge:staff', 'document:upload:assisted-action'))",
+                            + "WHERE r.code = 'LOAN_OFFICER' AND p.code = 'loan:cancel:staff'",
                     Integer.class));
             assertEquals(0, jdbc.queryForObject(
                     "SELECT count(*) FROM " + schema + ".role_permissions rp "
                             + "JOIN " + schema + ".roles r ON r.id = rp.role_id "
                             + "JOIN " + schema + ".permissions p ON p.id = rp.permission_id "
-                            + "WHERE p.code IN ('loan:offer:respond:staff', "
-                            + "'loan:contract:acknowledge:staff', 'document:upload:assisted-action') "
-                            + "AND r.code NOT IN ('LOAN_OFFICER', 'ACCOUNTING_OFFICER')",
+                            + "WHERE r.code <> 'LOAN_OFFICER' AND p.code = 'loan:cancel:staff'",
                     Integer.class));
-            assertEquals(3, jdbc.queryForObject(
-                    "SELECT count(*) FROM pg_trigger trigger "
-                            + "JOIN pg_class table_ref ON table_ref.oid = trigger.tgrelid "
-                            + "JOIN pg_namespace namespace_ref ON namespace_ref.oid = table_ref.relnamespace "
-                            + "WHERE namespace_ref.nspname = ? AND NOT trigger.tgisinternal "
-                            + "AND table_ref.relname IN ('assisted_action_document_versions', "
-                            + "'staff_assisted_offer_responses', 'staff_assisted_contract_acknowledgments')",
+            assertEquals(2, jdbc.queryForObject(
+                    "SELECT count(*) FROM information_schema.columns WHERE table_schema = ? "
+                            + "AND ((table_name = 'assisted_action_documents' "
+                            + "AND column_name = 'correction_request_id') "
+                            + "OR (table_name = 'loan_application_cancellations' "
+                            + "AND column_name = 'assisted_evidence_document_version_id'))",
                     Integer.class, schema));
-            assertEquals(8, jdbc.queryForObject(
+            assertEquals(1, jdbc.queryForObject(
                     "SELECT count(*) FROM pg_constraint constraint_ref "
                             + "JOIN pg_namespace namespace_ref "
                             + "ON namespace_ref.oid = constraint_ref.connamespace "
-                            + "WHERE namespace_ref.nspname = ? AND constraint_ref.contype = 'u' "
-                            + "AND constraint_ref.conname IN ("
-                            + "'uq_assisted_action_documents_offer', "
-                            + "'uq_assisted_action_documents_contract_version', "
-                            + "'uq_assisted_action_versions_document_sequence', "
-                            + "'uq_assisted_action_versions_upload_request', "
-                            + "'uq_staff_assisted_offer_response_request', "
-                            + "'uq_staff_assisted_offer_response_offer', "
-                            + "'uq_staff_assisted_contract_ack_request', "
-                            + "'uq_staff_assisted_contract_ack_version')",
+                            + "WHERE namespace_ref.nspname = ? "
+                            + "AND constraint_ref.conname = 'uq_assisted_action_documents_correction'",
                     Integer.class, schema));
             assertEquals(0, jdbc.queryForObject(
                     "SELECT count(*) FROM pg_constraint constraint_ref "
@@ -103,9 +82,10 @@ class StaffAssistedDownstreamV60MigrationTest {
                             + "JOIN pg_class target_table ON target_table.oid = constraint_ref.confrelid "
                             + "JOIN pg_namespace namespace_ref ON namespace_ref.oid = source_table.relnamespace "
                             + "WHERE namespace_ref.nspname = ? AND constraint_ref.contype = 'f' "
-                            + "AND source_table.relname IN ('staff_assisted_offer_responses', "
-                            + "'staff_assisted_contract_acknowledgments') "
-                            + "AND target_table.relname = 'assisted_action_document_versions'",
+                            + "AND ((source_table.relname = 'assisted_action_documents' "
+                            + "AND target_table.relname = 'loan_correction_requests') "
+                            + "OR (source_table.relname = 'loan_application_cancellations' "
+                            + "AND target_table.relname = 'assisted_action_document_versions'))",
                     Integer.class, schema));
         } finally {
             jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
@@ -113,14 +93,11 @@ class StaffAssistedDownstreamV60MigrationTest {
     }
 
     @Test
-    void migrationAndSnapshotDescribeTheSameV60Boundary() throws IOException {
+    void migrationAndSnapshotDescribeTheSameV62Boundary() throws IOException {
         String migration = Files.readString(MIGRATION).replace("\r\n", "\n");
         String snapshot = Files.readString(CURRENT_SCHEMA).replace("\r\n", "\n");
         assertTrue(snapshot.contains("Snapshot source: migrations V1 through V62"));
         assertTrue(snapshot.contains(migration.trim()));
-        assertTrue(migration.contains("loan:offer:respond:staff"));
-        assertTrue(migration.contains("loan:contract:acknowledge:staff"));
-        assertTrue(migration.contains("document:upload:assisted-action"));
     }
 
     private int migrateTo(String schema, String target) {
@@ -129,6 +106,6 @@ class StaffAssistedDownstreamV60MigrationTest {
     }
 
     private static String schemaName(String suffix) {
-        return "meridian_v60_" + suffix + "_" + UUID.randomUUID().toString().replace("-", "");
+        return "meridian_v62_" + suffix + "_" + UUID.randomUUID().toString().replace("-", "");
     }
 }

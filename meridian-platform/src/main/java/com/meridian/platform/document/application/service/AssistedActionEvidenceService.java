@@ -148,6 +148,20 @@ public class AssistedActionEvidenceService
     }
 
     @Override
+    @Transactional
+    public EvidenceSnapshot requireCurrentCancellationEvidence(
+            UUID loanApplicationId, UUID correctionRequestId, UUID documentVersionId
+    ) {
+        AssistedActionDocument document = documents
+                .findCancellationDocumentForUpdate(loanApplicationId, correctionRequestId)
+                .orElseThrow(AssistedActionEvidenceService::evidenceRequired);
+        if (document.evidenceType() != AssistedActionEvidenceType.CUSTOMER_CANCELLATION_REQUEST) {
+            throw evidenceInvalid();
+        }
+        return requireVersion(document, documentVersionId);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public Optional<EvidenceSnapshot> findOfferEvidence(UUID loanApplicationId, UUID approvedOfferId) {
         return documents.findOfferDocument(loanApplicationId, approvedOfferId).flatMap(this::currentSnapshot);
@@ -162,27 +176,41 @@ public class AssistedActionEvidenceService
                 .flatMap(this::currentSnapshot);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<EvidenceSnapshot> findCancellationEvidence(
+            UUID loanApplicationId, UUID correctionRequestId
+    ) {
+        return documents.findCancellationDocument(loanApplicationId, correctionRequestId)
+                .flatMap(this::currentSnapshot);
+    }
+
     private AssistedActionDocument lockOrCreate(
             UploadAssistedActionEvidenceCommand command, LocalDateTime now
     ) {
-        Optional<AssistedActionDocument> existing = command.evidenceType()
-                == AssistedActionEvidenceType.CUSTOMER_OFFER_RESPONSE
-                ? documents.findOfferDocumentForUpdate(command.loanApplicationId(), command.approvedOfferId())
-                : documents.findContractDocumentForUpdate(
-                        command.loanApplicationId(), command.loanContractId(), command.contractVersion());
+        Optional<AssistedActionDocument> existing = switch (command.evidenceType()) {
+            case CUSTOMER_OFFER_RESPONSE -> documents.findOfferDocumentForUpdate(
+                    command.loanApplicationId(), command.approvedOfferId());
+            case CUSTOMER_CONTRACT_ACKNOWLEDGMENT -> documents.findContractDocumentForUpdate(
+                    command.loanApplicationId(), command.loanContractId(), command.contractVersion());
+            case CUSTOMER_CANCELLATION_REQUEST -> documents.findCancellationDocumentForUpdate(
+                    command.loanApplicationId(), command.correctionRequestId());
+        };
         return existing.orElseGet(() -> documents.saveDocument(new AssistedActionDocument(
                 UUID.randomUUID(), command.loanApplicationId(), command.evidenceType(),
                 command.approvedOfferId(), command.declaredOfferDecision(), command.loanContractId(),
-                command.contractVersion(), null, now, now)));
+                command.contractVersion(), command.correctionRequestId(), null, now, now)));
     }
 
     private void authorizeTarget(UploadAssistedActionEvidenceCommand command) {
-        if (command.evidenceType() == AssistedActionEvidenceType.CUSTOMER_OFFER_RESPONSE) {
-            authorizations.authorizeOfferEvidence(command.loanApplicationId(), command.approvedOfferId(),
+        switch (command.evidenceType()) {
+            case CUSTOMER_OFFER_RESPONSE -> authorizations.authorizeOfferEvidence(
+                    command.loanApplicationId(), command.approvedOfferId(),
                     command.declaredOfferDecision().name());
-        } else {
-            authorizations.authorizeContractEvidence(command.loanApplicationId(), command.loanContractId(),
-                    command.contractVersion());
+            case CUSTOMER_CONTRACT_ACKNOWLEDGMENT -> authorizations.authorizeContractEvidence(
+                    command.loanApplicationId(), command.loanContractId(), command.contractVersion());
+            case CUSTOMER_CANCELLATION_REQUEST -> authorizations.authorizeCancellationEvidence(
+                    command.loanApplicationId(), command.correctionRequestId());
         }
     }
 
@@ -193,7 +221,8 @@ public class AssistedActionEvidenceService
                 || !Objects.equals(document.approvedOfferId(), command.approvedOfferId())
                 || document.declaredOfferDecision() != command.declaredOfferDecision()
                 || !Objects.equals(document.loanContractId(), command.loanContractId())
-                || !Objects.equals(document.contractVersion(), command.contractVersion())) {
+                || !Objects.equals(document.contractVersion(), command.contractVersion())
+                || !Objects.equals(document.correctionRequestId(), command.correctionRequestId())) {
             throw evidenceInvalid();
         }
     }
@@ -222,7 +251,8 @@ public class AssistedActionEvidenceService
         return new EvidenceSnapshot(
                 document.id(), version.id(), document.evidenceType().name(), document.approvedOfferId(),
                 document.declaredOfferDecision() == null ? null : document.declaredOfferDecision().name(),
-                document.loanContractId(), document.contractVersion(), version.versionNumber(),
+                document.loanContractId(), document.contractVersion(), document.correctionRequestId(),
+                version.versionNumber(),
                 version.detectedMimeType(), version.byteSize(), version.uploadedAt());
     }
 
@@ -233,8 +263,8 @@ public class AssistedActionEvidenceService
             throw new AuthorizationException("ASSISTED_ACTION_EVIDENCE_ACCESS_DENIED",
                     "Staff-assisted action evidence access is denied.");
         }
-        String requiredRole = type == AssistedActionEvidenceType.CUSTOMER_OFFER_RESPONSE
-                ? "LOAN_OFFICER" : "ACCOUNTING_OFFICER";
+        String requiredRole = type == AssistedActionEvidenceType.CUSTOMER_CONTRACT_ACKNOWLEDGMENT
+                ? "ACCOUNTING_OFFICER" : "LOAN_OFFICER";
         if (!actor.roles().contains(requiredRole)) {
             throw new AuthorizationException("ASSISTED_ACTION_ROLE_REQUIRED",
                     "The required Staff business role is missing.");
@@ -246,19 +276,31 @@ public class AssistedActionEvidenceService
         Objects.requireNonNull(command.loanApplicationId());
         Objects.requireNonNull(command.evidenceType());
         Objects.requireNonNull(command.uploadRequestId());
-        if (command.evidenceType() == AssistedActionEvidenceType.CUSTOMER_OFFER_RESPONSE) {
-            Objects.requireNonNull(command.approvedOfferId());
-            Objects.requireNonNull(command.declaredOfferDecision());
-            if (command.loanContractId() != null || command.contractVersion() != null) {
-                throw new IllegalArgumentException("Offer evidence cannot target a contract.");
+        switch (command.evidenceType()) {
+            case CUSTOMER_OFFER_RESPONSE -> {
+                Objects.requireNonNull(command.approvedOfferId());
+                Objects.requireNonNull(command.declaredOfferDecision());
+                if (command.loanContractId() != null || command.contractVersion() != null
+                        || command.correctionRequestId() != null) {
+                    throw new IllegalArgumentException("Offer evidence has an invalid target.");
+                }
             }
-        } else {
-            Objects.requireNonNull(command.loanContractId());
-            if (command.contractVersion() == null || command.contractVersion() <= 0) {
-                throw new IllegalArgumentException("contractVersion must be positive");
+            case CUSTOMER_CONTRACT_ACKNOWLEDGMENT -> {
+                Objects.requireNonNull(command.loanContractId());
+                if (command.contractVersion() == null || command.contractVersion() <= 0) {
+                    throw new IllegalArgumentException("contractVersion must be positive");
+                }
+                if (command.approvedOfferId() != null || command.declaredOfferDecision() != null
+                        || command.correctionRequestId() != null) {
+                    throw new IllegalArgumentException("Contract evidence has an invalid target.");
+                }
             }
-            if (command.approvedOfferId() != null || command.declaredOfferDecision() != null) {
-                throw new IllegalArgumentException("Contract evidence cannot target an offer.");
+            case CUSTOMER_CANCELLATION_REQUEST -> {
+                Objects.requireNonNull(command.correctionRequestId());
+                if (command.approvedOfferId() != null || command.declaredOfferDecision() != null
+                        || command.loanContractId() != null || command.contractVersion() != null) {
+                    throw new IllegalArgumentException("Cancellation evidence has an invalid target.");
+                }
             }
         }
     }

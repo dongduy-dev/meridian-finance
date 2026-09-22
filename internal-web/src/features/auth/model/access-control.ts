@@ -24,6 +24,7 @@ export const STAFF_OPERATIONAL_PERMISSIONS = [
   'loan:contract:read',
   'loan:offer:respond:staff',
   'loan:contract:acknowledge:staff',
+  'loan:cancel:staff',
   'loan:disbursement:prepare',
   'loan:disburse',
   'repayment:update',
