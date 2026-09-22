@@ -132,7 +132,7 @@ class ResubmitCustomerCorrectionServiceTest {
                 Set.of("CUSTOMER"),
                 Set.of("loan:correction:resubmit:own")
         ));
-        when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(application));
+        lenient().when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(application));
         lenient().when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
                 .thenReturn(Optional.of(correction));
         lenient().when(corrections.findActiveRequestByApplicationIdForUpdate(APPLICATION_ID))
@@ -194,6 +194,50 @@ class ResubmitCustomerCorrectionServiceTest {
 
         assertEquals("CUSTOMER_DIRECT_ACTION_NOT_ALLOWED", error.getErrorCode());
         verify(corrections, never()).findLatestRequestByApplicationId(any());
+    }
+
+    @Test
+    void authorizedStaffCanResubmitCustomerOnlyAssistedUclCorrection() {
+        when(currentUser.currentUser()).thenReturn(staff(Set.of("loan:correction:staff")));
+        when(applications.findByIdForUpdate(APPLICATION_ID))
+                .thenReturn(Optional.of(assistedUclApplication()));
+        UnsecuredConsumerLoanVerification completed = pendingVerification().completeManualReview(
+                UnsecuredConsumerLoanManualVerificationOutcome.REQUIRES_MORE_INFORMATION,
+                UUID.randomUUID(), NOW.minusHours(1), "Replace evidence.");
+        when(uclVerifications.findLatestByLoanApplicationIdForUpdate(APPLICATION_ID))
+                .thenReturn(Optional.of(completed));
+
+        CorrectionResubmissionDto result = service.resubmitAsStaff(
+                APPLICATION_ID, new CorrectionResubmissionRequest(RESUBMISSION_ID));
+
+        assertEquals("SUBMITTED", result.loanApplicationStatus());
+        verify(uclVerifications).save(any(UnsecuredConsumerLoanVerification.class));
+    }
+
+    @Test
+    void staffCannotResubmitCustomerOnlyDigitalCorrection() {
+        when(currentUser.currentUser()).thenReturn(staff(Set.of("loan:correction:staff")));
+
+        AuthorizationException error = assertThrows(AuthorizationException.class,
+                () -> service.resubmitAsStaff(
+                        APPLICATION_ID, new CorrectionResubmissionRequest(RESUBMISSION_ID)));
+
+        assertEquals("CORRECTION_RESUBMISSION_DENIED", error.getErrorCode());
+        verify(readiness, never()).findReadinessByCustomerId(any());
+    }
+
+    @Test
+    void customerPrincipalCannotUseStaffResubmissionEvenWithPermission() {
+        when(currentUser.currentUser()).thenReturn(new AuthenticatedUser(
+                USER_ID, "customer@meridian.local", "CUSTOMER", CUSTOMER_ID,
+                Set.of("CUSTOMER"), Set.of("loan:correction:staff")));
+
+        AuthorizationException error = assertThrows(AuthorizationException.class,
+                () -> service.resubmitAsStaff(
+                        APPLICATION_ID, new CorrectionResubmissionRequest(RESUBMISSION_ID)));
+
+        assertEquals("CORRECTION_RESUBMISSION_DENIED", error.getErrorCode());
+        verify(applications, never()).acquireWorkflowLock(any());
     }
 
     @Test
@@ -312,6 +356,14 @@ class ResubmitCustomerCorrectionServiceTest {
         );
     }
 
+    private LoanApplication assistedUclApplication() {
+        return new LoanApplication(
+                application.id(), application.customerId(), application.loanProductId(),
+                application.applicationNumber(), application.productCode(), application.productType(),
+                OriginationChannel.STAFF_ASSISTED, application.status(), application.requestedAmount(),
+                application.requestedTermMonths(), application.submittedAt());
+    }
+
     private LoanProduct product() {
         return new LoanProduct(
                 application.loanProductId(),
@@ -408,5 +460,11 @@ class ResubmitCustomerCorrectionServiceTest {
                 ),
                 NOW.minusDays(1)
         );
+    }
+
+    private AuthenticatedUser staff(Set<String> permissions) {
+        return new AuthenticatedUser(
+                USER_ID, "loan.officer@meridian.local", "STAFF", null,
+                Set.of("LOAN_OFFICER"), permissions);
     }
 }

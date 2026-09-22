@@ -48,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -60,6 +61,7 @@ class TransactionalDocumentUploadServiceTest {
     private static final UUID CHECKLIST_ID = UUID.randomUUID();
     private static final UUID ITEM_ID = UUID.randomUUID();
     private static final UUID DOCUMENT_ID = UUID.randomUUID();
+    private static final UUID BASELINE_ID = UUID.randomUUID();
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 9, 18, 8, 0);
     private static final StagedDocument STAGED = new StagedDocument(
             UUID.randomUUID(), "evidence.pdf", "application/pdf", "application/pdf", 128, "a".repeat(64));
@@ -130,6 +132,52 @@ class TransactionalDocumentUploadServiceTest {
                 LoanApplicationStatus.DOCUMENTS_PENDING, DocumentUploaderActorType.STAFF);
         assertDenied(staff("document:upload:assisted"), OriginationChannel.STAFF_ASSISTED,
                 LoanApplicationStatus.SUBMITTED, DocumentUploaderActorType.STAFF);
+    }
+
+    @Test
+    void assistedCorrectionPermissionUploadsOnlyWhenCustomerTaskAuthorizesExactBaseline() {
+        prepareCorrectionUpload(
+                staff("document:upload:assisted-correction"),
+                LoanDocumentCorrectionPort.StaffUploadAuthority.ASSISTED_CUSTOMER_CORRECTION);
+
+        service.store(command(DocumentUploaderActorType.STAFF, UUID.randomUUID(), BASELINE_ID), STAGED);
+
+        verify(corrections).authorizeStaffUpload(APPLICATION_ID, ITEM_ID, BASELINE_ID);
+        verify(documents).saveVersion(any());
+    }
+
+    @Test
+    void staffCorrectionPermissionCannotAuthorizeAssistedCustomerTaskUpload() {
+        prepareCorrectionUpload(
+                staff("document:upload:staff"),
+                LoanDocumentCorrectionPort.StaffUploadAuthority.ASSISTED_CUSTOMER_CORRECTION);
+
+        AuthorizationException error = assertThrows(AuthorizationException.class,
+                () -> service.store(
+                        command(DocumentUploaderActorType.STAFF, UUID.randomUUID(), BASELINE_ID), STAGED));
+
+        assertEquals("DOCUMENT_ACCESS_DENIED", error.getErrorCode());
+        verify(storage, never()).commit(any());
+    }
+
+    @Test
+    void assistedCorrectionPermissionCannotAuthorizeStaffOwnedTaskUpload() {
+        prepareCorrectionUpload(
+                staff("document:upload:assisted-correction"),
+                LoanDocumentCorrectionPort.StaffUploadAuthority.STAFF_CORRECTION);
+
+        AuthorizationException error = assertThrows(AuthorizationException.class,
+                () -> service.store(
+                        command(DocumentUploaderActorType.STAFF, UUID.randomUUID(), BASELINE_ID), STAGED));
+
+        assertEquals("DOCUMENT_ACCESS_DENIED", error.getErrorCode());
+        verify(storage, never()).commit(any());
+    }
+
+    @Test
+    void assistedCorrectionPermissionCannotAuthorizeInitialAssistedUpload() {
+        assertDenied(staff("document:upload:assisted-correction"), OriginationChannel.STAFF_ASSISTED,
+                LoanApplicationStatus.DOCUMENTS_PENDING, DocumentUploaderActorType.STAFF);
     }
 
     @Test
@@ -250,6 +298,28 @@ class TransactionalDocumentUploadServiceTest {
         when(documents.saveVersion(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(checklists.findReadiness(APPLICATION_ID, DocumentChecklistStage.SUBMISSION))
                 .thenReturn(new DocumentChecklistReadiness(uploadComplete, false));
+    }
+
+    private void prepareCorrectionUpload(
+            AuthenticatedUser actor,
+            LoanDocumentCorrectionPort.StaffUploadAuthority authority
+    ) {
+        prepareWorkflow(actor, OriginationChannel.STAFF_ASSISTED,
+                LoanApplicationStatus.RETURNED_FOR_REVISION);
+        when(checklists.findByLoanApplicationIdAndStage(APPLICATION_ID, DocumentChecklistStage.SUBMISSION))
+                .thenReturn(Optional.of(checklist()));
+        when(checklists.findItemByIdForUpdate(ITEM_ID)).thenReturn(Optional.of(item()));
+        when(documents.findDocumentByChecklistItemIdForUpdate(ITEM_ID))
+                .thenReturn(Optional.of(storedDocument(BASELINE_ID)));
+        when(documents.findVersionByUploadRequestId(any())).thenReturn(Optional.empty());
+        when(corrections.authorizeStaffUpload(APPLICATION_ID, ITEM_ID, BASELINE_ID))
+                .thenReturn(authority);
+        lenient().when(documents.findVersionById(BASELINE_ID)).thenReturn(Optional.of(version(
+                UUID.randomUUID(), null)));
+        lenient().when(storage.commit(STAGED)).thenReturn(new StoredObject("documents/evidence.pdf"));
+        lenient().when(documents.saveVersion(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(checklists.findReadiness(APPLICATION_ID, DocumentChecklistStage.SUBMISSION))
+                .thenReturn(new DocumentChecklistReadiness(true, false));
     }
 
     private UploadDocumentCommand command(DocumentUploaderActorType actorType, UUID requestId) {

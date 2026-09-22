@@ -30,17 +30,20 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
     private final LoanApplicationRepository applications;
     private final LoanCorrectionRepository corrections;
     private final LoanDocumentChecklistPort documents;
+    private final CustomerCorrectionDocumentProof customerDocumentProof;
     private final CurrentUserProvider currentUserProvider;
 
     public QueryStaffCorrectionCaseService(
             LoanApplicationRepository applications,
             LoanCorrectionRepository corrections,
             LoanDocumentChecklistPort documents,
+            CustomerCorrectionDocumentProof customerDocumentProof,
             CurrentUserProvider currentUserProvider
     ) {
         this.applications = applications;
         this.corrections = corrections;
         this.documents = documents;
+        this.customerDocumentProof = customerDocumentProof;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -56,51 +59,86 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
                 .orElse(null);
         return new StaffCorrectionCaseDto(
                 application.id(), application.applicationNumber(), application.productCode().name(),
-                application.status().name(), request == null ? null : toRequest(request, actor));
+                application.originationChannel().name(), application.status().name(),
+                request == null ? null : toRequest(application, request, actor));
     }
 
     private StaffCorrectionCaseDto.CorrectionRequestDto toRequest(
+            LoanApplication application,
             LoanCorrectionRequest request,
             AuthenticatedUser actor
     ) {
         List<LoanCorrectionTask> tasks = corrections.findTasksByRequestId(request.id());
         boolean hasStaffTasks = tasks.stream()
                 .anyMatch(task -> task.responsibleParty() == LoanCorrectionResponsibility.STAFF);
+        boolean hasCustomerTasks = tasks.stream()
+                .anyMatch(task -> task.responsibleParty() == LoanCorrectionResponsibility.CUSTOMER);
+        boolean assistedCustomerTasks = hasCustomerTasks
+                && application.permitsStaffMediatedCustomerCorrection();
         boolean allComplete = !tasks.isEmpty() && tasks.stream()
                 .allMatch(task -> task.status() == LoanCorrectionTaskStatus.COMPLETED);
+        boolean makerCheckerBlocked = hasStaffTasks
+                && request.createdByUserId().equals(actor.userId());
         return new StaffCorrectionCaseDto.CorrectionRequestDto(
                 request.id(), request.status().name(), request.reasonCode().name(), request.createdAt(),
-                request.createdByUserId().equals(actor.userId()), allComplete,
-                hasStaffTasks
+                makerCheckerBlocked, allComplete,
+                (hasStaffTasks || assistedCustomerTasks)
                         && request.status() == LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION
                         && allComplete,
-                tasks.stream().map(task -> toTask(request, task, tasks)).toList());
+                tasks.stream().map(task -> toTask(
+                        application, request, task, tasks, actor, makerCheckerBlocked)).toList());
     }
 
     private StaffCorrectionCaseDto.TaskDto toTask(
+            LoanApplication application,
             LoanCorrectionRequest request,
             LoanCorrectionTask task,
-            List<LoanCorrectionTask> requestTasks
+            List<LoanCorrectionTask> requestTasks,
+            AuthenticatedUser actor,
+            boolean makerCheckerBlocked
     ) {
+        boolean customerSourceViaStaff = task.responsibleParty() == LoanCorrectionResponsibility.CUSTOMER
+                && application.permitsStaffMediatedCustomerCorrection();
+        String proofState = proofState(application, task, requestTasks, customerSourceViaStaff);
+        boolean open = task.status() == LoanCorrectionTaskStatus.OPEN;
+        boolean uploadActionAvailable = open
+                && task.scope() != LoanCorrectionScope.DOCUMENT_REVIEW
+                && ((customerSourceViaStaff
+                && actor.hasPermission("document:upload:assisted-correction"))
+                || (task.responsibleParty() == LoanCorrectionResponsibility.STAFF
+                && actor.hasPermission("document:upload:staff")));
+        boolean completionActionAvailable = open
+                && "SATISFIED".equals(proofState)
+                && (customerSourceViaStaff
+                || (task.responsibleParty() == LoanCorrectionResponsibility.STAFF
+                && !makerCheckerBlocked));
         return new StaffCorrectionCaseDto.TaskDto(
                 task.id(), task.responsibleParty().name(), task.status().name(), task.scope().name(),
                 task.documentType() == null ? null : task.documentType().name(), task.checklistItemId(),
                 task.baselineDocumentVersionId(), request.reasonCode().name(),
+                customerSourceViaStaff ? task.customerInstruction() : null,
                 task.responsibleParty() == LoanCorrectionResponsibility.STAFF
                         ? task.staffInstruction() : null,
-                task.createdAt(), task.completedAt(), proofState(request.loanApplicationId(), task, requestTasks));
+                task.createdAt(), task.completedAt(), proofState, customerSourceViaStaff,
+                uploadActionAvailable, completionActionAvailable);
     }
 
     private String proofState(
-            UUID loanApplicationId,
+            LoanApplication application,
             LoanCorrectionTask task,
-            List<LoanCorrectionTask> requestTasks
+            List<LoanCorrectionTask> requestTasks,
+            boolean customerSourceViaStaff
     ) {
-        if (task.responsibleParty() != LoanCorrectionResponsibility.STAFF) return "NOT_APPLICABLE";
+        if (task.responsibleParty() != LoanCorrectionResponsibility.STAFF && !customerSourceViaStaff) {
+            return "NOT_APPLICABLE";
+        }
         if (task.status() == LoanCorrectionTaskStatus.COMPLETED) return "SATISFIED";
+        if (customerSourceViaStaff) {
+            return customerDocumentProof.isSatisfied(application.id(), task) ? "SATISFIED" : "MISSING";
+        }
         try {
             if (task.scope() == LoanCorrectionScope.SUPPORTING_DOCUMENT_UPLOAD) {
-                documents.requireCurrentVersion(loanApplicationId, task.checklistItemId());
+                documents.requireCurrentVersion(application.id(), task.checklistItemId());
                 return "SATISFIED";
             }
             if (task.scope() == LoanCorrectionScope.DOCUMENT_REVIEW) {
@@ -113,11 +151,11 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
                 UUID versionToReview = task.baselineDocumentVersionId();
                 if (followsReplacement) {
                     versionToReview = documents.requireCurrentVersion(
-                            loanApplicationId, task.checklistItemId());
+                            application.id(), task.checklistItemId());
                     if (Objects.equals(versionToReview, task.baselineDocumentVersionId())) return "MISSING";
                 }
                 return documents.isVersionReviewed(
-                        loanApplicationId, task.checklistItemId(), versionToReview)
+                        application.id(), task.checklistItemId(), versionToReview)
                         ? "SATISFIED" : "MISSING";
             }
             return "MISSING";

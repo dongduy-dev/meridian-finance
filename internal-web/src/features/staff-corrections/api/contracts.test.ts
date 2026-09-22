@@ -7,6 +7,7 @@ describe('Staff correction contracts', () => {
       loanApplicationId: '11111111-1111-4111-8111-111111111111',
       applicationNumber: 'MER-1',
       productCode: 'FUTURE_PRODUCT',
+      originationChannel: 'FUTURE_CHANNEL',
       applicationStatus: 'FUTURE_STATUS',
       correctionRequest: null,
     }).correctionRequest).toBeNull()

@@ -152,8 +152,17 @@ public class TransactionalDocumentUploadService {
             correctionPort.authorizeCustomerUpload(
                     command.loanApplicationId(), item.id(), command.expectedCurrentVersionId());
         } else if (command.uploaderActorType() == DocumentUploaderActorType.STAFF && !assistedInitialUpload) {
-            correctionPort.authorizeStaffUpload(
+            LoanDocumentCorrectionPort.StaffUploadAuthority authority = correctionPort.authorizeStaffUpload(
                     command.loanApplicationId(), item.id(), command.expectedCurrentVersionId());
+            String requiredPermission = authority
+                    == LoanDocumentCorrectionPort.StaffUploadAuthority.ASSISTED_CUSTOMER_CORRECTION
+                    ? "document:upload:assisted-correction" : "document:upload:staff";
+            if (!currentUser.hasPermission(requiredPermission)) {
+                throw new AuthorizationException(
+                        "DOCUMENT_ACCESS_DENIED",
+                        "Staff document upload is denied."
+                );
+            }
         }
 
         if (!Objects.equals(document.currentVersionId(), command.expectedCurrentVersionId())) {
@@ -275,9 +284,11 @@ public class TransactionalDocumentUploadService {
         if (command.uploaderActorType() == DocumentUploaderActorType.STAFF) {
             boolean assistedInitial = workflow.originationChannel() == OriginationChannel.STAFF_ASSISTED
                     && workflow.status() == LoanApplicationStatus.DOCUMENTS_PENDING;
-            String requiredPermission = assistedInitial
-                    ? "document:upload:assisted" : "document:upload:staff";
-            if (!actor.hasPermission(requiredPermission)) {
+            boolean permitted = assistedInitial
+                    ? actor.hasPermission("document:upload:assisted")
+                    : actor.hasPermission("document:upload:staff")
+                    || actor.hasPermission("document:upload:assisted-correction");
+            if (!permitted) {
                 throw new AuthorizationException(
                         "DOCUMENT_ACCESS_DENIED",
                         "Staff document upload is denied."

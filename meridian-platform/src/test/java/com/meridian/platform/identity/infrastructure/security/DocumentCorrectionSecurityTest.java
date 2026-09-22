@@ -15,6 +15,7 @@ import com.meridian.platform.document.infrastructure.adapter.in.web.StaffDocumen
 import com.meridian.platform.document.infrastructure.adapter.in.web.StaffDocumentReadController;
 import com.meridian.platform.loan.application.port.in.CompleteOwnCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.CompleteStaffCorrectionTaskUseCase;
+import com.meridian.platform.loan.application.port.in.CompleteAssistedCustomerCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.QueryOwnCorrectionTasksUseCase;
 import com.meridian.platform.loan.application.port.in.QueryStaffCorrectionTasksUseCase;
 import com.meridian.platform.loan.application.port.in.ResubmitOwnCorrectionUseCase;
@@ -92,6 +93,7 @@ class DocumentCorrectionSecurityTest {
     @MockitoBean private ResubmitOwnCorrectionUseCase resubmitOwnCorrectionUseCase;
     @MockitoBean private QueryStaffCorrectionTasksUseCase queryStaffCorrectionTasksUseCase;
     @MockitoBean private CompleteStaffCorrectionTaskUseCase completeStaffCorrectionTaskUseCase;
+    @MockitoBean private CompleteAssistedCustomerCorrectionTaskUseCase completeAssistedCustomerCorrectionTaskUseCase;
     @MockitoBean private ResubmitStaffCorrectionUseCase resubmitStaffCorrectionUseCase;
     @MockitoBean private QueryStaffCorrectionCaseUseCase queryStaffCorrectionCaseUseCase;
     @MockitoBean private CurrentUserProvider currentUserProvider;
@@ -101,6 +103,10 @@ class DocumentCorrectionSecurityTest {
         mockMvc.perform(get("/api/v1/loan-applications/{id}/corrections/tasks", APPLICATION_ID))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/v1/staff-corrections/tasks"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post(
+                        "/api/v1/staff-corrections/loan-applications/{id}/customer-tasks/{task}/complete",
+                        APPLICATION_ID, TASK_ID))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/v1/document-review-items"))
                 .andExpect(status().isUnauthorized());
@@ -122,6 +128,12 @@ class DocumentCorrectionSecurityTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
         mockMvc.perform(get("/api/v1/staff-corrections/tasks").with(actor))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(
+                        "/api/v1/staff-corrections/loan-applications/{id}/customer-tasks/{task}/complete",
+                        APPLICATION_ID, TASK_ID).with(actor)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"completionRequestId\":\"" + UUID.randomUUID() + "\"}"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/document-review-items").with(actor))
                 .andExpect(status().isForbidden());
@@ -208,8 +220,48 @@ class DocumentCorrectionSecurityTest {
                         APPLICATION_ID, ITEM_ID)
                         .file("file", new byte[]{1, 2, 3})
                         .param("uploadRequestId", UUID.randomUUID().toString())
+                        .with(user("assisted-correction-staff").authorities(
+                                new SimpleGrantedAuthority("document:upload:assisted-correction"))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(multipart(
+                        "/api/v1/staff/loan-applications/{id}/documents/{item}/versions",
+                        APPLICATION_ID, ITEM_ID)
+                        .file("file", new byte[]{1, 2, 3})
+                        .param("uploadRequestId", UUID.randomUUID().toString())
                         .with(user("intake-staff").authorities(
                                 new SimpleGrantedAuthority("document:upload:intake"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void assistedCustomerCompletionRequiresExactStaffCorrectionPermission() throws Exception {
+        String body = "{\"completionRequestId\":\"" + UUID.randomUUID() + "\"}";
+        mockMvc.perform(post(
+                        "/api/v1/staff-corrections/loan-applications/{id}/customer-tasks/{task}/complete",
+                        APPLICATION_ID, TASK_ID)
+                        .with(user("loan-officer").authorities(
+                                new SimpleGrantedAuthority("loan:correction:staff")))
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post(
+                        "/api/v1/staff-corrections/loan-applications/{id}/customer-tasks/{task}/complete",
+                        APPLICATION_ID, TASK_ID)
+                        .with(user("near-match").authorities(
+                                new SimpleGrantedAuthority("loan:correction:staff.extra")))
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post(
+                        "/api/v1/staff-corrections/loan-applications/{id}/customer-tasks/{task}/complete",
+                        APPLICATION_ID, TASK_ID)
+                        .with(user("customer").authorities(
+                                new SimpleGrantedAuthority("loan:correction:own")))
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content(body))
                 .andExpect(status().isForbidden());
     }
 

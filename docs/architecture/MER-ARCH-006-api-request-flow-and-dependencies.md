@@ -541,6 +541,8 @@ For `CUSTOMER_DIGITAL`, Customer-sourced correction endpoints derive the exact C
 
 A Customer-via-Staff correction remains distinct from a Staff correction of Staff-controlled work. Task completion, upload authorization, and resubmission must preserve that distinction rather than treating every Staff-executed command as `REQUEST_STAFF_CORRECTION`. Staff queue, content-read, review, waiver, and resubmission endpoints retain their narrow permissions, and application services recheck task ownership and maker-checker constraints.
 
+The executable UCL/Collateral assisted path uses exact `loan:correction:staff` authority for purpose-specific Customer-task completion and Staff resubmission. Document authorizes replacement upload through the Loan-owned active-task boundary and exact `document:upload:assisted-correction`; the task baseline remains the concurrency proof. Loan records the authenticated Staff user as completion/audit actor and the application Customer as subject. Staff-task maker-checker remains unchanged but is not applied to a Customer-owned task merely because Staff records its Customer-provided proof. Customer-digital Customer tasks continue through the Customer-owned ports only. Staff-mediated UCL cancellation remains a separate deferred command, and no generic Staff checklist-mutation port is introduced by this correction slice.
+
 The Staff correction case query remains inside Loan because Loan owns the correction lifecycle:
 
 ```mermaid

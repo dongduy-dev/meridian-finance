@@ -23,6 +23,7 @@ export const staffCorrectionCaseSchema = z.object({
   loanApplicationId: uuidSchema,
   applicationNumber: z.string().trim().min(1),
   productCode: rawValue,
+  originationChannel: rawValue,
   applicationStatus: rawValue,
   correctionRequest: z.object({
     correctionRequestId: uuidSchema,
@@ -41,10 +42,14 @@ export const staffCorrectionCaseSchema = z.object({
       checklistItemId: uuidSchema.nullable(),
       baselineDocumentVersionId: uuidSchema.nullable(),
       reasonCode: rawValue,
+      customerInstruction: z.string().nullable(),
       staffInstruction: z.string().nullable(),
       createdAt: apiTimestampSchema,
       completedAt: nullableTimestamp,
       proofState: rawValue,
+      customerSourceViaStaff: z.boolean(),
+      uploadActionAvailable: z.boolean(),
+      completionActionAvailable: z.boolean(),
     })),
   }).nullable(),
 })
