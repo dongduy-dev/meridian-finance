@@ -218,6 +218,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/staff-corrections/tasks/{taskId}/complete` | `loan:correction:staff` | Complete a Staff task with proof and maker-checker enforcement. |
 | POST | `/api/v1/staff-corrections/loan-applications/{loanApplicationId}/resubmit` | `loan:correction:staff` | Resubmit an eligible Staff-only or mixed correction. |
 | POST | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions` | `document:upload:assisted` for initial Staff-assisted `DOCUMENTS_PENDING` evidence; otherwise `document:upload:staff` | Upload initial assisted application evidence or upload for an authorized Staff correction task. |
+| POST | `/api/v1/staff/loan-applications/{loanApplicationId}/assisted-action-evidence/{evidenceType}/versions` | Staff with `document:upload:assisted-action` plus the action-specific Loan permission and business role | Upload or replace the current immutable signed `CUSTOMER_OFFER_RESPONSE` or `CUSTOMER_CONTRACT_ACKNOWLEDGMENT` evidence version for its exact authorized target. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | `document:review` | Stream a review-authorized immutable version. |
 
 ### 2.3 Offers, contracts, disbursement, account, and servicing
@@ -227,12 +228,15 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/loan-applications/{loanApplicationId}/approved-offer` | `loan:read:own` | Return the Customer’s approved offer without mutating state. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept` | `loan:offer:respond:own` | Accept a valid pending offer. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/approved-offer/decline` | `loan:offer:respond:own` | Decline a valid pending offer and release a Salary Advance reservation when applicable. |
+| GET | `/api/v1/staff/loan-applications/{loanApplicationId}/offer-response` | Staff `loan:offer:respond:staff` plus Loan Officer role | Return the safe exact pending-offer, action state, and current assisted-action evidence metadata for an eligible Staff-assisted UCL or Collateral application. |
+| POST | `/api/v1/staff/loan-applications/{loanApplicationId}/offer-response` | Staff `loan:offer:respond:staff` plus Loan Officer role | Record the Customer's evidenced `ACCEPT` or `DECLINE` decision for the exact approved offer. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts` | `loan:contract:prepare` | Prepare version 1 or regenerate the current contract. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/contracts/current` | `loan:read:own` or `loan:contract:read` | Return the safe masked current contract. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/acknowledgment` | `loan:contract:acknowledge:own` | Acknowledge the exact current version. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness` | `loan:contract:read` | Calculate point-in-time readiness; optional `expectedContractVersion`. |
 | GET | `/api/v1/staff/contract-work?productCode={productCode}&page=0&size=25` | Staff `loan:contract:read` plus Accounting Officer role | Return the authoritative `CONTRACT_PENDING` operational queue with safe current-contract and advisory-readiness evidence. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/contract` | Staff `loan:contract:read` plus Accounting Officer role | Return one contract workspace for `CONTRACT_PENDING` or `DISBURSEMENT_PENDING`. |
+| POST | `/api/v1/staff/loan-applications/{loanApplicationId}/contract/acknowledgment` | Staff `loan:contract:acknowledge:staff` plus Accounting Officer role | Record the Customer's evidenced acknowledgment of the exact current `PREPARED` contract version. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness/confirm` | `loan:disbursement:prepare` | Recompute and confirm readiness. |
 | GET | `/api/v1/staff/disbursement-work?productCode={productCode}&page=0&size=25` | Staff `loan:disburse` plus Accounting Officer role | Return the authoritative ready-disbursement queue. |
 | GET | `/api/v1/staff/servicing-work?productCode={productCode}&accountStatus={accountStatus}&page=0&size=25` | Staff `loan:read` | Return the authoritative ordinary-repayment servicing queue. |
@@ -1261,7 +1265,39 @@ Accepted types are PDF, JPEG, and PNG, up to 10 MiB, with signature-to-media-typ
 
 For a `STAFF_ASSISTED` application in `DOCUMENTS_PENDING`, exact `document:upload:assisted` authority permits initial checklist upload without a correction task. It does not authorize Customer-digital application upload, later correction upload, or another workflow state. `document:upload:staff` retains its correction-task meaning and cannot bypass the initial assisted rule; `document:upload:intake` remains limited to pre-application intake evidence. Exact `uploadRequestId` replay returns the existing logical upload, different logical content returns `409 IDEMPOTENCY_KEY_REUSED`, and replacement must retain the authoritative `expectedCurrentVersionId`. The final missing required upload publishes the established completion event and advances the application from `DOCUMENTS_PENDING` to `SUBMITTED` through the existing Loan workflow.
 
-Customer-owned document upload, correction task/query and resubmission, cancellation, offer response, and contract acknowledgment require `originationChannel = CUSTOMER_DIGITAL`. A Customer attempting those mutations against a `STAFF_ASSISTED` application receives `403 CUSTOMER_DIRECT_ACTION_NOT_ALLOWED`; Customer projections do not advertise those direct actions. Staff-mediated replacements for those later Customer decisions are outside the current contract.
+Customer-owned document upload, correction task/query and resubmission, cancellation, offer response, and contract acknowledgment require `originationChannel = CUSTOMER_DIGITAL`. A Customer attempting those mutations against a `STAFF_ASSISTED` application receives `403 CUSTOMER_DIRECT_ACTION_NOT_ALLOWED`; Customer projections do not advertise those direct actions. Purpose-specific Staff-mediated offer response and contract acknowledgment are available only through the separate contracts below. Staff-mediated correction/resubmission, cancellation, and generic checklist mutation remain unsupported and fail closed.
+
+#### 5.5.1 Evidenced Staff-assisted downstream Customer decisions
+
+These contracts apply only to `STAFF_ASSISTED` Unsecured Consumer Loan and Collateral Loan applications. The Customer is the decision subject, the authenticated Staff user is the recording actor, Document owns the signed immutable evidence, and Loan owns the resulting workflow action. Salary Advance remains Customer-digital only. The Staff endpoints never manufacture a Customer principal and do not broaden the Customer-owned endpoints.
+
+Offer-response evidence uses `CUSTOMER_OFFER_RESPONSE` and binds `loanApplicationId`, exact `approvedOfferId`, and declared `ACCEPT` or `DECLINE`. Upload is multipart with `uploadRequestId`, optional `expectedCurrentVersionId`, `approvedOfferId`, `declaredOfferDecision`, and `file`. The Loan command body is:
+
+```json
+{
+  "requestId": "10000000-0000-4000-8000-000000000001",
+  "expectedApprovedOfferId": "20000000-0000-4000-8000-000000000001",
+  "action": "ACCEPT",
+  "evidenceDocumentVersionId": "30000000-0000-4000-8000-000000000001"
+}
+```
+
+Exact `loan:offer:respond:staff` authority and the `LOAN_OFFICER` role are both required. Loan locks the workflow and current offer, derives the Customer subject from the application, verifies the exact current evidence version and declared action, and preserves ordinary offer expiry and transition history. Success moves `CUSTOMER_ACCEPTANCE_PENDING` to `CONTRACT_PENDING` for `ACCEPT`, or to `CUSTOMER_DECLINED` for `DECLINE`, and stores one immutable Staff-assisted response per offer.
+
+Contract evidence uses `CUSTOMER_CONTRACT_ACKNOWLEDGMENT` and binds `loanApplicationId`, exact `loanContractId`, and exact `contractVersion`. Upload is multipart with `uploadRequestId`, optional `expectedCurrentVersionId`, `loanContractId`, `contractVersion`, and `file`. The Loan command body is:
+
+```json
+{
+  "acknowledgmentRequestId": "10000000-0000-4000-8000-000000000002",
+  "contractId": "20000000-0000-4000-8000-000000000002",
+  "expectedContractVersion": 1,
+  "evidenceDocumentVersionId": "30000000-0000-4000-8000-000000000002"
+}
+```
+
+Exact `loan:contract:acknowledge:staff` authority and the `ACCOUNTING_OFFICER` role are both required. Loan uses the established acknowledgment-request and application lock order, requires the exact current `PREPARED` contract, validates evidence for that version, records the Staff actor and Customer subject separately, and changes only the contract to `ACKNOWLEDGED`; the application remains `CONTRACT_PENDING`. Existing readiness confirmation then operates unchanged. A regenerated version requires fresh evidence and a fresh acknowledgment.
+
+For both actions, exact request-identity replay returns the recorded outcome without another transition, audit, or action row. Reuse with different semantic content returns `409 IDEMPOTENCY_KEY_REUSED`. Evidence replacement before the action requires the current `expectedCurrentVersionId`; stale replacement returns `409 STALE_DOCUMENT_VERSION`. Missing, mismatched, or non-current evidence returns `422 ASSISTED_ACTION_EVIDENCE_REQUIRED`, `409 ASSISTED_ACTION_EVIDENCE_INVALID`, or `409 STALE_DOCUMENT_VERSION`. Wrong channel, product, target, or state returns the applicable `ASSISTED_ACTION_NOT_ALLOWED`, offer, or contract conflict. After Loan records the action, target authorization rejects further evidence replacement.
 
 Review targets the exact `documentVersionId` and supports:
 

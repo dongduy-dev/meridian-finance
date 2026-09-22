@@ -56,7 +56,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     @Test
     void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
-        assertEquals("59", latestVersion(SCHEMA));
+        assertEquals("60", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -282,7 +282,8 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                 || action == BusinessAuditAction.ASSISTED_ORIGINATION_CUSTOMER_ASSOCIATED
                 || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_ABANDONED
                 || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_COMPLETED
-                || action == BusinessAuditAction.INTAKE_DOCUMENT_VERSION_UPLOADED;
+                || action == BusinessAuditAction.INTAKE_DOCUMENT_VERSION_UPLOADED
+                || action == BusinessAuditAction.ASSISTED_ACTION_DOCUMENT_VERSION_UPLOADED;
     }
 
     private void assertV32ActionsRejected(String schema) {

@@ -4,6 +4,27 @@ import { apiTimestampSchema, uuidSchema } from '@/features/staff-applications/ap
 const rawValue = z.string().trim().min(1)
 const moneySchema = z.number().finite().nonnegative()
 
+export const assistedActionEvidenceSchema = z.object({
+  documentId: uuidSchema,
+  documentVersionId: uuidSchema,
+  evidenceType: z.string().trim().min(1),
+  declaredOfferDecision: z.enum(['ACCEPT', 'DECLINE']).nullable(),
+  targetId: uuidSchema,
+  targetVersion: z.number().int().positive().nullable(),
+  versionNumber: z.number().int().positive(),
+  detectedMimeType: z.enum(['application/pdf', 'image/jpeg', 'image/png']),
+  byteSize: z.number().int().positive(),
+  uploadedAt: apiTimestampSchema,
+})
+
+export const uploadedEvidenceVersionSchema = z.object({
+  documentVersionId: uuidSchema,
+  versionNumber: z.number().int().positive(),
+  detectedMimeType: z.string().trim().min(1),
+  byteSize: z.number().int().positive(),
+  uploadedAt: apiTimestampSchema,
+})
+
 export const contractRepaymentItemSchema = z.object({
   installmentNumber: z.number().int().positive(),
   principalDue: moneySchema,
@@ -56,6 +77,7 @@ const applicationHeaderShape = {
   applicationNumber: z.string().trim().min(1),
   productCode: rawValue,
   productType: rawValue,
+  originationChannel: z.enum(['CUSTOMER_DIGITAL', 'STAFF_ASSISTED']),
   requestedAmount: moneySchema,
   requestedTermMonths: z.number().int().positive(),
   applicationStatus: rawValue,
@@ -65,7 +87,10 @@ const applicationHeaderShape = {
   workStage: rawValue,
 }
 
-export const staffContractCaseSchema = z.object(applicationHeaderShape)
+export const staffContractCaseSchema = z.object({
+  ...applicationHeaderShape,
+  assistedAcknowledgmentEvidence: assistedActionEvidenceSchema.nullable(),
+})
 
 export const staffContractWorkPageSchema = z.object({
   page: z.number().int().nonnegative(),
@@ -86,12 +111,20 @@ export const readinessConfirmationSemanticPayloadSchema = z.object({
   expectedContractVersion: z.number().int().positive(),
 })
 
+export const assistedAcknowledgmentSemanticPayloadSchema = z.object({
+  loanApplicationId: uuidSchema,
+  contractId: uuidSchema,
+  expectedContractVersion: z.number().int().positive(),
+  evidenceDocumentVersionId: uuidSchema,
+})
+
 export type StaffContractCase = z.infer<typeof staffContractCaseSchema>
 export type StaffContractWorkPage = z.infer<typeof staffContractWorkPageSchema>
 export type StaffContractWorkFilters = { productCode?: string; page: number; size: number }
 export type LoanContract = z.infer<typeof loanContractSchema>
 export type PreparationSemanticPayload = z.infer<typeof preparationSemanticPayloadSchema>
 export type ReadinessConfirmationSemanticPayload = z.infer<typeof readinessConfirmationSemanticPayloadSchema>
+export type AssistedAcknowledgmentSemanticPayload = z.infer<typeof assistedAcknowledgmentSemanticPayloadSchema>
 export type PrepareLoanContractRequest = {
   preparationRequestId: string
   expectedCurrentContractVersion: number

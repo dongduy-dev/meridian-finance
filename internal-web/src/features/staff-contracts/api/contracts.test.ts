@@ -40,6 +40,7 @@ export function caseFixture(overrides: Record<string, unknown> = {}) {
     applicationNumber: 'UCL-20260907-000001',
     productCode: 'UNSECURED_CONSUMER_LOAN',
     productType: 'UNSECURED',
+    originationChannel: 'CUSTOMER_DIGITAL',
     requestedAmount: 10_000_000,
     requestedTermMonths: 2,
     applicationStatus: 'CONTRACT_PENDING',
@@ -54,6 +55,7 @@ export function caseFixture(overrides: Record<string, unknown> = {}) {
       calculationSemantics: 'POINT_IN_TIME_ADVISORY',
       recomputedDuringConfirmation: true,
     },
+    assistedAcknowledgmentEvidence: null,
     workStage: 'READY_TO_CONFIRM',
     ...overrides,
   }

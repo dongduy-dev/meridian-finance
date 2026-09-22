@@ -126,7 +126,7 @@ class StaffAssistedUclOriginationV57MigrationTest {
     void migrationAndSnapshotDescribeTheSameV57Foundation() throws IOException {
         String migration = Files.readString(MIGRATION).replace("\r\n", "\n");
         String snapshot = Files.readString(CURRENT_SCHEMA).replace("\r\n", "\n");
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V59"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V60"));
         assertTrue(snapshot.contains(migration.trim()));
         assertTrue(migration.contains("origination_channel"));
         assertTrue(migration.contains("document:upload:assisted"));

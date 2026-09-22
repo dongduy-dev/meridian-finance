@@ -42,6 +42,13 @@ export const STAFF_APPLICATION_CASE_ROUTE = {
   requiredPermissions: ['loan:read'],
 } as const satisfies StaffRouteDefinition
 
+export const STAFF_OFFER_RESPONSE_ROUTE = {
+  path: '/staff/applications/:loanApplicationId/offer-response',
+  label: 'Customer offer response',
+  requiredPermissions: ['loan:offer:respond:staff'],
+  requiredRoles: ['LOAN_OFFICER'],
+} as const satisfies StaffRouteDefinition
+
 export const STAFF_DOCUMENT_QUEUE_ROUTE = {
   path: '/staff/work/documents',
   label: 'Document review',

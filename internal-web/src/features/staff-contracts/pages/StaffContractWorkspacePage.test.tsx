@@ -28,7 +28,10 @@ const staff: AuthResponse = {
   tokenType: 'Bearer', accessToken: 'staff-token', expiresAt: '2026-09-07T10:00:00Z',
   userId: '22222222-2222-4222-8222-222222222222', email: 'accounting@meridian.local',
   userType: 'STAFF', customerId: null, roles: ['ACCOUNTING_OFFICER'],
-  permissions: ['loan:contract:read', 'loan:contract:prepare', 'loan:disbursement:prepare'],
+  permissions: [
+    'loan:contract:read', 'loan:contract:prepare', 'loan:disbursement:prepare',
+    'loan:contract:acknowledge:staff', 'document:upload:assisted-action',
+  ],
 }
 
 function noContractCase() {
@@ -74,6 +77,10 @@ function confirmedCase() {
   })
 }
 
+function assistedPreparedCase() {
+  return preparedCase(1) as ReturnType<typeof caseFixture> & { originationChannel: string }
+}
+
 function renderPage() {
   const router = createTestRouter([`/staff/applications/${applicationId}/contract`])
   render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
@@ -104,6 +111,52 @@ describe('Staff contract workspace', () => {
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) =>
       String(path).includes('/acknowledgment') || String(path).includes('/destination')
       || String(path).includes('/disbursements') || String(path).includes('/approved-offer'))).toBe(false)
+  })
+
+  it('records an evidenced Staff-assisted acknowledgment against the exact current contract version', async () => {
+    const evidenceVersionId = '44444444-4444-4444-8444-444444444444'
+    let acknowledged = false
+    let submitted: Record<string, unknown> | undefined
+    vi.mocked(api.apiRequest).mockImplementation(async (_path, options) => {
+      if ((options as RequestInit | undefined)?.method === 'POST') {
+        submitted = (options as { body: Record<string, unknown> }).body
+        acknowledged = true
+        return contractFixture('ACKNOWLEDGED')
+      }
+      return caseFixture({
+        ...assistedPreparedCase(),
+        originationChannel: 'STAFF_ASSISTED',
+        currentContract: acknowledged ? contractFixture('ACKNOWLEDGED') : contractFixture('PREPARED'),
+        assistedAcknowledgmentEvidence: {
+          documentId: '55555555-5555-4555-8555-555555555555',
+          documentVersionId: evidenceVersionId,
+          evidenceType: 'CUSTOMER_CONTRACT_ACKNOWLEDGMENT',
+          declaredOfferDecision: null,
+          targetId: '22222222-2222-4222-8222-222222222222',
+          targetVersion: 1,
+          versionNumber: 1,
+          detectedMimeType: 'application/pdf',
+          byteSize: 2048,
+          uploadedAt: '2026-09-07T08:20:00',
+        },
+        workStage: acknowledged ? 'READY_TO_CONFIRM' : 'CUSTOMER_ACKNOWLEDGMENT_REQUIRED',
+      })
+    })
+    renderPage()
+    const user = userEvent.setup()
+
+    expect(await screen.findByText(/Customer remains the decision subject/i)).toBeVisible()
+    await user.click(screen.getByRole('checkbox'))
+    await user.click(screen.getByRole('button', { name: 'Review evidenced acknowledgment' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
+
+    await screen.findByText(/command response and refreshed authoritative contract case are confirmed/i)
+    expect(submitted).toEqual({
+      acknowledgmentRequestId: operationId,
+      contractId: '22222222-2222-4222-8222-222222222222',
+      expectedContractVersion: 1,
+      evidenceDocumentVersionId: evidenceVersionId,
+    })
   })
 
   it('prepares version 1 with exact version zero, null reason, and a generated stable UUID', async () => {

@@ -66,6 +66,9 @@ public class LoanContractRepositoryAdapter implements LoanContractRepository {
     @Override public Optional<LoanContract> findCurrentByApplicationIdForUpdate(UUID applicationId) {
         return contracts.findCurrentForUpdate(applicationId).map(this::toDomain);
     }
+    @Override public Optional<LoanContract> findById(UUID contractId) {
+        return contracts.findById(contractId).map(this::toDomain);
+    }
     @Override public Optional<LoanContract> findByPreparationRequestId(UUID requestId) {
         return contracts.findByPreparationRequestId(requestId).map(this::toDomain);
     }

@@ -13,6 +13,7 @@ public interface LoanContractRepository {
     LoanContract saveAndFlush(LoanContract contract);
     Optional<LoanContract> findCurrentByApplicationId(UUID loanApplicationId);
     Optional<LoanContract> findCurrentByApplicationIdForUpdate(UUID loanApplicationId);
+    Optional<LoanContract> findById(UUID contractId);
     Optional<LoanContract> findByPreparationRequestId(UUID requestId);
     Optional<LoanContract> findByAcknowledgmentRequestId(UUID requestId);
     Optional<LoanContract> findByConfirmationRequestId(UUID requestId);
