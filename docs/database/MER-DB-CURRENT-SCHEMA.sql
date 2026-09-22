@@ -10566,10 +10566,6 @@ CREATE TRIGGER trg_assisted_action_document_versions_immutable
     BEFORE UPDATE OR DELETE ON assisted_action_document_versions
     FOR EACH ROW EXECUTE FUNCTION reject_immutable_history_row_mutation();
 
-ALTER TABLE loan_contracts
-    ADD CONSTRAINT uq_loan_contracts_id_application_version
-        UNIQUE (id, loan_application_id, contract_version);
-
 CREATE TABLE staff_assisted_offer_responses (
     id UUID PRIMARY KEY,
     request_id UUID NOT NULL,
