@@ -1020,7 +1020,7 @@ Type: Lending workflow contract
 
 Priority: P1
 
-Status: Completed
+Status: Done
 
 Blocking: None.
 

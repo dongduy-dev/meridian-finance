@@ -110,7 +110,7 @@ export function StaffCorrectionWorkspacePage() {
     if (query.data?.applicationStatus === 'CANCELLED' || request.status === 'CANCELLED') {
       removeUnresolvedOperation('ASSISTED_UCL_CANCELLATION', `cancel:${loanApplicationId}`)
     }
-  }, [query.data, resubmissionKey])
+  }, [query.data, resubmissionKey, loanApplicationId])
 
   const closeResubmissionConfirmation = () => {
     setConfirmingResubmission(false)
