@@ -16,12 +16,16 @@ import com.meridian.platform.customer.application.dto.AddCustomerBankAccountRequ
 import com.meridian.platform.customer.application.port.in.ManageOwnCustomerBankAccountUseCase;
 import com.meridian.platform.document.application.dto.DocumentVersionDto;
 import com.meridian.platform.document.application.dto.ReviewDocumentCommand;
+import com.meridian.platform.document.application.dto.UploadIntakeEvidenceCommand;
 import com.meridian.platform.document.application.dto.UploadDocumentCommand;
+import com.meridian.platform.document.application.port.in.ManageIntakeEvidenceUseCase;
 import com.meridian.platform.document.application.port.in.ReviewDocumentUseCase;
 import com.meridian.platform.document.application.port.in.UploadDocumentUseCase;
 import com.meridian.platform.document.domain.model.DocumentReviewOutcome;
 import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.document.domain.model.DocumentUploaderActorType;
+import com.meridian.platform.document.domain.model.IntakeEvidenceType;
+import com.meridian.platform.loan.application.dto.AssistedOriginationCaseDto;
 import com.meridian.platform.loan.application.dto.CollateralDetailsRequest;
 import com.meridian.platform.loan.application.dto.CollateralLoanApplicationDto;
 import com.meridian.platform.loan.application.dto.CollateralLoanApplicationRequest;
@@ -29,17 +33,21 @@ import com.meridian.platform.loan.application.dto.CollateralLoanVerificationStar
 import com.meridian.platform.loan.application.dto.CompleteCollateralLoanVerificationRequest;
 import com.meridian.platform.loan.application.dto.CompleteCorrectionTaskRequest;
 import com.meridian.platform.loan.application.dto.CorrectionResubmissionRequest;
+import com.meridian.platform.loan.application.dto.CreateAssistedOriginationCaseRequest;
 import com.meridian.platform.loan.application.dto.CustomerCorrectionTaskDto;
 import com.meridian.platform.loan.application.port.in.CompleteAssistedCustomerCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.CompleteOwnCorrectionTaskUseCase;
+import com.meridian.platform.loan.application.port.in.ManageAssistedOriginationUseCase;
 import com.meridian.platform.loan.application.port.in.ManageCollateralLoanVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.QueryOwnCorrectionTasksUseCase;
 import com.meridian.platform.loan.application.port.in.QueryStaffLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.in.QueryStaffLoanApplicationVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.ResubmitOwnCorrectionUseCase;
 import com.meridian.platform.loan.application.port.in.ResubmitStaffCorrectionUseCase;
+import com.meridian.platform.loan.application.port.in.StartAssistedCollateralLoanUseCase;
 import com.meridian.platform.loan.application.port.in.StartCollateralLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
+import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.collateral.CollateralLoanManualVerificationOutcome;
 import com.meridian.platform.loan.domain.model.collateral.CollateralType;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
@@ -113,6 +121,9 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
             .getBytes(StandardCharsets.US_ASCII);
 
     @Autowired private StartCollateralLoanApplicationUseCase submissionUseCase;
+    @Autowired private StartAssistedCollateralLoanUseCase assistedSubmissionUseCase;
+    @Autowired private ManageAssistedOriginationUseCase assistedOriginationUseCase;
+    @Autowired private ManageIntakeEvidenceUseCase intakeEvidenceUseCase;
     @Autowired private UploadDocumentUseCase uploadUseCase;
     @Autowired private ReviewDocumentUseCase documentReviewUseCase;
     @Autowired private ManageCollateralLoanVerificationUseCase verificationUseCase;
@@ -400,9 +411,7 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
 
     @Test
     void assistedCollateralCustomerReplacementIsUploadedCompletedAndResubmittedByStaff() {
-        ReadyApplication ready = originateAndMakeProcessingReady();
-        jdbc.update("UPDATE loan_applications SET origination_channel = 'STAFF_ASSISTED' WHERE id = ?",
-                ready.applicationId());
+        ReadyApplication ready = originateAssistedAndMakeProcessingReady();
         useLoanOfficer();
         UUID verificationId = verificationUseCase.startManualVerification(
                 ready.applicationId()).verificationId();
@@ -471,6 +480,54 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
         acceptDocument(application.loanApplicationId(), checklistItemId, version.documentVersionId());
         assertEquals("SUBMITTED", status(application.loanApplicationId()));
         return new ReadyApplication(application.loanApplicationId(), checklistItemId, version.documentVersionId());
+    }
+
+    private ReadyApplication originateAssistedAndMakeProcessingReady() {
+        useAssistedLoanOfficer();
+        AssistedOriginationCaseDto assistedCase = assistedOriginationUseCase.createCase(
+                new CreateAssistedOriginationCaseRequest(
+                        ProductCode.COLLATERAL_LOAN,
+                        fixture.customerId()
+                )
+        );
+        intakeEvidenceUseCase.upload(new UploadIntakeEvidenceCommand(
+                assistedCase.assistedOriginationCaseId(),
+                IntakeEvidenceType.COLLATERAL_PAPER_APPLICATION,
+                UUID.randomUUID(),
+                null,
+                "signed-collateral-application.pdf",
+                "application/pdf",
+                new ByteArrayInputStream(PDF)
+        ));
+        UUID applicationId = assistedSubmissionUseCase.submit(
+                assistedCase.assistedOriginationCaseId(),
+                new CollateralLoanApplicationRequest(
+                        new BigDecimal("25000000"),
+                        12,
+                        new CollateralDetailsRequest(
+                                CollateralType.CAR,
+                                "Customer vehicle",
+                                new BigDecimal("50000000"),
+                                "Customer-submitted ownership statement",
+                                "Normal used condition"
+                        )
+                )
+        ).loanApplicationId();
+        UUID checklistItemId = uuid(
+                "SELECT item.id FROM document_checklist_items item "
+                        + "JOIN document_checklists checklist ON checklist.id = item.checklist_id "
+                        + "WHERE checklist.loan_application_id = ?",
+                applicationId
+        );
+        DocumentVersionDto version = uploadAsStaff(
+                applicationId,
+                checklistItemId,
+                null,
+                "assisted-ownership-evidence.pdf"
+        );
+        assertEquals("SUBMITTED", status(applicationId));
+        acceptDocument(applicationId, checklistItemId, version.documentVersionId());
+        return new ReadyApplication(applicationId, checklistItemId, version.documentVersionId());
     }
 
     private void completeReplacement(ReadyApplication ready) {
@@ -768,6 +825,9 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
                         "loan:review",
                         "approval:recommend",
                         "document:review",
+                        "loan:originate:staff",
+                        "document:upload:intake",
+                        "document:upload:assisted",
                         "loan:correction:staff",
                         "document:upload:assisted-correction"
                 )

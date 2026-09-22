@@ -16,15 +16,20 @@ import com.meridian.platform.customer.application.dto.AddCustomerBankAccountRequ
 import com.meridian.platform.customer.application.port.in.ManageOwnCustomerBankAccountUseCase;
 import com.meridian.platform.document.application.dto.DocumentVersionDto;
 import com.meridian.platform.document.application.dto.ReviewDocumentCommand;
+import com.meridian.platform.document.application.dto.UploadIntakeEvidenceCommand;
 import com.meridian.platform.document.application.dto.UploadDocumentCommand;
+import com.meridian.platform.document.application.port.in.ManageIntakeEvidenceUseCase;
 import com.meridian.platform.document.application.port.in.ReviewDocumentUseCase;
 import com.meridian.platform.document.application.port.in.UploadDocumentUseCase;
 import com.meridian.platform.document.domain.model.DocumentReviewOutcome;
 import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.document.domain.model.DocumentUploaderActorType;
+import com.meridian.platform.document.domain.model.IntakeEvidenceType;
+import com.meridian.platform.loan.application.dto.AssistedOriginationCaseDto;
 import com.meridian.platform.loan.application.dto.CompleteUnsecuredConsumerLoanVerificationRequest;
 import com.meridian.platform.loan.application.dto.CompleteCorrectionTaskRequest;
 import com.meridian.platform.loan.application.dto.CorrectionResubmissionRequest;
+import com.meridian.platform.loan.application.dto.CreateAssistedOriginationCaseRequest;
 import com.meridian.platform.loan.application.dto.CustomerCorrectionTaskDto;
 import com.meridian.platform.loan.application.dto.StaffCorrectionTaskDto;
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionResult;
@@ -40,6 +45,7 @@ import com.meridian.platform.loan.application.port.in.CancelLoanApplicationUseCa
 import com.meridian.platform.loan.application.port.in.CompleteAssistedCustomerCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.CompleteOwnCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.CompleteStaffCorrectionTaskUseCase;
+import com.meridian.platform.loan.application.port.in.ManageAssistedOriginationUseCase;
 import com.meridian.platform.loan.application.port.in.ManageUnsecuredConsumerLoanVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.PrepareLoanContractUseCase;
 import com.meridian.platform.loan.application.port.in.QueryApprovedOfferUseCase;
@@ -51,12 +57,14 @@ import com.meridian.platform.loan.application.port.in.ResubmitOwnCorrectionUseCa
 import com.meridian.platform.loan.application.port.in.ResubmitStaffCorrectionUseCase;
 import com.meridian.platform.loan.application.port.in.RecordRepaymentUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
+import com.meridian.platform.loan.application.port.in.StartAssistedUnsecuredConsumerLoanUseCase;
 import com.meridian.platform.loan.application.port.in.StartUnsecuredConsumerLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanContract;
 import com.meridian.platform.loan.domain.model.LoanContractStatus;
 import com.meridian.platform.loan.domain.model.ContractSupersessionReason;
+import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.RepaymentMethod;
 import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanManualVerificationOutcome;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
@@ -137,6 +145,9 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
             .getBytes(StandardCharsets.US_ASCII);
 
     @Autowired private StartUnsecuredConsumerLoanApplicationUseCase submissionUseCase;
+    @Autowired private StartAssistedUnsecuredConsumerLoanUseCase assistedSubmissionUseCase;
+    @Autowired private ManageAssistedOriginationUseCase assistedOriginationUseCase;
+    @Autowired private ManageIntakeEvidenceUseCase intakeEvidenceUseCase;
     @Autowired private UploadDocumentUseCase uploadUseCase;
     @Autowired private ReviewDocumentUseCase documentReviewUseCase;
     @Autowired private ManageUnsecuredConsumerLoanVerificationUseCase verificationUseCase;
@@ -1014,9 +1025,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
 
     @Test
     void assistedUclCustomerReplacementIsUploadedCompletedAndResubmittedByStaff() {
-        UUID applicationId = originateAndMakeProcessingReady();
-        jdbcTemplate.update("UPDATE loan_applications SET origination_channel = 'STAFF_ASSISTED' WHERE id = ?",
-                applicationId);
+        UUID applicationId = originateAssistedAndMakeProcessingReady();
         CorrectionEvidence evidence = correctionEvidence(applicationId);
         useLoanOfficer();
         verificationUseCase.startManualVerification(applicationId);
@@ -1483,6 +1492,59 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         return application.loanApplicationId();
     }
 
+    private UUID originateAssistedAndMakeProcessingReady() {
+        useAssistedLoanOfficer();
+        AssistedOriginationCaseDto assistedCase = assistedOriginationUseCase.createCase(
+                new CreateAssistedOriginationCaseRequest(
+                        ProductCode.UNSECURED_CONSUMER_LOAN,
+                        fixture.customerId()
+                )
+        );
+        intakeEvidenceUseCase.upload(new UploadIntakeEvidenceCommand(
+                assistedCase.assistedOriginationCaseId(),
+                IntakeEvidenceType.UCL_PAPER_APPLICATION,
+                UUID.randomUUID(),
+                null,
+                "signed-ucl-application.pdf",
+                "application/pdf",
+                new ByteArrayInputStream(PDF)
+        ));
+        UUID applicationId = assistedSubmissionUseCase.submit(
+                assistedCase.assistedOriginationCaseId(),
+                new UnsecuredConsumerLoanApplicationRequest(new BigDecimal("5000000"), 6)
+        ).loanApplicationId();
+        List<UUID> checklistItemIds = jdbcTemplate.query(
+                "SELECT item.id FROM document_checklist_items item "
+                        + "JOIN document_checklists checklist ON checklist.id = item.checklist_id "
+                        + "WHERE checklist.loan_application_id = ? ORDER BY item.document_type",
+                (resultSet, rowNumber) -> resultSet.getObject(1, UUID.class),
+                applicationId
+        );
+        assertEquals(3, checklistItemIds.size());
+
+        List<UploadedEvidence> uploaded = checklistItemIds.stream()
+                .map(itemId -> new UploadedEvidence(
+                        itemId,
+                        uploadAsStaff(applicationId, itemId, null, "assisted-ucl-evidence.pdf")
+                ))
+                .toList();
+        assertEquals("SUBMITTED", status(applicationId));
+        for (UploadedEvidence evidence : uploaded) {
+            documentReviewUseCase.review(new ReviewDocumentCommand(
+                    applicationId,
+                    evidence.checklistItemId(),
+                    evidence.version().documentVersionId(),
+                    UUID.randomUUID(),
+                    DocumentReviewOutcome.ACCEPT_DOCUMENT,
+                    null,
+                    "Restricted UCL evidence acceptance note.",
+                    LOAN_OFFICER_USER_ID,
+                    false
+            ));
+        }
+        return applicationId;
+    }
+
     private DocumentVersionDto upload(UUID applicationId, UUID checklistItemId) {
         return upload(applicationId, checklistItemId, null, "ucl-evidence.pdf");
     }
@@ -1883,6 +1945,9 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                         "loan:review",
                         "approval:recommend",
                         "document:review",
+                        "loan:originate:staff",
+                        "document:upload:intake",
+                        "document:upload:assisted",
                         "loan:correction:staff",
                         "document:upload:assisted-correction"
                 )
