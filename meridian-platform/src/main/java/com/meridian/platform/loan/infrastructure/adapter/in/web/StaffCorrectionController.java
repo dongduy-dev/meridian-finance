@@ -3,7 +3,9 @@ package com.meridian.platform.loan.infrastructure.adapter.in.web;
 import com.meridian.platform.loan.application.dto.CompleteCorrectionTaskRequest;
 import com.meridian.platform.loan.application.dto.CorrectionResubmissionDto;
 import com.meridian.platform.loan.application.dto.CorrectionResubmissionRequest;
+import com.meridian.platform.loan.application.dto.CustomerCorrectionTaskDto;
 import com.meridian.platform.loan.application.dto.StaffCorrectionTaskDto;
+import com.meridian.platform.loan.application.port.in.CompleteAssistedCustomerCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.CompleteStaffCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.QueryStaffCorrectionTasksUseCase;
 import com.meridian.platform.loan.application.port.in.ResubmitStaffCorrectionUseCase;
@@ -31,16 +33,29 @@ public class StaffCorrectionController {
 
     private final QueryStaffCorrectionTasksUseCase queryTasks;
     private final CompleteStaffCorrectionTaskUseCase completeTask;
+    private final CompleteAssistedCustomerCorrectionTaskUseCase completeAssistedCustomerTask;
     private final ResubmitStaffCorrectionUseCase resubmitCorrection;
 
     public StaffCorrectionController(
             QueryStaffCorrectionTasksUseCase queryTasks,
             CompleteStaffCorrectionTaskUseCase completeTask,
+            CompleteAssistedCustomerCorrectionTaskUseCase completeAssistedCustomerTask,
             ResubmitStaffCorrectionUseCase resubmitCorrection
     ) {
         this.queryTasks = queryTasks;
         this.completeTask = completeTask;
+        this.completeAssistedCustomerTask = completeAssistedCustomerTask;
         this.resubmitCorrection = resubmitCorrection;
+    }
+
+    @PostMapping("/loan-applications/{loanApplicationId}/customer-tasks/{taskId}/complete")
+    @PreAuthorize("hasAuthority('loan:correction:staff')")
+    public CustomerCorrectionTaskDto completeAssistedCustomerTask(
+            @PathVariable UUID loanApplicationId,
+            @PathVariable UUID taskId,
+            @Valid @RequestBody CompleteCorrectionTaskRequest request
+    ) {
+        return completeAssistedCustomerTask.complete(loanApplicationId, taskId, request);
     }
 
     @GetMapping("/tasks")

@@ -30,12 +30,14 @@ import com.meridian.platform.loan.application.dto.CompleteCollateralLoanVerifica
 import com.meridian.platform.loan.application.dto.CompleteCorrectionTaskRequest;
 import com.meridian.platform.loan.application.dto.CorrectionResubmissionRequest;
 import com.meridian.platform.loan.application.dto.CustomerCorrectionTaskDto;
+import com.meridian.platform.loan.application.port.in.CompleteAssistedCustomerCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.CompleteOwnCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.ManageCollateralLoanVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.QueryOwnCorrectionTasksUseCase;
 import com.meridian.platform.loan.application.port.in.QueryStaffLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.application.port.in.QueryStaffLoanApplicationVerificationUseCase;
 import com.meridian.platform.loan.application.port.in.ResubmitOwnCorrectionUseCase;
+import com.meridian.platform.loan.application.port.in.ResubmitStaffCorrectionUseCase;
 import com.meridian.platform.loan.application.port.in.StartCollateralLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.in.StartLoanApplicationReviewUseCase;
 import com.meridian.platform.loan.domain.model.collateral.CollateralLoanManualVerificationOutcome;
@@ -122,7 +124,9 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
     @Autowired private QueryStaffLoanApplicationVerificationUseCase staffVerificationQuery;
     @Autowired private QueryStaffLoanApplicationReviewUseCase staffReviewQuery;
     @Autowired private CompleteOwnCorrectionTaskUseCase correctionTaskCompletion;
+    @Autowired private CompleteAssistedCustomerCorrectionTaskUseCase assistedTaskCompletion;
     @Autowired private ResubmitOwnCorrectionUseCase correctionResubmission;
+    @Autowired private ResubmitStaffCorrectionUseCase staffCorrectionResubmission;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private ThreadLocalCurrentUserProvider currentUserProvider;
     @MockitoSpyBean private BusinessAuditPublisher auditPublisher;
@@ -394,6 +398,56 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
                 + "FROM collateral_loan_verifications WHERE id = ?", latestVerificationId));
     }
 
+    @Test
+    void assistedCollateralCustomerReplacementIsUploadedCompletedAndResubmittedByStaff() {
+        ReadyApplication ready = originateAndMakeProcessingReady();
+        jdbc.update("UPDATE loan_applications SET origination_channel = 'STAFF_ASSISTED' WHERE id = ?",
+                ready.applicationId());
+        useLoanOfficer();
+        UUID verificationId = verificationUseCase.startManualVerification(
+                ready.applicationId()).verificationId();
+        verificationUseCase.completeManualVerification(
+                ready.applicationId(),
+                moreInformation(
+                        verificationId,
+                        ready,
+                        "Staff must collect replacement Collateral ownership evidence."
+                )
+        );
+        UUID taskId = uuid("SELECT task.id FROM loan_correction_tasks task "
+                + "JOIN loan_correction_requests correction ON correction.id = task.correction_request_id "
+                + "WHERE correction.loan_application_id = ? AND task.responsible_party = 'CUSTOMER'",
+                ready.applicationId());
+
+        useAssistedLoanOfficer();
+        DocumentVersionDto replacement = uploadAsStaff(
+                ready.applicationId(),
+                ready.checklistItemId(),
+                ready.documentVersionId(),
+                "assisted-collateral-replacement.pdf"
+        );
+        UUID completionRequestId = UUID.randomUUID();
+        assistedTaskCompletion.complete(
+                ready.applicationId(), taskId, new CompleteCorrectionTaskRequest(completionRequestId));
+        assistedTaskCompletion.complete(
+                ready.applicationId(), taskId, new CompleteCorrectionTaskRequest(completionRequestId));
+        acceptDocument(ready.applicationId(), ready.checklistItemId(), replacement.documentVersionId());
+
+        assertEquals("STAFF", text("SELECT uploader_actor_type FROM document_versions WHERE id = ?",
+                replacement.documentVersionId()));
+        assertEquals(LOAN_OFFICER_USER_ID, uuid(
+                "SELECT completed_by_user_id FROM loan_correction_tasks WHERE id = ?", taskId));
+        assertEquals(1, count("SELECT count(*) FROM audit_events WHERE action = 'CORRECTION_TASK_COMPLETED' "
+                + "AND entity_id = ? AND actor_user_id = ?", taskId, LOAN_OFFICER_USER_ID));
+
+        assertEquals("SUBMITTED", staffCorrectionResubmission.resubmitAsStaff(
+                ready.applicationId(),
+                new CorrectionResubmissionRequest(UUID.randomUUID())
+        ).loanApplicationStatus());
+        assertEquals(2, count("SELECT count(*) FROM collateral_loan_verifications "
+                + "WHERE loan_application_id = ?", ready.applicationId()));
+    }
+
     private ReadyApplication originateAndMakeProcessingReady() {
         useCustomer();
         CollateralLoanApplicationDto application = submissionUseCase.startCollateralLoanApplication(
@@ -456,6 +510,26 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
                 DocumentUploaderActorType.CUSTOMER,
                 fixture.customerUserId(),
                 fixture.customerId()
+        ));
+    }
+
+    private DocumentVersionDto uploadAsStaff(
+            UUID applicationId,
+            UUID checklistItemId,
+            UUID replacesVersionId,
+            String filename
+    ) {
+        return uploadUseCase.upload(new UploadDocumentCommand(
+                applicationId,
+                checklistItemId,
+                UUID.randomUUID(),
+                replacesVersionId,
+                filename,
+                "application/pdf",
+                new ByteArrayInputStream(PDF),
+                DocumentUploaderActorType.STAFF,
+                LOAN_OFFICER_USER_ID,
+                null
         ));
     }
 
@@ -681,6 +755,23 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
 
     private void useLoanOfficer() {
         useStaff(LOAN_OFFICER_USER_ID);
+    }
+
+    private void useAssistedLoanOfficer() {
+        currentUserProvider.use(new AuthenticatedUser(
+                LOAN_OFFICER_USER_ID,
+                "collateral-assisted-loan-officer@meridian.local",
+                "STAFF",
+                null,
+                Set.of("LOAN_OFFICER"),
+                Set.of(
+                        "loan:review",
+                        "approval:recommend",
+                        "document:review",
+                        "loan:correction:staff",
+                        "document:upload:assisted-correction"
+                )
+        ));
     }
 
     private void useStaff(UUID userId) {

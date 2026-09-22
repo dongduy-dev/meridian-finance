@@ -15,6 +15,7 @@ import com.meridian.platform.loan.domain.model.LoanCorrectionTask;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,7 +53,8 @@ class QueryStaffCorrectionCaseServiceTest {
     @BeforeEach
     void setUp() {
         service = new QueryStaffCorrectionCaseService(
-                applications, corrections, documents, currentUserProvider);
+                applications, corrections, documents,
+                new CustomerCorrectionDocumentProof(documents), currentUserProvider);
         when(currentUserProvider.currentUser()).thenReturn(staff(CREATOR_ID));
         when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application()));
     }
@@ -133,6 +135,60 @@ class QueryStaffCorrectionCaseServiceTest {
     }
 
     @Test
+    void exposesAssistedCustomerTaskInstructionProofAndBackendActions() {
+        when(applications.findById(APPLICATION_ID))
+                .thenReturn(Optional.of(application(OriginationChannel.STAFF_ASSISTED)));
+        when(currentUserProvider.currentUser()).thenReturn(staff(
+                CREATOR_ID, Set.of("loan:correction:staff", "document:upload:assisted-correction")));
+        LoanCorrectionRequest request = request(LoanCorrectionRequestStatus.OPEN);
+        LoanCorrectionTask task = task(
+                1, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.OPEN);
+        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
+                .thenReturn(Optional.of(request));
+        when(corrections.findTasksByRequestId(REQUEST_ID)).thenReturn(List.of(task));
+        when(documents.hasCurrentVersionDifferentFrom(ITEM_ID, VERSION_ID)).thenReturn(true);
+
+        var result = service.query(APPLICATION_ID).correctionRequest();
+        var projected = result.tasks().getFirst();
+
+        assertEquals(false, result.makerCheckerBlockedForCurrentActor());
+        assertEquals("Replace it.", projected.customerInstruction());
+        assertNull(projected.staffInstruction());
+        assertEquals("SATISFIED", projected.proofState());
+        assertEquals(true, projected.customerSourceViaStaff());
+        assertEquals(true, projected.uploadActionAvailable());
+        assertEquals(true, projected.completionActionAvailable());
+    }
+
+    @Test
+    void keepsCustomerDigitalCustomerTaskHiddenAndNonActionable() {
+        LoanCorrectionRequest request = request(LoanCorrectionRequestStatus.OPEN);
+        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
+                .thenReturn(Optional.of(request));
+        when(corrections.findTasksByRequestId(REQUEST_ID)).thenReturn(List.of(task(
+                1, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.OPEN)));
+
+        var projected = service.query(APPLICATION_ID).correctionRequest().tasks().getFirst();
+
+        assertNull(projected.customerInstruction());
+        assertEquals("NOT_APPLICABLE", projected.proofState());
+        assertEquals(false, projected.customerSourceViaStaff());
+        assertEquals(false, projected.uploadActionAvailable());
+        assertEquals(false, projected.completionActionAvailable());
+    }
+
+    @Test
+    void reportsCompletedAssistedCustomerOnlyCorrectionAsStaffResubmittable() {
+        when(applications.findById(APPLICATION_ID))
+                .thenReturn(Optional.of(application(OriginationChannel.STAFF_ASSISTED)));
+        assertStaffResubmissionReady(
+                LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION,
+                List.of(task(1, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.COMPLETED)),
+                true
+        );
+    }
+
+    @Test
     void doesNotReportCorrectionWithIncompleteStaffTaskAsStaffResubmittable() {
         assertStaffResubmissionReady(
                 LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION,
@@ -195,16 +251,24 @@ class QueryStaffCorrectionCaseServiceTest {
     }
 
     private static LoanApplication application() {
+        return application(OriginationChannel.CUSTOMER_DIGITAL);
+    }
+
+    private static LoanApplication application(OriginationChannel channel) {
         return new LoanApplication(
                 APPLICATION_ID, UUID.randomUUID(), UUID.randomUUID(), "MER-2026-000001",
                 ProductCode.UNSECURED_CONSUMER_LOAN, ProductType.UNSECURED,
-                LoanApplicationStatus.RETURNED_FOR_REVISION,
+                channel, LoanApplicationStatus.RETURNED_FOR_REVISION,
                 BigDecimal.valueOf(10_000_000), 12, NOW.minusDays(2));
     }
 
     private static AuthenticatedUser staff(UUID userId) {
+        return staff(userId, Set.of("loan:correction:staff"));
+    }
+
+    private static AuthenticatedUser staff(UUID userId, Set<String> permissions) {
         return new AuthenticatedUser(
                 userId, "staff@meridian.test", "STAFF", null,
-                Set.of("LOAN_OFFICER"), Set.of("loan:correction:staff"));
+                Set.of("LOAN_OFFICER"), permissions);
     }
 }

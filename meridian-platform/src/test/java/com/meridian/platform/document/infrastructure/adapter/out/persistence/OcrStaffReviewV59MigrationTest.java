@@ -79,7 +79,7 @@ class OcrStaffReviewV59MigrationTest {
     void migrationAndSnapshotDescribeTheSameV59ReviewTable() throws IOException {
         String migration = Files.readString(MIGRATION).replace("\r\n", "\n");
         String snapshot = Files.readString(CURRENT_SCHEMA).replace("\r\n", "\n");
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V60"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V61"));
         assertTrue(snapshot.contains(migration.trim()));
         assertTrue(migration.contains("UNIQUE (ocr_result_id)"));
         assertTrue(migration.contains("encrypted_reviewed_fields"));

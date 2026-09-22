@@ -52,7 +52,8 @@ class CustomerCorrectionTaskChannelSafetyTest {
 
     @BeforeEach
     void setUp() {
-        service = new CustomerCorrectionTaskService(corrections, applications, documents, currentUsers, audits,
+        service = new CustomerCorrectionTaskService(
+                corrections, applications, new CustomerCorrectionDocumentProof(documents), currentUsers, audits,
                 Clock.fixed(Instant.parse("2026-09-18T08:00:00Z"), ZoneOffset.UTC));
         when(currentUsers.currentUser()).thenReturn(new AuthenticatedUser(
                 USER_ID, "customer@meridian.test", "CUSTOMER", CUSTOMER_ID,

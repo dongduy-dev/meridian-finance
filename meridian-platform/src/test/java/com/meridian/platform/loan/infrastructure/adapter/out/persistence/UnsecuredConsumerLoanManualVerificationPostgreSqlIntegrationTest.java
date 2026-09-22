@@ -37,6 +37,7 @@ import com.meridian.platform.loan.application.port.in.ConfirmContractReadinessUs
 import com.meridian.platform.loan.application.port.in.ConfirmManualDisbursementUseCase;
 import com.meridian.platform.loan.application.port.in.CloseLoanAccountUseCase;
 import com.meridian.platform.loan.application.port.in.CancelLoanApplicationUseCase;
+import com.meridian.platform.loan.application.port.in.CompleteAssistedCustomerCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.CompleteOwnCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.CompleteStaffCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.ManageUnsecuredConsumerLoanVerificationUseCase;
@@ -63,6 +64,7 @@ import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
+import com.meridian.platform.shared.domain.exception.AuthorizationException;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.AfterEach;
@@ -154,6 +156,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     @Autowired private QueryOwnCorrectionTasksUseCase correctionTaskQuery;
     @Autowired private QueryStaffLoanApplicationVerificationUseCase staffVerificationQuery;
     @Autowired private CompleteOwnCorrectionTaskUseCase correctionTaskCompletion;
+    @Autowired private CompleteAssistedCustomerCorrectionTaskUseCase assistedTaskCompletion;
     @Autowired private ResubmitOwnCorrectionUseCase correctionResubmission;
     @Autowired private CompleteStaffCorrectionTaskUseCase staffTaskCompletion;
     @Autowired private ResubmitStaffCorrectionUseCase staffCorrectionResubmission;
@@ -1010,6 +1013,93 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     }
 
     @Test
+    void assistedUclCustomerReplacementIsUploadedCompletedAndResubmittedByStaff() {
+        UUID applicationId = originateAndMakeProcessingReady();
+        jdbcTemplate.update("UPDATE loan_applications SET origination_channel = 'STAFF_ASSISTED' WHERE id = ?",
+                applicationId);
+        CorrectionEvidence evidence = correctionEvidence(applicationId);
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+        verificationUseCase.completeManualVerification(
+                applicationId,
+                moreInformationRequest(evidence, "Staff must collect replacement UCL evidence.")
+        );
+
+        UUID taskId = uuid("SELECT task.id FROM loan_correction_tasks task "
+                + "JOIN loan_correction_requests correction ON correction.id = task.correction_request_id "
+                + "WHERE correction.loan_application_id = ? AND task.responsible_party = 'CUSTOMER'",
+                applicationId);
+        useAssistedLoanOfficer();
+        DocumentVersionDto replacement = uploadAsStaff(
+                applicationId,
+                evidence.checklistItemId(),
+                evidence.documentVersionId(),
+                "assisted-ucl-replacement.pdf"
+        );
+        UUID completionRequestId = UUID.randomUUID();
+        assistedTaskCompletion.complete(
+                applicationId,
+                taskId,
+                new CompleteCorrectionTaskRequest(completionRequestId)
+        );
+        assistedTaskCompletion.complete(
+                applicationId,
+                taskId,
+                new CompleteCorrectionTaskRequest(completionRequestId)
+        );
+        acceptReplacement(applicationId, evidence.checklistItemId(), replacement);
+
+        assertEquals("STAFF", text("SELECT uploader_actor_type FROM document_versions WHERE id = ?",
+                replacement.documentVersionId()));
+        assertEquals(LOAN_OFFICER_USER_ID, uuid(
+                "SELECT completed_by_user_id FROM loan_correction_tasks WHERE id = ?",
+                taskId));
+        assertEquals(1, count("SELECT count(*) FROM audit_events WHERE action = 'CORRECTION_TASK_COMPLETED' "
+                + "AND entity_id = ? AND actor_user_id = ?",
+                taskId, LOAN_OFFICER_USER_ID));
+
+        assertEquals("SUBMITTED", staffCorrectionResubmission.resubmitAsStaff(
+                applicationId,
+                new CorrectionResubmissionRequest(UUID.randomUUID())
+        ).loanApplicationStatus());
+        assertEquals(2, count("SELECT count(*) FROM unsecured_consumer_loan_verifications "
+                + "WHERE loan_application_id = ?", applicationId));
+    }
+
+    @Test
+    void customerDigitalUclRejectsStaffMediatedCustomerCorrectionActions() {
+        UUID applicationId = originateAndMakeProcessingReady();
+        CorrectionEvidence evidence = correctionEvidence(applicationId);
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+        verificationUseCase.completeManualVerification(
+                applicationId,
+                moreInformationRequest(evidence, "Customer must replace this evidence directly.")
+        );
+        useCustomer();
+        CustomerCorrectionTaskDto task = onlyCustomerTask(applicationId);
+
+        useAssistedLoanOfficer();
+        assertThrows(AuthorizationException.class, () -> uploadAsStaff(
+                applicationId,
+                task.checklistItemId(),
+                evidence.documentVersionId(),
+                "forbidden-digital-ucl-replacement.pdf"
+        ));
+        AuthorizationException completionDenied = assertThrows(
+                AuthorizationException.class,
+                () -> assistedTaskCompletion.complete(
+                        applicationId,
+                        task.correctionTaskId(),
+                        new CompleteCorrectionTaskRequest(UUID.randomUUID())
+                )
+        );
+        assertEquals("STAFF_CORRECTION_ACCESS_DENIED", completionDenied.getErrorCode());
+        assertEquals("OPEN", text("SELECT status FROM loan_correction_tasks WHERE id = ?",
+                task.correctionTaskId()));
+    }
+
+    @Test
     void loanOfficerUclCorrectionPreservesOldCycleAndRequiresReverification() {
         UUID applicationId = originateAndMakeProcessingReady();
         CorrectionEvidence evidence = correctionEvidence(applicationId);
@@ -1417,6 +1507,44 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         ));
     }
 
+    private DocumentVersionDto uploadAsStaff(
+            UUID applicationId,
+            UUID checklistItemId,
+            UUID replacesVersionId,
+            String filename
+    ) {
+        return uploadUseCase.upload(new UploadDocumentCommand(
+                applicationId,
+                checklistItemId,
+                UUID.randomUUID(),
+                replacesVersionId,
+                filename,
+                "application/pdf",
+                new ByteArrayInputStream(PDF),
+                DocumentUploaderActorType.STAFF,
+                LOAN_OFFICER_USER_ID,
+                null
+        ));
+    }
+
+    private void acceptReplacement(
+            UUID applicationId,
+            UUID checklistItemId,
+            DocumentVersionDto replacement
+    ) {
+        documentReviewUseCase.review(new ReviewDocumentCommand(
+                applicationId,
+                checklistItemId,
+                replacement.documentVersionId(),
+                UUID.randomUUID(),
+                DocumentReviewOutcome.ACCEPT_DOCUMENT,
+                null,
+                "Restricted assisted UCL replacement acceptance.",
+                LOAN_OFFICER_USER_ID,
+                false
+        ));
+    }
+
     private CorrectionEvidence correctionEvidence(UUID applicationId) {
         return jdbcTemplate.queryForObject(
                 "SELECT item.id, document.current_version_id, item.document_type "
@@ -1742,6 +1870,23 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
 
     private void useLoanOfficer() {
         useStaff(LOAN_OFFICER_USER_ID);
+    }
+
+    private void useAssistedLoanOfficer() {
+        currentUserProvider.use(new AuthenticatedUser(
+                LOAN_OFFICER_USER_ID,
+                "ucl-assisted-loan-officer@meridian.local",
+                "STAFF",
+                null,
+                Set.of("LOAN_OFFICER"),
+                Set.of(
+                        "loan:review",
+                        "approval:recommend",
+                        "document:review",
+                        "loan:correction:staff",
+                        "document:upload:assisted-correction"
+                )
+        ));
     }
 
     private void useApprover() {

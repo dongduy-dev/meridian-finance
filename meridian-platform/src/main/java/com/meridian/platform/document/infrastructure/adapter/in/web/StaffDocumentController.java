@@ -35,7 +35,8 @@ public class StaffDocumentController {
     }
 
     @PostMapping(value = "/{checklistItemId}/versions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyAuthority('document:upload:staff', 'document:upload:assisted')")
+    @PreAuthorize("hasAnyAuthority('document:upload:staff', 'document:upload:assisted', "
+            + "'document:upload:assisted-correction')")
     public DocumentVersionDto uploadStaffDocument(
             @PathVariable UUID loanApplicationId,
             @PathVariable UUID checklistItemId,

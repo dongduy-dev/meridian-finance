@@ -301,6 +301,12 @@ public record LoanApplication(
         );
     }
 
+    public boolean permitsStaffMediatedCustomerCorrection() {
+        return originationChannel == OriginationChannel.STAFF_ASSISTED
+                && (productCode == ProductCode.UNSECURED_CONSUMER_LOAN
+                || productCode == ProductCode.COLLATERAL_LOAN);
+    }
+
     public LoanApplicationTransitionResult markCustomerAcceptancePending() {
         if (status != LoanApplicationStatus.APPROVED) {
             throw new BusinessStateConflictException(

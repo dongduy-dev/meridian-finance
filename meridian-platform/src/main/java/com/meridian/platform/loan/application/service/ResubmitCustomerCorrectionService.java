@@ -166,11 +166,8 @@ public class ResubmitCustomerCorrectionService
         AuthenticatedUser user = currentUserProvider.currentUser();
         UUID authenticatedCustomerId = actor == ResubmissionActor.CUSTOMER
                 ? user.requireCustomerId() : null;
-        if (actor == ResubmissionActor.STAFF && !user.hasPermission("loan:correction:staff")) {
-            throw new AuthorizationException(
-                    "CORRECTION_RESUBMISSION_DENIED",
-                    "Staff correction permission is required."
-            );
+        if (actor == ResubmissionActor.STAFF) {
+            requireStaffCorrectionActor(user);
         }
         LocalDateTime now = LocalDateTime.now(clock);
         BusinessOperationContext operation = BusinessOperationContext.user(
@@ -205,7 +202,7 @@ public class ResubmitCustomerCorrectionService
         if (latest.status() == LoanCorrectionRequestStatus.RESUBMITTED) {
             List<LoanCorrectionTask> completedTasks =
                     correctionRepository.findTasksByRequestIdForUpdate(latest.id());
-            validateResubmitter(actor, completedTasks);
+            validateResubmitter(actor, application, completedTasks);
             if (command.resubmissionRequestId().equals(latest.resubmissionRequestId())) {
                 return toDto(latest, application);
             }
@@ -223,7 +220,7 @@ public class ResubmitCustomerCorrectionService
                 ));
         List<LoanCorrectionTask> tasks = correctionRepository
                 .findTasksByRequestIdForUpdate(request.id());
-        validateResubmitter(actor, tasks);
+        validateResubmitter(actor, application, tasks);
         if (tasks.stream().anyMatch(task -> task.status() != LoanCorrectionTaskStatus.COMPLETED)) {
             throw new BusinessStateConflictException(
                     "CORRECTION_TASKS_INCOMPLETE",
@@ -476,6 +473,7 @@ public class ResubmitCustomerCorrectionService
 
     private void validateResubmitter(
             ResubmissionActor actor,
+            LoanApplication application,
             List<LoanCorrectionTask> tasks
     ) {
         boolean hasCustomerTasks = tasks.stream().anyMatch(
@@ -484,14 +482,28 @@ public class ResubmitCustomerCorrectionService
         boolean hasStaffTasks = tasks.stream().anyMatch(
                 task -> task.responsibleParty() == LoanCorrectionResponsibility.STAFF
         );
+        boolean assistedCustomerOnly = hasCustomerTasks
+                && !hasStaffTasks
+                && application.permitsStaffMediatedCustomerCorrection();
         if (tasks.isEmpty()
                 || (actor == ResubmissionActor.CUSTOMER && hasStaffTasks)
-                || (actor == ResubmissionActor.STAFF && !hasStaffTasks)) {
+                || (actor == ResubmissionActor.STAFF && !hasStaffTasks && !assistedCustomerOnly)) {
             throw new AuthorizationException(
                     "CORRECTION_RESUBMISSION_DENIED",
                     hasCustomerTasks && hasStaffTasks
                             ? "Only authorized staff can resubmit a mixed correction request."
                             : "The authenticated actor cannot resubmit this correction request."
+            );
+        }
+    }
+
+    private static void requireStaffCorrectionActor(AuthenticatedUser user) {
+        if (!"STAFF".equals(user.userType())
+                || user.optionalCustomerId().isPresent()
+                || !user.hasPermission("loan:correction:staff")) {
+            throw new AuthorizationException(
+                    "CORRECTION_RESUBMISSION_DENIED",
+                    "Staff correction permission is required."
             );
         }
     }

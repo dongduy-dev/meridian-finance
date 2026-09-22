@@ -8,6 +8,7 @@ public record StaffCorrectionCaseDto(
         UUID loanApplicationId,
         String applicationNumber,
         String productCode,
+        String originationChannel,
         String applicationStatus,
         CorrectionRequestDto correctionRequest
 ) {
@@ -35,10 +36,14 @@ public record StaffCorrectionCaseDto(
             UUID checklistItemId,
             UUID baselineDocumentVersionId,
             String reasonCode,
+            String customerInstruction,
             String staffInstruction,
             LocalDateTime createdAt,
             LocalDateTime completedAt,
-            String proofState
+            String proofState,
+            boolean customerSourceViaStaff,
+            boolean uploadActionAvailable,
+            boolean completionActionAvailable
     ) {
     }
 }

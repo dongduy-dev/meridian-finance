@@ -109,7 +109,7 @@ Meridian uses `STAFF` as the Identity `userType` for internal users. It does not
 
 Administration permissions exist in seeded roles, but most corresponding management use cases and HTTP endpoints do not. `MER-FU-019` and `MER-FU-022` explicitly defer user and permission management UI until backend support exists.
 
-Two narrow upload capabilities remain distinct. `document:upload:assisted` is seeded to Loan Officer and authorizes only an initial required-document upload for a `STAFF_ASSISTED` application in `DOCUMENTS_PENDING`; it does not authorize intake-evidence upload, digital application upload, or correction-task upload. `document:upload:staff` remains the separate Staff correction-task capability seeded to Back-Office Admin. Staff Web exposes each control only when the exact permission and workflow state match.
+Three narrow upload capabilities remain distinct. `document:upload:assisted` authorizes only an initial required-document upload for a `STAFF_ASSISTED` application in `DOCUMENTS_PENDING`. `document:upload:assisted-correction` is seeded to Loan Officer and authorizes only the exact active open Customer-owned correction task of an eligible Staff-assisted UCL or Collateral application. `document:upload:staff` remains the separate Staff-owned correction-task capability seeded to Back-Office Admin. None authorizes intake evidence or Customer-digital mutation, and Staff Web exposes each control only when the exact permission and workflow state match.
 
 ---
 
@@ -154,7 +154,7 @@ The same backend value must use the same label within Internal Web unless a clea
 
 | Actor | Current operational responsibility | Representative executable permissions |
 |---|---|---|
-| Loan Officer | Staff-assisted intake and initial checklist upload, evidenced Customer offer-response recording, UCL and Collateral verification, LoanApplication review, recommendation, document review, and authorized correction initiation | `loan:originate:staff`, `document:upload:assisted`, `document:upload:assisted-action`, `loan:offer:respond:staff`, `loan:read`, `loan:review`, `approval:recommend`, `document:review`, `loan:correction:staff`; waiver additionally requires `document:waive` |
+| Loan Officer | Staff-assisted intake and initial checklist upload, Staff-mediated Customer correction completion/resubmission, evidenced Customer offer-response recording, UCL and Collateral verification, LoanApplication review, recommendation, document review, and authorized correction initiation | `loan:originate:staff`, `document:upload:assisted`, `document:upload:assisted-correction`, `document:upload:assisted-action`, `loan:offer:respond:staff`, `loan:read`, `loan:review`, `approval:recommend`, `document:review`, `loan:correction:staff`; waiver additionally requires `document:waive` |
 | Approver | Independent decision and payment-backed Administrative Full-Balance Settlement | `loan:read`, `approval:decide`, `document:read`, `audit:read`, `loan:settlement:approve`; settlement also requires the Approver role |
 | Accounting Officer | Contract preparation/readiness, evidenced Customer contract-acknowledgment recording, destination reveal, manual disbursement, repayment, and administrative closure | `loan:read`, `loan:contract:prepare`, `loan:contract:read`, `loan:contract:acknowledge:staff`, `document:upload:assisted-action`, `loan:disbursement:prepare`, `loan:disburse`, `repayment:update`, `loan:account:close`; acknowledgment and closure also require the Accounting Officer role |
 | Back-Office Admin | Back-Office Administration outside this blueprint; currently also holds the narrow Staff document-upload permission | `loan:product:manage`, `partner:read`, `partner:manage`, `identity:user:manage`, `admin:config`, `audit:read`, `document:upload:staff` |
@@ -202,7 +202,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 | Staff case foundation | `GET /api/v1/staff/loan-applications/{loanApplicationId}` | Staff `loan:read` | Safe header, purpose-limited Customer readiness, and ordered lifecycle transitions only |
 | Assisted offer-response case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/offer-response` | Staff `loan:offer:respond:staff` plus Loan Officer role | Eligible Staff-assisted UCL or Collateral safe header, exact current offer, expiry/action state, and current signed-evidence metadata |
 | Staff document evidence | `GET /api/v1/staff/loan-applications/{loanApplicationId}/documents` | `document:review` | Checklist/readiness, exact current version, immutable version history, and safe review history |
-| Staff correction case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/corrections` | `loan:correction:staff` | Latest request, mixed task composition, proof, completion readiness, and current-actor maker-checker evidence |
+| Staff correction case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/corrections` | `loan:correction:staff` | Origination channel, latest request, mixed task composition, proof, purpose-limited assisted Customer instructions/actions, completion readiness, and current-actor maker-checker evidence |
 | Safe application status | `GET /api/v1/loan-applications/{loanApplicationId}` | Staff `loan:read` | Minimal durable summary; not a case projection |
 | Document-review queue | `GET /api/v1/document-review-items?status=AWAITING_REVIEW&page=0&size=20` | `document:review` | Current versions awaiting review; list has no total or page metadata |
 | Review-authorized content | `GET /api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | `document:review` | Exact known version only; `no-store`, private attachment |
@@ -222,8 +222,8 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 | Verification | Start and complete UCL verification; start and complete exact numbered Collateral verification |
 | Review and approval | Start review; submit recommendation; submit independent decision |
 | Assisted offer response | Upload/replace exact signed Customer offer-response evidence and record the Customer's confirmed `ACCEPT` or `DECLINE` decision |
-| Documents | Review the exact current version; waive with added permission; request replacement; stream known content; upload an initial Staff-assisted UCL or Collateral checklist document with `document:upload:assisted`; upload for an open correction task with `document:upload:staff` |
-| Corrections | Complete an eligible Staff task and resubmit an eligible Staff-only or mixed correction |
+| Documents | Review the exact current version; waive with added permission; request replacement; stream known content; upload an initial Staff-assisted UCL or Collateral checklist document with `document:upload:assisted`; upload Customer-provided evidence for an eligible assisted Customer task with `document:upload:assisted-correction`; upload for an open Staff-owned correction task with `document:upload:staff` |
+| Corrections | Complete an eligible Staff task; record completion of an eligible Staff-assisted Customer task; resubmit an eligible Staff-only, mixed, or assisted Customer-only correction |
 | Contract | Prepare or regenerate a contract; for eligible Staff-assisted cases upload/replace exact signed Customer acknowledgment evidence and record acknowledgment; recompute advisory readiness; confirm readiness |
 | Disbursement | Reveal the exact ready-contract destination; confirm an externally completed transfer and activate the LoanAccount |
 | Servicing | Record repayment; apply exact payment-backed Administrative Full-Balance Settlement; administratively close an eligible settled account |
@@ -993,12 +993,13 @@ Manual review remains authoritative. Staff Web can explicitly request OCR for an
 
 ### 23.3 Staff Correction Tasks
 
-The task workspace shows responsible party, scope, required document/item, baseline version, safe Staff instruction, proof status when authoritative, and maker-checker notice.
+The task workspace shows origination channel, responsible party, scope, required document/item, baseline version, purpose-limited instruction, proof status when authoritative, and maker-checker notice. Customer-digital Customer-owned tasks remain instruction-free and non-actionable in Staff Web. Eligible Staff-assisted Customer-owned tasks are labeled “Customer-sourced” so the operator is never presented as the business source.
 
 - `SUPPORTING_DOCUMENT_UPLOAD` exposes upload only with `document:upload:staff` and only for the open task.
+- an eligible Staff-assisted Customer upload exposes only with `document:upload:assisted-correction`, binds the exact task baseline, and reuses the existing upload unresolved-operation rules;
 - `DOCUMENT_REVIEW` links to the exact review workspace.
-- Completion uses a stable `completionRequestId` and never marks proof complete locally.
-- Staff-only or mixed resubmission uses a stable `resubmissionRequestId` only after authoritative tasks are complete.
+- Staff-owned completion and assisted Customer-task completion use distinct endpoints with one stable `completionRequestId`; the client never marks proof complete locally. Maker-checker applies only to Staff-owned tasks.
+- Staff-only, mixed, or eligible assisted Customer-only resubmission uses a stable `resubmissionRequestId` only after the backend reports every task complete and Staff resubmission available.
 - Mixed corrections remain blocked until both Customer and Staff work is complete.
 - Requested amount and term remain immutable through current correction flows.
 - UCL and Collateral product restrictions are rendered from the supported command contract, not generalized into arbitrary task construction.
@@ -1267,8 +1268,8 @@ The current servicing APIs are application-scoped, so routes retain `loanApplica
 | Route family | Intended actor/capability | Backend authority | Primary task | Important states and action ownership |
 |---|---|---|---|---|
 | Assisted origination | Loan Officer with `loan:originate:staff`; Customer mutation also needs `customer:intake:manage`; intake evidence needs `document:upload:intake` | Loan intake, Customer intake, Document intake-evidence, and assisted UCL/Collateral submission endpoints | Select or create the Customer, capture controlled paper evidence, and convert an eligible UCL or Collateral case | `OPEN`, `ABANDONED`, `COMPLETED`; completion atomically links one `STAFF_ASSISTED` application; Staff is actor and Customer is subject |
-| Document work | Loan Officer with `document:review`; waiver also needs `document:waive`; initial assisted upload needs `document:upload:assisted` | Document checklist, upload, review queue, content, and review endpoints | Upload the initial assisted checklist document or inspect and decide the exact current version | `DOCUMENTS_PENDING` assisted initial upload or `AWAITING_REVIEW`; correction upload remains separate under `document:upload:staff` |
-| Correction work | Loan Officer with `loan:correction:staff`; uploader also needs `document:upload:staff` | Staff correction queue, task completion, upload, and resubmission endpoints | Satisfy Staff proof and return an eligible request to workflow | `OPEN`, proof incomplete/complete, mixed work incomplete, resubmitted; backend owns maker-checker |
+| Document work | Loan Officer with `document:review`; waiver also needs `document:waive`; initial assisted upload needs `document:upload:assisted` | Document checklist, upload, review queue, content, and review endpoints | Upload the initial assisted checklist document or inspect and decide the exact current version | `DOCUMENTS_PENDING` assisted initial upload or `AWAITING_REVIEW`; task-scoped correction uploads use their separate authorities |
+| Correction work | Loan Officer with `loan:correction:staff`; an assisted Customer upload also needs `document:upload:assisted-correction`, while Staff-owned upload needs `document:upload:staff` | Staff correction case/queue, purpose-specific task completion, upload, and resubmission endpoints | Satisfy Staff proof or record Customer-provided assisted proof and return an eligible request to workflow | `OPEN`, proof incomplete/complete, mixed work incomplete, resubmitted; maker-checker applies to Staff-owned tasks only |
 | Verification and review | Loan Officer with `loan:review`; recommendation additionally needs `approval:recommend` | Purpose-limited verification/review reads, Approval-owned recommendation read, and existing commands | Verify product evidence, start review, and record a recommendation when separately authorized | Submitted/pending verification, verified/failed/more information, under review; Loan Officer acts, Approver does not verify |
 | Approval | Approver with `approval:decide` | Decision endpoint plus required recommendation/decision reads | Independently approve, reject, return, or request correction | Awaiting decision, customer acceptance pending, rejected, returned; Approver owns final decision, backend owns separation |
 | Contract/readiness | Accounting Officer with `loan:contract:prepare`, `loan:contract:read`, and `loan:disbursement:prepare` | Contract and readiness endpoints | Prepare/regenerate and confirm an eligible contract | Contract pending, acknowledgment missing, ready/not ready, disbursement pending; Accounting owns operations, Customer owns acknowledgment |
@@ -1515,7 +1516,7 @@ Staff FE checkpoints deliver the Staff Web feature area inside `internal-web/`. 
 - atomically convert one eligible open UCL assisted-intake case into one application, checklist, pending verification, lifecycle evidence, case link, and PII-safe audit outcome;
 - expose completed-case reconciliation and navigate to the ordinary Staff application/document workspace;
 - permit only the initial Staff-assisted checklist upload under `document:upload:assisted`, while preserving separate intake and correction upload authorities;
-- block Customer-owned correction, cancellation, offer-response, contract-acknowledgment, and checklist-mutation commands for Staff-assisted applications; offer response and contract acknowledgment now use separate evidenced Staff-mediated workspaces, while correction/resubmission, cancellation, and unsupported checklist mutation remain fail-closed;
+- block Customer-owned correction, cancellation, offer-response, contract-acknowledgment, and checklist-mutation commands for Staff-assisted applications; offer response, contract acknowledgment, and correction completion/resubmission now use separate Staff-mediated workspaces, while Staff-mediated UCL cancellation and unsupported generic checklist mutation remain fail-closed;
 - reconcile conversion uncertainty through GET without automatic POST retry, and preserve exact document-upload replay only for the unchanged operation and file.
 
 This checkpoint is executable for UCL. Paper Origination CP3 extends the same controlled workflow to Collateral Loan conversion. The assisted-intake workspace also places explicit OCR extraction, active-only polling, controlled failure/manual fallback, and immutable Staff review/correction beside each current evidence version. Staff may explicitly copy finalized reviewed values into the existing unsaved Customer, bank-account, UCL, and Collateral forms. Replacing the source evidence removes untouched OCR-applied values, and persistence still requires the existing owning command.
@@ -1544,6 +1545,8 @@ This checkpoint is executable for UCL. Paper Origination CP3 extends the same co
 - complete the Staff checklist/correction projection dependencies needed by the workspace.
 
 The CP3 routes and their purpose-limited read contracts are executable in Internal Web. CP4 product verification and review start, CP5 recommendation and decision, CP6 contract/readiness operations, and CP7 disbursement/activation operations are also executable. Servicing remains a separate later checkpoint.
+
+MER-FU-046 CP3 extends this existing workspace for Staff-assisted UCL and Collateral Customer-sourced tasks: it displays the channel and Customer instruction, uploads against the exact task baseline under `document:upload:assisted-correction`, records completion through the purpose-specific Customer-task route, and enables Staff resubmission only from backend-derived readiness. The existing unresolved upload, completion, and resubmission operation identities remain unchanged. Customer-digital tasks retain their separate Customer path.
 
 ### Staff FE-CP4 — Product Verification and Loan Officer Review
 

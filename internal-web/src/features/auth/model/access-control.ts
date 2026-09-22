@@ -10,6 +10,7 @@ export const STAFF_OPERATIONAL_PERMISSIONS = [
   'loan:originate:staff',
   'document:upload:intake',
   'document:upload:assisted',
+  'document:upload:assisted-correction',
   'document:upload:assisted-action',
   'loan:read',
   'loan:review',

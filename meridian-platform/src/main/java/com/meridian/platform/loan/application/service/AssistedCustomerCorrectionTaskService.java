@@ -2,15 +2,16 @@ package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.dto.CompleteCorrectionTaskRequest;
 import com.meridian.platform.loan.application.dto.CustomerCorrectionTaskDto;
-import com.meridian.platform.loan.application.port.in.CompleteOwnCorrectionTaskUseCase;
-import com.meridian.platform.loan.application.port.in.QueryOwnCorrectionTasksUseCase;
+import com.meridian.platform.loan.application.port.in.CompleteAssistedCustomerCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
 import com.meridian.platform.loan.domain.model.LoanCorrectionResponsibility;
 import com.meridian.platform.loan.domain.model.LoanCorrectionScope;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTask;
+import com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -33,38 +34,29 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-public class CustomerCorrectionTaskService implements QueryOwnCorrectionTasksUseCase, CompleteOwnCorrectionTaskUseCase {
-    private final LoanCorrectionRepository correctionRepository;
-    private final LoanApplicationRepository applicationRepository;
+public class AssistedCustomerCorrectionTaskService
+        implements CompleteAssistedCustomerCorrectionTaskUseCase {
+    private final LoanApplicationRepository applications;
+    private final LoanCorrectionRepository corrections;
     private final CustomerCorrectionDocumentProof documentProof;
     private final CurrentUserProvider currentUserProvider;
     private final BusinessAuditPublisher auditPublisher;
     private final Clock clock;
 
-    public CustomerCorrectionTaskService(
-            LoanCorrectionRepository correctionRepository,
-            LoanApplicationRepository applicationRepository,
+    public AssistedCustomerCorrectionTaskService(
+            LoanApplicationRepository applications,
+            LoanCorrectionRepository corrections,
             CustomerCorrectionDocumentProof documentProof,
             CurrentUserProvider currentUserProvider,
             BusinessAuditPublisher auditPublisher,
             Clock clock
     ) {
-        this.correctionRepository = correctionRepository;
-        this.applicationRepository = applicationRepository;
+        this.applications = applications;
+        this.corrections = corrections;
         this.documentProof = documentProof;
         this.currentUserProvider = currentUserProvider;
         this.auditPublisher = auditPublisher;
         this.clock = clock;
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<CustomerCorrectionTaskDto> findOwnTasks(UUID loanApplicationId) {
-        UUID customerId = currentUserProvider.currentUser().requireCustomerId();
-        requireOwnedApplication(loanApplicationId, customerId);
-        return correctionRepository.findCustomerTasks(loanApplicationId, customerId).stream()
-                .map(this::toDto)
-                .toList();
     }
 
     @Override
@@ -74,72 +66,81 @@ public class CustomerCorrectionTaskService implements QueryOwnCorrectionTasksUse
             UUID taskId,
             CompleteCorrectionTaskRequest command
     ) {
-        AuthenticatedUser user = currentUserProvider.currentUser();
-        UUID customerId = user.requireCustomerId();
-        requireOwnedApplication(loanApplicationId, customerId);
-        LoanCorrectionTask task = correctionRepository.findTaskByIdForUpdate(taskId)
+        AuthenticatedUser actor = currentUserProvider.currentUser();
+        requireStaffActor(actor);
+        applications.acquireWorkflowLock(loanApplicationId);
+        LoanApplication application = applications.findByIdForUpdate(loanApplicationId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "LOAN_APPLICATION_NOT_FOUND", "Loan Application was not found."));
+        if (!application.permitsStaffMediatedCustomerCorrection()) {
+            throw new AuthorizationException(
+                    "STAFF_CORRECTION_ACCESS_DENIED",
+                    "Staff cannot mediate Customer correction for this Loan Application."
+            );
+        }
+        if (application.status() != LoanApplicationStatus.RETURNED_FOR_REVISION) {
+            throw new BusinessStateConflictException(
+                    "CORRECTION_REQUEST_CONFLICT", "Correction request is no longer actionable."
+            );
+        }
+        LoanCorrectionRequest request = corrections.findActiveRequestByApplicationIdForUpdate(loanApplicationId)
+                .orElseThrow(() -> new BusinessStateConflictException(
+                        "CORRECTION_REQUEST_CONFLICT", "No active correction request is available."));
+        LoanCorrectionTask task = corrections.findTaskByIdForUpdate(taskId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "CORRECTION_TASK_NOT_FOUND", "Correction task was not found."));
-        LoanCorrectionRequest request = correctionRepository.findRequestById(task.correctionRequestId())
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "CORRECTION_REQUEST_NOT_FOUND", "Correction request was not found."));
-        if (!request.loanApplicationId().equals(loanApplicationId)
+        if (!task.correctionRequestId().equals(request.id())
                 || task.responsibleParty() != LoanCorrectionResponsibility.CUSTOMER) {
             throw new AuthorizationException(
-                    "CORRECTION_ACCESS_DENIED", "Customer cannot complete this correction task.");
+                    "STAFF_CORRECTION_ACCESS_DENIED",
+                    "Staff cannot complete this Customer correction task."
+            );
         }
-        requireActiveRequest(request);
+
         LocalDateTime now = LocalDateTime.now(clock);
-        LoanCorrectionTask completed = task.complete(user.userId(), command.completionRequestId(), now);
+        LoanCorrectionTask completed = task.complete(
+                actor.userId(), command.completionRequestId(), now);
         if (completed == task) {
-            return toDto(task);
+            return toDto(request, task);
         }
         documentProof.requireSatisfied(loanApplicationId, task);
-        completed = correctionRepository.saveTask(completed);
-        List<LoanCorrectionTask> tasks = correctionRepository.findTasksByRequestIdForUpdate(request.id());
-        if (tasks.stream().allMatch(candidate ->
-                candidate.status() == com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus.COMPLETED)) {
-            correctionRepository.saveRequest(request.markReady(tasks, now));
+        completed = corrections.saveTask(completed);
+        List<LoanCorrectionTask> tasks = corrections.findTasksByRequestIdForUpdate(request.id());
+        if (tasks.stream().allMatch(candidate -> candidate.status() == LoanCorrectionTaskStatus.COMPLETED)) {
+            corrections.saveRequest(request.markReady(tasks, now));
         }
+
         BusinessOperationContext operation = BusinessOperationContext.user(
-                UUID.randomUUID(), user.userId(), now);
+                UUID.randomUUID(), actor.userId(), now);
         auditPublisher.publish(BusinessAuditEvent.single(operation, new BusinessAuditEntry(
                 BusinessAuditAction.CORRECTION_TASK_COMPLETED,
                 BusinessAuditEntityType.LOAN_CORRECTION_TASK,
                 completed.id(),
                 BusinessAuditPayload.builder()
+                        .put(BusinessAuditPayloadKey.CUSTOMER_ID, application.customerId())
                         .put(BusinessAuditPayloadKey.LOAN_APPLICATION_ID, loanApplicationId)
                         .put(BusinessAuditPayloadKey.CORRECTION_REQUEST_ID, request.id())
                         .put(BusinessAuditPayloadKey.CORRECTION_TASK_ID, completed.id())
                         .build()
         )));
-        return toDto(completed);
+        return toDto(request, completed);
     }
 
-    private LoanApplication requireOwnedApplication(UUID applicationId, UUID customerId) {
-        LoanApplication application = applicationRepository.findById(applicationId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "LOAN_APPLICATION_NOT_FOUND", "Loan Application was not found."));
-        if (!application.customerId().equals(customerId)) {
+    private static void requireStaffActor(AuthenticatedUser actor) {
+        if (!"STAFF".equals(actor.userType())
+                || actor.optionalCustomerId().isPresent()
+                || !actor.hasPermission("loan:correction:staff")) {
             throw new AuthorizationException(
-                    "CORRECTION_ACCESS_DENIED", "Customer cannot access another Loan Application correction.");
-        }
-        CustomerDigitalApplicationAccess.require(application);
-        return application;
-    }
-
-    private static void requireActiveRequest(LoanCorrectionRequest request) {
-        if (!request.isActive()) {
-            throw new BusinessStateConflictException(
-                    "CORRECTION_REQUEST_CONFLICT",
-                    "Correction request is no longer actionable."
+                    "STAFF_CORRECTION_ACCESS_DENIED",
+                    "Staff correction permission is required."
             );
         }
     }
 
-    private CustomerCorrectionTaskDto toDto(LoanCorrectionTask task) {
-        LoanCorrectionRequest request = correctionRepository.findRequestById(task.correctionRequestId())
-                .orElseThrow();
+    private static CustomerCorrectionTaskDto toDto(
+            LoanCorrectionRequest request,
+            LoanCorrectionTask task
+    ) {
         return new CustomerCorrectionTaskDto(
                 task.id(), task.correctionRequestId(), task.status().name(), task.scope().name(),
                 task.documentType() == null ? null : task.documentType().name(), task.checklistItemId(),

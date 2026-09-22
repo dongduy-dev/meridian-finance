@@ -31,18 +31,20 @@ const requestId = '22222222-2222-4222-8222-222222222222'
 const taskId = '33333333-3333-4333-8333-333333333333'
 const itemId = '44444444-4444-4444-8444-444444444444'
 const operationId = '55555555-5555-4555-8555-555555555555'
+const baselineId = '77777777-7777-4777-8777-777777777777'
 const staff: AuthResponse = {
   tokenType: 'Bearer', accessToken: 'staff-token', expiresAt: '2026-09-04T10:00:00Z',
   userId: '66666666-6666-4666-8666-666666666666', email: 'staff@meridian.local',
   userType: 'STAFF', customerId: null, roles: ['LOAN_OFFICER'],
-  permissions: ['loan:correction:staff', 'document:upload:staff'],
+  permissions: ['loan:correction:staff', 'document:upload:staff', 'document:upload:assisted-correction'],
 }
 
-function caseFixture(proofState: string) {
+function caseFixture(proofState: string, assisted = false) {
   return {
     loanApplicationId: applicationId,
     applicationNumber: 'UCL-20260904-000001',
     productCode: 'UNSECURED_CONSUMER_LOAN',
+    originationChannel: assisted ? 'STAFF_ASSISTED' : 'CUSTOMER_DIGITAL',
     applicationStatus: 'RETURNED_FOR_REVISION',
     correctionRequest: {
       correctionRequestId: requestId,
@@ -54,17 +56,21 @@ function caseFixture(proofState: string) {
       staffResubmissionReady: false,
       tasks: [{
         taskId,
-        responsibleParty: 'STAFF',
+        responsibleParty: assisted ? 'CUSTOMER' : 'STAFF',
         status: 'OPEN',
-        scope: 'SUPPORTING_DOCUMENT_UPLOAD',
+        scope: assisted ? 'DOCUMENT_REPLACEMENT' : 'SUPPORTING_DOCUMENT_UPLOAD',
         documentType: 'BANK_STATEMENT',
         checklistItemId: itemId,
-        baselineDocumentVersionId: null,
+        baselineDocumentVersionId: assisted ? baselineId : null,
         reasonCode: 'DOCUMENT_REVIEW_REQUIRED',
-        staffInstruction: 'Upload supporting evidence.',
+        customerInstruction: assisted ? 'Provide a clearer current bank statement.' : null,
+        staffInstruction: assisted ? null : 'Upload supporting evidence.',
         createdAt: '2026-09-04T08:00:00',
         completedAt: null,
         proofState,
+        customerSourceViaStaff: assisted,
+        uploadActionAvailable: true,
+        completionActionAvailable: true,
       }],
     },
   }
@@ -131,6 +137,53 @@ describe('Staff correction operation recovery', () => {
       String(path).endsWith(`/staff-corrections/tasks/${taskId}/complete`)
       && (options as { body?: { completionRequestId?: string } } | undefined)?.body?.completionRequestId === operationId,
     )).toBe(true))
+  })
+
+  it('labels an assisted Customer task and reuses its completion identity on the purpose-specific route', async () => {
+    saveUnresolvedOperation({
+      type: 'TASK_COMPLETION', resource: `complete:${taskId}`, operationId,
+      payloadDigest: await digestOperationPayload({ taskId }),
+      unresolvedAt: '2026-09-04T08:15:00Z',
+    })
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (String(path).endsWith(`/staff-corrections/loan-applications/${applicationId}/customer-tasks/${taskId}/complete`)) {
+        return { status: 'COMPLETED' }
+      }
+      return caseFixture('SATISFIED', true)
+    })
+    renderWorkspace()
+    const user = userEvent.setup()
+
+    expect(await screen.findByText(/Customer-sourced task · Staff records Customer-provided evidence/)).toBeVisible()
+    expect(screen.getByText('Provide a clearer current bank statement.')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Record Customer task complete' }))
+
+    await waitFor(() => expect(vi.mocked(api.apiRequest).mock.calls.some(([path, options]) =>
+      String(path).endsWith(`/staff-corrections/loan-applications/${applicationId}/customer-tasks/${taskId}/complete`)
+      && (options as { body?: { completionRequestId?: string } } | undefined)?.body?.completionRequestId === operationId,
+    )).toBe(true))
+  })
+
+  it('uploads assisted Customer evidence against the exact baseline version', async () => {
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (String(path).endsWith('/versions')) return { documentVersionId: operationId }
+      return caseFixture('MISSING', true)
+    })
+    renderWorkspace()
+    const user = userEvent.setup()
+
+    await user.upload(
+      await screen.findByLabelText('Upload proof'),
+      new File(['replacement bytes'], 'replacement.pdf', { type: 'application/pdf' }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Upload Customer-provided evidence' }))
+
+    await waitFor(() => {
+      const uploadCall = vi.mocked(api.apiRequest).mock.calls.find(([path]) => String(path).endsWith('/versions'))
+      expect(uploadCall).toBeDefined()
+      const body = (uploadCall?.[1] as { body?: FormData } | undefined)?.body
+      expect(body?.get('expectedCurrentVersionId')).toBe(baselineId)
+    })
   })
 })
 

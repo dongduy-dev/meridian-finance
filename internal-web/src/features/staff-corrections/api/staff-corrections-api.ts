@@ -25,6 +25,18 @@ export async function completeStaffCorrectionTask(
   return staffCorrectionTaskSchema.parse(payload)
 }
 
+export async function completeAssistedCustomerCorrectionTask(
+  manager: AuthSessionManager,
+  loanApplicationId: string,
+  taskId: string,
+  completionRequestId: string,
+) {
+  return manager.protectedRequest<unknown>(
+    `/staff-corrections/loan-applications/${loanApplicationId}/customer-tasks/${taskId}/complete`,
+    { method: 'POST', body: { completionRequestId } },
+  )
+}
+
 export async function resubmitStaffCorrection(
   manager: AuthSessionManager,
   loanApplicationId: string,
