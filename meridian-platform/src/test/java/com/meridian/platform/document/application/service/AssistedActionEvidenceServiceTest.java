@@ -11,6 +11,7 @@ import com.meridian.platform.shared.domain.exception.BusinessStateConflictExcept
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -37,6 +38,7 @@ class AssistedActionEvidenceServiceTest {
     private final BusinessAuditPublisher audits = mock(BusinessAuditPublisher.class);
     private final UUID applicationId = UUID.randomUUID();
     private final UUID offerId = UUID.randomUUID();
+    private final UUID correctionId = UUID.randomUUID();
     private final UUID actorId = UUID.randomUUID();
     private AssistedActionEvidenceService service;
 
@@ -166,13 +168,61 @@ class AssistedActionEvidenceServiceTest {
         verify(storage, never()).commit(any());
     }
 
+    @Test
+    void storesCancellationEvidenceAgainstExactCorrectionTarget() {
+        when(documents.findCancellationDocumentForUpdate(applicationId, correctionId))
+                .thenReturn(Optional.empty());
+
+        var result = service.upload(cancellationCommand(UUID.randomUUID(), null));
+
+        assertEquals(1, result.versionNumber());
+        verify(authorizations).authorizeCancellationEvidence(applicationId, correctionId);
+        ArgumentCaptor<AssistedActionDocument> stored =
+                ArgumentCaptor.forClass(AssistedActionDocument.class);
+        verify(documents, atLeastOnce()).saveDocument(stored.capture());
+        assertEquals(AssistedActionEvidenceType.CUSTOMER_CANCELLATION_REQUEST,
+                stored.getAllValues().getFirst().evidenceType());
+        assertEquals(correctionId, stored.getAllValues().getFirst().correctionRequestId());
+        assertEquals(null, stored.getAllValues().getFirst().approvedOfferId());
+        assertEquals(null, stored.getAllValues().getFirst().loanContractId());
+    }
+
+    @Test
+    void cancellationEvidenceReplacementRequiresExactCurrentVersion() {
+        AssistedActionDocument document = new AssistedActionDocument(
+                UUID.randomUUID(), applicationId,
+                AssistedActionEvidenceType.CUSTOMER_CANCELLATION_REQUEST,
+                null, null, null, null, correctionId, UUID.randomUUID(),
+                LocalDateTime.of(2026, 9, 22, 7, 0),
+                LocalDateTime.of(2026, 9, 22, 7, 0));
+        when(documents.findCancellationDocumentForUpdate(applicationId, correctionId))
+                .thenReturn(Optional.of(document));
+
+        BusinessStateConflictException error = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.upload(cancellationCommand(UUID.randomUUID(), UUID.randomUUID())));
+
+        assertEquals("STALE_DOCUMENT_VERSION", error.getErrorCode());
+        verify(storage, never()).commit(any());
+    }
+
     private UploadAssistedActionEvidenceCommand command(
             UUID requestId, UUID expectedVersionId, AssistedOfferDecision decision
     ) {
         return new UploadAssistedActionEvidenceCommand(
                 applicationId, AssistedActionEvidenceType.CUSTOMER_OFFER_RESPONSE,
-                offerId, decision, null, null, requestId, expectedVersionId,
+                offerId, decision, null, null, null, requestId, expectedVersionId,
                 "customer-offer-response.pdf", "application/pdf",
+                new ByteArrayInputStream(new byte[] {1}));
+    }
+
+    private UploadAssistedActionEvidenceCommand cancellationCommand(
+            UUID requestId, UUID expectedVersionId
+    ) {
+        return new UploadAssistedActionEvidenceCommand(
+                applicationId, AssistedActionEvidenceType.CUSTOMER_CANCELLATION_REQUEST,
+                null, null, null, null, correctionId, requestId, expectedVersionId,
+                "customer-cancellation-request.pdf", "application/pdf",
                 new ByteArrayInputStream(new byte[] {1}));
     }
 
@@ -181,7 +231,7 @@ class AssistedActionEvidenceServiceTest {
     ) {
         return new AssistedActionDocument(
                 documentId, applicationId, AssistedActionEvidenceType.CUSTOMER_OFFER_RESPONSE,
-                offerId, decision, null, null, currentVersionId,
+                offerId, decision, null, null, null, currentVersionId,
                 LocalDateTime.of(2026, 9, 22, 7, 0), LocalDateTime.of(2026, 9, 22, 7, 0));
     }
 

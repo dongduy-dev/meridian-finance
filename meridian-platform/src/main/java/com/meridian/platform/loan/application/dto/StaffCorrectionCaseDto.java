@@ -10,8 +10,18 @@ public record StaffCorrectionCaseDto(
         String productCode,
         String originationChannel,
         String applicationStatus,
-        CorrectionRequestDto correctionRequest
+        CorrectionRequestDto correctionRequest,
+        AssistedCancellationDto assistedCancellation
 ) {
+    public record AssistedCancellationDto(
+            boolean available,
+            UUID correctionRequestId,
+            AssistedActionEvidenceMetadataDto evidence,
+            boolean evidenceUploadAvailable,
+            boolean cancellationCommandAvailable
+    ) {
+    }
+
     public record CorrectionRequestDto(
             UUID correctionRequestId,
             String status,

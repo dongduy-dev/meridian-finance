@@ -26,11 +26,11 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V59. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion, Document-owned OCR processing and Staff review, protected Partner, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
+The physical schema is the result of Flyway migrations V1 through V62. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion and downstream evidenced actions, Document-owned OCR processing and Staff review, protected Partner, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
-The V59 physical schema contains OCR processing jobs, encrypted results, and encrypted immutable Staff reviews. It does not contain application of reviewed values to Customer or Loan, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
+The V62 physical schema contains OCR processing jobs, encrypted results, encrypted immutable Staff reviews, Document-owned assisted-action evidence, and the exact evidence reference consumed by Staff-assisted UCL cancellation. It does not contain application of reviewed OCR values to Customer or Loan, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
 
 The physical `event_publication` table is Spring Modulith infrastructure. It is omitted from the business ERD because it does not own lending state or redefine the synchronous transaction boundaries documented in `MER-ARCH-006-api-request-flow-and-dependencies.md`.
 
@@ -196,7 +196,7 @@ Loan owns `loan_application_review_cycles`, `loan_correction_requests`, `loan_co
 - A correction request records its source decision, audience, reason, lifecycle, and resubmission evidence.
 - Correction tasks preserve responsible party, document scope, proof baseline, audience-specific instruction, and completion identity.
 - Customer and Staff tasks remain distinct even when one mixed correction request contains both.
-- Cancellation evidence records the idempotent Customer command that abandons a returned correction. It requires an exact reservation-release reference for Salary Advance and no exposure reference for UCL. Collateral cancellation is not part of this physical/application contract.
+- Cancellation evidence records the idempotent command that abandons a returned correction. Customer-digital Salary Advance requires an exact reservation-release reference; UCL has no exposure reference. A Staff-assisted UCL cancellation additionally records the exact consumed assisted-action document-version ID while keeping Staff actor and Customer subject identities distinct. Collateral cancellation is not part of this physical/application contract.
 
 Requested terms and submitted Collateral facts remain outside correction-task mutation. Product-specific resubmission creates or reuses the verification evidence required by the business workflow.
 
@@ -211,7 +211,7 @@ Approval owns `review_recommendations` and `approval_decisions`.
 
 ### 6.7 Document
 
-Document owns `document_checklists`, `document_checklist_items`, `documents`, `document_versions`, `document_review_decisions`, `intake_documents`, `intake_document_versions`, `ocr_jobs`, `ocr_results`, and `ocr_reviews`.
+Document owns `document_checklists`, `document_checklist_items`, `documents`, `document_versions`, `document_review_decisions`, `intake_documents`, `intake_document_versions`, `assisted_action_documents`, `assisted_action_document_versions`, `ocr_jobs`, `ocr_results`, and `ocr_reviews`.
 
 - A checklist belongs to one LoanApplication and checklist stage and contains product-resolved items.
 - One logical document belongs to a checklist item and points to its current immutable version.
@@ -221,6 +221,7 @@ Document owns `document_checklists`, `document_checklist_items`, `documents`, `d
 - Waiver is represented by an authorized review decision; there is no separate document-waiver table.
 - An intake document belongs to one assisted-origination case and controlled evidence type. Its immutable versions preserve request identity, expected predecessor, safe content metadata/hash, opaque storage key, uploader Staff user, and upload time.
 - Intake documents are separate from LoanApplication checklists and correction tasks. The product-specific paper application types are constrained to the matching UCL or Collateral intake by the Document application boundary.
+- An assisted-action document belongs to one LoanApplication and one exact action target: approved offer and declared decision, contract and version, or active correction request. Immutable versions preserve upload replay identity and current-version lineage. Loan consumes the authoritative current version through a narrow Document contract; the Loan cancellation row stores only its version ID and does not create a cross-context foreign key.
 - One OCR job may exist for one immutable intake-document version. The job snapshots only the assigned source object's opaque key, media type, SHA-256, controlled evidence type, queue/lease/retry state, and PII-free trace identifier.
 - One encrypted OCR result may exist for one job. It preserves provider/processor metadata, normalized confidence, disposition, processing duration, and AES-256-GCM envelopes for extracted text, normalized layout, and structured suggestions.
 - Pending and expired-lease indexes support atomic `SKIP LOCKED` claims and abandoned-worker recovery. Result insertion and the job's `COMPLETED` transition commit atomically.
@@ -305,6 +306,7 @@ Audit events preserve operation, actor, action, entity, time, and a controlled P
 - Correction task actor, scope, document type, checklist item, and proof baseline must form an allowed product-specific combination.
 - Logical documents have ordered immutable versions and one current-version pointer.
 - Upload, review, completion, resubmission, and cancellation request identities cannot represent conflicting logical content.
+- An assisted-action evidence row has exactly one permitted target shape; a cancellation-request target contains only the correction-request ID, while offer and contract targets retain their own exact identity fields.
 - Review decisions target the exact current version where the operation requires current evidence.
 - Intake evidence types are controlled, one logical intake document exists per case and type, version numbers are unique and positive, upload request identities and storage keys are unique, and immutable versions cannot be updated or deleted.
 

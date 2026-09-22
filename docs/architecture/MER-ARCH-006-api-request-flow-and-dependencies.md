@@ -541,7 +541,9 @@ For `CUSTOMER_DIGITAL`, Customer-sourced correction endpoints derive the exact C
 
 A Customer-via-Staff correction remains distinct from a Staff correction of Staff-controlled work. Task completion, upload authorization, and resubmission must preserve that distinction rather than treating every Staff-executed command as `REQUEST_STAFF_CORRECTION`. Staff queue, content-read, review, waiver, and resubmission endpoints retain their narrow permissions, and application services recheck task ownership and maker-checker constraints.
 
-The executable UCL/Collateral assisted path uses exact `loan:correction:staff` authority for purpose-specific Customer-task completion and Staff resubmission. Document authorizes replacement upload through the Loan-owned active-task boundary and exact `document:upload:assisted-correction`; the task baseline remains the concurrency proof. Loan records the authenticated Staff user as completion/audit actor and the application Customer as subject. Staff-task maker-checker remains unchanged but is not applied to a Customer-owned task merely because Staff records its Customer-provided proof. Customer-digital Customer tasks continue through the Customer-owned ports only. Staff-mediated UCL cancellation remains a separate deferred command, and no generic Staff checklist-mutation port is introduced by this correction slice.
+The executable UCL/Collateral assisted path uses exact `loan:correction:staff` authority for purpose-specific Customer-task completion and Staff resubmission. Document authorizes replacement upload through the Loan-owned active-task boundary and exact `document:upload:assisted-correction`; the task baseline remains the concurrency proof. Loan records the authenticated Staff user as completion/audit actor and the application Customer as subject. Staff-task maker-checker remains unchanged but is not applied to a Customer-owned task merely because Staff records its Customer-provided proof. Customer-digital Customer tasks continue through the Customer-owned ports only. No generic Staff checklist-mutation port is introduced by this correction slice.
+
+Staff-assisted UCL cancellation is a separate evidenced terminal command. Document authorizes `CUSTOMER_CANCELLATION_REQUEST` upload or exact-baseline replacement only for the active correction of a `STAFF_ASSISTED` UCL in `RETURNED_FOR_REVISION`. Loan requires exact `loan:cancel:staff` authority and the Loan Officer role, revalidates the same correction and current evidence version under the cancellation lock order, and then uses the common Loan-owned cancellation execution path. The authenticated Staff user remains the actor, the application Customer remains the subject, and the stored cancellation row references the consumed Document version by ID without a cross-context foreign key. Customer-digital cancellation remains on the Customer-owned port; Collateral and Salary Advance remain unsupported by this Staff command.
 
 The Staff correction case query remains inside Loan because Loan owns the correction lifecycle:
 
@@ -563,7 +565,7 @@ flowchart LR
     Service --> DocumentPort --> DocumentService --> DocumentPersistence
 ```
 
-The service computes current-actor maker-checker evidence without serializing actor IDs. It derives Staff task proof through `LoanDocumentChecklistPort`; Loan does not query Document tables or adapters. The read is advisory presentation evidence, while completion and resubmission commands revalidate locked state.
+The service computes current-actor maker-checker evidence without serializing actor IDs. It derives Staff task proof through `LoanDocumentChecklistPort` and assisted-cancellation evidence through the narrow assisted-action evidence port; Loan does not query Document tables or adapters. The read is advisory presentation evidence, while completion, resubmission, evidence upload, and cancellation commands revalidate locked state.
 
 ### Channel-Specific Customer Decisions
 
@@ -586,7 +588,7 @@ flowchart LR
     Loan --> Audit
 ```
 
-Offer acceptance or decline remains the Customer's decision. A Staff-assisted command records that decision only when supported by the required branch evidence; it must not let Staff choose on the Customer's behalf. Contract acknowledgment follows the same actor-versus-subject rule. Customer-digital and Staff-assisted entry points may share the same Loan-owned offer or contract transition logic after their channel-specific authorization and evidence checks.
+Offer acceptance or decline remains the Customer's decision. A Staff-assisted command records that decision only when supported by the required branch evidence; it must not let Staff choose on the Customer's behalf. Contract acknowledgment follows the same actor-versus-subject rule. Customer-requested cancellation follows the rule for the exact active correction of a Staff-assisted UCL and consumes the current signed cancellation-request evidence before the terminal transition. Customer-digital and Staff-assisted entry points may share the same Loan-owned offer, contract, or cancellation transition logic after their channel-specific authorization and evidence checks.
 
 ### Collateral Verification and Approval Coordination
 

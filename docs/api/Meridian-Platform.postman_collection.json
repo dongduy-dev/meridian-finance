@@ -906,12 +906,18 @@
                       {"key":"assistedContractEvidenceFile","value":"","type":"string","description":"Select a fictional signed Customer Contract Acknowledgment PDF."},
                       {"key":"assistedContractEvidenceUploadRequestId","value":"10000000-0000-4000-8000-000000000004","type":"string"},
                       {"key":"assistedContractEvidenceVersionId","value":"","type":"string"},
-                      {"key":"assistedContractAcknowledgmentRequestId","value":"10000000-0000-4000-8000-000000000005","type":"string"}
+                      {"key":"assistedContractAcknowledgmentRequestId","value":"10000000-0000-4000-8000-000000000005","type":"string"},
+                      {"key":"assistedCancellationLoanApplicationId","value":"","type":"string","description":"Prepared STAFF_ASSISTED UCL in RETURNED_FOR_REVISION with one exact active correction."},
+                      {"key":"assistedCancellationCorrectionRequestId","value":"","type":"string"},
+                      {"key":"assistedCancellationEvidenceFile","value":"","type":"string","description":"Select a fictional signed Customer Cancellation Request PDF."},
+                      {"key":"assistedCancellationEvidenceUploadRequestId","value":"10000000-0000-4000-8000-000000000006","type":"string"},
+                      {"key":"assistedCancellationEvidenceVersionId","value":"","type":"string"},
+                      {"key":"assistedCancellationRequestId","value":"10000000-0000-4000-8000-000000000007","type":"string"}
                  ],
     "item":  [
                  {
                      "name": "00 Evidenced Staff-Assisted Downstream Customer Decisions",
-                     "description": "Representative Staff-mediated offer-response and contract-acknowledgment contracts. The Customer remains the business subject; Loan Officer or Accounting Officer is the authenticated recording actor. Use only fictional signed-form files and prepared STAFF_ASSISTED UCL or Collateral fixtures.",
+                     "description": "Representative Staff-mediated offer-response, contract-acknowledgment, and UCL Customer-requested cancellation contracts. The Customer remains the business subject; Loan Officer or Accounting Officer is the authenticated recording actor. Use only fictional signed-form files and prepared STAFF_ASSISTED fixtures.",
                      "item": [
                          {
                              "name": "Read exact assisted offer-response case",
@@ -953,6 +959,31 @@
                              "name": "Record evidenced assisted contract acknowledgment",
                              "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.expect(pm.response.json().status).to.eql(\"ACKNOWLEDGED\");"]}}],
                              "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},"body":{"mode":"raw","raw":"{\n  \"acknowledgmentRequestId\": \"{{assistedContractAcknowledgmentRequestId}}\",\n  \"contractId\": \"{{assistedContractId}}\",\n  \"expectedContractVersion\": {{assistedContractVersion}},\n  \"evidenceDocumentVersionId\": \"{{assistedContractEvidenceVersionId}}\"\n}","options":{"raw":{"language":"json"}}},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/contract/acknowledgment"},
+                             "response": []
+                         },
+                         {
+                             "name": "Read exact assisted UCL cancellation case",
+                             "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.expect(json.originationChannel).to.eql(\"STAFF_ASSISTED\");","pm.expect(json.productCode).to.eql(\"UNSECURED_CONSUMER_LOAN\");","pm.expect(json.assistedCancellation.available).to.eql(true);","pm.collectionVariables.set(\"assistedCancellationCorrectionRequestId\", json.assistedCancellation.correctionRequestId);"]}}],
+                             "request": {"method":"GET","header":[],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedCancellationLoanApplicationId}}/corrections"},
+                             "response": []
+                         },
+                         {
+                             "name": "Upload signed Customer Cancellation Request evidence",
+                             "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.collectionVariables.set(\"assistedCancellationEvidenceVersionId\", pm.response.json().documentVersionId);"]}}],
+                             "request": {"method":"POST","header":[],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"body":{"mode":"formdata","formdata":[{"key":"file","type":"file","src":"{{assistedCancellationEvidenceFile}}"}]},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedCancellationLoanApplicationId}}/assisted-action-evidence/CUSTOMER_CANCELLATION_REQUEST/versions?correctionRequestId={{assistedCancellationCorrectionRequestId}}&uploadRequestId={{assistedCancellationEvidenceUploadRequestId}}"},
+                             "response": []
+                         },
+                         {
+                             "name": "Record evidenced assisted UCL cancellation",
+                             "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.expect(json.resultingStatus).to.eql(\"CANCELLED\");","pm.expect(json.idempotentReplay).to.eql(false);"]}}],
+                             "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"body":{"mode":"raw","raw":"{\n  \"requestId\": \"{{assistedCancellationRequestId}}\",\n  \"expectedCorrectionRequestId\": \"{{assistedCancellationCorrectionRequestId}}\",\n  \"evidenceDocumentVersionId\": \"{{assistedCancellationEvidenceVersionId}}\"\n}","options":{"raw":{"language":"json"}}},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedCancellationLoanApplicationId}}/cancellation"},
+                             "response": []
+                         },
+                         {
+                             "name": "Replay assisted UCL cancellation exactly",
+                             "description": "Uses the identical request, correction, and evidence identities. It must return the recorded outcome without duplicate transition, cancellation, or audit effects.",
+                             "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.expect(json.resultingStatus).to.eql(\"CANCELLED\");","pm.expect(json.idempotentReplay).to.eql(true);"]}}],
+                             "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"body":{"mode":"raw","raw":"{\n  \"requestId\": \"{{assistedCancellationRequestId}}\",\n  \"expectedCorrectionRequestId\": \"{{assistedCancellationCorrectionRequestId}}\",\n  \"evidenceDocumentVersionId\": \"{{assistedCancellationEvidenceVersionId}}\"\n}","options":{"raw":{"language":"json"}}},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedCancellationLoanApplicationId}}/cancellation"},
                              "response": []
                          },
                          {

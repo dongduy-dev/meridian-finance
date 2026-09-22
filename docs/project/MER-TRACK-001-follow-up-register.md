@@ -1020,17 +1020,17 @@ Type: Lending workflow contract
 
 Priority: P1
 
-Status: Partially complete
+Status: Completed
 
-Blocking: Staff-mediated UCL cancellation remains undecided.
+Blocking: None.
 
 Problem:
-A `STAFF_ASSISTED` UCL or Collateral Loan can enter ordinary verification and review. Evidenced Staff-mediated approved-offer response, exact contract acknowledgment, and Customer correction completion/resubmission are executable with actor/subject separation. Customer-owned endpoints remain digital-only. Staff-mediated UCL cancellation still fails closed, so a Customer without a Customer Web login still lacks that residual abandonment path.
+A `STAFF_ASSISTED` UCL or Collateral Loan needed purpose-specific downstream Customer-action recording without manufacturing a Customer principal. The full approved boundary now supports evidenced offer response and exact contract acknowledgment for UCL and Collateral, Customer correction completion/resubmission for both products, and evidenced Customer-requested cancellation for UCL. Customer-owned endpoints remain digital-only.
 
 Recommendation:
-Retain the delivered purpose-specific offer-response, contract-acknowledgment, and correction commands. Define the residual Staff-mediated UCL cancellation with explicit Customer-request evidence, actor/subject separation, exact permission, audit, replay/reconciliation, and Customer-visible consequences. Do not impersonate the Customer or reopen the existing Customer-owned endpoints to Staff.
+Retain the delivered purpose-specific commands, exact permissions, immutable Document evidence, actor/subject separation, audit, and explicit replay/reconciliation. Do not impersonate the Customer, reopen Customer-owned endpoints to Staff, generalize cancellation to Collateral or Salary Advance, or introduce a generic Staff checklist-mutation port without a separately approved contract.
 
-Partial completion:
+Completed outcome:
 
 - Loan Officer can record an evidenced Customer `ACCEPT` or `DECLINE` for the exact pending offer of a Staff-assisted UCL or Collateral application.
 - Accounting Officer can record an evidenced Customer acknowledgment for the exact current prepared contract version.
@@ -1038,15 +1038,11 @@ Partial completion:
 - Loan Officer can upload Customer-provided replacement evidence against the exact active Customer-task baseline under `document:upload:assisted-correction`, record the Customer-owned task complete under `loan:correction:staff`, and resubmit a ready Customer-only assisted UCL or Collateral correction.
 - Staff-mediated completion preserves Customer proof rules and completion replay, records Staff actor and Customer/application subject audit facts, and does not apply Staff-task maker-checker to the Customer-owned task.
 - The Staff correction projection and workspace expose channel, Customer instruction, proof, and action availability only for eligible assisted cases; Customer-digital tasks remain separate.
+- Loan Officer can upload or replace `CUSTOMER_CANCELLATION_REQUEST` evidence for the exact active correction and record the Customer-requested cancellation of an eligible Staff-assisted UCL under `loan:cancel:staff`.
+- Cancellation reuses the Loan-owned terminal execution path, stores the exact consumed evidence-version ID with Staff actor and Customer subject attribution, preserves exact replay, and creates no Salary Advance exposure effect.
+- The Staff workspace keeps cancellation visually and semantically separate from correction completion, labels it as the Customer's request, and reconciles uncertain results without automatic POST replay or persisted file bytes.
 - Customer-digital endpoints and `CUSTOMER_DIRECT_ACTION_NOT_ALLOWED` protection remain unchanged.
 - No generic Staff checklist-mutation requirement was introduced; the delivered mutation remains exact and task-scoped.
-
-Residual scope:
-
-- Staff-mediated UCL Customer cancellation.
-
-Suggested future branch name:
-`feature/paper-assisted-ucl-cancellation`
 
 ## Roadmap Boundary
 

@@ -5,10 +5,13 @@ import com.meridian.platform.document.infrastructure.adapter.in.web.StaffAssiste
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionOutcome;
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionResult;
 import com.meridian.platform.loan.application.mapper.LoanContractMapper;
+import com.meridian.platform.loan.application.mapper.LoanApplicationCancellationApiMapper;
 import com.meridian.platform.loan.application.port.in.QueryAssistedApprovedOfferResponseUseCase;
 import com.meridian.platform.loan.application.port.in.RecordAssistedApprovedOfferResponseUseCase;
 import com.meridian.platform.loan.application.port.in.RecordAssistedLoanContractAcknowledgmentUseCase;
+import com.meridian.platform.loan.application.port.in.RecordAssistedUclCancellationUseCase;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.StaffAssistedContractAcknowledgmentController;
+import com.meridian.platform.loan.infrastructure.adapter.in.web.StaffAssistedUclCancellationController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.StaffAssistedOfferResponseController;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = {
         StaffAssistedOfferResponseController.class,
         StaffAssistedContractAcknowledgmentController.class,
+        StaffAssistedUclCancellationController.class,
         StaffAssistedActionEvidenceController.class
 })
 @Import({
@@ -46,8 +50,10 @@ class StaffAssistedDownstreamSecurityTest {
     @MockitoBean QueryAssistedApprovedOfferResponseUseCase queryOffer;
     @MockitoBean RecordAssistedApprovedOfferResponseUseCase recordOffer;
     @MockitoBean RecordAssistedLoanContractAcknowledgmentUseCase recordAcknowledgment;
+    @MockitoBean RecordAssistedUclCancellationUseCase recordCancellation;
     @MockitoBean ManageAssistedActionEvidenceUseCase evidence;
     @MockitoBean LoanContractMapper mapper;
+    @MockitoBean LoanApplicationCancellationApiMapper cancellationMapper;
 
     private final UUID applicationId = UUID.randomUUID();
 
@@ -125,9 +131,43 @@ class StaffAssistedDownstreamSecurityTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void assistedCancellationRequiresExactPermissionAndLoanOfficerRole() throws Exception {
+        when(recordCancellation.record(any())).thenReturn(
+                new RecordAssistedUclCancellationUseCase.Result(
+                        applicationId,
+                        com.meridian.platform.loan.domain.model.LoanApplicationStatus.CANCELLED,
+                        java.time.LocalDateTime.of(2026, 9, 22, 12, 0),
+                        false
+                ));
+        String path = "/api/v1/staff/loan-applications/{id}/cancellation";
+        String body = """
+                {"requestId":"%s","expectedCorrectionRequestId":"%s",
+                "evidenceDocumentVersionId":"%s"}
+                """.formatted(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+
+        mockMvc.perform(post(path, applicationId)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post(path, applicationId)
+                        .with(authority("loan:cancel:own", "ROLE_LOAN_OFFICER"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(path, applicationId)
+                        .with(authority("loan:cancel:staff"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(path, applicationId)
+                        .with(authority("loan:cancel:staff", "ROLE_LOAN_OFFICER"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+    }
+
     private static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor authority(
-            String value
+            String... values
     ) {
-        return user("staff").authorities(new SimpleGrantedAuthority(value));
+        return user("staff").authorities(java.util.Arrays.stream(values)
+                .map(SimpleGrantedAuthority::new)
+                .toArray(SimpleGrantedAuthority[]::new));
     }
 }

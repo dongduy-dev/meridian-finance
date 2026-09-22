@@ -3,10 +3,12 @@ package com.meridian.platform.loan.application.service;
 import com.meridian.platform.loan.application.service.salaryadvance.SalaryAdvanceReservationReleaseService;
 
 import com.meridian.platform.loan.application.port.in.CancelLoanApplicationUseCase;
+import com.meridian.platform.loan.application.port.in.RecordAssistedUclCancellationUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationCancellationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
+import com.meridian.platform.loan.application.port.out.LoanAssistedActionEvidencePort;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
@@ -17,6 +19,7 @@ import com.meridian.platform.loan.domain.model.LoanApplicationTransitionAction;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.salaryadvance.ReservationReleaseTrigger;
 import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceLimitMovement;
@@ -46,11 +49,13 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-public class CancelLoanApplicationService implements CancelLoanApplicationUseCase {
+public class CancelLoanApplicationService
+        implements CancelLoanApplicationUseCase, RecordAssistedUclCancellationUseCase {
 
     private final LoanApplicationCancellationRepository cancellations;
     private final LoanApplicationRepository applications;
     private final LoanCorrectionRepository corrections;
+    private final LoanAssistedActionEvidencePort assistedEvidence;
     private final SalaryAdvanceVerificationRepository verifications;
     private final SalaryAdvanceLimitRepository limits;
     private final SalaryAdvanceLimitMovementRepository movements;
@@ -66,6 +71,7 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
             LoanApplicationCancellationRepository cancellations,
             LoanApplicationRepository applications,
             LoanCorrectionRepository corrections,
+            LoanAssistedActionEvidencePort assistedEvidence,
             SalaryAdvanceVerificationRepository verifications,
             SalaryAdvanceLimitRepository limits,
             SalaryAdvanceLimitMovementRepository movements,
@@ -80,6 +86,7 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
         this.cancellations = cancellations;
         this.applications = applications;
         this.corrections = corrections;
+        this.assistedEvidence = assistedEvidence;
         this.verifications = verifications;
         this.limits = limits;
         this.movements = movements;
@@ -94,25 +101,61 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
 
     @Override
     @Transactional
-    public Result cancel(Command command) {
+    public CancelLoanApplicationUseCase.Result cancel(CancelLoanApplicationUseCase.Command command) {
         AuthenticatedUser actor = requireCustomer(currentUsers.currentUser());
-        UUID customerId = actor.requireCustomerId();
+        CancellationOutcome outcome = execute(
+                command.requestId(), command.loanApplicationId(), actor,
+                actor.requireCustomerId(), null, null, false);
+        return new CancelLoanApplicationUseCase.Result(
+                outcome.loanApplicationId(), outcome.resultingStatus(),
+                outcome.cancelledAt(), outcome.idempotentReplay());
+    }
 
-        cancellations.acquireCancellationRequestLock(command.requestId());
-        applications.acquireWorkflowLock(command.loanApplicationId());
-        LoanApplication application = applications.findByIdForUpdate(command.loanApplicationId())
+    @Override
+    @Transactional
+    public RecordAssistedUclCancellationUseCase.Result record(
+            RecordAssistedUclCancellationUseCase.Command command
+    ) {
+        AuthenticatedUser actor = requireAssistedCancellationStaff(currentUsers.currentUser());
+        CancellationOutcome outcome = execute(
+                command.requestId(), command.loanApplicationId(), actor, null,
+                command.expectedCorrectionRequestId(), command.evidenceDocumentVersionId(), true);
+        return new RecordAssistedUclCancellationUseCase.Result(
+                outcome.loanApplicationId(), outcome.resultingStatus(),
+                outcome.cancelledAt(), outcome.idempotentReplay());
+    }
+
+    private CancellationOutcome execute(
+            UUID requestId,
+            UUID loanApplicationId,
+            AuthenticatedUser actor,
+            UUID customerOwnerId,
+            UUID expectedCorrectionRequestId,
+            UUID evidenceDocumentVersionId,
+            boolean assisted
+    ) {
+
+        cancellations.acquireCancellationRequestLock(requestId);
+        applications.acquireWorkflowLock(loanApplicationId);
+        LoanApplication application = applications.findByIdForUpdate(loanApplicationId)
                 .orElseThrow(CancelLoanApplicationService::notFound);
-        if (!application.customerId().equals(customerId)) {
-            throw notFound();
+        if (assisted) {
+            requireAssistedUclApplication(application);
+        } else {
+            if (!application.customerId().equals(customerOwnerId)) {
+                throw notFound();
+            }
+            CustomerDigitalApplicationAccess.require(application);
         }
-        CustomerDigitalApplicationAccess.require(application);
 
         LoanApplicationCancellation existing = cancellations
-                .findByRequestId(command.requestId())
+                .findByRequestId(requestId)
                 .orElse(null);
         if (existing != null) {
-            validateIdentity(existing, command, actor);
-            return replay(existing, application);
+            validateIdentity(
+                    existing, requestId, loanApplicationId, expectedCorrectionRequestId,
+                    evidenceDocumentVersionId, actor, assisted);
+            return replay(existing, application, assisted);
         }
         if (cancellations.findByLoanApplicationId(application.id()).isPresent()) {
             throw cancellationNotAllowed();
@@ -125,6 +168,21 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
         LoanCorrectionRequest correction = corrections
                 .findActiveRequestByApplicationIdForUpdate(application.id())
                 .orElseThrow(CancelLoanApplicationService::stateConflict);
+        if (assisted && !correction.id().equals(expectedCorrectionRequestId)) {
+            throw new BusinessStateConflictException(
+                    "CORRECTION_REQUEST_CONFLICT",
+                    "The cancellation command does not target the active correction request."
+            );
+        }
+        if (assisted) {
+            LoanAssistedActionEvidencePort.EvidenceSnapshot evidence = assistedEvidence
+                    .requireCurrentCancellationEvidence(
+                            application.id(), correction.id(), evidenceDocumentVersionId);
+            if (!"CUSTOMER_CANCELLATION_REQUEST".equals(evidence.evidenceType())
+                    || !correction.id().equals(evidence.correctionRequestId())) {
+                throw stateConflict();
+            }
+        }
 
         LocalDateTime cancelledAt = ServicingEvidenceTimestamp.normalizeForPersistence(
                 LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)
@@ -145,7 +203,9 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
                 correction.cancel(cancelledAt)
         );
         transitionRecorder.record(operation, transition.facts(), "CUSTOMER_CANCELLATION");
-        publishCancellationAudit(operation, application, cancelledCorrection);
+        publishCancellationAudit(
+                operation, application, cancelledCorrection,
+                assisted ? evidenceDocumentVersionId : null);
 
         LoanApplicationCancellation cancellation = application.productCode()
                 == ProductCode.SALARY_ADVANCE
@@ -154,27 +214,38 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
                         cancelledApplication,
                         cancelledCorrection,
                         releaseMovement,
-                        command.requestId(),
+                        requestId,
                         actor.userId(),
+                        cancelledAt
+                )
+                : assisted
+                ? LoanApplicationCancellation.recordedAssistedWithoutExposureEffect(
+                        cancellationId,
+                        cancelledApplication,
+                        cancelledCorrection,
+                        requestId,
+                        actor.userId(),
+                        evidenceDocumentVersionId,
                         cancelledAt
                 )
                 : LoanApplicationCancellation.recordedWithoutExposureEffect(
                         cancellationId,
                         cancelledApplication,
                         cancelledCorrection,
-                        command.requestId(),
+                        requestId,
                         actor.userId(),
                         cancelledAt
                 );
         if (!cancellations.saveIfAbsent(cancellation)) {
             throw stateConflict();
         }
-        return result(cancellation, false);
+        return outcome(cancellation, false);
     }
 
-    private Result replay(
+    private CancellationOutcome replay(
             LoanApplicationCancellation cancellation,
-            LoanApplication application
+            LoanApplication application,
+            boolean assisted
     ) {
         if (application.status() != LoanApplicationStatus.CANCELLED) {
             throw stateConflict();
@@ -185,6 +256,15 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
         boolean productEvidenceValid = application.productCode() == ProductCode.SALARY_ADVANCE
                 ? hasValidSalaryAdvanceReplayEvidence(application, cancellation)
                 : hasValidUclReplayEvidence(application, cancellation);
+        if (assisted) {
+            LoanAssistedActionEvidencePort.EvidenceSnapshot evidence = assistedEvidence
+                    .requireCurrentCancellationEvidence(
+                            application.id(), cancellation.correctionRequestId(),
+                            cancellation.assistedEvidenceDocumentVersionId());
+            productEvidenceValid = productEvidenceValid
+                    && "CUSTOMER_CANCELLATION_REQUEST".equals(evidence.evidenceType())
+                    && cancellation.correctionRequestId().equals(evidence.correctionRequestId());
+        }
         if (correction.status() != LoanCorrectionRequestStatus.CANCELLED
                 || !correction.loanApplicationId().equals(application.id())
                 || !cancellation.cancelledAt().equals(correction.cancelledAt())
@@ -204,7 +284,7 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
         ) {
             throw stateConflict();
         }
-        return result(cancellation, true);
+        return outcome(cancellation, true);
     }
 
     private SalaryAdvanceLimitMovement releaseSalaryAdvanceReservation(
@@ -318,38 +398,56 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
     private void publishCancellationAudit(
             BusinessOperationContext operation,
             LoanApplication application,
-            LoanCorrectionRequest correction
+            LoanCorrectionRequest correction,
+            UUID assistedEvidenceDocumentVersionId
     ) {
+        BusinessAuditPayload.Builder payload = BusinessAuditPayload.builder()
+                .put(BusinessAuditPayloadKey.CUSTOMER_ID, application.customerId())
+                .put(BusinessAuditPayloadKey.LOAN_APPLICATION_ID, application.id())
+                .put(BusinessAuditPayloadKey.CORRECTION_REQUEST_ID, correction.id())
+                .put(
+                        BusinessAuditPayloadKey.PREVIOUS_APPLICATION_STATUS,
+                        LoanApplicationStatus.RETURNED_FOR_REVISION
+                )
+                .put(
+                        BusinessAuditPayloadKey.FINAL_APPLICATION_STATUS,
+                        LoanApplicationStatus.CANCELLED
+                );
+        if (assistedEvidenceDocumentVersionId != null) {
+            payload.put(
+                    BusinessAuditPayloadKey.DOCUMENT_VERSION_ID,
+                    assistedEvidenceDocumentVersionId
+            );
+        }
         auditPublisher.publish(BusinessAuditEvent.single(
                 operation,
                 new BusinessAuditEntry(
                         BusinessAuditAction.LOAN_APPLICATION_CANCELLED,
                         BusinessAuditEntityType.LOAN_APPLICATION,
                         application.id(),
-                        BusinessAuditPayload.builder()
-                                .put(BusinessAuditPayloadKey.LOAN_APPLICATION_ID, application.id())
-                                .put(BusinessAuditPayloadKey.CORRECTION_REQUEST_ID, correction.id())
-                                .put(
-                                        BusinessAuditPayloadKey.PREVIOUS_APPLICATION_STATUS,
-                                        LoanApplicationStatus.RETURNED_FOR_REVISION
-                                )
-                                .put(
-                                        BusinessAuditPayloadKey.FINAL_APPLICATION_STATUS,
-                                        LoanApplicationStatus.CANCELLED
-                                )
-                                .build()
+                        payload.build()
                 )
         ));
     }
 
     private static void validateIdentity(
             LoanApplicationCancellation cancellation,
-            Command command,
-            AuthenticatedUser actor
+            UUID requestId,
+            UUID loanApplicationId,
+            UUID expectedCorrectionRequestId,
+            UUID evidenceDocumentVersionId,
+            AuthenticatedUser actor,
+            boolean assisted
     ) {
-        if (!cancellation.requestId().equals(command.requestId())
-                || !cancellation.loanApplicationId().equals(command.loanApplicationId())
-                || !cancellation.cancelledByUserId().equals(actor.userId())) {
+        boolean matchingAssistedIdentity = assisted
+                ? cancellation.correctionRequestId().equals(expectedCorrectionRequestId)
+                && cancellation.assistedEvidenceDocumentVersionId() != null
+                && cancellation.assistedEvidenceDocumentVersionId().equals(evidenceDocumentVersionId)
+                : cancellation.assistedEvidenceDocumentVersionId() == null;
+        if (!cancellation.requestId().equals(requestId)
+                || !cancellation.loanApplicationId().equals(loanApplicationId)
+                || !cancellation.cancelledByUserId().equals(actor.userId())
+                || !matchingAssistedIdentity) {
             throw new BusinessStateConflictException(
                     "IDEMPOTENCY_KEY_REUSED",
                     "Cancellation request identifier was reused for a different operation."
@@ -370,16 +468,50 @@ public class CancelLoanApplicationService implements CancelLoanApplicationUseCas
         return actor;
     }
 
-    private static Result result(
+    private static AuthenticatedUser requireAssistedCancellationStaff(AuthenticatedUser actor) {
+        if (actor == null
+                || !"STAFF".equals(actor.userType())
+                || actor.optionalCustomerId().isPresent()
+                || !actor.hasPermission("loan:cancel:staff")) {
+            throw new AuthorizationException(
+                    "ASSISTED_UCL_CANCELLATION_ACCESS_DENIED",
+                    "Staff-assisted UCL cancellation authority is required."
+            );
+        }
+        if (!actor.roles().contains("LOAN_OFFICER")) {
+            throw new AuthorizationException(
+                    "ASSISTED_ACTION_ROLE_REQUIRED",
+                    "Loan Officer authority is required for assisted UCL cancellation."
+            );
+        }
+        return actor;
+    }
+
+    private static void requireAssistedUclApplication(LoanApplication application) {
+        if (application.originationChannel() != OriginationChannel.STAFF_ASSISTED
+                || application.productCode() != ProductCode.UNSECURED_CONSUMER_LOAN) {
+            throw cancellationNotAllowed();
+        }
+    }
+
+    private static CancellationOutcome outcome(
             LoanApplicationCancellation cancellation,
             boolean replay
     ) {
-        return new Result(
+        return new CancellationOutcome(
                 cancellation.loanApplicationId(),
                 LoanApplicationStatus.CANCELLED,
                 cancellation.cancelledAt(),
                 replay
         );
+    }
+
+    private record CancellationOutcome(
+            UUID loanApplicationId,
+            LoanApplicationStatus resultingStatus,
+            LocalDateTime cancelledAt,
+            boolean idempotentReplay
+    ) {
     }
 
     private static EntityNotFoundException notFound() {

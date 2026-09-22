@@ -13,6 +13,7 @@ public record UploadAssistedActionEvidenceCommand(
         AssistedOfferDecision declaredOfferDecision,
         UUID loanContractId,
         Integer contractVersion,
+        UUID correctionRequestId,
         UUID uploadRequestId,
         UUID expectedCurrentVersionId,
         String originalFilename,

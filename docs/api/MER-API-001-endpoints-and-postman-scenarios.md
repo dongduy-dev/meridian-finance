@@ -219,7 +219,8 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/staff-corrections/loan-applications/{loanApplicationId}/customer-tasks/{taskId}/complete` | `loan:correction:staff` | Record completion of an active Customer-owned task for an eligible Staff-assisted UCL or Collateral application. |
 | POST | `/api/v1/staff-corrections/loan-applications/{loanApplicationId}/resubmit` | `loan:correction:staff` | Resubmit an eligible Staff-only, mixed, or Staff-assisted Customer-only correction. |
 | POST | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions` | `document:upload:assisted` for initial Staff-assisted `DOCUMENTS_PENDING` evidence; `document:upload:assisted-correction` for an eligible Staff-assisted Customer correction task; otherwise `document:upload:staff` for a Staff-owned correction task | Upload initial assisted application evidence or upload exact task-scoped correction proof. |
-| POST | `/api/v1/staff/loan-applications/{loanApplicationId}/assisted-action-evidence/{evidenceType}/versions` | Staff with `document:upload:assisted-action` plus the action-specific Loan permission and business role | Upload or replace the current immutable signed `CUSTOMER_OFFER_RESPONSE` or `CUSTOMER_CONTRACT_ACKNOWLEDGMENT` evidence version for its exact authorized target. |
+| POST | `/api/v1/staff/loan-applications/{loanApplicationId}/assisted-action-evidence/{evidenceType}/versions` | Staff with `document:upload:assisted-action` plus the action-specific Loan permission and business role | Upload or replace the current immutable signed `CUSTOMER_OFFER_RESPONSE`, `CUSTOMER_CONTRACT_ACKNOWLEDGMENT`, or `CUSTOMER_CANCELLATION_REQUEST` evidence version for its exact authorized target. |
+| POST | `/api/v1/staff/loan-applications/{loanApplicationId}/cancellation` | Staff with `loan:cancel:staff` and the Loan Officer role | Record an evidenced Customer-requested cancellation for the exact active correction of a Staff-assisted UCL. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | `document:review` | Stream a review-authorized immutable version. |
 
 ### 2.3 Offers, contracts, disbursement, account, and servicing
@@ -1235,6 +1236,26 @@ The only allowed source status is `RETURNED_FOR_REVISION`. A new request against
 
 Success atomically marks the active correction request `CANCELLED`, changes the LoanApplication to `CANCELLED`, and records immutable history and audit evidence. For Salary Advance it also releases the repository-derived reservation exactly once and writes one `RESERVATION_RELEASED` movement. For UCL it stores no release reference and creates no Salary Advance limit, movement, reservation, conversion, or release effect. Cancellation does not run Partner freshness or re-verification and changes neither LoanAccount nor repayment state.
 
+#### 5.4.1 Evidenced Staff-assisted UCL cancellation
+
+The Staff command is purpose-specific to `STAFF_ASSISTED` UCL in `RETURNED_FOR_REVISION`. It requires an authenticated Staff principal with no Customer identity, exact `loan:cancel:staff`, and the `LOAN_OFFICER` role. Collateral Loan, Salary Advance, Customer-digital applications, and every other application status fail with `409 LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED`. Customer-digital cancellation remains on the Customer-owned route and cannot be authorized with the Staff permission.
+
+Before recording cancellation, the Loan Officer uploads `CUSTOMER_CANCELLATION_REQUEST` evidence through the assisted-action evidence endpoint. The multipart target contains `correctionRequestId`, `uploadRequestId`, optional `expectedCurrentVersionId`, and `file`. Document authorizes only the exact active correction, stores immutable versions, permits exact-baseline replacement before cancellation, and rejects replacement after Loan records cancellation.
+
+The command body is:
+
+```json
+{
+  "requestId": "10000000-0000-4000-8000-000000000006",
+  "expectedCorrectionRequestId": "20000000-0000-4000-8000-000000000006",
+  "evidenceDocumentVersionId": "30000000-0000-4000-8000-000000000006"
+}
+```
+
+Loan derives the Customer subject from the application and records the authenticated Staff user as actor. It consumes the exact current evidence version, terminalizes the correction and application through the same cancellation execution path as Customer-digital cancellation, stores the Staff actor and Document version reference in `loan_application_cancellations`, and records PII-safe Customer, application, correction, evidence, and status audit facts. UCL continues to create no Salary Advance exposure effect.
+
+Exact replay requires the same request, application, correction, Staff actor, and evidence version and returns `idempotentReplay = true` without duplicate terminal effects. Reusing the request identity with different logical content returns `409 IDEMPOTENCY_KEY_REUSED`. A new request against the cancelled application returns `409 LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED`. Missing, mismatched, foreign-target, or stale evidence uses the established assisted-action evidence errors.
+
 ### 5.5 Document upload and review
 
 The Customer checklist projection is:
@@ -1269,11 +1290,11 @@ Accepted types are PDF, JPEG, and PNG, up to 10 MiB, with signature-to-media-typ
 
 For a `STAFF_ASSISTED` application in `DOCUMENTS_PENDING`, exact `document:upload:assisted` authority permits initial checklist upload without a correction task. It does not authorize Customer-digital application upload, later correction upload, or another workflow state. Exact `document:upload:assisted-correction` authority permits only an upload for the exact active open Customer-owned correction task of an eligible Staff-assisted UCL or Collateral application in `RETURNED_FOR_REVISION`; replacement must name that task's exact baseline version. `document:upload:staff` remains limited to an open Staff-owned correction task, and `document:upload:intake` remains limited to pre-application intake evidence. Exact `uploadRequestId` replay returns the existing logical upload, different logical content returns `409 IDEMPOTENCY_KEY_REUSED`, and replacement must retain the authoritative `expectedCurrentVersionId`. The final missing required initial upload publishes the established completion event and advances the application from `DOCUMENTS_PENDING` to `SUBMITTED` through the existing Loan workflow.
 
-Customer-owned document upload, correction task/query and resubmission, cancellation, offer response, and contract acknowledgment require `originationChannel = CUSTOMER_DIGITAL`. A Customer attempting those mutations against a `STAFF_ASSISTED` application receives `403 CUSTOMER_DIRECT_ACTION_NOT_ALLOWED`; Customer projections do not advertise those direct actions. Purpose-specific Staff-mediated correction completion/resubmission, offer response, and contract acknowledgment use separate Staff contracts without manufacturing a Customer principal. Staff-mediated UCL cancellation remains unsupported and fail closed. CP3 does not introduce or require a generic Staff checklist-mutation contract.
+Customer-owned document upload, correction task/query and resubmission, cancellation, offer response, and contract acknowledgment require `originationChannel = CUSTOMER_DIGITAL`. A Customer attempting those mutations against a `STAFF_ASSISTED` application receives `403 CUSTOMER_DIRECT_ACTION_NOT_ALLOWED`; Customer projections do not advertise those direct actions. Purpose-specific Staff-mediated correction completion/resubmission, offer response, contract acknowledgment, and UCL Customer-requested cancellation use separate Staff contracts without manufacturing a Customer principal. No generic Staff checklist-mutation contract is required.
 
 #### 5.5.1 Evidenced Staff-assisted downstream Customer decisions
 
-These contracts apply only to `STAFF_ASSISTED` Unsecured Consumer Loan and Collateral Loan applications. The Customer is the decision subject, the authenticated Staff user is the recording actor, Document owns the signed immutable evidence, and Loan owns the resulting workflow action. Salary Advance remains Customer-digital only. The Staff endpoints never manufacture a Customer principal and do not broaden the Customer-owned endpoints.
+These contracts apply only to the product/channel combinations named by each action. Offer response and contract acknowledgment support `STAFF_ASSISTED` UCL and Collateral Loan. Customer-requested cancellation supports only `STAFF_ASSISTED` UCL. The Customer is the decision subject, the authenticated Staff user is the recording actor, Document owns the signed immutable evidence, and Loan owns the resulting workflow action. Salary Advance remains Customer-digital only. The Staff endpoints never manufacture a Customer principal and do not broaden the Customer-owned endpoints.
 
 Offer-response evidence uses `CUSTOMER_OFFER_RESPONSE` and binds `loanApplicationId`, exact `approvedOfferId`, and declared `ACCEPT` or `DECLINE`. Upload is multipart with `uploadRequestId`, optional `expectedCurrentVersionId`, `approvedOfferId`, `declaredOfferDecision`, and `file`. The Loan command body is:
 
@@ -1322,6 +1343,8 @@ GET /api/v1/staff/loan-applications/{loanApplicationId}/corrections
 The endpoint requires exact `loan:correction:staff` authority and does not require `loan:read`. It returns safe Loan-owned application number, product, origination channel, and status facts plus a nullable latest correction request. No correction is an ordinary `200` response with `correctionRequest: null`.
 
 A correction request contains its ID, status, controlled reason, creation time, `makerCheckerBlockedForCurrentActor`, `allTasksComplete`, `staffResubmissionReady`, and tasks in deterministic request sequence. Each task contains its ID, responsibility, status, scope, optional document/item/baseline identities, controlled reason, timestamps, backend-derived `SATISFIED`, `MISSING`, or `NOT_APPLICABLE` proof state, and backend-derived upload/completion availability. Staff-owned work exposes only its Staff instruction. A Customer-owned task exposes its Customer instruction and `customerSourceViaStaff = true` only for an eligible Staff-assisted UCL or Collateral application; the same task remains non-actionable and instruction-free in the Customer-digital Staff projection.
+
+The response also contains `assistedCancellation`. Loan reports `available = true` only for a Staff-assisted UCL in `RETURNED_FOR_REVISION` with the exact active correction and no recorded cancellation. The object carries that correction ID, nullable current `CUSTOMER_CANCELLATION_REQUEST` version metadata, and backend-derived upload and command availability for the current actor. Customer-digital, Collateral, Salary Advance, and non-returned cases report the action unavailable.
 
 Loan derives document proof through `LoanDocumentChecklistPort`; it does not access Document persistence. The response excludes the correction creator and completer User IDs, operation IDs, audit IDs, restricted assessment notes, and unrelated Customer data. Customer instruction is purpose-limited to the eligible Staff-assisted correction workflow and is not returned for Customer-digital tasks. `404 LOAN_APPLICATION_NOT_FOUND` represents a missing application. The command endpoints remain authoritative when state changes after the read.
 

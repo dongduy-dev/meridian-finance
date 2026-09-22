@@ -33,6 +33,7 @@ public class StaffAssistedActionEvidenceController {
             @RequestParam(required = false) AssistedOfferDecision declaredOfferDecision,
             @RequestParam(required = false) UUID loanContractId,
             @RequestParam(required = false) Integer contractVersion,
+            @RequestParam(required = false) UUID correctionRequestId,
             @RequestParam UUID uploadRequestId,
             @RequestParam(required = false) UUID expectedCurrentVersionId,
             @RequestParam("file") MultipartFile file
@@ -40,7 +41,8 @@ public class StaffAssistedActionEvidenceController {
         try {
             return useCase.upload(new UploadAssistedActionEvidenceCommand(
                     loanApplicationId, evidenceType, approvedOfferId, declaredOfferDecision,
-                    loanContractId, contractVersion, uploadRequestId, expectedCurrentVersionId,
+                    loanContractId, contractVersion, correctionRequestId,
+                    uploadRequestId, expectedCurrentVersionId,
                     file.getOriginalFilename(), file.getContentType(), file.getInputStream()));
         } catch (IOException exception) {
             throw new ServiceUnavailableException(

@@ -10,6 +10,13 @@ describe('Staff correction contracts', () => {
       originationChannel: 'FUTURE_CHANNEL',
       applicationStatus: 'FUTURE_STATUS',
       correctionRequest: null,
+      assistedCancellation: {
+        available: false,
+        correctionRequestId: null,
+        evidence: null,
+        evidenceUploadAvailable: false,
+        cancellationCommandAvailable: false,
+      },
     }).correctionRequest).toBeNull()
   })
 

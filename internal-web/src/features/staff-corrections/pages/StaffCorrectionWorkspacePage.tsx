@@ -10,7 +10,7 @@ import { OperationStatusPanel, type OperationStatus } from '@/components/operati
 import { RequestCorrelation } from '@/components/common/RequestCorrelation'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/features/auth/model/auth-context'
-import { hasPermission } from '@/features/auth/model/access-control'
+import { hasPermission, hasRole } from '@/features/auth/model/access-control'
 import { uuidSchema } from '@/features/staff-applications/api/contracts'
 import { QueryErrorPanel } from '@/features/staff-applications/components/QueryErrorPanel'
 import { humanizeKnownValue } from '@/features/staff-applications/model/presentation'
@@ -34,7 +34,9 @@ import { staffCorrectionCaseQuery, staffCorrectionKeys } from '../api/queries'
 import {
   completeAssistedCustomerCorrectionTask,
   completeStaffCorrectionTask,
+  recordAssistedUclCancellation,
   resubmitStaffCorrection,
+  uploadAssistedCancellationEvidence,
 } from '../api/staff-corrections-api'
 
 const ALLOWED_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png'])
@@ -53,11 +55,20 @@ export function StaffCorrectionWorkspacePage() {
     && hasPermission(state.actor, 'document:upload:assisted-correction')
   const canReview = state.status === 'authenticated' && hasPermission(state.actor, 'document:review')
   const canReadCase = state.status === 'authenticated' && hasPermission(state.actor, 'loan:read')
+  const canRecordAssistedCancellation = state.status === 'authenticated'
+    && hasPermission(state.actor, 'loan:cancel:staff')
+    && hasRole(state.actor, 'LOAN_OFFICER')
+  const canUploadAssistedAction = state.status === 'authenticated'
+    && hasPermission(state.actor, 'document:upload:assisted-action')
+    && canRecordAssistedCancellation
   const query = useQuery(staffCorrectionCaseQuery(manager, loanApplicationId, validId && allowed))
   const [files, setFiles] = useState<Record<string, File | undefined>>({})
   const [fileErrors, setFileErrors] = useState<Record<string, string | undefined>>({})
   const [actions, setActions] = useState<Record<string, ActionState>>({})
   const [confirmingResubmission, setConfirmingResubmission] = useState(false)
+  const [cancellationFile, setCancellationFile] = useState<File>()
+  const [cancellationFileError, setCancellationFileError] = useState<string>()
+  const [confirmingCancellation, setConfirmingCancellation] = useState(false)
   const selectedTaskId = params.get('taskId')
   const resubmissionKey = `resubmit:${loanApplicationId}`
 
@@ -79,6 +90,25 @@ export function StaffCorrectionWorkspacePage() {
     if (request.status === 'RESUBMITTED'
         && findUnresolvedOperation('STAFF_RESUBMISSION', resubmissionKey)) {
       removeUnresolvedOperation('STAFF_RESUBMISSION', resubmissionKey)
+    }
+    const cancellation = query.data?.assistedCancellation
+    if (cancellation?.correctionRequestId) {
+      const uploadResource = `cancel-evidence:${loanApplicationId}:${cancellation.correctionRequestId}`
+      const pendingUpload = findUnresolvedOperation(
+        'ASSISTED_CANCELLATION_EVIDENCE_UPLOAD', uploadResource,
+      )
+      const pendingBaseline = pendingUpload?.semanticPayload
+        && typeof pendingUpload.semanticPayload === 'object'
+        && 'expectedCurrentVersionId' in pendingUpload.semanticPayload
+        ? (pendingUpload.semanticPayload as { expectedCurrentVersionId?: string }).expectedCurrentVersionId
+        : undefined
+      if (pendingUpload && cancellation.evidence
+          && cancellation.evidence.documentVersionId !== pendingBaseline) {
+        removeUnresolvedOperation('ASSISTED_CANCELLATION_EVIDENCE_UPLOAD', uploadResource)
+      }
+    }
+    if (query.data?.applicationStatus === 'CANCELLED' || request.status === 'CANCELLED') {
+      removeUnresolvedOperation('ASSISTED_UCL_CANCELLATION', `cancel:${loanApplicationId}`)
     }
   }, [query.data, resubmissionKey])
 
@@ -127,7 +157,8 @@ export function StaffCorrectionWorkspacePage() {
         status: error instanceof NetworkError ? 'RESULT_UNKNOWN' : 'BLOCKED', id, error,
       } }))
       if (error instanceof NetworkError) saveUnresolvedOperation({
-        type, resource: key, operationId: id, payloadDigest, unresolvedAt: new Date().toISOString(),
+        type, resource: key, operationId: id, payloadDigest, semanticPayload,
+        unresolvedAt: new Date().toISOString(),
       })
       else removeUnresolvedOperation(type, key)
       if (error instanceof ApiError && [
@@ -162,6 +193,60 @@ export function StaffCorrectionWorkspacePage() {
     if (completed) setFiles((value) => ({ ...value, [task.taskId]: undefined }))
   }
 
+  const chooseCancellationFile = (file?: File) => {
+    if (!file) { setCancellationFile(undefined); setCancellationFileError(undefined); return }
+    const problem = !ALLOWED_TYPES.has(file.type)
+      ? 'Choose a PDF, JPEG, or PNG file.'
+      : file.size > MAX_SIZE ? 'Choose a file no larger than 10 MiB.' : undefined
+    setCancellationFileError(problem)
+    setCancellationFile(problem ? undefined : file)
+  }
+
+  const uploadCancellationEvidence = async () => {
+    const cancellation = query.data?.assistedCancellation
+    if (!cancellation?.correctionRequestId || !cancellationFile) return
+    const resource = `cancel-evidence:${loanApplicationId}:${cancellation.correctionRequestId}`
+    const fileHash = await digestFile(cancellationFile)
+    const expectedCurrentVersionId = cancellation.evidence?.documentVersionId
+    const completed = await runAction(
+      resource,
+      'ASSISTED_CANCELLATION_EVIDENCE_UPLOAD',
+      { correctionRequestId: cancellation.correctionRequestId, expectedCurrentVersionId, fileHash },
+      (id) => uploadAssistedCancellationEvidence(
+        manager,
+        loanApplicationId,
+        cancellation.correctionRequestId!,
+        id,
+        expectedCurrentVersionId,
+        cancellationFile,
+      ),
+      true,
+    )
+    if (completed) setCancellationFile(undefined)
+  }
+
+  const recordCancellation = async () => {
+    const cancellation = query.data?.assistedCancellation
+    if (!cancellation?.correctionRequestId || !cancellation.evidence) return
+    const completed = await runAction(
+      `cancel:${loanApplicationId}`,
+      'ASSISTED_UCL_CANCELLATION',
+      {
+        expectedCorrectionRequestId: cancellation.correctionRequestId,
+        evidenceDocumentVersionId: cancellation.evidence.documentVersionId,
+      },
+      (id) => recordAssistedUclCancellation(
+        manager,
+        loanApplicationId,
+        id,
+        cancellation.correctionRequestId!,
+        cancellation.evidence!.documentVersionId,
+      ),
+      true,
+    )
+    if (completed) setConfirmingCancellation(false)
+  }
+
   if (!validId) return <section className="mx-auto max-w-6xl space-y-5"><h1 data-route-heading tabIndex={-1} className="text-2xl font-semibold">Corrections unavailable</h1><Alert variant="warning"><AlertTriangle /><AlertTitle>Invalid application identifier</AlertTitle></Alert></section>
   if (query.isPending) return <section className="mx-auto max-w-6xl space-y-5"><h1 data-route-heading tabIndex={-1} className="text-2xl font-semibold">Application corrections</h1><div role="status" className="flex min-h-64 items-center justify-center gap-3 rounded-lg border bg-card"><Spinner /> Loading correction evidence…</div></section>
   if (query.isError && !query.data) return <section className="mx-auto max-w-6xl space-y-5"><h1 data-route-heading tabIndex={-1} className="text-2xl font-semibold">Application corrections</h1><QueryErrorPanel error={query.error} resource="correction evidence" onRetry={() => void query.refetch()} /></section>
@@ -169,6 +254,12 @@ export function StaffCorrectionWorkspacePage() {
   const data = query.data
   const request = data.correctionRequest
   const resubmitState = actions[resubmissionKey]
+  const assistedCancellation = data.assistedCancellation
+  const cancellationEvidenceKey = assistedCancellation.correctionRequestId
+    ? `cancel-evidence:${loanApplicationId}:${assistedCancellation.correctionRequestId}` : undefined
+  const cancellationCommandKey = `cancel:${loanApplicationId}`
+  const cancellationEvidenceState = cancellationEvidenceKey ? actions[cancellationEvidenceKey] : undefined
+  const cancellationCommandState = actions[cancellationCommandKey]
 
   return <section className="mx-auto max-w-7xl space-y-6">
     <header className="rounded-lg border bg-card p-5"><p className="text-sm font-semibold text-muted-foreground">CORRECTION CASE</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold sm:text-3xl">{data.applicationNumber}</h1><p className="mt-2 text-sm text-muted-foreground">{humanizeKnownValue(data.productCode)} · {humanizeKnownValue(data.applicationStatus)}</p><div className="mt-4 flex flex-wrap gap-2"><Button variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>{query.isFetching ? <Spinner /> : <RefreshCw />} Refresh proof</Button>{canReadCase ? <Button asChild variant="outline"><Link to={`/staff/applications/${loanApplicationId}`}>Application overview</Link></Button> : null}{canReview ? <Button asChild variant="outline"><Link to={`/staff/applications/${loanApplicationId}/documents`}>Documents</Link></Button> : null}</div></header>
@@ -190,8 +281,10 @@ export function StaffCorrectionWorkspacePage() {
           {(staffOwned || customerViaStaff) && task.status === 'OPEN' ? <Button onClick={() => void runAction(`complete:${task.taskId}`, 'TASK_COMPLETION', { taskId: task.taskId }, (id) => customerViaStaff ? completeAssistedCustomerCorrectionTask(manager, loanApplicationId, task.taskId, id) : completeStaffCorrectionTask(manager, task.taskId, id), true)} disabled={!task.completionActionAvailable || completion?.status === 'IN_FLIGHT'}>{customerViaStaff ? 'Record Customer task complete' : 'Complete Staff task'}</Button> : null}
         </CardContent></Card>
       })}</div>
+      {assistedCancellation.available ? <Card><CardHeader><CardTitle>Customer-requested cancellation</CardTitle><p className="text-sm text-muted-foreground">The Customer is requesting cancellation. Staff records the Customer&apos;s signed request; this is not a Staff decision to cancel.</p></CardHeader><CardContent className="space-y-5"><div className="rounded-md border bg-muted/25 p-4"><p className="text-sm font-semibold">Signed Customer cancellation request</p><p className="mt-1 text-sm text-muted-foreground">Upload PDF, JPEG, or PNG evidence bound to correction {assistedCancellation.correctionRequestId}.</p>{assistedCancellation.evidence ? <p className="mt-3 text-sm">Current immutable version {assistedCancellation.evidence.versionNumber} · {assistedCancellation.evidence.detectedMimeType} · uploaded {formatTimestamp(assistedCancellation.evidence.uploadedAt)}</p> : <p className="mt-3 text-sm text-muted-foreground">No current signed cancellation evidence.</p>}<label className="mt-4 grid gap-2 text-sm font-semibold">Signed request<Input type="file" accept="application/pdf,image/jpeg,image/png" onChange={(event) => chooseCancellationFile(event.target.files?.[0])} /></label>{cancellationFileError ? <p role="alert" className="mt-2 text-sm font-semibold text-danger">{cancellationFileError}</p> : null}<Button className="mt-3" variant="outline" onClick={() => void uploadCancellationEvidence()} disabled={!assistedCancellation.evidenceUploadAvailable || !canUploadAssistedAction || !cancellationFile || cancellationEvidenceState?.status === 'IN_FLIGHT' || cancellationEvidenceState?.status === 'RECONCILING'}><FileUp />{assistedCancellation.evidence ? 'Replace signed request' : 'Upload signed request'}</Button>{cancellationEvidenceState ? <div className="mt-3"><OperationStatusPanel status={cancellationEvidenceState.status} /></div> : null}{cancellationEvidenceState?.error ? <ActionError error={cancellationEvidenceState.error} /> : null}</div><div><p className="text-sm text-muted-foreground">Recording cancellation terminalizes this correction and the application. It creates no Salary Advance exposure effect.</p><Button className="mt-3" variant="destructive" onClick={() => setConfirmingCancellation(true)} disabled={!assistedCancellation.cancellationCommandAvailable || !canRecordAssistedCancellation || cancellationCommandState?.status === 'IN_FLIGHT' || cancellationCommandState?.status === 'RECONCILING'}>Review Customer-requested cancellation</Button>{cancellationCommandState ? <div className="mt-3"><OperationStatusPanel status={cancellationCommandState.status} /></div> : null}{cancellationCommandState?.error ? <ActionError error={cancellationCommandState.error} /> : null}</div></CardContent></Card> : null}
       <Card><CardHeader><CardTitle>Staff resubmission</CardTitle><p className="text-sm text-muted-foreground">Meridian revalidates Customer, product, and document state. The resulting lifecycle status is not predicted here.</p></CardHeader><CardContent className="space-y-4">{request.staffResubmissionReady ? <Button id="review-resubmission" onClick={() => setConfirmingResubmission(true)} disabled={resubmitState?.status === 'IN_FLIGHT' || resubmitState?.status === 'RECONCILING'}>Review Staff resubmission</Button> : <p className="text-sm text-muted-foreground">{request.allTasksComplete ? 'Staff resubmission is not applicable to this correction composition.' : 'Resubmission is unavailable until the backend reports every required task complete.'}</p>}{resubmitState ? <OperationStatusPanel status={resubmitState.status} /> : null}{resubmitState?.error ? <ActionError error={resubmitState.error} /> : null}</CardContent></Card>
       {confirmingResubmission ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="resubmit-confirm-title"><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><div><h2 id="resubmit-confirm-title" className="text-xl font-semibold">Confirm Staff resubmission</h2><p className="mt-1 text-sm text-muted-foreground">The backend remains authoritative for the resulting application lifecycle state.</p></div><dl className="grid gap-3 text-sm"><div><dt className="text-muted-foreground">Application</dt><dd className="font-semibold">{data.applicationNumber}</dd></div><div><dt className="text-muted-foreground">Current correction status</dt><dd className="font-semibold">{humanizeKnownValue(request.status)}</dd></div><div><dt className="text-muted-foreground">Required tasks</dt><dd className="font-semibold">Backend reports all tasks complete</dd></div><div><dt className="text-muted-foreground">Final validation</dt><dd className="font-semibold">Customer, product, and document state will be revalidated</dd></div></dl><div className="flex justify-end gap-2"><Button variant="outline" onClick={closeResubmissionConfirmation}>Cancel</Button><Button autoFocus onClick={() => { closeResubmissionConfirmation(); void runAction(resubmissionKey, 'STAFF_RESUBMISSION', { loanApplicationId }, (id) => resubmitStaffCorrection(manager, loanApplicationId, id), true) }}><CheckCircle2 /> Confirm resubmission</Button></div></div></div> : null}
+      {confirmingCancellation ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="cancellation-confirm-title"><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><div><h2 id="cancellation-confirm-title" className="text-xl font-semibold">Confirm Customer-requested cancellation</h2><p className="mt-1 text-sm text-muted-foreground">The Customer requested and signed this cancellation. You are recording the request as the authenticated Staff actor.</p></div><dl className="grid gap-3 text-sm"><div><dt className="text-muted-foreground">Application</dt><dd className="font-semibold">{data.applicationNumber}</dd></div><div><dt className="text-muted-foreground">Correction request</dt><dd className="break-all font-semibold">{assistedCancellation.correctionRequestId}</dd></div><div><dt className="text-muted-foreground">Evidence version</dt><dd className="break-all font-semibold">{assistedCancellation.evidence?.documentVersionId}</dd></div><div><dt className="text-muted-foreground">Outcome</dt><dd className="font-semibold">Correction and Loan Application become CANCELLED</dd></div></dl><div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setConfirmingCancellation(false)}>Back</Button><Button autoFocus variant="destructive" onClick={() => void recordCancellation()}>Record Customer request</Button></div></div></div> : null}
     </>}
   </section>
 }

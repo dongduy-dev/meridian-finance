@@ -33,6 +33,7 @@ interface JpaLoanApplicationCancellationRepository
                 reservation_release_movement_id,
                 request_id,
                 cancelled_by_user_id,
+                assisted_evidence_document_version_id,
                 cancelled_at
             ) values (
                 :id,
@@ -41,6 +42,7 @@ interface JpaLoanApplicationCancellationRepository
                 :reservationReleaseMovementId,
                 :requestId,
                 :cancelledByUserId,
+                :assistedEvidenceDocumentVersionId,
                 :cancelledAt
             )
             on conflict do nothing
@@ -52,6 +54,7 @@ interface JpaLoanApplicationCancellationRepository
             @Param("reservationReleaseMovementId") UUID reservationReleaseMovementId,
             @Param("requestId") UUID requestId,
             @Param("cancelledByUserId") UUID cancelledByUserId,
+            @Param("assistedEvidenceDocumentVersionId") UUID assistedEvidenceDocumentVersionId,
             @Param("cancelledAt") LocalDateTime cancelledAt
     );
 }

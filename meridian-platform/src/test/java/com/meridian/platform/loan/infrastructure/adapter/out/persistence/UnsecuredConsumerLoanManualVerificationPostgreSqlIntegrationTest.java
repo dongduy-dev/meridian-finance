@@ -18,13 +18,17 @@ import com.meridian.platform.document.application.dto.DocumentVersionDto;
 import com.meridian.platform.document.application.dto.ReviewDocumentCommand;
 import com.meridian.platform.document.application.dto.UploadIntakeEvidenceCommand;
 import com.meridian.platform.document.application.dto.UploadDocumentCommand;
+import com.meridian.platform.document.application.dto.UploadAssistedActionEvidenceCommand;
+import com.meridian.platform.document.application.dto.AssistedActionEvidenceVersionDto;
 import com.meridian.platform.document.application.port.in.ManageIntakeEvidenceUseCase;
+import com.meridian.platform.document.application.port.in.ManageAssistedActionEvidenceUseCase;
 import com.meridian.platform.document.application.port.in.ReviewDocumentUseCase;
 import com.meridian.platform.document.application.port.in.UploadDocumentUseCase;
 import com.meridian.platform.document.domain.model.DocumentReviewOutcome;
 import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.document.domain.model.DocumentUploaderActorType;
 import com.meridian.platform.document.domain.model.IntakeEvidenceType;
+import com.meridian.platform.document.domain.model.AssistedActionEvidenceType;
 import com.meridian.platform.loan.application.dto.AssistedOriginationCaseDto;
 import com.meridian.platform.loan.application.dto.CompleteUnsecuredConsumerLoanVerificationRequest;
 import com.meridian.platform.loan.application.dto.CompleteCorrectionTaskRequest;
@@ -42,6 +46,7 @@ import com.meridian.platform.loan.application.port.in.ConfirmContractReadinessUs
 import com.meridian.platform.loan.application.port.in.ConfirmManualDisbursementUseCase;
 import com.meridian.platform.loan.application.port.in.CloseLoanAccountUseCase;
 import com.meridian.platform.loan.application.port.in.CancelLoanApplicationUseCase;
+import com.meridian.platform.loan.application.port.in.RecordAssistedUclCancellationUseCase;
 import com.meridian.platform.loan.application.port.in.CompleteAssistedCustomerCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.CompleteOwnCorrectionTaskUseCase;
 import com.meridian.platform.loan.application.port.in.CompleteStaffCorrectionTaskUseCase;
@@ -172,6 +177,8 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     @Autowired private CompleteStaffCorrectionTaskUseCase staffTaskCompletion;
     @Autowired private ResubmitStaffCorrectionUseCase staffCorrectionResubmission;
     @Autowired private CancelLoanApplicationUseCase cancellationUseCase;
+    @Autowired private RecordAssistedUclCancellationUseCase assistedCancellationUseCase;
+    @Autowired private ManageAssistedActionEvidenceUseCase assistedActionEvidenceUseCase;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private ThreadLocalCurrentUserProvider currentUserProvider;
     @MockitoSpyBean private BusinessAuditPublisher auditPublisher;
@@ -1305,6 +1312,87 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     }
 
     @Test
+    void assistedUclCancellationStoresStaffActorExactDocumentVersionAndReplaysExactly() {
+        UUID applicationId = originateAssistedAndMakeProcessingReady();
+        CorrectionEvidence evidence = correctionEvidence(applicationId);
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+        verificationUseCase.completeManualVerification(
+                applicationId,
+                moreInformationRequest(evidence, "Customer requested cancellation after correction return.")
+        );
+        UUID correctionId = activeCorrectionId(applicationId);
+
+        useAssistedLoanOfficer();
+        UUID evidenceVersionId = uploadCancellationEvidence(applicationId, correctionId);
+        UUID requestId = UUID.randomUUID();
+        RecordAssistedUclCancellationUseCase.Command command =
+                new RecordAssistedUclCancellationUseCase.Command(
+                        requestId, applicationId, correctionId, evidenceVersionId);
+        RecordAssistedUclCancellationUseCase.Result cancelled =
+                assistedCancellationUseCase.record(command);
+        RecordAssistedUclCancellationUseCase.Result replay =
+                assistedCancellationUseCase.record(command);
+
+        assertFalse(cancelled.idempotentReplay());
+        assertTrue(replay.idempotentReplay());
+        assertEquals("CANCELLED", status(applicationId));
+        assertEquals("CANCELLED", text(
+                "SELECT status FROM loan_correction_requests WHERE id = ?", correctionId));
+        assertEquals(1, count("SELECT count(*) FROM loan_application_cancellations "
+                + "WHERE loan_application_id = ? AND correction_request_id = ? "
+                + "AND cancelled_by_user_id = ? "
+                + "AND assisted_evidence_document_version_id = ? "
+                + "AND reservation_release_movement_id IS NULL",
+                applicationId, correctionId, LOAN_OFFICER_USER_ID, evidenceVersionId));
+        assertEquals(0, count("SELECT count(*) FROM salary_advance_limit_movements "
+                + "WHERE loan_application_id = ?", applicationId));
+        assertEquals(1, count("SELECT count(*) FROM loan_application_status_transitions "
+                + "WHERE loan_application_id = ? AND action = 'CANCEL_APPLICATION' "
+                + "AND actor_user_id = ?", applicationId, LOAN_OFFICER_USER_ID));
+        assertEquals(1, count("SELECT count(*) FROM audit_events "
+                + "WHERE action = 'LOAN_APPLICATION_CANCELLED' "
+                + "AND payload ->> 'customerId' = ? "
+                + "AND payload ->> 'correctionRequestId' = ? "
+                + "AND payload ->> 'documentVersionId' = ?",
+                fixture.customerId().toString(), correctionId.toString(), evidenceVersionId.toString()));
+    }
+
+    @Test
+    void assistedUclCancellationAndStaffResubmissionRaceHasOneTerminalWinner() throws Exception {
+        AssistedReadyCorrection readyCorrection = prepareReadyAssistedCorrection();
+        useAssistedLoanOfficer();
+        UUID evidenceVersionId = uploadCancellationEvidence(
+                readyCorrection.applicationId(), readyCorrection.correctionRequestId());
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        CommandOutcome cancellation;
+        CommandOutcome resubmission;
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<CommandOutcome> cancelFuture = executor.submit(() -> assistedCancelAfter(
+                    readyCorrection, evidenceVersionId, UUID.randomUUID(), ready, start));
+            Future<CommandOutcome> resubmitFuture = executor.submit(() -> assistedResubmitAfter(
+                    readyCorrection.applicationId(), UUID.randomUUID(), ready, start));
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            cancellation = cancelFuture.get(20, TimeUnit.SECONDS);
+            resubmission = resubmitFuture.get(20, TimeUnit.SECONDS);
+        }
+
+        assertEquals(1, List.of(cancellation, resubmission).stream()
+                .filter(CommandOutcome::successful).count());
+        assertTrue(Set.of("CANCELLED", "SUBMITTED").contains(status(readyCorrection.applicationId())));
+        assertTrue(count("SELECT count(*) FROM loan_application_cancellations "
+                + "WHERE loan_application_id = ?", readyCorrection.applicationId()) <= 1);
+        assertEquals(0, count("SELECT count(*) FROM salary_advance_limit_movements "
+                + "WHERE loan_application_id = ?", readyCorrection.applicationId()));
+        assertEquals(0, count("SELECT count(*) FROM loan_correction_requests "
+                + "WHERE loan_application_id = ? AND status IN ('OPEN', 'READY_FOR_RESUBMISSION')",
+                readyCorrection.applicationId()));
+    }
+
+    @Test
     void failedMoreInformationCompletionRollsBackCorrectionAndDecisionEvidence() {
         UUID applicationId = originateAndMakeProcessingReady();
         CorrectionEvidence evidence = correctionEvidence(applicationId);
@@ -1775,6 +1863,37 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         ));
     }
 
+    private CommandOutcome assistedCancelAfter(
+            AssistedReadyCorrection correction,
+            UUID evidenceVersionId,
+            UUID requestId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
+        useAssistedLoanOfficer();
+        return afterBarrier(ready, start, () -> assistedCancellationUseCase.record(
+                new RecordAssistedUclCancellationUseCase.Command(
+                        requestId,
+                        correction.applicationId(),
+                        correction.correctionRequestId(),
+                        evidenceVersionId
+                )
+        ));
+    }
+
+    private CommandOutcome assistedResubmitAfter(
+            UUID applicationId,
+            UUID requestId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
+        useAssistedLoanOfficer();
+        return afterBarrier(ready, start, () -> staffCorrectionResubmission.resubmitAsStaff(
+                applicationId,
+                new CorrectionResubmissionRequest(requestId)
+        ));
+    }
+
     private CommandOutcome startReviewAfter(
             UUID applicationId,
             UUID actorId,
@@ -1949,7 +2068,9 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                         "document:upload:intake",
                         "document:upload:assisted",
                         "loan:correction:staff",
-                        "document:upload:assisted-correction"
+                        "document:upload:assisted-correction",
+                        "document:upload:assisted-action",
+                        "loan:cancel:staff"
                 )
         ));
     }
@@ -2071,6 +2192,66 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         return applicationId;
     }
 
+    private AssistedReadyCorrection prepareReadyAssistedCorrection() {
+        UUID applicationId = originateAssistedAndMakeProcessingReady();
+        CorrectionEvidence evidence = correctionEvidence(applicationId);
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+        verificationUseCase.completeManualVerification(
+                applicationId,
+                moreInformationRequest(evidence, "Prepare an assisted correction for a race test.")
+        );
+        UUID correctionId = activeCorrectionId(applicationId);
+        UUID taskId = uuid("SELECT task.id FROM loan_correction_tasks task "
+                + "WHERE task.correction_request_id = ? AND task.responsible_party = 'CUSTOMER'",
+                correctionId);
+
+        useAssistedLoanOfficer();
+        DocumentVersionDto replacement = uploadAsStaff(
+                applicationId,
+                evidence.checklistItemId(),
+                evidence.documentVersionId(),
+                "assisted-ucl-race-replacement.pdf"
+        );
+        assistedTaskCompletion.complete(
+                applicationId,
+                taskId,
+                new CompleteCorrectionTaskRequest(UUID.randomUUID())
+        );
+        useLoanOfficer();
+        acceptReplacement(applicationId, evidence.checklistItemId(), replacement);
+        assertEquals("READY_FOR_RESUBMISSION", text(
+                "SELECT status FROM loan_correction_requests WHERE id = ?", correctionId));
+        return new AssistedReadyCorrection(applicationId, correctionId);
+    }
+
+    private UUID activeCorrectionId(UUID applicationId) {
+        return uuid("SELECT id FROM loan_correction_requests "
+                + "WHERE loan_application_id = ? "
+                + "AND status IN ('OPEN', 'READY_FOR_RESUBMISSION')",
+                applicationId);
+    }
+
+    private UUID uploadCancellationEvidence(UUID applicationId, UUID correctionRequestId) {
+        AssistedActionEvidenceVersionDto version = assistedActionEvidenceUseCase.upload(
+                new UploadAssistedActionEvidenceCommand(
+                        applicationId,
+                        AssistedActionEvidenceType.CUSTOMER_CANCELLATION_REQUEST,
+                        null,
+                        null,
+                        null,
+                        null,
+                        correctionRequestId,
+                        UUID.randomUUID(),
+                        null,
+                        "signed-customer-cancellation-request.pdf",
+                        "application/pdf",
+                        new ByteArrayInputStream(PDF)
+                )
+        );
+        return version.documentVersionId();
+    }
+
     private record CorrectionEvidence(
             UUID checklistItemId,
             UUID documentVersionId,
@@ -2082,6 +2263,9 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     }
 
     private record ReadyUcl(UUID applicationId, UUID contractId, int contractVersion) {
+    }
+
+    private record AssistedReadyCorrection(UUID applicationId, UUID correctionRequestId) {
     }
 
     private record CommandOutcome(RuntimeException failure) {

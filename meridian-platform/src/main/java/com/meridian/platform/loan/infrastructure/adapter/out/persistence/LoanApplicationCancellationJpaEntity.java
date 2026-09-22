@@ -32,6 +32,9 @@ public class LoanApplicationCancellationJpaEntity {
     @Column(name = "cancelled_by_user_id", nullable = false, updatable = false)
     private UUID cancelledByUserId;
 
+    @Column(name = "assisted_evidence_document_version_id", updatable = false)
+    private UUID assistedEvidenceDocumentVersionId;
+
     @Column(name = "cancelled_at", nullable = false, updatable = false)
     private LocalDateTime cancelledAt;
 
@@ -49,6 +52,7 @@ public class LoanApplicationCancellationJpaEntity {
                 reservationReleaseMovementId,
                 requestId,
                 cancelledByUserId,
+                assistedEvidenceDocumentVersionId,
                 cancelledAt
         );
     }

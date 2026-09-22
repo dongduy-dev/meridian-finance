@@ -46,6 +46,16 @@ public class AssistedActionDocumentRepositoryAdapter implements AssistedActionDo
         return documents.findByLoanApplicationIdAndLoanContractIdAndContractVersion(applicationId, contractId, version)
                 .map(AssistedActionDocumentJpaEntity::toDomain);
     }
+    @Override public Optional<AssistedActionDocument> findCancellationDocumentForUpdate(
+            UUID applicationId, UUID correctionRequestId) {
+        return documents.findCancellationForUpdate(applicationId, correctionRequestId)
+                .map(AssistedActionDocumentJpaEntity::toDomain);
+    }
+    @Override public Optional<AssistedActionDocument> findCancellationDocument(
+            UUID applicationId, UUID correctionRequestId) {
+        return documents.findByLoanApplicationIdAndCorrectionRequestId(applicationId, correctionRequestId)
+                .map(AssistedActionDocumentJpaEntity::toDomain);
+    }
     @Override public AssistedActionDocumentVersion saveVersion(AssistedActionDocumentVersion version) {
         return versions.save(new AssistedActionDocumentVersionJpaEntity(version)).toDomain();
     }

@@ -1,9 +1,12 @@
 package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.dto.StaffCorrectionCaseDto;
+import com.meridian.platform.loan.application.dto.AssistedActionEvidenceMetadataDto;
 import com.meridian.platform.loan.application.port.in.QueryStaffCorrectionCaseUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
+import com.meridian.platform.loan.application.port.out.LoanApplicationCancellationRepository;
+import com.meridian.platform.loan.application.port.out.LoanAssistedActionEvidencePort;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
@@ -12,6 +15,9 @@ import com.meridian.platform.loan.domain.model.LoanCorrectionResponsibility;
 import com.meridian.platform.loan.domain.model.LoanCorrectionScope;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTask;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTaskStatus;
+import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
+import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.AuthorizationException;
@@ -29,6 +35,8 @@ import java.util.UUID;
 public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCaseUseCase {
     private final LoanApplicationRepository applications;
     private final LoanCorrectionRepository corrections;
+    private final LoanApplicationCancellationRepository cancellations;
+    private final LoanAssistedActionEvidencePort assistedEvidence;
     private final LoanDocumentChecklistPort documents;
     private final CustomerCorrectionDocumentProof customerDocumentProof;
     private final CurrentUserProvider currentUserProvider;
@@ -36,12 +44,16 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
     public QueryStaffCorrectionCaseService(
             LoanApplicationRepository applications,
             LoanCorrectionRepository corrections,
+            LoanApplicationCancellationRepository cancellations,
+            LoanAssistedActionEvidencePort assistedEvidence,
             LoanDocumentChecklistPort documents,
             CustomerCorrectionDocumentProof customerDocumentProof,
             CurrentUserProvider currentUserProvider
     ) {
         this.applications = applications;
         this.corrections = corrections;
+        this.cancellations = cancellations;
+        this.assistedEvidence = assistedEvidence;
         this.documents = documents;
         this.customerDocumentProof = customerDocumentProof;
         this.currentUserProvider = currentUserProvider;
@@ -60,7 +72,39 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
         return new StaffCorrectionCaseDto(
                 application.id(), application.applicationNumber(), application.productCode().name(),
                 application.originationChannel().name(), application.status().name(),
-                request == null ? null : toRequest(application, request, actor));
+                request == null ? null : toRequest(application, request, actor),
+                assistedCancellation(application, request, actor));
+    }
+
+    private StaffCorrectionCaseDto.AssistedCancellationDto assistedCancellation(
+            LoanApplication application,
+            LoanCorrectionRequest request,
+            AuthenticatedUser actor
+    ) {
+        boolean eligible = request != null
+                && application.originationChannel() == OriginationChannel.STAFF_ASSISTED
+                && application.productCode() == ProductCode.UNSECURED_CONSUMER_LOAN
+                && application.status() == LoanApplicationStatus.RETURNED_FOR_REVISION
+                && (request.status() == LoanCorrectionRequestStatus.OPEN
+                || request.status() == LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION)
+                && cancellations.findByLoanApplicationId(application.id()).isEmpty();
+        if (!eligible) {
+            return new StaffCorrectionCaseDto.AssistedCancellationDto(
+                    false, null, null, false, false);
+        }
+        AssistedActionEvidenceMetadataDto evidence = assistedEvidence
+                .findCancellationEvidence(application.id(), request.id())
+                .map(QueryAssistedApprovedOfferResponseService::toDto)
+                .orElse(null);
+        boolean loanOfficer = actor.roles().contains("LOAN_OFFICER");
+        boolean commandAuthority = loanOfficer && actor.hasPermission("loan:cancel:staff");
+        return new StaffCorrectionCaseDto.AssistedCancellationDto(
+                true,
+                request.id(),
+                evidence,
+                commandAuthority && actor.hasPermission("document:upload:assisted-action"),
+                commandAuthority && evidence != null
+        );
     }
 
     private StaffCorrectionCaseDto.CorrectionRequestDto toRequest(

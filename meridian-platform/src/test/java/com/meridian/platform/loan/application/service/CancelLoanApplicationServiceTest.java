@@ -4,10 +4,12 @@ import com.meridian.platform.loan.application.service.salaryadvance.SalaryAdvanc
 
 import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
 import com.meridian.platform.loan.application.port.in.CancelLoanApplicationUseCase;
+import com.meridian.platform.loan.application.port.in.RecordAssistedUclCancellationUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationCancellationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
+import com.meridian.platform.loan.application.port.out.LoanAssistedActionEvidencePort;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitMovementRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceLimitRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
@@ -33,6 +35,7 @@ import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.AuthorizationException;
+import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,12 +90,16 @@ class CancelLoanApplicationServiceTest {
     private static final UUID RELEASE_ID = UUID.fromString(
             "80000000-0000-0000-0000-000000000001"
     );
+    private static final UUID EVIDENCE_VERSION_ID = UUID.fromString(
+            "90000000-0000-0000-0000-000000000001"
+    );
     private static final BigDecimal REQUESTED_AMOUNT = new BigDecimal("3000000.00");
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 10, 9, 0);
 
     @Mock LoanApplicationCancellationRepository cancellations;
     @Mock LoanApplicationRepository applications;
     @Mock LoanCorrectionRepository corrections;
+    @Mock LoanAssistedActionEvidencePort assistedEvidence;
     @Mock SalaryAdvanceVerificationRepository verifications;
     @Mock SalaryAdvanceLimitRepository limits;
     @Mock SalaryAdvanceLimitMovementRepository movements;
@@ -111,6 +118,7 @@ class CancelLoanApplicationServiceTest {
                 cancellations,
                 applications,
                 corrections,
+                assistedEvidence,
                 verifications,
                 limits,
                 movements,
@@ -254,6 +262,7 @@ class CancelLoanApplicationServiceTest {
                 RELEASE_ID,
                 requestId,
                 USER_ID,
+                null,
                 NOW
         );
         when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(application));
@@ -338,6 +347,7 @@ class CancelLoanApplicationServiceTest {
                 null,
                 requestId,
                 USER_ID,
+                null,
                 NOW
         );
         when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(application));
@@ -368,6 +378,199 @@ class CancelLoanApplicationServiceTest {
                 BusinessAuditAction.RESERVATION_RELEASED
         );
         verify(reservationReleases, never()).releaseReservationOnce(any(), any(), any());
+    }
+
+    @Test
+    void loanOfficerRecordsEvidencedCustomerRequestedAssistedUclCancellation() {
+        UUID requestId = UUID.randomUUID();
+        when(currentUsers.currentUser()).thenReturn(staffCancellationActor());
+        LoanApplication application = assistedUclApplication(LoanApplicationStatus.RETURNED_FOR_REVISION);
+        LoanCorrectionRequest correction = uclCorrection(LoanCorrectionRequestStatus.OPEN, null);
+        when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(application));
+        when(cancellations.findByRequestId(requestId)).thenReturn(Optional.empty());
+        when(cancellations.findByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.empty());
+        when(corrections.findActiveRequestByApplicationIdForUpdate(APPLICATION_ID))
+                .thenReturn(Optional.of(correction));
+        when(assistedEvidence.requireCurrentCancellationEvidence(
+                APPLICATION_ID, CORRECTION_ID, EVIDENCE_VERSION_ID
+        )).thenReturn(cancellationEvidence());
+        when(applications.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(corrections.saveRequest(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(cancellations.saveIfAbsent(any())).thenReturn(true);
+
+        RecordAssistedUclCancellationUseCase.Result result = service.record(
+                assistedCommand(requestId, CORRECTION_ID, EVIDENCE_VERSION_ID));
+
+        assertEquals(LoanApplicationStatus.CANCELLED, result.resultingStatus());
+        assertFalse(result.idempotentReplay());
+        ArgumentCaptor<LoanApplicationCancellation> stored =
+                ArgumentCaptor.forClass(LoanApplicationCancellation.class);
+        verify(cancellations).saveIfAbsent(stored.capture());
+        assertEquals(USER_ID, stored.getValue().cancelledByUserId());
+        assertEquals(EVIDENCE_VERSION_ID, stored.getValue().assistedEvidenceDocumentVersionId());
+        assertEquals(null, stored.getValue().reservationReleaseMovementId());
+        verify(reservationReleases, never()).releaseReservationOnce(any(), any(), any());
+    }
+
+    @Test
+    void exactAssistedUclCancellationReplayReturnsDurableResultWithoutNewEffects() {
+        UUID requestId = UUID.randomUUID();
+        UUID cancellationId = UUID.randomUUID();
+        when(currentUsers.currentUser()).thenReturn(staffCancellationActor());
+        when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(
+                assistedUclApplication(LoanApplicationStatus.CANCELLED)));
+        when(cancellations.findByRequestId(requestId)).thenReturn(Optional.of(
+                new LoanApplicationCancellation(
+                        cancellationId, APPLICATION_ID, CORRECTION_ID, null,
+                        requestId, USER_ID, EVIDENCE_VERSION_ID, NOW)));
+        when(corrections.findRequestById(CORRECTION_ID)).thenReturn(Optional.of(
+                uclCorrection(LoanCorrectionRequestStatus.CANCELLED, NOW)));
+        when(assistedEvidence.requireCurrentCancellationEvidence(
+                APPLICATION_ID, CORRECTION_ID, EVIDENCE_VERSION_ID
+        )).thenReturn(cancellationEvidence());
+        when(transitionEvidence.countMatching(
+                APPLICATION_ID,
+                LoanApplicationStatus.RETURNED_FOR_REVISION,
+                LoanApplicationStatus.CANCELLED,
+                LoanApplicationTransitionAction.CANCEL_APPLICATION
+        )).thenReturn(1L);
+        when(auditEvidence.countMatchingOperation(
+                cancellationId,
+                BusinessAuditAction.LOAN_APPLICATION_CANCELLED,
+                BusinessAuditEntityType.LOAN_APPLICATION,
+                APPLICATION_ID
+        )).thenReturn(1L);
+
+        RecordAssistedUclCancellationUseCase.Result result = service.record(
+                assistedCommand(requestId, CORRECTION_ID, EVIDENCE_VERSION_ID));
+
+        assertEquals(LoanApplicationStatus.CANCELLED, result.resultingStatus());
+        assertEquals(NOW, result.cancelledAt());
+        assertEquals(true, result.idempotentReplay());
+        verify(auditEvidence).countMatchingOperationAction(
+                cancellationId, BusinessAuditAction.RESERVATION_RELEASED);
+        verify(cancellations, never()).saveIfAbsent(any());
+        verify(transitionRecorder, never()).record(any(), any(), any());
+        verify(auditPublisher, never()).publish(any());
+        verify(reservationReleases, never()).releaseReservationOnce(any(), any(), any());
+    }
+
+    @Test
+    void assistedCancellationRejectsWrongActiveCorrectionBeforeEvidenceConsumption() {
+        when(currentUsers.currentUser()).thenReturn(staffCancellationActor());
+        when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(
+                assistedUclApplication(LoanApplicationStatus.RETURNED_FOR_REVISION)));
+        when(cancellations.findByRequestId(any())).thenReturn(Optional.empty());
+        when(cancellations.findByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.empty());
+        when(corrections.findActiveRequestByApplicationIdForUpdate(APPLICATION_ID))
+                .thenReturn(Optional.of(uclCorrection(LoanCorrectionRequestStatus.OPEN, null)));
+
+        BusinessStateConflictException error = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.record(assistedCommand(
+                        UUID.randomUUID(), UUID.randomUUID(), EVIDENCE_VERSION_ID)));
+
+        assertEquals("CORRECTION_REQUEST_CONFLICT", error.getErrorCode());
+        verify(assistedEvidence, never()).requireCurrentCancellationEvidence(any(), any(), any());
+    }
+
+    @Test
+    void assistedCancellationRequiresCurrentExactEvidence() {
+        when(currentUsers.currentUser()).thenReturn(staffCancellationActor());
+        when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(
+                assistedUclApplication(LoanApplicationStatus.RETURNED_FOR_REVISION)));
+        when(cancellations.findByRequestId(any())).thenReturn(Optional.empty());
+        when(cancellations.findByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.empty());
+        when(corrections.findActiveRequestByApplicationIdForUpdate(APPLICATION_ID))
+                .thenReturn(Optional.of(uclCorrection(LoanCorrectionRequestStatus.OPEN, null)));
+        when(assistedEvidence.requireCurrentCancellationEvidence(any(), any(), any()))
+                .thenThrow(new BusinessRuleViolationException(
+                        "ASSISTED_ACTION_EVIDENCE_REQUIRED", "Evidence is required."));
+
+        BusinessRuleViolationException error = assertThrows(
+                BusinessRuleViolationException.class,
+                () -> service.record(assistedCommand(
+                        UUID.randomUUID(), CORRECTION_ID, EVIDENCE_VERSION_ID)));
+
+        assertEquals("ASSISTED_ACTION_EVIDENCE_REQUIRED", error.getErrorCode());
+        verify(cancellations, never()).saveIfAbsent(any());
+    }
+
+    @Test
+    void assistedCancellationRejectsDigitalCollateralSalaryAndNonReturnedApplications() {
+        when(currentUsers.currentUser()).thenReturn(staffCancellationActor());
+        assertAssistedCancellationNotAllowed(uclApplication(
+                CUSTOMER_ID, LoanApplicationStatus.RETURNED_FOR_REVISION));
+        assertAssistedCancellationNotAllowed(new LoanApplication(
+                APPLICATION_ID, CUSTOMER_ID, UUID.randomUUID(), "CL-1",
+                ProductCode.COLLATERAL_LOAN, ProductType.SECURED,
+                OriginationChannel.STAFF_ASSISTED, LoanApplicationStatus.RETURNED_FOR_REVISION,
+                BigDecimal.valueOf(5_000_000), 6, NOW.minusDays(2)));
+        assertAssistedCancellationNotAllowed(application(
+                CUSTOMER_ID, LoanApplicationStatus.RETURNED_FOR_REVISION));
+
+        when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(
+                assistedUclApplication(LoanApplicationStatus.SUBMITTED)));
+        when(cancellations.findByRequestId(any())).thenReturn(Optional.empty());
+        when(cancellations.findByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.empty());
+        BusinessStateConflictException stateError = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.record(assistedCommand(
+                        UUID.randomUUID(), CORRECTION_ID, EVIDENCE_VERSION_ID)));
+        assertEquals("LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED", stateError.getErrorCode());
+    }
+
+    @Test
+    void customerCannotUseAssistedCancellationCommand() {
+        AuthorizationException error = assertThrows(
+                AuthorizationException.class,
+                () -> service.record(assistedCommand(
+                        UUID.randomUUID(), CORRECTION_ID, EVIDENCE_VERSION_ID)));
+
+        assertEquals("ASSISTED_UCL_CANCELLATION_ACCESS_DENIED", error.getErrorCode());
+        verify(applications, never()).acquireWorkflowLock(any());
+    }
+
+    @Test
+    void assistedReplayRejectsChangedEvidenceIdentity() {
+        UUID requestId = UUID.randomUUID();
+        when(currentUsers.currentUser()).thenReturn(staffCancellationActor());
+        when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(
+                assistedUclApplication(LoanApplicationStatus.CANCELLED)));
+        when(cancellations.findByRequestId(requestId)).thenReturn(Optional.of(
+                new LoanApplicationCancellation(
+                        UUID.randomUUID(), APPLICATION_ID, CORRECTION_ID, null,
+                        requestId, USER_ID, EVIDENCE_VERSION_ID, NOW)));
+
+        BusinessStateConflictException error = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.record(assistedCommand(
+                        requestId, CORRECTION_ID, UUID.randomUUID())));
+
+        assertEquals("IDEMPOTENCY_KEY_REUSED", error.getErrorCode());
+    }
+
+    private void assertAssistedCancellationNotAllowed(LoanApplication application) {
+        when(applications.findByIdForUpdate(APPLICATION_ID)).thenReturn(Optional.of(application));
+        BusinessStateConflictException error = assertThrows(
+                BusinessStateConflictException.class,
+                () -> service.record(assistedCommand(
+                        UUID.randomUUID(), CORRECTION_ID, EVIDENCE_VERSION_ID)));
+        assertEquals("LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED", error.getErrorCode());
+    }
+
+    private static RecordAssistedUclCancellationUseCase.Command assistedCommand(
+            UUID requestId, UUID correctionRequestId, UUID evidenceVersionId
+    ) {
+        return new RecordAssistedUclCancellationUseCase.Command(
+                requestId, APPLICATION_ID, correctionRequestId, evidenceVersionId);
+    }
+
+    private static LoanAssistedActionEvidencePort.EvidenceSnapshot cancellationEvidence() {
+        return new LoanAssistedActionEvidencePort.EvidenceSnapshot(
+                UUID.randomUUID(), EVIDENCE_VERSION_ID, "CUSTOMER_CANCELLATION_REQUEST",
+                null, null, null, null, CORRECTION_ID, 1,
+                "application/pdf", 100, NOW);
     }
 
     private void stubNewCancellation(
@@ -405,6 +608,20 @@ class CancelLoanApplicationServiceTest {
                 Set.of("CUSTOMER"),
                 Set.of("loan:cancel:own")
         );
+    }
+
+    private static AuthenticatedUser staffCancellationActor() {
+        return new AuthenticatedUser(
+                USER_ID, "officer@meridian.test", "STAFF", null,
+                Set.of("LOAN_OFFICER"), Set.of("loan:cancel:staff"));
+    }
+
+    private static LoanApplication assistedUclApplication(LoanApplicationStatus status) {
+        return new LoanApplication(
+                APPLICATION_ID, CUSTOMER_ID, UUID.randomUUID(), "UCL-ASSISTED-1",
+                ProductCode.UNSECURED_CONSUMER_LOAN, ProductType.UNSECURED,
+                OriginationChannel.STAFF_ASSISTED, status,
+                BigDecimal.valueOf(5_000_000), 6, NOW.minusDays(2));
     }
 
     private static LoanApplication application(
