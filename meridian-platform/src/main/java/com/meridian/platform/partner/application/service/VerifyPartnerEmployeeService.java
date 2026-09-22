@@ -8,11 +8,13 @@ import com.meridian.platform.partner.application.port.out.CustomerIdentityEviden
 import com.meridian.platform.partner.application.port.out.CustomerIdentityEvidenceSnapshot;
 import com.meridian.platform.partner.application.port.out.CustomerPartnerEmployeeLinkRepository;
 import com.meridian.platform.partner.application.port.out.PartnerCompanyRepository;
+import com.meridian.platform.partner.application.port.out.PartnerEligibilityReviewRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportBatchRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeRepository;
 import com.meridian.platform.partner.domain.model.CustomerPartnerEmployeeLink;
 import com.meridian.platform.partner.domain.model.EmployeeVerificationOutcome;
 import com.meridian.platform.partner.domain.model.PartnerCompany;
+import com.meridian.platform.partner.domain.model.PartnerEligibilityReview;
 import com.meridian.platform.partner.domain.model.PartnerEmployee;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatch;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeVerificationResult;
@@ -38,6 +40,7 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
     private final PartnerEmployeeImportBatchRepository importBatchRepository;
     private final PartnerEmployeeRepository partnerEmployeeRepository;
     private final CustomerPartnerEmployeeLinkRepository linkRepository;
+    private final PartnerEligibilityReviewRepository reviewRepository;
     private final CustomerIdentityEvidencePort customerIdentityEvidencePort;
     private final PartnerEmployeeVerificationMapper verificationMapper;
     private final CurrentUserProvider currentUserProvider;
@@ -49,6 +52,7 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
             PartnerEmployeeImportBatchRepository importBatchRepository,
             PartnerEmployeeRepository partnerEmployeeRepository,
             CustomerPartnerEmployeeLinkRepository linkRepository,
+            PartnerEligibilityReviewRepository reviewRepository,
             CustomerIdentityEvidencePort customerIdentityEvidencePort,
             PartnerEmployeeVerificationMapper verificationMapper,
             CurrentUserProvider currentUserProvider,
@@ -58,6 +62,7 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
         this.importBatchRepository = importBatchRepository;
         this.partnerEmployeeRepository = partnerEmployeeRepository;
         this.linkRepository = linkRepository;
+        this.reviewRepository = reviewRepository;
         this.customerIdentityEvidencePort = customerIdentityEvidencePort;
         this.verificationMapper = verificationMapper;
         this.currentUserProvider = currentUserProvider;
@@ -78,35 +83,43 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
         String identityReference = normalizeRequired(identityEvidence.identityReference(), "identityReference");
         String employeeCode = normalizeRequired(request.employeeCode(), "employeeCode");
 
-        PartnerCompany partnerCompany = partnerCompanyRepository.findById(partnerCompanyId)
+        reviewRepository.acquireCustomerPartnerLock(customerId, partnerCompanyId);
+
+        PartnerCompany partnerCompany = partnerCompanyRepository.findByIdForUpdate(partnerCompanyId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "PARTNER_COMPANY_NOT_FOUND",
                         "Partner company was not found."
                 ));
         verificationPolicy.validatePartnerCompanyCanBeUsedForEligibility(partnerCompany);
 
-        return importBatchRepository.findLatestCompletedByPartnerCompanyIdAndEffectiveMonth(
-                        partnerCompanyId,
-                        YearMonth.now(clock).toString()
-                )
-                .map(importBatch -> verifyAgainstBatch(
+        String effectiveMonth = YearMonth.now(clock).toString();
+        PartnerEmployeeImportBatch importBatch = importBatchRepository
+                .findLatestCompletedByPartnerCompanyIdAndEffectiveMonth(partnerCompanyId, effectiveMonth)
+                .orElse(null);
+        PartnerEmployeeVerificationDto result = importBatch == null
+                ? verificationMapper.toDto(new PartnerEmployeeVerificationResult(
+                        customerId, partnerCompanyId, null, null,
+                        EmployeeVerificationOutcome.PENDING_MANUAL_REVIEW, null, true, null, null
+                ))
+                : verifyAgainstBatch(
                         customerId,
                         partnerCompanyId,
                         importBatch,
                         identityReference,
                         employeeCode
-                ))
-                .orElseGet(() -> verificationMapper.toDto(new PartnerEmployeeVerificationResult(
-                        customerId,
-                        partnerCompanyId,
-                        null,
-                        null,
-                        EmployeeVerificationOutcome.PENDING_MANUAL_REVIEW,
-                        null,
-                        true,
-                        null,
-                        null
-                )));
+                );
+
+        if (result.manualReviewRequired()) {
+            ensurePendingReview(
+                    customerId, partnerCompanyId, effectiveMonth,
+                    importBatch == null ? null : importBatch.id(),
+                    EmployeeVerificationOutcome.valueOf(result.outcome()), employeeCode
+            );
+        } else if (EmployeeVerificationOutcome.MATCHED_ACTIVE.name().equals(result.outcome())
+                || EmployeeVerificationOutcome.MATCHED_INACTIVE.name().equals(result.outcome())) {
+            supersedePendingReview(customerId, partnerCompanyId);
+        }
+        return result;
     }
 
     private CustomerIdentityEvidenceSnapshot loadUsableIdentityEvidence(UUID customerId) {
@@ -273,5 +286,37 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
             throw new IllegalArgumentException(fieldName + " must not be blank");
         }
         return trimmedValue;
+    }
+
+    private void ensurePendingReview(
+            UUID customerId,
+            UUID partnerCompanyId,
+            String effectiveMonth,
+            UUID sourceImportBatchId,
+            EmployeeVerificationOutcome triggerOutcome,
+            String requestedEmployeeCode
+    ) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        PartnerEligibilityReview existing = reviewRepository
+                .findPendingByCustomerIdAndPartnerCompanyId(customerId, partnerCompanyId)
+                .orElse(null);
+        if (existing != null
+                && existing.effectiveMonth().equals(effectiveMonth)
+                && (existing.sourceImportBatchId() == null
+                    || Objects.equals(existing.sourceImportBatchId(), sourceImportBatchId))) {
+            return;
+        }
+        if (existing != null) {
+            reviewRepository.save(existing.supersede(now));
+        }
+        reviewRepository.save(PartnerEligibilityReview.pending(
+                UUID.randomUUID(), customerId, partnerCompanyId, effectiveMonth,
+                sourceImportBatchId, triggerOutcome, requestedEmployeeCode, now
+        ));
+    }
+
+    private void supersedePendingReview(UUID customerId, UUID partnerCompanyId) {
+        reviewRepository.findPendingByCustomerIdAndPartnerCompanyId(customerId, partnerCompanyId)
+                .ifPresent(review -> reviewRepository.save(review.supersede(LocalDateTime.now(clock))));
     }
 }

@@ -160,6 +160,9 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/partner-companies/{partnerCompanyId}/status` | `partner:manage` | Change Partner Company status. |
 | POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | `partner:manage` | Import Partner Employee source rows for an effective month. |
 | POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-verifications` | `partner:employee:verify:own` | Verify the authenticated Customer and create/reuse an eligible employee link. |
+| GET | `/api/v1/admin/partner-eligibility-reviews?status=PENDING&page=0&size=20` | `partner:read` | Return the bounded shared eligibility-review queue. |
+| GET | `/api/v1/admin/partner-eligibility-reviews/{reviewId}` | `partner:read` | Return one review with current purpose-limited candidate evidence. |
+| POST | `/api/v1/admin/partner-eligibility-reviews/{reviewId}/decision` | `partner:manage` | Approve one exact current Partner Employee or reject the review with a controlled reason. |
 | POST | `/api/v1/staff/customers/search` | Staff with `customer:read` | Find one Customer by exact Customer number or protected identity match. |
 | GET | `/api/v1/staff/customers/{customerId}` | Staff with `customer:read` | Return one purpose-limited Customer intake projection. |
 | POST | `/api/v1/staff/customers` | Staff with `customer:intake:manage` | Atomically create a Customer and required identity-bearing profile. |
@@ -604,7 +607,57 @@ Safe response fields: `customerId`, `partnerCompanyId`, `partnerEmployeeId`, `cu
 
 Responses exclude salary, limit values, employee code, identity evidence, and raw matching evidence.
 
-### 3.18 Staff-assisted Customer and pre-application intake
+When verification requires authorized review, Partner persists or reuses one pending review for the Customer and Partner Company. `MATCHED_INACTIVE` remains a hard stop and does not create a review. A later automatic terminal match (`MATCHED_ACTIVE` or `MATCHED_INACTIVE`) supersedes an unresolved review before it can authorize conflicting evidence.
+
+### 3.18 Partner eligibility manual review
+
+The default shared queue is:
+
+```text
+GET /api/v1/admin/partner-eligibility-reviews?status=PENDING&page=0&size=20
+```
+
+`status` accepts `PENDING`, `APPROVED`, `REJECTED`, or `SUPERSEDED`; omission selects `PENDING`. `page` starts at zero and `size` is between 1 and 100. The response contains `page`, `size`, `totalElements`, `totalPages`, and ordered `items`. Each item contains `reviewId`, opaque `customerId`, Partner Company identity/code/name, `effectiveMonth`, trigger outcome, requested employee code, status, creation time, `reviewable`, and a controlled `nonReviewableReason` when applicable.
+
+The detail endpoint returns the same review identity plus `sourceImportBatchId`, decision outcome/reason, selected employee, reviewer user ID, review time, creation/update times, action availability, and current candidates. Candidate rows contain only `partnerEmployeeId`, `importBatchId`, employee code, employment status, and active state. They exclude Customer identity evidence, salary, Salary Advance limit, and unrestricted notes.
+
+Approval body:
+
+```json
+{
+  "outcome": "APPROVE",
+  "partnerEmployeeId": "50000000-0000-4000-8000-000000000005",
+  "reasonCode": "CURRENT_EMPLOYEE_CONFIRMED"
+}
+```
+
+Rejection body:
+
+```json
+{
+  "outcome": "REJECT",
+  "partnerEmployeeId": null,
+  "reasonCode": "NO_ELIGIBLE_CURRENT_EMPLOYEE"
+}
+```
+
+Rejection also accepts `IDENTITY_EVIDENCE_MISMATCH` and `INSUFFICIENT_SOURCE_EVIDENCE`. Approval requires one exact Partner Employee and `CURRENT_EMPLOYEE_CONFIRMED`; rejection must not select an employee.
+
+Before approval, Partner revalidates the active Partner Company, current UTC effective month, authoritative latest `COMPLETED` batch, current usable Customer identity evidence, selected employee ownership and batch, active row and employment state, and identity match. Success atomically creates or refreshes the reusable `VERIFIED` link with `MANUAL_REVIEW_APPROVED`, resolves the review, and records PII-safe audit evidence. Rejection records `MANUAL_REVIEW_REJECTED` and does not create or refresh a link. Neither outcome creates a LoanApplication, Salary Advance limit, reservation, or Loan-owned verification snapshot.
+
+An exact terminal replay returns the recorded projection without another link or audit effect. A different decision after terminal resolution returns `409 PARTNER_ELIGIBILITY_REVIEW_ALREADY_RESOLVED`. Competing decisions serialize so one terminal outcome wins. The client reconciles an unknown command result through the detail GET and does not retry the decision optimistically.
+
+Important errors:
+
+| Status | Code | Condition |
+|---|---|---|
+| `400` | `VALIDATION_FAILED` | Invalid status/page input, unknown fields, missing outcome/reason, or an invalid outcome/reason/employee combination. |
+| `403` | `FORBIDDEN` | The caller lacks exact `partner:read` for reads or `partner:manage` for decision. |
+| `404` | `PARTNER_ELIGIBILITY_REVIEW_NOT_FOUND`, `PARTNER_COMPANY_NOT_FOUND`, or `CUSTOMER_NOT_FOUND` | Required authoritative state does not exist. |
+| `409` | `PARTNER_ELIGIBILITY_REVIEW_ALREADY_RESOLVED`, `PARTNER_ELIGIBILITY_REVIEW_STALE`, or `CUSTOMER_NOT_ACTIVE` | The review is terminal, prior-month/replaced-batch stale, or the Customer is inactive. |
+| `422` | `PARTNER_COMPANY_INACTIVE`, `PARTNER_EMPLOYEE_INACTIVE`, `PARTNER_ELIGIBILITY_EMPLOYEE_INVALID`, or `PROFILE_INCOMPLETE` | Current evidence cannot authorize the requested outcome. |
+
+### 3.19 Staff-assisted Customer and pre-application intake
 
 Every endpoint in this section authenticates a Staff User with no Customer context. Customer is the selected business subject; Staff never calls a `/customers/me` capability or authenticates as that Customer.
 

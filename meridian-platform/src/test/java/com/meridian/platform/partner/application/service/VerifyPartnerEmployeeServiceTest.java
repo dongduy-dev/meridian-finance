@@ -7,6 +7,7 @@ import com.meridian.platform.partner.application.port.out.CustomerIdentityEviden
 import com.meridian.platform.partner.application.port.out.CustomerIdentityEvidenceSnapshot;
 import com.meridian.platform.partner.application.port.out.CustomerPartnerEmployeeLinkRepository;
 import com.meridian.platform.partner.application.port.out.PartnerCompanyRepository;
+import com.meridian.platform.partner.application.port.out.PartnerEligibilityReviewRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportBatchRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeRepository;
 import com.meridian.platform.partner.domain.model.CustomerPartnerEmployeeLink;
@@ -14,6 +15,8 @@ import com.meridian.platform.partner.domain.model.CustomerPartnerEmployeeLinkSta
 import com.meridian.platform.partner.domain.model.EmployeeVerificationOutcome;
 import com.meridian.platform.partner.domain.model.PartnerCompany;
 import com.meridian.platform.partner.domain.model.PartnerCompanyStatus;
+import com.meridian.platform.partner.domain.model.PartnerEligibilityReview;
+import com.meridian.platform.partner.domain.model.PartnerEligibilityReviewStatus;
 import com.meridian.platform.partner.domain.model.PartnerEmployee;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatch;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatchStatus;
@@ -60,6 +63,7 @@ class VerifyPartnerEmployeeServiceTest {
     private FakePartnerEmployeeImportBatchRepository importBatchRepository;
     private FakePartnerEmployeeRepository partnerEmployeeRepository;
     private FakeCustomerPartnerEmployeeLinkRepository linkRepository;
+    private FakePartnerEligibilityReviewRepository reviewRepository;
     private FakeCustomerIdentityEvidencePort customerIdentityEvidencePort;
     private VerifyPartnerEmployeeService service;
 
@@ -69,12 +73,14 @@ class VerifyPartnerEmployeeServiceTest {
         importBatchRepository = new FakePartnerEmployeeImportBatchRepository(importBatchId, partnerCompanyId);
         partnerEmployeeRepository = new FakePartnerEmployeeRepository();
         linkRepository = new FakeCustomerPartnerEmployeeLinkRepository();
+        reviewRepository = new FakePartnerEligibilityReviewRepository();
         customerIdentityEvidencePort = new FakeCustomerIdentityEvidencePort(identityEvidence(true, true, "IDREF-MER-001"));
         service = new VerifyPartnerEmployeeService(
                 partnerCompanyRepository,
                 importBatchRepository,
                 partnerEmployeeRepository,
                 linkRepository,
+                reviewRepository,
                 customerIdentityEvidencePort,
                 new PartnerEmployeeVerificationMapper(),
                 new FixedCurrentUserProvider(customerId),
@@ -201,6 +207,64 @@ class VerifyPartnerEmployeeServiceTest {
         assertNull(result.partnerEmployeeId());
         assertNull(result.customerPartnerEmployeeLinkId());
         assertNull(linkRepository.savedLink);
+        assertNotNull(reviewRepository.review);
+        assertEquals(PartnerEligibilityReviewStatus.PENDING, reviewRepository.review.status());
+        assertNull(reviewRepository.review.sourceImportBatchId());
+
+        UUID firstReviewId = reviewRepository.review.id();
+        service.verifyPartnerEmployee(
+                partnerCompanyId,
+                new PartnerEmployeeVerificationRequest("MER-EMP-001")
+        );
+        assertEquals(firstReviewId, reviewRepository.review.id());
+    }
+
+    @Test
+    void laterAutomaticMatchSupersedesPendingReview() {
+        importBatchRepository.latestCompletedBatch = Optional.empty();
+        service.verifyPartnerEmployee(
+                partnerCompanyId,
+                new PartnerEmployeeVerificationRequest("MER-EMP-001")
+        );
+        assertEquals(PartnerEligibilityReviewStatus.PENDING, reviewRepository.review.status());
+
+        importBatchRepository.latestCompletedBatch = Optional.of(new PartnerEmployeeImportBatch(
+                importBatchId, partnerCompanyId, "2026-06",
+                PartnerEmployeeImportBatchStatus.COMPLETED, 1, 0
+        ));
+        partnerEmployeeRepository.employees.add(activeEmployee());
+        PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
+                partnerCompanyId,
+                new PartnerEmployeeVerificationRequest("MER-EMP-001")
+        );
+
+        assertEquals("MATCHED_ACTIVE", result.outcome());
+        assertEquals(PartnerEligibilityReviewStatus.SUPERSEDED, reviewRepository.review.status());
+        assertNotNull(linkRepository.savedLink);
+    }
+
+    @Test
+    void laterInactiveMatchSupersedesPendingReviewWithoutCreatingLink() {
+        importBatchRepository.latestCompletedBatch = Optional.empty();
+        service.verifyPartnerEmployee(
+                partnerCompanyId,
+                new PartnerEmployeeVerificationRequest("MER-EMP-001")
+        );
+        assertEquals(PartnerEligibilityReviewStatus.PENDING, reviewRepository.review.status());
+
+        importBatchRepository.latestCompletedBatch = Optional.of(new PartnerEmployeeImportBatch(
+                importBatchId, partnerCompanyId, "2026-06",
+                PartnerEmployeeImportBatchStatus.COMPLETED, 1, 0
+        ));
+        partnerEmployeeRepository.employees.add(inactiveEmployee());
+        PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
+                partnerCompanyId,
+                new PartnerEmployeeVerificationRequest("MER-EMP-001")
+        );
+
+        assertEquals("MATCHED_INACTIVE", result.outcome());
+        assertEquals(PartnerEligibilityReviewStatus.SUPERSEDED, reviewRepository.review.status());
+        assertNull(linkRepository.savedLink);
     }
 
     @Test
@@ -217,6 +281,7 @@ class VerifyPartnerEmployeeServiceTest {
         assertEquals(partnerEmployeeId, result.partnerEmployeeId());
         assertNull(result.customerPartnerEmployeeLinkId());
         assertNull(linkRepository.savedLink);
+        assertNull(reviewRepository.review);
     }
 
     @Test
@@ -468,6 +533,48 @@ class VerifyPartnerEmployeeServiceTest {
             savedLink = customerPartnerEmployeeLink;
             currentLink = Optional.of(customerPartnerEmployeeLink);
             return customerPartnerEmployeeLink;
+        }
+    }
+
+    private static class FakePartnerEligibilityReviewRepository implements PartnerEligibilityReviewRepository {
+        private PartnerEligibilityReview review;
+
+        @Override
+        public void acquireCustomerPartnerLock(UUID customerId, UUID partnerCompanyId) {
+        }
+
+        @Override
+        public Optional<PartnerEligibilityReview> findById(UUID reviewId) {
+            return Optional.ofNullable(review).filter(value -> value.id().equals(reviewId));
+        }
+
+        @Override
+        public Optional<PartnerEligibilityReview> findByIdForUpdate(UUID reviewId) {
+            return findById(reviewId);
+        }
+
+        @Override
+        public Optional<PartnerEligibilityReview> findPendingByCustomerIdAndPartnerCompanyId(
+                UUID customerId,
+                UUID partnerCompanyId
+        ) {
+            return Optional.ofNullable(review)
+                    .filter(PartnerEligibilityReview::isPending)
+                    .filter(value -> value.customerId().equals(customerId))
+                    .filter(value -> value.partnerCompanyId().equals(partnerCompanyId));
+        }
+
+        @Override
+        public Page findPage(PartnerEligibilityReviewStatus status, int page, int size) {
+            List<PartnerEligibilityReview> values = Optional.ofNullable(review)
+                    .filter(value -> value.status() == status).stream().toList();
+            return new Page(page, size, values.size(), values.isEmpty() ? 0 : 1, values);
+        }
+
+        @Override
+        public PartnerEligibilityReview save(PartnerEligibilityReview review) {
+            this.review = review;
+            return review;
         }
     }
 }

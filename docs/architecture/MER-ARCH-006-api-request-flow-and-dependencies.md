@@ -285,6 +285,41 @@ Runtime rules:
 4. An inactive Partner Company or Partner Employee is a hard stop. Re-verification may restore eligibility only by refreshing the link to matching active evidence in the authoritative batch.
 5. The response may expose identifiers, outcome, link status, and whether manual review is required. It must not expose raw identity evidence, employee code, salary, Salary Advance limit, or matching evidence.
 
+### 6.1 Partner Eligibility Manual Review
+
+Customer verification and Back-Office decisions serialize on the same Customer–Partner Company boundary. Missing or ambiguous evidence creates or reuses one Partner-owned `PENDING` review. A changed source batch supersedes the obsolete pending review when fresh Customer verification creates a replacement; a successful automatic match supersedes it without requiring a hidden mutation from a read request.
+
+```mermaid
+flowchart LR
+    Customer["Authenticated Customer verification"]
+    Review["Partner eligibility review"]
+    Queue["Back-Office shared queue"]
+    Reviewer["Authorized Staff reviewer"]
+    Evidence["Current Customer identity and Partner source evidence"]
+    Link["Reusable Customer–Partner Employee link"]
+    Audit["PII-safe business audit"]
+
+    Customer --> Review --> Queue --> Reviewer
+    Reviewer --> Evidence
+    Evidence -->|Approve exact active employee| Link
+    Evidence -->|Reject| Review
+    Link --> Audit
+    Review --> Audit
+```
+
+Queue and detail reads require exact `partner:read`; the decision command requires exact `partner:manage`. The queue has no persisted assignment, claim, or reassignment state. Detail responses expose employee code and active employment facts needed for this restricted purpose, but exclude Customer identity references, salary, Salary Advance limit, and unrestricted notes.
+
+The decision transaction follows this order:
+
+1. locate the review, acquire the Customer–Partner serialization boundary, and lock the review row;
+2. return an exact persisted terminal replay or reject a different decision after resolution;
+3. lock and revalidate the Partner Company, effective UTC month, and authoritative latest `COMPLETED` import batch;
+4. for approval, obtain current usable Customer identity evidence and validate the selected active Partner Employee against the authoritative batch and identity;
+5. create or refresh the reusable `VERIFIED` link with `MANUAL_REVIEW_APPROVED`, or record `MANUAL_REVIEW_REJECTED` without a link mutation;
+6. persist the controlled reason, reviewer, decision time, selected employee/source evidence when approved, and PII-safe audit outcome in the same transaction.
+
+A prior-month review or a review bound to a replaced authoritative batch returns a stable stale-review conflict and requires fresh Customer verification. Import completion does not proactively refresh Customer links or reviews; that reconciliation remains a separate Partner capability.
+
 ---
 
 ## 7. Product Origination and Salary Advance Readiness

@@ -107,13 +107,15 @@ Audit records may contain only PII-safe identifiers, statuses, reason codes, and
 | Aspect | Detail |
 |---|---|
 | **Responsibilities** | Partner Company lifecycle, Partner Employee source data, monthly employee imports, import validation, employment matching, authorized manual-review outcomes, and reusable Customer–Partner Employee relationships used for Salary Advance eligibility. |
-| **Owns** | `PartnerCompany`, `PartnerEmployee`, employee import batches and row outcomes, reusable `CustomerPartnerEmployeeLink`, employment-verification evidence, and Partner-owned eligibility facts. |
-| **Public Capabilities** | Manage Partner Companies; import and validate employee data; verify Customer employment; query or refresh an active verified employee link; provide purpose-limited eligibility facts to Loan. |
+| **Owns** | `PartnerCompany`, `PartnerEmployee`, employee import batches and row outcomes, Partner eligibility reviews and decisions, reusable `CustomerPartnerEmployeeLink`, employment-verification evidence, and Partner-owned eligibility facts. |
+| **Public Capabilities** | Manage Partner Companies; import and validate employee data; verify Customer employment; queue and decide Partner eligibility reviews; query or refresh an active verified employee link; provide purpose-limited eligibility facts to Loan. |
 | **Publishes** | Representative events include Partner Company activated or suspended, employee import completed, Customer employee link verified, refreshed, suspended, rejected, or expired. |
 | **Consumes** | Purpose-limited Customer identity evidence and authenticated actor information. |
 | **Must Not Own** | Salary Advance limit state, `LoanApplication` verification snapshots, lending exposure, `LoanAccount` state, approved offers, or repayment servicing. |
 
 Partner owns the reusable Customer-to-Partner Employee relationship because it answers whether a Customer is verified as an employee of a Partner Company.
+
+Partner also owns unresolved employment matches and their authorized manual-review outcomes. The review record remains separate from the reusable link and from LoanApplication verification. An approved review may create or refresh the link; it does not create Loan state or lending exposure.
 
 Loan may reference that relationship by identifier and consume eligibility facts through application-level contracts. Loan must not own or duplicate Partner Employee source records.
 

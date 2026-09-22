@@ -535,7 +535,13 @@ Employee-verification outcomes:
 | `MANUAL_REVIEW_APPROVED` | `VERIFIED` | Create or refresh the link and audit the reason and reviewer |
 | `MANUAL_REVIEW_REJECTED` | `FAILED` | Customer cannot proceed until source information is corrected |
 
-Manual review requires a controlled reason and identifies the supporting evidence. It cannot override an inactive Partner Company or inactive Partner Employee.
+Partner creates one unresolved eligibility review for each Customer and Partner Company when current-month verification returns `NOT_FOUND`, `MULTIPLE_MATCHES`, lacks usable current-month source evidence, or cannot safely replace a reusable verified link with different evidence. `MATCHED_INACTIVE` remains a hard stop and does not create a manually approvable review. Repeated verification reuses the unresolved review while its month and source authority remain unchanged. A later automatic terminal match (`MATCHED_ACTIVE` or `MATCHED_INACTIVE`) supersedes the unresolved review before it can authorize conflicting evidence.
+
+The unresolved reviews form one shared Back-Office queue. `partner:read` permits queue and detail inspection; `partner:manage` permits a Staff actor to approve or reject. The workflow has no persisted assignment or claim. Customer verification is the maker action and the authorized Back-Office decision is the checker action; Meridian does not require the reviewer to differ from a Partner Employee importer.
+
+Approval requires the reviewer to select one exact Partner Employee and use `CURRENT_EMPLOYEE_CONFIRMED`. Partner revalidates the active Partner Company, current UTC effective month, latest authoritative `COMPLETED` batch, active employment, usable Customer identity evidence, and the selected employee's identity match. Approval atomically creates or refreshes the reusable `VERIFIED` link with `MANUAL_REVIEW_APPROVED`, records the reviewer, reason, selected employee, source batch, and time, and appends PII-safe audit evidence. It does not create a LoanApplication, Salary Advance limit, exposure reservation, or Loan-owned verification snapshot.
+
+Rejection uses `NO_ELIGIBLE_CURRENT_EMPLOYEE`, `IDENTITY_EVIDENCE_MISMATCH`, or `INSUFFICIENT_SOURCE_EVIDENCE`. It records `MANUAL_REVIEW_REJECTED`, the reviewer, reason, and time without creating or refreshing a verified link. A prior-month review cannot be approved. A review bound to a batch that is no longer authoritative is stale and requires fresh Customer verification. Competing decisions permit one terminal outcome; exact replay of that outcome returns the recorded result, while a different later decision conflicts.
 
 #### Limit Calculation and Exposure
 
