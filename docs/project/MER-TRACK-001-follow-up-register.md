@@ -1020,15 +1020,28 @@ Type: Lending workflow contract
 
 Priority: P1
 
-Status: Open
+Status: Partially complete
 
-Blocking: Requires approved evidence and authority rules for Staff acting on Customer-provided paper instructions.
+Blocking: Residual correction/resubmission, cancellation, and generic checklist-mutation rules remain undecided.
 
 Problem:
-A `STAFF_ASSISTED` UCL can enter ordinary verification and review, but Customer-owned correction completion/resubmission, cancellation, offer response, contract acknowledgment, and direct Customer checklist mutation fail closed. A Customer without a Customer Web login therefore has no authorized downstream action path yet.
+A `STAFF_ASSISTED` UCL or Collateral Loan can enter ordinary verification and review. Evidenced Staff-mediated approved-offer response and exact contract acknowledgment are executable with actor/subject separation and immutable signed-form evidence. Customer-owned correction completion/resubmission, cancellation, and direct Customer checklist mutation still fail closed. A Customer without a Customer Web login therefore still lacks those residual downstream action paths.
 
 Recommendation:
-Define purpose-specific Staff-mediated commands with explicit paper evidence, actor/subject separation, exact permissions, audit rules, idempotency or reconciliation behavior, and Customer-visible consequences. Do not impersonate the Customer or reopen the existing Customer-owned endpoints to Staff.
+Retain the delivered purpose-specific offer-response and contract-acknowledgment commands. Define the residual Staff-mediated correction/resubmission, cancellation, and any required checklist mutation with explicit paper evidence, actor/subject separation, exact permissions, audit rules, idempotency or reconciliation behavior, and Customer-visible consequences. Do not impersonate the Customer or reopen the existing Customer-owned endpoints to Staff.
+
+Partial completion:
+
+- Loan Officer can record an evidenced Customer `ACCEPT` or `DECLINE` for the exact pending offer of a Staff-assisted UCL or Collateral application.
+- Accounting Officer can record an evidenced Customer acknowledgment for the exact current prepared contract version.
+- Document owns immutable signed-form versions; Loan stores the exact consumed version ID with Customer subject and Staff actor attribution.
+- Customer-digital endpoints and `CUSTOMER_DIRECT_ACTION_NOT_ALLOWED` protection remain unchanged.
+
+Residual scope:
+
+- Staff-mediated Customer correction completion and resubmission;
+- Staff-mediated Customer cancellation;
+- any approved Staff-mediated Customer checklist mutation beyond the existing initial assisted upload and Staff correction contracts.
 
 Suggested future branch name:
 `feature/paper-assisted-downstream-actions`

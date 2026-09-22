@@ -154,9 +154,9 @@ The same backend value must use the same label within Internal Web unless a clea
 
 | Actor | Current operational responsibility | Representative executable permissions |
 |---|---|---|
-| Loan Officer | Staff-assisted intake and initial UCL checklist upload, UCL and Collateral verification, LoanApplication review, recommendation, document review, and authorized correction initiation | `loan:originate:staff`, `document:upload:assisted`, `loan:read`, `loan:review`, `approval:recommend`, `document:review`, `loan:correction:staff`; waiver additionally requires `document:waive` |
+| Loan Officer | Staff-assisted intake and initial checklist upload, evidenced Customer offer-response recording, UCL and Collateral verification, LoanApplication review, recommendation, document review, and authorized correction initiation | `loan:originate:staff`, `document:upload:assisted`, `document:upload:assisted-action`, `loan:offer:respond:staff`, `loan:read`, `loan:review`, `approval:recommend`, `document:review`, `loan:correction:staff`; waiver additionally requires `document:waive` |
 | Approver | Independent decision and payment-backed Administrative Full-Balance Settlement | `loan:read`, `approval:decide`, `document:read`, `audit:read`, `loan:settlement:approve`; settlement also requires the Approver role |
-| Accounting Officer | Contract preparation/readiness, destination reveal, manual disbursement, repayment, and administrative closure | `loan:read`, `loan:contract:prepare`, `loan:contract:read`, `loan:disbursement:prepare`, `loan:disburse`, `repayment:update`, `loan:account:close`; closure also requires the Accounting Officer role |
+| Accounting Officer | Contract preparation/readiness, evidenced Customer contract-acknowledgment recording, destination reveal, manual disbursement, repayment, and administrative closure | `loan:read`, `loan:contract:prepare`, `loan:contract:read`, `loan:contract:acknowledge:staff`, `document:upload:assisted-action`, `loan:disbursement:prepare`, `loan:disburse`, `repayment:update`, `loan:account:close`; acknowledgment and closure also require the Accounting Officer role |
 | Back-Office Admin | Back-Office Administration outside this blueprint; currently also holds the narrow Staff document-upload permission | `loan:product:manage`, `partner:read`, `partner:manage`, `identity:user:manage`, `admin:config`, `audit:read`, `document:upload:staff` |
 
 The permission sets above describe the current seeded roles; they are not a frontend role template. Identity supports composable role assignments, and authentication returns sets of roles and permissions. Staff Web therefore gates capabilities from permission and user-type facts, then lets the backend enforce both permission and any stricter business-role rule.
@@ -169,6 +169,7 @@ The permission sets above describe the current seeded roles; they are not a fron
 - Query functions must not run for a capability the session lacks. The application must not preload hidden administrative or sensitive case data.
 - A `403` after an action was shown is handled as current authority truth: keep the case context, remove or disable the action after session refresh, and explain that authorization changed or the role rule was not satisfied.
 - Staff Web must not infer a role from a permission when the command also enforces an explicit role. Settlement and closure are the current examples.
+- Evidenced assisted offer response requires both `loan:offer:respond:staff` and the Loan Officer role; evidenced assisted contract acknowledgment requires both `loan:contract:acknowledge:staff` and the Accounting Officer role.
 - Permission-denied and maker-checker-denied are different operator explanations even when both use HTTP `403`.
 
 ### 6.3 Maker-Checker Presentation
@@ -199,6 +200,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 | Intake evidence metadata | `GET /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence` | Staff `document:upload:intake` plus valid Loan intake authority | Controlled logical evidence and immutable version metadata; no storage keys or content |
 | Staff application discovery | `GET /api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20` | Staff `loan:read` | Cross-product safe facts, exact filters, deterministic page envelope |
 | Staff case foundation | `GET /api/v1/staff/loan-applications/{loanApplicationId}` | Staff `loan:read` | Safe header, purpose-limited Customer readiness, and ordered lifecycle transitions only |
+| Assisted offer-response case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/offer-response` | Staff `loan:offer:respond:staff` plus Loan Officer role | Eligible Staff-assisted UCL or Collateral safe header, exact current offer, expiry/action state, and current signed-evidence metadata |
 | Staff document evidence | `GET /api/v1/staff/loan-applications/{loanApplicationId}/documents` | `document:review` | Checklist/readiness, exact current version, immutable version history, and safe review history |
 | Staff correction case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/corrections` | `loan:correction:staff` | Latest request, mixed task composition, proof, completion readiness, and current-actor maker-checker evidence |
 | Safe application status | `GET /api/v1/loan-applications/{loanApplicationId}` | Staff `loan:read` | Minimal durable summary; not a case projection |
@@ -208,7 +210,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 | Current contract | `GET /api/v1/loan-applications/{loanApplicationId}/contracts/current` | `loan:contract:read` | Known application only; masked destination |
 | Advisory readiness | `GET /api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness` | `loan:contract:read` | Point-in-time result; optional expected version |
 | Staff contract queue | `GET /api/v1/staff/contract-work?productCode={productCode}&page=0&size=25` | Staff `loan:contract:read` plus Accounting Officer role | Exact `CONTRACT_PENDING` membership, safe contract/readiness summary, product filter, and deterministic page envelope |
-| Staff contract case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/contract` | Staff `loan:contract:read` plus Accounting Officer role | `CONTRACT_PENDING` or `DISBURSEMENT_PENDING`; masked contract, canonical readiness, and backend-derived work stage |
+| Staff contract case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/contract` | Staff `loan:contract:read` plus Accounting Officer role | `CONTRACT_PENDING` or `DISBURSEMENT_PENDING`; origination channel, masked contract, canonical readiness, current assisted acknowledgment evidence, and backend-derived work stage |
 | LoanAccount detail | `GET /api/v1/loan-applications/{loanApplicationId}/loan-account` | `loan:read` | Known application only; safe terms, schedule, and servicing state |
 | Repayment history | `GET /api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read` | Known application only; immutable paged outcomes, no external references |
 
@@ -219,9 +221,10 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 | Assisted origination | Create/reopen/associate/abandon UCL or Collateral intake; create and maintain the selected Customer; manage masked bank accounts; upload or replace controlled paper intake evidence; explicitly request OCR, monitor safe status, finalize corrected structured suggestions beside the current evidence version, and copy finalized reviewed values into the existing unsaved forms; convert an eligible UCL or Collateral case into one Staff-assisted LoanApplication |
 | Verification | Start and complete UCL verification; start and complete exact numbered Collateral verification |
 | Review and approval | Start review; submit recommendation; submit independent decision |
+| Assisted offer response | Upload/replace exact signed Customer offer-response evidence and record the Customer's confirmed `ACCEPT` or `DECLINE` decision |
 | Documents | Review the exact current version; waive with added permission; request replacement; stream known content; upload an initial Staff-assisted UCL or Collateral checklist document with `document:upload:assisted`; upload for an open correction task with `document:upload:staff` |
 | Corrections | Complete an eligible Staff task and resubmit an eligible Staff-only or mixed correction |
-| Contract | Prepare or regenerate a contract; recompute advisory readiness; confirm readiness |
+| Contract | Prepare or regenerate a contract; for eligible Staff-assisted cases upload/replace exact signed Customer acknowledgment evidence and record acknowledgment; recompute advisory readiness; confirm readiness |
 | Disbursement | Reveal the exact ready-contract destination; confirm an externally completed transfer and activate the LoanAccount |
 | Servicing | Record repayment; apply exact payment-backed Administrative Full-Balance Settlement; administratively close an eligible settled account |
 
@@ -1048,6 +1051,14 @@ Approval may atomically create an immutable Customer offer. Staff Web must repor
 
 ---
 
+### 24.5 Evidenced Staff-Assisted Offer Response
+
+`/staff/applications/:loanApplicationId/offer-response` is a purpose-specific Loan Officer workspace gated by exact `loan:offer:respond:staff` authority and the Loan Officer role. The read runs only after the route guard succeeds and must return an eligible `STAFF_ASSISTED` UCL or Collateral application in `CUSTOMER_ACCEPTANCE_PENDING` with its exact pending offer and current safe evidence metadata. The ordinary application case remains read-only and links here only when its authoritative channel and status permit the operation.
+
+The workspace displays exact backend-owned offer terms and expiry, lets the operator choose the decision present on the signed form, and uploads or replaces `CUSTOMER_OFFER_RESPONSE` evidence using `document:upload:assisted-action`, `uploadRequestId`, and exact `expectedCurrentVersionId`. Recording stays disabled until the current evidence targets the displayed offer, declares the selected decision, and the operator confirms that the signed form records the Customer's exact decision. Staff Web does not present Staff as the decision subject.
+
+The Loan command uses one stable request UUID and stores only its non-sensitive semantic payload for unresolved-result recovery. A network or 5xx result never triggers an automatic POST retry. The workspace refetches authoritative state, retains the exact request identity and payload, and offers only an explicit exact replay. File bytes, filename, digest, signature, and form contents never enter browser persistence.
+
 ## 25. Contracts, Readiness, and Disbursement
 
 ### 25.1 Contract Workspace
@@ -1067,6 +1078,10 @@ The workspace presents:
 Version 1 preparation uses `expectedCurrentContractVersion = 0`. Regeneration requires the exact current version and supported `DISBURSEMENT_ACCOUNT_REFRESH` reason. The UI explains that regeneration preserves accepted financial terms, supersedes the prior operational version, refreshes the captured destination, and requires fresh Customer acknowledgment.
 
 Preparation uses a stable `preparationRequestId`. It must not accept browser-entered pricing, principal, term, schedule, product verification, Customer ID, or destination fields.
+
+For a Customer-digital `PREPARED` contract, the workspace continues to state that the Customer must acknowledge through the Customer channel and renders no Staff acknowledgment control. For an eligible Staff-assisted contract at `CUSTOMER_ACKNOWLEDGMENT_REQUIRED`, exact `loan:contract:acknowledge:staff`, `document:upload:assisted-action`, and the Accounting Officer role enable the evidenced workflow. The operator uploads or replaces `CUSTOMER_CONTRACT_ACKNOWLEDGMENT` evidence bound to the exact contract ID/version, reviews the current immutable version, and explicitly confirms that the Customer signed acknowledgment for that exact contract version.
+
+Recording uses one stable `acknowledgmentRequestId` and the exact evidence-document-version ID. Unknown network or 5xx outcomes use the existing explicit exact-replay discipline and never automatically repeat the POST. Successful acknowledgment refetches the workspace and expects `ACKNOWLEDGED` / readiness work. Contract regeneration invalidates prior action eligibility because evidence for a superseded version cannot match the new current version; the new version requires fresh signed evidence and acknowledgment. No file bytes, filename, hash, signature, or paper content enters browser persistence.
 
 ### 25.2 Readiness
 
@@ -1500,7 +1515,7 @@ Staff FE checkpoints deliver the Staff Web feature area inside `internal-web/`. 
 - atomically convert one eligible open UCL assisted-intake case into one application, checklist, pending verification, lifecycle evidence, case link, and PII-safe audit outcome;
 - expose completed-case reconciliation and navigate to the ordinary Staff application/document workspace;
 - permit only the initial Staff-assisted checklist upload under `document:upload:assisted`, while preserving separate intake and correction upload authorities;
-- block Customer-owned correction, cancellation, offer-response, contract-acknowledgment, and checklist-mutation commands for Staff-assisted applications until a Staff-mediated contract is delivered;
+- block Customer-owned correction, cancellation, offer-response, contract-acknowledgment, and checklist-mutation commands for Staff-assisted applications; offer response and contract acknowledgment now use separate evidenced Staff-mediated workspaces, while correction/resubmission, cancellation, and unsupported checklist mutation remain fail-closed;
 - reconcile conversion uncertainty through GET without automatic POST retry, and preserve exact document-upload replay only for the unchanged operation and file.
 
 This checkpoint is executable for UCL. Paper Origination CP3 extends the same controlled workflow to Collateral Loan conversion. The assisted-intake workspace also places explicit OCR extraction, active-only polling, controlled failure/manual fallback, and immutable Staff review/correction beside each current evidence version. Staff may explicitly copy finalized reviewed values into the existing unsaved Customer, bank-account, UCL, and Collateral forms. Replacing the source evidence removes untouched OCR-applied values, and persistence still requires the existing owning command.

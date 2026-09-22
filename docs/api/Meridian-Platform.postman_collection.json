@@ -882,9 +882,106 @@
                           "value":  "",
                           "type":  "string",
                           "description":  "Optional prepared OPEN case used by the Staff-assisted Collateral failure examples."
-                      }
+                      },
+                      {
+                          "key":  "assistedDownstreamLoanApplicationId",
+                          "value":  "",
+                          "type":  "string",
+                          "description":  "Prepared STAFF_ASSISTED UCL or Collateral application at the action required by the selected scenario."
+                      },
+                      {
+                          "key":  "assistedDownstreamWrongChannelApplicationId",
+                          "value":  "",
+                          "type":  "string",
+                          "description":  "Prepared CUSTOMER_DIGITAL application used to prove the Staff-assisted command fails closed."
+                      },
+                      {"key":"assistedOfferId","value":"","type":"string"},
+                      {"key":"assistedOfferEvidenceFile","value":"","type":"string","description":"Select a fictional signed Customer Offer Response PDF."},
+                      {"key":"assistedOfferUploadRequestId","value":"10000000-0000-4000-8000-000000000001","type":"string"},
+                      {"key":"assistedOfferEvidenceVersionId","value":"","type":"string"},
+                      {"key":"assistedOfferResponseRequestId","value":"10000000-0000-4000-8000-000000000002","type":"string"},
+                      {"key":"assistedOfferDeclineRequestId","value":"10000000-0000-4000-8000-000000000003","type":"string"},
+                      {"key":"assistedContractId","value":"","type":"string"},
+                      {"key":"assistedContractVersion","value":1,"type":"default"},
+                      {"key":"assistedContractEvidenceFile","value":"","type":"string","description":"Select a fictional signed Customer Contract Acknowledgment PDF."},
+                      {"key":"assistedContractEvidenceUploadRequestId","value":"10000000-0000-4000-8000-000000000004","type":"string"},
+                      {"key":"assistedContractEvidenceVersionId","value":"","type":"string"},
+                      {"key":"assistedContractAcknowledgmentRequestId","value":"10000000-0000-4000-8000-000000000005","type":"string"}
                  ],
     "item":  [
+                 {
+                     "name": "00 Evidenced Staff-Assisted Downstream Customer Decisions",
+                     "description": "Representative Staff-mediated offer-response and contract-acknowledgment contracts. The Customer remains the business subject; Loan Officer or Accounting Officer is the authenticated recording actor. Use only fictional signed-form files and prepared STAFF_ASSISTED UCL or Collateral fixtures.",
+                     "item": [
+                         {
+                             "name": "Read exact assisted offer-response case",
+                             "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.expect(json.originationChannel).to.eql(\"STAFF_ASSISTED\");","pm.collectionVariables.set(\"assistedOfferId\", json.approvedOffer.approvedOfferId);"]}}],
+                             "request": {"method":"GET","header":[],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/offer-response"},
+                             "response": []
+                         },
+                         {
+                             "name": "Upload signed Customer Offer Response evidence",
+                             "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.collectionVariables.set(\"assistedOfferEvidenceVersionId\", pm.response.json().documentVersionId);"]}}],
+                             "request": {"method":"POST","header":[],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"body":{"mode":"formdata","formdata":[{"key":"file","type":"file","src":"{{assistedOfferEvidenceFile}}"}]},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/assisted-action-evidence/CUSTOMER_OFFER_RESPONSE/versions?approvedOfferId={{assistedOfferId}}&declaredOfferDecision=ACCEPT&uploadRequestId={{assistedOfferUploadRequestId}}"},
+                             "response": []
+                         },
+                         {
+                             "name": "Record evidenced assisted ACCEPT",
+                             "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.expect(pm.response.json().status).to.eql(\"ACCEPTED\");"]}}],
+                             "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"body":{"mode":"raw","raw":"{\n  \"requestId\": \"{{assistedOfferResponseRequestId}}\",\n  \"expectedApprovedOfferId\": \"{{assistedOfferId}}\",\n  \"action\": \"ACCEPT\",\n  \"evidenceDocumentVersionId\": \"{{assistedOfferEvidenceVersionId}}\"\n}","options":{"raw":{"language":"json"}}},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/offer-response"},
+                             "response": []
+                         },
+                         {
+                             "name": "Replay assisted ACCEPT exactly",
+                             "description": "Uses the identical request identity and semantic payload. It must return the recorded outcome without another action record, transition, or audit effect.",
+                             "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"body":{"mode":"raw","raw":"{\n  \"requestId\": \"{{assistedOfferResponseRequestId}}\",\n  \"expectedApprovedOfferId\": \"{{assistedOfferId}}\",\n  \"action\": \"ACCEPT\",\n  \"evidenceDocumentVersionId\": \"{{assistedOfferEvidenceVersionId}}\"\n}","options":{"raw":{"language":"json"}}},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/offer-response"},
+                             "response": []
+                         },
+                         {
+                             "name": "Record evidenced assisted DECLINE on a fresh pending fixture",
+                             "description": "Set assistedDownstreamLoanApplicationId, assistedOfferId, and evidence to a separate pending fixture whose signed form declares DECLINE.",
+                             "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"body":{"mode":"raw","raw":"{\n  \"requestId\": \"{{assistedOfferDeclineRequestId}}\",\n  \"expectedApprovedOfferId\": \"{{assistedOfferId}}\",\n  \"action\": \"DECLINE\",\n  \"evidenceDocumentVersionId\": \"{{assistedOfferEvidenceVersionId}}\"\n}","options":{"raw":{"language":"json"}}},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/offer-response"},
+                             "response": []
+                         },
+                         {
+                             "name": "Upload exact contract acknowledgment evidence",
+                             "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.collectionVariables.set(\"assistedContractEvidenceVersionId\", pm.response.json().documentVersionId);"]}}],
+                             "request": {"method":"POST","header":[],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},"body":{"mode":"formdata","formdata":[{"key":"file","type":"file","src":"{{assistedContractEvidenceFile}}"}]},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/assisted-action-evidence/CUSTOMER_CONTRACT_ACKNOWLEDGMENT/versions?loanContractId={{assistedContractId}}&contractVersion={{assistedContractVersion}}&uploadRequestId={{assistedContractEvidenceUploadRequestId}}"},
+                             "response": []
+                         },
+                         {
+                             "name": "Record evidenced assisted contract acknowledgment",
+                             "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.expect(pm.response.json().status).to.eql(\"ACKNOWLEDGED\");"]}}],
+                             "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},"body":{"mode":"raw","raw":"{\n  \"acknowledgmentRequestId\": \"{{assistedContractAcknowledgmentRequestId}}\",\n  \"contractId\": \"{{assistedContractId}}\",\n  \"expectedContractVersion\": {{assistedContractVersion}},\n  \"evidenceDocumentVersionId\": \"{{assistedContractEvidenceVersionId}}\"\n}","options":{"raw":{"language":"json"}}},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/contract/acknowledgment"},
+                             "response": []
+                         },
+                         {
+                             "name": "Reject stale contract version",
+                             "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.expect(pm.response.json().errorCode).to.eql(\"CONTRACT_VERSION_STALE\");"]}}],
+                             "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},"body":{"mode":"raw","raw":"{\n  \"acknowledgmentRequestId\": \"{{$guid}}\",\n  \"contractId\": \"{{assistedContractId}}\",\n  \"expectedContractVersion\": 999,\n  \"evidenceDocumentVersionId\": \"{{assistedContractEvidenceVersionId}}\"\n}","options":{"raw":{"language":"json"}}},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/contract/acknowledgment"},
+                             "response": []
+                         },
+                         {
+                             "name": "Reject wrong Customer-digital channel",
+                             "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.expect(pm.response.json().errorCode).to.eql(\"ASSISTED_ACTION_NOT_ALLOWED\");"]}}],
+                             "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"body":{"mode":"raw","raw":"{\n  \"requestId\": \"{{$guid}}\",\n  \"expectedApprovedOfferId\": \"{{assistedOfferId}}\",\n  \"action\": \"ACCEPT\",\n  \"evidenceDocumentVersionId\": \"{{assistedOfferEvidenceVersionId}}\"\n}","options":{"raw":{"language":"json"}}},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamWrongChannelApplicationId}}/offer-response"},
+                             "response": []
+                         },
+                         {
+                             "name": "Reject missing Staff permission",
+                             "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 403\", () => pm.response.to.have.status(403));"]}}],
+                             "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"body":{"mode":"raw","raw":"{\n  \"requestId\": \"{{$guid}}\",\n  \"expectedApprovedOfferId\": \"{{assistedOfferId}}\",\n  \"action\": \"ACCEPT\",\n  \"evidenceDocumentVersionId\": \"{{assistedOfferEvidenceVersionId}}\"\n}","options":{"raw":{"language":"json"}}},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/offer-response"},
+                             "response": []
+                         },
+                         {
+                             "name": "Reject missing current evidence",
+                             "description": "Use a valid UUID that is not the current evidence version for the exact pending assisted offer.",
+                             "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409 or 422\", () => pm.expect([409,422]).to.include(pm.response.code));"]}}],
+                             "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"body":{"mode":"raw","raw":"{\n  \"requestId\": \"{{$guid}}\",\n  \"expectedApprovedOfferId\": \"{{assistedOfferId}}\",\n  \"action\": \"ACCEPT\",\n  \"evidenceDocumentVersionId\": \"00000000-0000-4000-8000-000000000099\"\n}","options":{"raw":{"language":"json"}}},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/offer-response"},
+                             "response": []
+                         }
+                     ]
+                 },
                  {
                      "name":  "00 Paper Origination CP2 - Manual UCL",
                      "description":  "Loan Officer scenario for Staff-assisted UCL: open an intake case, create and associate a Customer, upload immutable paper evidence, explicitly start and reconcile a safe OCR job, prove exact replay and stale-version rejection, atomically convert the case, reconcile the completed case through GET, and upload one initial application checklist document. OCR remains advisory and the scenario performs no Customer-owned downstream action.",

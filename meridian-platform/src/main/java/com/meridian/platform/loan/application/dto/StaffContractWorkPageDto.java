@@ -21,6 +21,7 @@ public record StaffContractWorkPageDto(
             String applicationNumber,
             String productCode,
             String productType,
+            String originationChannel,
             BigDecimal requestedAmount,
             int requestedTermMonths,
             String applicationStatus,
@@ -29,5 +30,15 @@ public record StaffContractWorkPageDto(
             ContractReadinessDto readiness,
             String workStage
     ) {
+        public ItemDto(
+                UUID loanApplicationId, String applicationNumber, String productCode, String productType,
+                BigDecimal requestedAmount, int requestedTermMonths, String applicationStatus,
+                LocalDateTime submittedAt, LoanContractDto currentContract, ContractReadinessDto readiness,
+                String workStage
+        ) {
+            this(loanApplicationId, applicationNumber, productCode, productType, "CUSTOMER_DIGITAL",
+                    requestedAmount, requestedTermMonths, applicationStatus, submittedAt,
+                    currentContract, readiness, workStage);
+        }
     }
 }

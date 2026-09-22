@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/features/auth/model/auth-context'
-import { hasPermission } from '@/features/auth/model/access-control'
+import { hasPermission, hasRole } from '@/features/auth/model/access-control'
 import { formatTimestamp, formatVnd } from '@/lib/format/presentation'
 import { uuidSchema } from '../api/contracts'
 import { staffApplicationCaseQuery } from '../api/queries'
@@ -140,6 +140,13 @@ export function ApplicationCasePage() {
         {state.status === 'authenticated' && hasPermission(state.actor, 'loan:review') ? <Link to={`/staff/applications/${loanApplicationId}/review`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Review</Link> : null}
         {state.status === 'authenticated' && hasPermission(state.actor, 'document:review') ? <Link to={`/staff/applications/${loanApplicationId}/documents`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Documents</Link> : null}
         {state.status === 'authenticated' && hasPermission(state.actor, 'loan:correction:staff') ? <Link to={`/staff/applications/${loanApplicationId}/corrections`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Corrections</Link> : null}
+        {data.originationChannel === 'STAFF_ASSISTED'
+          && data.status === 'CUSTOMER_ACCEPTANCE_PENDING'
+          && state.status === 'authenticated'
+          && hasPermission(state.actor, 'loan:offer:respond:staff')
+          && hasRole(state.actor, 'LOAN_OFFICER')
+          ? <Link to={`/staff/applications/${loanApplicationId}/offer-response`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Customer offer response</Link>
+          : null}
       </nav>
 
       <section id="overview" className="scroll-mt-4 space-y-4" aria-labelledby="overview-heading">

@@ -9,12 +9,24 @@ public record StaffContractCaseDto(
         String applicationNumber,
         String productCode,
         String productType,
+        String originationChannel,
         BigDecimal requestedAmount,
         int requestedTermMonths,
         String applicationStatus,
         LocalDateTime submittedAt,
         LoanContractDto currentContract,
         ContractReadinessDto readiness,
+        AssistedActionEvidenceMetadataDto assistedAcknowledgmentEvidence,
         String workStage
 ) {
+    public StaffContractCaseDto(
+            UUID loanApplicationId, String applicationNumber, String productCode, String productType,
+            BigDecimal requestedAmount, int requestedTermMonths, String applicationStatus,
+            LocalDateTime submittedAt, LoanContractDto currentContract, ContractReadinessDto readiness,
+            String workStage
+    ) {
+        this(loanApplicationId, applicationNumber, productCode, productType, "CUSTOMER_DIGITAL",
+                requestedAmount, requestedTermMonths, applicationStatus, submittedAt, currentContract,
+                readiness, null, workStage);
+    }
 }

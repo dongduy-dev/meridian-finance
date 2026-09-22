@@ -7,6 +7,7 @@ import { RouteErrorPage } from '@/routes/RouteErrorPage'
 import { RouteFocus } from '@/routes/RouteFocus'
 import {
   STAFF_APPLICATION_CASE_ROUTE,
+  STAFF_OFFER_RESPONSE_ROUTE,
   STAFF_APPLICATIONS_ROUTE,
   STAFF_ORIGINATION_ROUTE,
   STAFF_ORIGINATION_CASE_ROUTE,
@@ -44,6 +45,7 @@ const ApplicationSearchPage = lazy(() => import('@/features/staff-applications/p
 const AssistedOriginationListPage = lazy(() => import('@/features/staff-origination/pages/AssistedOriginationListPage').then((module) => ({ default: module.AssistedOriginationListPage })))
 const AssistedOriginationWorkspacePage = lazy(() => import('@/features/staff-origination/pages/AssistedOriginationWorkspacePage').then((module) => ({ default: module.AssistedOriginationWorkspacePage })))
 const ApplicationCasePage = lazy(() => import('@/features/staff-applications/pages/ApplicationCasePage').then((module) => ({ default: module.ApplicationCasePage })))
+const StaffOfferResponseWorkspacePage = lazy(() => import('@/features/staff-offer-response/pages/StaffOfferResponseWorkspacePage').then((module) => ({ default: module.StaffOfferResponseWorkspacePage })))
 const DocumentReviewQueuePage = lazy(() => import('@/features/staff-documents/pages/DocumentReviewQueuePage').then((module) => ({ default: module.DocumentReviewQueuePage })))
 const StaffDocumentWorkspacePage = lazy(() => import('@/features/staff-documents/pages/StaffDocumentWorkspacePage').then((module) => ({ default: module.StaffDocumentWorkspacePage })))
 const StaffCorrectionQueuePage = lazy(() => import('@/features/staff-corrections/pages/StaffCorrectionQueuePage').then((module) => ({ default: module.StaffCorrectionQueuePage })))
@@ -89,6 +91,9 @@ export const routes: RouteObject[] = [{ element: <RouteFrame />, errorElement: <
     ] },
     { element: <StaffCapabilityRoute route={STAFF_APPLICATION_CASE_ROUTE} />, children: [
       { path: STAFF_APPLICATION_CASE_ROUTE.path, element: <Deferred><ApplicationCasePage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_OFFER_RESPONSE_ROUTE} />, children: [
+      { path: STAFF_OFFER_RESPONSE_ROUTE.path, element: <Deferred><StaffOfferResponseWorkspacePage /></Deferred> },
     ] },
     { element: <StaffCapabilityRoute route={STAFF_DOCUMENT_QUEUE_ROUTE} />, children: [
       { path: STAFF_DOCUMENT_QUEUE_ROUTE.path, element: <Deferred><DocumentReviewQueuePage /></Deferred> },

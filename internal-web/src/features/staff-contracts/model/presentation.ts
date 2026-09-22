@@ -82,7 +82,9 @@ export function contractStatusLabel(value: string) {
   return statusLabels[value] ?? 'Status unavailable'
 }
 
-export function hasCoherentContractLifecycle(value: StaffContractCase) {
+export function hasCoherentContractLifecycle(
+  value: Pick<StaffContractCase, 'currentContract' | 'readiness' | 'applicationStatus' | 'workStage'>,
+) {
   const contract = value.currentContract
   const readiness = value.readiness
   const readinessIdentityMatches = contract

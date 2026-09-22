@@ -170,6 +170,9 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 403 | `DOCUMENT_WAIVER_DENIED` | Waiver permission required | Use a Loan Officer with separate `document:waive` authority |
 | 422 | `DOCUMENT_WAIVER_REASON_REQUIRED` | Controlled waiver reason required | Supply an approved waiver reason code |
 | 409 | `CORRECTION_TASK_PROOF_MISSING` | Correction proof missing | Upload the required new version before completing the task |
+| 403 | `ASSISTED_ACTION_EVIDENCE_ACCESS_DENIED` | Assisted-action evidence access denied | Use exact `document:upload:assisted-action` authority and the action-specific Staff role |
+| 422 | `ASSISTED_ACTION_EVIDENCE_REQUIRED` | Current signed assisted-action evidence required | Upload the signed form for the exact current offer or contract version |
+| 409 | `ASSISTED_ACTION_EVIDENCE_INVALID` | Assisted-action evidence does not match the business target | Refresh and use the current evidence version bound to the exact target and decision |
 
 ---
 
@@ -186,6 +189,9 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 409 | `CONTRACT_SUPERSESSION_REASON_REQUIRED` | Contract supersession reason required | Use the controlled reason `DISBURSEMENT_ACCOUNT_REFRESH` |
 | 409 | `CONTRACT_REGENERATION_NOT_ALLOWED` | Contract regeneration is not allowed | Do not regenerate a ready contract or a superseded version |
 | 409 | `CONTRACT_ACKNOWLEDGMENT_NOT_ALLOWED` | Contract acknowledgment is not allowed | Acknowledge only the current `PREPARED` contract version |
+| 403 | `ASSISTED_ACTION_ACCESS_DENIED` | Staff-assisted Customer action access denied | Use the exact purpose-specific Staff permission with a Staff-only principal |
+| 403 | `ASSISTED_ACTION_ROLE_REQUIRED` | Required Staff business role missing | Use a Loan Officer for offer response or Accounting Officer for contract acknowledgment |
+| 409 | `ASSISTED_ACTION_NOT_ALLOWED` | Staff-assisted Customer action not allowed | Use only an eligible `STAFF_ASSISTED` UCL or Collateral application in the required state |
 | 409 | `ACKNOWLEDGMENT_MISSING` | Current version has not been acknowledged | The Customer must acknowledge the exact current contract version |
 | 409 | `DOCUMENTS_NOT_PROCESSING_READY` | Documents are not processing-ready | Complete required document review before contract preparation or readiness confirmation |
 | 409 | `ACTIVE_CORRECTION_REQUEST` | Active correction blocks contract readiness | Complete and resubmit the active correction before confirming readiness |

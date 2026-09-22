@@ -4,6 +4,7 @@ import com.meridian.platform.loan.application.mapper.LoanContractMapper;
 import com.meridian.platform.loan.application.port.in.QueryContractReadinessUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanContractRepository;
+import com.meridian.platform.loan.application.port.out.LoanAssistedActionEvidencePort;
 import com.meridian.platform.loan.domain.model.ContractReadinessBlockerCode;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
@@ -44,6 +45,7 @@ class QueryStaffContractWorkServiceTest {
 
     @Mock LoanApplicationRepository applications;
     @Mock LoanContractRepository contracts;
+    @Mock LoanAssistedActionEvidencePort assistedActionEvidence;
     @Mock QueryContractReadinessUseCase readiness;
     @Mock CurrentUserProvider currentUserProvider;
 
@@ -54,6 +56,7 @@ class QueryStaffContractWorkServiceTest {
         service = new QueryStaffContractWorkService(
                 applications,
                 contracts,
+                assistedActionEvidence,
                 readiness,
                 new LoanContractMapper(),
                 currentUserProvider

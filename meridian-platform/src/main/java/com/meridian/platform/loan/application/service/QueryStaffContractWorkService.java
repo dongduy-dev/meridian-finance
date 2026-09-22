@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.dto.ContractReadinessDto;
+import com.meridian.platform.loan.application.dto.AssistedActionEvidenceMetadataDto;
 import com.meridian.platform.loan.application.dto.LoanContractDto;
 import com.meridian.platform.loan.application.dto.StaffContractCaseDto;
 import com.meridian.platform.loan.application.dto.StaffContractWorkPageDto;
@@ -9,6 +10,7 @@ import com.meridian.platform.loan.application.port.in.QueryContractReadinessUseC
 import com.meridian.platform.loan.application.port.in.QueryStaffContractWorkUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanContractRepository;
+import com.meridian.platform.loan.application.port.out.LoanAssistedActionEvidencePort;
 import com.meridian.platform.loan.domain.model.ContractReadinessBlockerCode;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
@@ -34,6 +36,7 @@ public class QueryStaffContractWorkService implements QueryStaffContractWorkUseC
 
     private final LoanApplicationRepository applications;
     private final LoanContractRepository contracts;
+    private final LoanAssistedActionEvidencePort assistedActionEvidence;
     private final QueryContractReadinessUseCase readiness;
     private final LoanContractMapper contractMapper;
     private final CurrentUserProvider currentUserProvider;
@@ -41,12 +44,14 @@ public class QueryStaffContractWorkService implements QueryStaffContractWorkUseC
     public QueryStaffContractWorkService(
             LoanApplicationRepository applications,
             LoanContractRepository contracts,
+            LoanAssistedActionEvidencePort assistedActionEvidence,
             QueryContractReadinessUseCase readiness,
             LoanContractMapper contractMapper,
             CurrentUserProvider currentUserProvider
     ) {
         this.applications = applications;
         this.contracts = contracts;
+        this.assistedActionEvidence = assistedActionEvidence;
         this.readiness = readiness;
         this.contractMapper = contractMapper;
         this.currentUserProvider = currentUserProvider;
@@ -86,18 +91,20 @@ public class QueryStaffContractWorkService implements QueryStaffContractWorkUseC
                     "Loan Application is not in a contract workspace state."
             );
         }
-        Projection projection = project(application);
+        Projection projection = project(application, true);
         return new StaffContractCaseDto(
                 application.id(),
                 application.applicationNumber(),
                 application.productCode().name(),
                 application.productType().name(),
+                application.originationChannel().name(),
                 application.requestedAmount(),
                 application.requestedTermMonths(),
                 application.status().name(),
                 application.submittedAt(),
                 projection.contract(),
                 projection.readiness(),
+                projection.assistedAcknowledgmentEvidence(),
                 projection.stage().name()
         );
     }
@@ -106,12 +113,13 @@ public class QueryStaffContractWorkService implements QueryStaffContractWorkUseC
         if (application.status() != LoanApplicationStatus.CONTRACT_PENDING) {
             throw systemConflict();
         }
-        Projection projection = project(application);
+        Projection projection = project(application, false);
         return new StaffContractWorkPageDto.ItemDto(
                 application.id(),
                 application.applicationNumber(),
                 application.productCode().name(),
                 application.productType().name(),
+                application.originationChannel().name(),
                 application.requestedAmount(),
                 application.requestedTermMonths(),
                 application.status().name(),
@@ -122,7 +130,7 @@ public class QueryStaffContractWorkService implements QueryStaffContractWorkUseC
         );
     }
 
-    private Projection project(LoanApplication application) {
+    private Projection project(LoanApplication application, boolean includeAssistedEvidence) {
         LoanContract current = contracts.findCurrentByApplicationId(application.id()).orElse(null);
         Integer expectedVersion = current == null ? null : current.contractVersion();
         QueryContractReadinessUseCase.Snapshot readinessSnapshot = readiness.query(
@@ -134,6 +142,9 @@ public class QueryStaffContractWorkService implements QueryStaffContractWorkUseC
         return new Projection(
                 current == null ? null : contractMapper.toDto(current),
                 contractMapper.toDto(readinessSnapshot),
+                current == null || !includeAssistedEvidence ? null : assistedActionEvidence.findContractEvidence(
+                                application.id(), current.id(), current.contractVersion())
+                        .map(QueryAssistedApprovedOfferResponseService::toDto).orElse(null),
                 stage
         );
     }
@@ -255,6 +266,7 @@ public class QueryStaffContractWorkService implements QueryStaffContractWorkUseC
     private record Projection(
             LoanContractDto contract,
             ContractReadinessDto readiness,
+            AssistedActionEvidenceMetadataDto assistedAcknowledgmentEvidence,
             WorkStage stage
     ) {
     }
