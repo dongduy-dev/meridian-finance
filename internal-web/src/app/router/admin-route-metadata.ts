@@ -31,6 +31,12 @@ export const ADMIN_PARTNER_DETAIL_ROUTE = {
   navigation: false,
 } as const satisfies AdminRouteDefinition
 
+export const ADMIN_PARTNER_ELIGIBILITY_REVIEWS_ROUTE = {
+  path: '/admin/partner-eligibility-reviews',
+  label: 'Eligibility reviews',
+  requiredPermissions: ['partner:read'],
+} as const satisfies AdminRouteDefinition
+
 export const ADMIN_PRODUCTS_ROUTE = {
   path: '/admin/products',
   label: 'Loan Products',
@@ -47,6 +53,7 @@ export const ADMIN_ROUTES = [
   ADMIN_HOME_ROUTE,
   ADMIN_PARTNERS_ROUTE,
   ADMIN_PARTNER_DETAIL_ROUTE,
+  ADMIN_PARTNER_ELIGIBILITY_REVIEWS_ROUTE,
   ADMIN_PRODUCTS_ROUTE,
   ADMIN_USERS_ROUTE,
 ] as const satisfies readonly AdminRouteDefinition[]

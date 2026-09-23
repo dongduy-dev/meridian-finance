@@ -195,15 +195,12 @@ Type: Deferred feature
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocking: No current blocker.
 
-Problem:
-Document review queues, immutable version decisions, waivers/replacements, and Customer/Staff/mixed correction workflows are implemented. A dedicated Partner eligibility manual-review queue and authoritative outcome workflow for ambiguous employee matching are not implemented.
-
-Recommendation:
-Keep this follow-up scoped to Partner eligibility. Define assignment, evidence, maker-checker, outcome, expiry/revalidation, audit, and concurrency rules before implementation; do not duplicate the implemented Document review/correction workflow.
+Resolution:
+Partner persists or reuses one unresolved review per Customer and Partner Company when Customer employee verification cannot establish a safe automatic match. Back-Office Staff with `partner:read` inspect the shared queue and purpose-limited current evidence; `partner:manage` authorizes controlled approval or rejection. Approval selects and revalidates one exact active Partner Employee from the authoritative current-month batch, creates or refreshes the reusable verified link with `MANUAL_REVIEW_APPROVED`, and records reviewer, reason, source evidence, and PII-safe audit in one transaction. Rejection records `MANUAL_REVIEW_REJECTED` without a link mutation. Customer verification and decisions share a serialization boundary, terminal exact replay is stable, conflicting decisions return a conflict, and prior-month or replaced-batch reviews fail closed. Automatic post-import link refresh and reconciliation remain separately tracked by MER-FU-028.
 
 ### MER-FU-010 - Implement review/approval/customer acceptance/disbursement lifecycle
 

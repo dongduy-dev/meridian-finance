@@ -59,6 +59,18 @@ public class PartnerEmployeeRepositoryAdapter implements PartnerEmployeeReposito
     }
 
     @Override
+    public List<PartnerEmployee> findByIdentityEvidence(
+            UUID partnerCompanyId,
+            UUID importBatchId,
+            String identityReference
+    ) {
+        return jpaPartnerEmployeeRepository
+                .findByPartnerCompanyIdAndImportBatchIdAndIdentityReferenceOrderByEmployeeCodeAsc(
+                        partnerCompanyId, importBatchId, identityReference
+                ).stream().map(this::toDomain).toList();
+    }
+
+    @Override
     public List<PartnerEmployee> saveAll(List<PartnerEmployee> partnerEmployees) {
         if (partnerEmployees.isEmpty()) return List.of();
         return jpaPartnerEmployeeRepository.saveAllAndFlush(

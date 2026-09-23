@@ -15,4 +15,9 @@ public interface JpaPartnerEmployeeRepository extends JpaRepository<PartnerEmplo
             String identityReference,
             String employeeCode
     );
+    List<PartnerEmployeeJpaEntity> findByPartnerCompanyIdAndImportBatchIdAndIdentityReferenceOrderByEmployeeCodeAsc(
+            UUID partnerCompanyId,
+            UUID importBatchId,
+            String identityReference
+    );
 }

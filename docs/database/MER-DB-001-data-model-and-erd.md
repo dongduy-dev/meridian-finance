@@ -14,7 +14,7 @@ The logical model covers:
 
 - Identity users and login-protection, email-verification, password-reset, and authorization-version state, roles, permissions, refresh-token sessions, access-token revocations, and the optional association from a login user to a Customer;
 - Customer profile, protected identity evidence, and Customer-owned bank accounts;
-- Partner Companies, employee imports, Partner Employees, and reusable Customer–Partner Employee links;
+- Partner Companies, employee imports, Partner Employees, Partner eligibility reviews, and reusable Customer–Partner Employee links;
 - the common LoanApplication lifecycle for Salary Advance, Unsecured Consumer Loan, and Collateral Loan;
 - product-specific application facts, verification, and Salary Advance exposure;
 - review, correction, recommendation, and approval evidence;
@@ -26,11 +26,11 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V62. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion and downstream evidenced actions, Document-owned OCR processing and Staff review, protected Partner, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
+The physical schema is the result of Flyway migrations V1 through V63. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion and downstream evidenced actions, Document-owned OCR processing and Staff review, protected Partner Company/import/eligibility-review, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
-The V62 physical schema contains OCR processing jobs, encrypted results, encrypted immutable Staff reviews, Document-owned assisted-action evidence, and the exact evidence reference consumed by Staff-assisted UCL cancellation. It does not contain application of reviewed OCR values to Customer or Loan, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
+The V63 physical schema also contains Partner-owned eligibility reviews with current-month/source evidence, controlled terminal decisions, reviewer evidence, and one-pending-review uniqueness per Customer and Partner Company. It does not contain automatic Customer-link refresh after Partner imports, application of reviewed OCR values to Customer or Loan, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
 
 The physical `event_publication` table is Spring Modulith infrastructure. It is omitted from the business ERD because it does not own lending state or redefine the synchronous transaction boundaries documented in `MER-ARCH-006-api-request-flow-and-dependencies.md`.
 
@@ -152,12 +152,14 @@ Customer owns the mutable source account. Loan does not share or copy Customer's
 
 ### 6.3 Partner
 
-Partner owns `partner_companies`, `partner_employee_import_batches`, `partner_employees`, and `customer_partner_employee_links`.
+Partner owns `partner_companies`, `partner_employee_import_batches`, `partner_employees`, `partner_eligibility_reviews`, and `customer_partner_employee_links`.
 
 - A Partner Company has ordered employee-import batches and Partner Employee source rows.
 - The authoritative employment source is tied to its company and import batch.
 - A command-created import batch may carry one unique request identity, a SHA-256 semantic fingerprint, and a PII-safe rejection summary. Historical batches remain valid without replay metadata.
 - More than one batch may exist for the same Partner Company and effective month; deterministic latest-completed selection remains the authority rule.
+- A Partner eligibility review preserves the Customer and Partner Company, effective UTC month, optional source batch, trigger, requested employee code, state, and terminal reviewer evidence. It does not copy Customer identity evidence or salary data.
+- Approved reviews preserve the exact selected Partner Employee and import batch. Rejected reviews preserve no selected employee. Superseded reviews carry no terminal decision evidence.
 - A Customer–Partner Employee link records a reusable verified relationship; it is not a loan application and does not represent lending exposure.
 - Partner salary, employee code, source identity evidence, employment state, and import-batch evidence remain Partner-owned.
 
@@ -285,6 +287,7 @@ Audit events preserve operation, actor, action, entity, time, and a controlled P
 - Customer protected identity evidence and bank-account fingerprints support duplicate detection without exposing plaintext through normal reads.
 - A primary Customer bank account must be active and owned by that Customer.
 - Partner Employee rows remain tied to their Partner Company and import batch.
+- A partial unique index permits one `PENDING` Partner eligibility review per Customer and Partner Company. Terminal-state constraints require the controlled outcome, reason, reviewer, time, and selected employee/source batch only for approval.
 - Reusable employment-link uniqueness and state prevent conflicting active relationships for the same authoritative source evidence.
 
 ### 8.2 Application and Product Evidence
@@ -352,7 +355,7 @@ Physical indexes belong in Flyway and the schema snapshot. The logical model req
 - refresh-token digest lookup, per-token locking, and family revocation;
 - email-verification digest lookup, per-token locking, and active-token replacement by User;
 - Customer profile, primary bank account, and product-readiness lookup;
-- Partner Company/import/employee lookup and current employment-link resolution;
+- Partner Company/import/employee lookup, pending eligibility-review queue order, and current employment-link resolution;
 - Customer/product application serialization and lifecycle queues;
 - authoritative product-verification and active review/correction lookup;
 - current document versions and bounded document/Staff correction queues;

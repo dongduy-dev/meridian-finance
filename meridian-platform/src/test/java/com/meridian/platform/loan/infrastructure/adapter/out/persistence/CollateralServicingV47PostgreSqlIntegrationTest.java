@@ -42,7 +42,7 @@ class CollateralServicingV47PostgreSqlIntegrationTest {
 
             migrate(schema, null);
 
-            assertEquals("62", latestVersion(schema));
+            assertEquals("63", latestVersion(schema));
             assertEquals(9, servicingTriggerCount(schema));
             assertExplicitProductSemantics(schema);
         } finally {
@@ -56,7 +56,7 @@ class CollateralServicingV47PostgreSqlIntegrationTest {
         try {
             migrate(schema, null);
 
-            assertEquals("62", latestVersion(schema));
+            assertEquals("63", latestVersion(schema));
             assertEquals(9, servicingTriggerCount(schema));
             assertExplicitProductSemantics(schema);
         } finally {

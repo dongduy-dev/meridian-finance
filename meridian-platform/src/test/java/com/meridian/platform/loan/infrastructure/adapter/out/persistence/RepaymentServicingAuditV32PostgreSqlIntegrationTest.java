@@ -207,7 +207,8 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
                     && action != BusinessAuditAction.OCR_JOB_CREATED
                     && action != BusinessAuditAction.OCR_RESULT_REVIEWED
-                    && !isStaffAssistedOriginationAction(action)) {
+                    && !isStaffAssistedOriginationAction(action)
+                    && !isPartnerEligibilityReviewAction(action)) {
                 insertAuditEvent(schema, action.name());
             }
         }
@@ -248,7 +249,8 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                     || action == BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
                     || action == BusinessAuditAction.OCR_JOB_CREATED
                     || action == BusinessAuditAction.OCR_RESULT_REVIEWED
-                    || isStaffAssistedOriginationAction(action)) {
+                    || isStaffAssistedOriginationAction(action)
+                    || isPartnerEligibilityReviewAction(action)) {
                 continue;
             }
             insertAuditEvent(schema, action.name());
@@ -282,6 +284,11 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                 || action == BusinessAuditAction.ASSISTED_ORIGINATION_CASE_COMPLETED
                 || action == BusinessAuditAction.INTAKE_DOCUMENT_VERSION_UPLOADED
                 || action == BusinessAuditAction.ASSISTED_ACTION_DOCUMENT_VERSION_UPLOADED;
+    }
+
+    private boolean isPartnerEligibilityReviewAction(BusinessAuditAction action) {
+        return action == BusinessAuditAction.PARTNER_ELIGIBILITY_REVIEW_APPROVED
+                || action == BusinessAuditAction.PARTNER_ELIGIBILITY_REVIEW_REJECTED;
     }
 
     private void executeV32(String schema) throws Exception {

@@ -148,10 +148,11 @@ Session restoration and refresh replace the actor's current permission set. A pe
 | `/admin` | Back-Office landing and capability-scoped entry | Back-Office FE-CP1 |
 | `/admin/partners` | Partner Company administration and discovery | Back-Office FE-CP2 |
 | `/admin/partners/:partnerCompanyId` | Company detail, employees, import history, and controlled administration | Back-Office FE-CP2 |
+| `/admin/partner-eligibility-reviews` | Shared Partner eligibility review queue, detail, and controlled decision | Back-Office FE-CP2 |
 | `/admin/products` | Loan Product administration | Back-Office FE-CP3 |
 | `/admin/users` | Internal-user administration and predefined role assignment | Back-Office FE-CP4 |
 
-`/admin`, `/admin/partners`, `/admin/partners/:partnerCompanyId`, `/admin/products`, and `/admin/users` are executable. Other unimplemented child paths return the normal safe not-found view. The client does not render placeholder pages, fake records, disabled forms, or speculative API contracts for deferred capabilities.
+`/admin`, `/admin/partners`, `/admin/partners/:partnerCompanyId`, `/admin/partner-eligibility-reviews`, `/admin/products`, and `/admin/users` are executable. Other unimplemented child paths return the normal safe not-found view. The client does not render placeholder pages, fake records, disabled forms, or speculative API contracts for deferred capabilities.
 
 ### 5.2 Deferred Routes
 
@@ -263,6 +264,7 @@ Back-Office FE-CP2 covers:
 - Partner Employee list;
 - employee import history;
 - Partner Employee import by effective month.
+- Partner eligibility pending-review queue, current candidate detail, and controlled approve/reject decisions.
 
 Partner owns company, employee, import-batch, employment, status, and freshness rules. The browser presents returned states and command outcomes. It does not calculate Salary Advance eligibility or select the latest valid `COMPLETED` batch for the current UTC effective month.
 
@@ -275,10 +277,16 @@ Partner owns company, employee, import-batch, employment, status, and freshness 
 | Backend fact | Import-batch states are `PENDING`, `PROCESSING`, `COMPLETED`, and `FAILED`; Partner owns batch authority and freshness. |
 | Backend fact | `partner:manage` protects Partner Company create, supported-fact update, status change, and effective-month employee import commands. |
 | Backend fact | Import is a synchronous structured JSON batch with partial row validation, durable `requestId` replay, and safe per-row rejection details. |
+| Backend fact | `partner:read` protects Partner eligibility queue/detail reads; `partner:manage` protects approve/reject decisions. |
+| Backend fact | Review states are `PENDING`, `APPROVED`, `REJECTED`, and `SUPERSEDED`; Partner owns current-month, source-batch, identity-match, and terminal-outcome authority. |
 
 The company list uses the existing deterministic backend order. The detail route loads the company, employee projection, and import history only after exact `partner:read` authorization. The employee projection displays employee code, identity reference, salary, Salary Advance limit, employment status, and active state because those facts are required for authorized source-data review. It uses a zero-retention Query cache after unmount, never places sensitive values in query keys, URLs, browser persistence, operation recovery, logs, or telemetry, and clears with the shared session boundary.
 
 Create, edit, status, and import controls appear only when the actor also has exact `partner:manage`. Consequential commands do not retry automatically. An unknown import result retains the exact `requestId` and unchanged payload in mounted page memory only and offers explicit exact replay. Confirmed import success refreshes employee and import-history reads. The browser does not label a batch authoritative or refresh Customer employment links.
+
+The eligibility-review route loads the bounded pending queue and selected detail only after exact `partner:read` authorization. It stores only review identifiers in TanStack Query keys. Candidate responses expose employee code and active employment facts for this review purpose, but exclude Customer identity evidence, salary, and Salary Advance limit. Query cache uses zero retention after unmount and clears with the shared session boundary.
+
+A read-only actor sees review evidence without decision controls. An actor who also holds exact `partner:manage` may select one backend-returned eligible employee for approval or choose a controlled rejection reason. The page disables unavailable actions from backend `approvalAvailable` and `rejectionAvailable` facts and displays stale/non-reviewable reasons. It applies no optimistic state. Confirmed decisions refetch queue and detail; an unknown result performs the authoritative detail GET before presenting another decision.
 
 ---
 
@@ -380,6 +388,8 @@ Each later checkpoint adds contract, query, command, error, responsive, and acce
 - employee import history;
 - controlled company management;
 - effective-month employee import after the required backend commands exist.
+- shared eligibility-review queue and detail;
+- controlled `partner:manage` approval or rejection with authoritative reconciliation.
 
 ### Back-Office FE-CP3 — Loan Product Administration
 

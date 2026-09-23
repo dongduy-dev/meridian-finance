@@ -4,6 +4,8 @@ import {
   partnerEmployeeSchema,
   partnerImportBatchSchema,
   partnerImportResultSchema,
+  partnerEligibilityReviewSchema,
+  partnerEligibilityReviewPageSchema,
   type CreatePartnerCompanyInput,
   type ImportPartnerEmployeesInput,
   type PartnerCompany,
@@ -11,6 +13,9 @@ import {
   type PartnerImportBatch,
   type PartnerImportResult,
   type UpdatePartnerCompanyInput,
+  type PartnerEligibilityReview,
+  type PartnerEligibilityReviewPage,
+  type PartnerEligibilityReviewDecision,
 } from './contracts'
 
 export async function getPartnerCompanies(manager: AuthSessionManager): Promise<PartnerCompany[]> {
@@ -51,4 +56,34 @@ export async function importPartnerEmployees(
     method: 'POST',
     body: { requestId, ...input },
   }))
+}
+
+export async function getPartnerEligibilityReviews(
+  manager: AuthSessionManager,
+  page = 0,
+  size = 20,
+): Promise<PartnerEligibilityReviewPage> {
+  return partnerEligibilityReviewPageSchema.parse(await manager.protectedRequest<unknown>(
+    `/admin/partner-eligibility-reviews?status=PENDING&page=${page}&size=${size}`,
+  ))
+}
+
+export async function getPartnerEligibilityReview(
+  manager: AuthSessionManager,
+  reviewId: string,
+): Promise<PartnerEligibilityReview> {
+  return partnerEligibilityReviewSchema.parse(await manager.protectedRequest<unknown>(
+    `/admin/partner-eligibility-reviews/${reviewId}`,
+  ))
+}
+
+export async function decidePartnerEligibilityReview(
+  manager: AuthSessionManager,
+  reviewId: string,
+  decision: PartnerEligibilityReviewDecision,
+): Promise<PartnerEligibilityReview> {
+  return partnerEligibilityReviewSchema.parse(await manager.protectedRequest<unknown>(
+    `/admin/partner-eligibility-reviews/${reviewId}/decision`,
+    { method: 'POST', body: decision },
+  ))
 }

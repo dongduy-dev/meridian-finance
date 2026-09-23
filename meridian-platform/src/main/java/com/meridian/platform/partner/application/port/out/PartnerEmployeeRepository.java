@@ -16,6 +16,13 @@ public interface PartnerEmployeeRepository {
             String identityReference,
             String employeeCode
     );
+    default List<PartnerEmployee> findByIdentityEvidence(
+            UUID partnerCompanyId,
+            UUID importBatchId,
+            String identityReference
+    ) {
+        return List.of();
+    }
     default List<PartnerEmployee> saveAll(List<PartnerEmployee> partnerEmployees) {
         throw new UnsupportedOperationException("Partner Employee save is not implemented.");
     }

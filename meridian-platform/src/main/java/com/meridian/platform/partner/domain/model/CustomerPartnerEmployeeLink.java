@@ -43,6 +43,26 @@ public record CustomerPartnerEmployeeLink(
         );
     }
 
+    public static CustomerPartnerEmployeeLink manuallyApproved(
+            UUID id,
+            UUID customerId,
+            PartnerEmployee partnerEmployee,
+            String verifiedIdentityRef,
+            LocalDateTime verifiedAt
+    ) {
+        Objects.requireNonNull(partnerEmployee, "partnerEmployee must not be null");
+        return new CustomerPartnerEmployeeLink(
+                Objects.requireNonNull(id, "id must not be null"),
+                Objects.requireNonNull(customerId, "customerId must not be null"),
+                partnerEmployee.partnerCompanyId(), partnerEmployee.id(), partnerEmployee.importBatchId(),
+                EmployeeVerificationOutcome.MANUAL_REVIEW_APPROVED,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED,
+                Objects.requireNonNull(verifiedIdentityRef, "verifiedIdentityRef must not be null"),
+                Objects.requireNonNull(partnerEmployee.employeeCode(), "employeeCode must not be null"),
+                Objects.requireNonNull(verifiedAt, "verifiedAt must not be null"), verifiedAt
+        );
+    }
+
     public CustomerPartnerEmployeeLink refreshVerifiedLink(
             PartnerEmployee partnerEmployee,
             String verifiedIdentityRef,
@@ -63,6 +83,22 @@ public record CustomerPartnerEmployeeLink(
                 Objects.requireNonNull(verifiedEmployeeCode, "verifiedEmployeeCode must not be null"),
                 Objects.requireNonNull(refreshedAt, "refreshedAt must not be null"),
                 refreshedAt
+        );
+    }
+
+    public CustomerPartnerEmployeeLink approveManualReview(
+            PartnerEmployee partnerEmployee,
+            String verifiedIdentityRef,
+            LocalDateTime reviewedAt
+    ) {
+        Objects.requireNonNull(partnerEmployee, "partnerEmployee must not be null");
+        return new CustomerPartnerEmployeeLink(
+                id, customerId, partnerEmployee.partnerCompanyId(), partnerEmployee.id(),
+                partnerEmployee.importBatchId(), EmployeeVerificationOutcome.MANUAL_REVIEW_APPROVED,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED,
+                Objects.requireNonNull(verifiedIdentityRef, "verifiedIdentityRef must not be null"),
+                Objects.requireNonNull(partnerEmployee.employeeCode(), "employeeCode must not be null"),
+                Objects.requireNonNull(reviewedAt, "reviewedAt must not be null"), reviewedAt
         );
     }
 
