@@ -71,7 +71,7 @@ function VerifyEmailContent({ locationKey }: { locationKey: string }) {
         ) : null}
         {state.status === 'success' ? (
           <>
-            <SuccessFeedback title="Email confirmed" description="Your email is ready. You can now log in to Customer Web." />
+            <SuccessFeedback title="Email confirmed" description="Your email is ready. You can now log in to Meridian." />
             <Button asChild className="w-full"><Link to="/login"><BadgeCheck />Continue to Login</Link></Button>
           </>
         ) : null}

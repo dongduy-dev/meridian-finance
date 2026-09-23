@@ -38,7 +38,7 @@ export function RepaymentHistoryItem({ item }: { item: RepaymentHistoryItemData 
             <BalanceFact label="Interest outstanding" value={item.accountBalance.interestOutstanding} />
           </dl>
           <p className="text-xs text-muted-foreground">
-            Servicing state evaluated {formatDateOnly(item.accountBalance.servicingEvaluationDate)}
+            Balance updated {formatDateOnly(item.accountBalance.servicingEvaluationDate)}
           </p>
         </section>
 
@@ -53,7 +53,7 @@ export function RepaymentHistoryItem({ item }: { item: RepaymentHistoryItemData 
                 </li>
               ))}
             </ol>
-          ) : <p className="mt-3 text-sm text-muted-foreground">No allocation detail was returned.</p>}
+          ) : <p className="mt-3 text-sm text-muted-foreground">No allocation details are available.</p>}
         </details>
 
         {item.affectedInstallments.length ? (

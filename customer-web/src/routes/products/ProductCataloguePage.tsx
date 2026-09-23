@@ -16,17 +16,17 @@ export function ProductCataloguePage() {
     <div className="space-y-8">
       <PageHeader
         eyebrow="Borrowing options"
-        title="Products"
-        description="Compare active Meridian products using the current amount, term, pricing, evidence, and eligibility policy returned by the platform."
+        title="Explore loans"
+        description="Compare available amounts, terms, interest, fees, required documents, and eligibility."
       />
 
       {customerQuery.isPending ? (
-        <Skeleton className="h-32 w-full" role="status" aria-label="Loading account readiness" />
+        <Skeleton className="h-32 w-full" role="status" aria-label="Loading account details" />
       ) : null}
       {customerQuery.isError ? (
         <QueryErrorFeedback
           error={customerQuery.error}
-          title="Account readiness could not be loaded"
+          title="Account status could not be loaded"
           onRetry={() => void customerQuery.refetch()}
         />
       ) : null}
@@ -40,12 +40,12 @@ export function ProductCataloguePage() {
       {productQuery.isError ? (
         <QueryErrorFeedback
           error={productQuery.error}
-          title="Product catalogue could not be loaded"
+          title="Loans could not be loaded"
           onRetry={() => void productQuery.refetch()}
         />
       ) : null}
       {productQuery.data?.length ? (
-        <section aria-label="Available products" className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <section aria-label="Available loans" className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {productQuery.data.map((product) => (
             <LoanProductCard key={product.productCode} product={product} />
           ))}
@@ -54,8 +54,8 @@ export function ProductCataloguePage() {
       {productQuery.data?.length === 0 ? (
         <EmptyState
           icon={Shapes}
-          title="No products available"
-          description="Meridian is not currently returning any active lending products. Please check again later."
+          title="No loans available"
+          description="No loans are available right now. Please check again later."
         />
       ) : null}
     </div>

@@ -13,12 +13,12 @@ export function LoansPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Loan servicing"
-        title="Your LoanAccounts"
-        description="Review every activated LoanAccount and open its backend-authoritative servicing details."
+        eyebrow="Loan overview"
+        title="Your loans"
+        description="View your balance, repayment schedule, and payment history."
       />
       {accountsQuery.isPending ? (
-        <div className="space-y-4" role="status" aria-label="Loading LoanAccounts">
+        <div className="space-y-4" role="status" aria-label="Loading loans">
           <Skeleton className="h-72" />
           <Skeleton className="h-72" />
         </div>
@@ -26,7 +26,7 @@ export function LoansPage() {
       {accountsQuery.isError ? (
         <QueryErrorFeedback
           error={accountsQuery.error}
-          title="LoanAccounts could not be loaded"
+          title="Loans could not be loaded"
           onRetry={() => void accountsQuery.refetch()}
         />
       ) : null}
@@ -40,8 +40,8 @@ export function LoansPage() {
       {accountsQuery.data?.length === 0 ? (
         <EmptyState
           icon={Landmark}
-          title="No LoanAccounts yet"
-          description="Meridian has not returned an activated LoanAccount for this Customer."
+          title="No loans yet"
+          description="No active loans are available yet."
         />
       ) : null}
     </div>

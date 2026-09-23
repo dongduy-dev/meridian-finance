@@ -41,7 +41,7 @@ const emptyProfile: ProfileFormValues = {
 
 function ProfileLoading() {
   return (
-    <div className="space-y-5" role="status" aria-label="Loading Customer profile">
+    <div className="space-y-5" role="status" aria-label="Loading your profile">
       <Skeleton className="h-36 w-full" />
       <Skeleton className="h-96 w-full" />
     </div>
@@ -121,9 +121,9 @@ export function ProfilePage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Customer account"
+        eyebrow="Your account"
         title="Profile"
-        description="Complete and maintain the personal details Meridian keeps with your Customer account."
+        description="Review and update the personal details saved with your account."
       />
       <AccountNavigation />
 
@@ -142,7 +142,7 @@ export function ProfilePage() {
             <CardHeader>
               <CardTitle>{profileComplete ? 'Maintain your profile' : 'Complete your profile'}</CardTitle>
               <CardDescription>
-                Required fields are marked with an asterisk. Meridian validates the submitted details before saving.
+                Required fields are marked with an asterisk. Review your details before saving.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -158,7 +158,7 @@ export function ProfilePage() {
                 {saved ? (
                   <AccountSuccessFeedback
                     title="Profile saved"
-                    description="Your account readiness now reflects Meridian’s saved profile."
+                    description="Your account setup now reflects the saved profile."
                   />
                 ) : null}
 
@@ -191,7 +191,7 @@ export function ProfilePage() {
                       Identity reference: On file
                     </div>
                     <p className="mt-2 text-sm leading-5 text-muted-foreground">
-                      Meridian protects this reference and does not return it to Customer Web. It cannot be changed through ordinary profile maintenance.
+                      Your identity reference is securely stored and is not shown here after verification. It cannot be changed from your profile.
                     </p>
                   </div>
                 ) : (
@@ -243,17 +243,17 @@ export function ProfilePage() {
                 </div>
 
                 <div className="space-y-3">
-                  <ConsentField id="termsConsentAccepted" label="I accept the Meridian Customer terms." error={errors.termsConsentAccepted?.message}>
+                  <ConsentField id="termsConsentAccepted" label="I accept the Meridian terms." error={errors.termsConsentAccepted?.message}>
                     <input
                       id="termsConsentAccepted"
                       type="checkbox"
                       className="mt-1 size-5 shrink-0 accent-primary"
                       aria-invalid={Boolean(errors.termsConsentAccepted)}
                       aria-describedby={errors.termsConsentAccepted ? 'termsConsentAccepted-error' : undefined}
-                      {...register('termsConsentAccepted', { validate: (value) => value || 'Accept the Customer terms to continue.' })}
+                      {...register('termsConsentAccepted', { validate: (value) => value || 'Accept the Meridian terms to continue.' })}
                     />
                   </ConsentField>
-                  <ConsentField id="dataProcessingConsentAccepted" label="I consent to the processing of my data for this Customer account." error={errors.dataProcessingConsentAccepted?.message}>
+                  <ConsentField id="dataProcessingConsentAccepted" label="I consent to the processing of my data for this account." error={errors.dataProcessingConsentAccepted?.message}>
                     <input
                       id="dataProcessingConsentAccepted"
                       type="checkbox"

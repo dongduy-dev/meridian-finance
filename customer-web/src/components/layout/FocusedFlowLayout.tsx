@@ -37,7 +37,7 @@ export function FocusedFlowLayout({
     <div className={`min-h-svh bg-background${showsActions ? ' pb-24 sm:pb-28' : ''}`}>
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex min-h-20 max-w-3xl items-center justify-between px-4 sm:px-6">
-          <Link to="/" aria-label="Return to Meridian Customer Web">
+          <Link to="/" aria-label="Return to Meridian dashboard">
             <MeridianLogo variant="primary" className="w-28" />
           </Link>
           {showsProgress ? (

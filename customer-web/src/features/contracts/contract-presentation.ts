@@ -24,11 +24,11 @@ export function contractErrorMessage(error: unknown) {
   }
   const messages: Record<string, string> = {
     CONTRACT_VERSION_STALE: 'A newer contract version is current. Review it before acknowledging again.',
-    CONTRACT_ACKNOWLEDGMENT_NOT_ALLOWED: 'This contract is not currently available for Customer acknowledgment.',
+    CONTRACT_ACKNOWLEDGMENT_NOT_ALLOWED: 'This contract cannot be confirmed right now.',
     IDEMPOTENCY_KEY_REUSED: 'This acknowledgment identity cannot be used for the displayed contract. Refresh and begin again.',
     CURRENT_CONTRACT_MISSING: 'The current operational contract is not ready yet.',
     INVALID_APPLICATION_STATE: 'The application is not currently eligible for contract acknowledgment.',
-    LOAN_APPLICATION_ACCESS_DENIED: 'This contract is not available to this Customer.',
+    LOAN_APPLICATION_ACCESS_DENIED: 'This contract is not available to you.',
   }
   return messages[error.errorCode] ?? 'The contract acknowledgment could not be completed. Refresh the current contract and try again if the action remains available.'
 }

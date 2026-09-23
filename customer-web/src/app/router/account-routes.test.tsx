@@ -132,8 +132,8 @@ describe('Customer account routes and profile', () => {
     await user.type(screen.getByLabelText(/Identity reference/), 'IDREF-SENSITIVE-001')
     await user.type(screen.getByLabelText(/Residential address/), '1 Meridian Street')
     await user.type(screen.getByLabelText(/Employment status/), 'SALARIED')
-    await user.click(screen.getByLabelText('I accept the Meridian Customer terms.'))
-    await user.click(screen.getByLabelText('I consent to the processing of my data for this Customer account.'))
+    await user.click(screen.getByLabelText('I accept the Meridian terms.'))
+    await user.click(screen.getByLabelText('I consent to the processing of my data for this account.'))
     await user.click(screen.getByRole('button', { name: 'Save profile' }))
 
     expect(await screen.findByText('Identity reference: On file')).toBeVisible()
@@ -187,8 +187,8 @@ describe('Customer account routes and profile', () => {
     await user.type(screen.getByLabelText(/Identity reference/), 'IDREF-CONFLICT-001')
     await user.type(screen.getByLabelText(/Residential address/), '1 Meridian Street')
     await user.type(screen.getByLabelText(/Employment status/), 'SALARIED')
-    await user.click(screen.getByLabelText('I accept the Meridian Customer terms.'))
-    await user.click(screen.getByLabelText('I consent to the processing of my data for this Customer account.'))
+    await user.click(screen.getByLabelText('I accept the Meridian terms.'))
+    await user.click(screen.getByLabelText('I consent to the processing of my data for this account.'))
     await user.click(screen.getByRole('button', { name: 'Save profile' }))
 
     expect(await screen.findByText('Identity reference is already associated with another customer.')).toBeVisible()

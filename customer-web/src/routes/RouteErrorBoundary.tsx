@@ -14,10 +14,10 @@ export function RouteErrorBoundary() {
         <EmptyState
           icon={CircleAlert}
           title="We could not open this page"
-          description="Return to the foundation and try again. No technical details or private data are shown here."
+          description="Return to your dashboard and try again."
           action={
             <Button asChild>
-              <Link to="/">Return to foundation</Link>
+              <Link to="/">Return to dashboard</Link>
             </Button>
           }
         />

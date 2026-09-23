@@ -40,7 +40,7 @@ function SessionCheckFailure() {
           ) : (
             <ErrorFeedback
               title="Session check interrupted"
-              description="Your Customer session could not be confirmed safely."
+              description="We couldn't confirm your session. Try again."
               requestId={error?.requestId}
             />
           )}
@@ -92,8 +92,8 @@ export function ProtectedCustomerRoute() {
     return (
       <main className="flex min-h-svh items-center justify-center bg-background px-4">
         <ErrorFeedback
-          title="Customer access required"
-          description="This Customer Web route is not available for the current account."
+          title="Account access required"
+          description="This page is not available for the current account."
         />
         <AlertTriangle className="sr-only" />
       </main>

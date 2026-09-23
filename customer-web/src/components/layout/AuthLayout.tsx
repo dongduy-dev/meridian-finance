@@ -14,8 +14,7 @@ export function AuthLayout() {
             Clear steps for important financial moments.
           </p>
           <p className="text-sm leading-6 text-primary-foreground/72">
-            Meridian Customer Web is designed to keep every action calm, legible, and
-            grounded in authoritative platform state.
+            Manage your applications, offers, and loans with clear guidance at every step.
           </p>
         </div>
       </section>

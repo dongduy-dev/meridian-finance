@@ -21,7 +21,7 @@ export function OfferSummary({ offer }: { offer: ApprovedOffer }) {
           <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle>Approved offer</CardTitle>
-              <CardDescription>Immutable financial terms returned by Meridian.</CardDescription>
+              <CardDescription>Review the financial terms approved for your application.</CardDescription>
             </div>
             <StatusBadge presentation={offerStatusPresentation(offer.status)} />
           </div>
@@ -48,7 +48,7 @@ export function OfferSummary({ offer }: { offer: ApprovedOffer }) {
       <section aria-labelledby="provisional-repayments" className="space-y-4">
         <div>
           <h2 id="provisional-repayments" className="text-xl font-semibold">Provisional repayment preview</h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">These returned amounts are not the final dated LoanAccount schedule.</p>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">These amounts are a preview. Your final repayment schedule will include the due dates.</p>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           {offer.repaymentItems.map((item) => (

@@ -18,19 +18,19 @@ import {
 import { ApiError } from '@/lib/api'
 
 const submissionErrorMessages: Record<string, string> = {
-  CUSTOMER_NOT_FOUND: 'Meridian could not confirm the Customer account for this application.',
+  CUSTOMER_NOT_FOUND: 'Meridian could not confirm your account for this application.',
   PRODUCT_NOT_FOUND: 'This product is no longer available.',
-  CUSTOMER_NOT_ACTIVE: 'The Customer account must be active before submission.',
-  PROFILE_INCOMPLETE: 'Your Customer profile must be complete before submission.',
+  CUSTOMER_NOT_ACTIVE: 'Your account must be active before submission.',
+  PROFILE_INCOMPLETE: 'Complete your profile before submission.',
   PRIMARY_BANK_ACCOUNT_REQUIRED: 'An active primary bank account is required before submission.',
   PRODUCT_INACTIVE: 'This product is no longer active for new applications.',
-  PRODUCT_POLICY_INVALID: 'The current product policy cannot accept this application.',
-  INVALID_PRODUCT_AMOUNT: 'The requested amount no longer satisfies the current product policy.',
-  INVALID_PRODUCT_TERM: 'The requested term is no longer allowed by the current product policy.',
-  INVALID_COLLATERAL_DETAILS: 'The collateral facts are incomplete or outside their technical limits.',
-  BLOCKING_APPLICATION_EXISTS: 'Another application for this product now blocks this submission.',
-  OUTSTANDING_LOAN_ACCOUNT_EXISTS: 'A prior Unsecured Consumer Loan balance now blocks this submission.',
-  SYSTEM_STATE_CONFLICT: 'Meridian could not safely reconcile the current application state.',
+  PRODUCT_POLICY_INVALID: 'Applications for this loan are temporarily unavailable.',
+  INVALID_PRODUCT_AMOUNT: 'The requested amount is no longer available.',
+  INVALID_PRODUCT_TERM: 'The requested term is no longer available.',
+  INVALID_COLLATERAL_DETAILS: 'The collateral details are incomplete or are not supported.',
+  BLOCKING_APPLICATION_EXISTS: 'You already have an application for this loan in progress. You can submit another after it is no longer active.',
+  OUTSTANDING_LOAN_ACCOUNT_EXISTS: 'A previous Unsecured Consumer Loan still has an outstanding balance.',
+  SYSTEM_STATE_CONFLICT: "We couldn't confirm the latest application information. Refresh and try again if appropriate.",
   VALIDATION_FAILED: 'Meridian could not validate the submitted request. Review the entered details before trying again.',
 }
 
@@ -88,7 +88,7 @@ export function OriginationExitWarning({ blocker, productName }: { blocker: Bloc
 
 export function EvidenceRequirements({
   requirements,
-  description = 'These requirements come from the current product policy. Documents are supplied after the application is created.',
+  description = 'You can provide these documents after your application is created.',
 }: {
   requirements: SubmissionEvidenceRequirement[]
   description?: string
@@ -96,7 +96,7 @@ export function EvidenceRequirements({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Submission evidence</CardTitle>
+        <CardTitle>Required documents</CardTitle>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
@@ -110,7 +110,7 @@ export function EvidenceRequirements({
             ))}
           </ul>
         ) : (
-          <p className="rounded-md bg-background p-4 text-sm leading-6 text-muted-foreground">No documents are listed by the current product policy.</p>
+          <p className="rounded-md bg-background p-4 text-sm leading-6 text-muted-foreground">No documents are currently listed for this application.</p>
         )}
       </CardContent>
     </Card>

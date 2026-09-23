@@ -18,7 +18,7 @@ it('links only implemented Customer actions to their authoritative workspaces', 
   expect(screen.getByRole('link', { name: 'Upload documents' })).toHaveAttribute('href', `/applications/${application.loanApplicationId}/documents`)
 
   rerender(<MemoryRouter><RequiredActionCard application={{ ...application, requiredAction: 'COMPLETE_CORRECTIONS' }} /></MemoryRouter>)
-  expect(screen.getByRole('link', { name: 'Complete corrections' })).toHaveAttribute('href', `/applications/${application.loanApplicationId}/corrections`)
+  expect(screen.getByRole('link', { name: 'Review requested changes' })).toHaveAttribute('href', `/applications/${application.loanApplicationId}/corrections`)
 
   rerender(<MemoryRouter><RequiredActionCard application={{ ...application, requiredAction: 'REVIEW_APPROVED_OFFER' }} /></MemoryRouter>)
   expect(screen.getByRole('link', { name: 'Review offer' })).toHaveAttribute('href', `/applications/${application.loanApplicationId}/offer`)

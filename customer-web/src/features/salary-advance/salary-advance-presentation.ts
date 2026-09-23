@@ -20,13 +20,13 @@ export interface BlockerPresentation {
 
 const blockerPresentations: Record<string, BlockerPresentation> = {
   CUSTOMER_NOT_ACTIVE: {
-    title: 'Customer account is not active',
-    description: 'Salary Advance is unavailable while the Customer account is inactive. Contact Meridian support if this is unexpected.',
+    title: 'Your account is not active',
+    description: 'Salary Advance is unavailable while your account is inactive. Contact Meridian support if this is unexpected.',
     tone: 'danger',
   },
   PROFILE_INCOMPLETE: {
     title: 'Complete your profile',
-    description: 'Meridian requires a complete Customer profile before a Salary Advance application can be submitted.',
+    description: 'Complete your profile before submitting a Salary Advance application.',
     tone: 'warning',
     action: { label: 'Complete profile', to: '/account/profile' },
   },
@@ -43,12 +43,12 @@ const blockerPresentations: Record<string, BlockerPresentation> = {
   },
   EMPLOYEE_NOT_VERIFIED: {
     title: 'Verify your employment',
-    description: 'Complete the secure Partner employment check below. Meridian will refresh readiness after the attempt.',
+    description: 'Select your employer and enter your employee code below.',
     tone: 'warning',
   },
   SALARY_ADVANCE_ELIGIBILITY_DATA_STALE: {
-    title: 'Refresh your employment verification',
-    description: 'Current Partner evidence is required. Re-verify below against the latest available Partner information.',
+    title: 'Refresh employment verification',
+    description: 'Your employment verification needs to be refreshed before submission.',
     tone: 'warning',
   },
   SALARY_ADVANCE_LIMIT_UNAVAILABLE: {
@@ -58,12 +58,12 @@ const blockerPresentations: Record<string, BlockerPresentation> = {
   },
   INSUFFICIENT_AVAILABLE_LIMIT: {
     title: 'Available limit is insufficient',
-    description: 'The currently returned available amount is below the minimum needed for a new Salary Advance application.',
+    description: 'Your available amount is below the minimum for a new Salary Advance application.',
     tone: 'warning',
   },
   BLOCKING_APPLICATION_EXISTS: {
-    title: 'Another Salary Advance application is active',
-    description: 'A new application cannot be started while Meridian reports another blocking Salary Advance application.',
+    title: 'Salary Advance application in progress',
+    description: 'You already have a Salary Advance application in progress. You can start another after it is no longer active.',
     tone: 'information',
   },
   OUTSTANDING_LOAN_ACCOUNT_EXISTS: {
@@ -72,23 +72,23 @@ const blockerPresentations: Record<string, BlockerPresentation> = {
     tone: 'information',
   },
   SYSTEM_STATE_CONFLICT: {
-    title: 'Readiness is temporarily unavailable',
-    description: 'Meridian found inconsistent lending evidence. Refresh the page, and contact support if the issue continues.',
+    title: 'Salary Advance information is unavailable',
+    description: "We couldn't confirm the latest Salary Advance information. Review the latest status and try again if appropriate.",
     tone: 'danger',
   },
 }
 
 const employeeStatusPresentations: Record<string, StatusPresentation> = {
-  VERIFIED: { label: 'Verification on file', tone: 'success', icon: CheckCircle2 },
-  NOT_VERIFIED: { label: 'Verification required', tone: 'warning', icon: CircleAlert },
+  VERIFIED: { label: 'Employment verified', tone: 'success', icon: CheckCircle2 },
+  NOT_VERIFIED: { label: 'Employment verification required', tone: 'warning', icon: CircleAlert },
 }
 
 const partnerStatusPresentations: Record<string, StatusPresentation> = {
-  ELIGIBLE: { label: 'Partner evidence eligible', tone: 'success', icon: CheckCircle2 },
-  NOT_VERIFIED: { label: 'Partner evidence not verified', tone: 'warning', icon: CircleAlert },
-  PARTNER_INACTIVE: { label: 'Partner is inactive', tone: 'danger', icon: Ban },
+  ELIGIBLE: { label: 'Employment verified', tone: 'success', icon: CheckCircle2 },
+  NOT_VERIFIED: { label: 'Employment not verified', tone: 'warning', icon: CircleAlert },
+  PARTNER_INACTIVE: { label: 'Employer is inactive', tone: 'danger', icon: Ban },
   EMPLOYEE_INACTIVE: { label: 'Employment is inactive', tone: 'danger', icon: Ban },
-  EVIDENCE_STALE: { label: 'Partner evidence needs refresh', tone: 'warning', icon: RefreshCw },
+  EVIDENCE_STALE: { label: 'Employment information needs updating', tone: 'warning', icon: RefreshCw },
 }
 
 const limitStatusPresentations: Record<string, StatusPresentation> = {
@@ -96,7 +96,7 @@ const limitStatusPresentations: Record<string, StatusPresentation> = {
   SUSPENDED: { label: 'Limit suspended', tone: 'warning', icon: ShieldAlert },
   DISABLED: { label: 'Limit disabled', tone: 'danger', icon: Ban },
   STALE: { label: 'Limit needs refresh', tone: 'warning', icon: RefreshCw },
-  NOT_INITIALIZED: { label: 'Advisory current limit', tone: 'information', icon: Clock3 },
+  NOT_INITIALIZED: { label: 'Current estimate', tone: 'information', icon: Clock3 },
   UNAVAILABLE: { label: 'Limit unavailable', tone: 'neutral', icon: CircleHelp },
 }
 
@@ -106,10 +106,10 @@ export interface VerificationOutcomePresentation extends StatusPresentation {
 
 const verificationOutcomePresentations: Record<string, VerificationOutcomePresentation> = {
   MATCHED_ACTIVE: {
-    label: 'Employment match recorded',
+    label: 'Employment verified',
     tone: 'success',
     icon: CheckCircle2,
-    description: 'Meridian refreshed Salary Advance readiness. The refreshed readiness result remains authoritative for applying.',
+    description: 'Your employment was verified. We updated your application availability.',
   },
   MATCHED_INACTIVE: {
     label: 'Employment is not active',
@@ -121,7 +121,7 @@ const verificationOutcomePresentations: Record<string, VerificationOutcomePresen
     label: 'Employment could not be verified',
     tone: 'warning',
     icon: CircleAlert,
-    description: 'Meridian could not verify employment from the submitted Partner and employee code.',
+    description: 'We could not verify employment using the selected employer and employee code.',
   },
   MULTIPLE_MATCHES: {
     label: 'Employment needs review',
@@ -130,29 +130,29 @@ const verificationOutcomePresentations: Record<string, VerificationOutcomePresen
     description: 'The verification could not establish one eligible employment record.',
   },
   PENDING_MANUAL_REVIEW: {
-    label: 'Manual review required',
+    label: "We're reviewing your employment details",
     tone: 'information',
     icon: Clock3,
-    description: 'Meridian has recorded the attempt for manual review. Readiness will remain blocked unless a later authoritative result allows application.',
+    description: "We'll update your application availability when the review is complete.",
   },
   MANUAL_REVIEW_APPROVED: {
-    label: 'Manual review approved',
+    label: 'Employment verified',
     tone: 'success',
     icon: CheckCircle2,
-    description: 'Meridian refreshed Salary Advance readiness. The refreshed readiness result remains authoritative for applying.',
+    description: 'Your employment was verified. We updated your application availability.',
   },
   MANUAL_REVIEW_REJECTED: {
-    label: 'Manual review did not verify employment',
+    label: 'Employment could not be verified',
     tone: 'danger',
     icon: AlertCircle,
-    description: 'The manual review did not establish eligible employment for Salary Advance.',
+    description: 'We could not verify eligible employment for Salary Advance.',
   },
 }
 
 export function blockerPresentation(code: string): BlockerPresentation {
   return blockerPresentations[code] ?? {
-    title: 'Readiness unavailable',
-    description: 'Meridian returned a readiness condition that Customer Web cannot safely interpret yet.',
+    title: 'Application status unavailable',
+    description: "We can't show whether you can apply right now. Refresh the page or try again later.",
     tone: 'neutral',
   }
 }
@@ -167,7 +167,7 @@ export function employeeStatusPresentation(value: string): StatusPresentation {
 
 export function partnerStatusPresentation(value: string): StatusPresentation {
   return partnerStatusPresentations[value] ?? {
-    label: 'Partner status unavailable',
+    label: 'Employment status unavailable',
     tone: 'neutral',
     icon: CircleHelp,
   }
@@ -192,6 +192,6 @@ export function verificationOutcomePresentation(
     label: 'Verification result unavailable',
     tone: 'neutral',
     icon: CircleHelp,
-    description: 'Meridian returned a verification result that Customer Web cannot safely interpret yet. Use the refreshed readiness result for current application availability.',
+    description: "We can't show the verification result right now. Check your application availability before continuing.",
   }
 }

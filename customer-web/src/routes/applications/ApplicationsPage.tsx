@@ -16,8 +16,8 @@ export function ApplicationsPage() {
     <div className="space-y-8">
       <PageHeader
         eyebrow="Application tracking"
-        title="Applications"
-        description="Review every owned application in the authoritative order returned by Meridian."
+        title="Your applications"
+        description="Track your applications and see what happens next."
       />
       {applicationsQuery.isPending ? (
         <div className="space-y-4" role="status" aria-label="Loading applications">
@@ -53,7 +53,7 @@ export function ApplicationsPage() {
         <EmptyState
           icon={FileSearch}
           title="No applications yet"
-          description="When you submit a Meridian product application, its current durable state will appear here."
+          description="When you submit an application, you can track its progress here."
           action={<Button asChild><Link to="/products">Explore products</Link></Button>}
         />
       ) : null}

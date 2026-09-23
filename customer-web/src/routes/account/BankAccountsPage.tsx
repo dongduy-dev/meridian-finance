@@ -142,7 +142,7 @@ export function BankAccountsPage() {
         accountNumber: values.accountNumber,
       })
       reset()
-      setSuccessMessage('Bank account added. Meridian now displays only the protected masked account number.')
+      setSuccessMessage('Bank account added. Only a masked account number will be shown from now on.')
     } catch (error) {
       setServerError(error)
       focusAccountError()
@@ -158,10 +158,10 @@ export function BankAccountsPage() {
     try {
       if (confirmation.type === 'primary') {
         await makePrimary.mutateAsync(confirmation.account.customerBankAccountId)
-        setSuccessMessage('Primary bank account updated from Meridian’s authoritative account state.')
+        setSuccessMessage('Primary bank account updated.')
       } else {
         await deactivate.mutateAsync(confirmation.account.customerBankAccountId)
-        setSuccessMessage('Bank account deactivated. Account readiness has been refreshed.')
+        setSuccessMessage('Bank account deactivated. Your account setup has been refreshed.')
       }
     } catch (error) {
       setServerError(error)
@@ -191,14 +191,14 @@ export function BankAccountsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Customer account"
+        eyebrow="Your account"
         title="Bank accounts"
-        description="Manage the masked bank-account details held with your Meridian Customer account."
+        description="Manage the bank accounts saved with your Meridian account."
       />
       <AccountNavigation />
 
       {customerQuery.isPending ? <Skeleton className="h-40 w-full" /> : null}
-      {customerQuery.isError ? <AccountErrorFeedback error={customerQuery.error} title="Account readiness could not be loaded" /> : null}
+      {customerQuery.isError ? <AccountErrorFeedback error={customerQuery.error} title="Account status could not be loaded" /> : null}
       {customerQuery.data ? <AccountReadinessCard customer={customerQuery.data} /> : null}
 
       {serverError ? <AccountErrorFeedback error={serverError} title="Bank account was not updated" /> : null}
@@ -208,7 +208,7 @@ export function BankAccountsPage() {
         <section aria-labelledby="saved-accounts-heading" className="space-y-4">
           <div>
             <h2 id="saved-accounts-heading" tabIndex={-1} className="text-xl font-semibold outline-none">Saved bank accounts</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Only backend-provided masked account numbers are shown.</p>
+            <p className="mt-1 text-sm text-muted-foreground">For your security, only masked account numbers are shown.</p>
           </div>
           {accountsQuery.isPending ? (
             <div className="space-y-4" role="status" aria-label="Loading bank accounts">
@@ -226,7 +226,7 @@ export function BankAccountsPage() {
             <EmptyState
               icon={Landmark}
               title="No bank accounts yet"
-              description="Add a bank account to establish a primary active account for your Customer setup. This does not determine loan eligibility."
+              description="Add a bank account and choose a primary account. This does not determine loan eligibility."
               action={<Button variant="secondary" asChild><a href="#add-bank-account">Add bank account</a></Button>}
             />
           ) : null}
@@ -248,7 +248,7 @@ export function BankAccountsPage() {
           <CardHeader>
             <div className="flex size-10 items-center justify-center rounded-full bg-accent-subtle"><Plus aria-hidden="true" className="size-5" /></div>
             <CardTitle>Add bank account</CardTitle>
-            <CardDescription>Meridian uses the bank name you provide as a snapshot; no bank directory is inferred.</CardDescription>
+            <CardDescription>Enter the bank details exactly as they appear on your account.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-5" noValidate onSubmit={onAdd}>
@@ -265,7 +265,7 @@ export function BankAccountsPage() {
                 htmlFor="accountNumber"
                 label="Account number"
                 required
-                description="The full number is transient input. After this request completes, Customer Web clears it and uses only Meridian’s mask."
+                description="Your full account number is used only to save the account. Afterward, Meridian shows only a masked number."
                 error={errors.accountNumber?.message}
               >
                 <Input id="accountNumber" autoComplete="off" spellCheck={false} aria-invalid={Boolean(errors.accountNumber)} aria-describedby={fieldDescriptionIds('accountNumber', true, Boolean(errors.accountNumber))} {...register('accountNumber', { validate: validateWith(bankAccountFieldSchemas.accountNumber) })} />

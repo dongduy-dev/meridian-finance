@@ -66,7 +66,7 @@ export function VerificationPendingPage() {
     <AuthCard
       eyebrow="Email confirmation"
       title="Check your email"
-      description="Confirm your email before logging in to Customer Web."
+      description="Confirm your email before logging in to Meridian."
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Already confirmed?{' '}
@@ -87,7 +87,7 @@ export function VerificationPendingPage() {
         <FormField
           htmlFor="email"
           label="Email"
-          description="Enter the address used for your Customer account."
+          description="Enter the email address used for your account."
           error={errors.email?.message}
         >
           <Input

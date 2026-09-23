@@ -102,14 +102,14 @@ export function ApplicationOfferPage() {
 
   return (
     <DetailLayout
-      header={<PageHeader eyebrow="Approved offer" title="Review your offer" description="Review the immutable terms Meridian approved for this application." actions={<BackToApplication loanApplicationId={loanApplicationId} />} />}
+      header={<PageHeader eyebrow="Approved offer" title="Review your offer" description="Review the terms approved for your application." actions={<BackToApplication loanApplicationId={loanApplicationId} />} />}
       rail={offer ? (
         <div className="space-y-4">
           {offer.status === 'PENDING' ? (
-            <Alert variant="warning"><Clock3 aria-hidden="true" /><AlertTitle>Offer expiry</AlertTitle><AlertDescription>This offer expires at {formatTimestamp(offer.expiresAt)}. Meridian's returned status and actions remain authoritative.</AlertDescription></Alert>
+            <Alert variant="warning"><Clock3 aria-hidden="true" /><AlertTitle>Offer expiry</AlertTitle><AlertDescription>This offer expires at {formatTimestamp(offer.expiresAt)}. Refresh the page if its status changes while you are reviewing it.</AlertDescription></Alert>
           ) : null}
           {hasUnknownAction ? (
-            <Alert variant="warning"><ShieldAlert aria-hidden="true" /><AlertTitle>Action unavailable</AlertTitle><AlertDescription>Meridian returned an action this Customer Web version cannot execute safely.</AlertDescription></Alert>
+            <Alert variant="warning"><ShieldAlert aria-hidden="true" /><AlertTitle>Action unavailable</AlertTitle><AlertDescription>This action is not available right now. Refresh the page or try again later.</AlertDescription></Alert>
           ) : null}
           {!actionsBlocked && supportedActions.length ? (
             <div className="space-y-3 rounded-lg border border-border bg-card p-5 shadow-soft">
@@ -119,7 +119,7 @@ export function ApplicationOfferPage() {
             </div>
           ) : null}
           {!actionsBlocked && supportedActions.length === 0 ? (
-            <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No offer response required</AlertTitle><AlertDescription>Meridian is not currently requesting a Customer response to this offer.</AlertDescription></Alert>
+            <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No response required</AlertTitle><AlertDescription>There is nothing you need to do with this offer right now.</AlertDescription></Alert>
           ) : null}
         </div>
       ) : undefined}
@@ -132,7 +132,7 @@ export function ApplicationOfferPage() {
             <AlertCircle aria-hidden="true" />
             <AlertTitle>Offer response needs confirmation</AlertTitle>
             <AlertDescription className="space-y-3">
-              <p>Meridian could not confirm whether the {uncertainAction === 'ACCEPT' ? 'acceptance' : 'decline'} completed. The opposite response is unavailable until current state is recovered.</p>
+              <p>We're checking whether your {uncertainAction === 'ACCEPT' ? 'acceptance' : 'decline'} was completed. Other offer actions are unavailable until this check finishes.</p>
               <div className="flex flex-wrap gap-3">
                 <Button size="sm" disabled={pending || recovering} onClick={() => void respond(uncertainAction)}>{pending ? 'Retrying…' : `Retry ${uncertainAction === 'ACCEPT' ? 'accept' : 'decline'}`}</Button>
                 <Button size="sm" variant="secondary" disabled={recovering} onClick={() => void refreshAuthoritative(uncertainAction)}><RefreshCw aria-hidden="true" />{recovering ? 'Checking…' : 'Check current status'}</Button>

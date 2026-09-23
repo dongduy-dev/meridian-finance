@@ -40,7 +40,7 @@ const SESSION_ERROR_CODES = new Set([
 
 export class CustomerSessionRequiredError extends Error {
   constructor() {
-    super('Customer authentication is required for Customer Web.')
+    super('A Meridian account is required to continue.')
     this.name = 'CustomerSessionRequiredError'
   }
 }

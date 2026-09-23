@@ -169,7 +169,7 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     const { fetchMock } = renderRoute('/products/salary-advance')
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Salary Advance' })).toBeVisible()
-    expect(await screen.findByRole('heading', { name: 'Product policy' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Amounts & terms' })).toBeVisible()
     for (const amount of [
       readyReadiness.totalAmount,
       readyReadiness.usedAmount,
@@ -202,7 +202,9 @@ describe('FE-CP6 Salary Advance product readiness', () => {
       return defaultFetch(input, init)
     })
 
-    expect(await screen.findByText('Another Salary Advance application is active')).toBeVisible()
+    expect(await screen.findByText('Salary Advance application in progress')).toBeVisible()
+    expect(screen.getByText('You already have a Salary Advance application in progress. You can start another after it is no longer active.')).toBeVisible()
+    expect(screen.queryByText(/finish or close/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Apply for Salary Advance' })).not.toBeInTheDocument()
   })
 
@@ -233,7 +235,7 @@ describe('FE-CP6 Salary Advance product readiness', () => {
 
     expect(await screen.findByRole('link', { name: 'Complete profile' })).toHaveAttribute('href', '/account/profile')
     expect(screen.getByRole('link', { name: 'Manage bank accounts' })).toHaveAttribute('href', '/account/bank-accounts')
-    const readinessSection = screen.getByRole('heading', { name: 'Your Salary Advance readiness' }).closest('section') as HTMLElement
+    const readinessSection = screen.getByRole('heading', { name: 'Before you apply' }).closest('section') as HTMLElement
     expect(within(readinessSection).getAllByRole('link')).toHaveLength(2)
   })
 
@@ -267,13 +269,13 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     })
 
     expect(await screen.findByRole('heading', { name: 'Verify your employment' })).toBeVisible()
-    const select = await screen.findByRole('combobox', { name: /Partner Company/ })
+    const select = await screen.findByRole('combobox', { name: /Employer/ })
     expect(within(select).getAllByRole('option')).toHaveLength(2)
     await user.selectOptions(select, partnerCompanyId)
     await user.type(screen.getByRole('textbox', { name: /Employee code/ }), 'PRIVATE-EMPLOYEE-001')
     await user.click(screen.getByRole('button', { name: 'Verify employment' }))
 
-    expect(await screen.findByText('Employment match recorded')).toBeVisible()
+    expect((await screen.findAllByText('Employment verified')).length).toBeGreaterThan(0)
     expect(await screen.findByRole('link', { name: 'Apply for Salary Advance' })).toBeVisible()
     expect(readinessReads).toBeGreaterThanOrEqual(2)
     expect(submittedBody).toEqual({ employeeCode: 'PRIVATE-EMPLOYEE-001' })
@@ -314,21 +316,24 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     })
 
     expect(await screen.findByRole('heading', { name: 'Refresh employment verification' })).toBeVisible()
-    await user.selectOptions(await screen.findByRole('combobox', { name: /Partner Company/ }), partnerCompanyId)
+    expect(screen.getByText('Your employment verification needs to be refreshed before submission.')).toBeVisible()
+    expect(screen.queryByText(/employment information changed/i)).not.toBeInTheDocument()
+    await user.selectOptions(await screen.findByRole('combobox', { name: /Employer/ }), partnerCompanyId)
     await user.type(screen.getByRole('textbox', { name: /Employee code/ }), 'PRIVATE-EMPLOYEE-002')
     await user.click(screen.getByRole('button', { name: 'Refresh verification' }))
 
-    expect(await screen.findByText('Manual review required')).toBeVisible()
-    expect(screen.queryByText('Employment match recorded')).not.toBeInTheDocument()
+    expect(await screen.findByText("We're reviewing your employment details")).toBeVisible()
+    expect(screen.getByText('Action or waiting required')).toBeVisible()
     expect(screen.queryByRole('link', { name: 'Apply for Salary Advance' })).not.toBeInTheDocument()
   })
 
   it.each([
-    ['MATCHED_INACTIVE', 'Employment is not active'],
-    ['NOT_FOUND', 'Employment could not be verified'],
-    ['MULTIPLE_MATCHES', 'Employment needs review'],
-    ['FUTURE_OUTCOME', 'Verification result unavailable'],
-  ])('renders %s safely without internal matching evidence', async (outcome, label) => {
+    ['MATCHED_INACTIVE', 'Employment is not active', 'The verification did not establish active employment for Salary Advance eligibility.'],
+    ['NOT_FOUND', 'Employment could not be verified', 'We could not verify employment using the selected employer and employee code.'],
+    ['MULTIPLE_MATCHES', 'Employment needs review', 'The verification could not establish one eligible employment record.'],
+    ['MANUAL_REVIEW_REJECTED', 'Employment could not be verified', 'We could not verify eligible employment for Salary Advance.'],
+    ['FUTURE_OUTCOME', 'Verification result unavailable', "We can't show the verification result right now. Check your application availability before continuing."],
+  ])('renders %s safely without internal matching evidence', async (outcome, label, description) => {
     const user = userEvent.setup()
     renderRoute('/products/salary-advance', async (input, init) => {
       const url = String(input)
@@ -358,11 +363,13 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     })
 
     await screen.findByRole('heading', { name: 'Verify your employment' })
-    await user.selectOptions(await screen.findByRole('combobox', { name: /Partner Company/ }), partnerCompanyId)
+    await user.selectOptions(await screen.findByRole('combobox', { name: /Employer/ }), partnerCompanyId)
     await user.type(screen.getByRole('textbox', { name: /Employee code/ }), 'PRIVATE-EMPLOYEE-003')
     await user.click(screen.getByRole('button', { name: 'Verify employment' }))
 
     expect(await screen.findByText(label)).toBeVisible()
+    expect(screen.getByText(description)).toBeVisible()
+    expect(screen.queryByText(/update your employment information before trying again/i)).not.toBeInTheDocument()
     expect(screen.queryByText('99999999-9999-4999-8999-999999999991')).not.toBeInTheDocument()
     expect(screen.queryByText('PRIVATE-EMPLOYEE-003')).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Apply for Salary Advance' })).not.toBeInTheDocument()
@@ -391,8 +398,8 @@ describe('FE-CP6 Salary Advance product readiness', () => {
 
     expect(await screen.findByText('Limit values are unavailable')).toBeVisible()
     expect(screen.getByText('Verification status unavailable')).toBeVisible()
-    expect(screen.getByText('Partner status unavailable')).toBeVisible()
-    expect(screen.getByText('Readiness unavailable')).toBeVisible()
+    expect(screen.getByText('Employment status unavailable')).toBeVisible()
+    expect(screen.getByText('Application status unavailable')).toBeVisible()
     const limitCard = screen.getByRole('heading', { name: 'Current Salary Advance limit' }).closest('[class*="rounded-lg"]') as HTMLElement
     expect(within(limitCard).queryByText(moneyText(0))).not.toBeInTheDocument()
   })
@@ -510,7 +517,7 @@ describe('FE-CP6 focused Salary Advance application', () => {
     resolveSubmission?.(response(submittedApplication, 201))
     expect(await screen.findByRole('heading', { name: 'Application submitted' })).toBeVisible()
     expect(screen.getByText(application.applicationNumber)).toBeVisible()
-    expect(screen.getByText('Meridian recorded the application and reserved the requested amount against your current Salary Advance limit after its authoritative submission checks succeeded.')).toBeVisible()
+    expect(screen.getByText('Your application was submitted and the requested amount was reserved against your current Salary Advance limit.')).toBeVisible()
     expect(screen.queryByText(/approved current exposure/i)).not.toBeInTheDocument()
     expect(screen.getByText('Submission confirmed').closest('[role="alert"]')).toHaveClass('bg-success-subtle')
     expect(screen.getByText('Submitted').parentElement).toHaveClass('bg-information-subtle')
@@ -557,13 +564,36 @@ describe('FE-CP6 focused Salary Advance application', () => {
     await user.click(screen.getByRole('button', { name: 'Review request' }))
     await user.click(await screen.findByRole('button', { name: 'Submit application' }))
 
-    expect(await screen.findByRole('heading', { name: 'Application state changed' })).toBeVisible()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Application was not submitted' })).toBeVisible()
     expect(screen.getByText('The current available amount is no longer sufficient for this request.')).toBeVisible()
     expect(screen.getByText(moneyText(2_000_000))).toBeVisible()
     expect(screen.getByText('7 months')).toBeVisible()
     expect(screen.getAllByText(moneyText(1_000_000)).length).toBeGreaterThan(0)
     expect(submissionCalls).toBe(1)
     expect(readinessReads).toBeGreaterThanOrEqual(2)
+  })
+
+  it.each([
+    ['SYSTEM_STATE_CONFLICT', "We couldn't confirm the latest Salary Advance information. Review the latest status and try again if appropriate."],
+    ['SALARY_ADVANCE_ELIGIBILITY_DATA_STALE', 'Your employment verification needs to be refreshed before submission.'],
+    ['BLOCKING_APPLICATION_EXISTS', 'You already have a Salary Advance application in progress. You can submit another after it is no longer active.'],
+  ])('describes %s without inventing changed information or a Customer-controlled resolution', async (errorCode, expectedMessage) => {
+    const user = userEvent.setup()
+    renderRoute('/products/salary-advance/apply', async (input, init) => {
+      if (String(input).endsWith('/loan-applications/salary-advance')) {
+        return errorResponse(errorCode, 409, '/api/v1/loan-applications/salary-advance')
+      }
+      return defaultFetch(input, init)
+    })
+
+    await screen.findByRole('heading', { name: 'Choose your request' })
+    await user.type(screen.getByRole('textbox', { name: /Requested amount/ }), '2000000')
+    await user.selectOptions(screen.getByRole('combobox', { name: /Requested term/ }), '7')
+    await user.click(screen.getByRole('button', { name: 'Review request' }))
+    await user.click(await screen.findByRole('button', { name: 'Submit application' }))
+
+    expect(await screen.findByText(expectedMessage)).toBeVisible()
+    expect(screen.queryByText(/application details changed|your information changed|finish or close/i)).not.toBeInTheDocument()
   })
 
   it('replays a rejected protected readiness request while keeping the product read public', async () => {

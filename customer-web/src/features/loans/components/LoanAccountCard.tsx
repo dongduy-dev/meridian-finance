@@ -37,7 +37,7 @@ export function LoanAccountCard({ account }: { account: CustomerLoanAccountSumma
       </CardHeader>
       <CardContent className="space-y-5">
         <dl className="grid gap-3 sm:grid-cols-3">
-          <FinancialFact label="Originated principal" value={account.originatedPrincipal} />
+          <FinancialFact label="Original principal" value={account.originatedPrincipal} />
           <FinancialFact label="Total paid" value={account.totalPaid} />
           <FinancialFact label="Total outstanding" value={account.totalOutstanding} />
         </dl>

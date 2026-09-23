@@ -19,14 +19,14 @@ export function RepaymentSummary({ account }: { account: LoanAccount }) {
       <CardHeader>
         <CardTitle>Repayment summary</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Servicing state as of {formatDateOnly(servicing.servicingEvaluationDate)}
+          Balances as of {formatDateOnly(servicing.servicingEvaluationDate)}
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
         <section aria-labelledby="originated-terms-heading" className="space-y-3">
-          <h3 id="originated-terms-heading" className="font-semibold">Originated terms</h3>
+          <h3 id="originated-terms-heading" className="font-semibold">Loan terms</h3>
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <MoneyFact label="Originated principal" value={account.originatedPrincipal} />
+            <MoneyFact label="Original principal" value={account.originatedPrincipal} />
             <MoneyFact label="Total interest" value={account.totalInterest} />
             <MoneyFact label="Total fee" value={account.totalFee} />
             <MoneyFact label="Total repayment" value={account.totalRepayment} />
@@ -37,7 +37,7 @@ export function RepaymentSummary({ account }: { account: LoanAccount }) {
         </section>
 
         <section aria-labelledby="servicing-totals-heading" className="space-y-3 border-t border-border pt-5">
-          <h3 id="servicing-totals-heading" className="font-semibold">Current servicing totals</h3>
+          <h3 id="servicing-totals-heading" className="font-semibold">Current balances</h3>
           <dl className="grid gap-3 sm:grid-cols-2">
             <MoneyFact label="Total paid" value={servicing.totalPaid} />
             <MoneyFact label="Total outstanding" value={servicing.totalOutstanding} />

@@ -43,22 +43,22 @@ interface SalaryAdvanceFormValues {
 }
 
 const submissionErrorMessages: Record<string, string> = {
-  CUSTOMER_NOT_FOUND: 'Meridian could not confirm the Customer account for this application.',
+  CUSTOMER_NOT_FOUND: 'Meridian could not confirm your account for this application.',
   PRODUCT_NOT_FOUND: 'The Salary Advance product is no longer available.',
-  CUSTOMER_NOT_ACTIVE: 'The Customer account is no longer active for Salary Advance submission.',
-  PROFILE_INCOMPLETE: 'Your current profile no longer satisfies Salary Advance submission readiness.',
+  CUSTOMER_NOT_ACTIVE: 'Your account is no longer active for Salary Advance applications.',
+  PROFILE_INCOMPLETE: 'Complete your profile before submitting this application.',
   PRIMARY_BANK_ACCOUNT_REQUIRED: 'An active primary bank account is now required before submission.',
   PRODUCT_INACTIVE: 'Salary Advance is no longer active for new applications.',
-  PRODUCT_POLICY_INVALID: 'The current Salary Advance policy cannot accept this application.',
-  INVALID_PRODUCT_AMOUNT: 'The requested amount no longer satisfies the current product policy.',
-  INVALID_PRODUCT_TERM: 'The requested term is no longer allowed by the current product policy.',
+  PRODUCT_POLICY_INVALID: 'Salary Advance applications are temporarily unavailable.',
+  INVALID_PRODUCT_AMOUNT: 'The requested amount is no longer available.',
+  INVALID_PRODUCT_TERM: 'The requested term is no longer available.',
   EMPLOYEE_NOT_VERIFIED: 'Current employment verification is required before submission.',
-  SALARY_ADVANCE_ELIGIBILITY_DATA_STALE: 'Partner employment evidence changed and must be refreshed before submission.',
+  SALARY_ADVANCE_ELIGIBILITY_DATA_STALE: 'Your employment verification needs to be refreshed before submission.',
   SALARY_ADVANCE_LIMIT_UNAVAILABLE: 'Meridian can no longer confirm a usable Salary Advance limit.',
   INSUFFICIENT_AVAILABLE_LIMIT: 'The current available amount is no longer sufficient for this request.',
-  BLOCKING_APPLICATION_EXISTS: 'Another Salary Advance application now blocks this submission.',
+  BLOCKING_APPLICATION_EXISTS: 'You already have a Salary Advance application in progress. You can submit another after it is no longer active.',
   OUTSTANDING_LOAN_ACCOUNT_EXISTS: 'A prior Salary Advance balance now blocks this submission.',
-  SYSTEM_STATE_CONFLICT: 'Meridian could not safely reconcile the current Salary Advance state.',
+  SYSTEM_STATE_CONFLICT: "We couldn't confirm the latest Salary Advance information. Review the latest status and try again if appropriate.",
   VALIDATION_FAILED: 'Meridian could not validate the submitted request. Review the entered amount and term before trying again.',
 }
 
@@ -80,7 +80,7 @@ function SubmissionError({ error }: { error: unknown }) {
         <p>{knownMessage ?? (error instanceof ApiError
           ? error.message
           : 'The request could not be completed. Check your connection and try again.')}</p>
-        <p>Meridian has refreshed the affected current state where appropriate. Review it and submit again only when you are ready.</p>
+        <p>Review the latest information and submit again only when you are ready.</p>
         {error instanceof ApiError && error.requestId ? (
           <p className="break-all text-xs">Support reference: {error.requestId}</p>
         ) : null}
@@ -128,7 +128,7 @@ function SuccessState({ application }: { application: SalaryAdvanceApplication }
     <FocusedFlowLayout
       eyebrow="Salary Advance application"
       title="Application submitted"
-      description="Meridian recorded the application and reserved the requested amount against your current Salary Advance limit after its authoritative submission checks succeeded."
+      description="Your application was submitted and the requested amount was reserved against your current Salary Advance limit."
       currentStep={2}
       totalSteps={2}
       backAction={<span />}
@@ -148,7 +148,7 @@ function SuccessState({ application }: { application: SalaryAdvanceApplication }
           <Alert variant="success" aria-live="polite">
             <CheckCircle2 aria-hidden="true" />
             <AlertTitle>Submission confirmed</AlertTitle>
-            <AlertDescription>Your Dashboard can now reflect this active application from Meridian's application index.</AlertDescription>
+            <AlertDescription>You can now track this application from your dashboard.</AlertDescription>
           </Alert>
           <dl className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-md border border-border bg-background p-4">
@@ -232,7 +232,7 @@ export function SalaryAdvanceApplicationPage() {
       <FocusedFlowLayout
         eyebrow="Salary Advance application"
         title="Prepare your request"
-        description="Meridian is loading the current product policy and Salary Advance readiness."
+        description="We're loading the available amounts, terms, and application status."
         currentStep={1}
         totalSteps={2}
         backAction={backToProduct}
@@ -251,7 +251,7 @@ export function SalaryAdvanceApplicationPage() {
       <FocusedFlowLayout
         eyebrow="Salary Advance application"
         title="Application details unavailable"
-        description="The current product policy and readiness must both be available before Customer Web can prepare a request."
+        description="We need the available amounts, terms, and application status before you can continue."
         currentStep={1}
         totalSteps={2}
         backAction={backToProduct}
@@ -259,10 +259,10 @@ export function SalaryAdvanceApplicationPage() {
       >
         <div className="space-y-5">
           {productQuery.isError ? (
-            <QueryErrorFeedback error={productQuery.error} title="Salary Advance policy could not be loaded" onRetry={() => void productQuery.refetch()} />
+            <QueryErrorFeedback error={productQuery.error} title="Salary Advance details could not be loaded" onRetry={() => void productQuery.refetch()} />
           ) : null}
           {readinessQuery.isError ? (
-            <QueryErrorFeedback error={readinessQuery.error} title="Salary Advance readiness could not be loaded" onRetry={() => void readinessQuery.refetch()} />
+            <QueryErrorFeedback error={readinessQuery.error} title="Application status could not be loaded" onRetry={() => void readinessQuery.refetch()} />
           ) : null}
           {readinessQuery.data ? <SalaryAdvanceReadiness readiness={readinessQuery.data} showApplyAction={false} /> : null}
         </div>
@@ -287,19 +287,19 @@ export function SalaryAdvanceApplicationPage() {
       <>
         <FocusedFlowLayout
           eyebrow="Salary Advance application"
-          title="Application state changed"
-          description="Meridian rejected the submission after re-checking authoritative state. Your request remains in browser memory for a deliberate retry if readiness becomes available again."
+          title="Application was not submitted"
+          description="Review the latest information below. Your entered amount and term are still available."
           currentStep={2}
           totalSteps={2}
           backAction={backToProduct}
-          continueAction={<Button variant="secondary" onClick={() => void readinessQuery.refetch()}>Refresh readiness</Button>}
+          continueAction={<Button variant="secondary" onClick={() => void readinessQuery.refetch()}>Check again</Button>}
         >
           <div className="space-y-6">
             <SubmissionError error={serverError} />
             <Card>
               <CardHeader>
                 <CardTitle>Retained request</CardTitle>
-                <CardDescription>Customer Web has not changed or resubmitted these values.</CardDescription>
+                <CardDescription>These values have not been changed or resubmitted.</CardDescription>
               </CardHeader>
               <CardContent>
                 <dl className="grid gap-4 sm:grid-cols-2">
@@ -327,18 +327,18 @@ export function SalaryAdvanceApplicationPage() {
       <FocusedFlowLayout
         eyebrow="Salary Advance application"
         title="Application cannot be started"
-        description="Review the current authoritative readiness and policy state before trying to apply."
+        description="Review the current application status, available amount, and terms before trying again."
         currentStep={1}
         totalSteps={2}
         backAction={backToProduct}
-        continueAction={<Button variant="secondary" onClick={() => void readinessQuery.refetch()}>Refresh readiness</Button>}
+        continueAction={<Button variant="secondary" onClick={() => void readinessQuery.refetch()}>Check again</Button>}
       >
         <div className="space-y-6">
           {!usableAmountFacts || allowedTerms.length === 0 ? (
             <Alert variant="warning">
               <Info aria-hidden="true" />
-              <AlertTitle>Product policy is unavailable for this form</AlertTitle>
-              <AlertDescription>Meridian must return usable whole-VND amount constraints and at least one allowed term. Customer Web will not invent defaults.</AlertDescription>
+              <AlertTitle>Loan details are unavailable</AlertTitle>
+              <AlertDescription>We can't show an available amount and term right now. Refresh the page or try again later.</AlertDescription>
             </Alert>
           ) : null}
           <SalaryAdvanceReadiness readiness={readiness} showApplyAction={false} />
@@ -360,7 +360,7 @@ export function SalaryAdvanceApplicationPage() {
   }
 
   const validateTerm = (value: string) => (
-    allowedTerms.includes(Number(value)) || 'Select a term returned by the current product policy.'
+    allowedTerms.includes(Number(value)) || 'Select one of the available terms.'
   )
 
   const focusFirstError = (fieldErrors: FieldErrors<SalaryAdvanceFormValues>) => {
@@ -401,8 +401,8 @@ export function SalaryAdvanceApplicationPage() {
         eyebrow="Salary Advance application"
         title={stage === 'request' ? 'Choose your request' : 'Review your application'}
         description={stage === 'request'
-          ? 'Enter a whole-VND amount and select a term from Meridian’s current Salary Advance policy.'
-          : 'Confirm the request below. Meridian will re-check readiness, eligibility, limits, and competing state when you submit.'}
+          ? 'Enter a whole-VND amount and select one of the available terms.'
+          : 'Confirm your request. We will check your information, eligibility, and available limit again when you submit.'}
         currentStep={stage === 'request' ? 1 : 2}
         totalSteps={2}
         backAction={stage === 'request' ? backToProduct : (
@@ -440,7 +440,7 @@ export function SalaryAdvanceApplicationPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Request details</CardTitle>
-                  <CardDescription>Customer Web validates the returned constraints for immediate feedback. Meridian remains authoritative at submission.</CardDescription>
+                  <CardDescription>We'll check that your amount and term are still available when you submit.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
                   <AccountFormField
@@ -467,7 +467,7 @@ export function SalaryAdvanceApplicationPage() {
                     htmlFor="requestedTermMonths"
                     label="Requested term"
                     required
-                    description="Terms come directly from the current Salary Advance product policy."
+                    description="Choose one of the available Salary Advance terms."
                     error={errors.requestedTermMonths?.message}
                   >
                     <select
@@ -492,7 +492,7 @@ export function SalaryAdvanceApplicationPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Confirm your request</CardTitle>
-                  <CardDescription>No interest, repayment, limit, or eligibility calculation is performed in Customer Web.</CardDescription>
+                  <CardDescription>Review the exact amount and term you are about to submit.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <dl className="grid gap-4 sm:grid-cols-2">

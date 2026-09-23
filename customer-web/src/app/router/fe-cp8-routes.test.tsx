@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AppProviders } from '@/app/providers/AppProviders'
 import { AuthSessionManager } from '@/features/auth/auth-session'
+import { correctionErrorMessage } from '@/features/corrections/correction-presentation'
 import { ApiError } from '@/lib/api'
 import { createAuthApiMock, createTestAuthManager } from '@/test/auth'
 
@@ -210,7 +211,7 @@ afterEach(() => {
 describe('FE-CP8 application tracking', () => {
   it('renders the backend-ordered application index with safe status and real detail routes', async () => {
     renderRoute('/applications', state())
-    expect(await screen.findByRole('heading', { name: 'Applications' })).toHaveFocus()
+    expect(await screen.findByRole('heading', { name: 'Your applications' })).toHaveFocus()
     const links = await screen.findAllByRole('link', { name: 'View application' })
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       `/applications/${applicationId}`,
@@ -253,7 +254,7 @@ describe('FE-CP8 application tracking', () => {
     expect(await screen.findByLabelText('Loading application details')).toBeVisible()
     resolveDetail(json(detail))
     expect(await screen.findByRole('heading', { name: summary.applicationNumber, level: 1 })).toBeVisible()
-    expect(screen.getByRole('link', { name: 'Complete corrections' })).toHaveAttribute('href', `/applications/${applicationId}/corrections`)
+    expect(screen.getByRole('link', { name: 'Review requested changes' })).toHaveAttribute('href', `/applications/${applicationId}/corrections`)
     expect(screen.queryByRole('heading', { name: /timeline/i })).not.toBeInTheDocument()
     expect(screen.queryByText(/offer terms|contract details|staff notes/i)).not.toBeInTheDocument()
   })
@@ -261,25 +262,36 @@ describe('FE-CP8 application tracking', () => {
   it('uses a generic concealed unavailable state for application 404', async () => {
     renderRoute(`/applications/${applicationId}`, state({ detailNotFound: true }))
     expect(await screen.findByRole('heading', { name: 'Application unavailable', level: 1 })).toBeVisible()
-    expect(screen.getByText('This application could not be found or is not available to this Customer.')).toBeVisible()
+    expect(screen.getByText('This application could not be found or is not available to you.')).toBeVisible()
     expect(screen.queryByText('Safe LOAN_APPLICATION_NOT_FOUND response.')).not.toBeInTheDocument()
   })
 })
 
 describe('FE-CP8 Customer corrections', () => {
+  it('describes a state conflict without claiming the application changed', () => {
+    const message = correctionErrorMessage(new ApiError({
+      status: 409,
+      errorCode: 'SYSTEM_STATE_CONFLICT',
+      message: 'Safe system conflict.',
+    }), 'Fallback message.')
+
+    expect(message).toBe("We couldn't confirm the latest application status. Review the latest information and try again if needed.")
+    expect(message).not.toMatch(/application changed/i)
+  })
+
   it('composes upload/replacement from the existing document flow and renders Staff/unknown work read-only', async () => {
     const user = userEvent.setup()
     const fixture = state()
     renderRoute(`/applications/${applicationId}/corrections`, fixture)
 
-    expect(await screen.findByRole('heading', { name: 'Complete corrections' })).toHaveFocus()
+    expect(await screen.findByRole('heading', { name: 'Update your application' })).toHaveFocus()
     expect(await screen.findByText(supportingTask.customerInstruction)).toBeVisible()
     expect(screen.getByText(replacementTask.customerInstruction)).toBeVisible()
     expect(screen.getByText('Reason unavailable')).toBeVisible()
-    expect(screen.getByText('Customer action unavailable')).toBeVisible()
+    expect(screen.getByText('Action unavailable')).toBeVisible()
     expect(screen.getByLabelText('Choose file')).toBeVisible()
     expect(screen.getByLabelText('Choose replacement file')).toBeVisible()
-    expect(screen.getAllByRole('button', { name: 'Complete task' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Mark as complete' })).toHaveLength(2)
 
     await user.upload(screen.getByLabelText('Choose file'), new File(['%PDF'], 'uploaded.pdf', { type: 'application/pdf' }))
     await user.click(screen.getByRole('button', { name: 'Upload document' }))
@@ -293,20 +305,20 @@ describe('FE-CP8 Customer corrections', () => {
     const user = userEvent.setup()
     const fixture = state({ proofMissing: true, tasks: [supportingTask] })
     renderRoute(`/applications/${applicationId}/corrections`, fixture)
-    await user.click(await screen.findByRole('button', { name: 'Complete task' }))
-    expect(await screen.findByText(/not yet accepted the required evidence as proof/i)).toBeVisible()
+    await user.click(await screen.findByRole('button', { name: 'Mark as complete' }))
+    expect(await screen.findByText(/required document is not ready/i)).toBeVisible()
     expect(screen.getByText('Open')).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Complete task' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Mark as complete' })).toBeVisible()
   })
 
   it('reuses one completion identity after an uncertain result and completes only from returned task state', async () => {
     const user = userEvent.setup()
     const fixture = state({ completionUncertainOnce: true, tasks: [supportingTask] })
     renderRoute(`/applications/${applicationId}/corrections`, fixture)
-    await user.click(await screen.findByRole('button', { name: 'Complete task' }))
+    await user.click(await screen.findByRole('button', { name: 'Mark as complete' }))
     expect(await screen.findByText(/could not be completed/i)).toBeVisible()
-    await user.click(screen.getByRole('button', { name: 'Complete task' }))
-    expect(await screen.findByText('Meridian reports this Customer task as completed.')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Mark as complete' }))
+    expect(await screen.findByText('This requested change is complete.')).toBeVisible()
     expect(fixture.completionBodies).toHaveLength(2)
     expect(fixture.completionBodies[0]?.completionRequestId).toBe(fixture.completionBodies[1]?.completionRequestId)
   })
@@ -316,12 +328,12 @@ describe('FE-CP8 Customer corrections', () => {
     const completedTask = { ...supportingTask, status: 'COMPLETED', completedAt: '2026-08-31T10:00:00' }
     const fixture = state({ tasks: [completedTask], resubmissionUncertainOnce: true })
     const { router } = renderRoute(`/applications/${applicationId}/corrections`, fixture)
-    const resubmit = await screen.findByRole('button', { name: 'Resubmit corrections' })
+    const resubmit = await screen.findByRole('button', { name: 'Submit updates' })
     await user.click(resubmit)
-    expect(await screen.findByText(/could not be completed/i)).toBeVisible()
-    await user.click(screen.getByRole('button', { name: 'Resubmit corrections' }))
+    expect(await screen.findByText(/could not be submitted/i)).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Submit updates' }))
     await waitFor(() => expect(router.state.location.pathname).toBe(`/applications/${applicationId}`))
-    expect(await screen.findByText('Corrections resubmitted')).toBeVisible()
+    expect(await screen.findByText('Updates submitted')).toBeVisible()
     expect(screen.getByText(/current application status: Submitted/i)).toBeVisible()
     expect(fixture.resubmissionBodies).toHaveLength(2)
     expect(fixture.resubmissionBodies[0]?.resubmissionRequestId).toBe(fixture.resubmissionBodies[1]?.resubmissionRequestId)
@@ -330,14 +342,14 @@ describe('FE-CP8 Customer corrections', () => {
   it('shows a calm waiting state and no resubmit when Customer tasks are complete but requiredAction is NONE', async () => {
     const completedTask = { ...supportingTask, status: 'COMPLETED', completedAt: '2026-08-31T10:00:00' }
     renderRoute(`/applications/${applicationId}/corrections`, state({ applications: [{ ...summary, requiredAction: 'NONE' }], tasks: [completedTask] }))
-    expect(await screen.findByText('Your Customer tasks are complete')).toBeVisible()
-    expect(screen.queryByRole('button', { name: 'Resubmit corrections' })).not.toBeInTheDocument()
+    expect(await screen.findByText('All requested changes are complete')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Submit updates' })).not.toBeInTheDocument()
     expect(screen.queryByText(/Staff work is pending/i)).not.toBeInTheDocument()
   })
 
   it('keeps correction query errors visible with an explicit retry', async () => {
     renderRoute(`/applications/${applicationId}/corrections`, state({ taskQueryFailure: true }))
-    expect(await screen.findByText('Correction tasks could not be loaded')).toBeVisible()
+    expect(await screen.findByText('Requested changes could not be loaded')).toBeVisible()
     expect(screen.getAllByRole('button', { name: 'Try again' }).length).toBeGreaterThan(0)
   })
 })

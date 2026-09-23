@@ -37,7 +37,7 @@ function ProductPolicy({ product }: { product: LoanProduct }) {
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
       <div className="space-y-6">
         <Card>
-          <CardHeader><CardTitle>Product policy</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Amounts &amp; terms</CardTitle></CardHeader>
           <CardContent>
             <dl className="grid gap-4 sm:grid-cols-2">
               <PolicyFact label="Minimum amount"><MoneyDisplay value={product.minAmount} /></PolicyFact>
@@ -54,8 +54,8 @@ function ProductPolicy({ product }: { product: LoanProduct }) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Submission evidence</CardTitle>
-            <p className="text-sm leading-6 text-muted-foreground">Evidence requirements are returned by the active product policy.</p>
+            <CardTitle>Required documents</CardTitle>
+            <p className="text-sm leading-6 text-muted-foreground">Review the documents that may be required with your application.</p>
           </CardHeader>
           <CardContent>
             {product.policy.submissionEvidenceRequirements.length ? (
@@ -69,7 +69,7 @@ function ProductPolicy({ product }: { product: LoanProduct }) {
               </ul>
             ) : (
               <p className="rounded-md bg-background p-4 text-sm leading-6 text-muted-foreground">
-                No submission evidence is listed for this product.
+                No documents are listed for this product.
               </p>
             )}
           </CardContent>
@@ -78,8 +78,8 @@ function ProductPolicy({ product }: { product: LoanProduct }) {
 
       <Card className="h-fit">
         <CardHeader>
-          <CardTitle>Eligibility notes</CardTitle>
-          <p className="text-sm leading-6 text-muted-foreground">These notes explain returned product prerequisites; they do not determine individual eligibility.</p>
+          <CardTitle>Eligibility</CardTitle>
+          <p className="text-sm leading-6 text-muted-foreground">These notes explain the general requirements. Your information is checked when you apply.</p>
         </CardHeader>
         <CardContent>
           {product.policy.eligibilityNotes.length ? (
@@ -92,7 +92,7 @@ function ProductPolicy({ product }: { product: LoanProduct }) {
               ))}
             </ul>
           ) : (
-            <p className="text-sm leading-6 text-muted-foreground">No eligibility notes are listed for this product.</p>
+            <p className="text-sm leading-6 text-muted-foreground">No additional eligibility information is listed for this product.</p>
           )}
         </CardContent>
       </Card>
@@ -170,18 +170,18 @@ function SalaryAdvanceProductContent() {
 
       <section aria-labelledby="salary-advance-readiness-heading" className="space-y-5">
         <div>
-          <h2 id="salary-advance-readiness-heading" className="text-2xl font-semibold tracking-tight">Your Salary Advance readiness</h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">Review the current backend readiness result, returned limit facts, and any Customer action Meridian requires.</p>
+          <h2 id="salary-advance-readiness-heading" className="text-2xl font-semibold tracking-tight">Before you apply</h2>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">Check your application availability, current limit, and any next steps.</p>
         </div>
         {readinessQuery.isPending ? (
-          <div className="grid gap-6 xl:grid-cols-2" role="status" aria-label="Loading Salary Advance readiness">
+          <div className="grid gap-6 xl:grid-cols-2" role="status" aria-label="Loading application status">
             <Skeleton className="h-80" /><Skeleton className="h-80" />
           </div>
         ) : null}
         {readinessQuery.isError ? (
           <QueryErrorFeedback
             error={readinessQuery.error}
-            title="Salary Advance readiness could not be loaded"
+            title="Salary Advance application status could not be loaded"
             onRetry={() => void readinessQuery.refetch()}
           />
         ) : null}
@@ -205,8 +205,8 @@ export function ProductDetailPage() {
         <PageHeader eyebrow="Product details" title="Product not available" />
         <EmptyState
           icon={Shapes}
-          title="Unknown product route"
-          description="This product route is not part of the current Meridian catalogue experience."
+          title="Product unavailable"
+          description="This product is not available. Return to the loan catalogue to view your options."
           action={<Button variant="secondary" asChild><Link to="/products">Return to products</Link></Button>}
         />
       </div>

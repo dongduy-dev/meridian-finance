@@ -46,7 +46,7 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
   const { pathname } = useLocation()
 
   return (
-    <nav aria-label="Customer navigation" className="space-y-1">
+    <nav aria-label="Main navigation" className="space-y-1">
       {navigation.map(({ label, href, icon: Icon, end }) => {
         const isActive = end
           ? pathname === href
@@ -109,15 +109,15 @@ export function CustomerAppLayout() {
           <div className="flex items-center gap-3 lg:hidden">
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Open customer navigation">
+                <Button variant="ghost" size="icon" aria-label="Open menu">
                   <Menu aria-hidden="true" />
                 </Button>
               </SheetTrigger>
               <SheetContent className="bg-primary text-primary-foreground">
                 <SheetHeader>
-                  <SheetTitle className="text-primary-foreground">Customer navigation</SheetTitle>
+                  <SheetTitle className="text-primary-foreground">Menu</SheetTitle>
                   <SheetDescription className="text-primary-foreground/65">
-                    Choose a Customer Web destination.
+                    Choose where you want to go.
                   </SheetDescription>
                 </SheetHeader>
                 <div className="px-4 pb-6">
@@ -133,7 +133,7 @@ export function CustomerAppLayout() {
 
           <div className="hidden lg:block">
             <p className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-              Customer Web
+              Meridian
             </p>
           </div>
 

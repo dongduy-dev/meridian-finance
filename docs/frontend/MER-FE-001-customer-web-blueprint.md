@@ -107,6 +107,7 @@ This blueprint does not define:
 - A form wizard step is client navigation, not a `LoanApplication` status.
 - Browser storage must not become an application index, LoanAccount index, document register, or recovery source when the API lacks the corresponding query.
 - Customer Web must not expose Staff-only notes, evidence, actions, identifiers, or endpoints.
+- Customer Web presents backend facts in Customer language. Visible copy must not expose implementation terms such as backend, projection, persistence, authoritative state, or internal domain entity names unless the term has genuine Customer meaning.
 
 ### 4.2 Status Presentation
 

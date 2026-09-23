@@ -14,21 +14,21 @@ export interface CorrectionScopePresentation {
 const scopes: Record<string, CorrectionScopePresentation> = {
   SUPPORTING_DOCUMENT_UPLOAD: {
     label: 'Supporting document required',
-    description: 'Upload the requested supporting evidence, then explicitly complete this task.',
+    description: 'Upload the requested supporting document, then mark this change as complete.',
     status: { label: 'Upload required', tone: 'warning', icon: FileUp },
     documentAction: 'upload',
     customerCompletable: true,
   },
   DOCUMENT_REPLACEMENT: {
     label: 'Document replacement required',
-    description: 'Replace the current document version, then explicitly complete this task.',
+    description: 'Upload a replacement document, then mark this change as complete.',
     status: { label: 'Replacement required', tone: 'warning', icon: RefreshCcw },
     documentAction: 'replace',
     customerCompletable: true,
   },
   DOCUMENT_REVIEW: {
-    label: 'Document review unavailable',
-    description: 'This task type is not Customer-executable. Customer Web will not expose a Staff review action.',
+    label: 'Document review in progress',
+    description: 'This review is completed by Meridian. There is no action for you right now.',
     status: { label: 'Action unavailable', tone: 'neutral', icon: ShieldAlert },
     customerCompletable: false,
   },
@@ -47,22 +47,22 @@ const taskStatuses: Record<string, StatusPresentation> = {
 }
 
 const correctionMessages: Record<string, string> = {
-  CORRECTION_TASK_PROOF_MISSING: 'Meridian has not yet accepted the required evidence as proof for this task. Review the current document state before trying again.',
-  CORRECTION_TASKS_INCOMPLETE: 'Every required Customer task must be completed before resubmission.',
-  CORRECTION_RESUBMISSION_DENIED: 'Customer resubmission is not available for the current correction state.',
-  CORRECTION_ALREADY_RESUBMITTED: 'This correction was already resubmitted. Meridian refreshed the authoritative application state.',
-  CORRECTION_REQUEST_CONFLICT: 'The correction request changed and is no longer actionable in its previous state.',
-  CORRECTION_TASK_ALREADY_COMPLETED: 'This task was already completed. Meridian refreshed the task state.',
-  IDEMPOTENCY_KEY_REUSED: 'This operation identity no longer matches the requested action. Review the refreshed state before trying again.',
-  LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED: 'Cancellation is no longer available for this application state.',
+  CORRECTION_TASK_PROOF_MISSING: 'The required document is not ready for this change. Review its current status before trying again.',
+  CORRECTION_TASKS_INCOMPLETE: 'Complete every requested change before submitting your updates.',
+  CORRECTION_RESUBMISSION_DENIED: 'Submitting updates is not available for this application right now.',
+  CORRECTION_ALREADY_RESUBMITTED: 'These changes were already submitted. The application status has been refreshed.',
+  CORRECTION_REQUEST_CONFLICT: 'The requested changes have changed. Review the latest information before continuing.',
+  CORRECTION_TASK_ALREADY_COMPLETED: 'This change was already completed. Its status has been refreshed.',
+  IDEMPOTENCY_KEY_REUSED: 'This action could not be safely repeated. Review the latest status before trying again.',
+  LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED: 'Cancellation is no longer available for this application.',
   LOAN_APPLICATION_NOT_FOUND: 'This application is unavailable.',
-  SYSTEM_STATE_CONFLICT: 'The current application state could not be reconciled safely.',
+  SYSTEM_STATE_CONFLICT: "We couldn't confirm the latest application status. Review the latest information and try again if needed.",
 }
 
 export function correctionScopePresentation(value: string): CorrectionScopePresentation {
   return scopes[value] ?? {
     label: 'Task type unavailable',
-    description: 'Customer Web cannot describe or execute this task type safely.',
+    description: "We can't show or complete this type of task right now.",
     status: unavailableStatus,
     customerCompletable: false,
   }
