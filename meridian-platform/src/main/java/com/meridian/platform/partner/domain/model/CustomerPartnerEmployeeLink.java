@@ -86,6 +86,27 @@ public record CustomerPartnerEmployeeLink(
         );
     }
 
+    public CustomerPartnerEmployeeLink refreshFromAuthoritativeImport(
+            PartnerEmployee partnerEmployee,
+            LocalDateTime refreshedAt
+    ) {
+        Objects.requireNonNull(partnerEmployee, "partnerEmployee must not be null");
+
+        return new CustomerPartnerEmployeeLink(
+                id,
+                customerId,
+                partnerEmployee.partnerCompanyId(),
+                partnerEmployee.id(),
+                partnerEmployee.importBatchId(),
+                EmployeeVerificationOutcome.MATCHED_ACTIVE,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED,
+                verifiedIdentityRef,
+                verifiedEmployeeCode,
+                lastVerifiedAt,
+                Objects.requireNonNull(refreshedAt, "refreshedAt must not be null")
+        );
+    }
+
     public CustomerPartnerEmployeeLink approveManualReview(
             PartnerEmployee partnerEmployee,
             String verifiedIdentityRef,

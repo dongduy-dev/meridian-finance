@@ -17,5 +17,7 @@ public interface CustomerPartnerEmployeeLinkRepository {
 
     List<CustomerPartnerEmployeeLink> findByCustomerId(UUID customerId);
 
+    List<CustomerPartnerEmployeeLink> findVerifiedByPartnerCompanyId(UUID partnerCompanyId);
+
     CustomerPartnerEmployeeLink save(CustomerPartnerEmployeeLink customerPartnerEmployeeLink);
 }

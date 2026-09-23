@@ -192,9 +192,15 @@ The effective-month import command uses this transaction order:
 2. return the stored outcome for an exact semantic fingerprint, or reject conflicting reuse;
 3. lock the Partner Company and verify that it exists without treating inactive or suspended status as an import prohibition;
 4. validate rows independently and exclude invalid or duplicate employee-code rows;
-5. persist one completed batch, every valid employee row, the safe rejection summary, and one PII-safe business audit outcome atomically.
+5. persist one completed batch with its safe rejection summary and every valid employee row;
+6. if the new batch is the deterministic latest `COMPLETED` batch for that Partner Company and current UTC month, load the company's existing `VERIFIED` links in deterministic Customer/link order;
+7. skip any link whose Customer and Partner Company have a pending eligibility review, then compare the remaining link's stored verified identity reference and employee code with employees in the new batch through the normal Partner matching policy;
+8. refresh the same link to the new employee and source batch only for `MATCHED_ACTIVE`, leaving missing, ambiguous, and inactive matches unchanged and therefore stale;
+9. publish one PII-safe business audit outcome before committing the complete import result.
 
-Request replay evidence stores the UUID and a SHA-256 semantic fingerprint rather than the raw command. Multiple batches for the same company and month remain valid. The existing latest-completed selection determines authoritative eligibility evidence; neither the import command nor Internal Web refreshes Customer–Partner Employee links or changes Loan-owned state.
+The Partner Company row remains the import reconciliation serialization boundary. The import path does not acquire the Customer–Partner advisory lock after that row lock and does not mutate pending review rows; verification and review decisions retain their existing advisory-lock-before-company-row order. A failure after a link refresh rolls back the batch, employees, link changes, rejection summary, and audit outcome in the same transaction.
+
+Request replay evidence stores the UUID and a SHA-256 semantic fingerprint rather than the raw command. Exact replay returns before reconciliation, so it does not advance link refresh timestamps or repeat audit effects. Multiple batches for the same company and month remain valid, and only the deterministic latest completed current-month batch may refresh links. Partner mutates only the Partner-owned relationship. It does not create or change LoanApplications, Salary Advance limits, movements, or exposure. Loan readiness projects the current effective limit from Partner eligibility, and Loan persists its own limit refresh during submission when required.
 
 ### 5.2 Loan Product Administration
 
@@ -318,7 +324,7 @@ The decision transaction follows this order:
 5. create or refresh the reusable `VERIFIED` link with `MANUAL_REVIEW_APPROVED`, or record `MANUAL_REVIEW_REJECTED` without a link mutation;
 6. persist the controlled reason, reviewer, decision time, selected employee/source evidence when approved, and PII-safe audit outcome in the same transaction.
 
-A prior-month review or a review bound to a replaced authoritative batch returns a stable stale-review conflict and requires fresh Customer verification. Import completion does not proactively refresh Customer links or reviews; that reconciliation remains a separate Partner capability.
+A prior-month review or a review bound to a replaced authoritative batch returns a stable stale-review conflict and requires fresh Customer verification. Import-time reconciliation never resolves or mutates a pending review; that relationship remains under the manual-review authority until Customer verification or an authorized decision changes it.
 
 ---
 

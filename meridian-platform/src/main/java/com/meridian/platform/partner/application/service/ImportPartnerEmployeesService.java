@@ -4,14 +4,19 @@ import com.meridian.platform.partner.application.dto.ImportPartnerEmployeesReque
 import com.meridian.platform.partner.application.dto.PartnerEmployeeImportResultDto;
 import com.meridian.platform.partner.application.dto.PartnerEmployeeImportRowRequest;
 import com.meridian.platform.partner.application.port.in.ImportPartnerEmployeesUseCase;
+import com.meridian.platform.partner.application.port.out.CustomerPartnerEmployeeLinkRepository;
 import com.meridian.platform.partner.application.port.out.PartnerCompanyRepository;
+import com.meridian.platform.partner.application.port.out.PartnerEligibilityReviewRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportBatchRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeRepository;
+import com.meridian.platform.partner.domain.model.CustomerPartnerEmployeeLink;
+import com.meridian.platform.partner.domain.model.EmployeeVerificationOutcome;
 import com.meridian.platform.partner.domain.model.PartnerEmployee;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatch;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportBatchStatus;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeImportRejection;
 import com.meridian.platform.partner.domain.model.PartnerEmployeeStatus;
+import com.meridian.platform.partner.domain.service.PartnerEmployeeVerificationPolicy;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -55,14 +60,19 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
     private final PartnerCompanyRepository companies;
     private final PartnerEmployeeImportBatchRepository batches;
     private final PartnerEmployeeRepository employees;
+    private final CustomerPartnerEmployeeLinkRepository links;
+    private final PartnerEligibilityReviewRepository reviews;
     private final CurrentUserProvider currentUserProvider;
     private final BusinessAuditPublisher auditPublisher;
     private final Clock clock;
+    private final PartnerEmployeeVerificationPolicy verificationPolicy = new PartnerEmployeeVerificationPolicy();
 
     public ImportPartnerEmployeesService(
             PartnerCompanyRepository companies,
             PartnerEmployeeImportBatchRepository batches,
             PartnerEmployeeRepository employees,
+            CustomerPartnerEmployeeLinkRepository links,
+            PartnerEligibilityReviewRepository reviews,
             CurrentUserProvider currentUserProvider,
             BusinessAuditPublisher auditPublisher,
             Clock clock
@@ -70,6 +80,8 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
         this.companies = companies;
         this.batches = batches;
         this.employees = employees;
+        this.links = links;
+        this.reviews = reviews;
         this.currentUserProvider = currentUserProvider;
         this.auditPublisher = auditPublisher;
         this.clock = clock;
@@ -99,6 +111,7 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
             return toResult(replay);
         }
 
+        LocalDateTime operationTime = LocalDateTime.now(clock);
         companies.findByIdForUpdate(partnerCompanyId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "PARTNER_COMPANY_NOT_FOUND", "Partner company was not found."
@@ -126,8 +139,51 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
         );
         PartnerEmployeeImportBatch saved = batches.save(batch);
         employees.saveAll(validEmployees);
-        publishAudit(saved);
+        reconcileVerifiedLinks(saved, operationTime);
+        publishAudit(saved, operationTime);
         return toResult(saved);
+    }
+
+    private void reconcileVerifiedLinks(
+            PartnerEmployeeImportBatch savedBatch,
+            LocalDateTime operationTime
+    ) {
+        String currentMonth = YearMonth.from(operationTime).toString();
+        if (!currentMonth.equals(savedBatch.effectiveMonth())) {
+            return;
+        }
+
+        PartnerEmployeeImportBatch authoritativeBatch = batches
+                .findLatestCompletedByPartnerCompanyIdAndEffectiveMonth(
+                        savedBatch.partnerCompanyId(), currentMonth
+                )
+                .orElse(null);
+        if (authoritativeBatch == null || !authoritativeBatch.id().equals(savedBatch.id())) {
+            return;
+        }
+
+        for (CustomerPartnerEmployeeLink link : links.findVerifiedByPartnerCompanyId(
+                savedBatch.partnerCompanyId()
+        )) {
+            if (reviews.findPendingByCustomerIdAndPartnerCompanyId(
+                    link.customerId(), savedBatch.partnerCompanyId()
+            ).isPresent()) {
+                continue;
+            }
+
+            List<PartnerEmployee> matchingEmployees = employees.findByVerificationEvidence(
+                    savedBatch.partnerCompanyId(),
+                    savedBatch.id(),
+                    link.verifiedIdentityRef(),
+                    link.verifiedEmployeeCode()
+            );
+            if (verificationPolicy.determineOutcome(matchingEmployees)
+                    != EmployeeVerificationOutcome.MATCHED_ACTIVE) {
+                continue;
+            }
+
+            links.save(link.refreshFromAuthoritativeImport(matchingEmployees.getFirst(), operationTime));
+        }
     }
 
     private static String validEffectiveMonth(String value) {
@@ -279,9 +335,11 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
         }
     }
 
-    private void publishAudit(PartnerEmployeeImportBatch batch) {
+    private void publishAudit(
+            PartnerEmployeeImportBatch batch,
+            LocalDateTime occurredAt
+    ) {
         AuthenticatedUser actor = currentUserProvider.currentUser();
-        LocalDateTime occurredAt = LocalDateTime.now(clock);
         BusinessAuditPayload payload = BusinessAuditPayload.builder()
                 .put(BusinessAuditPayloadKey.PARTNER_COMPANY_ID, batch.partnerCompanyId())
                 .put(BusinessAuditPayloadKey.PARTNER_EMPLOYEE_IMPORT_BATCH_ID, batch.id())

@@ -51,6 +51,16 @@ public class CustomerPartnerEmployeeLinkRepositoryAdapter implements CustomerPar
     }
 
     @Override
+    public List<CustomerPartnerEmployeeLink> findVerifiedByPartnerCompanyId(UUID partnerCompanyId) {
+        return jpaRepository.findByPartnerCompanyIdAndLinkStatusOrderByCustomerIdAscIdAsc(
+                        partnerCompanyId,
+                        CustomerPartnerEmployeeLinkStatus.VERIFIED
+                ).stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
     public CustomerPartnerEmployeeLink save(CustomerPartnerEmployeeLink customerPartnerEmployeeLink) {
         LocalDateTime now = LocalDateTime.now(clock);
         CustomerPartnerEmployeeLinkJpaEntity entity = jpaRepository.findById(customerPartnerEmployeeLink.id())
