@@ -20,4 +20,10 @@ public interface JpaCustomerPartnerEmployeeLinkRepository
                     UUID customerId,
                     CustomerPartnerEmployeeLinkStatus linkStatus
             );
+
+    List<CustomerPartnerEmployeeLinkJpaEntity>
+            findByPartnerCompanyIdAndLinkStatusOrderByCustomerIdAscIdAsc(
+                    UUID partnerCompanyId,
+                    CustomerPartnerEmployeeLinkStatus linkStatus
+            );
 }

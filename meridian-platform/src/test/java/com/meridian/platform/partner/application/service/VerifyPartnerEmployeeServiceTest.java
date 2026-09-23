@@ -529,6 +529,15 @@ class VerifyPartnerEmployeeServiceTest {
         }
 
         @Override
+        public List<CustomerPartnerEmployeeLink> findVerifiedByPartnerCompanyId(UUID partnerCompanyId) {
+            return currentLink
+                    .filter(link -> link.partnerCompanyId().equals(partnerCompanyId))
+                    .filter(CustomerPartnerEmployeeLink::isVerified)
+                    .stream()
+                    .toList();
+        }
+
+        @Override
         public CustomerPartnerEmployeeLink save(CustomerPartnerEmployeeLink customerPartnerEmployeeLink) {
             savedLink = customerPartnerEmployeeLink;
             currentLink = Optional.of(customerPartnerEmployeeLink);

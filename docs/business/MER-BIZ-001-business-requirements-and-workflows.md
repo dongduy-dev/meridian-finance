@@ -508,6 +508,7 @@ Salary Advance is Meridian's flagship MVP product. It is a limit-based product i
 - Back-Office Admin imports Partner Employee data by effective month.
 - System records the import batch, validates each row, stores valid records, and prevents invalid or unresolved duplicate rows from normal eligibility.
 - Normal eligibility uses the authoritative latest valid `COMPLETED` import batch for the current UTC effective month. If no such batch exists, or a verified link and its employee source do not both reference that batch, the evidence is stale and normal eligibility fails closed.
+- After an authoritative current-month import completes, Partner refreshes an existing `VERIFIED` link only when its stored verified identity reference and employee code resolve to exactly one active employee in that batch. A pending Partner eligibility review keeps the relationship under manual-review authority. Missing, ambiguous, or inactive evidence leaves the link on its prior source batch so normal eligibility fails closed.
 - An inactive Partner Company or Partner Employee is a hard stop.
 
 #### Customer Verification and Dashboard
@@ -521,7 +522,7 @@ The Salary Advance product page shows:
 - last refresh time;
 - the business reason normal application creation is blocked.
 
-A Customer without a valid employee link completes employee verification before starting a Salary Advance application. A link remains reusable while its status is `VERIFIED` and current Partner evidence remains eligible. Re-verification against the authoritative current-month batch refreshes the reusable link and restores eligibility when the current evidence matches.
+A Customer without a valid employee link completes employee verification before starting a Salary Advance application. A link remains reusable while its status is `VERIFIED` and current Partner evidence remains eligible. Partner may refresh the same link from a newly completed authoritative current-month batch when the stored verified evidence resolves to exactly one active employee and no Partner eligibility review is pending. Otherwise, re-verification against the authoritative current-month batch refreshes the reusable link when the current evidence matches or routes an eligible unresolved relationship to manual review.
 
 Employee-verification outcomes:
 
@@ -578,6 +579,8 @@ Limit behavior:
 - Disbursement converts the reservation to used exposure.
 - Ordinary repayment and Administrative Full-Balance Settlement release only allocated principal.
 - Existing loans and application history remain after suspension or disablement.
+
+Import-time link refresh changes only Partner-owned relationship evidence. Salary Advance readiness projects the effective current limit from the refreshed Partner evidence, and Loan persists its own limit refresh and movement when a later submission requires it. Partner import does not bulk mutate Salary Advance limits or exposure.
 
 Each submitted application records the employee-link, limit identity, limit values, and verification result used at submission.
 
@@ -843,7 +846,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-011 | An inactive Partner Employee cannot support normal Salary Advance eligibility. |
 | BR-012 | A matching `ACTIVE` or `OVERDUE` Salary Advance LoanAccount with positive contractual outstanding blocks new Salary Advance submission independently of overdue-evaluation freshness. |
 | BR-013 | Disbursed unreleased Salary Advance principal contributes to used exposure; submitted unreleased applications contribute to reserved exposure. |
-| BR-014 | Salary Advance calculation and refresh use the authoritative latest valid `COMPLETED` Partner Employee import batch for the current UTC effective month. Missing current-month evidence or a verified link/employee sourced from another batch is stale and fails closed until re-verification refreshes the link. |
+| BR-014 | Salary Advance calculation and refresh use the authoritative latest valid `COMPLETED` Partner Employee import batch for the current UTC effective month. Partner may refresh an existing verified link during import only when its stored evidence resolves to exactly one active employee and no Partner eligibility review is pending. Missing, ambiguous, inactive, or review-controlled evidence remains on its prior batch and fails closed until Customer verification or authorized review establishes current evidence. |
 | BR-015 | `SUSPENDED`, `DISABLED`, `STALE`, absent, or insufficient Salary Advance limit blocks normal creation and submission. |
 | BR-016 | Every submitted Salary Advance application records its own verification snapshot even when the reusable link already exists. |
 | BR-017 | Rejection, cancellation, Customer decline, offer expiry, or another approved pre-disbursement release frees the Salary Advance reservation exactly once in the same controlled operation as the application outcome. |

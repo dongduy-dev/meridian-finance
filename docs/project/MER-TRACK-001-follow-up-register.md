@@ -200,7 +200,7 @@ Status: Done
 Blocking: No current blocker.
 
 Resolution:
-Partner persists or reuses one unresolved review per Customer and Partner Company when Customer employee verification cannot establish a safe automatic match. Back-Office Staff with `partner:read` inspect the shared queue and purpose-limited current evidence; `partner:manage` authorizes controlled approval or rejection. Approval selects and revalidates one exact active Partner Employee from the authoritative current-month batch, creates or refreshes the reusable verified link with `MANUAL_REVIEW_APPROVED`, and records reviewer, reason, source evidence, and PII-safe audit in one transaction. Rejection records `MANUAL_REVIEW_REJECTED` without a link mutation. Customer verification and decisions share a serialization boundary, terminal exact replay is stable, conflicting decisions return a conflict, and prior-month or replaced-batch reviews fail closed. Automatic post-import link refresh and reconciliation remain separately tracked by MER-FU-028.
+Partner persists or reuses one unresolved review per Customer and Partner Company when Customer employee verification cannot establish a safe automatic match. Back-Office Staff with `partner:read` inspect the shared queue and purpose-limited current evidence; `partner:manage` authorizes controlled approval or rejection. Approval selects and revalidates one exact active Partner Employee from the authoritative current-month batch, creates or refreshes the reusable verified link with `MANUAL_REVIEW_APPROVED`, and records reviewer, reason, source evidence, and PII-safe audit in one transaction. Rejection records `MANUAL_REVIEW_REJECTED` without a link mutation. Customer verification and decisions share a serialization boundary, terminal exact replay is stable, conflicting decisions return a conflict, and prior-month or replaced-batch reviews fail closed. MER-FU-028 resolves automatic post-import refresh for relationships that are not already under this manual-review authority.
 
 ### MER-FU-010 - Implement review/approval/customer acceptance/disbursement lifecycle
 
@@ -533,44 +533,31 @@ Suggested future branch name:
 
 ### MER-FU-028 - Automatically refresh customer employee links after completed Partner Employee imports
 
-Area: Partner / Salary Advance Limit Refresh
+Area: Partner / Salary Advance eligibility evidence
 
-Type: Deferred feature
+Type: Completed feature
 
 Priority: P1
 
-Status: Open
+Status: Done
 
 Blocking: No current blocker.
 
-Problem:
-Customer Partner Employee links are refreshed when the Customer verifies again. They are not automatically refreshed when new Partner Employee imports are completed.
+Resolution:
+An authoritative latest `COMPLETED` current-month Partner Employee import reconciles existing `VERIFIED` links in the import transaction. Partner reuses each link's stored verified identity reference and employee code and refreshes the same link only when the normal matching policy returns exactly one active employee. Missing, ambiguous, or inactive evidence remains linked to the prior batch and therefore fails closed as stale. A pending Partner eligibility review prevents automatic refresh and remains unchanged under MER-FU-009 authority.
 
-Risk:
-Normal Salary Advance eligibility now fails closed when a reusable link is backed by stale or non-current-month Partner evidence. This prevents stale evidence from authorizing credit, but Customers remain blocked until re-verification or a future proactive refresh process updates the link.
+The import request lock and Partner Company row retain the existing serialization order. Exact replay returns before reconciliation, conflicting request reuse fails before mutation, and any later audit or persistence failure rolls back the batch, employee rows, link refreshes, and audit outcome together. The import path does not acquire the Customer–Partner advisory lock after the company row and does not introduce the opposite review lock order.
 
-Existing safety boundary:
+Partner changes only Partner-owned relationship evidence. Salary Advance readiness projects the effective current limit from fresh Partner evidence, and Loan persists any required `SalaryAdvanceLimit` refresh and movement during submission. Partner does not bulk mutate Loan-owned limit or exposure state.
 
-- Partner evidence freshness is enforced for normal Salary Advance eligibility.
-- Verified links backed by stale/non-current effective-month evidence fail closed.
-- Current eligibility uses the authoritative latest valid `COMPLETED` current-month import evidence.
-- Re-verification can refresh the reusable link.
-- Submission and correction resubmission cannot authorize credit using stale Partner evidence.
+Not required for the MVP resolution:
 
-Still deferred:
+- a background scheduler, event-driven retry worker, or reconciliation job table;
+- a reconciliation dashboard or new Customer, Staff, or Back-Office action;
+- Partner-triggered bulk mutation of Loan-owned `SalaryAdvanceLimit`;
+- configurable evidence-aging windows beyond the approved current-month rule.
 
-- Automatic refresh immediately after Partner import completion.
-- Background reconciliation of all affected Customer links.
-- Automatic bulk Salary Advance limit recalculation.
-- Event- or scheduler-based proactive refresh.
-- Operational reconciliation and retry tooling.
-- Richer configurable aging windows beyond the approved current-month MVP rule if business policy later changes.
-
-Recommendation:
-Implement the proactive refresh and reconciliation capabilities above without weakening inactive Partner Company/Employee hard stops or the completed fail-closed boundary.
-
-Suggested future branch name:
-`feature/partner-employee-import-link-refresh`
+Unsafe links already fail closed, and the synchronous import/reconciliation outcome is atomic and request-id retryable. These hardening or expansion ideas do not keep MER-FU-028 open.
 
 ### MER-FU-029 - Harden Salary Advance same-customer cross-link submission concurrency
 
