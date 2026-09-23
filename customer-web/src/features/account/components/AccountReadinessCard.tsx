@@ -74,9 +74,9 @@ export function AccountReadinessCard({ customer }: { customer: Customer }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Account readiness</CardTitle>
+        <CardTitle>Account setup</CardTitle>
         <CardDescription>
-          These account setup facts come from Meridian. They do not indicate loan eligibility.
+          Complete these details before applying. Account setup does not indicate loan eligibility.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -84,7 +84,7 @@ export function AccountReadinessCard({ customer }: { customer: Customer }) {
           <ReadinessItem
             complete={profileComplete}
             icon={UserRound}
-            title="Customer profile"
+            title="Your profile"
             description={profileComplete ? 'Your required profile details are on file.' : 'Complete the required profile and consent details.'}
             href="/account/profile"
             action="Complete profile"
@@ -100,7 +100,7 @@ export function AccountReadinessCard({ customer }: { customer: Customer }) {
         </div>
         <div className="flex flex-wrap gap-x-6 gap-y-2 rounded-md bg-information-subtle px-4 py-3 text-sm text-information">
           <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          <span><strong>Customer status:</strong> {safeLabel(customerStatusLabels, customer.status)}</span>
+          <span><strong>Account status:</strong> {safeLabel(customerStatusLabels, customer.status)}</span>
           <span><strong>Profile verification:</strong> {safeLabel(verificationStatusLabels, customer.verificationStatus)}</span>
         </div>
       </CardContent>

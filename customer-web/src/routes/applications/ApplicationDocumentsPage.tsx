@@ -41,9 +41,9 @@ export function ApplicationDocumentsPage() {
 
   return (
     <FocusedFlowLayout
-      eyebrow="Application evidence"
+      eyebrow="Application documents"
       title="Documents"
-      description="Upload required evidence and review the current Customer-safe checklist state returned by Meridian."
+      description="Upload the documents we need and track their review status."
       backAction={<Button variant="secondary" asChild><Link to="/">Return to Dashboard</Link></Button>}
     >
       <div className="space-y-8">
@@ -58,22 +58,22 @@ export function ApplicationDocumentsPage() {
         </Alert>
       ) : null}
       {checklistQuery.isPending ? (
-        <div className="space-y-5" role="status" aria-label="Loading document checklist"><Skeleton className="h-40" /><Skeleton className="h-72" /></div>
+        <div className="space-y-5" role="status" aria-label="Loading documents"><Skeleton className="h-40" /><Skeleton className="h-72" /></div>
       ) : null}
       {checklistQuery.isError ? (
-        <QueryErrorFeedback error={checklistQuery.error} title="Document checklist could not be loaded" onRetry={() => void checklistQuery.refetch()} />
+        <QueryErrorFeedback error={checklistQuery.error} title="Documents could not be loaded" onRetry={() => void checklistQuery.refetch()} />
       ) : null}
       {checklistQuery.data ? (
         <>
           <section aria-labelledby="checklist-readiness-heading" className="space-y-4">
-            <div><h2 id="checklist-readiness-heading" className="text-xl font-semibold">Checklist readiness</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">These aggregate facts come directly from Meridian and do not imply loan approval.</p></div>
+            <div><h2 id="checklist-readiness-heading" className="text-xl font-semibold">Document progress</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Document completion does not mean that your loan is approved.</p></div>
             <dl className="grid gap-4 sm:grid-cols-2">
-              <ReadinessFact label="Uploads" ready={checklistQuery.data.uploadComplete} readyText="Current required upload-level evidence is present or otherwise satisfied." pendingText="One or more upload-level requirements are still incomplete." />
-              <ReadinessFact label="Processing" ready={checklistQuery.data.processingReady} readyText="Meridian says this checklist is ready for downstream processing." pendingText="Document review or readiness is not complete yet." />
+              <ReadinessFact label="Documents provided" ready={checklistQuery.data.uploadComplete} readyText="All required documents have been provided or are no longer needed." pendingText="One or more required documents are still needed." />
+              <ReadinessFact label="Review status" ready={checklistQuery.data.processingReady} readyText="Your documents are ready for the next step." pendingText="One or more documents are still being reviewed or need attention." />
             </dl>
           </section>
           <section aria-labelledby="document-items-heading" className="space-y-4">
-            <div><h2 id="document-items-heading" className="text-xl font-semibold">Required evidence</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Each item uses its returned Customer status and readiness facts.</p></div>
+            <div><h2 id="document-items-heading" className="text-xl font-semibold">Documents we need</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Review the status of each document and take action where needed.</p></div>
             {checklistQuery.data.items.length ? (
               <div className="space-y-5">
                 {checklistQuery.data.items.map((item) => {
@@ -82,19 +82,19 @@ export function ApplicationDocumentsPage() {
                     <Card key={item.checklistItemId} className="min-w-0">
                       <CardHeader className="gap-3">
                         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0"><CardTitle className="break-words">{documentTypeLabel(item.documentType)}</CardTitle><CardDescription className="mt-1">Current requirement and review state</CardDescription></div>
+                          <div className="min-w-0"><CardTitle className="break-words">{documentTypeLabel(item.documentType)}</CardTitle><CardDescription className="mt-1">Document status</CardDescription></div>
                           <StatusBadge presentation={evidenceRequirementPresentation(item.requirementStatus)} />
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-5">
                         <DocumentStatus status={item.customerStatus} />
                         <dl className="grid gap-3 text-sm sm:grid-cols-2">
-                          <ReadinessLine label="Upload-level requirement" value={item.uploadComplete ? 'Complete' : 'Incomplete'} />
-                          <ReadinessLine label="Processing readiness" value={item.processingReady ? 'Ready' : 'Not ready'} />
+                          <ReadinessLine label="Document provided" value={item.uploadComplete ? 'Complete' : 'Still needed'} />
+                          <ReadinessLine label="Review status" value={item.processingReady ? 'Complete' : 'In progress'} />
                         </dl>
                         {item.currentVersion ? (
                           <div className="min-w-0 rounded-md border border-border bg-background p-4">
-                            <p className="flex items-center gap-2 text-sm font-semibold"><FileText aria-hidden="true" className="size-4 shrink-0" />Current version {item.currentVersion.versionNumber}</p>
+                            <p className="flex items-center gap-2 text-sm font-semibold"><FileText aria-hidden="true" className="size-4 shrink-0" />Uploaded file · Version {item.currentVersion.versionNumber}</p>
                             <dl className="mt-3 grid min-w-0 gap-2 text-sm text-muted-foreground sm:grid-cols-2">
                               <div className="min-w-0"><dt className="font-medium text-foreground">Filename</dt><dd className="break-all">{item.currentVersion.originalFilename}</dd></div>
                               <div className="min-w-0"><dt className="font-medium text-foreground">File details</dt><dd className="break-all">{item.currentVersion.mimeType} · {formatFileSize(item.currentVersion.byteSize)}</dd></div>
@@ -109,7 +109,7 @@ export function ApplicationDocumentsPage() {
                 })}
               </div>
             ) : (
-              <EmptyState icon={FileCheck2} title="No documents are currently required" description="Meridian returned an empty checklist. The aggregate readiness facts above remain authoritative." className="min-h-56" />
+              <EmptyState icon={FileCheck2} title="No documents are currently required" description="There are no documents to upload for this application right now." className="min-h-56" />
             )}
           </section>
         </>

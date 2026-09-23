@@ -80,7 +80,7 @@ export function RegisterPage() {
     <AuthCard
       eyebrow="Create an account"
       title="Start with Meridian"
-      description="Create your Customer account, then confirm your email before logging in."
+      description="Create your account, then confirm your email before logging in."
       footer={
         <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
           <Link className="font-semibold text-primary underline-offset-4 hover:underline" to="/login">Log in</Link>
@@ -129,7 +129,7 @@ export function RegisterPage() {
         </FormField>
 
         <p className="text-xs leading-5 text-muted-foreground">
-          By creating an account, you agree to provide accurate information for your Meridian Customer access.
+          By creating an account, you agree to provide accurate information to Meridian.
         </p>
 
         <Button className="w-full" type="submit" disabled={isSubmitting || rateLimit.isActive}>

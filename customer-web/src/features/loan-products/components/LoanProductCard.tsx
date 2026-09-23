@@ -61,7 +61,7 @@ export function LoanProductCard({ product }: { product: LoanProduct }) {
             </Link>
           </Button>
         ) : (
-          <p className="text-sm text-muted-foreground">Product details are not available in this version.</p>
+          <p className="text-sm text-muted-foreground">Loan details are not available right now.</p>
         )}
       </CardFooter>
     </Card>

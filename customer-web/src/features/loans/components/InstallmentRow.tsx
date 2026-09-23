@@ -32,10 +32,10 @@ export function InstallmentRow({ item }: { item: FinalRepaymentScheduleItem }) {
             <Amount label="Total due" value={item.totalDue} />
           </dl>
         </section>
-        <section aria-label={`Installment ${item.installmentNumber} servicing state`} className="space-y-3 border-t border-border pt-5">
+        <section aria-label={`Installment ${item.installmentNumber} payment status`} className="space-y-3 border-t border-border pt-5">
           <div>
-            <h4 className="text-sm font-semibold">Servicing state</h4>
-            <p className="mt-1 text-xs text-muted-foreground">Evaluated {formatDateOnly(servicing.statusEvaluationDate)}</p>
+            <h4 className="text-sm font-semibold">Payment status</h4>
+            <p className="mt-1 text-xs text-muted-foreground">Updated {formatDateOnly(servicing.statusEvaluationDate)}</p>
           </div>
           <dl className="grid grid-cols-2 gap-4 rounded-md bg-background p-4 sm:grid-cols-4">
             <Amount label="Principal paid" value={servicing.principalPaid} />

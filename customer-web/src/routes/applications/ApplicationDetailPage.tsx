@@ -48,7 +48,7 @@ export function ApplicationDetailPage() {
   if (notFound) {
     return (
       <DetailLayout
-        header={<PageHeader eyebrow="Application tracking" title="Application unavailable" description="This application could not be found or is not available to this Customer." actions={<BackToApplications />} />}
+        header={<PageHeader eyebrow="Application tracking" title="Application unavailable" description="This application could not be found or is not available to you." actions={<BackToApplications />} />}
       >
         <EmptyState icon={Info} title="Application unavailable" description="Return to your application list and choose an available application." action={<BackToApplications />} />
       </DetailLayout>
@@ -61,25 +61,25 @@ export function ApplicationDetailPage() {
         <PageHeader
           eyebrow="Application detail"
           title={detailQuery.data?.applicationNumber ?? 'Application details'}
-          description="Authoritative durable application facts returned by Meridian."
+          description="Review your application status and details."
           actions={<BackToApplications />}
         />
       )}
       rail={(
         <div className="space-y-4">
-          {indexQuery.isPending ? <Skeleton className="h-64" role="status" aria-label="Loading Customer action" /> : null}
+          {indexQuery.isPending ? <Skeleton className="h-64" role="status" aria-label="Loading next step" /> : null}
           {indexQuery.isError ? (
-            <QueryErrorFeedback error={indexQuery.error} title="Customer action could not be loaded" onRetry={() => void indexQuery.refetch()} />
+            <QueryErrorFeedback error={indexQuery.error} title="Next step could not be loaded" onRetry={() => void indexQuery.refetch()} />
           ) : null}
           {indexedApplication ? <RequiredActionCard application={indexedApplication} /> : null}
           {indexQuery.data && !indexedApplication ? (
             <Card>
-              <CardHeader><CardTitle>Customer action unavailable</CardTitle><CardDescription>The application index did not return an action projection for this application.</CardDescription></CardHeader>
+              <CardHeader><CardTitle>Next step unavailable</CardTitle><CardDescription>We can't show the next step for this application right now. Try again later.</CardDescription></CardHeader>
             </Card>
           ) : null}
           {indexedApplication?.requiredAction === 'NONE' ? (
             <Card>
-              <CardHeader><CardTitle>No Customer action required</CardTitle><CardDescription>Meridian is not currently requesting Customer work for this application.</CardDescription></CardHeader>
+              <CardHeader><CardTitle>No action needed</CardTitle><CardDescription>There is nothing you need to do for this application right now.</CardDescription></CardHeader>
             </Card>
           ) : null}
         </div>
@@ -89,7 +89,7 @@ export function ApplicationDetailPage() {
         {notice ? (
           <Alert variant="success">
             <CircleCheck aria-hidden="true" />
-            <AlertTitle>{notice.kind === 'cancelled' ? 'Application cancelled' : notice.kind === 'offer-declined' ? 'Offer declined' : 'Corrections resubmitted'}</AlertTitle>
+            <AlertTitle>{notice.kind === 'cancelled' ? 'Application cancelled' : notice.kind === 'offer-declined' ? 'Offer declined' : 'Updates submitted'}</AlertTitle>
             <AlertDescription>{notice.kind === 'offer-declined' ? 'The approved offer was declined. No further offer response is available.' : `Current application status: ${noticeStatus}.`}</AlertDescription>
           </Alert>
         ) : null}

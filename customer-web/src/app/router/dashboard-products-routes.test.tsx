@@ -259,12 +259,12 @@ describe('FE-CP5 Dashboard', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible()
     expect(await screen.findByText('Your required profile details are on file.')).toBeVisible()
 
-    const requiredWork = screen.getByRole('heading', { name: 'Required Customer work' }).closest('section') as HTMLElement
+    const requiredWork = screen.getByRole('heading', { name: 'What needs your attention' }).closest('section') as HTMLElement
     for (const title of [
       'Documents are required',
-      'Corrections need attention',
+      'Requested changes need attention',
       'An approved offer is ready',
-      'Contract acknowledgment is required',
+      'Review your contract',
       'Action details unavailable',
     ]) {
       expect(await within(requiredWork).findByText(title)).toBeVisible()
@@ -275,7 +275,7 @@ describe('FE-CP5 Dashboard', () => {
       'href',
       '/applications/22222222-2222-4222-8222-222222222221/documents',
     )
-    expect(within(requiredWork).getByRole('link', { name: 'Complete corrections' })).toHaveAttribute(
+    expect(within(requiredWork).getByRole('link', { name: 'Review requested changes' })).toHaveAttribute(
       'href',
       '/applications/22222222-2222-4222-8222-222222222222/corrections',
     )
@@ -288,16 +288,16 @@ describe('FE-CP5 Dashboard', () => {
       '/applications/22222222-2222-4222-8222-222222222224/contract',
     )
 
-    const activeApplications = screen.getByRole('heading', { name: 'Active applications' }).closest('section') as HTMLElement
+    const activeApplications = screen.getByRole('heading', { name: 'Applications' }).closest('section') as HTMLElement
     expect(within(activeApplications).getByText('UNKNOWN-ACTIVE-APPLICATION-WITH-A-LONG-REFERENCE-000001')).toBeVisible()
     expect(within(activeApplications).getByText('Status unavailable')).toBeVisible()
-    expect(within(activeApplications).getByText('Returned for revision')).toBeVisible()
-    expect(within(activeApplications).getByText('Customer acceptance pending')).toBeVisible()
+    expect(within(activeApplications).getByText('Changes requested')).toBeVisible()
+    expect(within(activeApplications).getByText('Offer ready to review')).toBeVisible()
     expect(within(activeApplications).queryByText('Action required')).not.toBeInTheDocument()
     expect(within(activeApplications).queryByText('Offer review required')).not.toBeInTheDocument()
     expect(within(activeApplications).queryByText('ACTION-DOCUMENTS')).not.toBeInTheDocument()
 
-    const activeLoans = screen.getByRole('heading', { name: 'Active LoanAccounts' }).closest('section') as HTMLElement
+    const activeLoans = screen.getByRole('heading', { name: 'Your loans' }).closest('section') as HTMLElement
     expect(within(activeLoans).getAllByText('LOAN-ACCOUNT-WITH-A-LONG-REFERENCE-000001')[0]).toBeVisible()
     expect(within(activeLoans).getByText(moneyText(1_234_567))).toBeVisible()
     expect(within(activeLoans).getByText(moneyText(98_765_432_109))).toBeVisible()
@@ -323,7 +323,7 @@ describe('FE-CP5 Dashboard', () => {
       return successfulFetch(input, init)
     })
 
-    expect(await screen.findByText('Required Customer work could not be loaded')).toBeVisible()
+    expect(await screen.findByText('Next steps could not be loaded')).toBeVisible()
     expect(await screen.findByText('Your required profile details are on file.')).toBeVisible()
     expect((await screen.findAllByText('LOAN-ACCOUNT-WITH-A-LONG-REFERENCE-000001'))[0]).toBeVisible()
     expect(await screen.findByRole('heading', { name: 'Salary Advance' })).toBeVisible()
@@ -371,7 +371,7 @@ describe('FE-CP5 product catalogue and details', () => {
   it('renders returned catalogue data, including a nullable description, without invented copy', async () => {
     renderRoute('/products')
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Products' })).toBeVisible()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Explore loans' })).toBeVisible()
     for (const product of products) {
       expect(await screen.findByRole('heading', { name: product.name })).toBeVisible()
     }
@@ -406,7 +406,7 @@ describe('FE-CP5 product catalogue and details', () => {
       return successfulFetch(input, init)
     })
 
-    expect(await screen.findByText('Account readiness could not be loaded')).toBeVisible()
+    expect(await screen.findByText('Account status could not be loaded')).toBeVisible()
     expect(await screen.findByRole('heading', { name: 'Salary Advance' })).toBeVisible()
   })
 
@@ -417,7 +417,7 @@ describe('FE-CP5 product catalogue and details', () => {
       throw new Error(`Unexpected request: ${String(input)}`)
     })
 
-    expect(await screen.findByText('No products available')).toBeVisible()
+    expect(await screen.findByText('No loans available')).toBeVisible()
     expect(screen.queryByRole('heading', { name: 'Salary Advance' })).not.toBeInTheDocument()
   })
 
@@ -431,8 +431,8 @@ describe('FE-CP5 product catalogue and details', () => {
       return reads === 1 ? errorResponse('/api/v1/loan-products') : response(products)
     })
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Products' })).toBeVisible()
-    expect(await screen.findByText('Product catalogue could not be loaded')).toBeVisible()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Explore loans' })).toBeVisible()
+    expect(await screen.findByText('Loans could not be loaded')).toBeVisible()
     expect(screen.getByText(/Support reference: 55555555/)).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('heading', { name: 'Salary Advance' })).toBeVisible()
@@ -451,7 +451,7 @@ describe('FE-CP5 product catalogue and details', () => {
     expect(screen.getByText(formatPercentage(product.policy.pricing.flatMonthlyInterestRate))).toBeVisible()
     expect(screen.getByText(note)).toBeVisible()
     if (code === 'SALARY_ADVANCE') {
-      expect(screen.getByText('No submission evidence is listed for this product.')).toBeVisible()
+      expect(screen.getByText('No documents are listed for this product.')).toBeVisible()
       expect(screen.queryByText(/flexible cash|quick funds/i)).not.toBeInTheDocument()
       expect(await screen.findByRole('link', { name: 'Apply for Salary Advance' })).toHaveAttribute('href', '/products/salary-advance/apply')
     } else {

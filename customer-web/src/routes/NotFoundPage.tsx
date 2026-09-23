@@ -16,10 +16,10 @@ export function NotFoundPage() {
         <EmptyState
           icon={Compass}
           title="This page is not available"
-          description="Check the address or return to the Customer Web foundation."
+          description="Check the address or return to your dashboard."
           action={
             <Button asChild>
-              <Link to="/">Return to foundation</Link>
+              <Link to="/">Return to dashboard</Link>
             </Button>
           }
         />

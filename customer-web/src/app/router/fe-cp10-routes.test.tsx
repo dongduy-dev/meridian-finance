@@ -264,20 +264,20 @@ describe('FE-CP10 LoanAccount index', () => {
     vi.stubGlobal('fetch', vi.fn(() => pending))
     const router = createTestRouter(['/loans'])
     render(<AppProviders router={router} authManager={createTestAuthManager()} />)
-    expect(await screen.findByLabelText('Loading LoanAccounts')).toBeVisible()
+    expect(await screen.findByLabelText('Loading loans')).toBeVisible()
     resolve(error('/api/v1/loan-accounts', 'SYSTEM_STATE_CONFLICT', 409))
-    expect(await screen.findByText('LoanAccounts could not be loaded')).toBeVisible()
+    expect(await screen.findByText('Loans could not be loaded')).toBeVisible()
   })
 
   it('renders a normal empty state', async () => {
     renderRoute('/loans', fixture({ accounts: [] }))
-    expect(await screen.findByText('No LoanAccounts yet')).toBeVisible()
+    expect(await screen.findByText('No loans yet')).toBeVisible()
   })
 
   it('shows all statuses in backend order and navigates cards by loanApplicationId', async () => {
     const user = userEvent.setup()
     const { router } = renderRoute('/loans')
-    expect(await screen.findByRole('heading', { name: 'Your LoanAccounts' })).toHaveFocus()
+    expect(await screen.findByRole('heading', { name: 'Your loans' })).toHaveFocus()
     await screen.findByRole('heading', { name: 'LA-ACTIVE' })
     for (const status of ['Active', 'Overdue', 'Settled', 'Closed', 'Status unavailable']) {
       expect(screen.getByText(status)).toBeVisible()
@@ -296,9 +296,9 @@ describe('FE-CP10 LoanAccount detail', () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => String(input).includes('/loan-account') ? pending : json([])))
     const router = createTestRouter([`/loans/${applicationId}`])
     render(<AppProviders router={router} authManager={createTestAuthManager()} />)
-    expect(await screen.findByLabelText('Loading LoanAccount detail')).toBeVisible()
+    expect(await screen.findByLabelText('Loading loan details')).toBeVisible()
     resolve(error(`/api/v1/loan-applications/${applicationId}/loan-account`, 'LOAN_ACCOUNT_NOT_FOUND', 404))
-    expect(await screen.findByText('This loan could not be found or is not available to this Customer.')).toBeVisible()
+    expect(await screen.findByText('This loan could not be found or is not available to you.')).toBeVisible()
     expect(screen.queryByText(/foreign|inconsistent/i)).not.toBeInTheDocument()
   })
 
@@ -321,7 +321,7 @@ describe('FE-CP10 LoanAccount detail', () => {
 
   it('uses backend installment servicing even when a due date is in the past and fails safely for unknown status', async () => {
     renderRoute(`/loans/${applicationId}`)
-    await screen.findByLabelText('Installment 1 servicing state')
+    await screen.findByLabelText('Installment 1 payment status')
     expect(screen.getByText('Not due')).toBeVisible()
     expect(screen.getByText('Status unavailable')).toBeVisible()
   })
@@ -378,7 +378,7 @@ describe('FE-CP10 repayment history', () => {
     queryClient.clear()
 
     renderRoute(`/loans/${applicationId}?tab=repayments&page=0`, fixture({ history: { page: 0, size: 20, totalElements: 0, totalPages: 0, items: [] } }))
-    expect(await screen.findByText('No repayments recorded yet')).toBeVisible()
+    expect(await screen.findByText('No payments recorded yet')).toBeVisible()
     expect(screen.queryByText(/nothing is owed|no payment required/i)).not.toBeInTheDocument()
   })
 })

@@ -35,7 +35,7 @@ export function SalaryAdvanceLimitSummary({ readiness }: { readiness: SalaryAdva
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle>Current Salary Advance limit</CardTitle>
-            <CardDescription className="mt-1">Amounts are returned directly by Meridian and are not recalculated in Customer Web.</CardDescription>
+            <CardDescription className="mt-1">See how much may be available for a new application.</CardDescription>
           </div>
           <StatusBadge presentation={limitStatusPresentation(readiness.limitStatus)} />
         </div>
@@ -45,7 +45,7 @@ export function SalaryAdvanceLimitSummary({ readiness }: { readiness: SalaryAdva
           <Alert>
             <Info aria-hidden="true" />
             <AlertTitle>Limit values are unavailable</AlertTitle>
-            <AlertDescription>Meridian has not returned a usable authoritative limit. Placeholder zero values are not shown as a granted limit.</AlertDescription>
+            <AlertDescription>We can't show a usable limit right now. Refresh the page or try again later.</AlertDescription>
           </Alert>
         ) : (
           <dl className="grid gap-3 sm:grid-cols-2">
@@ -56,10 +56,10 @@ export function SalaryAdvanceLimitSummary({ readiness }: { readiness: SalaryAdva
           </dl>
         )}
         {readiness.limitStatus === 'NOT_INITIALIZED' ? (
-          <p className="text-sm leading-6 text-muted-foreground">This is an advisory current limit. A durable Salary Advance limit is initialized only through authoritative submission processing.</p>
+          <p className="text-sm leading-6 text-muted-foreground">This amount is an estimate. We'll confirm the available limit when you submit.</p>
         ) : null}
         <p className="text-sm leading-6 text-muted-foreground">
-          Last Partner evidence refresh: {readiness.lastRefreshAt ? formatTimestamp(readiness.lastRefreshAt) : 'Not available'}
+          Employment information last updated: {readiness.lastRefreshAt ? formatTimestamp(readiness.lastRefreshAt) : 'Not available'}
         </p>
       </CardContent>
     </Card>
@@ -81,8 +81,8 @@ export function ReadinessSummary({ readiness }: { readiness: SalaryAdvanceReadin
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>Application readiness</CardTitle>
-            <CardDescription className="mt-1">Meridian uses current backend facts to decide whether an application can be submitted.</CardDescription>
+            <CardTitle>Can you apply?</CardTitle>
+            <CardDescription className="mt-1">Check whether anything needs your attention before you apply.</CardDescription>
           </div>
           <StatusBadge presentation={readiness.applicationAllowed
             ? { label: 'Ready to apply', tone: 'success', icon: ShieldCheck }
@@ -90,7 +90,7 @@ export function ReadinessSummary({ readiness }: { readiness: SalaryAdvanceReadin
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="flex flex-wrap gap-2" aria-label="Employment and Partner readiness statuses">
+        <div className="flex flex-wrap gap-2" aria-label="Employment verification statuses">
           <StatusBadge presentation={employeeStatusPresentation(readiness.employeeVerificationStatus)} />
           <StatusBadge presentation={partnerStatusPresentation(readiness.partnerEligibilityStatus)} />
         </div>
@@ -98,7 +98,7 @@ export function ReadinessSummary({ readiness }: { readiness: SalaryAdvanceReadin
           <Alert variant="success" aria-live="polite">
             <ShieldCheck aria-hidden="true" />
             <AlertTitle>Ready to begin</AlertTitle>
-            <AlertDescription>Current readiness permits an application. Meridian will re-check all authoritative facts when you submit.</AlertDescription>
+            <AlertDescription>You're ready to start an application. We'll check your information again when you submit.</AlertDescription>
           </Alert>
         ) : (
           <div className="space-y-3" aria-live="polite">
@@ -112,8 +112,8 @@ export function ReadinessSummary({ readiness }: { readiness: SalaryAdvanceReadin
               )
             }) : (
               <div className="rounded-md border border-border bg-background p-4">
-                <p className="font-semibold">Readiness unavailable</p>
-                <p className="mt-1 text-sm leading-6 text-muted-foreground">Meridian has not confirmed that an application is currently allowed.</p>
+                <p className="font-semibold">Application status unavailable</p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">We can't confirm whether you can apply right now. Refresh the page or try again later.</p>
               </div>
             )}
           </div>
@@ -127,7 +127,7 @@ export function ReadinessSummary({ readiness }: { readiness: SalaryAdvanceReadin
             ))}
           </div>
         ) : null}
-        <p className="text-xs leading-5 text-muted-foreground">Readiness is advisory and non-locking. A ready view does not guarantee that a later submission succeeds after state changes.</p>
+        <p className="text-xs leading-5 text-muted-foreground">We'll check your information again when you submit. Being ready to apply does not guarantee that the application will be accepted.</p>
       </CardContent>
     </Card>
   )
@@ -158,7 +158,7 @@ export function SalaryAdvanceReadiness({
         <Alert variant="destructive">
           <Info aria-hidden="true" />
           <AlertTitle>Application cannot be started safely</AlertTitle>
-          <AlertDescription>Meridian reported readiness without the reusable employment link required for submission. Refresh the page or contact support if this continues.</AlertDescription>
+          <AlertDescription>We can't start the application with the current employment information. Refresh the page or contact support if this continues.</AlertDescription>
         </Alert>
       ) : null}
       {showVerification && (needsVerification || needsReverification || keepVerificationResult) ? (

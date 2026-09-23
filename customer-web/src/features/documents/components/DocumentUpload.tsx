@@ -20,11 +20,11 @@ function newOperationId() {
 const uploadMessages: Record<string, string> = {
   DOCUMENT_CHECKLIST_NOT_FOUND: 'This document checklist is no longer available.',
   DOCUMENT_ACCESS_DENIED: 'This document is not available for upload.',
-  DOCUMENT_UPLOAD_DENIED: 'This document cannot be uploaded in its current state.',
+  DOCUMENT_UPLOAD_DENIED: 'This document cannot be uploaded right now.',
   INVALID_DOCUMENT_UPLOAD: 'Meridian rejected the file content, type, size, or format.',
-  STALE_DOCUMENT_VERSION: 'The document changed since this page loaded. Meridian refreshed the checklist; review the current version before retrying.',
-  IDEMPOTENCY_KEY_REUSED: 'This upload identity no longer matches the selected file. Select the file again to start a new upload.',
-  SYSTEM_STATE_CONFLICT: 'The current document state could not be reconciled safely.',
+  STALE_DOCUMENT_VERSION: 'The document changed since this page loaded. Review the latest file before trying again.',
+  IDEMPOTENCY_KEY_REUSED: 'This upload could not be safely repeated. Select the file again to start a new upload.',
+  SYSTEM_STATE_CONFLICT: 'The document changed before the upload was completed. Review its latest status and try again if needed.',
   DOCUMENT_STORAGE_UNAVAILABLE: 'Document storage is temporarily unavailable. You can retry this same file.',
   VALIDATION_FAILED: 'Meridian could not validate this upload.',
 }
@@ -105,7 +105,7 @@ export function DocumentUpload({
       <Alert variant="warning">
         <AlertCircle aria-hidden="true" />
         <AlertTitle>Replacement is temporarily unavailable</AlertTitle>
-        <AlertDescription>The current document version is missing, so Customer Web cannot establish a safe replacement baseline.</AlertDescription>
+        <AlertDescription>We can't identify the file that needs to be replaced. Refresh the page and try again.</AlertDescription>
       </Alert>
     )
   }
@@ -126,7 +126,7 @@ export function DocumentUpload({
           onChange={(event) => chooseFile(event.target.files?.[0])}
         />
         <p id={`file-${item.checklistItemId}-help`} className="text-xs leading-5 text-muted-foreground">
-          PDF, JPEG, or PNG; maximum 10 MiB. Meridian verifies actual file content and MIME type.
+          PDF, JPEG, or PNG; maximum 10 MiB.
         </p>
         {file ? <p className="break-all text-sm">Selected: {file.name} ({formatFileSize(file.size)})</p> : null}
         {localError ? <p id={`file-${item.checklistItemId}-error`} className="text-sm text-danger">{localError}</p> : null}
@@ -145,7 +145,7 @@ export function DocumentUpload({
         <Alert variant="success" aria-live="polite">
           <Upload aria-hidden="true" />
           <AlertTitle>{action === 'replace' ? 'Replacement uploaded' : 'Document uploaded'}</AlertTitle>
-          <AlertDescription>Meridian recorded the file and refreshed the current checklist state.</AlertDescription>
+          <AlertDescription>Your file was uploaded and the document status was refreshed.</AlertDescription>
         </Alert>
       ) : null}
       <Button type="button" disabled={!file || Boolean(localError) || mutation.isPending} onClick={() => void submit()}>

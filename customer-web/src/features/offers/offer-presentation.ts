@@ -46,11 +46,11 @@ export function offerErrorMessage(error: unknown) {
     return 'The offer response could not be confirmed. Check the current offer status before retrying.'
   }
   const messages: Record<string, string> = {
-    OFFER_EXPIRED: 'This offer has expired. Meridian refreshed the current offer state.',
-    OFFER_ACTION_CONFLICT: 'The offer changed before this response was completed. Meridian refreshed the current state.',
+    OFFER_EXPIRED: 'This offer has expired. Review the latest offer status before continuing.',
+    OFFER_ACTION_CONFLICT: 'The offer changed before your response was completed. Review the latest offer status before continuing.',
     APPROVED_OFFER_NOT_FOUND: 'The approved offer is not currently available.',
     LOAN_APPLICATION_NOT_FOUND: 'This application is not currently available.',
-    ACCESS_DENIED: 'This offer is not available to this Customer.',
+    ACCESS_DENIED: 'This offer is not available to you.',
   }
   return messages[error.errorCode] ?? 'The offer response could not be completed. Refresh the offer and try again if an action remains available.'
 }

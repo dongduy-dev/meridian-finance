@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 
 const routeTitles: Record<string, string> = {
-  '/': 'Customer Dashboard',
+  '/': 'Dashboard',
   '/products': 'Products',
   '/products/salary-advance': 'Salary Advance',
   '/products/salary-advance/apply': 'Apply for Salary Advance',
@@ -10,11 +10,9 @@ const routeTitles: Record<string, string> = {
   '/products/unsecured-consumer-loan/apply': 'Apply for Unsecured Consumer Loan',
   '/products/collateral-loan': 'Collateral Loan',
   '/products/collateral-loan/apply': 'Apply for Collateral Loan',
-  '/applications': 'Applications Foundation',
-  '/loans': 'Loans Foundation',
-  '/account': 'Account Foundation',
-  '/foundation/flow': 'Focused Flow Foundation',
-  '/foundation/detail': 'Detail Layout Foundation',
+  '/applications': 'Applications',
+  '/loans': 'Loans',
+  '/account': 'Account',
   '/login': 'Login',
   '/register': 'Create Account',
   '/verify-email': 'Confirm Email',

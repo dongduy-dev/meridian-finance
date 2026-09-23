@@ -67,15 +67,15 @@ export function UnsecuredConsumerLoanApplicationPage() {
 
   if (productQuery.isPending) {
     return (
-      <FocusedFlowLayout eyebrow="Unsecured Consumer Loan application" title="Prepare your request" description="Meridian is loading the current product policy." currentStep={1} totalSteps={2} backAction={backToProduct} continueAction={<span />}>
+      <FocusedFlowLayout eyebrow="Unsecured Consumer Loan application" title="Prepare your request" description="We're loading the available amounts and terms." currentStep={1} totalSteps={2} backAction={backToProduct} continueAction={<span />}>
         <div className="space-y-5" role="status" aria-label="Loading Unsecured Consumer Loan application"><Skeleton className="h-72" /><Skeleton className="h-48" /></div>
       </FocusedFlowLayout>
     )
   }
   if (productQuery.isError) {
     return (
-      <FocusedFlowLayout eyebrow="Unsecured Consumer Loan application" title="Application details unavailable" description="The current product policy must be available before Customer Web can prepare a request." currentStep={1} totalSteps={2} backAction={backToProduct} continueAction={<Button onClick={() => void productQuery.refetch()}>Try again</Button>}>
-        <QueryErrorFeedback error={productQuery.error} title="Unsecured Consumer Loan policy could not be loaded" onRetry={() => void productQuery.refetch()} />
+      <FocusedFlowLayout eyebrow="Unsecured Consumer Loan application" title="Application details unavailable" description="We need the available amounts and terms before you can continue." currentStep={1} totalSteps={2} backAction={backToProduct} continueAction={<Button onClick={() => void productQuery.refetch()}>Try again</Button>}>
+        <QueryErrorFeedback error={productQuery.error} title="Unsecured Consumer Loan details could not be loaded" onRetry={() => void productQuery.refetch()} />
       </FocusedFlowLayout>
     )
   }
@@ -87,14 +87,14 @@ export function UnsecuredConsumerLoanApplicationPage() {
     && product.policy.allowedTermsMonths.length > 0
   if (!usablePolicy) {
     return (
-      <FocusedFlowLayout eyebrow="Unsecured Consumer Loan application" title="Application cannot be started" description="Meridian must return an active product with usable amount constraints and at least one allowed term." currentStep={1} totalSteps={2} backAction={backToProduct} continueAction={<span />}>
-        <Alert variant="warning"><Info aria-hidden="true" /><AlertTitle>Product policy is unavailable for this form</AlertTitle><AlertDescription>Customer Web will not invent amount limits or terms.</AlertDescription></Alert>
+      <FocusedFlowLayout eyebrow="Unsecured Consumer Loan application" title="Application cannot be started" description="Available amounts and terms could not be confirmed." currentStep={1} totalSteps={2} backAction={backToProduct} continueAction={<span />}>
+        <Alert variant="warning"><Info aria-hidden="true" /><AlertTitle>Loan details are unavailable</AlertTitle><AlertDescription>We can't show an available amount and term right now. Refresh the page or try again later.</AlertDescription></Alert>
       </FocusedFlowLayout>
     )
   }
 
   const validateAmount = (value: string) => validateWholeVnd(value, product.minAmount, product.maxAmount)
-  const validateTerm = (value: string) => product.policy.allowedTermsMonths.includes(Number(value)) || 'Select a term returned by the current product policy.'
+  const validateTerm = (value: string) => product.policy.allowedTermsMonths.includes(Number(value)) || 'Select one of the available terms.'
   const focusFirstError = () => {
     setTimeout(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(), 50)
   }
@@ -128,7 +128,7 @@ export function UnsecuredConsumerLoanApplicationPage() {
       <FocusedFlowLayout
         eyebrow="Unsecured Consumer Loan application"
         title={stage === 'request' ? 'Choose your request' : 'Review your application'}
-        description={stage === 'request' ? 'Enter a whole-VND amount and choose a term from Meridian’s current product policy.' : 'Confirm your request and product-derived evidence requirements before submission.'}
+        description={stage === 'request' ? 'Enter a whole-VND amount and choose one of the available terms.' : 'Confirm your request and the required documents before submission.'}
         currentStep={stage === 'request' ? 1 : 2}
         totalSteps={2}
         backAction={stage === 'request' ? backToProduct : <Button variant="secondary" onClick={() => setSearchParams({})}><ArrowLeft aria-hidden="true" />Back to request</Button>}
@@ -142,12 +142,12 @@ export function UnsecuredConsumerLoanApplicationPage() {
           {serverError ? <OriginationSubmissionError error={serverError} /> : null}
           {stage === 'request' ? (
             <Card>
-              <CardHeader><CardTitle>Request details</CardTitle><CardDescription>Immediate validation uses the returned policy; Meridian remains authoritative at submission.</CardDescription></CardHeader>
+              <CardHeader><CardTitle>Request details</CardTitle><CardDescription>We'll check that your amount and term are still available when you submit.</CardDescription></CardHeader>
               <CardContent className="space-y-5">
                 <AccountFormField htmlFor="requestedAmount" label="Requested amount" required description="Enter a positive whole-VND amount within the current product minimum and maximum." error={errors.requestedAmount?.message}>
                   <Controller name="requestedAmount" control={control} rules={{ validate: validateAmount }} render={({ field }) => <AmountInput field={field} invalid={Boolean(errors.requestedAmount)} describedBy={`requestedAmount-description${errors.requestedAmount ? ' requestedAmount-error' : ''}`} />} />
                 </AccountFormField>
-                <AccountFormField htmlFor="requestedTermMonths" label="Requested term" required description="Terms come directly from the current product policy." error={errors.requestedTermMonths?.message}>
+                <AccountFormField htmlFor="requestedTermMonths" label="Requested term" required description="Choose one of the available terms." error={errors.requestedTermMonths?.message}>
                   <select id="requestedTermMonths" className="flex min-h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20" aria-invalid={Boolean(errors.requestedTermMonths)} aria-describedby={`requestedTermMonths-description${errors.requestedTermMonths ? ' requestedTermMonths-error' : ''}`} {...register('requestedTermMonths', { validate: validateTerm })}>
                     <option value="">Select a term</option>
                     {product.policy.allowedTermsMonths.map((value) => <option key={value} value={value}>{value} {value === 1 ? 'month' : 'months'}</option>)}
@@ -157,7 +157,7 @@ export function UnsecuredConsumerLoanApplicationPage() {
             </Card>
           ) : (
             <Card>
-              <CardHeader><CardTitle>Confirm your request</CardTitle><CardDescription>No lending eligibility or financial result is calculated in Customer Web.</CardDescription></CardHeader>
+              <CardHeader><CardTitle>Confirm your request</CardTitle><CardDescription>Review the exact amount and term you are about to submit.</CardDescription></CardHeader>
               <CardContent><dl className="grid gap-4 sm:grid-cols-2"><ReviewFact label="Requested amount"><MoneyDisplay value={Number(getValues('requestedAmount'))} /></ReviewFact><ReviewFact label="Requested term">{getValues('requestedTermMonths')} months</ReviewFact></dl></CardContent>
             </Card>
           )}

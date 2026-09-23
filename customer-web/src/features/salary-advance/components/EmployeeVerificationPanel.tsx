@@ -112,12 +112,12 @@ export function EmployeeVerificationPanel({
       <CardHeader>
         <CardTitle>{reverify ? 'Refresh employment verification' : 'Verify your employment'}</CardTitle>
         <CardDescription>
-          Select your employer and enter your employee code. Meridian checks protected identity evidence on the server; Customer Web never asks for salary or identity matching data here.
+          Select your employer and enter your employee code.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         {optionsQuery.isPending ? (
-          <div role="status" aria-label="Loading Partner verification options" className="space-y-3">
+          <div role="status" aria-label="Loading employers" className="space-y-3">
             <Skeleton className="h-11 w-full" />
             <Skeleton className="h-11 w-full" />
           </div>
@@ -125,15 +125,15 @@ export function EmployeeVerificationPanel({
         {optionsQuery.isError ? (
           <QueryErrorFeedback
             error={optionsQuery.error}
-            title="Partner verification options could not be loaded"
+            title="Employers could not be loaded"
             onRetry={() => void optionsQuery.refetch()}
           />
         ) : null}
         {optionsQuery.data?.length === 0 ? (
           <Alert>
             <Building2 aria-hidden="true" />
-            <AlertTitle>No Partner Companies available</AlertTitle>
-            <AlertDescription>Meridian is not currently returning a Partner Company that can be selected for employment verification.</AlertDescription>
+            <AlertTitle>No employers available</AlertTitle>
+            <AlertDescription>No employers are currently available for verification.</AlertDescription>
           </Alert>
         ) : null}
         {optionsQuery.data?.length ? (
@@ -142,7 +142,7 @@ export function EmployeeVerificationPanel({
             {result ? <VerificationResult result={result} /> : null}
             <AccountFormField
               htmlFor="partnerCompanyId"
-              label="Partner Company"
+              label="Employer"
               required
               error={errors.partnerCompanyId?.message}
             >
@@ -151,9 +151,9 @@ export function EmployeeVerificationPanel({
                 className="flex min-h-11 w-full min-w-0 rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20"
                 aria-invalid={Boolean(errors.partnerCompanyId)}
                 aria-describedby={errors.partnerCompanyId ? 'partnerCompanyId-error' : undefined}
-                {...register('partnerCompanyId', { required: 'Select your Partner Company.' })}
+                {...register('partnerCompanyId', { required: 'Select your employer.' })}
               >
-                <option value="">Select a Partner Company</option>
+                <option value="">Select an employer</option>
                 {optionsQuery.data.map((option) => (
                   <option key={option.partnerCompanyId} value={option.partnerCompanyId}>
                     {option.name} ({option.companyCode})
@@ -165,7 +165,7 @@ export function EmployeeVerificationPanel({
               htmlFor="employeeCode"
               label="Employee code"
               required
-              description="Used only for this verification request. It is not placed in the URL or retained after a completed attempt."
+              description="Enter the employee code provided by your employer."
               error={errors.employeeCode?.message}
             >
               <Input

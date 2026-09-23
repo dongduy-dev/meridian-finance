@@ -4,17 +4,17 @@ import type { StatusPresentation } from '@/components/common/status-presentation
 
 const documentStatuses: Record<string, StatusPresentation> = {
   NOT_UPLOADED: { label: 'Upload required', tone: 'warning', icon: FileUp },
-  AWAITING_REVIEW: { label: 'Awaiting review', tone: 'information', icon: Clock3 },
+  AWAITING_REVIEW: { label: 'Under review', tone: 'information', icon: Clock3 },
   ACCEPTED: { label: 'Accepted', tone: 'success', icon: CheckCircle2 },
-  REPLACEMENT_REQUESTED: { label: 'Replacement requested', tone: 'warning', icon: RefreshCcw },
+  REPLACEMENT_REQUESTED: { label: 'Action needed', tone: 'warning', icon: RefreshCcw },
   WAIVED: { label: 'Requirement waived', tone: 'neutral', icon: CheckCircle2 },
 }
 
 const descriptions: Record<string, string> = {
   NOT_UPLOADED: 'This document still needs an upload.',
-  AWAITING_REVIEW: 'An upload exists and is awaiting review. It is not missing.',
+  AWAITING_REVIEW: 'Your document was uploaded and is under review.',
   ACCEPTED: 'The current document has been accepted.',
-  REPLACEMENT_REQUESTED: 'A reviewer requested a replacement for the current document.',
+  REPLACEMENT_REQUESTED: 'Please upload a replacement for this document.',
   WAIVED: 'This requirement was waived. No upload is needed.',
 }
 
@@ -25,7 +25,7 @@ export function documentStatusPresentation(value: string): StatusPresentation {
 }
 
 export function documentStatusDescription(value: string) {
-  return descriptions[value] ?? 'The current document status cannot be described safely.'
+  return descriptions[value] ?? "We can't show this document's status right now."
 }
 
 export function documentUploadAction(value: string): 'upload' | 'replace' | undefined {

@@ -4,8 +4,6 @@ import { AuthLayout } from '@/components/layout/AuthLayout'
 import { CustomerAppLayout } from '@/components/layout/CustomerAppLayout'
 import { NotFoundPage } from '@/routes/NotFoundPage'
 import { RouteErrorBoundary } from '@/routes/RouteErrorBoundary'
-import { DetailPreviewPage } from '@/routes/foundation/DetailPreviewPage'
-import { FocusedFlowPreviewPage } from '@/routes/foundation/FocusedFlowPreviewPage'
 import { ForgotPasswordPage } from '@/routes/auth/ForgotPasswordPage'
 import { LoginPage } from '@/routes/auth/LoginPage'
 import { RegisterPage } from '@/routes/auth/RegisterPage'
@@ -117,8 +115,6 @@ export const routes: RouteObject[] = [
           },
         ],
       },
-      { path: 'foundation/flow', element: <FocusedFlowPreviewPage /> },
-      { path: 'foundation/detail', element: <DetailPreviewPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

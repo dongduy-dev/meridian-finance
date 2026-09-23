@@ -86,7 +86,7 @@ export function CorrectionTaskCard({
       <CardContent className="space-y-5">
         <Alert>
           <Info aria-hidden="true" />
-          <AlertTitle>Customer instruction</AlertTitle>
+          <AlertTitle>What you need to update</AlertTitle>
           <AlertDescription className="break-words whitespace-pre-wrap">{task.customerInstruction}</AlertDescription>
         </Alert>
         <p className="text-sm leading-6 text-muted-foreground">{scope.description}</p>
@@ -96,19 +96,19 @@ export function CorrectionTaskCard({
           {task.completedAt ? <div className="sm:col-span-2"><dt className="text-muted-foreground">Completed</dt><dd className="mt-1 font-medium">{formatTimestamp(task.completedAt)}</dd></div> : null}
         </dl>
         {completed ? (
-          <Alert variant="success"><CheckCircle2 aria-hidden="true" /><AlertTitle>Task completed</AlertTitle><AlertDescription>Meridian reports this Customer task as completed.</AlertDescription></Alert>
+          <Alert variant="success"><CheckCircle2 aria-hidden="true" /><AlertTitle>Change completed</AlertTitle><AlertDescription>This requested change is complete.</AlertDescription></Alert>
         ) : null}
         {!completed && !open ? (
-          <Alert variant="warning"><FileQuestion aria-hidden="true" /><AlertTitle>Task status unavailable</AlertTitle><AlertDescription>Customer Web will not expose an action for an unknown task status.</AlertDescription></Alert>
+          <Alert variant="warning"><FileQuestion aria-hidden="true" /><AlertTitle>Status unavailable</AlertTitle><AlertDescription>This action is not available right now. Refresh the page or try again later.</AlertDescription></Alert>
         ) : null}
         {open && !scope.customerCompletable ? (
-          <Alert variant="warning"><FileQuestion aria-hidden="true" /><AlertTitle>Customer action unavailable</AlertTitle><AlertDescription>{scope.description}</AlertDescription></Alert>
+          <Alert variant="warning"><FileQuestion aria-hidden="true" /><AlertTitle>Action unavailable</AlertTitle><AlertDescription>{scope.description}</AlertDescription></Alert>
         ) : null}
         {open && scope.documentAction && !checklistReady ? (
-          <Alert variant="warning"><FileQuestion aria-hidden="true" /><AlertTitle>Evidence unavailable</AlertTitle><AlertDescription>The authoritative document checklist is not currently available. Retry the checklist before completing this task.</AlertDescription></Alert>
+          <Alert variant="warning"><FileQuestion aria-hidden="true" /><AlertTitle>Document status unavailable</AlertTitle><AlertDescription>Refresh the document list before completing this change.</AlertDescription></Alert>
         ) : null}
         {open && scope.documentAction && checklistReady && !checklistItem ? (
-          <Alert variant="warning"><FileQuestion aria-hidden="true" /><AlertTitle>Checklist item unavailable</AlertTitle><AlertDescription>Meridian did not return the checklist item referenced by this task. Customer Web will not create one locally.</AlertDescription></Alert>
+          <Alert variant="warning"><FileQuestion aria-hidden="true" /><AlertTitle>Document unavailable</AlertTitle><AlertDescription>We can't show the document needed for this change. Refresh the page or try again later.</AlertDescription></Alert>
         ) : null}
         {open && scope.documentAction && checklistItem ? (
           <div className="space-y-4">
@@ -127,14 +127,14 @@ export function CorrectionTaskCard({
           </Alert>
         ) : null}
         {completedResult ? (
-          <Alert variant="success" aria-live="polite"><CheckCircle2 aria-hidden="true" /><AlertTitle>Correction task completed</AlertTitle><AlertDescription>Meridian accepted the task completion and refreshed the current correction state.</AlertDescription></Alert>
+          <Alert variant="success" aria-live="polite"><CheckCircle2 aria-hidden="true" /><AlertTitle>Requested change completed</AlertTitle><AlertDescription>This change is complete and the application status was refreshed.</AlertDescription></Alert>
         ) : null}
         {open && scope.customerCompletable && checklistItem ? (
           <div className="space-y-2 border-t border-border pt-5">
-            <p className="text-sm leading-6 text-muted-foreground">Uploading or replacing evidence does not complete this task. Complete it explicitly after the required proof is available.</p>
+            <p className="text-sm leading-6 text-muted-foreground">Uploading a document does not complete this change. Mark it complete after the required document is available.</p>
             <Button type="button" disabled={completion.isPending} onClick={() => void completeTask()}>
               {completion.isPending ? <Spinner /> : <CheckCircle2 aria-hidden="true" />}
-              {completion.isPending ? 'Completing…' : 'Complete task'}
+              {completion.isPending ? 'Completing…' : 'Mark as complete'}
             </Button>
           </div>
         ) : null}

@@ -90,8 +90,8 @@ export function LoginPage() {
         rateLimit.start(error.retryAfter, error.requestId)
       } else if (error instanceof CustomerSessionRequiredError) {
         setServerError({
-          title: 'Customer account required',
-          description: 'Use a Customer account to continue in Meridian Customer Web.',
+          title: 'Account access required',
+          description: 'Use your Meridian account to continue.',
           requestId: undefined,
         })
       } else {
@@ -107,9 +107,9 @@ export function LoginPage() {
 
   return (
     <AuthCard
-      eyebrow="Customer access"
+      eyebrow="Welcome back"
       title="Welcome back"
-      description="Log in to continue securely to Meridian Customer Web."
+      description="Log in to continue securely to Meridian."
       footer={
         <p className="text-center text-sm text-muted-foreground">
           New to Meridian?{' '}

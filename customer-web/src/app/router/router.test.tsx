@@ -24,34 +24,35 @@ describe('application routing and shell', () => {
       expect(screen.getByRole('link', { name: label })).toBeVisible()
     }
     expect(within(screen.getByRole('complementary')).queryByText(/FE-CP|checkpoint/i)).not.toBeInTheDocument()
-    const navigationTrigger = screen.getByRole('button', { name: 'Open customer navigation' })
+    const navigationTrigger = screen.getByRole('button', { name: 'Open menu' })
     const shellBanner = navigationTrigger.closest('header') as HTMLElement
 
     expect(within(shellBanner).queryByText(/FE-CP|checkpoint/i)).not.toBeInTheDocument()
-    expect(navigationTrigger).toHaveAccessibleName('Open customer navigation')
+    expect(navigationTrigger).toHaveAccessibleName('Open menu')
   })
 
   it.each([
-    ['/foundation/flow', 'One clear task at a time'],
-    ['/foundation/detail', 'Information with a clear hierarchy'],
-  ])('renders the layout demonstration at %s', async (path, heading) => {
+    '/foundation/flow',
+    '/foundation/detail',
+  ])('does not expose the foundation preview route at %s', async (path) => {
     renderRoute(path)
 
-    expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeVisible()
+    expect(await screen.findByText('This page is not available')).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Return to dashboard' })).toBeVisible()
   })
 
   it('keeps mobile navigation links composed, active, and dismissible', async () => {
     const user = userEvent.setup()
     const router = renderRoute('/')
-    const trigger = await screen.findByRole('button', { name: 'Open customer navigation' })
+    const trigger = await screen.findByRole('button', { name: 'Open menu' })
 
     trigger.focus()
     await user.keyboard('{Enter}')
 
-    const dialog = await screen.findByRole('dialog', { name: 'Customer navigation' })
+    const dialog = await screen.findByRole('dialog', { name: 'Menu' })
     const productsLink = within(dialog).getByRole('link', { name: 'Products' })
 
-    expect(within(dialog).getByText('Choose a Customer Web destination.')).toBeVisible()
+    expect(within(dialog).getByText('Choose where you want to go.')).toBeVisible()
     expect(within(dialog).queryByText(/FE-CP|checkpoint/i)).not.toBeInTheDocument()
     expect(productsLink).toHaveClass('flex')
     expect(productsLink.className).not.toContain('isActive')
@@ -61,7 +62,7 @@ describe('application routing and shell', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/products'))
     await waitFor(() =>
       expect(
-        screen.queryByRole('dialog', { name: 'Customer navigation' }),
+        screen.queryByRole('dialog', { name: 'Menu' }),
       ).not.toBeInTheDocument(),
     )
     expect(screen.getByRole('link', { name: 'Products' })).toHaveAttribute(
@@ -74,6 +75,6 @@ describe('application routing and shell', () => {
     renderRoute('/not-a-meridian-route')
 
     expect(await screen.findByText('This page is not available')).toBeVisible()
-    expect(screen.getByRole('link', { name: 'Return to foundation' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Return to dashboard' })).toBeVisible()
   })
 })

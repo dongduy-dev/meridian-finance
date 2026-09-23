@@ -17,7 +17,7 @@ export function AccountReadinessPrompt({ customer }: { customer: Customer }) {
       <AlertTitle>Finish setting up your account</AlertTitle>
       <AlertDescription className="space-y-3">
         <p>
-          Complete the basic account details below to prepare for later lending journeys. Account readiness does not confirm loan eligibility.
+          Complete your profile and primary bank account before applying. Finishing setup does not confirm loan eligibility.
         </p>
         <div className="flex flex-wrap gap-2">
           {profileNeedsAttention ? (

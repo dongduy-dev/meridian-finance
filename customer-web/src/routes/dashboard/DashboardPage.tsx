@@ -57,24 +57,24 @@ export function DashboardPage() {
   return (
     <div className="space-y-10">
       <PageHeader
-        eyebrow="Customer overview"
+        eyebrow="Overview"
         title="Dashboard"
-        description="Review account readiness, Customer work, active lending, and Meridian products from one calm overview."
+        description="See what needs your attention, track applications, and review your loans."
       />
 
       <section aria-labelledby="account-readiness-heading" className="space-y-4">
         <SectionHeading
           id="account-readiness-heading"
-          title="Customer account"
-          description="Keep the Customer account facts needed by later lending journeys up to date."
+          title="Account"
+          description="Keep your profile and primary bank account up to date."
         />
         {customerQuery.isPending ? (
-          <Skeleton className="h-72 w-full" role="status" aria-label="Loading account readiness" />
+          <Skeleton className="h-72 w-full" role="status" aria-label="Loading account details" />
         ) : null}
         {customerQuery.isError ? (
           <QueryErrorFeedback
             error={customerQuery.error}
-            title="Account readiness could not be loaded"
+            title="Account status could not be loaded"
             onRetry={() => void customerQuery.refetch()}
           />
         ) : null}
@@ -84,14 +84,14 @@ export function DashboardPage() {
       <section aria-labelledby="required-work-heading" className="space-y-4">
         <SectionHeading
           id="required-work-heading"
-          title="Required Customer work"
-          description="These summaries show Customer work reported by Meridian."
+          title="What needs your attention"
+          description="Review the next steps for your applications."
         />
         {applicationQuery.isPending ? <CardSkeletons /> : null}
         {applicationQuery.isError ? (
           <QueryErrorFeedback
             error={applicationQuery.error}
-            title="Required Customer work could not be loaded"
+            title="Next steps could not be loaded"
             onRetry={() => void applicationQuery.refetch()}
           />
         ) : null}
@@ -106,7 +106,7 @@ export function DashboardPage() {
           <EmptyState
             icon={CheckCircle2}
             title="You're up to date"
-            description="Meridian has not reported any supported Customer action for your current applications."
+            description="There are no application tasks waiting for you."
             className="min-h-52"
           />
         ) : null}
@@ -115,8 +115,8 @@ export function DashboardPage() {
       <section aria-labelledby="active-applications-heading" className="space-y-4">
         <SectionHeading
           id="active-applications-heading"
-          title="Active applications"
-          description="Applications currently in an active origination lifecycle, as identified by Meridian."
+          title="Applications"
+          description="Track applications that are still in progress."
         />
         {applicationQuery.isPending ? <CardSkeletons /> : null}
         {applicationQuery.isError ? (
@@ -137,7 +137,7 @@ export function DashboardPage() {
           <EmptyState
             icon={FileSearch}
             title="No active applications"
-            description="No application is currently in an active origination lifecycle. You can explore available products when you are ready."
+            description="You have no applications in progress. Explore available loans when you're ready."
             action={<Button variant="secondary" asChild><Link to="/products">Explore products</Link></Button>}
             className="min-h-52"
           />
@@ -147,14 +147,14 @@ export function DashboardPage() {
       <section aria-labelledby="active-loans-heading" className="space-y-4">
         <SectionHeading
           id="active-loans-heading"
-          title="Active LoanAccounts"
-          description="Accounts Meridian currently identifies as active servicing work."
+          title="Your loans"
+          description="View loans with an active or overdue balance."
         />
         {loanQuery.isPending ? <CardSkeletons /> : null}
         {loanQuery.isError ? (
           <QueryErrorFeedback
             error={loanQuery.error}
-            title="Active LoanAccounts could not be loaded"
+            title="Loans could not be loaded"
             onRetry={() => void loanQuery.refetch()}
           />
         ) : null}
@@ -168,8 +168,8 @@ export function DashboardPage() {
         {activeLoanAccounts?.length === 0 ? (
           <EmptyState
             icon={Landmark}
-            title="No active LoanAccounts"
-            description="No active or overdue LoanAccount is currently being serviced."
+            title="No active loans"
+            description="You have no active or overdue loans."
             className="min-h-52"
           />
         ) : null}
@@ -179,8 +179,8 @@ export function DashboardPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <SectionHeading
             id="product-discovery-heading"
-            title="Explore Meridian products"
-            description="Compare the current product policies returned by Meridian."
+            title="Explore loans"
+            description="Compare available amounts, terms, interest, and fees."
           />
           <Button variant="secondary" asChild>
             <Link to="/products">View all products <ArrowRight aria-hidden="true" /></Link>
@@ -205,7 +205,7 @@ export function DashboardPage() {
           <EmptyState
             icon={Shapes}
             title="No products available"
-            description="Meridian is not currently returning an active product catalogue."
+            description="No lending products are available right now. Please check again later."
             className="min-h-52"
           />
         ) : null}

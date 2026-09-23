@@ -21,7 +21,7 @@ export function ContractSummary({ contract }: { contract: LoanContract }) {
           <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <CardTitle className="break-all">{contract.contractReference}</CardTitle>
-              <CardDescription>Operational contract version {contract.contractVersion}</CardDescription>
+              <CardDescription>Contract version {contract.contractVersion}</CardDescription>
             </div>
             <StatusBadge presentation={contractStatusPresentation(contract.status)} />
           </div>
@@ -44,8 +44,8 @@ export function ContractSummary({ contract }: { contract: LoanContract }) {
 
       <Card className="min-w-0">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Landmark aria-hidden="true" className="size-5" />Captured disbursement destination</CardTitle>
-          <CardDescription>This masked snapshot is bound to this exact contract version.</CardDescription>
+          <CardTitle className="flex items-center gap-2"><Landmark aria-hidden="true" className="size-5" />Disbursement account</CardTitle>
+          <CardDescription>This masked account is linked to this contract version.</CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-x-6 gap-y-5 text-sm sm:grid-cols-2">
@@ -54,7 +54,7 @@ export function ContractSummary({ contract }: { contract: LoanContract }) {
             <Fact label="Account holder">{account.accountHolderName}</Fact>
             <Fact label="Masked account"><span className="break-all font-mono">{account.maskedAccountNumber}</span></Fact>
             <Fact label="Captured">{formatTimestamp(account.capturedAt)}</Fact>
-            <Fact label="Snapshot eligibility">{account.primaryAtCapture && account.activeAtCapture ? 'Primary and active when captured' : 'Historical eligibility unavailable'}</Fact>
+            <Fact label="Account status">{account.primaryAtCapture && account.activeAtCapture ? 'Primary and active when selected' : 'Previous status unavailable'}</Fact>
           </dl>
         </CardContent>
       </Card>
@@ -62,7 +62,7 @@ export function ContractSummary({ contract }: { contract: LoanContract }) {
       <section aria-labelledby="contract-repayment-preview" className="space-y-4">
         <div>
           <h2 id="contract-repayment-preview" className="text-xl font-semibold">Contract repayment preview</h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">Meridian returned these version-bound amounts without final calendar due dates.</p>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">These amounts are linked to this contract version. Your final repayment schedule will include due dates.</p>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           {contract.repaymentPreview.map((item) => (

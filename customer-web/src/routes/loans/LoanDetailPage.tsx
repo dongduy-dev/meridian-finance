@@ -99,9 +99,9 @@ export function LoanDetailPage() {
     <DetailLayout
       header={(
         <PageHeader
-          eyebrow="LoanAccount"
+          eyebrow="Loan"
           title={account?.accountNumber ?? (concealedUnavailable ? 'Loan unavailable' : 'Loan details')}
-          description={account ? `Activated ${formatTimestamp(account.activatedAt)}` : 'Review Customer-safe LoanAccount servicing information.'}
+          description={account ? `Activated ${formatTimestamp(account.activatedAt)}` : 'Review your loan balance, schedule, and payment history.'}
           actions={<BackToLoans />}
         />
       )}
@@ -109,7 +109,7 @@ export function LoanDetailPage() {
     >
       <div className="space-y-6">
         {detailQuery.isPending ? (
-          <div role="status" aria-label="Loading LoanAccount detail" className="space-y-4">
+          <div role="status" aria-label="Loading loan details" className="space-y-4">
             <Skeleton className="h-16" />
             <Skeleton className="h-96" />
             <Skeleton className="h-72" />
@@ -119,7 +119,7 @@ export function LoanDetailPage() {
           <EmptyState
             icon={Landmark}
             title="Loan unavailable"
-            description="This loan could not be found or is not available to this Customer."
+            description="This loan could not be found or is not available to you."
           />
         ) : null}
         {detailQuery.isError && !concealedUnavailable ? (
@@ -154,13 +154,13 @@ type RepaymentHistoryQuery = ReturnType<typeof useRepaymentHistoryQuery>
 function LoanStatusRail({ account }: { account: LoanAccountData }) {
   return (
     <Card>
-      <CardHeader><CardTitle>Servicing status</CardTitle></CardHeader>
+      <CardHeader><CardTitle>Loan status</CardTitle></CardHeader>
       <CardContent className="space-y-5">
         <StatusBadge presentation={loanAccountStatusPresentation(account.status)} />
         <dl className="space-y-4 text-sm">
           <div><dt className="text-muted-foreground">Total paid</dt><dd className="mt-1"><MoneyDisplay value={account.servicing.totalPaid} /></dd></div>
           <div><dt className="text-muted-foreground">Total outstanding</dt><dd className="mt-1"><MoneyDisplay value={account.servicing.totalOutstanding} /></dd></div>
-          <div><dt className="text-muted-foreground">Servicing state</dt><dd className="mt-1 font-medium">As of {formatDateOnly(account.servicing.servicingEvaluationDate)}</dd></div>
+          <div><dt className="text-muted-foreground">Balance updated</dt><dd className="mt-1 font-medium">As of {formatDateOnly(account.servicing.servicingEvaluationDate)}</dd></div>
         </dl>
       </CardContent>
     </Card>
@@ -185,9 +185,9 @@ function LoanOverview({ account }: { account: LoanAccountData }) {
       <section aria-labelledby="final-schedule-heading" className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 id="final-schedule-heading" className="text-xl font-semibold">Final repayment schedule</h2>
+            <h2 id="final-schedule-heading" className="text-xl font-semibold">Repayment schedule</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {schedule.scheduleType === 'FINAL' ? 'Final schedule' : 'Schedule type unavailable'} · Version {schedule.version}
+              {schedule.scheduleType === 'FINAL' ? 'Current schedule' : 'Schedule details unavailable'} · Version {schedule.version}
             </p>
           </div>
           <p className="text-sm text-muted-foreground">
@@ -197,7 +197,7 @@ function LoanOverview({ account }: { account: LoanAccountData }) {
         {schedule.items.length ? schedule.items.map((item) => (
           <InstallmentRow key={item.installmentNumber} item={item} />
         )) : (
-          <EmptyState icon={Clock3} title="No schedule items available" description="Meridian returned a final schedule without installment items." />
+          <EmptyState icon={Clock3} title="No schedule items available" description="We can't show any installments for this schedule right now." />
         )}
       </section>
     </div>
@@ -210,7 +210,7 @@ function RepaymentHistory({ query, page, onPageChange }: { query: RepaymentHisto
     <section aria-labelledby="repayment-history-heading" className="space-y-5">
       <div>
         <h2 id="repayment-history-heading" className="text-xl font-semibold">Repayment history</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Immutable payment outcomes and the balance returned after each repayment.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Review recorded payments and the balance after each repayment.</p>
       </div>
       {query.isPending ? (
         <div role="status" aria-label="Loading repayment history" className="space-y-4"><Skeleton className="h-72" /><Skeleton className="h-72" /></div>
@@ -222,7 +222,7 @@ function RepaymentHistory({ query, page, onPageChange }: { query: RepaymentHisto
         <RepaymentHistoryItem key={item.repaymentTransactionId} item={item} />
       )) : null}
       {history?.totalElements === 0 ? (
-        <EmptyState icon={ReceiptText} title="No repayments recorded yet" description="No immutable repayment outcome has been recorded for this LoanAccount." />
+        <EmptyState icon={ReceiptText} title="No payments recorded yet" description="Your payment history will appear here after a repayment is recorded." />
       ) : null}
       {history ? (
         <nav aria-label="Repayment history pagination" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4">

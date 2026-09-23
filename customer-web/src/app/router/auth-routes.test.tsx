@@ -53,7 +53,7 @@ describe('Customer authentication routes', () => {
     await completeLogin(user)
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/loans'))
-    expect(await screen.findByRole('heading', { name: 'Your LoanAccounts' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Your loans' })).toBeVisible()
   })
 
   it('keeps invalid credentials generic and never calls refresh recovery', async () => {
@@ -134,7 +134,7 @@ describe('Customer authentication routes', () => {
     window.history.replaceState(null, '', '/verify-email#token=opaque-email-token')
     renderAuthRoute('/verify-email#token=opaque-email-token', api, true)
 
-    expect(await screen.findByText('Your email is ready. You can now log in to Customer Web.')).toBeVisible()
+    expect(await screen.findByText('Your email is ready. You can now log in to Meridian.')).toBeVisible()
     expect(api.confirmEmailVerification).toHaveBeenCalledOnce()
     expect(api.confirmEmailVerification).toHaveBeenCalledWith('opaque-email-token')
     expect(window.location.hash).toBe('')
