@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AppProviders } from '@/app/providers/AppProviders'
 import { AuthSessionManager } from '@/features/auth/auth-session'
+import { correctionErrorMessage } from '@/features/corrections/correction-presentation'
 import { ApiError } from '@/lib/api'
 import { createAuthApiMock, createTestAuthManager } from '@/test/auth'
 
@@ -267,6 +268,17 @@ describe('FE-CP8 application tracking', () => {
 })
 
 describe('FE-CP8 Customer corrections', () => {
+  it('describes a state conflict without claiming the application changed', () => {
+    const message = correctionErrorMessage(new ApiError({
+      status: 409,
+      errorCode: 'SYSTEM_STATE_CONFLICT',
+      message: 'Safe system conflict.',
+    }), 'Fallback message.')
+
+    expect(message).toBe("We couldn't confirm the latest application status. Review the latest information and try again if needed.")
+    expect(message).not.toMatch(/application changed/i)
+  })
+
   it('composes upload/replacement from the existing document flow and renders Staff/unknown work read-only', async () => {
     const user = userEvent.setup()
     const fixture = state()

@@ -56,7 +56,7 @@ const correctionMessages: Record<string, string> = {
   IDEMPOTENCY_KEY_REUSED: 'This action could not be safely repeated. Review the latest status before trying again.',
   LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED: 'Cancellation is no longer available for this application.',
   LOAN_APPLICATION_NOT_FOUND: 'This application is unavailable.',
-  SYSTEM_STATE_CONFLICT: 'The application changed before this action was completed. Review the latest status and try again if needed.',
+  SYSTEM_STATE_CONFLICT: "We couldn't confirm the latest application status. Review the latest information and try again if needed.",
 }
 
 export function correctionScopePresentation(value: string): CorrectionScopePresentation {

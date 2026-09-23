@@ -24,7 +24,7 @@ const uploadMessages: Record<string, string> = {
   INVALID_DOCUMENT_UPLOAD: 'Meridian rejected the file content, type, size, or format.',
   STALE_DOCUMENT_VERSION: 'The document changed since this page loaded. Review the latest file before trying again.',
   IDEMPOTENCY_KEY_REUSED: 'This upload could not be safely repeated. Select the file again to start a new upload.',
-  SYSTEM_STATE_CONFLICT: 'The document changed before the upload was completed. Review its latest status and try again if needed.',
+  SYSTEM_STATE_CONFLICT: "We couldn't confirm the latest document status. Refresh and try again if needed.",
   DOCUMENT_STORAGE_UNAVAILABLE: 'Document storage is temporarily unavailable. You can retry this same file.',
   VALIDATION_FAILED: 'Meridian could not validate this upload.',
 }

@@ -84,8 +84,31 @@ describe('FE-CP7 UCL origination', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe(`/applications/${applicationId}/documents`))
     expect(submittedBody).toEqual({ requestedAmount: 5_000_000, requestedTermMonths: 6 })
     expect(await screen.findByText('Application submitted')).toBeVisible()
+    expect(screen.getByText(`Application ${application.applicationNumber} was created. Review and upload any required documents below.`)).toBeVisible()
     expect(screen.getByText('Status unavailable')).toBeVisible()
     expect(await screen.findByText('No documents are currently required')).toBeVisible()
+  })
+
+  it.each([
+    ['BLOCKING_APPLICATION_EXISTS', 'You already have an application for this loan in progress. You can submit another after it is no longer active.'],
+    ['SYSTEM_STATE_CONFLICT', "We couldn't confirm the latest application information. Refresh and try again if appropriate."],
+  ])('presents %s without inventing a Customer action or changed application details', async (errorCode, expectedMessage) => {
+    const user = userEvent.setup()
+    renderRoute('/products/unsecured-consumer-loan/apply', async (input, init) => {
+      const url = String(input)
+      if (url.endsWith('/loan-applications/unsecured-consumer-loan')) {
+        return response({ timestamp: '2026-08-31T09:00:00Z', status: 409, errorCode, message: 'Safe submission conflict.', path: url }, 409)
+      }
+      return baseFetch(input, init)
+    })
+
+    await user.type(await screen.findByRole('textbox', { name: /Requested amount/ }), '5000000')
+    await user.selectOptions(screen.getByRole('combobox', { name: /Requested term/ }), '6')
+    await user.click(screen.getByRole('button', { name: 'Review request' }))
+    await user.click(await screen.findByRole('button', { name: 'Submit application' }))
+
+    expect(await screen.findByText(expectedMessage)).toBeVisible()
+    expect(screen.queryByText(/completed or closed|application details changed/i)).not.toBeInTheDocument()
   })
 
   it('warns before leaving unsaved form input', async () => {
@@ -171,6 +194,9 @@ describe('FE-CP7 document workspace', () => {
     expect(screen.getByRole('link', { name: 'Return to Dashboard' })).toHaveAttribute('href', '/')
     expect(await screen.findByText('Documents provided: Not complete', {}, { timeout: 3_000 })).toBeVisible()
     expect(screen.getByText('Review status: Not complete')).toBeVisible()
+    expect(screen.getAllByText('Ready for next step')).toHaveLength(checklist.items.length)
+    expect(screen.getAllByText('No')).toHaveLength(checklist.items.filter((item) => !item.processingReady).length)
+    expect(screen.queryByText('In progress')).not.toBeInTheDocument()
     expect(screen.getByText('Your document was uploaded and is under review.')).toBeVisible()
     expect(screen.getByText('The current document has been accepted.')).toBeVisible()
     expect(screen.getByText('This requirement was waived. No upload is needed.')).toBeVisible()
@@ -222,6 +248,25 @@ describe('FE-CP7 document workspace', () => {
     await waitFor(() => expect(posts).toBe(2))
     expect(bodies[0]?.get('uploadRequestId')).toBe(bodies[1]?.get('uploadRequestId'))
     expect(bodies[0]?.has('expectedCurrentVersionId')).toBe(false)
+  })
+
+  it('describes a document state conflict without claiming the document changed', async () => {
+    const user = userEvent.setup()
+    const firstOnly = { ...checklist, items: [checklist.items[0]] }
+    renderRoute(`/applications/${applicationId}/documents`, async (input, init) => {
+      const url = String(input)
+      if (url.endsWith(`/loan-applications/${applicationId}/documents`) && init?.method !== 'POST') return response(firstOnly)
+      if (url.includes('/versions')) {
+        return response({ timestamp: '2026-08-31T09:00:00Z', status: 409, errorCode: 'SYSTEM_STATE_CONFLICT', message: 'Safe document conflict.', path: url }, 409)
+      }
+      return baseFetch(input, init)
+    })
+
+    await user.upload(await screen.findByLabelText('Choose file'), new File(['%PDF'], 'income.pdf', { type: 'application/pdf' }))
+    await user.click(screen.getByRole('button', { name: 'Upload document' }))
+
+    expect(await screen.findByText("We couldn't confirm the latest document status. Refresh and try again if needed.")).toBeVisible()
+    expect(screen.queryByText(/document changed before the upload/i)).not.toBeInTheDocument()
   })
 
   it('rejects an obviously oversized file locally without claiming server validation', async () => {

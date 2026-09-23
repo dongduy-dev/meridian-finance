@@ -52,7 +52,7 @@ export function ApplicationDocumentsPage() {
           <CheckCircle2 aria-hidden="true" />
           <AlertTitle>Application submitted</AlertTitle>
           <AlertDescription className="flex min-w-0 flex-wrap items-center gap-3">
-            <span className="break-all">Application {notice.applicationNumber} was created. Its document checklist is loaded independently below.</span>
+            <span className="break-all">Application {notice.applicationNumber} was created. Review and upload any required documents below.</span>
             <StatusBadge presentation={applicationStatusPresentation(notice.status)} />
           </AlertDescription>
         </Alert>
@@ -90,7 +90,7 @@ export function ApplicationDocumentsPage() {
                         <DocumentStatus status={item.customerStatus} />
                         <dl className="grid gap-3 text-sm sm:grid-cols-2">
                           <ReadinessLine label="Document provided" value={item.uploadComplete ? 'Complete' : 'Still needed'} />
-                          <ReadinessLine label="Review status" value={item.processingReady ? 'Complete' : 'In progress'} />
+                          <ReadinessLine label="Ready for next step" value={item.processingReady ? 'Yes' : 'No'} />
                         </dl>
                         {item.currentVersion ? (
                           <div className="min-w-0 rounded-md border border-border bg-background p-4">

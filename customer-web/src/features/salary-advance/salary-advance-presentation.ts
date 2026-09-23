@@ -47,8 +47,8 @@ const blockerPresentations: Record<string, BlockerPresentation> = {
     tone: 'warning',
   },
   SALARY_ADVANCE_ELIGIBILITY_DATA_STALE: {
-    title: 'Update your employment information',
-    description: 'Verify your employment again using the latest information from your employer.',
+    title: 'Refresh employment verification',
+    description: 'Your employment verification needs to be refreshed before submission.',
     tone: 'warning',
   },
   SALARY_ADVANCE_LIMIT_UNAVAILABLE: {
@@ -62,8 +62,8 @@ const blockerPresentations: Record<string, BlockerPresentation> = {
     tone: 'warning',
   },
   BLOCKING_APPLICATION_EXISTS: {
-    title: 'Another Salary Advance application is active',
-    description: 'Finish or close your existing Salary Advance application before starting another one.',
+    title: 'Salary Advance application in progress',
+    description: 'You already have a Salary Advance application in progress. You can start another after it is no longer active.',
     tone: 'information',
   },
   OUTSTANDING_LOAN_ACCOUNT_EXISTS: {
@@ -72,8 +72,8 @@ const blockerPresentations: Record<string, BlockerPresentation> = {
     tone: 'information',
   },
   SYSTEM_STATE_CONFLICT: {
-    title: 'Application status is temporarily unavailable',
-    description: 'Refresh the page, and contact support if the issue continues.',
+    title: 'Salary Advance information is unavailable',
+    description: "We couldn't confirm the latest Salary Advance information. Review the latest status and try again if appropriate.",
     tone: 'danger',
   },
 }
@@ -145,7 +145,7 @@ const verificationOutcomePresentations: Record<string, VerificationOutcomePresen
     label: 'Employment could not be verified',
     tone: 'danger',
     icon: AlertCircle,
-    description: 'We could not verify eligible employment for Salary Advance. Update your employment information before trying again.',
+    description: 'We could not verify eligible employment for Salary Advance.',
   },
 }
 

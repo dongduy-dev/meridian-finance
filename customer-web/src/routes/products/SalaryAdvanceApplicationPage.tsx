@@ -53,12 +53,12 @@ const submissionErrorMessages: Record<string, string> = {
   INVALID_PRODUCT_AMOUNT: 'The requested amount is no longer available.',
   INVALID_PRODUCT_TERM: 'The requested term is no longer available.',
   EMPLOYEE_NOT_VERIFIED: 'Current employment verification is required before submission.',
-  SALARY_ADVANCE_ELIGIBILITY_DATA_STALE: 'Your employment information changed and must be updated before submission.',
+  SALARY_ADVANCE_ELIGIBILITY_DATA_STALE: 'Your employment verification needs to be refreshed before submission.',
   SALARY_ADVANCE_LIMIT_UNAVAILABLE: 'Meridian can no longer confirm a usable Salary Advance limit.',
   INSUFFICIENT_AVAILABLE_LIMIT: 'The current available amount is no longer sufficient for this request.',
-  BLOCKING_APPLICATION_EXISTS: 'Another Salary Advance application now blocks this submission.',
+  BLOCKING_APPLICATION_EXISTS: 'You already have a Salary Advance application in progress. You can submit another after it is no longer active.',
   OUTSTANDING_LOAN_ACCOUNT_EXISTS: 'A prior Salary Advance balance now blocks this submission.',
-  SYSTEM_STATE_CONFLICT: 'Your application details changed before submission. Review the latest information and try again if appropriate.',
+  SYSTEM_STATE_CONFLICT: "We couldn't confirm the latest Salary Advance information. Review the latest status and try again if appropriate.",
   VALIDATION_FAILED: 'Meridian could not validate the submitted request. Review the entered amount and term before trying again.',
 }
 
@@ -287,8 +287,8 @@ export function SalaryAdvanceApplicationPage() {
       <>
         <FocusedFlowLayout
           eyebrow="Salary Advance application"
-          title="Application details changed"
-          description="Your information changed before submission, so the application was not submitted. Your entered amount and term are still available below."
+          title="Application was not submitted"
+          description="Review the latest information below. Your entered amount and term are still available."
           currentStep={2}
           totalSteps={2}
           backAction={backToProduct}

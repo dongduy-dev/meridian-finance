@@ -28,9 +28,9 @@ const submissionErrorMessages: Record<string, string> = {
   INVALID_PRODUCT_AMOUNT: 'The requested amount is no longer available.',
   INVALID_PRODUCT_TERM: 'The requested term is no longer available.',
   INVALID_COLLATERAL_DETAILS: 'The collateral details are incomplete or are not supported.',
-  BLOCKING_APPLICATION_EXISTS: 'Another application for this loan must be completed or closed before you can submit.',
+  BLOCKING_APPLICATION_EXISTS: 'You already have an application for this loan in progress. You can submit another after it is no longer active.',
   OUTSTANDING_LOAN_ACCOUNT_EXISTS: 'A previous Unsecured Consumer Loan still has an outstanding balance.',
-  SYSTEM_STATE_CONFLICT: 'Your application details changed before submission. Review the latest information and try again if appropriate.',
+  SYSTEM_STATE_CONFLICT: "We couldn't confirm the latest application information. Refresh and try again if appropriate.",
   VALIDATION_FAILED: 'Meridian could not validate the submitted request. Review the entered details before trying again.',
 }
 
