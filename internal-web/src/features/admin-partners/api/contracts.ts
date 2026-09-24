@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 const rawValue = z.string().trim().min(1)
 const money = z.number().finite().nonnegative()
-const uuid = z.string().uuid()
+const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
 
 export const partnerCompanySchema = z.object({
   id: uuid,
