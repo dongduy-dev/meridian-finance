@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -60,19 +61,24 @@ class PartnerEmployeeVerificationControllerTest {
     }
 
     @Test
-    void returnsOnlyCustomerSafeLatestReviewState() throws Exception {
-        mockMvc.perform(get("/api/v1/partner-companies/{partnerCompanyId}/employee-verifications", partnerCompanyId))
+    void returnsOnlyCustomerSafeCurrentReviewStatesSeparatedByPartnerCompany() throws Exception {
+        mockMvc.perform(get("/api/v1/partner-companies/employee-verifications"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.partnerCompanyId").value(partnerCompanyId.toString()))
-                .andExpect(jsonPath("$.outcome").value("MANUAL_REVIEW_APPROVED"))
-                .andExpect(jsonPath("$.manualReviewRequired").value(false))
-                .andExpect(jsonPath("$.customerId").doesNotExist())
-                .andExpect(jsonPath("$.reviewerUserId").doesNotExist())
-                .andExpect(jsonPath("$.partnerEmployeeId").doesNotExist())
-                .andExpect(jsonPath("$.salaryAmount").doesNotExist())
-                .andExpect(jsonPath("$.identityReference").doesNotExist())
-                .andExpect(jsonPath("$.candidates").doesNotExist())
-                .andExpect(jsonPath("$.internalNotes").doesNotExist());
+                .andExpect(jsonPath("$[0].partnerCompanyId").value(partnerCompanyId.toString()))
+                .andExpect(jsonPath("$[0].outcome").value("MANUAL_REVIEW_APPROVED"))
+                .andExpect(jsonPath("$[0].manualReviewRequired").value(false))
+                .andExpect(jsonPath("$[0].customerId").doesNotExist())
+                .andExpect(jsonPath("$[0].reviewId").doesNotExist())
+                .andExpect(jsonPath("$[0].reviewerUserId").doesNotExist())
+                .andExpect(jsonPath("$[0].decisionReason").doesNotExist())
+                .andExpect(jsonPath("$[0].partnerEmployeeId").doesNotExist())
+                .andExpect(jsonPath("$[0].employeeCode").doesNotExist())
+                .andExpect(jsonPath("$[0].salaryAmount").doesNotExist())
+                .andExpect(jsonPath("$[0].salaryAdvanceLimit").doesNotExist())
+                .andExpect(jsonPath("$[0].identityReference").doesNotExist())
+                .andExpect(jsonPath("$[0].sourceImportBatchId").doesNotExist())
+                .andExpect(jsonPath("$[0].candidates").doesNotExist())
+                .andExpect(jsonPath("$[0].internalNotes").doesNotExist());
     }
 
     private static class StubUseCase implements VerifyPartnerEmployeeUseCase {
@@ -94,15 +100,15 @@ class PartnerEmployeeVerificationControllerTest {
         }
     }
 
-    private static class StubQueryUseCase implements QueryOwnPartnerEmployeeVerificationUseCase {
+    private class StubQueryUseCase implements QueryOwnPartnerEmployeeVerificationUseCase {
 
         @Override
-        public OwnPartnerEmployeeVerificationDto getLatestOwnVerification(UUID partnerCompanyId) {
-            return new OwnPartnerEmployeeVerificationDto(
-                    partnerCompanyId,
+        public List<OwnPartnerEmployeeVerificationDto> getCurrentOwnVerifications() {
+            return List.of(new OwnPartnerEmployeeVerificationDto(
+                    PartnerEmployeeVerificationControllerTest.this.partnerCompanyId,
                     "MANUAL_REVIEW_APPROVED",
                     false
-            );
+            ));
         }
     }
 }

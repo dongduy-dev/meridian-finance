@@ -18,17 +18,18 @@ export const salaryAdvanceKeys = {
   all: ['salary-advance'] as const,
   readiness: () => [...salaryAdvanceKeys.all, 'readiness'] as const,
   partnerOptions: () => [...salaryAdvanceKeys.all, 'partner-verification-options'] as const,
-  ownEmployeeVerification: (partnerCompanyId: string) => [
+  ownEmployeeVerifications: () => [
     ...salaryAdvanceKeys.all,
-    'own-employee-verification',
-    partnerCompanyId,
+    'own-employee-verifications',
   ] as const,
 }
 
 export const manualReviewPollIntervalMs = 15_000
 
-export function manualReviewRefetchInterval(data: OwnEmployeeVerification | undefined) {
-  return data?.manualReviewRequired ? manualReviewPollIntervalMs : false
+export function manualReviewRefetchInterval(data: OwnEmployeeVerification[] | undefined) {
+  return data?.some((verification) => verification.manualReviewRequired)
+    ? manualReviewPollIntervalMs
+    : false
 }
 
 function useSalaryAdvanceApi() {
@@ -62,16 +63,20 @@ export function useVerifyEmployeeMutation() {
     mutationFn: (input: EmployeeVerificationInput) => api.verifyEmployee(input),
     retry: false,
     onSuccess: (result) => {
-      const reviewKey = salaryAdvanceKeys.ownEmployeeVerification(result.partnerCompanyId)
-      if (result.manualReviewRequired) {
-        queryClient.setQueryData<OwnEmployeeVerification>(reviewKey, {
-          partnerCompanyId: result.partnerCompanyId,
-          outcome: 'PENDING_MANUAL_REVIEW',
-          manualReviewRequired: true,
-        })
-      } else {
-        queryClient.removeQueries({ queryKey: reviewKey, exact: true })
-      }
+      const reviewKey = salaryAdvanceKeys.ownEmployeeVerifications()
+      queryClient.setQueryData<OwnEmployeeVerification[]>(reviewKey, (current = []) => {
+        const otherCompanies = current.filter(
+          (verification) => verification.partnerCompanyId !== result.partnerCompanyId,
+        )
+        return result.manualReviewRequired
+          ? [...otherCompanies, {
+              partnerCompanyId: result.partnerCompanyId,
+              outcome: 'PENDING_MANUAL_REVIEW',
+              manualReviewRequired: true,
+            }]
+          : otherCompanies
+      })
+      void queryClient.invalidateQueries({ queryKey: reviewKey, exact: true })
       void queryClient.invalidateQueries({ queryKey: salaryAdvanceKeys.readiness() })
     },
   })
@@ -84,30 +89,27 @@ export function useVerifyEmployeeMutation() {
   }
 }
 
-export function useOwnEmployeeVerificationQuery(
-  partnerCompanyId: string | undefined,
-  enabled: boolean,
-) {
+export function useOwnEmployeeVerificationsQuery() {
   const api = useSalaryAdvanceApi()
   const queryClient = useQueryClient()
   const query = useQuery({
-    queryKey: salaryAdvanceKeys.ownEmployeeVerification(partnerCompanyId ?? ''),
-    queryFn: () => api.getOwnEmployeeVerification(partnerCompanyId!),
-    enabled: enabled && Boolean(partnerCompanyId),
+    queryKey: salaryAdvanceKeys.ownEmployeeVerifications(),
+    queryFn: () => api.getOwnEmployeeVerifications(),
     staleTime: 0,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     refetchInterval: (current) => manualReviewRefetchInterval(current.state.data),
   })
-  const terminalOutcome = query.data?.manualReviewRequired === false
-    ? query.data.outcome
-    : undefined
+  const terminalOutcomes = query.data
+    ?.filter((verification) => !verification.manualReviewRequired)
+    .map((verification) => `${verification.partnerCompanyId}:${verification.outcome}`)
+    .join('|')
 
   useEffect(() => {
-    if (terminalOutcome) {
+    if (terminalOutcomes) {
       void queryClient.invalidateQueries({ queryKey: salaryAdvanceKeys.readiness() })
     }
-  }, [queryClient, terminalOutcome])
+  }, [queryClient, terminalOutcomes])
 
   return query
 }

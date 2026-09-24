@@ -14,10 +14,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/partner-companies/{partnerCompanyId}/employee-verifications")
+@RequestMapping("/api/v1/partner-companies")
 public class PartnerEmployeeVerificationController {
 
     private final VerifyPartnerEmployeeUseCase verifyPartnerEmployeeUseCase;
@@ -31,15 +32,13 @@ public class PartnerEmployeeVerificationController {
         this.queryOwnPartnerEmployeeVerificationUseCase = queryOwnPartnerEmployeeVerificationUseCase;
     }
 
-    @GetMapping
+    @GetMapping("/employee-verifications")
     @PreAuthorize("hasAuthority('partner:employee:verify:own')")
-    public OwnPartnerEmployeeVerificationDto getLatestOwnVerification(
-            @PathVariable UUID partnerCompanyId
-    ) {
-        return queryOwnPartnerEmployeeVerificationUseCase.getLatestOwnVerification(partnerCompanyId);
+    public List<OwnPartnerEmployeeVerificationDto> getCurrentOwnVerifications() {
+        return queryOwnPartnerEmployeeVerificationUseCase.getCurrentOwnVerifications();
     }
 
-    @PostMapping
+    @PostMapping("/{partnerCompanyId}/employee-verifications")
     @PreAuthorize("hasAuthority('partner:employee:verify:own')")
     public PartnerEmployeeVerificationDto verifyPartnerEmployee(
             @PathVariable UUID partnerCompanyId,

@@ -574,13 +574,15 @@ class VerifyPartnerEmployeeServiceTest {
         }
 
         @Override
-        public Optional<PartnerEligibilityReview> findLatestByCustomerIdAndPartnerCompanyId(
+        public List<PartnerEligibilityReview> findCurrentLatestByCustomerIdAndEffectiveMonth(
                 UUID customerId,
-                UUID partnerCompanyId
+                String effectiveMonth
         ) {
             return Optional.ofNullable(review)
                     .filter(value -> value.customerId().equals(customerId))
-                    .filter(value -> value.partnerCompanyId().equals(partnerCompanyId));
+                    .filter(value -> value.effectiveMonth().equals(effectiveMonth))
+                    .stream()
+                    .toList();
         }
 
         @Override

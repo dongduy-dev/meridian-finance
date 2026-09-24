@@ -47,7 +47,10 @@ class PartnerEligibilityReviewPostgreSqlIntegrationTest {
     private static final String SCHEMA = "partner_review_" + UUID.randomUUID().toString().replace("-", "");
     private static final UUID REVIEW_ID = UUID.fromString("10000000-0000-4000-8000-000000000001");
     private static final UUID CUSTOMER_ID = UUID.fromString("20000000-0000-4000-8000-000000000002");
+    private static final UUID OTHER_CUSTOMER_ID = UUID.fromString("20000000-0000-4000-8000-000000000099");
     private static final UUID COMPANY_ID = UUID.fromString("30000000-0000-4000-8000-000000000003");
+    private static final UUID SECOND_COMPANY_ID = UUID.fromString("30000000-0000-4000-8000-000000000013");
+    private static final UUID THIRD_COMPANY_ID = UUID.fromString("30000000-0000-4000-8000-000000000023");
     private static final UUID BATCH_ID = UUID.fromString("40000000-0000-4000-8000-000000000004");
     private static final UUID EMPLOYEE_ID = UUID.fromString("50000000-0000-4000-8000-000000000005");
 
@@ -70,7 +73,11 @@ class PartnerEligibilityReviewPostgreSqlIntegrationTest {
 
     @BeforeEach
     void seed() {
-        jdbcTemplate.update("DELETE FROM partner_eligibility_reviews WHERE id = ?", REVIEW_ID);
+        jdbcTemplate.update(
+                "DELETE FROM partner_eligibility_reviews "
+                        + "WHERE customer_id IN (?, ?) OR partner_company_id IN (?, ?, ?)",
+                CUSTOMER_ID, OTHER_CUSTOMER_ID, COMPANY_ID, SECOND_COMPANY_ID, THIRD_COMPANY_ID
+        );
         jdbcTemplate.update(
                 "DELETE FROM customer_partner_employee_links WHERE customer_id = ? AND partner_company_id = ?",
                 CUSTOMER_ID,
@@ -78,8 +85,11 @@ class PartnerEligibilityReviewPostgreSqlIntegrationTest {
         );
         jdbcTemplate.update("DELETE FROM partner_employees WHERE id = ?", EMPLOYEE_ID);
         jdbcTemplate.update("DELETE FROM partner_employee_import_batches WHERE id = ?", BATCH_ID);
-        jdbcTemplate.update("DELETE FROM partner_companies WHERE id = ?", COMPANY_ID);
-        jdbcTemplate.update("DELETE FROM customers WHERE id = ?", CUSTOMER_ID);
+        jdbcTemplate.update(
+                "DELETE FROM partner_companies WHERE id IN (?, ?, ?)",
+                COMPANY_ID, SECOND_COMPANY_ID, THIRD_COMPANY_ID
+        );
+        jdbcTemplate.update("DELETE FROM customers WHERE id IN (?, ?)", CUSTOMER_ID, OTHER_CUSTOMER_ID);
         when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(
                 UUID.randomUUID(), "admin@meridian.local", "STAFF", null,
                 Set.of(), Set.of("partner:manage")
@@ -161,15 +171,108 @@ class PartnerEligibilityReviewPostgreSqlIntegrationTest {
     }
 
     @Test
-    void latestCustomerReviewLookupIsBoundToCustomerAndPartnerCompany() {
-        assertEquals(
-                REVIEW_ID,
-                reviews.findLatestByCustomerIdAndPartnerCompanyId(CUSTOMER_ID, COMPANY_ID)
-                        .orElseThrow()
-                        .id()
+    void currentReviewDiscoverySelectsLatestPerCompanyWithoutResurrectingSupersededOrStaleHistory() {
+        String month = YearMonth.now(ZoneOffset.UTC).toString();
+        String priorMonth = YearMonth.now(ZoneOffset.UTC).minusMonths(1).toString();
+        insertCustomer(OTHER_CUSTOMER_ID, "CUS-REVIEW-OTHER");
+        insertCompany(SECOND_COMPANY_ID, "REVIEW-SECOND");
+        insertCompany(THIRD_COMPANY_ID, "REVIEW-THIRD");
+
+        jdbcTemplate.update("""
+                UPDATE partner_eligibility_reviews
+                SET status = 'REJECTED', decision_outcome = 'MANUAL_REVIEW_REJECTED',
+                    decision_reason = 'NO_ELIGIBLE_CURRENT_EMPLOYEE',
+                    reviewer_user_id = UUID '60000000-0000-4000-8000-000000000001',
+                    reviewed_at = TIMESTAMP '2026-09-24 08:30:00',
+                    created_at = TIMESTAMP '2026-09-24 08:00:00',
+                    updated_at = TIMESTAMP '2026-09-24 08:30:00'
+                WHERE id = ?
+                """, REVIEW_ID);
+        insertReview(
+                UUID.fromString("10000000-0000-4000-8000-000000000009"),
+                CUSTOMER_ID, COMPANY_ID, month, "SUPERSEDED", null,
+                "2026-09-24 09:00:00"
         );
-        assertTrue(reviews.findLatestByCustomerIdAndPartnerCompanyId(UUID.randomUUID(), COMPANY_ID).isEmpty());
-        assertTrue(reviews.findLatestByCustomerIdAndPartnerCompanyId(CUSTOMER_ID, UUID.randomUUID()).isEmpty());
+
+        insertReview(
+                UUID.fromString("10000000-0000-4000-8000-000000000010"),
+                CUSTOMER_ID, SECOND_COMPANY_ID, month, "PENDING", null,
+                "2026-09-24 10:00:00"
+        );
+        insertReview(
+                UUID.fromString("10000000-0000-4000-8000-000000000011"),
+                CUSTOMER_ID, SECOND_COMPANY_ID, month, "REJECTED", "MANUAL_REVIEW_REJECTED",
+                "2026-09-24 10:00:00"
+        );
+
+        insertReview(
+                UUID.fromString("10000000-0000-4000-8000-000000000020"),
+                CUSTOMER_ID, THIRD_COMPANY_ID, priorMonth, "REJECTED", "MANUAL_REVIEW_REJECTED",
+                "2026-09-24 11:00:00"
+        );
+        insertReview(
+                UUID.fromString("10000000-0000-4000-8000-000000000021"),
+                CUSTOMER_ID, THIRD_COMPANY_ID, month, "PENDING", null,
+                "2026-09-24 08:00:00"
+        );
+        insertReview(
+                UUID.fromString("10000000-0000-4000-8000-000000000030"),
+                OTHER_CUSTOMER_ID, SECOND_COMPANY_ID, month, "PENDING", null,
+                "2026-09-24 12:00:00"
+        );
+
+        var selected = reviews.findCurrentLatestByCustomerIdAndEffectiveMonth(CUSTOMER_ID, month);
+
+        assertEquals(2, selected.size());
+        assertEquals(SECOND_COMPANY_ID, selected.get(0).partnerCompanyId());
+        assertEquals("MANUAL_REVIEW_REJECTED", selected.get(0).decisionOutcome().name());
+        assertEquals(THIRD_COMPANY_ID, selected.get(1).partnerCompanyId());
+        assertTrue(selected.get(1).isPending());
+        assertTrue(selected.stream().noneMatch(review -> review.partnerCompanyId().equals(COMPANY_ID)));
+        assertTrue(reviews.findCurrentLatestByCustomerIdAndEffectiveMonth(OTHER_CUSTOMER_ID, month).stream()
+                .allMatch(review -> review.customerId().equals(OTHER_CUSTOMER_ID)));
+    }
+
+    private void insertCustomer(UUID customerId, String customerNumber) {
+        jdbcTemplate.update("""
+                INSERT INTO customers (
+                    id, customer_number, status, verification_status, profile_completion_status
+                ) VALUES (?, ?, 'ACTIVE', 'VERIFIED', 'COMPLETE')
+                """, customerId, customerNumber);
+    }
+
+    private void insertCompany(UUID companyId, String companyCode) {
+        jdbcTemplate.update("""
+                INSERT INTO partner_companies (
+                    id, company_code, name, status, salary_advance_policy_limit
+                ) VALUES (?, ?, 'Review Discovery Partner', 'ACTIVE', 20000000)
+                """, companyId, companyCode);
+    }
+
+    private void insertReview(
+            UUID reviewId,
+            UUID customerId,
+            UUID companyId,
+            String effectiveMonth,
+            String status,
+            String decisionOutcome,
+            String createdAt
+    ) {
+        jdbcTemplate.update("""
+                INSERT INTO partner_eligibility_reviews (
+                    id, customer_id, partner_company_id, effective_month,
+                    trigger_outcome, requested_employee_code, status,
+                    decision_outcome, decision_reason, reviewer_user_id, reviewed_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, 'NOT_FOUND', 'EMP-DISCOVERY', ?, ?,
+                    CASE WHEN ? = 'REJECTED' THEN 'NO_ELIGIBLE_CURRENT_EMPLOYEE' ELSE NULL END,
+                    CASE WHEN ? = 'REJECTED'
+                        THEN UUID '60000000-0000-4000-8000-000000000001' ELSE NULL END,
+                    CASE WHEN ? = 'REJECTED' THEN CAST(? AS timestamp) ELSE NULL END,
+                    CAST(? AS timestamp), CAST(? AS timestamp))
+                """,
+                reviewId, customerId, companyId, effectiveMonth, status, decisionOutcome,
+                status, status, status, createdAt, createdAt, createdAt
+        );
     }
 
     private String decide(CyclicBarrier start, PartnerEligibilityReviewDecisionRequest request) throws Exception {

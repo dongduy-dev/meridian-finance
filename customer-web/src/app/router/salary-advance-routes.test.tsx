@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppProviders } from '@/app/providers/AppProviders'
 import { AuthSessionManager } from '@/features/auth/auth-session'
 import { applicationKeys } from '@/features/applications/application-queries'
+import type { OwnEmployeeVerification } from '@/features/salary-advance/salary-advance-api'
 import {
   manualReviewPollIntervalMs,
   manualReviewRefetchInterval,
@@ -131,6 +132,7 @@ function defaultFetch(input: RequestInfo | URL, init?: RequestInit) {
   if (url.endsWith('/loan-products/SALARY_ADVANCE')) return Promise.resolve(response(product))
   if (url.endsWith('/loan-products/salary-advance/readiness')) return Promise.resolve(response(readyReadiness))
   if (url.endsWith('/partner-companies/verification-options')) return Promise.resolve(response(options))
+  if (url.endsWith('/partner-companies/employee-verifications')) return Promise.resolve(response([]))
   if (url.endsWith(`/partner-companies/${partnerCompanyId}/employee-verifications`)) {
     return Promise.resolve(response({
       customerId: customer.customerId,
@@ -154,8 +156,8 @@ function renderRoute(path: string, fetchImplementation: typeof fetch = defaultFe
   const fetchMock = vi.fn(fetchImplementation)
   vi.stubGlobal('fetch', fetchMock)
   const router = createTestRouter([path])
-  render(<AppProviders router={router} authManager={createTestAuthManager()} />)
-  return { fetchMock, router }
+  const rendered = render(<AppProviders router={router} authManager={createTestAuthManager()} />)
+  return { fetchMock, router, unmount: rendered.unmount }
 }
 
 function moneyText(value: number) {
@@ -347,8 +349,8 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     const user = userEvent.setup()
     let statusReads = 0
     let verificationPosts = 0
-    let resolveStatus!: (value: Response) => void
-    const laterStatus = new Promise<Response>((resolve) => { resolveStatus = resolve })
+    let resolveStatus!: (value: OwnEmployeeVerification[]) => void
+    const laterStatus = new Promise<OwnEmployeeVerification[]>((resolve) => { resolveStatus = resolve })
     renderRoute('/products/salary-advance', async (input, init) => {
       const url = String(input)
       if (url.endsWith('/loan-products/salary-advance/readiness')) {
@@ -375,8 +377,10 @@ describe('FE-CP6 Salary Advance product readiness', () => {
             manualReviewRequired: true,
           })
         }
+      }
+      if (url.endsWith('/partner-companies/employee-verifications')) {
         statusReads += 1
-        return laterStatus
+        return response(await laterStatus)
       }
       return defaultFetch(input, init)
     })
@@ -387,34 +391,144 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     await user.click(screen.getByRole('button', { name: 'Verify employment' }))
 
     expect(await screen.findByText("We're reviewing your employment details")).toBeVisible()
-    await waitFor(() => expect(statusReads).toBe(1))
-    resolveStatus(response({
+    await waitFor(() => expect(statusReads).toBeGreaterThanOrEqual(1))
+    resolveStatus([{
       partnerCompanyId,
       outcome: terminalOutcome,
       manualReviewRequired: false,
-    }))
+    }])
 
     expect(await screen.findByText(terminalDescription)).toBeVisible()
-    expect(statusReads).toBe(1)
+    expect(statusReads).toBeGreaterThanOrEqual(1)
     expect(verificationPosts).toBe(1)
   })
 
-  it('polls conservatively only while the authoritative review remains pending', () => {
-    expect(manualReviewRefetchInterval({
-      partnerCompanyId,
-      outcome: 'PENDING_MANUAL_REVIEW',
-      manualReviewRequired: true,
-    })).toBe(manualReviewPollIntervalMs)
-    expect(manualReviewRefetchInterval({
-      partnerCompanyId,
-      outcome: 'MANUAL_REVIEW_APPROVED',
-      manualReviewRequired: false,
-    })).toBe(false)
-    expect(manualReviewRefetchInterval({
+  it('rediscovers a pending review after remount and later shows rejection without another POST', async () => {
+    const user = userEvent.setup()
+    let verificationPosts = 0
+    let statusReads = 0
+    let backendStates: OwnEmployeeVerification[] = []
+    const fetchImplementation: typeof fetch = async (input, init) => {
+      const url = String(input)
+      if (url.endsWith('/loan-products/salary-advance/readiness')) {
+        return response({
+          ...readyReadiness,
+          customerPartnerEmployeeLinkId: null,
+          employeeVerificationStatus: 'NOT_VERIFIED',
+          partnerEligibilityStatus: 'NOT_VERIFIED',
+          limitStatus: 'UNAVAILABLE',
+          applicationAllowed: false,
+          blockerCodes: ['EMPLOYEE_NOT_VERIFIED'],
+        })
+      }
+      if (url.endsWith(`/partner-companies/${partnerCompanyId}/employee-verifications`)) {
+        verificationPosts += 1
+        backendStates = [{
+          partnerCompanyId,
+          outcome: 'PENDING_MANUAL_REVIEW',
+          manualReviewRequired: true,
+        }]
+        return response({
+          customerId: customer.customerId,
+          partnerCompanyId,
+          partnerEmployeeId: null,
+          customerPartnerEmployeeLinkId: null,
+          outcome: 'PENDING_MANUAL_REVIEW',
+          linkStatus: null,
+          manualReviewRequired: true,
+        })
+      }
+      if (url.endsWith('/partner-companies/employee-verifications')) {
+        statusReads += 1
+        return response(backendStates)
+      }
+      return defaultFetch(input, init)
+    }
+
+    const firstRender = renderRoute('/products/salary-advance', fetchImplementation)
+    await screen.findByRole('heading', { name: 'Verify your employment' })
+    await user.selectOptions(await screen.findByRole('combobox', { name: /Employer/ }), partnerCompanyId)
+    await user.type(screen.getByRole('textbox', { name: /Employee code/ }), 'GHOST-RELOAD')
+    await user.click(screen.getByRole('button', { name: 'Verify employment' }))
+    expect(await screen.findByText("We're reviewing your employment details")).toBeVisible()
+
+    firstRender.unmount()
+    queryClient.clear()
+    renderRoute('/products/salary-advance', fetchImplementation)
+
+    expect(await screen.findByText("We're reviewing your employment details")).toBeVisible()
+    backendStates = [{
       partnerCompanyId,
       outcome: 'MANUAL_REVIEW_REJECTED',
       manualReviewRequired: false,
-    })).toBe(false)
+    }]
+    await queryClient.refetchQueries({ queryKey: salaryAdvanceKeys.ownEmployeeVerifications() })
+
+    expect(await screen.findByText('We could not verify eligible employment for Salary Advance.')).toBeVisible()
+    expect(verificationPosts).toBe(1)
+    expect(statusReads).toBeGreaterThanOrEqual(2)
+    expect(manualReviewRefetchInterval(
+      queryClient.getQueryData<OwnEmployeeVerification[]>(salaryAdvanceKeys.ownEmployeeVerifications()),
+    )).toBe(false)
+  })
+
+  it('shows an existing rejected review on a fresh mount without any verification POST', async () => {
+    let verificationPosts = 0
+    renderRoute('/products/salary-advance', async (input, init) => {
+      const url = String(input)
+      if (url.endsWith('/loan-products/salary-advance/readiness')) {
+        return response({
+          ...readyReadiness,
+          customerPartnerEmployeeLinkId: null,
+          employeeVerificationStatus: 'NOT_VERIFIED',
+          partnerEligibilityStatus: 'NOT_VERIFIED',
+          limitStatus: 'UNAVAILABLE',
+          applicationAllowed: false,
+          blockerCodes: ['EMPLOYEE_NOT_VERIFIED'],
+        })
+      }
+      if (url.endsWith(`/partner-companies/${partnerCompanyId}/employee-verifications`)) {
+        verificationPosts += 1
+      }
+      if (url.endsWith('/partner-companies/employee-verifications')) {
+        return response([{
+          partnerCompanyId,
+          outcome: 'MANUAL_REVIEW_REJECTED',
+          manualReviewRequired: false,
+        }])
+      }
+      return defaultFetch(input, init)
+    })
+
+    expect(await screen.findByText('We could not verify eligible employment for Salary Advance.')).toBeVisible()
+    expect(screen.getByText(`for ${options[0]!.name}`)).toBeVisible()
+    expect(verificationPosts).toBe(0)
+  })
+
+  it('polls conservatively only while the authoritative review remains pending', () => {
+    expect(manualReviewRefetchInterval([
+      {
+        partnerCompanyId: '55555555-5555-4555-8555-555555555551',
+        outcome: 'MANUAL_REVIEW_REJECTED',
+        manualReviewRequired: false,
+      },
+      {
+        partnerCompanyId,
+        outcome: 'PENDING_MANUAL_REVIEW',
+        manualReviewRequired: true,
+      },
+    ])).toBe(manualReviewPollIntervalMs)
+    expect(manualReviewRefetchInterval([{
+      partnerCompanyId,
+      outcome: 'MANUAL_REVIEW_APPROVED',
+      manualReviewRequired: false,
+    }])).toBe(false)
+    expect(manualReviewRefetchInterval([{
+      partnerCompanyId,
+      outcome: 'MANUAL_REVIEW_REJECTED',
+      manualReviewRequired: false,
+    }])).toBe(false)
+    expect(manualReviewRefetchInterval([])).toBe(false)
   })
 
   it.each([

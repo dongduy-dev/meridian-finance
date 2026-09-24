@@ -35,11 +35,15 @@ const verification = {
   manualReviewRequired: false,
 }
 
-const ownVerification = {
+const ownVerifications = [{
   partnerCompanyId: option.partnerCompanyId,
   outcome: 'MANUAL_REVIEW_APPROVED',
   manualReviewRequired: false,
-}
+}, {
+  partnerCompanyId: '22222222-2222-4222-8222-222222222222',
+  outcome: 'PENDING_MANUAL_REVIEW',
+  manualReviewRequired: true,
+}]
 
 const application = {
   loanApplicationId: '33333333-3333-4333-8333-333333333333',
@@ -134,18 +138,24 @@ describe('Salary Advance API boundary', () => {
     expect(new Headers(request.mock.calls[1]?.[1]?.headers).get('Authorization')).toBe('Bearer refreshed-token')
   })
 
-  it('reads only the Customer-safe latest verification state for one Partner Company', async () => {
-    const { api, coordinator, request } = setup([ownVerification])
+  it('reads Customer-safe current verification states without conflating Partner Companies', async () => {
+    const { api, coordinator, request } = setup([ownVerifications])
 
-    expect(await api.getOwnEmployeeVerification(option.partnerCompanyId)).toEqual(ownVerification)
+    expect(await api.getOwnEmployeeVerifications()).toEqual(ownVerifications)
     expect(coordinator.requestProtected).toHaveBeenCalledOnce()
     const [path, options] = request.mock.calls[0]!
-    expect(path).toBe(`/partner-companies/${option.partnerCompanyId}/employee-verifications`)
+    expect(path).toBe('/partner-companies/employee-verifications')
     expect(options?.method).toBeUndefined()
-    expect(Object.keys(ownVerification)).toEqual([
-      'partnerCompanyId',
-      'outcome',
-      'manualReviewRequired',
+    for (const state of ownVerifications) {
+      expect(Object.keys(state)).toEqual([
+        'partnerCompanyId',
+        'outcome',
+        'manualReviewRequired',
+      ])
+    }
+    expect(ownVerifications.map((state) => state.partnerCompanyId)).toEqual([
+      option.partnerCompanyId,
+      '22222222-2222-4222-8222-222222222222',
     ])
   })
 

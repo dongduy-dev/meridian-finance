@@ -6,6 +6,7 @@ import com.meridian.platform.partner.domain.model.PartnerEligibilityReviewStatus
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -52,13 +53,13 @@ public class PartnerEligibilityReviewRepositoryAdapter implements PartnerEligibi
     }
 
     @Override
-    public Optional<PartnerEligibilityReview> findLatestByCustomerIdAndPartnerCompanyId(
+    public List<PartnerEligibilityReview> findCurrentLatestByCustomerIdAndEffectiveMonth(
             UUID customerId,
-            UUID partnerCompanyId
+            String effectiveMonth
     ) {
-        return repository.findFirstByCustomerIdAndPartnerCompanyIdOrderByCreatedAtDescIdDesc(
-                customerId, partnerCompanyId
-        ).map(PartnerEligibilityReviewJpaEntity::toDomain);
+        return repository.findCurrentLatestByCustomerIdAndEffectiveMonth(customerId, effectiveMonth).stream()
+                .map(PartnerEligibilityReviewJpaEntity::toDomain)
+                .toList();
     }
 
     @Override

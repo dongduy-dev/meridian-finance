@@ -35,9 +35,9 @@ public interface PartnerEligibilityReviewRepository {
             UUID partnerCompanyId
     );
 
-    Optional<PartnerEligibilityReview> findLatestByCustomerIdAndPartnerCompanyId(
+    List<PartnerEligibilityReview> findCurrentLatestByCustomerIdAndEffectiveMonth(
             UUID customerId,
-            UUID partnerCompanyId
+            String effectiveMonth
     );
 
     Page findPage(PartnerEligibilityReviewStatus status, int page, int size);

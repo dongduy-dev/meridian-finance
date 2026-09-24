@@ -557,7 +557,7 @@ class SecurityConfigTest {
                         .content("{}"))
                 .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(get("/api/v1/partner-companies/{partnerCompanyId}/employee-verifications", PARTNER_COMPANY_ID))
+        mockMvc.perform(get("/api/v1/partner-companies/employee-verifications"))
                 .andExpect(status().isUnauthorized());
 
         mockMvc.perform(post("/api/v1/loan-applications/salary-advance")
@@ -592,21 +592,21 @@ class SecurityConfigTest {
 
     @Test
     void enforcesOwnEmployeeVerificationPermissionForCustomerReviewStatusRead() throws Exception {
-        when(queryOwnPartnerEmployeeVerificationUseCase.getLatestOwnVerification(PARTNER_COMPANY_ID))
-                .thenReturn(new OwnPartnerEmployeeVerificationDto(
+        when(queryOwnPartnerEmployeeVerificationUseCase.getCurrentOwnVerifications())
+                .thenReturn(List.of(new OwnPartnerEmployeeVerificationDto(
                         PARTNER_COMPANY_ID,
                         "PENDING_MANUAL_REVIEW",
                         true
-                ));
+                )));
 
-        mockMvc.perform(get("/api/v1/partner-companies/{partnerCompanyId}/employee-verifications", PARTNER_COMPANY_ID)
+        mockMvc.perform(get("/api/v1/partner-companies/employee-verifications")
                         .with(user("customer").authorities(
                                 new SimpleGrantedAuthority("partner:employee:verify:own")
                         )))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.outcome").value("PENDING_MANUAL_REVIEW"));
+                .andExpect(jsonPath("$[0].outcome").value("PENDING_MANUAL_REVIEW"));
 
-        mockMvc.perform(get("/api/v1/partner-companies/{partnerCompanyId}/employee-verifications", PARTNER_COMPANY_ID)
+        mockMvc.perform(get("/api/v1/partner-companies/employee-verifications")
                         .with(user("customer").authorities(
                                 new SimpleGrantedAuthority("loan:submit")
                         )))

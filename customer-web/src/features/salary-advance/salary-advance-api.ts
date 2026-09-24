@@ -49,6 +49,8 @@ export const ownEmployeeVerificationSchema = z.object({
   manualReviewRequired: z.boolean(),
 })
 
+export const ownEmployeeVerificationsSchema = z.array(ownEmployeeVerificationSchema)
+
 export const salaryAdvanceApplicationSchema = z.object({
   loanApplicationId: javaUuid,
   applicationNumber: nonEmptyString,
@@ -95,7 +97,7 @@ export interface SalaryAdvanceApi {
   getReadiness(): Promise<SalaryAdvanceReadiness>
   getPartnerVerificationOptions(): Promise<PartnerVerificationOption[]>
   verifyEmployee(input: EmployeeVerificationInput): Promise<EmployeeVerification>
-  getOwnEmployeeVerification(partnerCompanyId: string): Promise<OwnEmployeeVerification>
+  getOwnEmployeeVerifications(): Promise<OwnEmployeeVerification[]>
   submitApplication(input: SalaryAdvanceApplicationInput): Promise<SalaryAdvanceApplication>
 }
 
@@ -127,11 +129,9 @@ export function createSalaryAdvanceApi(
         ),
       )
     },
-    async getOwnEmployeeVerification(partnerCompanyId) {
-      return ownEmployeeVerificationSchema.parse(
-        await protectedClient.request(
-          `/partner-companies/${encodeURIComponent(partnerCompanyId)}/employee-verifications`,
-        ),
+    async getOwnEmployeeVerifications() {
+      return ownEmployeeVerificationsSchema.parse(
+        await protectedClient.request('/partner-companies/employee-verifications'),
       )
     },
     async submitApplication(input) {

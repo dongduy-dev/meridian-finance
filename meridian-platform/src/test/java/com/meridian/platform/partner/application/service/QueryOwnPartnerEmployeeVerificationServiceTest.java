@@ -14,8 +14,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.Optional;
+import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -32,8 +36,9 @@ class QueryOwnPartnerEmployeeVerificationServiceTest {
 
     private static final UUID CUSTOMER_ID = UUID.fromString("99999999-9999-9999-9999-999999999999");
     private static final UUID COMPANY_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final UUID REVIEW_ID = UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    private static final UUID OTHER_COMPANY_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final LocalDateTime CREATED_AT = LocalDateTime.of(2026, 9, 24, 8, 0);
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-09-24T08:00:00Z"), ZoneOffset.UTC);
 
     @Mock PartnerEligibilityReviewRepository reviews;
     @Mock CurrentUserProvider currentUserProvider;
@@ -42,78 +47,103 @@ class QueryOwnPartnerEmployeeVerificationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new QueryOwnPartnerEmployeeVerificationService(reviews, currentUserProvider);
+        service = new QueryOwnPartnerEmployeeVerificationService(reviews, currentUserProvider, CLOCK);
     }
 
     @Test
-    void authenticatedCustomerReadsOnlyOwnPendingStateForTheSelectedCompany() {
+    void authenticatedCustomerDiscoversOwnCurrentStatesSeparatedByPartnerCompany() {
         when(currentUserProvider.currentUser()).thenReturn(customer(CUSTOMER_ID));
-        when(reviews.findLatestByCustomerIdAndPartnerCompanyId(CUSTOMER_ID, COMPANY_ID))
-                .thenReturn(Optional.of(review(PartnerEligibilityReviewStatus.PENDING, null)));
+        when(reviews.findCurrentLatestByCustomerIdAndEffectiveMonth(CUSTOMER_ID, "2026-09"))
+                .thenReturn(List.of(
+                        review(COMPANY_ID, PartnerEligibilityReviewStatus.PENDING, null),
+                        review(
+                                OTHER_COMPANY_ID,
+                                PartnerEligibilityReviewStatus.REJECTED,
+                                EmployeeVerificationOutcome.MANUAL_REVIEW_REJECTED
+                        )
+                ));
 
-        var result = service.getLatestOwnVerification(COMPANY_ID);
+        var result = service.getCurrentOwnVerifications();
 
-        assertEquals(COMPANY_ID, result.partnerCompanyId());
-        assertEquals("PENDING_MANUAL_REVIEW", result.outcome());
-        assertTrue(result.manualReviewRequired());
-        verify(reviews).findLatestByCustomerIdAndPartnerCompanyId(CUSTOMER_ID, COMPANY_ID);
+        assertEquals(2, result.size());
+        assertEquals(COMPANY_ID, result.get(0).partnerCompanyId());
+        assertEquals("PENDING_MANUAL_REVIEW", result.get(0).outcome());
+        assertTrue(result.get(0).manualReviewRequired());
+        assertEquals(OTHER_COMPANY_ID, result.get(1).partnerCompanyId());
+        assertEquals("MANUAL_REVIEW_REJECTED", result.get(1).outcome());
+        assertFalse(result.get(1).manualReviewRequired());
+        verify(reviews).findCurrentLatestByCustomerIdAndEffectiveMonth(CUSTOMER_ID, "2026-09");
     }
 
     @Test
     void approvedManualReviewReturnsCustomerSafeTerminalOutcome() {
         when(currentUserProvider.currentUser()).thenReturn(customer(CUSTOMER_ID));
-        when(reviews.findLatestByCustomerIdAndPartnerCompanyId(CUSTOMER_ID, COMPANY_ID))
-                .thenReturn(Optional.of(review(
+        when(reviews.findCurrentLatestByCustomerIdAndEffectiveMonth(CUSTOMER_ID, "2026-09"))
+                .thenReturn(List.of(review(
+                        COMPANY_ID,
                         PartnerEligibilityReviewStatus.APPROVED,
                         EmployeeVerificationOutcome.MANUAL_REVIEW_APPROVED
                 )));
 
-        var result = service.getLatestOwnVerification(COMPANY_ID);
+        var result = service.getCurrentOwnVerifications();
 
-        assertEquals("MANUAL_REVIEW_APPROVED", result.outcome());
-        assertFalse(result.manualReviewRequired());
+        assertEquals(1, result.size());
+        assertEquals("MANUAL_REVIEW_APPROVED", result.getFirst().outcome());
+        assertFalse(result.getFirst().manualReviewRequired());
     }
 
     @Test
-    void rejectedManualReviewReturnsCustomerSafeTerminalOutcome() {
+    void supersededOrInvalidReviewIsNotSurfacedDefensively() {
         when(currentUserProvider.currentUser()).thenReturn(customer(CUSTOMER_ID));
-        when(reviews.findLatestByCustomerIdAndPartnerCompanyId(CUSTOMER_ID, COMPANY_ID))
-                .thenReturn(Optional.of(review(
-                        PartnerEligibilityReviewStatus.REJECTED,
-                        EmployeeVerificationOutcome.MANUAL_REVIEW_REJECTED
-                )));
+        when(reviews.findCurrentLatestByCustomerIdAndEffectiveMonth(CUSTOMER_ID, "2026-09"))
+                .thenReturn(List.of(
+                        review(COMPANY_ID, PartnerEligibilityReviewStatus.SUPERSEDED, null),
+                        review(OTHER_COMPANY_ID, PartnerEligibilityReviewStatus.REJECTED, null)
+                ));
 
-        var result = service.getLatestOwnVerification(COMPANY_ID);
-
-        assertEquals("MANUAL_REVIEW_REJECTED", result.outcome());
-        assertFalse(result.manualReviewRequired());
+        assertTrue(service.getCurrentOwnVerifications().isEmpty());
     }
 
     @Test
     void nonCustomerCannotSupplyOrSubstituteAnotherCustomerIdentity() {
         when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(
-                UUID.randomUUID(), "staff@meridian.test", "STAFF", null,
+                UUID.randomUUID(), "staff@meridian.test", "STAFF", CUSTOMER_ID,
                 Set.of("BACK_OFFICE_ADMIN"), Set.of("partner:employee:verify:own")
         ));
 
-        assertThrows(AuthorizationException.class, () -> service.getLatestOwnVerification(COMPANY_ID));
+        assertThrows(AuthorizationException.class, service::getCurrentOwnVerifications);
         verifyNoInteractions(reviews);
     }
 
     private static PartnerEligibilityReview review(
+            UUID partnerCompanyId,
             PartnerEligibilityReviewStatus status,
             EmployeeVerificationOutcome decisionOutcome
     ) {
         return new PartnerEligibilityReview(
-                REVIEW_ID, CUSTOMER_ID, COMPANY_ID, "2026-09", null,
-                EmployeeVerificationOutcome.NOT_FOUND, "GHOST-999", status, decisionOutcome,
+                UUID.nameUUIDFromBytes(partnerCompanyId.toString().getBytes(StandardCharsets.UTF_8)),
+                CUSTOMER_ID,
+                partnerCompanyId,
+                "2026-09",
+                null,
+                EmployeeVerificationOutcome.NOT_FOUND,
+                "GHOST-999",
+                status,
+                decisionOutcome,
                 status == PartnerEligibilityReviewStatus.APPROVED
                         ? PartnerEligibilityReviewReason.CURRENT_EMPLOYEE_CONFIRMED
-                        : status == PartnerEligibilityReviewStatus.REJECTED
+                        : status == PartnerEligibilityReviewStatus.REJECTED && decisionOutcome != null
                                 ? PartnerEligibilityReviewReason.NO_ELIGIBLE_CURRENT_EMPLOYEE
                                 : null,
-                null, null, null, status == PartnerEligibilityReviewStatus.PENDING ? null : CREATED_AT.plusHours(1),
-                CREATED_AT, status == PartnerEligibilityReviewStatus.PENDING ? CREATED_AT : CREATED_AT.plusHours(1)
+                null,
+                null,
+                null,
+                status == PartnerEligibilityReviewStatus.PENDING
+                        || status == PartnerEligibilityReviewStatus.SUPERSEDED
+                        ? null
+                        : CREATED_AT.plusHours(1),
+                CREATED_AT,
+                status == PartnerEligibilityReviewStatus.PENDING ? CREATED_AT : CREATED_AT.plusHours(1)
         );
     }
 
