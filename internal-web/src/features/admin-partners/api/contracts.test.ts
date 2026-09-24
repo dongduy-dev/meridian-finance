@@ -18,7 +18,7 @@ describe('Partner administration contracts', () => {
   it('accepts canonical Meridian deterministic UUID identifiers', () => {
     expect(partnerCompanySchema.parse(partnerCompany).id).toBe(partnerCompany.id)
 
-    expect(partnerEligibilityReviewPageSchema.parse({
+    const parsedReviewPage = partnerEligibilityReviewPageSchema.parse({
       page: 0,
       size: 20,
       totalElements: 1,
@@ -37,7 +37,9 @@ describe('Partner administration contracts', () => {
         reviewable: true,
         nonReviewableReason: null,
       }],
-    }).items[0].partnerCompanyId).toBe(partnerCompany.id)
+    })
+    expect(parsedReviewPage.items).toHaveLength(1)
+    expect(parsedReviewPage.items[0]?.partnerCompanyId).toBe(partnerCompany.id)
   })
 
   it('continues to accept RFC versioned UUID identifiers', () => {
