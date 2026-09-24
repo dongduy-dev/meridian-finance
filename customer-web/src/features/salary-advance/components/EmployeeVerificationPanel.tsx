@@ -13,9 +13,10 @@ import { Spinner } from '@/components/ui/spinner'
 import { AccountFormField } from '@/features/account/components/AccountFormField'
 import { ApiError } from '@/lib/api'
 
-import type { EmployeeVerification } from '../salary-advance-api'
+import type { EmployeeVerification, OwnEmployeeVerification } from '../salary-advance-api'
 import {
   usePartnerVerificationOptionsQuery,
+  useOwnEmployeeVerificationQuery,
   useVerifyEmployeeMutation,
 } from '../salary-advance-queries'
 import { verificationOutcomePresentation } from '../salary-advance-presentation'
@@ -40,7 +41,7 @@ function VerificationError({ error }: { error: unknown }) {
   )
 }
 
-function VerificationResult({ result }: { result: EmployeeVerification }) {
+function VerificationResult({ result }: { result: EmployeeVerification | OwnEmployeeVerification }) {
   const presentation = verificationOutcomePresentation(result.outcome, result.manualReviewRequired)
   const Icon = presentation.icon ?? CircleHelp
   const alertVariant = presentation.tone === 'success'
@@ -72,6 +73,11 @@ export function EmployeeVerificationPanel({
   const optionsQuery = usePartnerVerificationOptionsQuery()
   const verification = useVerifyEmployeeMutation()
   const [result, setResult] = useState<EmployeeVerification>()
+  const reviewStatus = useOwnEmployeeVerificationQuery(
+    result?.partnerCompanyId,
+    Boolean(result?.manualReviewRequired),
+  )
+  const displayedResult = result?.manualReviewRequired ? reviewStatus.data ?? result : result
   const [serverError, setServerError] = useState<unknown>()
   const {
     register,
@@ -139,7 +145,7 @@ export function EmployeeVerificationPanel({
         {optionsQuery.data?.length ? (
           <form noValidate className="space-y-5" onSubmit={onSubmit}>
             {serverError ? <VerificationError error={serverError} /> : null}
-            {result ? <VerificationResult result={result} /> : null}
+            {displayedResult ? <VerificationResult result={displayedResult} /> : null}
             <AccountFormField
               htmlFor="partnerCompanyId"
               label="Employer"

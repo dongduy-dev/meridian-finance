@@ -6,7 +6,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppProviders } from '@/app/providers/AppProviders'
 import { AuthSessionManager } from '@/features/auth/auth-session'
 import { applicationKeys } from '@/features/applications/application-queries'
-import { salaryAdvanceKeys } from '@/features/salary-advance/salary-advance-queries'
+import {
+  manualReviewPollIntervalMs,
+  manualReviewRefetchInterval,
+  salaryAdvanceKeys,
+} from '@/features/salary-advance/salary-advance-queries'
 import { ApiError } from '@/lib/api'
 import { formatMoney } from '@/lib/format/presentation'
 import { customerAuthResponse, createAuthApiMock, createTestAuthManager } from '@/test/auth'
@@ -325,6 +329,92 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     expect(await screen.findByText("We're reviewing your employment details")).toBeVisible()
     expect(screen.getByText('Action or waiting required')).toBeVisible()
     expect(screen.queryByRole('link', { name: 'Apply for Salary Advance' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    [
+      'MANUAL_REVIEW_APPROVED',
+      'Your employment was verified. We updated your application availability.',
+    ],
+    [
+      'MANUAL_REVIEW_REJECTED',
+      'We could not verify eligible employment for Salary Advance.',
+    ],
+  ])('updates a pending manual review from a later %s read without another verification POST', async (
+    terminalOutcome,
+    terminalDescription,
+  ) => {
+    const user = userEvent.setup()
+    let statusReads = 0
+    let verificationPosts = 0
+    let resolveStatus!: (value: Response) => void
+    const laterStatus = new Promise<Response>((resolve) => { resolveStatus = resolve })
+    renderRoute('/products/salary-advance', async (input, init) => {
+      const url = String(input)
+      if (url.endsWith('/loan-products/salary-advance/readiness')) {
+        return response({
+          ...readyReadiness,
+          customerPartnerEmployeeLinkId: null,
+          employeeVerificationStatus: 'NOT_VERIFIED',
+          partnerEligibilityStatus: 'NOT_VERIFIED',
+          limitStatus: 'UNAVAILABLE',
+          applicationAllowed: false,
+          blockerCodes: ['EMPLOYEE_NOT_VERIFIED'],
+        })
+      }
+      if (url.endsWith(`/partner-companies/${partnerCompanyId}/employee-verifications`)) {
+        if (init?.method === 'POST') {
+          verificationPosts += 1
+          return response({
+            customerId: customer.customerId,
+            partnerCompanyId,
+            partnerEmployeeId: null,
+            customerPartnerEmployeeLinkId: null,
+            outcome: 'PENDING_MANUAL_REVIEW',
+            linkStatus: null,
+            manualReviewRequired: true,
+          })
+        }
+        statusReads += 1
+        return laterStatus
+      }
+      return defaultFetch(input, init)
+    })
+
+    await screen.findByRole('heading', { name: 'Verify your employment' })
+    await user.selectOptions(await screen.findByRole('combobox', { name: /Employer/ }), partnerCompanyId)
+    await user.type(screen.getByRole('textbox', { name: /Employee code/ }), 'GHOST-999')
+    await user.click(screen.getByRole('button', { name: 'Verify employment' }))
+
+    expect(await screen.findByText("We're reviewing your employment details")).toBeVisible()
+    await waitFor(() => expect(statusReads).toBe(1))
+    resolveStatus(response({
+      partnerCompanyId,
+      outcome: terminalOutcome,
+      manualReviewRequired: false,
+    }))
+
+    expect(await screen.findByText(terminalDescription)).toBeVisible()
+    expect(statusReads).toBe(1)
+    expect(verificationPosts).toBe(1)
+  })
+
+  it('polls conservatively only while the authoritative review remains pending', () => {
+    expect(manualReviewRefetchInterval({
+      partnerCompanyId,
+      outcome: 'PENDING_MANUAL_REVIEW',
+      manualReviewRequired: true,
+    })).toBe(manualReviewPollIntervalMs)
+    expect(manualReviewRefetchInterval({
+      partnerCompanyId,
+      outcome: 'MANUAL_REVIEW_APPROVED',
+      manualReviewRequired: false,
+    })).toBe(false)
+    expect(manualReviewRefetchInterval({
+      partnerCompanyId,
+      outcome: 'MANUAL_REVIEW_REJECTED',
+      manualReviewRequired: false,
+    })).toBe(false)
   })
 
   it.each([

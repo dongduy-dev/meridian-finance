@@ -52,6 +52,16 @@ public class PartnerEligibilityReviewRepositoryAdapter implements PartnerEligibi
     }
 
     @Override
+    public Optional<PartnerEligibilityReview> findLatestByCustomerIdAndPartnerCompanyId(
+            UUID customerId,
+            UUID partnerCompanyId
+    ) {
+        return repository.findFirstByCustomerIdAndPartnerCompanyIdOrderByCreatedAtDescIdDesc(
+                customerId, partnerCompanyId
+        ).map(PartnerEligibilityReviewJpaEntity::toDomain);
+    }
+
+    @Override
     public Page findPage(PartnerEligibilityReviewStatus status, int page, int size) {
         org.springframework.data.domain.Page<PartnerEligibilityReviewJpaEntity> selected =
                 repository.findByStatusOrderByCreatedAtAscIdAsc(status, PageRequest.of(page, size));

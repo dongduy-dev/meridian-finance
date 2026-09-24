@@ -54,7 +54,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
         ReviewRecommendation recommendation = loanCase.currentReviewCycle() == null ? null
                 : recommendations.findByReviewCycleId(loanCase.currentReviewCycle().reviewCycleId()).orElse(null);
         boolean available = recommendation == null
-                && "UNDER_REVIEW".equals(loanCase.applicationStatus())
+                && recommendationSourceStatus(loanCase.applicationStatus())
                 && activeCycle(loanCase)
                 && loanCase.productReadiness().readyForDecision();
         return new StaffRecommendationCaseDto(
@@ -198,6 +198,11 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
     private static boolean activeCycle(ApprovalLoanCasePort.CaseSnapshot loanCase) {
         return loanCase.currentReviewCycle() != null
                 && "ACTIVE".equals(loanCase.currentReviewCycle().status());
+    }
+
+    private static boolean recommendationSourceStatus(String applicationStatus) {
+        return "UNDER_REVIEW".equals(applicationStatus)
+                || "RETURNED_TO_REVIEW".equals(applicationStatus);
     }
 
     private static void validatePendingDecisionEvidence(

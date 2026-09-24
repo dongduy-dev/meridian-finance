@@ -574,6 +574,16 @@ class VerifyPartnerEmployeeServiceTest {
         }
 
         @Override
+        public Optional<PartnerEligibilityReview> findLatestByCustomerIdAndPartnerCompanyId(
+                UUID customerId,
+                UUID partnerCompanyId
+        ) {
+            return Optional.ofNullable(review)
+                    .filter(value -> value.customerId().equals(customerId))
+                    .filter(value -> value.partnerCompanyId().equals(partnerCompanyId));
+        }
+
+        @Override
         public Page findPage(PartnerEligibilityReviewStatus status, int page, int size) {
             List<PartnerEligibilityReview> values = Optional.ofNullable(review)
                     .filter(value -> value.status() == status).stream().toList();

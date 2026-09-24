@@ -84,6 +84,19 @@ describe('RecommendationPanel', () => {
     },
   )
 
+  it('renders recommendation controls for a returned case authorized by the backend', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue({
+      ...recommendationCase(),
+      applicationStatus: 'RETURNED_TO_REVIEW',
+      recommendationAvailable: true,
+    })
+
+    render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RecommendationPanel loanApplicationId={applicationId} /></AuthProvider></QueryClientProvider>)
+
+    expect(await screen.findByRole('button', { name: 'Review recommendation' })).toBeVisible()
+    expect(screen.queryByText('Recommendation is unavailable for the authoritative current state.')).not.toBeInTheDocument()
+  })
+
   it('reconciles a lost POST response by exact cycle and action without a second POST', async () => {
     let recorded = false
     vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {

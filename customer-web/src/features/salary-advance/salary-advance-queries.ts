@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 
 import { useAuth } from '@/features/auth/auth-context'
 import { applicationKeys } from '@/features/applications/application-queries'
@@ -10,6 +10,7 @@ import { ApiError } from '@/lib/api'
 import {
   createSalaryAdvanceApi,
   type EmployeeVerificationInput,
+  type OwnEmployeeVerification,
   type SalaryAdvanceApplicationInput,
 } from './salary-advance-api'
 
@@ -17,6 +18,17 @@ export const salaryAdvanceKeys = {
   all: ['salary-advance'] as const,
   readiness: () => [...salaryAdvanceKeys.all, 'readiness'] as const,
   partnerOptions: () => [...salaryAdvanceKeys.all, 'partner-verification-options'] as const,
+  ownEmployeeVerification: (partnerCompanyId: string) => [
+    ...salaryAdvanceKeys.all,
+    'own-employee-verification',
+    partnerCompanyId,
+  ] as const,
+}
+
+export const manualReviewPollIntervalMs = 15_000
+
+export function manualReviewRefetchInterval(data: OwnEmployeeVerification | undefined) {
+  return data?.manualReviewRequired ? manualReviewPollIntervalMs : false
 }
 
 function useSalaryAdvanceApi() {
@@ -49,7 +61,17 @@ export function useVerifyEmployeeMutation() {
   const mutation = useMutation({
     mutationFn: (input: EmployeeVerificationInput) => api.verifyEmployee(input),
     retry: false,
-    onSuccess: () => {
+    onSuccess: (result) => {
+      const reviewKey = salaryAdvanceKeys.ownEmployeeVerification(result.partnerCompanyId)
+      if (result.manualReviewRequired) {
+        queryClient.setQueryData<OwnEmployeeVerification>(reviewKey, {
+          partnerCompanyId: result.partnerCompanyId,
+          outcome: 'PENDING_MANUAL_REVIEW',
+          manualReviewRequired: true,
+        })
+      } else {
+        queryClient.removeQueries({ queryKey: reviewKey, exact: true })
+      }
       void queryClient.invalidateQueries({ queryKey: salaryAdvanceKeys.readiness() })
     },
   })
@@ -60,6 +82,34 @@ export function useVerifyEmployeeMutation() {
       return mutation.mutateAsync(input)
     },
   }
+}
+
+export function useOwnEmployeeVerificationQuery(
+  partnerCompanyId: string | undefined,
+  enabled: boolean,
+) {
+  const api = useSalaryAdvanceApi()
+  const queryClient = useQueryClient()
+  const query = useQuery({
+    queryKey: salaryAdvanceKeys.ownEmployeeVerification(partnerCompanyId ?? ''),
+    queryFn: () => api.getOwnEmployeeVerification(partnerCompanyId!),
+    enabled: enabled && Boolean(partnerCompanyId),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchInterval: (current) => manualReviewRefetchInterval(current.state.data),
+  })
+  const terminalOutcome = query.data?.manualReviewRequired === false
+    ? query.data.outcome
+    : undefined
+
+  useEffect(() => {
+    if (terminalOutcome) {
+      void queryClient.invalidateQueries({ queryKey: salaryAdvanceKeys.readiness() })
+    }
+  }, [queryClient, terminalOutcome])
+
+  return query
 }
 
 const readinessChangingErrors = new Set([

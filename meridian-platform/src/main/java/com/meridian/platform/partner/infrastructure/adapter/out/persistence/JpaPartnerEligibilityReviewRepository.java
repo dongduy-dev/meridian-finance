@@ -33,6 +33,12 @@ public interface JpaPartnerEligibilityReviewRepository
                     PartnerEligibilityReviewStatus status
             );
 
+    Optional<PartnerEligibilityReviewJpaEntity>
+            findFirstByCustomerIdAndPartnerCompanyIdOrderByCreatedAtDescIdDesc(
+                    UUID customerId,
+                    UUID partnerCompanyId
+            );
+
     Page<PartnerEligibilityReviewJpaEntity> findByStatusOrderByCreatedAtAscIdAsc(
             PartnerEligibilityReviewStatus status,
             Pageable pageable

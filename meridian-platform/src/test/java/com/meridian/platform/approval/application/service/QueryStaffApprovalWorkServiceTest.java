@@ -77,6 +77,30 @@ class QueryStaffApprovalWorkServiceTest {
     }
 
     @Test
+    void returnedToReviewWithFreshActiveCycleAllowsNewRecommendation() {
+        when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:recommend")));
+        when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("RETURNED_TO_REVIEW")));
+        when(recommendations.findByReviewCycleId(CYCLE_ID)).thenReturn(Optional.empty());
+
+        StaffRecommendationCaseDto result = service.queryRecommendationCase(APPLICATION_ID);
+
+        assertTrue(result.recommendationAvailable());
+        assertEquals("RETURNED_TO_REVIEW", result.applicationStatus());
+        assertEquals("ACTIVE", result.evidence().currentReviewCycle().status());
+        assertNull(result.recommendation());
+        assertTrue(result.evidence().readyForDecision());
+    }
+
+    @Test
+    void nonReviewStateDoesNotExposeRecommendationAction() {
+        when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:recommend")));
+        when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("APPROVAL_PENDING")));
+        when(recommendations.findByReviewCycleId(CYCLE_ID)).thenReturn(Optional.empty());
+
+        assertFalse(service.queryRecommendationCase(APPLICATION_ID).recommendationAvailable());
+    }
+
+    @Test
     void recommendationReadReturnsExactDurableCurrentCycleProvenance() {
         when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:recommend")));
         when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("UNDER_REVIEW")));

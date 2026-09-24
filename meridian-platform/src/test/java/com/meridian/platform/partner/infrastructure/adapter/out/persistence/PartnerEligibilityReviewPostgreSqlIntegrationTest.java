@@ -4,6 +4,7 @@ import com.meridian.platform.partner.application.dto.PartnerEligibilityReviewDec
 import com.meridian.platform.partner.application.port.in.DecidePartnerEligibilityReviewUseCase;
 import com.meridian.platform.partner.application.port.out.CustomerIdentityEvidencePort;
 import com.meridian.platform.partner.application.port.out.CustomerIdentityEvidenceSnapshot;
+import com.meridian.platform.partner.application.port.out.PartnerEligibilityReviewRepository;
 import com.meridian.platform.partner.domain.model.PartnerEligibilityReviewDecision;
 import com.meridian.platform.partner.domain.model.PartnerEligibilityReviewReason;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -51,6 +52,7 @@ class PartnerEligibilityReviewPostgreSqlIntegrationTest {
     private static final UUID EMPLOYEE_ID = UUID.fromString("50000000-0000-4000-8000-000000000005");
 
     @Autowired DecidePartnerEligibilityReviewUseCase decisions;
+    @Autowired PartnerEligibilityReviewRepository reviews;
     @Autowired JdbcTemplate jdbcTemplate;
     @MockitoBean CurrentUserProvider currentUserProvider;
     @MockitoBean CustomerIdentityEvidencePort identityEvidence;
@@ -68,6 +70,16 @@ class PartnerEligibilityReviewPostgreSqlIntegrationTest {
 
     @BeforeEach
     void seed() {
+        jdbcTemplate.update("DELETE FROM partner_eligibility_reviews WHERE id = ?", REVIEW_ID);
+        jdbcTemplate.update(
+                "DELETE FROM customer_partner_employee_links WHERE customer_id = ? AND partner_company_id = ?",
+                CUSTOMER_ID,
+                COMPANY_ID
+        );
+        jdbcTemplate.update("DELETE FROM partner_employees WHERE id = ?", EMPLOYEE_ID);
+        jdbcTemplate.update("DELETE FROM partner_employee_import_batches WHERE id = ?", BATCH_ID);
+        jdbcTemplate.update("DELETE FROM partner_companies WHERE id = ?", COMPANY_ID);
+        jdbcTemplate.update("DELETE FROM customers WHERE id = ?", CUSTOMER_ID);
         when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(
                 UUID.randomUUID(), "admin@meridian.local", "STAFF", null,
                 Set.of(), Set.of("partner:manage")
@@ -146,6 +158,18 @@ class PartnerEligibilityReviewPostgreSqlIntegrationTest {
         );
         assertTrue(links == 0 || links == 1);
         verify(auditPublisher, times(1)).publish(any());
+    }
+
+    @Test
+    void latestCustomerReviewLookupIsBoundToCustomerAndPartnerCompany() {
+        assertEquals(
+                REVIEW_ID,
+                reviews.findLatestByCustomerIdAndPartnerCompanyId(CUSTOMER_ID, COMPANY_ID)
+                        .orElseThrow()
+                        .id()
+        );
+        assertTrue(reviews.findLatestByCustomerIdAndPartnerCompanyId(UUID.randomUUID(), COMPANY_ID).isEmpty());
+        assertTrue(reviews.findLatestByCustomerIdAndPartnerCompanyId(CUSTOMER_ID, UUID.randomUUID()).isEmpty());
     }
 
     private String decide(CyclicBarrier start, PartnerEligibilityReviewDecisionRequest request) throws Exception {

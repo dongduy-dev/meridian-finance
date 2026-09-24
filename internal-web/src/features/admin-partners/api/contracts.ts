@@ -2,10 +2,10 @@ import { z } from 'zod'
 
 const rawValue = z.string().trim().min(1)
 const money = z.number().finite().nonnegative()
-const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+export const partnerUuidSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
 
 export const partnerCompanySchema = z.object({
-  id: uuid,
+  id: partnerUuidSchema,
   companyCode: z.string().trim().min(1),
   name: z.string().trim().min(1),
   status: rawValue,
@@ -13,9 +13,9 @@ export const partnerCompanySchema = z.object({
 })
 
 export const partnerEmployeeSchema = z.object({
-  id: uuid,
-  partnerCompanyId: uuid,
-  importBatchId: uuid,
+  id: partnerUuidSchema,
+  partnerCompanyId: partnerUuidSchema,
+  importBatchId: partnerUuidSchema,
   employeeCode: z.string(),
   identityReference: z.string(),
   salaryAmount: money,
@@ -25,8 +25,8 @@ export const partnerEmployeeSchema = z.object({
 })
 
 export const partnerImportBatchSchema = z.object({
-  id: uuid,
-  partnerCompanyId: uuid,
+  id: partnerUuidSchema,
+  partnerCompanyId: partnerUuidSchema,
   effectiveMonth: z.string(),
   status: rawValue,
   validRowCount: z.number().int().nonnegative(),
@@ -34,8 +34,8 @@ export const partnerImportBatchSchema = z.object({
 })
 
 export const partnerImportResultSchema = z.object({
-  importBatchId: uuid,
-  partnerCompanyId: uuid,
+  importBatchId: partnerUuidSchema,
+  partnerCompanyId: partnerUuidSchema,
   effectiveMonth: z.string(),
   status: rawValue,
   validRowCount: z.number().int().nonnegative(),
@@ -74,33 +74,33 @@ export const importPartnerEmployeesInputSchema = z.object({
 })
 
 const reviewCandidateSchema = z.object({
-  partnerEmployeeId: uuid,
-  importBatchId: uuid,
+  partnerEmployeeId: partnerUuidSchema,
+  importBatchId: partnerUuidSchema,
   employeeCode: z.string().trim().min(1),
   employmentStatus: rawValue,
   active: z.boolean(),
 })
 
 const reviewCompanySchema = z.object({
-  id: uuid,
+  id: partnerUuidSchema,
   companyCode: z.string().trim().min(1),
   name: z.string().trim().min(1),
   status: rawValue,
 })
 
 export const partnerEligibilityReviewSchema = z.object({
-  reviewId: uuid,
-  customerId: uuid,
+  reviewId: partnerUuidSchema,
+  customerId: partnerUuidSchema,
   partnerCompany: reviewCompanySchema,
   effectiveMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
-  sourceImportBatchId: uuid.nullable(),
+  sourceImportBatchId: partnerUuidSchema.nullable(),
   triggerOutcome: rawValue,
   requestedEmployeeCode: z.string().trim().min(1),
   status: rawValue,
   decisionOutcome: rawValue.nullable(),
   decisionReason: rawValue.nullable(),
   selectedEmployee: reviewCandidateSchema.nullable(),
-  reviewerUserId: uuid.nullable(),
+  reviewerUserId: partnerUuidSchema.nullable(),
   reviewedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -116,9 +116,9 @@ export const partnerEligibilityReviewPageSchema = z.object({
   totalElements: z.number().int().nonnegative(),
   totalPages: z.number().int().nonnegative(),
   items: z.array(z.object({
-    reviewId: uuid,
-    customerId: uuid,
-    partnerCompanyId: uuid,
+    reviewId: partnerUuidSchema,
+    customerId: partnerUuidSchema,
+    partnerCompanyId: partnerUuidSchema,
     partnerCompanyCode: z.string().trim().min(1),
     partnerCompanyName: z.string().trim().min(1),
     effectiveMonth: z.string(),
@@ -134,7 +134,7 @@ export const partnerEligibilityReviewPageSchema = z.object({
 export const partnerEligibilityReviewDecisionSchema = z.discriminatedUnion('outcome', [
   z.object({
     outcome: z.literal('APPROVE'),
-    partnerEmployeeId: uuid,
+    partnerEmployeeId: partnerUuidSchema,
     reasonCode: z.literal('CURRENT_EMPLOYEE_CONFIRMED'),
   }),
   z.object({

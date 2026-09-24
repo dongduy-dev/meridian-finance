@@ -47,12 +47,14 @@ import com.meridian.platform.loan.infrastructure.adapter.in.web.LoanProductContr
 import com.meridian.platform.loan.infrastructure.adapter.in.web.SalaryAdvanceLoanApplicationController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.UnsecuredConsumerLoanApplicationController;
 import com.meridian.platform.loan.infrastructure.adapter.in.web.UnsecuredConsumerLoanVerificationController;
+import com.meridian.platform.partner.application.dto.OwnPartnerEmployeeVerificationDto;
+import com.meridian.platform.partner.application.port.in.ImportPartnerEmployeesUseCase;
+import com.meridian.platform.partner.application.port.in.ManagePartnerCompanyUseCase;
+import com.meridian.platform.partner.application.port.in.QueryOwnPartnerEmployeeVerificationUseCase;
 import com.meridian.platform.partner.application.port.in.QueryPartnerCompanyUseCase;
 import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeImportBatchUseCase;
 import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeUseCase;
 import com.meridian.platform.partner.application.port.in.VerifyPartnerEmployeeUseCase;
-import com.meridian.platform.partner.application.port.in.ManagePartnerCompanyUseCase;
-import com.meridian.platform.partner.application.port.in.ImportPartnerEmployeesUseCase;
 import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerCompanyController;
 import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerEmployeeController;
 import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerEmployeeImportBatchController;
@@ -227,6 +229,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private VerifyPartnerEmployeeUseCase verifyPartnerEmployeeUseCase;
+
+    @MockitoBean
+    private QueryOwnPartnerEmployeeVerificationUseCase queryOwnPartnerEmployeeVerificationUseCase;
 
     @MockitoBean
     private QueryOwnCustomerUseCase queryOwnCustomerUseCase;
@@ -552,6 +557,9 @@ class SecurityConfigTest {
                         .content("{}"))
                 .andExpect(status().isUnauthorized());
 
+        mockMvc.perform(get("/api/v1/partner-companies/{partnerCompanyId}/employee-verifications", PARTNER_COMPANY_ID))
+                .andExpect(status().isUnauthorized());
+
         mockMvc.perform(post("/api/v1/loan-applications/salary-advance")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
@@ -580,6 +588,30 @@ class SecurityConfigTest {
 
         mockMvc.perform(post("/api/v1/loan-applications/{loanApplicationId}/approved-offer/accept", LOAN_APPLICATION_ID))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void enforcesOwnEmployeeVerificationPermissionForCustomerReviewStatusRead() throws Exception {
+        when(queryOwnPartnerEmployeeVerificationUseCase.getLatestOwnVerification(PARTNER_COMPANY_ID))
+                .thenReturn(new OwnPartnerEmployeeVerificationDto(
+                        PARTNER_COMPANY_ID,
+                        "PENDING_MANUAL_REVIEW",
+                        true
+                ));
+
+        mockMvc.perform(get("/api/v1/partner-companies/{partnerCompanyId}/employee-verifications", PARTNER_COMPANY_ID)
+                        .with(user("customer").authorities(
+                                new SimpleGrantedAuthority("partner:employee:verify:own")
+                        )))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.outcome").value("PENDING_MANUAL_REVIEW"));
+
+        mockMvc.perform(get("/api/v1/partner-companies/{partnerCompanyId}/employee-verifications", PARTNER_COMPANY_ID)
+                        .with(user("customer").authorities(
+                                new SimpleGrantedAuthority("loan:submit")
+                        )))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
     }
 
     @Test

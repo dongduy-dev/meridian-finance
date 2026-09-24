@@ -35,6 +35,11 @@ public interface PartnerEligibilityReviewRepository {
             UUID partnerCompanyId
     );
 
+    Optional<PartnerEligibilityReview> findLatestByCustomerIdAndPartnerCompanyId(
+            UUID customerId,
+            UUID partnerCompanyId
+    );
+
     Page findPage(PartnerEligibilityReviewStatus status, int page, int size);
 
     PartnerEligibilityReview save(PartnerEligibilityReview review);

@@ -35,6 +35,12 @@ const verification = {
   manualReviewRequired: false,
 }
 
+const ownVerification = {
+  partnerCompanyId: option.partnerCompanyId,
+  outcome: 'MANUAL_REVIEW_APPROVED',
+  manualReviewRequired: false,
+}
+
 const application = {
   loanApplicationId: '33333333-3333-4333-8333-333333333333',
   applicationNumber: 'SA-20260830-000001',
@@ -126,6 +132,21 @@ describe('Salary Advance API boundary', () => {
     }
     expect(new Headers(request.mock.calls[0]?.[1]?.headers).get('Authorization')).toBe('Bearer expired-token')
     expect(new Headers(request.mock.calls[1]?.[1]?.headers).get('Authorization')).toBe('Bearer refreshed-token')
+  })
+
+  it('reads only the Customer-safe latest verification state for one Partner Company', async () => {
+    const { api, coordinator, request } = setup([ownVerification])
+
+    expect(await api.getOwnEmployeeVerification(option.partnerCompanyId)).toEqual(ownVerification)
+    expect(coordinator.requestProtected).toHaveBeenCalledOnce()
+    const [path, options] = request.mock.calls[0]!
+    expect(path).toBe(`/partner-companies/${option.partnerCompanyId}/employee-verifications`)
+    expect(options?.method).toBeUndefined()
+    expect(Object.keys(ownVerification)).toEqual([
+      'partnerCompanyId',
+      'outcome',
+      'manualReviewRequired',
+    ])
   })
 
   it('submits exactly the reusable link, whole-VND amount, and returned term without transport retry', async () => {
