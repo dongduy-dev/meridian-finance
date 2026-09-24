@@ -82,9 +82,17 @@ export function EmployeeVerificationPanel({
   const [result, setResult] = useState<EmployeeVerification>()
   const reviewStatuses = useOwnEmployeeVerificationsQuery()
   const authoritativeResults = reviewStatuses.data ?? []
+  const authoritativeResultForLocalCompany = result
+    ? authoritativeResults.some((status) => status.partnerCompanyId === result.partnerCompanyId)
+    : false
   const displayedResults: (EmployeeVerification | OwnEmployeeVerification)[] = result
-    && !authoritativeResults.some((status) => status.partnerCompanyId === result.partnerCompanyId)
-    ? [result, ...authoritativeResults]
+    && (!result.manualReviewRequired || !authoritativeResultForLocalCompany)
+    ? [
+        result,
+        ...authoritativeResults.filter(
+          (status) => status.partnerCompanyId !== result.partnerCompanyId,
+        ),
+      ]
     : authoritativeResults
   const partnerNames = new Map(
     optionsQuery.data?.map((option) => [option.partnerCompanyId, option.name] as const) ?? [],

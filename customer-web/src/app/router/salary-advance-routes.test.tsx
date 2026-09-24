@@ -20,6 +20,7 @@ import { createTestRouter } from './router'
 
 const linkId = '55555555-5555-4555-8555-555555555551'
 const partnerCompanyId = '66666666-6666-4666-8666-666666666661'
+const otherPartnerCompanyId = '66666666-6666-4666-8666-666666666662'
 
 const product = {
   productCode: 'SALARY_ADVANCE',
@@ -503,6 +504,88 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     expect(await screen.findByText('We could not verify eligible employment for Salary Advance.')).toBeVisible()
     expect(screen.getByText(`for ${options[0]!.name}`)).toBeVisible()
     expect(verificationPosts).toBe(0)
+  })
+
+  it('keeps a fresh successful verification ahead of unchanged rejection history for the same company', async () => {
+    const user = userEvent.setup()
+    let verificationPosts = 0
+    let statusReads = 0
+    const companyOptions = [
+      { partnerCompanyId, companyCode: 'AURORA', name: 'Aurora' },
+      { partnerCompanyId: otherPartnerCompanyId, companyCode: 'BOREALIS', name: 'Borealis' },
+    ]
+    const backendStates: OwnEmployeeVerification[] = [
+      {
+        partnerCompanyId,
+        outcome: 'MANUAL_REVIEW_REJECTED',
+        manualReviewRequired: false,
+      },
+      {
+        partnerCompanyId: otherPartnerCompanyId,
+        outcome: 'PENDING_MANUAL_REVIEW',
+        manualReviewRequired: true,
+      },
+    ]
+    const fetchImplementation: typeof fetch = async (input, init) => {
+      const url = String(input)
+      if (url.endsWith('/loan-products/salary-advance/readiness')) {
+        return response({
+          ...readyReadiness,
+          customerPartnerEmployeeLinkId: null,
+          employeeVerificationStatus: 'NOT_VERIFIED',
+          partnerEligibilityStatus: 'NOT_VERIFIED',
+          limitStatus: 'UNAVAILABLE',
+          applicationAllowed: false,
+          blockerCodes: ['EMPLOYEE_NOT_VERIFIED'],
+        })
+      }
+      if (url.endsWith('/partner-companies/verification-options')) {
+        return response(companyOptions)
+      }
+      if (url.endsWith(`/partner-companies/${partnerCompanyId}/employee-verifications`)
+        && init?.method === 'POST') {
+        verificationPosts += 1
+        return response({
+          customerId: customer.customerId,
+          partnerCompanyId,
+          partnerEmployeeId: '99999999-9999-4999-8999-999999999991',
+          customerPartnerEmployeeLinkId: linkId,
+          outcome: 'MATCHED_ACTIVE',
+          linkStatus: 'VERIFIED',
+          manualReviewRequired: false,
+        })
+      }
+      if (url.endsWith('/partner-companies/employee-verifications')) {
+        statusReads += 1
+        return response(backendStates)
+      }
+      return defaultFetch(input, init)
+    }
+
+    const firstRender = renderRoute('/products/salary-advance', fetchImplementation)
+    expect(await screen.findByText('We could not verify eligible employment for Salary Advance.')).toBeVisible()
+    expect(screen.getByText('for Aurora')).toBeVisible()
+    expect(screen.getByText("We're reviewing your employment details")).toBeVisible()
+    expect(screen.getByText('for Borealis')).toBeVisible()
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: /Employer/ }), partnerCompanyId)
+    await user.type(screen.getByRole('textbox', { name: /Employee code/ }), 'AURORA-CORRECTED')
+    await user.click(screen.getByRole('button', { name: 'Verify employment' }))
+
+    expect(await screen.findByText('Your employment was verified. We updated your application availability.')).toBeVisible()
+    await waitFor(() => expect(statusReads).toBeGreaterThanOrEqual(2))
+    expect(screen.queryByText('We could not verify eligible employment for Salary Advance.')).not.toBeInTheDocument()
+    expect(screen.getByText("We're reviewing your employment details")).toBeVisible()
+    expect(screen.getByText('for Borealis')).toBeVisible()
+    expect(verificationPosts).toBe(1)
+
+    firstRender.unmount()
+    queryClient.clear()
+    renderRoute('/products/salary-advance', fetchImplementation)
+
+    expect(await screen.findByText('We could not verify eligible employment for Salary Advance.')).toBeVisible()
+    expect(screen.queryByText('Your employment was verified. We updated your application availability.')).not.toBeInTheDocument()
+    expect(verificationPosts).toBe(1)
   })
 
   it('polls conservatively only while the authoritative review remains pending', () => {
