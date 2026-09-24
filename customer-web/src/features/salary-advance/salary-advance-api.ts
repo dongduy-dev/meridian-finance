@@ -43,6 +43,14 @@ export const employeeVerificationSchema = z.object({
   manualReviewRequired: z.boolean(),
 })
 
+export const ownEmployeeVerificationSchema = z.object({
+  partnerCompanyId: javaUuid,
+  outcome: nonEmptyString,
+  manualReviewRequired: z.boolean(),
+})
+
+export const ownEmployeeVerificationsSchema = z.array(ownEmployeeVerificationSchema)
+
 export const salaryAdvanceApplicationSchema = z.object({
   loanApplicationId: javaUuid,
   applicationNumber: nonEmptyString,
@@ -82,12 +90,14 @@ const salaryAdvanceApplicationInputSchema = z.object({
 export type SalaryAdvanceReadiness = z.infer<typeof salaryAdvanceReadinessSchema>
 export type PartnerVerificationOption = z.infer<typeof partnerVerificationOptionSchema>
 export type EmployeeVerification = z.infer<typeof employeeVerificationSchema>
+export type OwnEmployeeVerification = z.infer<typeof ownEmployeeVerificationSchema>
 export type SalaryAdvanceApplication = z.infer<typeof salaryAdvanceApplicationSchema>
 
 export interface SalaryAdvanceApi {
   getReadiness(): Promise<SalaryAdvanceReadiness>
   getPartnerVerificationOptions(): Promise<PartnerVerificationOption[]>
   verifyEmployee(input: EmployeeVerificationInput): Promise<EmployeeVerification>
+  getOwnEmployeeVerifications(): Promise<OwnEmployeeVerification[]>
   submitApplication(input: SalaryAdvanceApplicationInput): Promise<SalaryAdvanceApplication>
 }
 
@@ -117,6 +127,11 @@ export function createSalaryAdvanceApi(
             json: { employeeCode },
           },
         ),
+      )
+    },
+    async getOwnEmployeeVerifications() {
+      return ownEmployeeVerificationsSchema.parse(
+        await protectedClient.request('/partner-companies/employee-verifications'),
       )
     },
     async submitApplication(input) {

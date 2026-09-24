@@ -35,6 +35,11 @@ public interface PartnerEligibilityReviewRepository {
             UUID partnerCompanyId
     );
 
+    List<PartnerEligibilityReview> findCurrentLatestByCustomerIdAndEffectiveMonth(
+            UUID customerId,
+            String effectiveMonth
+    );
+
     Page findPage(PartnerEligibilityReviewStatus status, int page, int size);
 
     PartnerEligibilityReview save(PartnerEligibilityReview review);

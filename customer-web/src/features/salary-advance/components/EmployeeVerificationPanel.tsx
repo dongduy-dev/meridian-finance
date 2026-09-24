@@ -13,9 +13,10 @@ import { Spinner } from '@/components/ui/spinner'
 import { AccountFormField } from '@/features/account/components/AccountFormField'
 import { ApiError } from '@/lib/api'
 
-import type { EmployeeVerification } from '../salary-advance-api'
+import type { EmployeeVerification, OwnEmployeeVerification } from '../salary-advance-api'
 import {
   usePartnerVerificationOptionsQuery,
+  useOwnEmployeeVerificationsQuery,
   useVerifyEmployeeMutation,
 } from '../salary-advance-queries'
 import { verificationOutcomePresentation } from '../salary-advance-presentation'
@@ -40,7 +41,13 @@ function VerificationError({ error }: { error: unknown }) {
   )
 }
 
-function VerificationResult({ result }: { result: EmployeeVerification }) {
+function VerificationResult({
+  result,
+  partnerName,
+}: {
+  result: EmployeeVerification | OwnEmployeeVerification
+  partnerName?: string
+}) {
   const presentation = verificationOutcomePresentation(result.outcome, result.manualReviewRequired)
   const Icon = presentation.icon ?? CircleHelp
   const alertVariant = presentation.tone === 'success'
@@ -55,6 +62,7 @@ function VerificationResult({ result }: { result: EmployeeVerification }) {
       <Icon aria-hidden="true" />
       <AlertTitle className="flex flex-wrap items-center gap-2">
         Verification result
+        {partnerName ? <span className="font-normal">for {partnerName}</span> : null}
         <StatusBadge presentation={presentation} />
       </AlertTitle>
       <AlertDescription>{presentation.description}</AlertDescription>
@@ -72,6 +80,23 @@ export function EmployeeVerificationPanel({
   const optionsQuery = usePartnerVerificationOptionsQuery()
   const verification = useVerifyEmployeeMutation()
   const [result, setResult] = useState<EmployeeVerification>()
+  const reviewStatuses = useOwnEmployeeVerificationsQuery()
+  const authoritativeResults = reviewStatuses.data ?? []
+  const authoritativeResultForLocalCompany = result
+    ? authoritativeResults.some((status) => status.partnerCompanyId === result.partnerCompanyId)
+    : false
+  const displayedResults: (EmployeeVerification | OwnEmployeeVerification)[] = result
+    && (!result.manualReviewRequired || !authoritativeResultForLocalCompany)
+    ? [
+        result,
+        ...authoritativeResults.filter(
+          (status) => status.partnerCompanyId !== result.partnerCompanyId,
+        ),
+      ]
+    : authoritativeResults
+  const partnerNames = new Map(
+    optionsQuery.data?.map((option) => [option.partnerCompanyId, option.name] as const) ?? [],
+  )
   const [serverError, setServerError] = useState<unknown>()
   const {
     register,
@@ -116,6 +141,20 @@ export function EmployeeVerificationPanel({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
+        {displayedResults.map((displayedResult) => (
+          <VerificationResult
+            key={displayedResult.partnerCompanyId}
+            result={displayedResult}
+            partnerName={partnerNames.get(displayedResult.partnerCompanyId)}
+          />
+        ))}
+        {reviewStatuses.isError ? (
+          <QueryErrorFeedback
+            error={reviewStatuses.error}
+            title="Verification status could not be loaded"
+            onRetry={() => void reviewStatuses.refetch()}
+          />
+        ) : null}
         {optionsQuery.isPending ? (
           <div role="status" aria-label="Loading employers" className="space-y-3">
             <Skeleton className="h-11 w-full" />
@@ -139,7 +178,6 @@ export function EmployeeVerificationPanel({
         {optionsQuery.data?.length ? (
           <form noValidate className="space-y-5" onSubmit={onSubmit}>
             {serverError ? <VerificationError error={serverError} /> : null}
-            {result ? <VerificationResult result={result} /> : null}
             <AccountFormField
               htmlFor="partnerCompanyId"
               label="Employer"

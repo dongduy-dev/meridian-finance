@@ -159,6 +159,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | PUT | `/api/v1/partner-companies/{partnerCompanyId}` | `partner:manage` | Update the company name and Salary Advance policy limit. |
 | POST | `/api/v1/partner-companies/{partnerCompanyId}/status` | `partner:manage` | Change Partner Company status. |
 | POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | `partner:manage` | Import Partner Employee source rows for an effective month. |
+| GET | `/api/v1/partner-companies/employee-verifications` | `partner:employee:verify:own` | Return the authenticated Customer's current manual-review verification states by Partner Company. |
 | POST | `/api/v1/partner-companies/{partnerCompanyId}/employee-verifications` | `partner:employee:verify:own` | Verify the authenticated Customer and create/reuse an eligible employee link. |
 | GET | `/api/v1/admin/partner-eligibility-reviews?status=PENDING&page=0&size=20` | `partner:read` | Return the bounded shared eligibility-review queue. |
 | GET | `/api/v1/admin/partner-eligibility-reviews/{reviewId}` | `partner:read` | Return one review with current purpose-limited candidate evidence. |
@@ -610,6 +611,35 @@ Safe response fields: `customerId`, `partnerCompanyId`, `partnerEmployeeId`, `cu
 Responses exclude salary, limit values, employee code, identity evidence, and raw matching evidence.
 
 When verification requires authorized review, Partner persists or reuses one pending review for the Customer and Partner Company. `MATCHED_INACTIVE` remains a hard stop and does not create a review. A later automatic terminal match (`MATCHED_ACTIVE` or `MATCHED_INACTIVE`) supersedes an unresolved review before it can authorize conflicting evidence.
+
+The Customer reads a later manual-review result through:
+
+```text
+GET /api/v1/partner-companies/employee-verifications
+```
+
+The read requires `partner:employee:verify:own` and derives `customerId` from the authenticated Customer. It does not accept a Customer identifier in the path, query, or body. A Staff user cannot substitute Customer context even when assigned the same permission.
+
+```json
+[
+  {
+    "partnerCompanyId": "22222222-2222-2222-2222-222222222222",
+    "outcome": "PENDING_MANUAL_REVIEW",
+    "manualReviewRequired": true
+  },
+  {
+    "partnerCompanyId": "33333333-3333-3333-3333-333333333333",
+    "outcome": "MANUAL_REVIEW_REJECTED",
+    "manualReviewRequired": false
+  }
+]
+```
+
+Partner returns at most one state per Partner Company for the current UTC effective month. It selects the latest review by creation time and review identifier before excluding `SUPERSEDED`; an older review does not reappear when a newer review was superseded. Prior-month reviews and reviews owned by another Customer are excluded. The list is ordered by `partnerCompanyId`, and an empty list means the Customer has no relevant current manual-review state.
+
+A pending review returns `PENDING_MANUAL_REVIEW` with `manualReviewRequired: true`. Approval returns `MANUAL_REVIEW_APPROVED` and rejection returns `MANUAL_REVIEW_REJECTED`, both with `manualReviewRequired: false`. Each item retains its own `partnerCompanyId`; states for different Partner Companies are not merged.
+
+The response exposes only `partnerCompanyId`, `outcome`, and `manualReviewRequired`. It excludes Customer identity, review identity, reviewer identity, decision reasons, selected employees, candidate lists, employee codes, identity evidence, salary and limit evidence, import-batch facts, timestamps, and internal notes.
 
 ### 3.18 Partner eligibility manual review
 

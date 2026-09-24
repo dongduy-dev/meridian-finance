@@ -4,6 +4,7 @@ import {
   partnerCompanySchema,
   partnerEligibilityReviewPageSchema,
   partnerEmployeeSchema,
+  partnerUuidSchema,
 } from './contracts'
 
 describe('Partner administration contracts', () => {
@@ -16,6 +17,7 @@ describe('Partner administration contracts', () => {
   }
 
   it('accepts canonical Meridian deterministic UUID identifiers', () => {
+    expect(partnerUuidSchema.parse(partnerCompany.id)).toBe(partnerCompany.id)
     expect(partnerCompanySchema.parse(partnerCompany).id).toBe(partnerCompany.id)
 
     const parsedReviewPage = partnerEligibilityReviewPageSchema.parse({
@@ -44,6 +46,7 @@ describe('Partner administration contracts', () => {
 
   it('continues to accept RFC versioned UUID identifiers', () => {
     const id = '4144793b-e7b6-4ce6-bc79-360670e8e5f5'
+    expect(partnerUuidSchema.parse(id)).toBe(id)
     expect(partnerCompanySchema.parse({ ...partnerCompany, id }).id).toBe(id)
   })
 
@@ -52,6 +55,7 @@ describe('Partner administration contracts', () => {
     '22222222-2222-2222',
     'gggggggg-2222-2222-2222-222222222222',
   ])('rejects malformed UUID identifier %s', (id) => {
+    expect(partnerUuidSchema.safeParse(id).success).toBe(false)
     expect(partnerCompanySchema.safeParse({ ...partnerCompany, id }).success).toBe(false)
   })
 
