@@ -48,6 +48,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -81,6 +82,11 @@ class ImportPartnerEmployeesServiceTest {
                 .thenAnswer(invocation -> Optional.ofNullable(stored.get()));
         when(employees.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(links.findVerifiedByPartnerCompanyId(companyId)).thenReturn(List.of());
+        when(links.findByIdForUpdate(any())).thenAnswer(invocation ->
+                links.findVerifiedByPartnerCompanyId(companyId).stream()
+                        .filter(link -> link.id().equals(invocation.getArgument(0)))
+                        .findFirst()
+        );
         when(links.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(reviews.findPendingByCustomerIdAndPartnerCompanyId(any(), eq(companyId)))
                 .thenReturn(Optional.empty());
@@ -251,6 +257,19 @@ class ImportPartnerEmployeesServiceTest {
         when(links.findVerifiedByPartnerCompanyId(companyId)).thenReturn(List.of(existing));
         when(reviews.findPendingByCustomerIdAndPartnerCompanyId(existing.customerId(), companyId))
                 .thenReturn(Optional.of(mock(PartnerEligibilityReview.class)));
+
+        service.importEmployees(companyId, request(List.of(row("EMP-1", "ID-1", "ACTIVE", true))));
+
+        verify(employees, never()).findByVerificationEvidence(any(), any(), any(), any());
+        verify(links, never()).save(any());
+    }
+
+    @Test
+    void lockedRecheckSkipsRelationshipDisplacedAfterCandidateDiscovery() {
+        CustomerPartnerEmployeeLink candidate = existingLink();
+        CustomerPartnerEmployeeLink displaced = candidate.disableForEmploymentChange();
+        when(links.findVerifiedByPartnerCompanyId(companyId)).thenReturn(List.of(candidate));
+        doReturn(Optional.of(displaced)).when(links).findByIdForUpdate(candidate.id());
 
         service.importEmployees(companyId, request(List.of(row("EMP-1", "ID-1", "ACTIVE", true))));
 

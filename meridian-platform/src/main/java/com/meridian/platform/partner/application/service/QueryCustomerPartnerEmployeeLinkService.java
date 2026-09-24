@@ -5,6 +5,7 @@ import com.meridian.platform.partner.application.dto.CustomerPartnerEmployeeLink
 import com.meridian.platform.partner.application.port.in.QueryCustomerPartnerEmployeeLinkUseCase;
 import com.meridian.platform.partner.application.port.out.CustomerPartnerEmployeeLinkRepository;
 import com.meridian.platform.partner.application.port.out.PartnerCompanyRepository;
+import com.meridian.platform.partner.application.port.out.PartnerEligibilityReviewRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportBatchRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeRepository;
 import com.meridian.platform.partner.domain.model.CustomerPartnerEmployeeLink;
@@ -18,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.YearMonth;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +30,7 @@ public class QueryCustomerPartnerEmployeeLinkService implements QueryCustomerPar
     private final PartnerEmployeeRepository partnerEmployeeRepository;
     private final PartnerCompanyRepository partnerCompanyRepository;
     private final PartnerEmployeeImportBatchRepository importBatchRepository;
+    private final PartnerEligibilityReviewRepository reviewRepository;
     private final Clock clock;
 
     public QueryCustomerPartnerEmployeeLinkService(
@@ -37,12 +38,14 @@ public class QueryCustomerPartnerEmployeeLinkService implements QueryCustomerPar
             PartnerEmployeeRepository partnerEmployeeRepository,
             PartnerCompanyRepository partnerCompanyRepository,
             PartnerEmployeeImportBatchRepository importBatchRepository,
+            PartnerEligibilityReviewRepository reviewRepository,
             Clock clock
     ) {
         this.customerPartnerEmployeeLinkRepository = customerPartnerEmployeeLinkRepository;
         this.partnerEmployeeRepository = partnerEmployeeRepository;
         this.partnerCompanyRepository = partnerCompanyRepository;
         this.importBatchRepository = importBatchRepository;
+        this.reviewRepository = reviewRepository;
         this.clock = clock;
     }
 
@@ -67,22 +70,15 @@ public class QueryCustomerPartnerEmployeeLinkService implements QueryCustomerPar
     @Transactional(readOnly = true)
     public CustomerPartnerEmployeeEligibilityDto inspectCurrentEligibility(UUID customerId) {
         Objects.requireNonNull(customerId, "customerId must not be null");
-        List<CustomerPartnerEmployeeLink> links = customerPartnerEmployeeLinkRepository.findByCustomerId(customerId);
-        CustomerPartnerEmployeeEligibilityDto firstIneligible = null;
-        for (CustomerPartnerEmployeeLink link : links) {
-            CustomerPartnerEmployeeEligibilityDto assessment = assess(link);
-            if (assessment.status() == CustomerPartnerEmployeeEligibilityDto.Status.ELIGIBLE) {
-                return assessment;
-            }
-            if (firstIneligible == null) {
-                firstIneligible = assessment;
-            }
+        String currentEffectiveMonth = YearMonth.now(clock).toString();
+        if (reviewRepository.existsPendingByCustomerIdAndEffectiveMonth(
+                customerId, currentEffectiveMonth
+        )) {
+            return ineligible(CustomerPartnerEmployeeEligibilityDto.Status.NOT_VERIFIED);
         }
-        return firstIneligible == null
-                ? CustomerPartnerEmployeeEligibilityDto.ineligible(
-                        CustomerPartnerEmployeeEligibilityDto.Status.NOT_VERIFIED
-                )
-                : firstIneligible;
+        return customerPartnerEmployeeLinkRepository.findCurrentVerifiedByCustomerId(customerId)
+                .map(this::assess)
+                .orElseGet(() -> ineligible(CustomerPartnerEmployeeEligibilityDto.Status.NOT_VERIFIED));
     }
 
     private CustomerPartnerEmployeeEligibilityDto assess(CustomerPartnerEmployeeLink link) {

@@ -51,6 +51,12 @@ public interface JpaPartnerEligibilityReviewRepository
             @Param("effectiveMonth") String effectiveMonth
     );
 
+    boolean existsByCustomerIdAndEffectiveMonthAndStatus(
+            UUID customerId,
+            String effectiveMonth,
+            PartnerEligibilityReviewStatus status
+    );
+
     Page<PartnerEligibilityReviewJpaEntity> findByStatusOrderByCreatedAtAscIdAsc(
             PartnerEligibilityReviewStatus status,
             Pageable pageable

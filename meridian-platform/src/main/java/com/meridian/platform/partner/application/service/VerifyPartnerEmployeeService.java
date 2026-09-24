@@ -83,6 +83,7 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
         String identityReference = normalizeRequired(identityEvidence.identityReference(), "identityReference");
         String employeeCode = normalizeRequired(request.employeeCode(), "employeeCode");
 
+        linkRepository.acquireCustomerEmploymentLock(customerId);
         reviewRepository.acquireCustomerPartnerLock(customerId, partnerCompanyId);
 
         PartnerCompany partnerCompany = partnerCompanyRepository.findByIdForUpdate(partnerCompanyId)
@@ -191,22 +192,26 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
     ) {
         LocalDateTime verifiedAt = LocalDateTime.now(clock);
 
-        return linkRepository.findCurrentByCustomerIdAndPartnerCompanyId(customerId, partnerCompanyId)
-                .map(existingLink -> handleExistingLink(
-                        existingLink,
-                        partnerEmployee,
-                        identityReference,
-                        employeeCode,
-                        verifiedAt
-                ))
-                .orElseGet(() -> createVerifiedLink(
-                        customerId,
-                        partnerCompanyId,
-                        partnerEmployee,
-                        identityReference,
-                        employeeCode,
-                        verifiedAt
-                ));
+        CustomerPartnerEmployeeLink current = linkRepository
+                .findCurrentVerifiedByCustomerIdForUpdate(customerId)
+                .orElse(null);
+        if (current == null) {
+            return createVerifiedLink(
+                    customerId, partnerCompanyId, partnerEmployee,
+                    identityReference, employeeCode, verifiedAt
+            );
+        }
+        if (current.partnerCompanyId().equals(partnerCompanyId)) {
+            return handleExistingLink(
+                    current, partnerEmployee, identityReference, employeeCode, verifiedAt
+            );
+        }
+
+        linkRepository.saveAndFlush(current.disableForEmploymentChange());
+        return createVerifiedLink(
+                customerId, partnerCompanyId, partnerEmployee,
+                identityReference, employeeCode, verifiedAt
+        );
     }
 
     private PartnerEmployeeVerificationResult handleExistingLink(

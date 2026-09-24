@@ -612,6 +612,10 @@ Responses exclude salary, limit values, employee code, identity evidence, and ra
 
 When verification requires authorized review, Partner persists or reuses one pending review for the Customer and Partner Company. `MATCHED_INACTIVE` remains a hard stop and does not create a review. A later automatic terminal match (`MATCHED_ACTIVE` or `MATCHED_INACTIVE`) supersedes an unresolved review before it can authorize conflicting evidence.
 
+The same POST handles a Customer-declared employment update. Exact active proof for the current employer and unchanged evidence refreshes the current relationship. Different evidence for that employer creates or reuses a review without overwriting the relationship. Exact active proof for another employer atomically changes the old current link to historical `DISABLED` state and creates a fresh `VERIFIED` link for the new employer. Missing, ambiguous, or absent current-month evidence leaves the prior relationship unchanged and returns the established manual-review response. `MATCHED_INACTIVE` leaves it unchanged without creating a review.
+
+A current-month pending review for any Partner Company makes Salary Advance readiness return `EMPLOYEE_NOT_VERIFIED`, even when a prior `VERIFIED` relationship remains stored. Prior-month and terminal reviews do not block through this rule. Approval completes the same-employer update or different-employer switch; rejection does not mutate the prior relationship. Neither path transfers Salary Advance limit or Loan evidence between links.
+
 The Customer reads a later manual-review result through:
 
 ```text
@@ -675,7 +679,7 @@ Rejection body:
 
 Rejection also accepts `IDENTITY_EVIDENCE_MISMATCH` and `INSUFFICIENT_SOURCE_EVIDENCE`. Approval requires one exact Partner Employee and `CURRENT_EMPLOYEE_CONFIRMED`; rejection must not select an employee.
 
-Before approval, Partner revalidates the active Partner Company, current UTC effective month, authoritative latest `COMPLETED` batch, current usable Customer identity evidence, selected employee ownership and batch, active row and employment state, and identity match. Success atomically creates or refreshes the reusable `VERIFIED` link with `MANUAL_REVIEW_APPROVED`, resolves the review, and records PII-safe audit evidence. Rejection records `MANUAL_REVIEW_REJECTED` and does not create or refresh a link. Neither outcome creates a LoanApplication, Salary Advance limit, reservation, or Loan-owned verification snapshot.
+Before approval, Partner revalidates the active Partner Company, current UTC effective month, authoritative latest `COMPLETED` batch, current usable Customer identity evidence, selected employee ownership and batch, active row and employment state, and identity match. Success atomically updates the current same-employer link or disables the old current link and creates a fresh different-employer `VERIFIED` link with `MANUAL_REVIEW_APPROVED`. It then resolves the review and records PII-safe audit evidence. Rejection records `MANUAL_REVIEW_REJECTED` without changing the prior relationship. Neither outcome creates or transfers a LoanApplication, Salary Advance limit, reservation, exposure, or Loan-owned verification snapshot.
 
 An exact terminal replay returns the recorded projection without another link or audit effect. A different decision after terminal resolution returns `409 PARTNER_ELIGIBILITY_REVIEW_ALREADY_RESOLVED`. Competing decisions serialize so one terminal outcome wins. The client reconciles an unknown command result through the detail GET and does not retry the decision optimistically.
 

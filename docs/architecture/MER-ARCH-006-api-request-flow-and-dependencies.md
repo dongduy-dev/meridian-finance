@@ -194,11 +194,12 @@ The effective-month import command uses this transaction order:
 4. validate rows independently and exclude invalid or duplicate employee-code rows;
 5. persist one completed batch with its safe rejection summary and every valid employee row;
 6. if the new batch is the deterministic latest `COMPLETED` batch for that Partner Company and current UTC month, load the company's existing `VERIFIED` links in deterministic Customer/link order;
-7. skip any link whose Customer and Partner Company have a pending eligibility review, then compare the remaining link's stored verified identity reference and employee code with employees in the new batch through the normal Partner matching policy;
-8. refresh the same link to the new employee and source batch only for `MATCHED_ACTIVE`, leaving missing, ambiguous, and inactive matches unchanged and therefore stale;
-9. publish one PII-safe business audit outcome before committing the complete import result.
+7. lock and re-read each candidate link, continue only when it remains the Customer's `VERIFIED` relationship for that Partner Company, and skip it when the Customer and Partner Company have a pending eligibility review;
+8. compare the remaining link's stored verified identity reference and employee code with employees in the new batch through the normal Partner matching policy;
+9. refresh the same link to the new employee and source batch only for `MATCHED_ACTIVE`, leaving missing, ambiguous, inactive, or displaced matches unchanged and therefore stale or historical;
+10. publish one PII-safe business audit outcome before committing the complete import result.
 
-The Partner Company row remains the import reconciliation serialization boundary. The import path does not acquire the Customer–Partner advisory lock after that row lock and does not mutate pending review rows; verification and review decisions retain their existing advisory-lock-before-company-row order. A failure after a link refresh rolls back the batch, employees, link changes, rejection summary, and audit outcome in the same transaction.
+The Partner Company row remains the import reconciliation serialization boundary. The import path does not acquire the Customer-wide or Customer–Partner advisory lock after that row lock and does not mutate pending review rows; verification and review decisions acquire Customer-wide, then Customer–Partner, then company locks. A failure after a link refresh rolls back the batch, employees, link changes, rejection summary, and audit outcome in the same transaction.
 
 Request replay evidence stores the UUID and a SHA-256 semantic fingerprint rather than the raw command. Exact replay returns before reconciliation, so it does not advance link refresh timestamps or repeat audit effects. Multiple batches for the same company and month remain valid, and only the deterministic latest completed current-month batch may refresh links. Partner mutates only the Partner-owned relationship. It does not create or change LoanApplications, Salary Advance limits, movements, or exposure. Loan readiness projects the current effective limit from Partner eligibility, and Loan persists its own limit refresh during submission when required.
 
@@ -286,14 +287,14 @@ flowchart LR
 Runtime rules:
 
 1. Partner Company existence and active status are checked before import-batch lookup, employee matching, link creation, or manual-review routing. Partner derives the current effective month from the shared UTC `Clock` and selects the latest valid `COMPLETED` batch for that Partner Company and exact month, ordered deterministically by creation time and identifier.
-2. One active match may create or refresh the reusable Customer–Partner Employee link.
-3. Missing or ambiguous current-month evidence follows the authorized manual-review policy during verification. A reused verified link whose source batch or employee batch is not authoritative fails closed as stale for lending eligibility.
+2. Verification acquires the Customer-wide Partner-employment advisory lock before the narrower Customer–Partner Company lock. One active match creates the first relationship, refreshes the same current relationship when its evidence matches, or disables the current relationship and creates a fresh link when the proven employer differs.
+3. Different same-employer evidence and missing or ambiguous current-month evidence follow the authorized manual-review policy. A current-month pending review makes the current eligibility contract return `NOT_VERIFIED`, even when an older current link remains persisted. A reused verified link whose source batch or employee batch is not authoritative fails closed as stale for lending eligibility.
 4. An inactive Partner Company or Partner Employee is a hard stop. Re-verification may restore eligibility only by refreshing the link to matching active evidence in the authoritative batch.
 5. The response may expose identifiers, outcome, link status, and whether manual review is required. It must not expose raw identity evidence, employee code, salary, Salary Advance limit, or matching evidence.
 
 ### 6.1 Partner Eligibility Manual Review
 
-Customer verification and Back-Office decisions serialize on the same Customer–Partner Company boundary. Missing or ambiguous evidence creates or reuses one Partner-owned `PENDING` review. A changed source batch supersedes the obsolete pending review when fresh Customer verification creates a replacement; a successful automatic match supersedes it without requiring a hidden mutation from a read request.
+Customer verification and Back-Office decisions acquire the Customer-wide Partner-employment advisory lock before the Customer–Partner Company boundary. This order serializes automatic and reviewed switches across different Partner Companies. Missing or ambiguous evidence creates or reuses one Partner-owned `PENDING` review. A changed source batch supersedes the obsolete pending review when fresh Customer verification creates a replacement; a successful automatic match supersedes it without requiring a hidden mutation from a read request.
 
 ```mermaid
 flowchart LR
@@ -317,14 +318,14 @@ Queue and detail reads require exact `partner:read`; the decision command requir
 
 The decision transaction follows this order:
 
-1. locate the review, acquire the Customer–Partner serialization boundary, and lock the review row;
+1. locate the review, acquire the Customer-wide Partner-employment boundary followed by the Customer–Partner boundary, and lock the review row;
 2. return an exact persisted terminal replay or reject a different decision after resolution;
 3. lock and revalidate the Partner Company, effective UTC month, and authoritative latest `COMPLETED` import batch;
 4. for approval, obtain current usable Customer identity evidence and validate the selected active Partner Employee against the authoritative batch and identity;
-5. create or refresh the reusable `VERIFIED` link with `MANUAL_REVIEW_APPROVED`, or record `MANUAL_REVIEW_REJECTED` without a link mutation;
+5. update the current same-employer link, or flush its transition to historical `DISABLED` before inserting a fresh different-employer `VERIFIED` link; rejection records `MANUAL_REVIEW_REJECTED` without a link mutation;
 6. persist the controlled reason, reviewer, decision time, selected employee/source evidence when approved, and PII-safe audit outcome in the same transaction.
 
-A prior-month review or a review bound to a replaced authoritative batch returns a stable stale-review conflict and requires fresh Customer verification. Import-time reconciliation never resolves or mutates a pending review; that relationship remains under the manual-review authority until Customer verification or an authorized decision changes it.
+A prior-month review or a review bound to a replaced authoritative batch returns a stable stale-review conflict and requires fresh Customer verification. Import-time reconciliation never resolves or mutates a pending review. It keeps the Partner Company row as its first business lock, locks and re-reads each candidate link, and refreshes only a row that remains `VERIFIED` for that company. It does not acquire the Customer-wide advisory lock after the company lock, so an import cannot invert the verification lock order or restore a displaced historical relationship.
 
 ---
 
@@ -342,7 +343,7 @@ A Customer self-service command must not be generalized by adding an optional St
 
 `GET /api/v1/loan-products/salary-advance/readiness` requires an authenticated Customer with `loan:submit`. Loan derives the Customer from the actor, reads Customer readiness, product policy, the Partner-owned current eligibility assessment, current limit/exposure, blocking applications, and outstanding-account guard, then returns safe values and blocker codes. Partner owns the current-month authoritative-batch decision; Loan consumes only the purpose-limited status and eligible snapshot.
 
-The query is read-only and non-locking. It does not initialize or refresh a persisted limit, reserve exposure, create a LoanApplication or verification, or append movements, history, or audit. A later submission command reacquires authoritative state and may reject after concurrent change.
+The query is read-only and non-locking. Partner returns at most one explicit current `VERIFIED` relationship, and returns `NOT_VERIFIED` while any current-month Partner eligibility review remains pending. Loan does not inspect Partner review persistence. The query does not initialize or refresh a persisted limit, reserve exposure, create a LoanApplication or verification, or append movements, history, or audit. A later submission command reacquires authoritative state and may reject after concurrent change.
 
 ### LoanApplication Status Query
 

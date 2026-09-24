@@ -165,8 +165,15 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
         for (CustomerPartnerEmployeeLink link : links.findVerifiedByPartnerCompanyId(
                 savedBatch.partnerCompanyId()
         )) {
+            CustomerPartnerEmployeeLink lockedLink = links.findByIdForUpdate(link.id())
+                    .filter(CustomerPartnerEmployeeLink::isVerified)
+                    .filter(current -> current.partnerCompanyId().equals(savedBatch.partnerCompanyId()))
+                    .orElse(null);
+            if (lockedLink == null) {
+                continue;
+            }
             if (reviews.findPendingByCustomerIdAndPartnerCompanyId(
-                    link.customerId(), savedBatch.partnerCompanyId()
+                    lockedLink.customerId(), savedBatch.partnerCompanyId()
             ).isPresent()) {
                 continue;
             }
@@ -174,15 +181,17 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
             List<PartnerEmployee> matchingEmployees = employees.findByVerificationEvidence(
                     savedBatch.partnerCompanyId(),
                     savedBatch.id(),
-                    link.verifiedIdentityRef(),
-                    link.verifiedEmployeeCode()
+                    lockedLink.verifiedIdentityRef(),
+                    lockedLink.verifiedEmployeeCode()
             );
             if (verificationPolicy.determineOutcome(matchingEmployees)
                     != EmployeeVerificationOutcome.MATCHED_ACTIVE) {
                 continue;
             }
 
-            links.save(link.refreshFromAuthoritativeImport(matchingEmployees.getFirst(), operationTime));
+            links.save(lockedLink.refreshFromAuthoritativeImport(
+                    matchingEmployees.getFirst(), operationTime
+            ));
         }
     }
 

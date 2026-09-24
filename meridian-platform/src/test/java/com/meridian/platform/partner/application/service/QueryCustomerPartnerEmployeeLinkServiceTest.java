@@ -3,6 +3,7 @@ package com.meridian.platform.partner.application.service;
 import com.meridian.platform.partner.application.dto.CustomerPartnerEmployeeEligibilityDto;
 import com.meridian.platform.partner.application.port.out.CustomerPartnerEmployeeLinkRepository;
 import com.meridian.platform.partner.application.port.out.PartnerCompanyRepository;
+import com.meridian.platform.partner.application.port.out.PartnerEligibilityReviewRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportBatchRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeRepository;
 import com.meridian.platform.partner.domain.model.CustomerPartnerEmployeeLink;
@@ -29,6 +30,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class QueryCustomerPartnerEmployeeLinkServiceTest {
 
@@ -43,6 +46,7 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
     private FakeEmployeeRepository employees;
     private FakeCompanyRepository companies;
     private FakeImportBatchRepository batches;
+    private PartnerEligibilityReviewRepository reviews;
 
     @BeforeEach
     void setUp() {
@@ -50,6 +54,7 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
         employees = new FakeEmployeeRepository(activeEmployee(BATCH_ID, EMPLOYEE_ID));
         companies = new FakeCompanyRepository(PartnerCompanyStatus.ACTIVE);
         batches = new FakeImportBatchRepository(completedBatch(BATCH_ID, "2026-08"));
+        reviews = mock(PartnerEligibilityReviewRepository.class);
     }
 
     @Test
@@ -119,13 +124,10 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
     }
 
     @Test
-    void currentEligibilityReturnsTheFirstEligibleVerifiedLinkWithoutExposingStaleSnapshot() {
+    void currentEligibilityUsesTheExplicitCurrentVerifiedRelationship() {
         UUID staleLinkId = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccb");
         UUID staleEmployeeId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb02");
-        links.all = List.of(
-                verifiedLink(staleLinkId, NEWER_BATCH_ID, staleEmployeeId),
-                verifiedLink(LINK_ID, BATCH_ID, EMPLOYEE_ID)
-        );
+        links.all = List.of(verifiedLink(staleLinkId, NEWER_BATCH_ID, staleEmployeeId), links.current);
         employees.all.add(activeEmployee(NEWER_BATCH_ID, staleEmployeeId));
         employees.all.add(employees.current);
 
@@ -136,12 +138,36 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
         assertEquals(LINK_ID, result.optionalSnapshot().orElseThrow().customerPartnerEmployeeLinkId());
     }
 
+    @Test
+    void currentMonthPendingReviewBlocksOtherwiseEligibleCurrentRelationship() {
+        when(reviews.existsPendingByCustomerIdAndEffectiveMonth(CUSTOMER_ID, "2026-08"))
+                .thenReturn(true);
+
+        CustomerPartnerEmployeeEligibilityDto result = serviceAt("2026-08-10T00:00:00Z")
+                .inspectCurrentEligibility(CUSTOMER_ID);
+
+        assertEquals(CustomerPartnerEmployeeEligibilityDto.Status.NOT_VERIFIED, result.status());
+        assertTrue(result.optionalSnapshot().isEmpty());
+    }
+
+    @Test
+    void priorMonthPendingReviewDoesNotBlockCurrentRelationship() {
+        when(reviews.existsPendingByCustomerIdAndEffectiveMonth(CUSTOMER_ID, "2026-07"))
+                .thenReturn(true);
+
+        CustomerPartnerEmployeeEligibilityDto result = serviceAt("2026-08-10T00:00:00Z")
+                .inspectCurrentEligibility(CUSTOMER_ID);
+
+        assertEquals(CustomerPartnerEmployeeEligibilityDto.Status.ELIGIBLE, result.status());
+    }
+
     private QueryCustomerPartnerEmployeeLinkService serviceAt(String instant) {
         return new QueryCustomerPartnerEmployeeLinkService(
                 links,
                 employees,
                 companies,
                 batches,
+                reviews,
                 Clock.fixed(Instant.parse(instant), ZoneOffset.UTC)
         );
     }
@@ -210,19 +236,20 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
         }
 
         @Override
-        public Optional<CustomerPartnerEmployeeLink> findCurrentByCustomerIdAndPartnerCompanyId(
-                UUID customerId,
-                UUID partnerCompanyId
-        ) {
-            return all.stream()
-                    .filter(link -> link.customerId().equals(customerId))
-                    .filter(link -> link.partnerCompanyId().equals(partnerCompanyId))
-                    .findFirst();
+        public Optional<CustomerPartnerEmployeeLink> findByIdForUpdate(UUID id) {
+            return findById(id);
         }
 
         @Override
-        public List<CustomerPartnerEmployeeLink> findByCustomerId(UUID customerId) {
-            return all.stream().filter(link -> link.customerId().equals(customerId)).toList();
+        public Optional<CustomerPartnerEmployeeLink> findCurrentVerifiedByCustomerId(UUID customerId) {
+            return Optional.ofNullable(current)
+                    .filter(CustomerPartnerEmployeeLink::isVerified)
+                    .filter(link -> link.customerId().equals(customerId));
+        }
+
+        @Override
+        public Optional<CustomerPartnerEmployeeLink> findCurrentVerifiedByCustomerIdForUpdate(UUID customerId) {
+            return findCurrentVerifiedByCustomerId(customerId);
         }
 
         @Override
@@ -234,10 +261,19 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
         }
 
         @Override
+        public void acquireCustomerEmploymentLock(UUID customerId) {
+        }
+
+        @Override
         public CustomerPartnerEmployeeLink save(CustomerPartnerEmployeeLink link) {
             current = link;
             all = List.of(link);
             return link;
+        }
+
+        @Override
+        public CustomerPartnerEmployeeLink saveAndFlush(CustomerPartnerEmployeeLink link) {
+            return save(link);
         }
     }
 

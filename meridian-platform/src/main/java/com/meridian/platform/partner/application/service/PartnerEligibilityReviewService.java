@@ -119,6 +119,7 @@ public class PartnerEligibilityReviewService
 
         PartnerEligibilityReviewRepository.LockIdentity lockIdentity = reviews.findLockIdentityById(reviewId)
                 .orElseThrow(PartnerEligibilityReviewService::reviewNotFound);
+        links.acquireCustomerEmploymentLock(lockIdentity.customerId());
         reviews.acquireCustomerPartnerLock(lockIdentity.customerId(), lockIdentity.partnerCompanyId());
         PartnerEligibilityReview review = reviews.findByIdForUpdate(reviewId)
                 .orElseThrow(PartnerEligibilityReviewService::reviewNotFound);
@@ -145,13 +146,21 @@ public class PartnerEligibilityReviewService
         if (request.outcome() == PartnerEligibilityReviewDecision.APPROVE) {
             CustomerIdentityEvidenceSnapshot identity = requireUsableIdentity(review.customerId());
             PartnerEmployee employee = requireApprovalCandidate(review, request.partnerEmployeeId(), identity);
-            CustomerPartnerEmployeeLink link = links
-                    .findCurrentByCustomerIdAndPartnerCompanyId(review.customerId(), review.partnerCompanyId())
-                    .map(existing -> existing.approveManualReview(employee, identity.identityReference(), decidedAt))
-                    .orElseGet(() -> CustomerPartnerEmployeeLink.manuallyApproved(
-                            UUID.randomUUID(), review.customerId(), employee,
-                            identity.identityReference(), decidedAt
-                    ));
+            CustomerPartnerEmployeeLink current = links
+                    .findCurrentVerifiedByCustomerIdForUpdate(review.customerId())
+                    .orElse(null);
+            CustomerPartnerEmployeeLink link;
+            if (current != null && current.partnerCompanyId().equals(review.partnerCompanyId())) {
+                link = current.approveManualReview(employee, identity.identityReference(), decidedAt);
+            } else {
+                if (current != null) {
+                    links.saveAndFlush(current.disableForEmploymentChange());
+                }
+                link = CustomerPartnerEmployeeLink.manuallyApproved(
+                        UUID.randomUUID(), review.customerId(), employee,
+                        identity.identityReference(), decidedAt
+                );
+            }
             links.save(link);
             resolved = review.approve(employee, request.reasonCode(), actor.userId(), decidedAt);
         } else {

@@ -63,6 +63,13 @@ public class PartnerEligibilityReviewRepositoryAdapter implements PartnerEligibi
     }
 
     @Override
+    public boolean existsPendingByCustomerIdAndEffectiveMonth(UUID customerId, String effectiveMonth) {
+        return repository.existsByCustomerIdAndEffectiveMonthAndStatus(
+                customerId, effectiveMonth, PartnerEligibilityReviewStatus.PENDING
+        );
+    }
+
+    @Override
     public Page findPage(PartnerEligibilityReviewStatus status, int page, int size) {
         org.springframework.data.domain.Page<PartnerEligibilityReviewJpaEntity> selected =
                 repository.findByStatusOrderByCreatedAtAscIdAsc(status, PageRequest.of(page, size));

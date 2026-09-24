@@ -10,14 +10,17 @@ public interface CustomerPartnerEmployeeLinkRepository {
 
     Optional<CustomerPartnerEmployeeLink> findById(UUID customerPartnerEmployeeLinkId);
 
-    Optional<CustomerPartnerEmployeeLink> findCurrentByCustomerIdAndPartnerCompanyId(
-            UUID customerId,
-            UUID partnerCompanyId
-    );
+    Optional<CustomerPartnerEmployeeLink> findByIdForUpdate(UUID customerPartnerEmployeeLinkId);
 
-    List<CustomerPartnerEmployeeLink> findByCustomerId(UUID customerId);
+    Optional<CustomerPartnerEmployeeLink> findCurrentVerifiedByCustomerId(UUID customerId);
+
+    Optional<CustomerPartnerEmployeeLink> findCurrentVerifiedByCustomerIdForUpdate(UUID customerId);
 
     List<CustomerPartnerEmployeeLink> findVerifiedByPartnerCompanyId(UUID partnerCompanyId);
 
+    void acquireCustomerEmploymentLock(UUID customerId);
+
     CustomerPartnerEmployeeLink save(CustomerPartnerEmployeeLink customerPartnerEmployeeLink);
+
+    CustomerPartnerEmployeeLink saveAndFlush(CustomerPartnerEmployeeLink customerPartnerEmployeeLink);
 }

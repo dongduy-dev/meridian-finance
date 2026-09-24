@@ -120,7 +120,7 @@ class StaffAssistedDownstreamV60MigrationTest {
                 .replace(",\n        'PARTNER_ELIGIBILITY_REVIEW'", "")
                 .replace(",\n        'PARTNER_ELIGIBILITY_REVIEW_APPROVED',\n"
                         + "        'PARTNER_ELIGIBILITY_REVIEW_REJECTED'", "");
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V63"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V64"));
         assertTrue(snapshotWithoutV63AuditActions.contains(migration.trim()));
         assertTrue(migration.contains("loan:offer:respond:staff"));
         assertTrue(migration.contains("loan:contract:acknowledge:staff"));

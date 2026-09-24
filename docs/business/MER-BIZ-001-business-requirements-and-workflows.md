@@ -522,7 +522,11 @@ The Salary Advance product page shows:
 - last refresh time;
 - the business reason normal application creation is blocked.
 
-A Customer without a valid employee link completes employee verification before starting a Salary Advance application. A link remains reusable while its status is `VERIFIED` and current Partner evidence remains eligible. Partner may refresh the same link from a newly completed authoritative current-month batch when the stored verified evidence resolves to exactly one active employee and no Partner eligibility review is pending. Otherwise, re-verification against the authoritative current-month batch refreshes the reusable link when the current evidence matches or routes an eligible unresolved relationship to manual review.
+A Customer has at most one current `VERIFIED` employment relationship for Salary Advance. A Customer without a current relationship completes employee verification before starting an application, and a Customer with a current relationship may declare an employment update through the same verification flow. A link remains reusable while its status is `VERIFIED`, no current-month Partner eligibility review is pending, and current Partner evidence remains eligible.
+
+Exact active proof for the same employer and the same verified evidence refreshes the current link. Different evidence for the same employer routes to manual review without overwriting that link. Exact active proof for a different employer disables the old current link as historical Partner evidence and creates a fresh `VERIFIED` link for the new employer. Unresolved proof leaves the prior relationship unchanged but blocks normal readiness while any relevant current-month review remains pending. Approval completes the same-company evidence update or different-employer switch; rejection leaves the prior current relationship unchanged. Historical relationships never participate in current eligibility.
+
+Partner may refresh the current link from a newly completed authoritative current-month batch when the stored verified evidence resolves to exactly one active employee and no Partner eligibility review is pending. Otherwise, re-verification against the authoritative current-month batch refreshes the current relationship when the evidence matches or routes an eligible unresolved relationship to manual review.
 
 Employee-verification outcomes:
 
@@ -540,9 +544,9 @@ Partner creates one unresolved eligibility review for each Customer and Partner 
 
 The unresolved reviews form one shared Back-Office queue. `partner:read` permits queue and detail inspection; `partner:manage` permits a Staff actor to approve or reject. The workflow has no persisted assignment or claim. Customer verification is the maker action and the authorized Back-Office decision is the checker action; Meridian does not require the reviewer to differ from a Partner Employee importer.
 
-Approval requires the reviewer to select one exact Partner Employee and use `CURRENT_EMPLOYEE_CONFIRMED`. Partner revalidates the active Partner Company, current UTC effective month, latest authoritative `COMPLETED` batch, active employment, usable Customer identity evidence, and the selected employee's identity match. Approval atomically creates or refreshes the reusable `VERIFIED` link with `MANUAL_REVIEW_APPROVED`, records the reviewer, reason, selected employee, source batch, and time, and appends PII-safe audit evidence. It does not create a LoanApplication, Salary Advance limit, exposure reservation, or Loan-owned verification snapshot.
+Approval requires the reviewer to select one exact Partner Employee and use `CURRENT_EMPLOYEE_CONFIRMED`. Partner revalidates the active Partner Company, current UTC effective month, latest authoritative `COMPLETED` batch, active employment, usable Customer identity evidence, and the selected employee's identity match. Approval atomically updates the current same-employer relationship or disables the old current relationship and creates a fresh `VERIFIED` relationship for a different employer. It records `MANUAL_REVIEW_APPROVED`, the reviewer, reason, selected employee, source batch, time, and PII-safe audit evidence. It does not create or transfer a Salary Advance limit, exposure reservation, LoanApplication, or Loan-owned verification snapshot.
 
-Rejection uses `NO_ELIGIBLE_CURRENT_EMPLOYEE`, `IDENTITY_EVIDENCE_MISMATCH`, or `INSUFFICIENT_SOURCE_EVIDENCE`. It records `MANUAL_REVIEW_REJECTED`, the reviewer, reason, and time without creating or refreshing a verified link. A prior-month review cannot be approved. A review bound to a batch that is no longer authoritative is stale and requires fresh Customer verification. Competing decisions permit one terminal outcome; exact replay of that outcome returns the recorded result, while a different later decision conflicts.
+Rejection uses `NO_ELIGIBLE_CURRENT_EMPLOYEE`, `IDENTITY_EVIDENCE_MISMATCH`, or `INSUFFICIENT_SOURCE_EVIDENCE`. It records `MANUAL_REVIEW_REJECTED`, the reviewer, reason, and time without changing the prior current relationship. Once no relevant current-month review remains pending, that relationship may support readiness if its evidence remains independently current and eligible. A prior-month review cannot be approved. A review bound to a batch that is no longer authoritative is stale and requires fresh Customer verification. Competing decisions permit one terminal outcome; exact replay of that outcome returns the recorded result, while a different later decision conflicts.
 
 #### Limit Calculation and Exposure
 
@@ -581,6 +585,8 @@ Limit behavior:
 - Existing loans and application history remain after suspension or disablement.
 
 Import-time link refresh changes only Partner-owned relationship evidence. Salary Advance readiness projects the effective current limit from the refreshed Partner evidence, and Loan persists its own limit refresh and movement when a later submission requires it. Partner import does not bulk mutate Salary Advance limits or exposure.
+
+An employment switch does not transfer or mutate Salary Advance limit state. Limits, movements, reservations, and used exposure remain attached to their original relationship and Loan history. The new relationship receives its own link identity, and normal future submission initializes or refreshes only that link's limit through Loan's existing behavior. Submitted applications, accepted offers, contracts, LoanAccounts, schedules, and servicing evidence keep the employment snapshot captured by their workflow.
 
 Each submitted application records the employee-link, limit identity, limit values, and verification result used at submission.
 
@@ -840,7 +846,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-005 | A Customer may cancel their own Salary Advance or UCL application from `RETURNED_FOR_REVISION`; for a Staff-assisted UCL, authorized Staff may record the Customer's evidenced cancellation request from the same state. The active correction ends, Salary Advance releases its reservation atomically, and UCL creates no product-exposure effect. |
 | BR-006 | Customer cancellation from another pre-disbursement state or Staff-initiated cancellation requires a separately approved policy defining actor authority, reason, permitted state, and financial effects. Recording a permitted Staff-assisted Customer cancellation under `BR-005` is not Staff-initiated cancellation. |
 | BR-007 | A `DISBURSED` application cannot be cancelled. |
-| BR-008 | Normal Salary Advance creation requires an active verified Customer–Partner Employee link. |
+| BR-008 | Normal Salary Advance creation requires the Customer's single current active `VERIFIED` employment relationship. Historical relationships do not participate, and any current-month pending Partner eligibility review blocks normal readiness until it becomes terminal or is superseded. |
 | BR-009 | Salary Advance requested principal must not exceed active available limit. |
 | BR-010 | An inactive Partner Company cannot be manually overridden for normal Salary Advance eligibility. |
 | BR-011 | An inactive Partner Employee cannot support normal Salary Advance eligibility. |

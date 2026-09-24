@@ -26,11 +26,11 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V63. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion and downstream evidenced actions, Document-owned OCR processing and Staff review, protected Partner Company/import/eligibility-review, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
+The physical schema is the result of Flyway migrations V1 through V64. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion and downstream evidenced actions, Document-owned OCR processing and Staff review, protected Partner Company/import/eligibility-review, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
-The V63 physical schema also contains Partner-owned eligibility reviews with current-month/source evidence, controlled terminal decisions, reviewer evidence, and one-pending-review uniqueness per Customer and Partner Company. Existing Customer–Partner Employee link columns retain verified matching evidence, the selected employee and source batch, and separate verification and refresh times; Partner uses those records for synchronous import-time link refresh without a new table. The schema does not contain a background reconciliation job, Partner-owned Salary Advance limit refresh state, application of reviewed OCR values to Customer or Loan, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
+The Partner physical model contains eligibility reviews with current-month/source evidence, controlled terminal decisions, reviewer evidence, and one-pending-review uniqueness per Customer and Partner Company. Customer–Partner Employee links retain verified matching evidence, the selected employee and source batch, separate verification and refresh times, and historical `DISABLED` relationships. V64 permits at most one `VERIFIED` link per Customer globally. Partner uses the current record for synchronous import-time refresh without a new history table. The schema does not contain a background reconciliation job, Partner-owned Salary Advance limit refresh state, application of reviewed OCR values to Customer or Loan, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
 
 The physical `event_publication` table is Spring Modulith infrastructure. It is omitted from the business ERD because it does not own lending state or redefine the synchronous transaction boundaries documented in `MER-ARCH-006-api-request-flow-and-dependencies.md`.
 
@@ -160,7 +160,7 @@ Partner owns `partner_companies`, `partner_employee_import_batches`, `partner_em
 - More than one batch may exist for the same Partner Company and effective month; deterministic latest-completed selection remains the authority rule.
 - A Partner eligibility review preserves the Customer and Partner Company, effective UTC month, optional source batch, trigger, requested employee code, state, and terminal reviewer evidence. It does not copy Customer identity evidence or salary data.
 - Approved reviews preserve the exact selected Partner Employee and import batch. Rejected reviews preserve no selected employee. Superseded reviews carry no terminal decision evidence.
-- A Customer–Partner Employee link records a reusable verified relationship; it is not a loan application and does not represent lending exposure.
+- A Customer–Partner Employee link records current or historical employment evidence; it is not a loan application and does not represent lending exposure. One Customer may have at most one `VERIFIED` link, while displaced `DISABLED` rows preserve prior evidence.
 - Partner salary, employee code, source identity evidence, employment state, and import-batch evidence remain Partner-owned.
 
 Loan consumes a purpose-limited eligibility snapshot for Salary Advance. Loan owns the resulting application verification and Salary Advance exposure; Partner does not.
@@ -288,7 +288,7 @@ Audit events preserve operation, actor, action, entity, time, and a controlled P
 - A primary Customer bank account must be active and owned by that Customer.
 - Partner Employee rows remain tied to their Partner Company and import batch.
 - A partial unique index permits one `PENDING` Partner eligibility review per Customer and Partner Company. Terminal-state constraints require the controlled outcome, reason, reviewer, time, and selected employee/source batch only for approval.
-- Reusable employment-link uniqueness and state prevent conflicting active relationships for the same authoritative source evidence.
+- A partial unique index on `customer_id` permits at most one `VERIFIED` Customer–Partner Employee link. Historical non-current rows remain valid and do not participate in current Salary Advance eligibility.
 
 ### 8.2 Application and Product Evidence
 
