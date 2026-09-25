@@ -8,7 +8,7 @@ describe('Staff-assisted origination contracts', () => {
     expect(assistedOriginationSchema.parse({
       assistedOriginationCaseId: '11111111-1111-4111-8111-111111111111',
       productCode: 'UNSECURED_CONSUMER_LOAN', customerId: null, status: 'OPEN',
-      createdByStaffUserId: '22222222-2222-4222-8222-222222222222',
+      createdByStaffUserId: '00000000-0000-0000-0000-000000000304',
       createdAt: '2026-09-17T08:00:00', updatedAt: '2026-09-17T08:00:00', terminalAt: null,
     }).status).toBe('OPEN')
     expect(intakeEvidenceSchema.parse({
@@ -16,6 +16,14 @@ describe('Staff-assisted origination contracts', () => {
       assistedOriginationCaseId: '11111111-1111-4111-8111-111111111111',
       evidenceType: 'CUSTOMER_IDENTITY', currentVersionId: null, versions: [],
     }).evidenceType).toBe('CUSTOMER_IDENTITY')
+    expect(staffCustomerSchema.parse({
+      customerId: '99999999-9999-9999-9999-999999999999', customerNumber: 'CUS-000000001',
+      status: 'ACTIVE', verificationStatus: 'UNVERIFIED', profileCompletionStatus: 'COMPLETE',
+      primaryActiveBankAccountPresent: false,
+      profile: { fullName: 'Paper Customer', phoneNumber: '0900', residentialAddress: 'Address',
+        employmentStatus: 'EMPLOYED', employerName: null, termsConsentAccepted: true,
+        dataProcessingConsentAccepted: true },
+    }).customerId).toBe('99999999-9999-9999-9999-999999999999')
   })
 
   it('rejects Salary Advance and responses containing raw identity fields', () => {

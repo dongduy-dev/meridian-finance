@@ -1,9 +1,10 @@
 import { z } from 'zod'
+import { meridianUuidSchema } from '@/lib/validation/meridian-uuid'
 
 const code = z.string().trim().min(1)
 
 export const internalUserSchema = z.object({
-  userId: z.string().uuid(),
+  userId: meridianUuidSchema,
   email: z.string().email(),
   displayName: z.string().trim().min(1),
   status: code,

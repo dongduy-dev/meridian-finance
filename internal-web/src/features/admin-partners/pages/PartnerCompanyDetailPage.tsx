@@ -11,9 +11,9 @@ import { hasPermission } from '@/features/auth/model/access-control'
 import { useAuth } from '@/features/auth/model/auth-context'
 import { ApiError, NetworkError } from '@/lib/api'
 import { formatVnd } from '@/lib/format/presentation'
+import { meridianUuidSchema } from '@/lib/validation/meridian-uuid'
 import {
   importPartnerEmployeesInputSchema,
-  partnerUuidSchema,
   updatePartnerCompanyInputSchema,
   type ImportPartnerEmployeesInput,
   type PartnerImportResult,
@@ -36,7 +36,7 @@ const emptyRow = (): ImportPartnerEmployeesInput['rows'][number] => ({
 
 export function PartnerCompanyDetailPage() {
   const { partnerCompanyId = '' } = useParams()
-  const validId = partnerUuidSchema.safeParse(partnerCompanyId).success
+  const validId = meridianUuidSchema.safeParse(partnerCompanyId).success
   const { manager, state } = useAuth()
   const queryClient = useQueryClient()
   const enabled = validId && state.status === 'authenticated'

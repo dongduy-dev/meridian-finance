@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { meridianUuidSchema } from '@/lib/validation/meridian-uuid'
 
 const timestampSchema = z.string().min(1)
 const uuidSchema = z.string().uuid()
@@ -6,10 +7,10 @@ const uuidSchema = z.string().uuid()
 export const assistedOriginationSchema = z.object({
   assistedOriginationCaseId: uuidSchema,
   productCode: z.enum(['UNSECURED_CONSUMER_LOAN', 'COLLATERAL_LOAN']),
-  customerId: uuidSchema.nullable(),
+  customerId: meridianUuidSchema.nullable(),
   status: z.enum(['OPEN', 'COMPLETED', 'ABANDONED']),
   loanApplicationId: uuidSchema.nullable().default(null),
-  createdByStaffUserId: uuidSchema,
+  createdByStaffUserId: meridianUuidSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   terminalAt: timestampSchema.nullable(),
@@ -24,7 +25,7 @@ const customerProfileSchema = z.object({
 }).strict()
 
 export const staffCustomerSchema = z.object({
-  customerId: uuidSchema, customerNumber: z.string(), status: z.string(),
+  customerId: meridianUuidSchema, customerNumber: z.string(), status: z.string(),
   verificationStatus: z.string(), profileCompletionStatus: z.string(),
   primaryActiveBankAccountPresent: z.boolean(), profile: customerProfileSchema.nullable(),
 }).strict()
