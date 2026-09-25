@@ -28,6 +28,8 @@ const employee = {
   identityReference: 'ID-SECRET', salaryAmount: 10_000_000, salaryAdvanceLimit: 4_000_000,
   employmentStatus: 'ACTIVE', active: true,
 }
+const csvHeaders = 'employeeCode,identityReference,salaryAmount,salaryAdvanceLimit,employmentStatus,active'
+const csvRow = 'EMP-NEW,ID-NEW,10000000,4000000,ACTIVE,true'
 const actor = (permissions: string[]): AuthResponse => ({
   tokenType: 'Bearer', accessToken: 'token', expiresAt: '2026-09-16T12:00:00Z',
   userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', email: 'admin@meridian.local',
@@ -72,6 +74,8 @@ describe('Partner administration pages', () => {
     expect(screen.getByText('EMP-001')).toBeVisible()
     expect(screen.getByText('ID-SECRET')).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Save details' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Upload CSV')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Partner Employee CSV')).not.toBeInTheDocument()
     expect(vi.mocked(api.apiRequest).mock.calls.every(([path]) => !String(path).includes('EMP-001') && !String(path).includes('ID-SECRET'))).toBe(true)
     expect(storedBrowserText()).not.toContain('EMP-001')
     expect(storedBrowserText()).not.toContain('ID-SECRET')
@@ -81,6 +85,10 @@ describe('Partner administration pages', () => {
     vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
     renderPath(`/admin/partners/${companyId}`)
     expect(await screen.findByRole('button', { name: 'Save details' })).toBeVisible()
+    expect(screen.getByLabelText('Upload CSV')).toBeChecked()
+    expect(screen.getByLabelText('Partner Employee CSV')).toBeVisible()
+    const user = userEvent.setup()
+    await user.click(screen.getByLabelText('Enter manually'))
     expect(screen.getByRole('button', { name: 'Import employees' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Add employee row' })).toBeVisible()
   })
@@ -176,6 +184,7 @@ describe('Partner administration pages', () => {
     renderPath(`/admin/partners/${companyId}`)
     const user = userEvent.setup()
     await screen.findByRole('heading', { name: 'Acme Ltd' })
+    await user.click(screen.getByLabelText('Enter manually'))
     await user.click(screen.getByRole('button', { name: 'Add employee row' }))
     expect(screen.getByText('Employee row 2')).toBeVisible()
     await user.click(screen.getAllByRole('button', { name: 'Remove row' })[1]!)
@@ -211,6 +220,7 @@ describe('Partner administration pages', () => {
     renderPath(`/admin/partners/${companyId}`)
     const user = userEvent.setup()
     await screen.findByRole('heading', { name: 'Acme Ltd' })
+    await user.click(screen.getByLabelText('Enter manually'))
     await user.type(screen.getByLabelText('Effective month'), '2026-09')
     await user.type(screen.getByLabelText('Employee code'), 'EMP-NEW')
     await user.type(screen.getByLabelText('Identity reference'), 'ID-NEW')
@@ -220,7 +230,70 @@ describe('Partner administration pages', () => {
     expect(screen.queryByRole('button', { name: 'Retry exact import' })).not.toBeInTheDocument()
   })
 
-  it('retains an unknown import only in page memory and explicitly retries the exact request and payload', async () => {
+  it('renders a valid CSV review and sends structured JSON without the raw file', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
+    let submitted: unknown
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if ((options as RequestInit | undefined)?.method === 'POST' && String(path).endsWith('/employee-import-batches')) {
+        submitted = (options as { body: unknown }).body
+        return { importBatchId: '55555555-5555-4555-8555-555555555555', partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'COMPLETED', validRowCount: 1, invalidRowCount: 0, rejections: [] }
+      }
+      if (String(path).endsWith('/employees?activeOnly=false')) return [employee]
+      if (String(path).endsWith('/employee-import-batches')) return []
+      if (String(path) === `/partner-companies/${companyId}`) return company
+      return [company]
+    })
+    renderPath(`/admin/partners/${companyId}`)
+    const user = userEvent.setup()
+    await screen.findByRole('heading', { name: 'Acme Ltd' })
+    await user.type(screen.getByLabelText('Effective month'), '2026-09')
+    await user.upload(screen.getByLabelText('Partner Employee CSV'), new File(
+      [`${csvHeaders}\n${csvRow}\n`],
+      'partner-employees.csv',
+      { type: 'text/csv' },
+    ))
+
+    expect(await screen.findByText('Selected file: partner-employees.csv')).toBeVisible()
+    expect(screen.getByText('Total data rows').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('Client-valid rows').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('Client-problem rows').nextElementSibling).toHaveTextContent('0')
+    expect(screen.getByRole('table', { name: 'Partner Employee CSV preview' })).toHaveTextContent('EMP-NEW')
+    expect(storedBrowserText()).not.toContain('EMP-NEW')
+    expect(storedBrowserText()).not.toContain('ID-NEW')
+
+    await user.click(screen.getByRole('button', { name: 'Import CSV rows' }))
+    await screen.findByText('Employee import completed.')
+    expect(submitted).toEqual({
+      requestId: expect.any(String),
+      effectiveMonth: '2026-09',
+      rows: [{
+        employeeCode: 'EMP-NEW', identityReference: 'ID-NEW', salaryAmount: 10_000_000,
+        salaryAdvanceLimit: 4_000_000, employmentStatus: 'ACTIVE', active: true,
+      }],
+    })
+    expect(submitted).not.toBeInstanceOf(FormData)
+    expect(JSON.stringify(submitted)).not.toContain(csvHeaders)
+  })
+
+  it('shows client CSV shape problems and does not offer submission', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
+    renderPath(`/admin/partners/${companyId}`)
+    const user = userEvent.setup()
+    await screen.findByRole('heading', { name: 'Acme Ltd' })
+    await user.upload(screen.getByLabelText('Partner Employee CSV'), new File(
+      [`${csvHeaders}\nEMP-NEW,ID-SECRET,not-money,4000000,ACTIVE,true`],
+      'invalid-partner-employees.csv',
+      { type: 'text/csv' },
+    ))
+
+    expect(await screen.findByText('Data row 1 — Salary amount must be a nonnegative number.')).toBeVisible()
+    expect(screen.getByText('Client-problem rows').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByRole('table', { name: 'Partner Employee CSV preview' })).toHaveTextContent('Problem')
+    expect(screen.getByRole('button', { name: 'Import CSV rows' })).toBeDisabled()
+    expect(vi.mocked(api.apiRequest).mock.calls.every(([, options]) => (options as RequestInit | undefined)?.method !== 'POST')).toBe(true)
+  })
+
+  it('retains an unknown CSV import only in page memory and explicitly retries the exact request and rows', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
     vi.spyOn(crypto, 'randomUUID').mockReturnValue('44444444-4444-4444-8444-444444444444')
     let attempts = 0
@@ -241,21 +314,55 @@ describe('Partner administration pages', () => {
     const user = userEvent.setup()
     await screen.findByRole('heading', { name: 'Acme Ltd' })
     await user.type(screen.getByLabelText('Effective month'), '2026-09')
-    await user.type(screen.getByLabelText('Employee code'), 'EMP-NEW')
-    await user.type(screen.getByLabelText('Identity reference'), 'ID-NEW')
-    await user.clear(screen.getByLabelText('Salary amount'))
-    await user.type(screen.getByLabelText('Salary amount'), '10000000')
-    await user.clear(screen.getByLabelText('Salary Advance limit'))
-    await user.type(screen.getByLabelText('Salary Advance limit'), '4000000')
-    await user.click(screen.getByRole('button', { name: 'Import employees' }))
+    await user.upload(screen.getByLabelText('Partner Employee CSV'), new File(
+      [`${csvHeaders}\n${csvRow}`],
+      'partner-employees.csv',
+      { type: 'text/csv' },
+    ))
+    await user.click(await screen.findByRole('button', { name: 'Import CSV rows' }))
     expect(await screen.findByRole('heading', { name: 'Import result unknown' })).toBeVisible()
     expect(storedBrowserText()).not.toContain('EMP-NEW')
     expect(storedBrowserText()).not.toContain('ID-NEW')
-    expect(screen.getByRole('button', { name: 'Import employees' })).toBeDisabled()
+    expect(screen.getByLabelText('Effective month')).toBeDisabled()
+    expect(screen.getByLabelText('Partner Employee CSV')).toBeDisabled()
+    expect(screen.getByLabelText('Enter manually')).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'Retry exact import' }))
     expect(await screen.findByText('Employee import completed.')).toBeVisible()
     await waitFor(() => expect(submitted).toHaveLength(2))
     expect(submitted[1]).toEqual(submitted[0])
     expect(submitted[0]).toMatchObject({ requestId: '44444444-4444-4444-8444-444444444444', effectiveMonth: '2026-09' })
+  })
+
+  it('bounds a large CSV preview while submitting every parsed row in order', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
+    let submittedRows: unknown[] = []
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if ((options as RequestInit | undefined)?.method === 'POST' && String(path).endsWith('/employee-import-batches')) {
+        submittedRows = (options as { body: { rows: unknown[] } }).body.rows
+        return { importBatchId: '55555555-5555-4555-8555-555555555555', partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'COMPLETED', validRowCount: 30, invalidRowCount: 0, rejections: [] }
+      }
+      if (String(path).endsWith('/employees?activeOnly=false')) return [employee]
+      if (String(path).endsWith('/employee-import-batches')) return []
+      if (String(path) === `/partner-companies/${companyId}`) return company
+      return [company]
+    })
+    const rows = Array.from({ length: 30 }, (_, index) => `EMP-${String(index + 1).padStart(3, '0')},ID-${index + 1},10000000,4000000,ACTIVE,true`)
+    renderPath(`/admin/partners/${companyId}`)
+    const user = userEvent.setup()
+    await screen.findByRole('heading', { name: 'Acme Ltd' })
+    await user.type(screen.getByLabelText('Effective month'), '2026-09')
+    await user.upload(screen.getByLabelText('Partner Employee CSV'), new File(
+      [[csvHeaders, ...rows].join('\n')],
+      'large-partner-import.csv',
+      { type: 'text/csv' },
+    ))
+
+    expect(await screen.findByText('Showing the first 25 of 30 rows. The full parsed batch will be submitted.')).toBeVisible()
+    expect(screen.getByRole('table', { name: 'Partner Employee CSV preview' }).querySelectorAll('tbody tr')).toHaveLength(25)
+    await user.click(screen.getByRole('button', { name: 'Import CSV rows' }))
+    await screen.findByText('Employee import completed.')
+    expect(submittedRows).toHaveLength(30)
+    expect(submittedRows[0]).toMatchObject({ employeeCode: 'EMP-001' })
+    expect(submittedRows[29]).toMatchObject({ employeeCode: 'EMP-030' })
   })
 })

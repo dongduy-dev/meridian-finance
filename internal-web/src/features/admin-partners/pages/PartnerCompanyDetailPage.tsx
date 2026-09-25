@@ -21,6 +21,7 @@ import {
 } from '../api/contracts'
 import { changePartnerCompanyStatus, importPartnerEmployees, updatePartnerCompany } from '../api/partner-admin-api'
 import { partnerAdminKeys, partnerCompanyQuery, partnerEmployeesQuery, partnerImportBatchesQuery } from '../api/queries'
+import { PartnerEmployeeCsvImport } from '../components/PartnerEmployeeCsvImport'
 import { PartnerQueryErrorPanel } from '../components/PartnerQueryErrorPanel'
 
 const companyStatuses = ['ACTIVE', 'INACTIVE', 'SUSPENDED'] as const
@@ -51,6 +52,8 @@ export function PartnerCompanyDetailPage() {
   const [commandMessage, setCommandMessage] = useState<string>()
   const [importResult, setImportResult] = useState<PartnerImportResult>()
   const [pendingImport, setPendingImport] = useState<PendingImport>()
+  const [importMethod, setImportMethod] = useState<'csv' | 'manual'>('csv')
+  const [csvResetKey, setCsvResetKey] = useState(0)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -83,6 +86,7 @@ export function PartnerCompanyDetailPage() {
     try {
       const result = await importPartnerEmployees(manager, partnerCompanyId, operation.requestId, operation.input)
       setImportResult(result); setPendingImport(undefined)
+      setCsvResetKey((value) => value + 1)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: partnerAdminKeys.employees(partnerCompanyId) }),
         queryClient.invalidateQueries({ queryKey: partnerAdminKeys.importBatches(partnerCompanyId) }),
@@ -94,11 +98,16 @@ export function PartnerCompanyDetailPage() {
     } finally { setBusy(false) }
   }
 
-  const submitImport = importer.handleSubmit(async (raw) => {
-    const parsed = importPartnerEmployeesInputSchema.safeParse(raw)
+  const submitRows = async (rows: ImportPartnerEmployeesInput['rows']) => {
+    const parsed = importPartnerEmployeesInputSchema.safeParse({
+      effectiveMonth: importer.getValues('effectiveMonth'),
+      rows,
+    })
     if (!parsed.success) { setCommandError(new Error('Review the effective month and employee rows.')); return }
     await executeImport({ requestId: crypto.randomUUID(), input: parsed.data })
-  })
+  }
+
+  const submitManualImport = importer.handleSubmit(async (raw) => submitRows(raw.rows))
 
   if (!validId) return <section><h1 data-route-heading tabIndex={-1} className="text-2xl font-semibold">Partner Company unavailable</h1><p className="mt-2 text-muted-foreground">The Partner Company identifier is invalid.</p></section>
   if (company.isPending || employees.isPending || batches.isPending) return <div className="flex items-center gap-2"><Spinner /> Loading Partner workspace…</div>
@@ -120,7 +129,7 @@ export function PartnerCompanyDetailPage() {
 
     <Card><CardHeader><CardTitle>Employee import history</CardTitle></CardHeader><CardContent>{batches.isError ? <PartnerQueryErrorPanel error={batches.error} onRetry={() => void batches.refetch()} /> : batches.data?.length === 0 ? <p className="text-sm text-muted-foreground">No import batches are available.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[36rem] text-left text-sm"><caption className="sr-only">Employee import history</caption><thead><tr className="border-b"><th className="p-2">Effective month</th><th className="p-2">Status</th><th className="p-2">Valid rows</th><th className="p-2">Invalid rows</th></tr></thead><tbody>{batches.data?.map((batch) => <tr className="border-b" key={batch.id}><td className="p-2">{batch.effectiveMonth}</td><td className="p-2">{labelKnown(batch.status, batchStatuses)}</td><td className="p-2">{batch.validRowCount}</td><td className="p-2">{batch.invalidRowCount}</td></tr>)}</tbody></table></div>}</CardContent></Card>
 
-    {canManage ? <Card><CardHeader><CardTitle>Import effective-month employees</CardTitle></CardHeader><CardContent><form className="space-y-5" onSubmit={submitImport}><label className="block max-w-xs space-y-1 text-sm font-medium">Effective month<Input type="month" {...importer.register('effectiveMonth')} /></label>{rowFields.fields.map((field, index) => <fieldset className="grid gap-3 rounded-md border p-4 md:grid-cols-3" key={field.id}><legend className="px-1 text-sm font-semibold">Employee row {index + 1}</legend><label className="space-y-1 text-sm">Employee code<Input {...importer.register(`rows.${index}.employeeCode`)} /></label><label className="space-y-1 text-sm">Identity reference<Input {...importer.register(`rows.${index}.identityReference`)} /></label><label className="space-y-1 text-sm">Employment status<select className="flex h-10 w-full rounded-md border bg-background px-3" {...importer.register(`rows.${index}.employmentStatus`)}>{employeeStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></label><label className="space-y-1 text-sm">Salary amount<Input type="number" min="0" step="0.01" {...importer.register(`rows.${index}.salaryAmount`, { valueAsNumber: true })} /></label><label className="space-y-1 text-sm">Salary Advance limit<Input type="number" min="0" step="0.01" {...importer.register(`rows.${index}.salaryAdvanceLimit`, { valueAsNumber: true })} /></label><label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" {...importer.register(`rows.${index}.active`)} /> Active source row</label><div className="md:col-span-3"><Button type="button" variant="outline" disabled={rowFields.fields.length === 1 || Boolean(pendingImport)} onClick={() => rowFields.remove(index)}>Remove row</Button></div></fieldset>)}<div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={Boolean(pendingImport)} onClick={() => rowFields.append(emptyRow())}>Add employee row</Button><Button type="submit" disabled={busy || Boolean(pendingImport)}>{busy ? 'Importing…' : 'Import employees'}</Button></div></form>
+    {canManage ? <Card><CardHeader><CardTitle>Import effective-month employees</CardTitle></CardHeader><CardContent><form className="space-y-5" onSubmit={importMethod === 'manual' ? submitManualImport : (event) => event.preventDefault()}><fieldset className="space-y-5" disabled={busy || Boolean(pendingImport)}><label className="block max-w-xs space-y-1 text-sm font-medium">Effective month<Input type="month" {...importer.register('effectiveMonth')} /></label><fieldset className="space-y-2"><legend className="text-sm font-semibold">Import method</legend><div className="flex flex-wrap gap-4"><label className="flex items-center gap-2 text-sm"><input checked={importMethod === 'csv'} name="import-method" type="radio" onChange={() => setImportMethod('csv')} /> Upload CSV</label><label className="flex items-center gap-2 text-sm"><input checked={importMethod === 'manual'} name="import-method" type="radio" onChange={() => setImportMethod('manual')} /> Enter manually</label></div></fieldset>{importMethod === 'csv' ? <PartnerEmployeeCsvImport key={csvResetKey} disabled={busy || Boolean(pendingImport)} onImport={submitRows} /> : <div className="space-y-5">{rowFields.fields.map((field, index) => <fieldset className="grid gap-3 rounded-md border p-4 md:grid-cols-3" key={field.id}><legend className="px-1 text-sm font-semibold">Employee row {index + 1}</legend><label className="space-y-1 text-sm">Employee code<Input {...importer.register(`rows.${index}.employeeCode`)} /></label><label className="space-y-1 text-sm">Identity reference<Input {...importer.register(`rows.${index}.identityReference`)} /></label><label className="space-y-1 text-sm">Employment status<select className="flex h-10 w-full rounded-md border bg-background px-3" {...importer.register(`rows.${index}.employmentStatus`)}>{employeeStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></label><label className="space-y-1 text-sm">Salary amount<Input type="number" min="0" step="0.01" {...importer.register(`rows.${index}.salaryAmount`, { valueAsNumber: true })} /></label><label className="space-y-1 text-sm">Salary Advance limit<Input type="number" min="0" step="0.01" {...importer.register(`rows.${index}.salaryAdvanceLimit`, { valueAsNumber: true })} /></label><label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" {...importer.register(`rows.${index}.active`)} /> Active source row</label><div className="md:col-span-3"><Button type="button" variant="outline" disabled={rowFields.fields.length === 1} onClick={() => rowFields.remove(index)}>Remove row</Button></div></fieldset>)}<div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => rowFields.append(emptyRow())}>Add employee row</Button><Button type="submit">{busy ? 'Importing…' : 'Import employees'}</Button></div></div>}</fieldset></form>
       {importResult ? <Alert variant="success" className="mt-5"><AlertTitle>Import {importResult.status.toLowerCase()}</AlertTitle><AlertDescription>{importResult.validRowCount} valid row(s), {importResult.invalidRowCount} invalid row(s).{importResult.rejections.length ? <ul className="mt-2 list-disc pl-5">{importResult.rejections.map((rejection) => <li key={`${rejection.rowIndex}-${rejection.errorCode}`}>Row {rejection.rowIndex}: {rejection.reason}</li>)}</ul> : null}</AlertDescription></Alert> : null}
     </CardContent></Card> : null}
   </section>
