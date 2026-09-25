@@ -19,6 +19,7 @@ import { customerAuthResponse, createAuthApiMock, createTestAuthManager } from '
 import { createTestRouter } from './router'
 
 const linkId = '55555555-5555-4555-8555-555555555551'
+const newEmploymentLinkId = '55555555-5555-4555-8555-555555555552'
 const partnerCompanyId = '66666666-6666-4666-8666-666666666661'
 const otherPartnerCompanyId = '66666666-6666-4666-8666-666666666662'
 
@@ -195,6 +196,80 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     })
   })
 
+  it('lets a ready Customer open the existing verification form to update employment', async () => {
+    const user = userEvent.setup()
+    let readinessReads = 0
+    let verificationPosts = 0
+    renderRoute('/products/salary-advance', async (input, init) => {
+      const url = String(input)
+      if (url.endsWith('/loan-products/salary-advance/readiness')) {
+        readinessReads += 1
+        return response(readyReadiness)
+      }
+      if (url.endsWith(`/partner-companies/${partnerCompanyId}/employee-verifications`)
+        && init?.method === 'POST') {
+        verificationPosts += 1
+      }
+      return defaultFetch(input, init)
+    })
+
+    const updateButton = await screen.findByRole('button', { name: 'Update employment' })
+    expect(screen.getByRole('link', { name: 'Apply for Salary Advance' })).toBeVisible()
+    expect(screen.queryByRole('heading', { name: 'Update your employment' })).not.toBeInTheDocument()
+
+    await user.click(updateButton)
+    expect(await screen.findByRole('heading', { name: 'Update your employment' })).toBeVisible()
+    await user.selectOptions(screen.getByRole('combobox', { name: /Employer/ }), partnerCompanyId)
+    await user.type(screen.getByRole('textbox', { name: /Employee code/ }), 'NEW-EMP-001')
+    await user.click(screen.getByRole('button', { name: 'Verify employment update' }))
+
+    expect((await screen.findAllByText('Employment verified')).length).toBeGreaterThan(0)
+    await waitFor(() => expect(readinessReads).toBeGreaterThanOrEqual(2))
+    expect(verificationPosts).toBe(1)
+  })
+
+  it('blocks Apply when an employment update enters manual review', async () => {
+    const user = userEvent.setup()
+    let readinessReads = 0
+    renderRoute('/products/salary-advance', async (input, init) => {
+      const url = String(input)
+      if (url.endsWith('/loan-products/salary-advance/readiness')) {
+        readinessReads += 1
+        return response(readinessReads === 1 ? readyReadiness : {
+          ...readyReadiness,
+          customerPartnerEmployeeLinkId: null,
+          employeeVerificationStatus: 'NOT_VERIFIED',
+          partnerEligibilityStatus: 'NOT_VERIFIED',
+          limitStatus: 'UNAVAILABLE',
+          applicationAllowed: false,
+          blockerCodes: ['EMPLOYEE_NOT_VERIFIED', 'SALARY_ADVANCE_LIMIT_UNAVAILABLE'],
+        })
+      }
+      if (url.endsWith(`/partner-companies/${partnerCompanyId}/employee-verifications`)
+        && init?.method === 'POST') {
+        return response({
+          customerId: customer.customerId,
+          partnerCompanyId,
+          partnerEmployeeId: null,
+          customerPartnerEmployeeLinkId: linkId,
+          outcome: 'PENDING_MANUAL_REVIEW',
+          linkStatus: 'VERIFIED',
+          manualReviewRequired: true,
+        })
+      }
+      return defaultFetch(input, init)
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Update employment' }))
+    await user.selectOptions(screen.getByRole('combobox', { name: /Employer/ }), partnerCompanyId)
+    await user.type(screen.getByRole('textbox', { name: /Employee code/ }), 'UNRESOLVED-EMP')
+    await user.click(screen.getByRole('button', { name: 'Verify employment update' }))
+
+    expect(await screen.findByText("We're reviewing your employment details")).toBeVisible()
+    await waitFor(() => expect(readinessReads).toBeGreaterThanOrEqual(2))
+    expect(screen.queryByRole('link', { name: 'Apply for Salary Advance' })).not.toBeInTheDocument()
+  })
+
   it('never exposes Apply when applicationAllowed is false even if returned amounts look sufficient', async () => {
     renderRoute('/products/salary-advance', (input, init) => {
       if (String(input).endsWith('/loan-products/salary-advance/readiness')) {
@@ -338,24 +413,33 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     [
       'MANUAL_REVIEW_APPROVED',
       'Your employment was verified. We updated your application availability.',
+      newEmploymentLinkId,
     ],
     [
       'MANUAL_REVIEW_REJECTED',
       'We could not verify eligible employment for Salary Advance.',
+      linkId,
     ],
   ])('updates a pending manual review from a later %s read without another verification POST', async (
     terminalOutcome,
     terminalDescription,
+    expectedCurrentLinkId,
   ) => {
     const user = userEvent.setup()
     let statusReads = 0
+    let readinessReads = 0
     let verificationPosts = 0
+    let terminalObserved = false
     let resolveStatus!: (value: OwnEmployeeVerification[]) => void
     const laterStatus = new Promise<OwnEmployeeVerification[]>((resolve) => { resolveStatus = resolve })
     renderRoute('/products/salary-advance', async (input, init) => {
       const url = String(input)
       if (url.endsWith('/loan-products/salary-advance/readiness')) {
-        return response({
+        readinessReads += 1
+        return response(terminalObserved ? {
+          ...readyReadiness,
+          customerPartnerEmployeeLinkId: expectedCurrentLinkId,
+        } : {
           ...readyReadiness,
           customerPartnerEmployeeLinkId: null,
           employeeVerificationStatus: 'NOT_VERIFIED',
@@ -393,6 +477,8 @@ describe('FE-CP6 Salary Advance product readiness', () => {
 
     expect(await screen.findByText("We're reviewing your employment details")).toBeVisible()
     await waitFor(() => expect(statusReads).toBeGreaterThanOrEqual(1))
+    const readsBeforeTerminal = readinessReads
+    terminalObserved = true
     resolveStatus([{
       partnerCompanyId,
       outcome: terminalOutcome,
@@ -400,6 +486,11 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     }])
 
     expect(await screen.findByText(terminalDescription)).toBeVisible()
+    await waitFor(() => expect(readinessReads).toBeGreaterThan(readsBeforeTerminal))
+    expect(await screen.findByRole('link', { name: 'Apply for Salary Advance' })).toBeVisible()
+    expect(queryClient.getQueryData(salaryAdvanceKeys.readiness())).toMatchObject({
+      customerPartnerEmployeeLinkId: expectedCurrentLinkId,
+    })
     expect(statusReads).toBeGreaterThanOrEqual(1)
     expect(verificationPosts).toBe(1)
   })

@@ -96,7 +96,7 @@ class StaffAssistedUclCancellationV62MigrationTest {
     void migrationAndSnapshotDescribeTheSameV62Boundary() throws IOException {
         String migration = Files.readString(MIGRATION).replace("\r\n", "\n");
         String snapshot = Files.readString(CURRENT_SCHEMA).replace("\r\n", "\n");
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V63"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V64"));
         assertTrue(snapshot.contains(migration.trim()));
     }
 

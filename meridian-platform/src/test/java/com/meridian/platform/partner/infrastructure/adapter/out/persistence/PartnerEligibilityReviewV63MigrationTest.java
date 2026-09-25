@@ -96,7 +96,7 @@ class PartnerEligibilityReviewV63MigrationTest {
         assertTrue(migration.contains("partner_eligibility_reviews"));
         assertTrue(migration.contains("uq_partner_eligibility_reviews_pending_customer_company"));
         assertTrue(migration.contains("PARTNER_ELIGIBILITY_REVIEW_APPROVED"));
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V63"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V64"));
         assertTrue(snapshot.contains("partner_eligibility_reviews"));
         assertTrue(snapshot.contains("PARTNER_ELIGIBILITY_REVIEW_APPROVED"));
     }

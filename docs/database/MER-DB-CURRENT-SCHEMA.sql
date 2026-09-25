@@ -1,7 +1,7 @@
 -- Meridian current physical schema snapshot.
 -- Documentation only. Flyway migrations under meridian-platform/src/main/resources/db/migration
 -- remain the executable database history.
--- Snapshot source: migrations V1 through V63.
+-- Snapshot source: migrations V1 through V64.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -334,7 +334,7 @@ CREATE TABLE customer_partner_employee_links (
 );
 
 CREATE UNIQUE INDEX uq_customer_partner_employee_links_current_verified
-    ON customer_partner_employee_links (customer_id, partner_company_id)
+    ON customer_partner_employee_links (customer_id)
     WHERE link_status = 'VERIFIED';
 
 CREATE INDEX idx_customer_partner_employee_links_customer_company_status
@@ -1254,6 +1254,10 @@ CREATE INDEX idx_partner_eligibility_reviews_queue
 
 CREATE INDEX idx_partner_eligibility_reviews_company_month
     ON partner_eligibility_reviews (partner_company_id, effective_month);
+
+CREATE INDEX idx_partner_eligibility_reviews_pending_customer_month
+    ON partner_eligibility_reviews (customer_id, effective_month)
+    WHERE status = 'PENDING';
 
 ALTER TABLE audit_events
     DROP CONSTRAINT chk_audit_events_entity_type,

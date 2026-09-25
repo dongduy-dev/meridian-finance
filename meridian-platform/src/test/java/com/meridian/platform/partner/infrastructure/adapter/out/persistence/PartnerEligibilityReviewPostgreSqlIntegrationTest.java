@@ -233,6 +233,26 @@ class PartnerEligibilityReviewPostgreSqlIntegrationTest {
                 .allMatch(review -> review.customerId().equals(OTHER_CUSTOMER_ID)));
     }
 
+    @Test
+    void multipleCurrentMonthPendingCompanyReviewsRemainSeparateAndBlockCurrentEligibility() {
+        String month = YearMonth.now(ZoneOffset.UTC).toString();
+        insertCompany(SECOND_COMPANY_ID, "REVIEW-MULTI-SECOND");
+        insertCompany(THIRD_COMPANY_ID, "REVIEW-MULTI-THIRD");
+        insertReview(
+                UUID.fromString("10000000-0000-4000-8000-000000000040"),
+                CUSTOMER_ID, SECOND_COMPANY_ID, month, "PENDING", null,
+                "2026-09-24 10:00:00"
+        );
+        insertReview(
+                UUID.fromString("10000000-0000-4000-8000-000000000041"),
+                CUSTOMER_ID, THIRD_COMPANY_ID, month, "PENDING", null,
+                "2026-09-24 11:00:00"
+        );
+
+        assertTrue(reviews.existsPendingByCustomerIdAndEffectiveMonth(CUSTOMER_ID, month));
+        assertEquals(3, reviews.findCurrentLatestByCustomerIdAndEffectiveMonth(CUSTOMER_ID, month).size());
+    }
+
     private void insertCustomer(UUID customerId, String customerNumber) {
         jdbcTemplate.update("""
                 INSERT INTO customers (

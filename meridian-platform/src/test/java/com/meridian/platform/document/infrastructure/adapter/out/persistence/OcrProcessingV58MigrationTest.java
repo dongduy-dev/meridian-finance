@@ -85,7 +85,7 @@ class OcrProcessingV58MigrationTest {
     void migrationAndSnapshotDescribeTheSameV58Foundation() throws IOException {
         String migration = Files.readString(MIGRATION).replace("\r\n", "\n");
         String snapshot = Files.readString(CURRENT_SCHEMA).replace("\r\n", "\n");
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V63"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V64"));
         assertTrue(snapshot.contains(migration.trim()));
         assertTrue(migration.contains("UNIQUE (intake_document_version_id)"));
         assertTrue(migration.contains("idx_ocr_jobs_expired_lease"));

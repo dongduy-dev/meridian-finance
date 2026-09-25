@@ -140,6 +140,111 @@ class VerifyPartnerEmployeeServiceTest {
     }
 
     @Test
+    void exactActiveMatchAtDifferentEmployerDisablesOldRelationshipAndCreatesFreshCurrentLink() {
+        UUID oldCompanyId = UUID.fromString("11111111-1111-1111-1111-111111111199");
+        CustomerPartnerEmployeeLink oldCurrent = new CustomerPartnerEmployeeLink(
+                UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccc99"),
+                customerId,
+                oldCompanyId,
+                UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb99"),
+                UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa99"),
+                EmployeeVerificationOutcome.MATCHED_ACTIVE,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED,
+                "IDREF-MER-001",
+                "OLD-EMP-001",
+                LocalDateTime.now(CLOCK).minusMonths(1),
+                LocalDateTime.now(CLOCK).minusMonths(1)
+        );
+        linkRepository.currentLink = Optional.of(oldCurrent);
+        partnerEmployeeRepository.employees.add(activeEmployee());
+
+        PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
+                partnerCompanyId,
+                new PartnerEmployeeVerificationRequest("MER-EMP-001")
+        );
+
+        assertEquals("MATCHED_ACTIVE", result.outcome());
+        assertEquals(CustomerPartnerEmployeeLinkStatus.DISABLED, linkRepository.flushedLink.linkStatus());
+        assertEquals(oldCurrent.id(), linkRepository.flushedLink.id());
+        assertEquals(partnerCompanyId, linkRepository.savedLink.partnerCompanyId());
+        assertTrue(linkRepository.savedLink.isVerified());
+        assertFalse(oldCurrent.id().equals(linkRepository.savedLink.id()));
+    }
+
+    @Test
+    void returningToFormerEmployerCreatesFreshEvidenceInsteadOfReactivatingHistory() {
+        UUID formerCompanyId = UUID.fromString("11111111-1111-1111-1111-111111111199");
+        UUID formerLinkId = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccc99");
+        CustomerPartnerEmployeeLink formerCurrent = new CustomerPartnerEmployeeLink(
+                formerLinkId, customerId, formerCompanyId, UUID.randomUUID(), UUID.randomUUID(),
+                EmployeeVerificationOutcome.MATCHED_ACTIVE,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED,
+                "IDREF-MER-001", "FORMER-EMP-001",
+                LocalDateTime.now(CLOCK).minusMonths(1), LocalDateTime.now(CLOCK).minusMonths(1)
+        );
+        linkRepository.currentLink = Optional.of(formerCurrent);
+        partnerEmployeeRepository.employees.add(activeEmployee());
+
+        service.verifyPartnerEmployee(
+                partnerCompanyId, new PartnerEmployeeVerificationRequest("MER-EMP-001")
+        );
+        UUID secondEmployerLinkId = linkRepository.currentLink.orElseThrow().id();
+
+        UUID returnBatchId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa98");
+        UUID returnEmployeeId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb98");
+        partnerCompanyRepository.partnerCompanyId = formerCompanyId;
+        importBatchRepository.latestCompletedBatch = Optional.of(new PartnerEmployeeImportBatch(
+                returnBatchId, formerCompanyId, "2026-06",
+                PartnerEmployeeImportBatchStatus.COMPLETED, 1, 0
+        ));
+        partnerEmployeeRepository.employees.clear();
+        partnerEmployeeRepository.employees.add(new PartnerEmployee(
+                returnEmployeeId, formerCompanyId, returnBatchId, "RETURN-EMP-001", "IDREF-MER-001",
+                BigDecimal.valueOf(18_000_000).setScale(2),
+                BigDecimal.valueOf(6_000_000).setScale(2),
+                PartnerEmployeeStatus.ACTIVE, true
+        ));
+
+        PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
+                formerCompanyId, new PartnerEmployeeVerificationRequest("RETURN-EMP-001")
+        );
+
+        assertEquals("MATCHED_ACTIVE", result.outcome());
+        assertNotNull(result.customerPartnerEmployeeLinkId());
+        assertFalse(formerLinkId.equals(result.customerPartnerEmployeeLinkId()));
+        assertFalse(secondEmployerLinkId.equals(result.customerPartnerEmployeeLinkId()));
+        assertEquals(List.of(formerLinkId, secondEmployerLinkId), linkRepository.flushedLinks.stream()
+                .map(CustomerPartnerEmployeeLink::id).toList());
+        assertTrue(linkRepository.flushedLinks.stream()
+                .allMatch(link -> link.linkStatus() == CustomerPartnerEmployeeLinkStatus.DISABLED));
+    }
+
+    @Test
+    void unresolvedDifferentEmployerKeepsOldCurrentRelationshipAndCreatesReview() {
+        UUID oldCompanyId = UUID.fromString("11111111-1111-1111-1111-111111111199");
+        CustomerPartnerEmployeeLink oldCurrent = new CustomerPartnerEmployeeLink(
+                UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccc99"), customerId,
+                oldCompanyId, UUID.randomUUID(), UUID.randomUUID(),
+                EmployeeVerificationOutcome.MATCHED_ACTIVE,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED,
+                "IDREF-MER-001", "OLD-EMP-001",
+                LocalDateTime.now(CLOCK), LocalDateTime.now(CLOCK)
+        );
+        linkRepository.currentLink = Optional.of(oldCurrent);
+
+        PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
+                partnerCompanyId,
+                new PartnerEmployeeVerificationRequest("UNKNOWN-EMPLOYEE")
+        );
+
+        assertEquals("NOT_FOUND", result.outcome());
+        assertTrue(result.manualReviewRequired());
+        assertEquals(oldCurrent, linkRepository.currentLink.orElseThrow());
+        assertNull(linkRepository.flushedLink);
+        assertNotNull(reviewRepository.review);
+    }
+
+    @Test
     void usesCustomerIdentityEvidenceForEmployeeMatching() {
         customerIdentityEvidencePort.snapshot = Optional.of(identityEvidence(true, true, "IDREF-FROM-CUSTOMER"));
         partnerEmployeeRepository.employees.add(employee(PartnerEmployeeStatus.ACTIVE, true, "IDREF-FROM-CUSTOMER"));
@@ -301,9 +406,21 @@ class VerifyPartnerEmployeeServiceTest {
     }
 
     @Test
-    void doesNotOverwriteSuspendedExistingLink() {
+    void sameEmployerDifferentEvidenceRequiresManualReviewWithoutOverwritingCurrentLink() {
         partnerEmployeeRepository.employees.add(activeEmployee());
-        CustomerPartnerEmployeeLink existingLink = existingLink(CustomerPartnerEmployeeLinkStatus.SUSPENDED);
+        CustomerPartnerEmployeeLink existingLink = new CustomerPartnerEmployeeLink(
+                UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+                customerId,
+                partnerCompanyId,
+                partnerEmployeeId,
+                importBatchId,
+                EmployeeVerificationOutcome.MATCHED_ACTIVE,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED,
+                "IDREF-MER-001",
+                "PREVIOUS-EMPLOYEE-CODE",
+                LocalDateTime.now(CLOCK),
+                LocalDateTime.now(CLOCK)
+        );
         linkRepository.currentLink = Optional.of(existingLink);
 
         PartnerEmployeeVerificationDto result = service.verifyPartnerEmployee(
@@ -312,10 +429,12 @@ class VerifyPartnerEmployeeServiceTest {
         );
 
         assertEquals("PENDING_MANUAL_REVIEW", result.outcome());
-        assertEquals("SUSPENDED", result.linkStatus());
+        assertEquals("VERIFIED", result.linkStatus());
         assertTrue(result.manualReviewRequired());
         assertEquals(existingLink.id(), result.customerPartnerEmployeeLinkId());
         assertNull(linkRepository.savedLink);
+        assertEquals(existingLink, linkRepository.currentLink.orElseThrow());
+        assertNotNull(reviewRepository.review);
     }
 
     private PartnerEmployee activeEmployee() {
@@ -400,7 +519,7 @@ class VerifyPartnerEmployeeServiceTest {
 
     private static class FakePartnerCompanyRepository implements PartnerCompanyRepository {
 
-        private final UUID partnerCompanyId;
+        private UUID partnerCompanyId;
         private PartnerCompanyStatus status = PartnerCompanyStatus.ACTIVE;
 
         private FakePartnerCompanyRepository(UUID partnerCompanyId) {
@@ -507,6 +626,8 @@ class VerifyPartnerEmployeeServiceTest {
 
         private Optional<CustomerPartnerEmployeeLink> currentLink = Optional.empty();
         private CustomerPartnerEmployeeLink savedLink;
+        private CustomerPartnerEmployeeLink flushedLink;
+        private final List<CustomerPartnerEmployeeLink> flushedLinks = new ArrayList<>();
 
         @Override
         public Optional<CustomerPartnerEmployeeLink> findById(UUID customerPartnerEmployeeLinkId) {
@@ -514,32 +635,54 @@ class VerifyPartnerEmployeeServiceTest {
         }
 
         @Override
-        public Optional<CustomerPartnerEmployeeLink> findCurrentByCustomerIdAndPartnerCompanyId(
-                UUID customerId,
-                UUID partnerCompanyId
-        ) {
-            return currentLink.filter(link ->
-                    link.customerId().equals(customerId) && link.partnerCompanyId().equals(partnerCompanyId)
-            );
+        public Optional<CustomerPartnerEmployeeLink> findCurrentVerifiedByCustomerId(UUID customerId) {
+            return currentLink.filter(CustomerPartnerEmployeeLink::isVerified)
+                    .filter(link -> link.customerId().equals(customerId));
         }
 
         @Override
-        public List<CustomerPartnerEmployeeLink> findByCustomerId(UUID customerId) {
-            return currentLink.filter(link -> link.customerId().equals(customerId)).stream().toList();
+        public Optional<CustomerPartnerEmployeeLink> findCurrentVerifiedByCustomerIdForUpdate(UUID customerId) {
+            return findCurrentVerifiedByCustomerId(customerId);
         }
 
         @Override
-        public List<CustomerPartnerEmployeeLink> findVerifiedByPartnerCompanyId(UUID partnerCompanyId) {
+        public List<UUID> findVerifiedLinkIdsByPartnerCompanyId(UUID partnerCompanyId) {
             return currentLink
                     .filter(link -> link.partnerCompanyId().equals(partnerCompanyId))
                     .filter(CustomerPartnerEmployeeLink::isVerified)
                     .stream()
+                    .map(CustomerPartnerEmployeeLink::id)
                     .toList();
+        }
+
+        @Override
+        public Optional<CustomerPartnerEmployeeLink> findVerifiedByIdAndPartnerCompanyIdForUpdate(
+                UUID customerPartnerEmployeeLinkId,
+                UUID partnerCompanyId
+        ) {
+            return currentLink
+                    .filter(link -> link.id().equals(customerPartnerEmployeeLinkId))
+                    .filter(link -> link.partnerCompanyId().equals(partnerCompanyId))
+                    .filter(CustomerPartnerEmployeeLink::isVerified);
+        }
+
+        @Override
+        public void acquireCustomerEmploymentLock(UUID customerId) {
         }
 
         @Override
         public CustomerPartnerEmployeeLink save(CustomerPartnerEmployeeLink customerPartnerEmployeeLink) {
             savedLink = customerPartnerEmployeeLink;
+            currentLink = Optional.of(customerPartnerEmployeeLink);
+            return customerPartnerEmployeeLink;
+        }
+
+        @Override
+        public CustomerPartnerEmployeeLink saveAndFlush(
+                CustomerPartnerEmployeeLink customerPartnerEmployeeLink
+        ) {
+            flushedLink = customerPartnerEmployeeLink;
+            flushedLinks.add(customerPartnerEmployeeLink);
             currentLink = Optional.of(customerPartnerEmployeeLink);
             return customerPartnerEmployeeLink;
         }
@@ -583,6 +726,15 @@ class VerifyPartnerEmployeeServiceTest {
                     .filter(value -> value.effectiveMonth().equals(effectiveMonth))
                     .stream()
                     .toList();
+        }
+
+        @Override
+        public boolean existsPendingByCustomerIdAndEffectiveMonth(UUID customerId, String effectiveMonth) {
+            return Optional.ofNullable(review)
+                    .filter(PartnerEligibilityReview::isPending)
+                    .filter(value -> value.customerId().equals(customerId))
+                    .filter(value -> value.effectiveMonth().equals(effectiveMonth))
+                    .isPresent();
         }
 
         @Override

@@ -162,11 +162,19 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
             return;
         }
 
-        for (CustomerPartnerEmployeeLink link : links.findVerifiedByPartnerCompanyId(
+        for (UUID linkId : links.findVerifiedLinkIdsByPartnerCompanyId(
                 savedBatch.partnerCompanyId()
         )) {
+            CustomerPartnerEmployeeLink lockedLink = links
+                    .findVerifiedByIdAndPartnerCompanyIdForUpdate(
+                            linkId, savedBatch.partnerCompanyId()
+                    )
+                    .orElse(null);
+            if (lockedLink == null) {
+                continue;
+            }
             if (reviews.findPendingByCustomerIdAndPartnerCompanyId(
-                    link.customerId(), savedBatch.partnerCompanyId()
+                    lockedLink.customerId(), savedBatch.partnerCompanyId()
             ).isPresent()) {
                 continue;
             }
@@ -174,15 +182,17 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
             List<PartnerEmployee> matchingEmployees = employees.findByVerificationEvidence(
                     savedBatch.partnerCompanyId(),
                     savedBatch.id(),
-                    link.verifiedIdentityRef(),
-                    link.verifiedEmployeeCode()
+                    lockedLink.verifiedIdentityRef(),
+                    lockedLink.verifiedEmployeeCode()
             );
             if (verificationPolicy.determineOutcome(matchingEmployees)
                     != EmployeeVerificationOutcome.MATCHED_ACTIVE) {
                 continue;
             }
 
-            links.save(link.refreshFromAuthoritativeImport(matchingEmployees.getFirst(), operationTime));
+            links.save(lockedLink.refreshFromAuthoritativeImport(
+                    matchingEmployees.getFirst(), operationTime
+            ));
         }
     }
 

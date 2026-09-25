@@ -123,6 +123,17 @@ public record CustomerPartnerEmployeeLink(
         );
     }
 
+    public CustomerPartnerEmployeeLink disableForEmploymentChange() {
+        if (!isVerified()) {
+            throw new IllegalStateException("Only a verified employment relationship can be displaced.");
+        }
+        return new CustomerPartnerEmployeeLink(
+                id, customerId, partnerCompanyId, partnerEmployeeId, sourceImportBatchId,
+                verificationOutcome, CustomerPartnerEmployeeLinkStatus.DISABLED,
+                verifiedIdentityRef, verifiedEmployeeCode, lastVerifiedAt, lastRefreshedAt
+        );
+    }
+
     public boolean isVerified() {
         return linkStatus == CustomerPartnerEmployeeLinkStatus.VERIFIED;
     }

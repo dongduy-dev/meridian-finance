@@ -40,6 +40,8 @@ public interface PartnerEligibilityReviewRepository {
             String effectiveMonth
     );
 
+    boolean existsPendingByCustomerIdAndEffectiveMonth(UUID customerId, String effectiveMonth);
+
     Page findPage(PartnerEligibilityReviewStatus status, int page, int size);
 
     PartnerEligibilityReview save(PartnerEligibilityReview review);

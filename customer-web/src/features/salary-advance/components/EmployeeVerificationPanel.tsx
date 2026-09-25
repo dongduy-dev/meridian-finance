@@ -73,9 +73,11 @@ function VerificationResult({
 export function EmployeeVerificationPanel({
   onCompleted,
   reverify = false,
+  employmentUpdate = false,
 }: {
   onCompleted?: () => void
   reverify?: boolean
+  employmentUpdate?: boolean
 }) {
   const optionsQuery = usePartnerVerificationOptionsQuery()
   const verification = useVerifyEmployeeMutation()
@@ -135,7 +137,9 @@ export function EmployeeVerificationPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{reverify ? 'Refresh employment verification' : 'Verify your employment'}</CardTitle>
+        <CardTitle>{employmentUpdate
+          ? 'Update your employment'
+          : reverify ? 'Refresh employment verification' : 'Verify your employment'}</CardTitle>
         <CardDescription>
           Select your employer and enter your employee code.
         </CardDescription>
@@ -219,7 +223,9 @@ export function EmployeeVerificationPanel({
             <div className="flex justify-end">
               <Button type="submit" disabled={verification.isPending}>
                 {verification.isPending ? <Spinner /> : null}
-                {verification.isPending ? 'Checking employment…' : reverify ? 'Refresh verification' : 'Verify employment'}
+                {verification.isPending
+                  ? 'Checking employment…'
+                  : employmentUpdate ? 'Verify employment update' : reverify ? 'Refresh verification' : 'Verify employment'}
               </Button>
             </div>
           </form>

@@ -32,36 +32,58 @@ public class CustomerPartnerEmployeeLinkRepositoryAdapter implements CustomerPar
     }
 
     @Override
-    public Optional<CustomerPartnerEmployeeLink> findCurrentByCustomerIdAndPartnerCompanyId(
-            UUID customerId,
+    public Optional<CustomerPartnerEmployeeLink> findCurrentVerifiedByCustomerId(UUID customerId) {
+        return jpaRepository.findByCustomerIdAndLinkStatus(
+                customerId, CustomerPartnerEmployeeLinkStatus.VERIFIED
+        ).map(this::toDomain);
+    }
+
+    @Override
+    public Optional<CustomerPartnerEmployeeLink> findCurrentVerifiedByCustomerIdForUpdate(UUID customerId) {
+        return jpaRepository.findByCustomerIdAndLinkStatusForUpdate(
+                customerId, CustomerPartnerEmployeeLinkStatus.VERIFIED
+        ).map(this::toDomain);
+    }
+
+    @Override
+    public List<UUID> findVerifiedLinkIdsByPartnerCompanyId(UUID partnerCompanyId) {
+        return jpaRepository.findIdsByPartnerCompanyIdAndLinkStatus(
+                partnerCompanyId,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED
+        );
+    }
+
+    @Override
+    public Optional<CustomerPartnerEmployeeLink> findVerifiedByIdAndPartnerCompanyIdForUpdate(
+            UUID customerPartnerEmployeeLinkId,
             UUID partnerCompanyId
     ) {
-        return jpaRepository.findFirstByCustomerIdAndPartnerCompanyIdOrderByUpdatedAtDesc(customerId, partnerCompanyId)
-                .map(this::toDomain);
+        return jpaRepository.findByIdAndPartnerCompanyIdAndLinkStatusForUpdate(
+                customerPartnerEmployeeLinkId,
+                partnerCompanyId,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED
+        ).map(this::toDomain);
     }
 
     @Override
-    public List<CustomerPartnerEmployeeLink> findByCustomerId(UUID customerId) {
-        return jpaRepository.findByCustomerIdAndLinkStatusOrderByLastRefreshedAtDescIdAsc(
-                        customerId,
-                        CustomerPartnerEmployeeLinkStatus.VERIFIED
-                ).stream()
-                .map(this::toDomain)
-                .toList();
-    }
-
-    @Override
-    public List<CustomerPartnerEmployeeLink> findVerifiedByPartnerCompanyId(UUID partnerCompanyId) {
-        return jpaRepository.findByPartnerCompanyIdAndLinkStatusOrderByCustomerIdAscIdAsc(
-                        partnerCompanyId,
-                        CustomerPartnerEmployeeLinkStatus.VERIFIED
-                ).stream()
-                .map(this::toDomain)
-                .toList();
+    public void acquireCustomerEmploymentLock(UUID customerId) {
+        jpaRepository.acquireCustomerEmploymentLock("partner-employment:" + customerId);
     }
 
     @Override
     public CustomerPartnerEmployeeLink save(CustomerPartnerEmployeeLink customerPartnerEmployeeLink) {
+        return save(customerPartnerEmployeeLink, false);
+    }
+
+    @Override
+    public CustomerPartnerEmployeeLink saveAndFlush(CustomerPartnerEmployeeLink customerPartnerEmployeeLink) {
+        return save(customerPartnerEmployeeLink, true);
+    }
+
+    private CustomerPartnerEmployeeLink save(
+            CustomerPartnerEmployeeLink customerPartnerEmployeeLink,
+            boolean flush
+    ) {
         LocalDateTime now = LocalDateTime.now(clock);
         CustomerPartnerEmployeeLinkJpaEntity entity = jpaRepository.findById(customerPartnerEmployeeLink.id())
                 .map(existingEntity -> {
@@ -73,7 +95,7 @@ public class CustomerPartnerEmployeeLinkRepositoryAdapter implements CustomerPar
                         now
                 ));
 
-        return toDomain(jpaRepository.save(entity));
+        return toDomain(flush ? jpaRepository.saveAndFlush(entity) : jpaRepository.save(entity));
     }
 
     private CustomerPartnerEmployeeLink toDomain(CustomerPartnerEmployeeLinkJpaEntity entity) {

@@ -143,10 +143,12 @@ export function SalaryAdvanceReadiness({
   showVerification?: boolean
 }) {
   const [keepVerificationResult, setKeepVerificationResult] = useState(false)
+  const [employmentUpdateOpen, setEmploymentUpdateOpen] = useState(false)
   const needsVerification = readiness.blockerCodes.includes('EMPLOYEE_NOT_VERIFIED')
   const needsReverification = readiness.blockerCodes.includes('SALARY_ADVANCE_ELIGIBILITY_DATA_STALE')
   const applyAvailable = readiness.applicationAllowed && Boolean(readiness.customerPartnerEmployeeLinkId)
   const inconsistentApplyState = readiness.applicationAllowed && !readiness.customerPartnerEmployeeLinkId
+  const hasCurrentEmployment = Boolean(readiness.customerPartnerEmployeeLinkId)
 
   return (
     <div className="space-y-6">
@@ -161,9 +163,20 @@ export function SalaryAdvanceReadiness({
           <AlertDescription>We can't start the application with the current employment information. Refresh the page or contact support if this continues.</AlertDescription>
         </Alert>
       ) : null}
-      {showVerification && (needsVerification || needsReverification || keepVerificationResult) ? (
+      {showVerification && hasCurrentEmployment && !needsVerification && !needsReverification
+        && !employmentUpdateOpen ? (
+        <div className="flex justify-end">
+          <Button variant="secondary" onClick={() => setEmploymentUpdateOpen(true)}>
+            Update employment
+          </Button>
+        </div>
+      ) : null}
+      {showVerification && (
+        needsVerification || needsReverification || keepVerificationResult || employmentUpdateOpen
+      ) ? (
         <EmployeeVerificationPanel
           reverify={needsReverification}
+          employmentUpdate={employmentUpdateOpen}
           onCompleted={() => setKeepVerificationResult(true)}
         />
       ) : null}

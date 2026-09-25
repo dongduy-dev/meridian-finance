@@ -80,7 +80,7 @@ class ImportPartnerEmployeesServiceTest {
         when(batches.findLatestCompletedByPartnerCompanyIdAndEffectiveMonth(companyId, "2026-09"))
                 .thenAnswer(invocation -> Optional.ofNullable(stored.get()));
         when(employees.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(links.findVerifiedByPartnerCompanyId(companyId)).thenReturn(List.of());
+        when(links.findVerifiedLinkIdsByPartnerCompanyId(companyId)).thenReturn(List.of());
         when(links.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(reviews.findPendingByCustomerIdAndPartnerCompanyId(any(), eq(companyId)))
                 .thenReturn(Optional.empty());
@@ -138,7 +138,7 @@ class ImportPartnerEmployeesServiceTest {
     void authoritativeCurrentMonthImportRefreshesSameVerifiedLinkToExactActiveEmployee() {
         CustomerPartnerEmployeeLink existing = existingLink();
         UUID replacementEmployeeId = UUID.fromString("55555555-5555-4555-8555-555555555555");
-        when(links.findVerifiedByPartnerCompanyId(companyId)).thenReturn(List.of(existing));
+        discoverVerifiedLink(existing);
         when(employees.findByVerificationEvidence(
                 eq(companyId), any(UUID.class), eq("ID-1"), eq("EMP-1")
         )).thenAnswer(invocation -> List.of(new PartnerEmployee(
@@ -176,7 +176,7 @@ class ImportPartnerEmployeesServiceTest {
                 requestId, "2026-08", List.of(row("EMP-1", "ID-1", "ACTIVE", true))
         ));
 
-        verify(links, never()).findVerifiedByPartnerCompanyId(any());
+        verify(links, never()).findVerifiedLinkIdsByPartnerCompanyId(any());
         verify(links, never()).save(any());
     }
 
@@ -198,13 +198,13 @@ class ImportPartnerEmployeesServiceTest {
 
         service.importEmployees(companyId, request(List.of(row("EMP-1", "ID-1", "ACTIVE", true))));
 
-        verify(links, never()).findVerifiedByPartnerCompanyId(any());
+        verify(links, never()).findVerifiedLinkIdsByPartnerCompanyId(any());
         verify(links, never()).save(any());
     }
 
     @Test
     void missingCurrentEvidenceLeavesVerifiedLinkUntouched() {
-        when(links.findVerifiedByPartnerCompanyId(companyId)).thenReturn(List.of(existingLink()));
+        discoverVerifiedLink(existingLink());
         when(employees.findByVerificationEvidence(
                 eq(companyId), any(UUID.class), eq("ID-1"), eq("EMP-1")
         )).thenReturn(List.of());
@@ -216,7 +216,7 @@ class ImportPartnerEmployeesServiceTest {
 
     @Test
     void inactiveCurrentEvidenceLeavesVerifiedLinkUntouched() {
-        when(links.findVerifiedByPartnerCompanyId(companyId)).thenReturn(List.of(existingLink()));
+        discoverVerifiedLink(existingLink());
         when(employees.findByVerificationEvidence(
                 eq(companyId), any(UUID.class), eq("ID-1"), eq("EMP-1")
         )).thenAnswer(invocation -> List.of(new PartnerEmployee(
@@ -232,7 +232,7 @@ class ImportPartnerEmployeesServiceTest {
 
     @Test
     void ambiguousCurrentEvidenceLeavesVerifiedLinkUntouched() {
-        when(links.findVerifiedByPartnerCompanyId(companyId)).thenReturn(List.of(existingLink()));
+        discoverVerifiedLink(existingLink());
         when(employees.findByVerificationEvidence(
                 eq(companyId), any(UUID.class), eq("ID-1"), eq("EMP-1")
         )).thenAnswer(invocation -> List.of(
@@ -248,9 +248,22 @@ class ImportPartnerEmployeesServiceTest {
     @Test
     void pendingEligibilityReviewLeavesRelationshipUnderManualAuthority() {
         CustomerPartnerEmployeeLink existing = existingLink();
-        when(links.findVerifiedByPartnerCompanyId(companyId)).thenReturn(List.of(existing));
+        discoverVerifiedLink(existing);
         when(reviews.findPendingByCustomerIdAndPartnerCompanyId(existing.customerId(), companyId))
                 .thenReturn(Optional.of(mock(PartnerEligibilityReview.class)));
+
+        service.importEmployees(companyId, request(List.of(row("EMP-1", "ID-1", "ACTIVE", true))));
+
+        verify(employees, never()).findByVerificationEvidence(any(), any(), any(), any());
+        verify(links, never()).save(any());
+    }
+
+    @Test
+    void lockedRecheckSkipsRelationshipDisplacedAfterCandidateDiscovery() {
+        CustomerPartnerEmployeeLink candidate = existingLink();
+        when(links.findVerifiedLinkIdsByPartnerCompanyId(companyId)).thenReturn(List.of(candidate.id()));
+        when(links.findVerifiedByIdAndPartnerCompanyIdForUpdate(candidate.id(), companyId))
+                .thenReturn(Optional.empty());
 
         service.importEmployees(companyId, request(List.of(row("EMP-1", "ID-1", "ACTIVE", true))));
 
@@ -355,9 +368,15 @@ class ImportPartnerEmployeesServiceTest {
         );
     }
 
+    private void discoverVerifiedLink(CustomerPartnerEmployeeLink link) {
+        when(links.findVerifiedLinkIdsByPartnerCompanyId(companyId)).thenReturn(List.of(link.id()));
+        when(links.findVerifiedByIdAndPartnerCompanyIdForUpdate(link.id(), companyId))
+                .thenReturn(Optional.of(link));
+    }
+
     private void prepareActiveRefresh() {
         CustomerPartnerEmployeeLink existing = existingLink();
-        when(links.findVerifiedByPartnerCompanyId(companyId)).thenReturn(List.of(existing));
+        discoverVerifiedLink(existing);
         when(employees.findByVerificationEvidence(
                 eq(companyId), any(UUID.class), eq("ID-1"), eq("EMP-1")
         )).thenAnswer(invocation -> List.of(new PartnerEmployee(

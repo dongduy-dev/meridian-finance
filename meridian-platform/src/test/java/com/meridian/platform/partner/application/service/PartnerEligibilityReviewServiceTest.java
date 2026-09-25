@@ -9,6 +9,8 @@ import com.meridian.platform.partner.application.port.out.PartnerEligibilityRevi
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportBatchRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeRepository;
 import com.meridian.platform.partner.domain.model.EmployeeVerificationOutcome;
+import com.meridian.platform.partner.domain.model.CustomerPartnerEmployeeLink;
+import com.meridian.platform.partner.domain.model.CustomerPartnerEmployeeLinkStatus;
 import com.meridian.platform.partner.domain.model.PartnerCompany;
 import com.meridian.platform.partner.domain.model.PartnerCompanyStatus;
 import com.meridian.platform.partner.domain.model.PartnerEligibilityReview;
@@ -46,6 +48,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -95,6 +98,7 @@ class PartnerEligibilityReviewServiceTest {
                 .thenReturn(Optional.of(identity()));
         when(reviews.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(links.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(links.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
@@ -138,7 +142,71 @@ class PartnerEligibilityReviewServiceTest {
         assertEquals("REJECTED", result.status());
         assertEquals("MANUAL_REVIEW_REJECTED", result.decisionOutcome());
         verify(links, never()).save(any());
+        verify(links, never()).saveAndFlush(any());
         verify(auditPublisher).publish(any());
+    }
+
+    @Test
+    void approvalForDifferentEmployerDisablesOldCurrentAndCreatesFreshRelationship() {
+        UUID oldCompanyId = UUID.fromString("30000000-0000-4000-8000-000000000099");
+        CustomerPartnerEmployeeLink oldCurrent = new CustomerPartnerEmployeeLink(
+                UUID.fromString("70000000-0000-4000-8000-000000000007"),
+                CUSTOMER_ID, oldCompanyId, UUID.randomUUID(), UUID.randomUUID(),
+                EmployeeVerificationOutcome.MATCHED_ACTIVE,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED,
+                "IDENTITY-SECRET", "OLD-EMP-001",
+                LocalDateTime.now(CLOCK).minusMonths(1), LocalDateTime.now(CLOCK).minusMonths(1)
+        );
+        when(links.findCurrentVerifiedByCustomerIdForUpdate(CUSTOMER_ID))
+                .thenReturn(Optional.of(oldCurrent));
+        when(employees.findById(EMPLOYEE_ID)).thenReturn(Optional.of(employee("IDENTITY-SECRET")));
+
+        service.decide(REVIEW_ID, new PartnerEligibilityReviewDecisionRequest(
+                PartnerEligibilityReviewDecision.APPROVE,
+                EMPLOYEE_ID,
+                PartnerEligibilityReviewReason.CURRENT_EMPLOYEE_CONFIRMED
+        ));
+
+        ArgumentCaptor<CustomerPartnerEmployeeLink> disabled =
+                ArgumentCaptor.forClass(CustomerPartnerEmployeeLink.class);
+        ArgumentCaptor<CustomerPartnerEmployeeLink> created =
+                ArgumentCaptor.forClass(CustomerPartnerEmployeeLink.class);
+        verify(links).saveAndFlush(disabled.capture());
+        verify(links).save(created.capture());
+        assertEquals(CustomerPartnerEmployeeLinkStatus.DISABLED, disabled.getValue().linkStatus());
+        assertEquals(oldCurrent.id(), disabled.getValue().id());
+        assertEquals(CustomerPartnerEmployeeLinkStatus.VERIFIED, created.getValue().linkStatus());
+        assertEquals(COMPANY_ID, created.getValue().partnerCompanyId());
+        assertNotEquals(oldCurrent.id(), created.getValue().id());
+    }
+
+    @Test
+    void approvalForSameEmployerUpdatesCurrentRelationshipWithoutCreatingFreshHistory() {
+        CustomerPartnerEmployeeLink current = new CustomerPartnerEmployeeLink(
+                UUID.fromString("70000000-0000-4000-8000-000000000007"),
+                CUSTOMER_ID, COMPANY_ID, UUID.randomUUID(), UUID.randomUUID(),
+                EmployeeVerificationOutcome.MATCHED_ACTIVE,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED,
+                "IDENTITY-SECRET", "OLD-EMP-001",
+                LocalDateTime.now(CLOCK).minusMonths(1), LocalDateTime.now(CLOCK).minusMonths(1)
+        );
+        when(links.findCurrentVerifiedByCustomerIdForUpdate(CUSTOMER_ID))
+                .thenReturn(Optional.of(current));
+        when(employees.findById(EMPLOYEE_ID)).thenReturn(Optional.of(employee("IDENTITY-SECRET")));
+
+        service.decide(REVIEW_ID, new PartnerEligibilityReviewDecisionRequest(
+                PartnerEligibilityReviewDecision.APPROVE,
+                EMPLOYEE_ID,
+                PartnerEligibilityReviewReason.CURRENT_EMPLOYEE_CONFIRMED
+        ));
+
+        ArgumentCaptor<CustomerPartnerEmployeeLink> saved =
+                ArgumentCaptor.forClass(CustomerPartnerEmployeeLink.class);
+        verify(links).save(saved.capture());
+        verify(links, never()).saveAndFlush(any());
+        assertEquals(current.id(), saved.getValue().id());
+        assertEquals(EmployeeVerificationOutcome.MANUAL_REVIEW_APPROVED,
+                saved.getValue().verificationOutcome());
     }
 
     @Test

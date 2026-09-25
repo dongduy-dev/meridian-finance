@@ -130,7 +130,7 @@ class StaffAssistedOriginationV56MigrationTest {
         assertTrue(migration.contains("CREATE TABLE intake_documents"));
         assertTrue(migration.contains("CREATE TABLE intake_document_versions"));
         assertTrue(migration.contains("trg_intake_document_versions_immutable"));
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V63"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V64"));
         assertTrue(snapshot.contains("'ASSISTED_ORIGINATION_CASE'"));
         assertTrue(snapshot.contains("'INTAKE_DOCUMENT_VERSION_UPLOADED'"));
     }
