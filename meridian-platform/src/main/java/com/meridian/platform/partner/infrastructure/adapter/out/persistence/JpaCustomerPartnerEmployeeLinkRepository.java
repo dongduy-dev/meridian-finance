@@ -29,15 +29,28 @@ public interface JpaCustomerPartnerEmployeeLinkRepository
             @Param("linkStatus") CustomerPartnerEmployeeLinkStatus linkStatus
     );
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select link from CustomerPartnerEmployeeLinkJpaEntity link where link.id = :linkId")
-    Optional<CustomerPartnerEmployeeLinkJpaEntity> findByIdForUpdate(@Param("linkId") UUID linkId);
+    @Query("""
+            select link.id from CustomerPartnerEmployeeLinkJpaEntity link
+            where link.partnerCompanyId = :partnerCompanyId and link.linkStatus = :linkStatus
+            order by link.customerId asc, link.id asc
+            """)
+    List<UUID> findIdsByPartnerCompanyIdAndLinkStatus(
+            @Param("partnerCompanyId") UUID partnerCompanyId,
+            @Param("linkStatus") CustomerPartnerEmployeeLinkStatus linkStatus
+    );
 
-    List<CustomerPartnerEmployeeLinkJpaEntity>
-            findByPartnerCompanyIdAndLinkStatusOrderByCustomerIdAscIdAsc(
-                    UUID partnerCompanyId,
-                    CustomerPartnerEmployeeLinkStatus linkStatus
-            );
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select link from CustomerPartnerEmployeeLinkJpaEntity link
+            where link.id = :linkId
+              and link.partnerCompanyId = :partnerCompanyId
+              and link.linkStatus = :linkStatus
+            """)
+    Optional<CustomerPartnerEmployeeLinkJpaEntity> findByIdAndPartnerCompanyIdAndLinkStatusForUpdate(
+            @Param("linkId") UUID linkId,
+            @Param("partnerCompanyId") UUID partnerCompanyId,
+            @Param("linkStatus") CustomerPartnerEmployeeLinkStatus linkStatus
+    );
 
     @Query(value = "select pg_advisory_xact_lock(hashtextextended(cast(:lockKey as text), 0))", nativeQuery = true)
     void acquireCustomerEmploymentLock(@Param("lockKey") String lockKey);

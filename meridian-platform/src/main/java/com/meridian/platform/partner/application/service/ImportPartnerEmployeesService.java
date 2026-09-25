@@ -162,12 +162,13 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
             return;
         }
 
-        for (CustomerPartnerEmployeeLink link : links.findVerifiedByPartnerCompanyId(
+        for (UUID linkId : links.findVerifiedLinkIdsByPartnerCompanyId(
                 savedBatch.partnerCompanyId()
         )) {
-            CustomerPartnerEmployeeLink lockedLink = links.findByIdForUpdate(link.id())
-                    .filter(CustomerPartnerEmployeeLink::isVerified)
-                    .filter(current -> current.partnerCompanyId().equals(savedBatch.partnerCompanyId()))
+            CustomerPartnerEmployeeLink lockedLink = links
+                    .findVerifiedByIdAndPartnerCompanyIdForUpdate(
+                            linkId, savedBatch.partnerCompanyId()
+                    )
                     .orElse(null);
             if (lockedLink == null) {
                 continue;

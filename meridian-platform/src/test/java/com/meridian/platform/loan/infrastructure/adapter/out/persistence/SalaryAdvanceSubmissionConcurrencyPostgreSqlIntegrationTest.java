@@ -64,13 +64,8 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
             UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb01");
     private static final UUID FIRST_IMPORT_BATCH_ID =
             UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1");
-    private static final UUID SECOND_PARTNER_COMPANY_ID =
-            UUID.fromString("22222222-2222-2222-2222-222222222222");
-    private static final UUID SECOND_PARTNER_EMPLOYEE_ID =
-            UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb04");
-    private static final UUID SECOND_IMPORT_BATCH_ID =
-            UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2");
     private static final BigDecimal REQUESTED_AMOUNT = money(3_000_000);
+    private static final BigDecimal DIFFERENT_REQUESTED_AMOUNT = money(2_000_000);
 
     @Autowired
     private StartSalaryAdvanceApplicationUseCase submissionUseCase;
@@ -106,10 +101,9 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
     @BeforeEach
     void setUp() {
         jdbcTemplate.update(
-                "UPDATE partner_employee_import_batches SET effective_month = ? WHERE id IN (?, ?)",
+                "UPDATE partner_employee_import_batches SET effective_month = ? WHERE id = ?",
                 YearMonth.now(clock).toString(),
-                FIRST_IMPORT_BATCH_ID,
-                SECOND_IMPORT_BATCH_ID
+                FIRST_IMPORT_BATCH_ID
         );
         fixture = createFixture();
         currentUserProvider.use(fixture.userId(), fixture.customerId());
@@ -157,26 +151,31 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
 
     @Test
     void concurrentSameLinkSubmissionsLeaveOneCompleteWinner() throws Exception {
-        List<SubmissionOutcome> outcomes = submitConcurrently(fixture.firstLinkId(), fixture.firstLinkId());
+        List<SubmissionOutcome> outcomes = submitConcurrently(
+                fixture.firstLinkId(), REQUESTED_AMOUNT,
+                fixture.firstLinkId(), REQUESTED_AMOUNT
+        );
 
         assertOneWinnerAndStableConflict(outcomes);
-        assertCompleteWinnerState(fixture.firstLinkId(), null);
+        assertCompleteWinnerState(fixture.firstLinkId(), REQUESTED_AMOUNT);
     }
 
     @Test
-    void concurrentDifferentLinkSubmissionsLeaveNoLoserFinancialResidue() throws Exception {
-        List<SubmissionOutcome> outcomes = submitConcurrently(fixture.firstLinkId(), fixture.secondLinkId());
+    void concurrentDifferentAmountSubmissionsOnCurrentLinkLeaveNoLoserFinancialResidue() throws Exception {
+        List<SubmissionOutcome> outcomes = submitConcurrently(
+                fixture.firstLinkId(), REQUESTED_AMOUNT,
+                fixture.firstLinkId(), DIFFERENT_REQUESTED_AMOUNT
+        );
 
         assertOneWinnerAndStableConflict(outcomes);
-        UUID winnerLinkId = jdbcTemplate.queryForObject(
-                "SELECT customer_partner_employee_link_id FROM salary_advance_verifications WHERE customer_id = ?",
-                UUID.class,
-                fixture.customerId()
-        );
-        UUID loserLinkId = winnerLinkId.equals(fixture.firstLinkId())
-                ? fixture.secondLinkId()
-                : fixture.firstLinkId();
-        assertCompleteWinnerState(winnerLinkId, loserLinkId);
+        BigDecimal winningAmount = outcomes.stream()
+                .filter(SubmissionOutcome::successful)
+                .findFirst()
+                .orElseThrow()
+                .result()
+                .requestedAmount();
+        assertTrue(List.of(REQUESTED_AMOUNT, DIFFERENT_REQUESTED_AMOUNT).contains(winningAmount));
+        assertCompleteWinnerState(fixture.firstLinkId(), winningAmount);
     }
 
     @Test
@@ -262,12 +261,19 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
         }
     }
 
-    private List<SubmissionOutcome> submitConcurrently(UUID firstLinkId, UUID secondLinkId) throws Exception {
+    private List<SubmissionOutcome> submitConcurrently(
+            UUID firstLinkId,
+            BigDecimal firstRequestedAmount,
+            UUID secondLinkId,
+            BigDecimal secondRequestedAmount
+    ) throws Exception {
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
         try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
-            Future<SubmissionOutcome> first = executor.submit(() -> submit(firstLinkId, ready, start));
-            Future<SubmissionOutcome> second = executor.submit(() -> submit(secondLinkId, ready, start));
+            Future<SubmissionOutcome> first = executor.submit(() ->
+                    submit(firstLinkId, firstRequestedAmount, ready, start));
+            Future<SubmissionOutcome> second = executor.submit(() ->
+                    submit(secondLinkId, secondRequestedAmount, ready, start));
 
             assertTrue(ready.await(5, TimeUnit.SECONDS), "Concurrent workers did not reach the start barrier.");
             start.countDown();
@@ -278,14 +284,19 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
         }
     }
 
-    private SubmissionOutcome submit(UUID linkId, CountDownLatch ready, CountDownLatch start) {
+    private SubmissionOutcome submit(
+            UUID linkId,
+            BigDecimal requestedAmount,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
         ready.countDown();
         try {
             if (!start.await(5, TimeUnit.SECONDS)) {
                 return SubmissionOutcome.failure(new AssertionError("Concurrent start barrier timed out."));
             }
             return SubmissionOutcome.success(submissionUseCase.startSalaryAdvanceApplication(
-                    new SalaryAdvanceApplicationRequest(linkId, REQUESTED_AMOUNT, 1)
+                    new SalaryAdvanceApplicationRequest(linkId, requestedAmount, 1)
             ));
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -309,7 +320,7 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
         assertEquals(1, count("SELECT count(*) FROM loan_applications WHERE customer_id = ?", fixture.customerId()));
     }
 
-    private void assertCompleteWinnerState(UUID winnerLinkId, UUID loserLinkId) {
+    private void assertCompleteWinnerState(UUID winnerLinkId, BigDecimal winningAmount) {
         assertEquals(1, count(
                 "SELECT count(*) FROM salary_advance_limit_movements WHERE movement_type = 'RESERVED' "
                         + "AND loan_application_id IN (SELECT id FROM loan_applications WHERE customer_id = ?)",
@@ -356,42 +367,31 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
                 fixture.customerId()
         ));
 
-        BigDecimal totalLimit = winnerLinkId.equals(fixture.firstLinkId())
-                ? money(6_000_000)
-                : money(9_000_000);
+        BigDecimal totalLimit = money(6_000_000);
         assertEquals(totalLimit, amount(
                 "SELECT total_limit FROM salary_advance_limits WHERE customer_id = ? "
                         + "AND customer_partner_employee_link_id = ?",
                 fixture.customerId(),
                 winnerLinkId
         ));
-        assertEquals(REQUESTED_AMOUNT, amount(
+        assertEquals(winningAmount, amount(
                 "SELECT reserved_amount FROM salary_advance_limits WHERE customer_id = ? "
                         + "AND customer_partner_employee_link_id = ?",
                 fixture.customerId(),
                 winnerLinkId
         ));
-        assertEquals(totalLimit.subtract(REQUESTED_AMOUNT), amount(
+        assertEquals(totalLimit.subtract(winningAmount), amount(
                 "SELECT available_amount FROM salary_advance_limits WHERE customer_id = ? "
                         + "AND customer_partner_employee_link_id = ?",
                 fixture.customerId(),
                 winnerLinkId
         ));
-        if (loserLinkId != null) {
-            assertEquals(0, count(
-                    "SELECT count(*) FROM salary_advance_limits WHERE customer_id = ? "
-                            + "AND customer_partner_employee_link_id = ?",
-                    fixture.customerId(),
-                    loserLinkId
-            ));
-        }
     }
 
     private Fixture createFixture() {
         UUID customerId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         UUID firstLinkId = UUID.randomUUID();
-        UUID secondLinkId = UUID.randomUUID();
         String unique = customerId.toString().replace("-", "");
 
         jdbcTemplate.update(
@@ -448,15 +448,7 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
                 FIRST_IMPORT_BATCH_ID,
                 "MER-EMP-001"
         );
-        insertVerifiedLink(
-                secondLinkId,
-                customerId,
-                SECOND_PARTNER_COMPANY_ID,
-                SECOND_PARTNER_EMPLOYEE_ID,
-                SECOND_IMPORT_BATCH_ID,
-                "AUR-EMP-001"
-        );
-        return new Fixture(customerId, userId, firstLinkId, secondLinkId);
+        return new Fixture(customerId, userId, firstLinkId);
     }
 
     private void insertVerifiedLink(
@@ -535,7 +527,7 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
         return BigDecimal.valueOf(value).setScale(2);
     }
 
-    private record Fixture(UUID customerId, UUID userId, UUID firstLinkId, UUID secondLinkId) {
+    private record Fixture(UUID customerId, UUID userId, UUID firstLinkId) {
     }
 
     private record SubmissionOutcome(SalaryAdvanceApplicationDto result, Throwable failure) {

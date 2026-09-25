@@ -104,7 +104,7 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
     @Test
     void authoritativeCurrentMonthImportRefreshesExistingLinkAndRestoresEligibility() {
         UUID companyId = createCompany("ACTIVE");
-        UUID customerId = seededCustomerId();
+        UUID customerId = createCustomer();
         UUID linkId = UUID.randomUUID();
         String employeeCode = "REFRESH-" + linkId.toString().substring(0, 8);
         String identityReference = "IDENTITY-" + linkId;
@@ -150,7 +150,7 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
     @Test
     void authoritativeCurrentMonthImportWithoutSafeMatchLeavesLinkStale() {
         UUID companyId = createCompany("ACTIVE");
-        UUID customerId = seededCustomerId();
+        UUID customerId = createCustomer();
         UUID linkId = UUID.randomUUID();
         String oldEmployeeCode = "STALE-" + linkId.toString().substring(0, 8);
         String identityReference = "IDENTITY-" + linkId;
@@ -186,7 +186,7 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
     @Test
     void auditFailureRollsBackBatchEmployeesAndLinkRefresh() {
         UUID companyId = createCompany("ACTIVE");
-        UUID customerId = seededCustomerId();
+        UUID customerId = createCustomer();
         UUID linkId = UUID.randomUUID();
         String employeeCode = "ROLLBACK-" + linkId.toString().substring(0, 8);
         String identityReference = "IDENTITY-" + linkId;
@@ -256,11 +256,17 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
         );
     }
 
-    private UUID seededCustomerId() {
-        return jdbcTemplate.queryForObject(
-                "SELECT id FROM customers ORDER BY id LIMIT 1",
-                UUID.class
+    private UUID createCustomer() {
+        UUID customerId = UUID.randomUUID();
+        String unique = customerId.toString().replace("-", "");
+        jdbcTemplate.update(
+                "INSERT INTO customers "
+                        + "(id, customer_number, status, verification_status, profile_completion_status) "
+                        + "VALUES (?, ?, 'ACTIVE', 'VERIFIED', 'COMPLETE')",
+                customerId,
+                "CUS-IMPORT-" + unique.substring(0, 12)
         );
+        return customerId;
     }
 
     private void insertVerifiedLink(

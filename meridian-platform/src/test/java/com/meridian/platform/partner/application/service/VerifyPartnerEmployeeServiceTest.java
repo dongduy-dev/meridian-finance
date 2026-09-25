@@ -635,11 +635,6 @@ class VerifyPartnerEmployeeServiceTest {
         }
 
         @Override
-        public Optional<CustomerPartnerEmployeeLink> findByIdForUpdate(UUID customerPartnerEmployeeLinkId) {
-            return findById(customerPartnerEmployeeLinkId);
-        }
-
-        @Override
         public Optional<CustomerPartnerEmployeeLink> findCurrentVerifiedByCustomerId(UUID customerId) {
             return currentLink.filter(CustomerPartnerEmployeeLink::isVerified)
                     .filter(link -> link.customerId().equals(customerId));
@@ -651,12 +646,24 @@ class VerifyPartnerEmployeeServiceTest {
         }
 
         @Override
-        public List<CustomerPartnerEmployeeLink> findVerifiedByPartnerCompanyId(UUID partnerCompanyId) {
+        public List<UUID> findVerifiedLinkIdsByPartnerCompanyId(UUID partnerCompanyId) {
             return currentLink
                     .filter(link -> link.partnerCompanyId().equals(partnerCompanyId))
                     .filter(CustomerPartnerEmployeeLink::isVerified)
                     .stream()
+                    .map(CustomerPartnerEmployeeLink::id)
                     .toList();
+        }
+
+        @Override
+        public Optional<CustomerPartnerEmployeeLink> findVerifiedByIdAndPartnerCompanyIdForUpdate(
+                UUID customerPartnerEmployeeLinkId,
+                UUID partnerCompanyId
+        ) {
+            return currentLink
+                    .filter(link -> link.id().equals(customerPartnerEmployeeLinkId))
+                    .filter(link -> link.partnerCompanyId().equals(partnerCompanyId))
+                    .filter(CustomerPartnerEmployeeLink::isVerified);
         }
 
         @Override

@@ -32,11 +32,6 @@ public class CustomerPartnerEmployeeLinkRepositoryAdapter implements CustomerPar
     }
 
     @Override
-    public Optional<CustomerPartnerEmployeeLink> findByIdForUpdate(UUID customerPartnerEmployeeLinkId) {
-        return jpaRepository.findByIdForUpdate(customerPartnerEmployeeLinkId).map(this::toDomain);
-    }
-
-    @Override
     public Optional<CustomerPartnerEmployeeLink> findCurrentVerifiedByCustomerId(UUID customerId) {
         return jpaRepository.findByCustomerIdAndLinkStatus(
                 customerId, CustomerPartnerEmployeeLinkStatus.VERIFIED
@@ -51,13 +46,23 @@ public class CustomerPartnerEmployeeLinkRepositoryAdapter implements CustomerPar
     }
 
     @Override
-    public List<CustomerPartnerEmployeeLink> findVerifiedByPartnerCompanyId(UUID partnerCompanyId) {
-        return jpaRepository.findByPartnerCompanyIdAndLinkStatusOrderByCustomerIdAscIdAsc(
-                        partnerCompanyId,
-                        CustomerPartnerEmployeeLinkStatus.VERIFIED
-                ).stream()
-                .map(this::toDomain)
-                .toList();
+    public List<UUID> findVerifiedLinkIdsByPartnerCompanyId(UUID partnerCompanyId) {
+        return jpaRepository.findIdsByPartnerCompanyIdAndLinkStatus(
+                partnerCompanyId,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED
+        );
+    }
+
+    @Override
+    public Optional<CustomerPartnerEmployeeLink> findVerifiedByIdAndPartnerCompanyIdForUpdate(
+            UUID customerPartnerEmployeeLinkId,
+            UUID partnerCompanyId
+    ) {
+        return jpaRepository.findByIdAndPartnerCompanyIdAndLinkStatusForUpdate(
+                customerPartnerEmployeeLinkId,
+                partnerCompanyId,
+                CustomerPartnerEmployeeLinkStatus.VERIFIED
+        ).map(this::toDomain);
     }
 
     @Override
