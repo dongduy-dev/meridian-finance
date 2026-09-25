@@ -20,7 +20,7 @@ vi.mock('@/lib/api', async () => {
   return { ...actual, apiRequest: vi.fn() }
 })
 
-const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const userId = '00000000-0000-0000-0000-000000000304'
 const internalUser = {
   userId,
   email: 'loan.officer@meridian.local',
@@ -55,7 +55,7 @@ describe('Internal User administration page', () => {
       String(path).endsWith('/assignable-roles') ? roles : [internalUser])
   })
 
-  it('renders safe user facts, backend roles, and unknown values without presenting Customer as assignable', async () => {
+  it('renders a deterministic-ID user without entering the unavailable state', async () => {
     vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/assignable-roles')
       ? [...roles, { code: 'FUTURE_ROLE', name: 'Future Role' }]
       : [{ ...internalUser, status: 'FUTURE_STATUS', assignedRoleCodes: ['LOAN_OFFICER', 'LEGACY_ROLE'] }])
@@ -68,6 +68,7 @@ describe('Internal User administration page', () => {
     expect(screen.getAllByText(/Unknown status \(FUTURE_STATUS\)/).length).toBeGreaterThan(0)
     expect(screen.getByText('LEGACY_ROLE')).toBeVisible()
     expect(screen.queryByRole('button', { name: /Customer/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Internal Users unavailable' })).not.toBeInTheDocument()
   })
 
   it('renders loading, empty, and protected-query error states with retry', async () => {
