@@ -137,7 +137,7 @@ describe('Staff correction operation recovery', () => {
     )
     await user.click(screen.getByRole('button', { name: 'Upload Staff document' }))
 
-    expect(await screen.findByText(/previous operation result is still unknown/i)).toBeVisible()
+    expect(await screen.findByText(/previous action result is still not confirmed/i)).toBeVisible()
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path, options]) =>
       String(path).endsWith('/versions') && (options as RequestInit | undefined)?.method === 'POST')).toBe(false)
   })

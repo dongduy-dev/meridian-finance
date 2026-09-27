@@ -355,7 +355,8 @@ describe('Staff disbursement workspace', () => {
     expect(dialog.textContent).not.toContain(fullAccountNumber)
     await user.click(screen.getByRole('button', { name: 'Confirm record' }))
 
-    expect(await screen.findByText(/cannot prove this exact request identity/i)).toBeVisible()
+    expect(await screen.findByText(/latest case information does not confirm this exact disbursement/i)).toBeVisible()
+    expect(document.body).not.toHaveTextContent(/\b(?:POST|GET|UUID|SHA-256)\b|payload digest|request identity/i)
     expect(disbursementPostCalls()).toHaveLength(1)
     const persisted = sessionStorage.getItem('meridian.staff.unresolved-operations.v1') ?? ''
     expect(persisted).toContain('DISBURSEMENT_CONFIRMATION')
@@ -368,7 +369,7 @@ describe('Staff disbursement workspace', () => {
 
     await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
     await waitFor(() => expect(disbursementPostCalls()).toHaveLength(2))
-    expect(await screen.findByText(/Recovered the previously recorded disbursement/i)).toBeVisible()
+    expect(await screen.findByText(/previously recorded disbursement was confirmed through the exact retry/i)).toBeVisible()
     expect(disbursementPostCalls()).toHaveLength(2)
     expect(submitted[1]).toEqual(submitted[0])
     expect(submitted[0]).toEqual({
@@ -396,7 +397,7 @@ describe('Staff disbursement workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Review disbursement confirmation' }))
     await user.click(screen.getByRole('button', { name: 'Confirm record' }))
 
-    expect(await screen.findByText(/cannot prove this exact request identity/i)).toBeVisible()
+    expect(await screen.findByText(/latest case information does not confirm this exact disbursement/i)).toBeVisible()
     expect(screen.getByText(/Support reference: server-correlation/i)).toBeVisible()
     expect(disbursementPostCalls()).toHaveLength(1)
   })
@@ -426,14 +427,14 @@ describe('Staff disbursement workspace', () => {
     expect(await screen.findByRole('heading', { name: 'Previous confirmation result unknown' })).toBeVisible()
     await enterEvidence(user, 'DIFFERENT-REFERENCE')
     await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
-    expect(await screen.findByText(/does not match the unresolved operation/i)).toBeVisible()
+    expect(await screen.findByText(/does not match the unresolved disbursement/i)).toBeVisible()
     expect(disbursementPostCalls()).toHaveLength(1)
 
     await user.clear(screen.getByLabelText('External transfer reference'))
     await user.type(screen.getByLabelText('External transfer reference'), secretReference)
     await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
     await waitFor(() => expect(disbursementPostCalls()).toHaveLength(2))
-    expect(await screen.findByText(/Recovered the previously recorded disbursement/i)).toBeVisible()
+    expect(await screen.findByText(/previously recorded disbursement was confirmed through the exact retry/i)).toBeVisible()
     expect(disbursementPostCalls()).toHaveLength(2)
     expect(submitted[1]).toEqual(submitted[0])
     expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
@@ -458,7 +459,7 @@ describe('Staff disbursement workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm record' }))
 
     expect(await screen.findByText(
-      /Disbursement confirmed; refreshed state unavailable/i,
+      /Disbursement confirmed; the latest case information is unavailable/i,
       undefined,
       { timeout: 3_000 },
     )).toBeVisible()
@@ -467,7 +468,7 @@ describe('Staff disbursement workspace', () => {
     readsAvailable = true
     const refresh = screen.getByRole('button', { name: 'Refresh' })
     await user.click(refresh)
-    expect(await screen.findByText(/confirmed disbursement is now reconciled/i)).toBeVisible()
+    expect(await screen.findByText(/disbursement remains confirmed and the latest case information is now loaded/i)).toBeVisible()
     expect(refresh).toHaveFocus()
     expect(disbursementPostCalls()).toHaveLength(1)
   })

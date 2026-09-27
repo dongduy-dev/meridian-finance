@@ -61,7 +61,7 @@ export function StaffOfferResponseWorkspacePage() {
       setMessage('Signed Customer Offer Response evidence uploaded. Review it before recording the decision.')
     } catch (value) {
       setError(value instanceof Error ? value : new NetworkError())
-      setMessage('The upload was not retried automatically. Refresh before selecting another file or request identity.')
+      setMessage('Meridian did not retry the upload automatically. Refresh before selecting another file.')
       await refresh()
     } finally { setUploading(false) }
   }
@@ -82,19 +82,19 @@ export function StaffOfferResponseWorkspacePage() {
       removeUnresolvedOperation(operationType, loanApplicationId)
       setConfirmed(false)
       await refresh()
-      setMessage('The evidenced Customer decision was recorded and authoritative state was refreshed.')
+      setMessage('The evidenced Customer decision was recorded and the latest offer information is loaded.')
     } catch (value) {
       const commandError = value instanceof Error ? value : new NetworkError()
       if (commandError instanceof ApiError && commandError.status < 500) {
         removeUnresolvedOperation(operationType, loanApplicationId)
-        setError(commandError); setMessage('The backend rejected the command. Authoritative state was refreshed.')
+        setError(commandError); setMessage('The action was rejected. Review the reason and the latest offer information before trying again.')
       } else {
         saveUnresolvedOperation({
           type: operationType, resource: loanApplicationId, operationId: identity.operationId,
           payloadDigest: digest, semanticPayload: parsed.data, unresolvedAt: new Date().toISOString(),
         })
         setError(commandError)
-        setMessage('The command result is unknown. No POST was retried automatically; use the exact retry after refresh.')
+        setMessage('The offer-response result is not confirmed. Meridian did not submit it again automatically; refresh and retry the exact same action.')
       }
       await refresh()
     } finally { setCommanding(false) }
@@ -115,6 +115,6 @@ export function StaffOfferResponseWorkspacePage() {
     {message ? <Alert variant={error ? 'warning' : 'success'}>{error ? <AlertTriangle /> : <CheckCircle2 />}<AlertTitle>{error ? 'Attention required' : 'Operation updated'}</AlertTitle><AlertDescription>{message}</AlertDescription></Alert> : null}
     <Card><CardHeader><CardTitle>Exact pending approved offer</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2"><div><p className="text-sm text-muted-foreground">Offer ID</p><p className="break-all font-semibold">{data.approvedOffer.approvedOfferId}</p></div><div><p className="text-sm text-muted-foreground">Status</p><p className="font-semibold">{data.approvedOffer.status}</p></div><div><p className="text-sm text-muted-foreground">Approved principal</p><p className="font-semibold">{formatVnd(data.approvedOffer.approvedPrincipal)}</p></div><div><p className="text-sm text-muted-foreground">Term</p><p className="font-semibold">{data.approvedOffer.approvedTermMonths} months</p></div><div><p className="text-sm text-muted-foreground">Total repayment</p><p className="font-semibold">{formatVnd(data.approvedOffer.totalRepaymentAmount)}</p></div><div><p className="text-sm text-muted-foreground">Expires</p><p className="font-semibold">{formatTimestamp(data.approvedOffer.expiresAt)}</p></div></CardContent></Card>
     <Card><CardHeader><CardTitle>Signed Customer Offer Response Form</CardTitle><p className="text-sm text-muted-foreground">Upload PDF, JPEG, or PNG evidence for this exact offer. Replacement creates another immutable version.</p></CardHeader><CardContent className="space-y-4"><label className="block text-sm font-semibold">Customer decision on form<select className="mt-2 min-h-11 w-full rounded-md border bg-background px-3" value={decision} onChange={(event) => { setDecision(event.target.value as AssistedOfferDecision); setConfirmed(false) }} disabled={!actionAvailable}><option value="ACCEPT">ACCEPT</option><option value="DECLINE">DECLINE</option></select></label><label className="block text-sm font-semibold">Signed form<input className="mt-2 block w-full text-sm" type="file" accept="application/pdf,image/jpeg,image/png" onChange={(event) => setFile(event.target.files?.[0])} /></label><Button variant="outline" disabled={!actionAvailable || !canUpload || !file || uploading} onClick={() => void upload()}>{uploading ? <Spinner /> : null}{data.evidence ? 'Replace signed evidence' : 'Upload signed evidence'}</Button>{data.evidence ? <p className="text-sm">Current immutable version {data.evidence.versionNumber} · {data.evidence.detectedMimeType} · uploaded {formatTimestamp(data.evidence.uploadedAt)} · declares {data.evidence.declaredOfferDecision}</p> : <p className="text-sm text-muted-foreground">No current signed evidence.</p>}</CardContent></Card>
-    <Card><CardHeader><CardTitle>Record evidenced Customer response</CardTitle></CardHeader><CardContent className="space-y-4"><label className="flex items-start gap-3 text-sm"><input className="mt-1" type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>I confirm this signed form records the Customer&apos;s {decision} decision for this exact offer.</span></label><Button disabled={!actionAvailable || !evidenceMatches || !confirmed || commanding || Boolean(unresolved)} onClick={() => void execute({ loanApplicationId, expectedApprovedOfferId: data.approvedOffer.approvedOfferId, action: decision, evidenceDocumentVersionId: data.evidence?.documentVersionId })}>{commanding ? <Spinner /> : null}Record Customer {decision}</Button>{!evidenceMatches ? <p className="text-sm text-warning">Current evidence must target this offer and declare the selected decision.</p> : null}{unresolved ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Offer response result unknown</AlertTitle><AlertDescription><p>No automatic POST retry occurred.</p><Button className="mt-3" variant="outline" disabled={commanding} onClick={() => void execute(unresolved.semanticPayload, unresolved.operationId)}>Retry exact command</Button></AlertDescription></Alert> : null}</CardContent></Card>
+    <Card><CardHeader><CardTitle>Record evidenced Customer response</CardTitle></CardHeader><CardContent className="space-y-4"><label className="flex items-start gap-3 text-sm"><input className="mt-1" type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>I confirm this signed form records the Customer&apos;s {decision} decision for this exact offer.</span></label><Button disabled={!actionAvailable || !evidenceMatches || !confirmed || commanding || Boolean(unresolved)} onClick={() => void execute({ loanApplicationId, expectedApprovedOfferId: data.approvedOffer.approvedOfferId, action: decision, evidenceDocumentVersionId: data.evidence?.documentVersionId })}>{commanding ? <Spinner /> : null}Record Customer {decision}</Button>{!evidenceMatches ? <p className="text-sm text-warning">Current evidence must target this offer and declare the selected decision.</p> : null}{unresolved ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Offer response result unknown</AlertTitle><AlertDescription><p>Meridian could not confirm the previous offer response. Retry this exact same action before recording a different response.</p><Button className="mt-3" variant="outline" disabled={commanding} onClick={() => void execute(unresolved.semanticPayload, unresolved.operationId)}>Retry exact command</Button></AlertDescription></Alert> : null}</CardContent></Card>
   </section>
 }

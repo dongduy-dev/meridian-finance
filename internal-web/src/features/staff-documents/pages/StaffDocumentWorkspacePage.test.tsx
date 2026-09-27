@@ -168,7 +168,7 @@ describe('Staff document workspace review eligibility', () => {
     const file = new File(['same application evidence'], 'income.pdf', { type: 'application/pdf' })
     await user.upload(input, file)
     fireEvent.submit(input.closest('form')!)
-    expect(await screen.findByText(/upload result is unknown/i)).toBeVisible()
+    expect(await screen.findByText(/could not confirm the upload/i)).toBeVisible()
     fireEvent.submit(input.closest('form')!)
     await waitFor(() => expect(uploads).toHaveLength(2))
 
@@ -196,11 +196,11 @@ describe('Staff document workspace review eligibility', () => {
     const input = await screen.findByLabelText('Upload BANK_STATEMENT')
     await user.upload(input, new File(['first'], 'income.pdf', { type: 'application/pdf' }))
     fireEvent.submit(input.closest('form')!)
-    expect(await screen.findByText(/upload result is unknown/i)).toBeVisible()
+    expect(await screen.findByText(/could not confirm the upload/i)).toBeVisible()
     await user.upload(input, new File(['changed'], 'income.pdf', { type: 'application/pdf' }))
     fireEvent.submit(input.closest('form')!)
 
-    expect(await screen.findByText(/differs from the unresolved upload/i)).toBeVisible()
+    expect(await screen.findByText(/selected file or original document version differs from the unresolved upload/i)).toBeVisible()
     expect(uploads).toBe(1)
     const stored = sessionStorage.getItem('meridian.staff.unresolved-operations.v1') ?? ''
     expect(stored).not.toContain('income.pdf')

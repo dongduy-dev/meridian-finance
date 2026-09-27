@@ -111,7 +111,8 @@ describe('Administrative Full-Balance Settlement workspace', () => {
     await enterEvidence(user)
     await user.click(screen.getByRole('button', { name: 'Review full-balance settlement' }))
     await user.click(screen.getByRole('button', { name: 'Confirm settlement' }))
-    expect(await screen.findByText(/Only the request UUID and SHA-256 semantic digest were persisted/i)).toBeVisible()
+    expect(await screen.findByText(/settlement result is not confirmed/i)).toBeVisible()
+    expect(document.body).not.toHaveTextContent(/\b(?:POST|GET|UUID|SHA-256)\b|payload digest|request identity/i)
     expect(settlementPosts()).toHaveLength(1)
     const stored = sessionStorage.getItem('meridian.staff.unresolved-operations.v1') ?? ''
     expect(stored).toContain(requestId)
@@ -167,7 +168,7 @@ describe('Administrative Full-Balance Settlement workspace', () => {
     const reloadUser = userEvent.setup()
     await reloadUser.type(await screen.findByLabelText('External payment reference'), 'DIFFERENT-REFERENCE')
     await reloadUser.click(await screen.findByRole('button', { name: 'Retry exact settlement' }))
-    expect(await screen.findByText(/does not match the unresolved settlement digest/i)).toBeVisible()
+    expect(await screen.findByText(/does not match the unresolved settlement/i)).toBeVisible()
     expect(settlementPosts()).toHaveLength(1)
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) =>
       String(path).endsWith('/settlements/approved'))).toBe(true)
@@ -192,7 +193,7 @@ describe('Administrative Full-Balance Settlement workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Review full-balance settlement' }))
     await user.click(screen.getByRole('button', { name: 'Confirm settlement' }))
     expect(await screen.findByText(
-      /Settlement is confirmed\. Current reads could not be reconciled/i,
+      /Settlement is confirmed, but the latest account information is unavailable/i,
       undefined,
       { timeout: 3_000 },
     ))
@@ -200,7 +201,7 @@ describe('Administrative Full-Balance Settlement workspace', () => {
     expect(screen.getByRole('heading', { name: 'Settlement confirmed' })).toBeVisible()
     readsFail = false
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
-    expect(await screen.findByText(/confirmed settlement is now reconciled/i)).toBeVisible()
+    expect(await screen.findByText(/settlement remains confirmed and the latest account information is now loaded/i)).toBeVisible()
     expect(settlementPosts()).toHaveLength(1)
   })
 
@@ -216,7 +217,7 @@ describe('Administrative Full-Balance Settlement workspace', () => {
     await enterEvidence(user)
     await user.click(screen.getByRole('button', { name: 'Review full-balance settlement' }))
     await user.click(screen.getByRole('button', { name: 'Confirm settlement' }))
-    expect(await screen.findByText(/backend definitely rejected the command/i)).toBeVisible()
+    expect(await screen.findByText(/settlement was rejected/i)).toBeVisible()
     expect(screen.getByLabelText('External payment reference')).toHaveValue(protectedReference)
     expect(settlementPosts()).toHaveLength(1)
     expect(findUnresolvedOperation('ADMINISTRATIVE_FULL_BALANCE_SETTLEMENT', applicationId))

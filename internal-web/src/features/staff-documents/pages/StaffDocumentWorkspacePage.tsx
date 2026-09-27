@@ -50,7 +50,7 @@ function AssistedApplicationUpload({
       ? (unresolved.semanticPayload as { baseline: string | null }).baseline
       : undefined
     if (unresolved && storedBaseline === undefined) {
-      setState({ status: 'RESULT_UNKNOWN', message: 'Recovery metadata is incomplete. Review authoritative evidence before continuing.' })
+      setState({ status: 'RESULT_UNKNOWN', message: 'The saved recovery information is incomplete. Review the latest document evidence before continuing.' })
       return
     }
     const baseline = unresolved ? storedBaseline! : item.currentVersion?.documentVersionId ?? null
@@ -60,7 +60,7 @@ function AssistedApplicationUpload({
     })
     const decision = decideOperationIdentity('ASSISTED_APPLICATION_UPLOAD', resource, digest)
     if (decision.kind === 'CONFLICT_WITH_UNRESOLVED') {
-      setState({ status: 'RESULT_UNKNOWN', error: new UnresolvedOperationConflictError(), message: 'The reselected file or original baseline differs from the unresolved upload. No upload was sent.' })
+      setState({ status: 'RESULT_UNKNOWN', error: new UnresolvedOperationConflictError(), message: 'The selected file or original document version differs from the unresolved upload. Meridian did not submit another upload.' })
       return
     }
     setState({ status: 'IN_FLIGHT' })
@@ -73,7 +73,7 @@ function AssistedApplicationUpload({
           type: 'ASSISTED_APPLICATION_UPLOAD', resource, operationId: decision.operationId,
           payloadDigest: digest, unresolvedAt: new Date().toISOString(), semanticPayload: { baseline },
         })
-        setState({ status: 'RESULT_UNKNOWN', error, message: 'The upload result is unknown. Reselect the exact file to retry with the retained request identity and original version baseline.' })
+        setState({ status: 'RESULT_UNKNOWN', error, message: 'Meridian could not confirm the upload. Reselect the exact same file and retry against the original document version.' })
         return
       }
       removeUnresolvedOperation('ASSISTED_APPLICATION_UPLOAD', resource)
@@ -92,7 +92,7 @@ function AssistedApplicationUpload({
     form.reset()
   }
 
-  return <form className="mt-3 space-y-2" onSubmit={(event) => void submit(event)}><Input aria-label={`Upload ${item.documentType}`} type="file" name="file" required accept="application/pdf,image/jpeg,image/png" /><Button className="w-full" type="submit" disabled={state.status === 'IN_FLIGHT' || state.status === 'RECONCILING'}>{item.currentVersion ? 'Replace initial evidence' : 'Upload initial evidence'}</Button>{unresolved ? <p className="text-xs font-medium text-warning">Reselect the exact file to recover the unresolved upload.</p> : null}{state.status !== 'DRAFT' ? <OperationStatusPanel status={state.status} /> : null}{state.message ? <p role="alert" className="text-xs text-muted-foreground">{state.message}</p> : null}</form>
+  return <form className="mt-3 space-y-2" onSubmit={(event) => void submit(event)}><Input aria-label={`Upload ${item.documentType}`} type="file" name="file" required accept="application/pdf,image/jpeg,image/png" /><Button className="w-full" type="submit" disabled={state.status === 'IN_FLIGHT' || state.status === 'RECONCILING'}>{item.currentVersion ? 'Replace initial evidence' : 'Upload initial evidence'}</Button>{unresolved ? <p className="text-xs font-medium text-warning">Reselect the exact same file to retry the unresolved upload.</p> : null}{state.status !== 'DRAFT' ? <OperationStatusPanel status={state.status} /> : null}{state.message ? <p role="alert" className="text-xs text-muted-foreground">{state.message}</p> : null}</form>
 }
 
 export function StaffDocumentWorkspacePage() {

@@ -174,7 +174,7 @@ describe('IntakeOcrReviewPanel', () => {
     await user.type(fullName, 'Recovered Applicant')
     await user.click(screen.getByRole('button', { name: 'Confirm final OCR review' }))
 
-    expect(await screen.findByText(/confirmed from the authoritative result/i)).toBeVisible()
+    expect(await screen.findByText(/completed OCR review was confirmed after Meridian refreshed the result/i)).toBeVisible()
     expect(posts).toBe(1)
     expect(sessionStorage.getItem('meridian.staff.unresolved-operations.v1') ?? '').not.toContain('Recovered Applicant')
   })

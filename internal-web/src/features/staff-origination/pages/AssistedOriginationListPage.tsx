@@ -40,7 +40,7 @@ export function AssistedOriginationListPage() {
     <div className="flex flex-wrap gap-3 rounded-lg border bg-card p-4">
       <Button disabled={createLocked} onClick={() => void start('UNSECURED_CONSUMER_LOAN')}>Start UCL intake</Button>
       <Button disabled={createLocked} variant="outline" onClick={() => void start('COLLATERAL_LOAN')}>Start Collateral intake</Button>
-      {createStatus !== 'DRAFT' ? <div className="w-full space-y-2"><OperationStatusPanel status={createStatus} />{createStatus === 'RESULT_UNKNOWN' ? <p role="alert" className="text-sm text-muted-foreground">The create result is unresolved. Open intake was refreshed, and no second create command was sent.</p> : null}</div> : null}
+      {createStatus !== 'DRAFT' ? <div className="w-full space-y-2"><OperationStatusPanel status={createStatus} />{createStatus === 'RESULT_UNKNOWN' ? <p role="alert" className="text-sm text-muted-foreground">Meridian could not confirm intake creation. Review the refreshed open-intake list before starting a different intake. Meridian did not submit the action again automatically.</p> : null}</div> : null}
     </div>
     {cases.isPending ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading open intake…</p> : null}
     {cases.isError ? <div className="rounded-lg border border-danger/30 p-4"><p role="alert">Open intake could not be loaded.</p><Button className="mt-3" variant="outline" onClick={() => void cases.refetch()}>Retry</Button></div> : null}

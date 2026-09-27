@@ -138,7 +138,7 @@ describe('Loan Product administration page', () => {
     await user.type(maximum, '12000000')
     await user.click(screen.getByRole('button', { name: 'Save amount limits' }))
     expect(await screen.findByRole('heading', { name: 'Limits were not confirmed' })).toBeVisible()
-    expect(screen.getByText(/Refresh authoritative product state/)).toBeVisible()
+    expect(screen.getByText(/could not confirm the product change.*Refresh the latest product information/i)).toBeVisible()
     expect(vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(1)
     expect(screen.getByText(/10.000.000/)).toBeVisible()
   })

@@ -201,7 +201,7 @@ describe('Staff decision workspace', () => {
     await user.click(await screen.findByRole('button', { name: 'Review decision' }, { timeout: 5_000 }))
     await user.click(screen.getByRole('button', { name: 'Confirm decision' }))
 
-    expect(await screen.findByText(/decision result is unknown/i)).toBeVisible()
+    expect(await screen.findByText(/decision result is not confirmed/i)).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
     const posts = () => vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
       String(path).endsWith('/approval-decisions') && (options as RequestInit | undefined)?.method === 'POST')
@@ -210,7 +210,7 @@ describe('Staff decision workspace', () => {
     readsAvailable = true
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
 
-    expect(await screen.findByText(/durable decision and resulting Loan state are confirmed/i)).toBeVisible()
+    expect(await screen.findByText(/decision and resulting Loan state are confirmed/i)).toBeVisible()
     expect(posts()).toHaveLength(1)
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => String(path).includes('/approved-offer'))).toBe(false)
     expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: staffApplicationKeys.all })
@@ -237,7 +237,7 @@ describe('Staff decision workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Review decision' }))
     await user.click(screen.getByRole('button', { name: 'Confirm decision' }))
 
-    expect(await screen.findByText(/decision result is unknown/i)).toBeVisible()
+    expect(await screen.findByText(/decision result is not confirmed/i)).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
     const posts = () => vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
       String(path).endsWith('/approval-decisions') && (options as RequestInit | undefined)?.method === 'POST')
@@ -246,7 +246,7 @@ describe('Staff decision workspace', () => {
     readsAvailable = true
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
 
-    expect(await screen.findByText(/durable decision and resulting Loan state are confirmed: RETURNED_TO_REVIEW/i)).toBeVisible()
+    expect(await screen.findByText(/decision and resulting Loan state are confirmed: RETURNED_TO_REVIEW/i)).toBeVisible()
     expect(posts()).toHaveLength(1)
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => String(path).includes('/approved-offer'))).toBe(false)
   })

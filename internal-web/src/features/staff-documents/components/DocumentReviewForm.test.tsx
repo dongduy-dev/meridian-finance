@@ -76,7 +76,7 @@ describe('Document review operation recovery', () => {
     await user.type(screen.getByLabelText(/Restricted Staff notes/), 'changed restricted note')
     await user.click(screen.getByRole('button', { name: 'Review final details' }))
 
-    expect(await screen.findByText(/previous operation result is still unknown/i)).toBeVisible()
+    expect(await screen.findByText(/previous action result is still not confirmed/i)).toBeVisible()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(protectedRequest).not.toHaveBeenCalled()
   })

@@ -272,12 +272,12 @@ export function AssistedOriginationWorkspacePage() {
         if (authoritative.customerId === targetCustomerId) {
           await refreshConfirmed(targetCustomerId)
           clearAppliedOcrTarget('create-customer')
-          setAction(key, { status: 'RESOLVED', message: 'The selected Customer was confirmed from the authoritative intake.' })
+          setAction(key, { status: 'RESOLVED', message: 'The selected Customer was confirmed after Meridian refreshed the intake.' })
         } else {
-          setAction(key, { status: 'RESULT_UNKNOWN', message: 'The association result is unresolved. The command was not repeated.' })
+          setAction(key, { status: 'RESULT_UNKNOWN', message: 'Customer selection was not confirmed. Review the current intake before selecting again. Meridian did not submit the action again automatically.' })
         }
       } catch {
-        setAction(key, { status: 'RESULT_UNKNOWN', message: 'The association result is unresolved. The command was not repeated.' })
+        setAction(key, { status: 'RESULT_UNKNOWN', message: 'Meridian could not confirm Customer selection or load the latest intake. Use Refresh before trying again.' })
       }
     }
   }
@@ -308,9 +308,9 @@ export function AssistedOriginationWorkspacePage() {
       try {
         const discovered = await searchCustomer(manager, { identityReference: input.identityReference })
         setSearchResult(discovered)
-        setAction(key, { status: 'RESULT_UNKNOWN', message: 'The create response was lost. A matching Customer was found; review and select that Customer. No create command was repeated.' })
+        setAction(key, { status: 'RESULT_UNKNOWN', message: 'Customer creation was not confirmed. A matching Customer was found; review and select that Customer instead of creating another.' })
       } catch {
-        setAction(key, { status: 'RESULT_UNKNOWN', message: 'The Customer creation result is unresolved. No create command was repeated.' })
+        setAction(key, { status: 'RESULT_UNKNOWN', message: 'Meridian could not confirm Customer creation. Search for the Customer before creating another; Meridian did not submit the action again automatically.' })
       }
       return
     }
@@ -336,11 +336,11 @@ export function AssistedOriginationWorkspacePage() {
           setAction(key, { status: 'RESOLVED' })
           setAction('customer-association', { status: 'RESOLVED' })
         } else {
-          setAction(key, { status: 'RESULT_UNKNOWN', message: 'The Customer was created, but selection is unresolved. The association command was not repeated.' })
+          setAction(key, { status: 'RESULT_UNKNOWN', message: 'The Customer was created, but selection was not confirmed. Review and select the existing Customer; do not create another.' })
           setAction('customer-association', { status: 'RESULT_UNKNOWN' })
         }
       } catch {
-        setAction(key, { status: 'RESULT_UNKNOWN', message: 'The Customer was created, but selection is unresolved. The association command was not repeated.' })
+        setAction(key, { status: 'RESULT_UNKNOWN', message: 'The Customer was created, but selection was not confirmed. Review and select the existing Customer; do not create another.' })
         setAction('customer-association', { status: 'RESULT_UNKNOWN' })
       }
     }
@@ -367,12 +367,12 @@ export function AssistedOriginationWorkspacePage() {
         const authoritative = await readCustomer(customerId)
         if (profileMatches(authoritative, input)) {
           clearAppliedOcrTarget('profile')
-          setAction(key, { status: 'RESOLVED', message: 'The saved profile was confirmed from authoritative safe fields.' })
+          setAction(key, { status: 'RESOLVED', message: 'The saved profile was confirmed after Meridian refreshed the Customer information.' })
         } else {
-          setAction(key, { status: 'RESULT_UNKNOWN', message: 'The profile result cannot be proven from the safe projection. The update was not repeated.' })
+          setAction(key, { status: 'RESULT_UNKNOWN', message: 'The profile update was not confirmed by the latest Customer information. Review the current profile before submitting again.' })
         }
       } catch {
-        setAction(key, { status: 'RESULT_UNKNOWN', message: 'The profile result is unresolved. The update was not repeated.' })
+        setAction(key, { status: 'RESULT_UNKNOWN', message: 'Meridian could not confirm the profile update or load the latest Customer information. Use Refresh before submitting again.' })
       }
     }
   }
@@ -396,7 +396,7 @@ export function AssistedOriginationWorkspacePage() {
       }
       setAction(key, { status: 'RECONCILING' })
       try { await readBanks(customerId) } catch { /* The result remains unresolved. */ }
-      setAction(key, { status: 'RESULT_UNKNOWN', message: 'The safe bank projection cannot prove this add request. The command was not repeated.' })
+      setAction(key, { status: 'RESULT_UNKNOWN', message: 'The latest bank-account list does not confirm this addition. Review the current accounts before adding it again.' })
     }
   }
 
@@ -416,10 +416,10 @@ export function AssistedOriginationWorkspacePage() {
       try {
         const authoritative = await readBanks(customerId)
         setAction(key, bankActionMatches(authoritative, bankId, action)
-          ? { status: 'RESOLVED', message: 'The bank-account state was confirmed from the authoritative projection.' }
-          : { status: 'RESULT_UNKNOWN', message: 'The bank-account result is unresolved. The command was not repeated.' })
+          ? { status: 'RESOLVED', message: 'The bank-account change was confirmed after Meridian refreshed the account list.' }
+          : { status: 'RESULT_UNKNOWN', message: 'The bank-account change was not confirmed. Review the current accounts before submitting it again.' })
       } catch {
-        setAction(key, { status: 'RESULT_UNKNOWN', message: 'The bank-account result is unresolved. The command was not repeated.' })
+        setAction(key, { status: 'RESULT_UNKNOWN', message: 'Meridian could not confirm the bank-account change or load the latest accounts. Use Refresh before trying again.' })
       }
     }
   }
@@ -434,7 +434,7 @@ export function AssistedOriginationWorkspacePage() {
     const unresolved = findUnresolvedOperation('INTAKE_EVIDENCE_UPLOAD', resource)
     const storedBaseline = evidenceBaselineFrom(unresolved)
     if (unresolved && storedBaseline === undefined) {
-      setAction(resource, { status: 'RESULT_UNKNOWN', message: 'Recovery metadata is incomplete. Reconcile the prior upload before continuing.' })
+      setAction(resource, { status: 'RESULT_UNKNOWN', message: 'The saved recovery information is incomplete. Review the latest evidence before continuing.' })
       return
     }
     const baseline = unresolved
@@ -445,7 +445,7 @@ export function AssistedOriginationWorkspacePage() {
     ))
     const decision = decideOperationIdentity('INTAKE_EVIDENCE_UPLOAD', resource, payloadDigest)
     if (decision.kind === 'CONFLICT_WITH_UNRESOLVED') {
-      setAction(resource, { status: 'RESULT_UNKNOWN', error: new UnresolvedOperationConflictError(), message: 'The selected file or original baseline does not match the unresolved upload. No upload was sent.' })
+      setAction(resource, { status: 'RESULT_UNKNOWN', error: new UnresolvedOperationConflictError(), message: 'The selected file or original evidence version does not match the unresolved upload. Meridian did not submit another upload.' })
       return
     }
     const operationId = decision.operationId
@@ -465,8 +465,8 @@ export function AssistedOriginationWorkspacePage() {
         setAction(resource, {
           status: 'RESULT_UNKNOWN', error,
           message: error instanceof ApiError
-            ? 'The request identity conflicts with server evidence. It was retained for reconciliation and was not replaced.'
-            : 'The upload result is unknown. Reselect this exact file to retry with the retained operation identity.',
+            ? 'The saved recovery action conflicts with recorded evidence. Do not start a replacement upload; operator resolution is required.'
+            : 'Meridian could not confirm the upload. Reselect this exact same file and retry the same upload.',
         })
         return
       }
@@ -515,14 +515,14 @@ export function AssistedOriginationWorkspacePage() {
         if (authoritative.status === 'COMPLETED' && authoritative.loanApplicationId) {
           clearAppliedOcrTarget('ucl')
           await refreshConfirmed()
-          setAction(key, { status: 'RESOLVED', message: 'Application creation was confirmed from the authoritative intake.' })
+          setAction(key, { status: 'RESOLVED', message: 'Application creation was confirmed after Meridian refreshed the intake.' })
         } else if (authoritative.status === 'OPEN') {
-          setAction(key, { status: 'RESULT_UNKNOWN', message: 'The conversion result is unresolved. No submission was repeated; review the intake and confirm a new attempt explicitly.' })
+          setAction(key, { status: 'RESULT_UNKNOWN', message: 'Application creation was not confirmed and the intake is still open. Review the intake before submitting again. Meridian did not submit the action again automatically.' })
         } else {
           setAction(key, { status: 'BLOCKED', message: 'The intake became terminal without a resulting Loan Application.' })
         }
       } catch {
-        setAction(key, { status: 'RESULT_UNKNOWN', message: 'The conversion result is unknown. No submission was repeated.' })
+        setAction(key, { status: 'RESULT_UNKNOWN', message: 'Meridian could not confirm application creation or load the latest intake. Use Refresh before submitting again.' })
       }
     }
   }
@@ -561,14 +561,14 @@ export function AssistedOriginationWorkspacePage() {
         if (authoritative.status === 'COMPLETED' && authoritative.loanApplicationId) {
           clearAppliedOcrTarget('collateral')
           await refreshConfirmed()
-          setAction(key, { status: 'RESOLVED', message: 'Application creation was confirmed from the authoritative intake.' })
+          setAction(key, { status: 'RESOLVED', message: 'Application creation was confirmed after Meridian refreshed the intake.' })
         } else if (authoritative.status === 'OPEN') {
-          setAction(key, { status: 'RESULT_UNKNOWN', message: 'The conversion result is unresolved. No submission was repeated; review the intake and confirm a new attempt explicitly.' })
+          setAction(key, { status: 'RESULT_UNKNOWN', message: 'Application creation was not confirmed and the intake is still open. Review the intake before submitting again. Meridian did not submit the action again automatically.' })
         } else {
           setAction(key, { status: 'BLOCKED', message: 'The intake became terminal without a resulting Loan Application.' })
         }
       } catch {
-        setAction(key, { status: 'RESULT_UNKNOWN', message: 'The conversion result is unknown. No submission was repeated.' })
+        setAction(key, { status: 'RESULT_UNKNOWN', message: 'Meridian could not confirm application creation or load the latest intake. Use Refresh before submitting again.' })
       }
     }
   }
@@ -590,13 +590,13 @@ export function AssistedOriginationWorkspacePage() {
       try {
         const authoritative = await readCase()
         if (authoritative.status === 'ABANDONED') {
-          setAction(key, { status: 'RESOLVED', message: 'Abandonment was confirmed from the authoritative intake.' })
+          setAction(key, { status: 'RESOLVED', message: 'Intake abandonment was confirmed after Meridian refreshed the intake.' })
           navigate('/staff/origination')
         } else {
-          setAction(key, { status: 'RESULT_UNKNOWN', message: 'The abandonment result is unresolved. The command was not repeated.' })
+          setAction(key, { status: 'RESULT_UNKNOWN', message: 'Intake abandonment was not confirmed. Review the latest intake before trying again. Meridian did not submit the action again automatically.' })
         }
       } catch {
-        setAction(key, { status: 'RESULT_UNKNOWN', message: 'The abandonment result is unresolved. The command was not repeated.' })
+        setAction(key, { status: 'RESULT_UNKNOWN', message: 'Meridian could not confirm intake abandonment or load the latest intake. Use Refresh before trying again.' })
       }
     }
   }
@@ -616,7 +616,7 @@ export function AssistedOriginationWorkspacePage() {
 
     {customer.data ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Bank accounts</h2>{banks.isPending ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading bank accounts…</p> : null}{banks.isError ? <div><p role="alert">Bank accounts could not be loaded.</p><Button className="mt-2" variant="outline" onClick={() => void banks.refetch()}>Retry bank accounts</Button></div> : null}{banks.data?.length === 0 ? <p className="text-sm text-muted-foreground">No bank accounts have been recorded.</p> : null}{banks.data?.map((bank) => <div key={bank.customerBankAccountId} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"><span>{bank.bankNameSnapshot} · {bank.maskedAccountNumber} · {bank.status}{bank.primaryAccount ? ' · Primary' : ''}</span><div className="flex gap-2">{bank.status === 'ACTIVE' && !bank.primaryAccount ? <Button size="sm" variant="outline" disabled={!open || locked(actions['bank-mutation'])} onClick={() => void mutateBank(bank.customerBankAccountId, 'make-primary')}>Make primary</Button> : null}<Button size="sm" variant="outline" disabled={!open || bank.status !== 'ACTIVE' || locked(actions['bank-mutation'])} onClick={() => void mutateBank(bank.customerBankAccountId, 'deactivate')}>Deactivate</Button></div></div>)}<form ref={bankForm} onSubmit={(event) => void submitBank(event)} className="grid gap-3 sm:grid-cols-2"><Input name="bankCode" required aria-label="Bank code" placeholder="Bank code" /><Input name="bankNameSnapshot" required aria-label="Bank name" placeholder="Bank name" /><Input name="accountHolderName" required aria-label="Account holder" placeholder="Account holder" /><Input name="accountNumber" required aria-label="Account number" placeholder="Account number" autoComplete="off" /><Button disabled={!open || locked(actions['bank-mutation'])}>Add bank account</Button></form><ActionNotice action={actions['bank-mutation']} /></article> : null}
 
-    {canEvidence ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Paper intake evidence</h2>{ocrFreshnessMessage ? <p role="alert" className="text-sm text-warning">{ocrFreshnessMessage}</p> : null}{evidence.isPending ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading evidence metadata…</p> : null}{evidence.isError ? <div><p role="alert">Evidence metadata could not be loaded.</p><Button className="mt-2" variant="outline" onClick={() => void evidence.refetch()}>Retry evidence</Button></div> : null}{evidence.isSuccess ? ['CUSTOMER_IDENTITY', selectedEvidenceType].map((type) => { const item = evidence.data.find((candidate) => candidate.evidenceType === type); const label = type === 'CUSTOMER_IDENTITY' ? 'Customer identity / CCCD' : 'Signed paper application'; const resource = evidenceRecoveryResource(assistedOriginationCaseId, type); const unresolved = findUnresolvedOperation('INTAKE_EVIDENCE_UPLOAD', resource); return <div key={type} className="space-y-3 rounded-md border p-3"><h3 className="font-medium">{label}</h3><p className="text-sm text-muted-foreground">{item ? `${item.versions.length} version(s); current ${item.currentVersionId}` : 'No evidence uploaded'}</p>{unresolved ? <p className="text-sm font-medium text-warning">A prior upload result is unresolved. Reselect the exact file to retry it.</p> : null}<form className="flex flex-col gap-2 sm:flex-row" onSubmit={submitEvidence(type)}><Input aria-label={`${label} file`} type="file" name="file" required accept="application/pdf,image/jpeg,image/png" /><Button type="submit" disabled={!open || busy(actions[resource])}>{item ? 'Replace evidence' : 'Upload evidence'}</Button></form><ActionNotice action={actions[resource]} />{item?.currentVersionId ? <IntakeOcrReviewPanel key={`${type}:${item.currentVersionId}`} manager={manager} caseId={assistedOriginationCaseId} evidenceType={type} versionId={item.currentVersionId} intakeOpen={open} onApplyReviewedValues={applyReviewedOcrValues} /> : null}</div> }) : null}</article> : null}
+    {canEvidence ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Paper intake evidence</h2>{ocrFreshnessMessage ? <p role="alert" className="text-sm text-warning">{ocrFreshnessMessage}</p> : null}{evidence.isPending ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading evidence metadata…</p> : null}{evidence.isError ? <div><p role="alert">Evidence metadata could not be loaded.</p><Button className="mt-2" variant="outline" onClick={() => void evidence.refetch()}>Retry evidence</Button></div> : null}{evidence.isSuccess ? ['CUSTOMER_IDENTITY', selectedEvidenceType].map((type) => { const item = evidence.data.find((candidate) => candidate.evidenceType === type); const label = type === 'CUSTOMER_IDENTITY' ? 'Customer identity / CCCD' : 'Signed paper application'; const resource = evidenceRecoveryResource(assistedOriginationCaseId, type); const unresolved = findUnresolvedOperation('INTAKE_EVIDENCE_UPLOAD', resource); return <div key={type} className="space-y-3 rounded-md border p-3"><h3 className="font-medium">{label}</h3><p className="text-sm text-muted-foreground">{item ? `${item.versions.length} version(s); current ${item.currentVersionId}` : 'No evidence uploaded'}</p>{unresolved ? <p className="text-sm font-medium text-warning">A prior upload result is not confirmed. Reselect the exact same file to retry the same upload.</p> : null}<form className="flex flex-col gap-2 sm:flex-row" onSubmit={submitEvidence(type)}><Input aria-label={`${label} file`} type="file" name="file" required accept="application/pdf,image/jpeg,image/png" /><Button type="submit" disabled={!open || busy(actions[resource])}>{item ? 'Replace evidence' : 'Upload evidence'}</Button></form><ActionNotice action={actions[resource]} />{item?.currentVersionId ? <IntakeOcrReviewPanel key={`${type}:${item.currentVersionId}`} manager={manager} caseId={assistedOriginationCaseId} evidenceType={type} versionId={item.currentVersionId} intakeOpen={open} onApplyReviewedValues={applyReviewedOcrValues} /> : null}</div> }) : null}</article> : null}
 
     {open && intake.data.productCode === 'UNSECURED_CONSUMER_LOAN' ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Create UCL application</h2><p className="text-sm text-muted-foreground">This consequential action creates the real Staff-assisted Loan Application and its required application-document checklist.</p><ul className="text-sm"><li>Selected Customer: {customer.data ? 'ready to evaluate' : 'not available'}</li><li>Profile: {customer.data?.profileCompletionStatus === 'COMPLETE' ? 'complete' : 'incomplete'}</li><li>Primary active bank account: {customer.data?.primaryActiveBankAccountPresent ? 'present' : 'missing'}</li><li>Signed UCL paper application: {evidence.data?.some((item) => item.evidenceType === 'UCL_PAPER_APPLICATION' && item.currentVersionId) ? 'present' : 'missing'}</li></ul><form ref={uclForm} className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submitUcl(event)}><label className="grid gap-1 text-sm font-medium">Requested amount<Input name="requestedAmount" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Requested term months<Input name="requestedTermMonths" type="number" min="1" step="1" required /></label><Button className="sm:col-span-2" disabled={locked(actions['ucl-conversion']) || !customer.data || customer.data.status !== 'ACTIVE' || customer.data.profileCompletionStatus !== 'COMPLETE' || !customer.data.primaryActiveBankAccountPresent || !evidence.data?.some((item) => item.evidenceType === 'UCL_PAPER_APPLICATION' && item.currentVersionId)}>Create UCL application</Button></form><ActionNotice action={actions['ucl-conversion']} /></article> : null}
     {open && intake.data.productCode === 'COLLATERAL_LOAN' ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Create Collateral Loan application</h2><p className="text-sm text-muted-foreground">This consequential action creates the real Staff-assisted Loan Application, one structured Collateral fact, and its ownership-evidence checklist.</p><ul className="text-sm"><li>Selected Customer: {customer.data ? 'ready to evaluate' : 'not available'}</li><li>Profile: {customer.data?.profileCompletionStatus === 'COMPLETE' ? 'complete' : 'incomplete'}</li><li>Primary active bank account: {customer.data?.primaryActiveBankAccountPresent ? 'present' : 'missing'}</li><li>Signed Collateral paper application: {evidence.data?.some((item) => item.evidenceType === 'COLLATERAL_PAPER_APPLICATION' && item.currentVersionId) ? 'present' : 'missing'}</li></ul><form ref={collateralForm} className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submitCollateral(event)}><label className="grid gap-1 text-sm font-medium">Requested amount<Input name="requestedAmount" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Requested term months<Input name="requestedTermMonths" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Collateral type<select name="collateralType" required className="h-11 rounded-md border bg-background px-3"><option value="MOTORBIKE">Motorbike</option><option value="CAR">Car</option><option value="ELECTRONICS">Electronics</option><option value="PROPERTY_DOCUMENT">Property document</option><option value="OTHER">Other</option></select></label><label className="grid gap-1 text-sm font-medium">Estimated value<Input name="estimatedValue" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium sm:col-span-2">Description<Input name="description" maxLength={500} required /></label><label className="grid gap-1 text-sm font-medium">Ownership status<Input name="ownershipStatus" maxLength={200} required /></label><label className="grid gap-1 text-sm font-medium">Condition note<Input name="conditionNote" maxLength={500} required /></label><Button className="sm:col-span-2" disabled={locked(actions['collateral-conversion']) || !customer.data || customer.data.status !== 'ACTIVE' || customer.data.profileCompletionStatus !== 'COMPLETE' || !customer.data.primaryActiveBankAccountPresent || !evidence.data?.some((item) => item.evidenceType === 'COLLATERAL_PAPER_APPLICATION' && item.currentVersionId)}>Create Collateral Loan application</Button></form><ActionNotice action={actions['collateral-conversion']} /></article> : null}

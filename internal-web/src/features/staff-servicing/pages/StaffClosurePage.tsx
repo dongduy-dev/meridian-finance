@@ -75,10 +75,10 @@ export function StaffClosurePage() {
       const refreshed = await accountQuery.refetch({ throwOnError: true })
       if (refreshed.isError) throw new NetworkError()
       setConfirmedRefreshFailed(false)
-      setOperation({ status: 'RESOLVED', detail: confirmed.idempotentReplay ? 'The original closure was recovered through exact same-request replay; current account state was refreshed separately.' : 'Administrative closure was confirmed and current account and work queues were reconciled.' })
+      setOperation({ status: 'RESOLVED', detail: confirmed.idempotentReplay ? 'The original closure was confirmed through the exact retry. The latest account information was loaded separately.' : 'Administrative closure was confirmed and the latest account and work-queue information is loaded.' })
     } catch (error) {
       setConfirmedRefreshFailed(true)
-      setOperation({ status: 'BLOCKED', error: error instanceof Error ? error : new NetworkError(), detail: 'Closure is confirmed. Current account refresh failed; retry GET only.' })
+      setOperation({ status: 'BLOCKED', error: error instanceof Error ? error : new NetworkError(), detail: 'Closure is confirmed, but the latest account information is unavailable. Use Refresh, and do not close the account again.' })
     }
   }
 
@@ -93,7 +93,7 @@ export function StaffClosurePage() {
       if (isUnknownOutcome(commandError)) {
         saveUnresolvedOperation({ type: operationType, resource: loanApplicationId, operationId: requestId, payloadDigest: digest, unresolvedAt: new Date().toISOString() })
         await Promise.allSettled([accountQuery.refetch(), invalidateAffected()])
-        setOperation({ status: 'RESULT_UNKNOWN', error: commandError, detail: retrying ? 'The exact replay result is also unknown; the same closure UUID remains retained.' : 'The result is unknown. The stable request UUID and minimal semantic digest were persisted; no POST was retried.' })
+        setOperation({ status: 'RESULT_UNKNOWN', error: commandError, detail: retrying ? 'The exact retry result is still not confirmed. Retry the same closure action again.' : 'The closure result is not confirmed. Meridian did not submit it again automatically; use the exact retry shown.' })
         return
       }
       if (!(commandError instanceof ApiError)) return
@@ -102,7 +102,7 @@ export function StaffClosurePage() {
       if (['LOAN_ACCOUNT_CLOSURE_NOT_ALLOWED', 'SYSTEM_STATE_CONFLICT'].includes(commandError.errorCode)) {
         await Promise.allSettled([accountQuery.refetch(), invalidateAffected()])
       }
-      setOperation({ status: 'BLOCKED', error: commandError, detail: keepIdentity ? 'The retained closure UUID conflicts with backend evidence. No replacement UUID was generated.' : 'The backend definitely rejected this request. A CLOSED account after another operator acted is not presented as success for this UUID.' })
+      setOperation({ status: 'BLOCKED', error: commandError, detail: keepIdentity ? 'The saved recovery action conflicts with recorded closure evidence. Do not start a replacement action; operator resolution is required.' : 'The closure was rejected. A later CLOSED state does not confirm this attempted action.' })
     }
   }
 
@@ -110,7 +110,7 @@ export function StaffClosurePage() {
     const digest = await digestOperationPayload(semanticPayload(loanApplicationId))
     const identity = decideOperationIdentity(operationType, loanApplicationId, digest)
     if (identity.kind === 'CONFLICT_WITH_UNRESOLVED') {
-      setOperation({ status: 'BLOCKED', detail: 'The unresolved closure identity does not match this resource. No replacement UUID was created.' })
+      setOperation({ status: 'BLOCKED', detail: 'The saved recovery action does not match this account. Do not start a replacement closure.' })
       return
     }
     await postCommand(identity.operationId, digest, identity.kind === 'REUSE_EXISTING')
@@ -120,7 +120,7 @@ export function StaffClosurePage() {
     if (!unresolved || readLocked) return
     const digest = await digestOperationPayload(semanticPayload(loanApplicationId))
     if (digest !== unresolved.payloadDigest) {
-      setOperation({ status: 'BLOCKED', detail: 'The current resource does not match the unresolved closure digest.' })
+      setOperation({ status: 'BLOCKED', detail: 'This account does not match the unresolved closure. Exact retry remains blocked.' })
       return
     }
     await postCommand(unresolved.operationId, digest, true)
@@ -133,7 +133,7 @@ export function StaffClosurePage() {
       if (confirmedRefreshFailed) {
         await invalidateAffected()
         setConfirmedRefreshFailed(false)
-        setOperation({ status: 'RESOLVED', detail: 'The confirmed closure is now reconciled with authoritative current state.' })
+        setOperation({ status: 'RESOLVED', detail: 'The closure remains confirmed and the latest account information is now loaded.' })
       }
     } catch { /* cached evidence remains inspection-only */ }
   }
@@ -151,8 +151,8 @@ export function StaffClosurePage() {
     {!canClose ? <Alert variant="warning"><ShieldAlert /><AlertTitle>Accounting Officer authority required</AlertTitle><AlertDescription>Both loan:account:close and the ACCOUNTING_OFFICER role are required.</AlertDescription></Alert> : null}
     {accountQuery.isError ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Latest authoritative refresh unavailable</AlertTitle><AlertDescription>Cached evidence remains inspectable, but closure is disabled.</AlertDescription></Alert> : null}
     {!safeAccount ? <Alert variant="destructive"><AlertTriangle /><AlertTitle>Contradictory LoanAccount evidence</AlertTitle><AlertDescription>No consequential action is available until evidence is coherent.</AlertDescription></Alert> : null}
-    {unresolved ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Previous closure result unknown</AlertTitle><AlertDescription>A later CLOSED state does not prove this UUID succeeded. Exact same-request replay remains available even when the account is CLOSED.</AlertDescription></Alert> : null}
-    <Card><CardHeader><CardTitle>Closure action</CardTitle></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">There are no financial inputs. The backend verifies the settled payoff provenance and complete reconciliation.</p>{unresolved ? <Button disabled={!canClose || readLocked} onClick={() => void retryExact()}>Retry exact closure</Button> : <Button id="confirm-closure-trigger" disabled={!canClose || newClosureLocked} onClick={() => setConfirmation(true)}>Review administrative closure</Button>}{account.status !== 'SETTLED' && !unresolved ? <p className="text-sm font-semibold text-muted-foreground">Only a fresh, coherent SETTLED account is eligible for a new closure request.</p> : null}{operation.status !== 'DRAFT' ? <OperationStatusPanel status={operation.status} headingId="closure-command-result" headingLabel={`Closure result for account ${account.accountNumber}`} /> : null}{operation.detail ? <p aria-live="polite" className="text-sm font-medium">{operation.detail}</p> : null}{operation.error instanceof ApiError && operation.error.requestId ? <RequestCorrelation requestId={operation.error.requestId} /> : null}{confirmedRefreshFailed && result ? <Alert variant="success"><CheckCircle2 /><AlertTitle>Closure command confirmed</AlertTitle><AlertDescription>The account was confirmed CLOSED at {formatTimestamp(result.closedAt)}. Retry GET reconciliation only.</AlertDescription></Alert> : null}</CardContent></Card>
+    {unresolved ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Previous closure result unknown</AlertTitle><AlertDescription>A later CLOSED state does not confirm this attempted closure. Retry the exact closure action before starting any different action.</AlertDescription></Alert> : null}
+    <Card><CardHeader><CardTitle>Closure action</CardTitle></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">There are no financial inputs. The backend verifies the settled payoff provenance and complete reconciliation.</p>{unresolved ? <Button disabled={!canClose || readLocked} onClick={() => void retryExact()}>Retry exact closure</Button> : <Button id="confirm-closure-trigger" disabled={!canClose || newClosureLocked} onClick={() => setConfirmation(true)}>Review administrative closure</Button>}{account.status !== 'SETTLED' && !unresolved ? <p className="text-sm font-semibold text-muted-foreground">Only a fresh, coherent SETTLED account is eligible for a new closure request.</p> : null}{operation.status !== 'DRAFT' ? <OperationStatusPanel status={operation.status} headingId="closure-command-result" headingLabel={`Closure result for account ${account.accountNumber}`} /> : null}{operation.detail ? <p aria-live="polite" className="text-sm font-medium">{operation.detail}</p> : null}{operation.error instanceof ApiError && operation.error.requestId ? <RequestCorrelation requestId={operation.error.requestId} /> : null}{confirmedRefreshFailed && result ? <Alert variant="success"><CheckCircle2 /><AlertTitle>Closure command confirmed</AlertTitle><AlertDescription>The account was confirmed CLOSED at {formatTimestamp(result.closedAt)}. The latest account information is still unavailable; use Refresh and do not close the account again.</AlertDescription></Alert> : null}</CardContent></Card>
     {result ? <Card><CardHeader><CardTitle>{result.idempotentReplay ? 'Closure recovered by exact replay' : 'Administrative closure confirmed'}</CardTitle></CardHeader><CardContent><p>Account state: <strong>{result.resultingStatus}</strong> · closed {formatTimestamp(result.closedAt)}</p></CardContent></Card> : null}
     <LoanAccountEvidence account={account} />
     {confirmation ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="closure-confirm-title"><div className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-lg bg-card p-6 shadow-xl"><h2 id="closure-confirm-title" className="text-xl font-semibold">Confirm administrative closure</h2><p>Close account <strong>{account.accountNumber}</strong> from its current <strong>SETTLED</strong> state.</p><p className="text-sm text-muted-foreground">This creates no payment and changes no financial evidence.</p><div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={() => { setConfirmation(false); setTimeout(() => document.getElementById('confirm-closure-trigger')?.focus(), 0) }}>Cancel</Button><Button autoFocus disabled={newClosureLocked} onClick={() => { requestResultFocus(); setConfirmation(false); void submit() }}>Confirm closure</Button></div></div></div> : null}

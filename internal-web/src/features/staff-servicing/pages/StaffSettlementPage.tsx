@@ -119,12 +119,12 @@ export function StaffSettlementPage() {
       setOperation({
         status: 'RESOLVED',
         detail: confirmed.idempotentReplay
-          ? 'The original settlement was recovered by exact same-request replay; current account and repayment evidence were refreshed separately.'
-          : 'Settlement was confirmed and current account, history, settlement work, and closure work were reconciled.',
+          ? 'The original settlement was confirmed through the exact retry. The latest account and repayment information was loaded separately.'
+          : 'Settlement was confirmed and the latest account, history, settlement, and closure information is loaded.',
       })
     } catch (error) {
       setConfirmedRefreshFailed(true)
-      setOperation({ status: 'BLOCKED', error: error instanceof Error ? error : new NetworkError(), detail: 'Settlement is confirmed. Current reads could not be reconciled; retry GET only.' })
+      setOperation({ status: 'BLOCKED', error: error instanceof Error ? error : new NetworkError(), detail: 'Settlement is confirmed, but the latest account information is unavailable. Use Refresh, and do not record the settlement again.' })
     }
   }
 
@@ -147,7 +147,7 @@ export function StaffSettlementPage() {
         saveUnresolvedOperation({ type: operationType, resource: loanApplicationId, operationId: requestId, payloadDigest: digest, unresolvedAt: new Date().toISOString() })
         setInMemoryUnknownPayload(payload)
         await Promise.allSettled([refetchReads(), invalidateAffected()])
-        setOperation({ status: 'RESULT_UNKNOWN', error: commandError, detail: retrying ? 'The exact replay result is also unknown. The same UUID and in-memory command remain retained.' : 'The result is unknown. Only the request UUID and SHA-256 semantic digest were persisted; no POST was retried.' })
+        setOperation({ status: 'RESULT_UNKNOWN', error: commandError, detail: retrying ? 'The exact retry result is still not confirmed. Retry the same settlement with the same payment evidence.' : 'The settlement result is not confirmed. Meridian did not submit it again automatically; retry the exact settlement with the same payment evidence.' })
         return
       }
       if (!(commandError instanceof ApiError)) return
@@ -159,7 +159,7 @@ export function StaffSettlementPage() {
       if (['SETTLEMENT_AMOUNT_INVALID', 'SETTLEMENT_NOT_ALLOWED', 'SYSTEM_STATE_CONFLICT'].includes(commandError.errorCode)) {
         await Promise.allSettled([refetchReads(), invalidateAffected()])
       }
-      setOperation({ status: 'BLOCKED', error: commandError, detail: keepIdentity ? 'The retained request UUID conflicts with backend evidence. No replacement UUID was generated.' : 'The backend definitely rejected the command. Entered evidence remains unchanged and no retry occurred.' })
+      setOperation({ status: 'BLOCKED', error: commandError, detail: keepIdentity ? 'The saved recovery action conflicts with recorded settlement evidence. Do not start a replacement action; operator resolution is required.' : 'The settlement was rejected. Entered evidence remains unchanged; review the reason before trying again.' })
     }
   }
 
@@ -167,7 +167,7 @@ export function StaffSettlementPage() {
     const digest = await digestOperationPayload(payload)
     const identity = decideOperationIdentity(operationType, loanApplicationId, digest)
     if (identity.kind === 'CONFLICT_WITH_UNRESOLVED') {
-      setOperation({ status: 'BLOCKED', detail: 'The candidate does not match the unresolved settlement. No protected difference is disclosed and no replacement UUID was created.' })
+      setOperation({ status: 'BLOCKED', detail: 'The entered evidence does not match the unresolved settlement. Re-enter the same payment evidence; do not start a replacement action.' })
       return
     }
     await postCommand(payload, identity.operationId, digest, identity.kind === 'REUSE_EXISTING')
@@ -201,7 +201,7 @@ export function StaffSettlementPage() {
     if (!candidate) return
     const digest = await digestOperationPayload(candidate)
     if (digest !== unresolved.payloadDigest) {
-      setOperation({ status: 'BLOCKED', detail: 'The reconstructed evidence does not match the unresolved settlement digest. Exact replay remains blocked.' })
+      setOperation({ status: 'BLOCKED', detail: 'The re-entered evidence does not match the unresolved settlement. Exact retry remains blocked.' })
       return
     }
     await postCommand(candidate, unresolved.operationId, digest, true)
@@ -214,7 +214,7 @@ export function StaffSettlementPage() {
       if (confirmedRefreshFailed) {
         await invalidateAffected()
         setConfirmedRefreshFailed(false)
-        setOperation({ status: 'RESOLVED', detail: 'The confirmed settlement is now reconciled with authoritative reads.' })
+        setOperation({ status: 'RESOLVED', detail: 'The settlement remains confirmed and the latest account information is now loaded.' })
       }
     } catch { /* cached evidence remains inspection-only */ }
   }
@@ -232,8 +232,8 @@ export function StaffSettlementPage() {
     {!canSettle ? <Alert variant="warning"><ShieldAlert /><AlertTitle>Approver authority required</AlertTitle><AlertDescription>Both loan:settlement:approve and the APPROVER role are required.</AlertDescription></Alert> : null}
     {accountQuery.isError || historyQuery.isError ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Latest authoritative refresh unavailable</AlertTitle><AlertDescription>Cached evidence remains inspectable, but a new settlement is disabled.</AlertDescription></Alert> : null}
     {!safeAccount ? <Alert variant="destructive"><AlertTriangle /><AlertTitle>Contradictory LoanAccount evidence</AlertTitle><AlertDescription>No consequential action is available until authoritative evidence is coherent.</AlertDescription></Alert> : null}
-    {unresolved ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Previous settlement result unknown</AlertTitle><AlertDescription>Current status, balance, queue membership, or history cannot prove this UUID succeeded. Exact same-request replay is required. After reload, re-enter the protected reference; safe amount/date evidence is reconstructed from the authorized immutable settlement read and verified against the stored digest.</AlertDescription></Alert> : null}
-    <Card><CardHeader><CardTitle>Settlement evidence</CardTitle><p className="text-sm text-muted-foreground">Allocation, payoff, principal release, and exposure effects are calculated only by Loan.</p></CardHeader><CardContent className="space-y-5"><div className="grid gap-4 lg:grid-cols-3"><div><p className="text-sm font-semibold">Settlement amount</p><p className="mt-2 flex min-h-11 items-center rounded-md border bg-muted px-3 font-semibold">{candidateAmount ? formatVnd(candidateAmount) : 'Authoritative amount unavailable'}</p></div><label className="grid gap-2 text-sm font-semibold">Payment value date<input ref={dateRef} type="date" disabled={Boolean(inMemoryUnknownPayload) || Boolean(unresolved && terminalRecovery && evidenceQuery.data)} className="h-11 min-w-0 rounded-md border bg-card px-3 font-normal" value={candidateDate} onChange={(event) => setForm((value) => ({ ...value, paymentValueDate: event.target.value }))} /></label><label className="grid gap-2 text-sm font-semibold">External payment reference<input ref={referenceRef} autoComplete="off" maxLength={64} disabled={Boolean(inMemoryUnknownPayload)} className="h-11 min-w-0 rounded-md border bg-card px-3 font-normal" value={form.externalPaymentReference} onChange={(event) => setForm((value) => ({ ...value, externalPaymentReference: event.target.value }))} /></label></div>{formError ? <p role="alert" className="font-semibold text-danger">{formError}</p> : null}{unresolved ? <Button disabled={!canSettle || readsLocked || evidenceQuery.isFetching || (!inMemoryUnknownPayload && !evidenceQuery.data)} onClick={() => void retryExact()}>Retry exact settlement</Button> : <Button id="confirm-settlement-trigger" disabled={!canSettle || newSettlementLocked} onClick={() => { const candidate = buildCandidate(); if (candidate) setConfirmation(candidate) }}>Review full-balance settlement</Button>}{operation.status !== 'DRAFT' ? <OperationStatusPanel status={operation.status} headingId="settlement-command-result" headingLabel={`Settlement result for account ${account.accountNumber}`} /> : null}{operation.detail ? <p aria-live="polite" className="text-sm font-medium">{operation.detail}</p> : null}{operation.error instanceof ApiError && operation.error.requestId ? <RequestCorrelation requestId={operation.error.requestId} /> : null}{confirmedRefreshFailed && result ? <Alert variant="success"><CheckCircle2 /><AlertTitle>Settlement command confirmed</AlertTitle><AlertDescription>{formatVnd(result.settlementAmount)} was confirmed. Retry authoritative GET reconciliation only.</AlertDescription></Alert> : null}</CardContent></Card>
+    {unresolved ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Previous settlement result unknown</AlertTitle><AlertDescription>Current account information alone does not confirm this settlement. Do not record another settlement. Re-enter the same protected reference and retry the exact settlement with the displayed amount and date.</AlertDescription></Alert> : null}
+    <Card><CardHeader><CardTitle>Settlement evidence</CardTitle><p className="text-sm text-muted-foreground">Allocation, payoff, principal release, and exposure effects are calculated only by Loan.</p></CardHeader><CardContent className="space-y-5"><div className="grid gap-4 lg:grid-cols-3"><div><p className="text-sm font-semibold">Settlement amount</p><p className="mt-2 flex min-h-11 items-center rounded-md border bg-muted px-3 font-semibold">{candidateAmount ? formatVnd(candidateAmount) : 'Authoritative amount unavailable'}</p></div><label className="grid gap-2 text-sm font-semibold">Payment value date<input ref={dateRef} type="date" disabled={Boolean(inMemoryUnknownPayload) || Boolean(unresolved && terminalRecovery && evidenceQuery.data)} className="h-11 min-w-0 rounded-md border bg-card px-3 font-normal" value={candidateDate} onChange={(event) => setForm((value) => ({ ...value, paymentValueDate: event.target.value }))} /></label><label className="grid gap-2 text-sm font-semibold">External payment reference<input ref={referenceRef} autoComplete="off" maxLength={64} disabled={Boolean(inMemoryUnknownPayload)} className="h-11 min-w-0 rounded-md border bg-card px-3 font-normal" value={form.externalPaymentReference} onChange={(event) => setForm((value) => ({ ...value, externalPaymentReference: event.target.value }))} /></label></div>{formError ? <p role="alert" className="font-semibold text-danger">{formError}</p> : null}{unresolved ? <Button disabled={!canSettle || readsLocked || evidenceQuery.isFetching || (!inMemoryUnknownPayload && !evidenceQuery.data)} onClick={() => void retryExact()}>Retry exact settlement</Button> : <Button id="confirm-settlement-trigger" disabled={!canSettle || newSettlementLocked} onClick={() => { const candidate = buildCandidate(); if (candidate) setConfirmation(candidate) }}>Review full-balance settlement</Button>}{operation.status !== 'DRAFT' ? <OperationStatusPanel status={operation.status} headingId="settlement-command-result" headingLabel={`Settlement result for account ${account.accountNumber}`} /> : null}{operation.detail ? <p aria-live="polite" className="text-sm font-medium">{operation.detail}</p> : null}{operation.error instanceof ApiError && operation.error.requestId ? <RequestCorrelation requestId={operation.error.requestId} /> : null}{confirmedRefreshFailed && result ? <Alert variant="success"><CheckCircle2 /><AlertTitle>Settlement command confirmed</AlertTitle><AlertDescription>{formatVnd(result.settlementAmount)} was confirmed. The latest account information is still unavailable; use Refresh and do not record the settlement again.</AlertDescription></Alert> : null}</CardContent></Card>
     {result ? <Card><CardHeader><CardTitle>{result.idempotentReplay ? 'Settlement recovered by exact replay' : 'Settlement confirmed'}</CardTitle></CardHeader><CardContent><dl className="grid gap-3 sm:grid-cols-3"><div><dt className="text-xs font-semibold uppercase text-muted-foreground">Amount</dt><dd className="font-semibold">{formatVnd(result.settlementAmount)}</dd></div><div><dt className="text-xs font-semibold uppercase text-muted-foreground">Value date</dt><dd>{formatDateOnly(result.paymentValueDate)}</dd></div><div><dt className="text-xs font-semibold uppercase text-muted-foreground">Approved</dt><dd>{formatTimestamp(result.approvedAt)}</dd></div></dl></CardContent></Card> : null}
     <LoanAccountEvidence account={account} />
     <RepaymentHistoryPanel data={historyQuery.data} pending={historyQuery.isPending} error={historyQuery.error} fetching={historyQuery.isFetching} onRetry={() => void historyQuery.refetch()} onPage={setHistoryPage} />

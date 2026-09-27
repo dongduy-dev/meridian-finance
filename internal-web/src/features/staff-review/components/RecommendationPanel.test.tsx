@@ -76,7 +76,7 @@ describe('RecommendationPanel', () => {
       await user.click(await screen.findByRole('button', { name: 'Review recommendation' }))
       await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
-      await screen.findByText(/confirms the exact recommendation/i)
+      await screen.findByText(/recommendation was confirmed for the displayed review cycle/i)
       await waitFor(() => expect(screen.getByRole('heading', { name: `Recommendation result for application ${applicationId}` })).toHaveFocus())
       expect(submittedBody).toMatchObject({
         action: selectedAction,
@@ -114,7 +114,7 @@ describe('RecommendationPanel', () => {
     await user.click(await screen.findByRole('button', { name: 'Review recommendation' }))
     await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
-    expect(await screen.findByText(/confirms the exact recommendation/i)).toBeVisible()
+    expect(await screen.findByText(/recommendation was confirmed for the displayed review cycle/i)).toBeVisible()
     const posts = vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
       String(path).endsWith('/review-recommendations') && (options as RequestInit | undefined)?.method === 'POST')
     expect(posts).toHaveLength(1)
@@ -140,7 +140,7 @@ describe('RecommendationPanel', () => {
     await user.click(await screen.findByRole('button', { name: 'Review recommendation' }))
     await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
-    expect(await screen.findByText(/recommendation result is unknown/i, {}, { timeout: 3_000 })).toBeVisible()
+    expect(await screen.findByText(/recommendation result is not confirmed/i, {}, { timeout: 3_000 })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review recommendation' })).not.toBeInTheDocument()
     const posts = () => vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
       String(path).endsWith('/review-recommendations') && (options as RequestInit | undefined)?.method === 'POST')
@@ -148,7 +148,7 @@ describe('RecommendationPanel', () => {
 
     readsAvailable = true
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
-    expect(await screen.findByText(/confirms the exact recommendation/i)).toBeVisible()
+    expect(await screen.findByText(/recommendation was confirmed for the displayed review cycle/i)).toBeVisible()
     expect(posts()).toHaveLength(1)
   })
 
