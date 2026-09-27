@@ -386,8 +386,8 @@ describe('assisted origination pages', () => {
   })
 
   it.each([
-    ['COMPLETED', loanApplicationId, /confirmed from the authoritative intake/i],
-    ['OPEN', null, /requires explicit operator confirmation|review the intake and confirm a new attempt explicitly/i],
+    ['COMPLETED', loanApplicationId, /application creation was confirmed after Meridian refreshed the intake/i],
+    ['OPEN', null, /application creation was not confirmed and the intake is still open/i],
   ])('reconciles a lost conversion as %s without automatically repeating POST', async (status, resultId, message) => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     let caseReads = 0
@@ -734,7 +734,7 @@ describe('assisted origination pages', () => {
     const editableName = screen.getAllByLabelText('Full name').find((field) => !(field as HTMLInputElement).readOnly)!
     expect(editableName).toHaveValue('Reviewed Customer')
     await user.click(screen.getByRole('button', { name: 'Save profile' }))
-    expect(await screen.findByText('Operation confirmed')).toBeVisible()
+    expect(await screen.findByText('Result confirmed')).toBeVisible()
     expect(profilePuts).toBe(1)
 
     const file = new File(['replacement'], 'replacement.pdf', { type: 'application/pdf' })
@@ -815,7 +815,7 @@ describe('assisted origination pages', () => {
     await user.upload(input, file)
     fireEvent.submit(input.closest('form')!)
     await waitFor(() => expect(uploads).toHaveLength(1))
-    expect(await screen.findByText(/upload result is unknown/i)).toBeVisible()
+    expect(await screen.findByText(/could not confirm the upload/i)).toBeVisible()
     fireEvent.submit(input.closest('form')!)
     await waitFor(() => expect(uploads).toHaveLength(2))
 
@@ -825,7 +825,7 @@ describe('assisted origination pages', () => {
     expect(findUnresolvedOperation(
       'INTAKE_EVIDENCE_UPLOAD', evidenceRecoveryResource(caseId, 'UCL_PAPER_APPLICATION'),
     )).toBeUndefined()
-    expect(await screen.findByText('Operation confirmed')).toBeVisible()
+    expect(await screen.findByText('Result confirmed')).toBeVisible()
   })
 
   it('restores an actor-bound unresolved upload after refresh without persisting the file', async () => {
@@ -852,14 +852,14 @@ describe('assisted origination pages', () => {
     const file = new File(['%PDF-private-content'], 'private-customer-name.pdf', { type: 'application/pdf' })
     await user.upload(firstInput, file)
     fireEvent.submit(firstInput.closest('form')!)
-    expect(await screen.findByText(/upload result is unknown/i)).toBeVisible()
+    expect(await screen.findByText(/could not confirm the upload/i)).toBeVisible()
     const stored = sessionStorage.getItem('meridian.staff.unresolved-operations.v1') ?? ''
     expect(stored).not.toContain('%PDF-private-content')
     expect(stored).not.toContain('private-customer-name.pdf')
     first.unmount()
 
     renderRoute(`/staff/origination/${caseId}`)
-    expect(await screen.findByText(/prior upload result is unresolved/i)).toBeVisible()
+    expect(await screen.findByText(/prior upload result is not confirmed/i)).toBeVisible()
     const recoveredInput = screen.getByLabelText('Signed paper application file')
     expect(recoveredInput).toHaveValue('')
     await user.upload(recoveredInput, file)
@@ -887,7 +887,7 @@ describe('assisted origination pages', () => {
     const input = await screen.findByLabelText('Signed paper application file')
     await user.upload(input, new File(['first'], 'application.pdf', { type: 'application/pdf' }))
     fireEvent.submit(input.closest('form')!)
-    expect(await screen.findByText(/upload result is unknown/i)).toBeVisible()
+    expect(await screen.findByText(/could not confirm the upload/i)).toBeVisible()
     await user.upload(input, new File(['changed'], 'application.pdf', { type: 'application/pdf' }))
     fireEvent.submit(input.closest('form')!)
 
@@ -916,7 +916,7 @@ describe('assisted origination pages', () => {
     const input = await screen.findByLabelText('Signed paper application file')
     await user.upload(input, new File(['same'], 'replacement.pdf', { type: 'application/pdf' }))
     fireEvent.submit(input.closest('form')!)
-    expect(await screen.findByText(/retained for reconciliation/i)).toBeVisible()
+    expect(await screen.findByText(/saved recovery action conflicts with recorded evidence/i)).toBeVisible()
     fireEvent.submit(input.closest('form')!)
     await waitFor(() => expect(ids).toHaveLength(2))
     expect(ids[1]).toBe(ids[0])
@@ -987,7 +987,7 @@ describe('assisted origination pages', () => {
     const user = userEvent.setup()
     const list = renderRoute('/staff/origination')
     await user.click(await screen.findByRole('button', { name: 'Start UCL intake' }))
-    expect(await screen.findByText(/create result is unresolved/i)).toBeVisible()
+    expect(await screen.findByText(/could not confirm intake creation/i)).toBeVisible()
     expect(screen.getByRole('button', { name: 'Start UCL intake' })).toBeDisabled()
     expect(intakeCreates).toBe(1)
     list.unmount()
@@ -1038,7 +1038,7 @@ describe('assisted origination pages', () => {
     await user.type(screen.getByLabelText('Account holder'), 'Paper Customer')
     await user.type(screen.getByLabelText('Account number'), '1234567890')
     await user.click(screen.getByRole('button', { name: 'Add bank account' }))
-    expect(await screen.findByText(/cannot prove this add request/i)).toBeVisible()
+    expect(await screen.findByText(/latest bank-account list does not confirm this addition/i)).toBeVisible()
     expect(screen.getByRole('button', { name: 'Add bank account' })).toBeDisabled()
     expect(bankPosts).toBe(1)
   })

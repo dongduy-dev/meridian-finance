@@ -111,15 +111,15 @@ export function StaffRepaymentEntryPage() {
       setOperation({
         status: 'RESOLVED',
         detail: confirmed.idempotentReplay
-          ? 'Recovered the previously recorded repayment through exact same-request replay. Current account state was refreshed separately.'
-          : 'Repayment was recorded and current account, history, and servicing work were reconciled.',
+          ? 'The previously recorded repayment was confirmed through the exact retry. The latest account information was loaded separately.'
+          : 'Repayment was confirmed and the latest account, history, and servicing information is loaded.',
       })
     } catch (error) {
       setConfirmedRefreshFailed(true)
       setOperation({
         status: 'BLOCKED',
         error: error instanceof Error ? error : new NetworkError(),
-        detail: 'Repayment confirmed; refreshed state unavailable. Only authoritative GET reconciliation may be retried.',
+        detail: 'Repayment confirmed; the latest account information is unavailable. Use Refresh, and do not record the payment again.',
       })
     }
   }
@@ -129,7 +129,7 @@ export function StaffRepaymentEntryPage() {
     setOperation({
       status: 'RESULT_UNKNOWN',
       error: commandError,
-      detail: 'Current account or history changes cannot prove this request identity. No POST was retried automatically; exact same-request replay is required.',
+      detail: 'Current account or history information does not confirm this exact repayment. Retry the exact operation with the same payment evidence. Do not record another payment.',
     })
   }
 
@@ -166,8 +166,8 @@ export function StaffRepaymentEntryPage() {
           status: 'RESULT_UNKNOWN',
           error: commandError,
           detail: retrying
-            ? 'The exact retry outcome is also unknown. The same request UUID and in-memory command remain retained.'
-            : 'The result is unknown. Only the request UUID and SHA-256 payload digest were persisted.',
+            ? 'The exact retry result is still not confirmed. The same payment evidence remains available for another explicit exact retry.'
+            : 'The repayment result is not confirmed. Meridian did not submit it again automatically; use the exact retry shown.',
         })
         await reconcileUnknown(commandError)
         return
@@ -188,8 +188,8 @@ export function StaffRepaymentEntryPage() {
         status: 'BLOCKED',
         error: commandError,
         detail: idempotencyConflict
-          ? 'The retained request identity conflicts with different backend evidence. No replacement UUID was generated; operator resolution is required.'
-          : 'The backend rejected the command with a definite response. Entered financial evidence was not changed automatically.',
+          ? 'The saved recovery action conflicts with recorded repayment evidence. Do not start a replacement action; operator resolution is required.'
+          : 'The repayment was rejected. Entered financial evidence was not changed; review the reason before trying again.',
       })
     }
   }
@@ -198,7 +198,7 @@ export function StaffRepaymentEntryPage() {
     const payloadDigest = await digestOperationPayload(payload)
     const identity = decideOperationIdentity(operationType, loanApplicationId, payloadDigest)
     if (identity.kind === 'CONFLICT_WITH_UNRESOLVED') {
-      setOperation({ status: 'BLOCKED', detail: 'The entered evidence does not match the unresolved operation. No protected field difference is disclosed and no new UUID was created.' })
+      setOperation({ status: 'BLOCKED', detail: 'The entered evidence does not match the unresolved repayment. Re-enter the same payment evidence; do not start a replacement action.' })
       return
     }
     await postCommand(payload, identity.operationId, payloadDigest, identity.kind === 'REUSE_EXISTING')
@@ -236,7 +236,7 @@ export function StaffRepaymentEntryPage() {
     if (!candidate) return
     const digest = await digestOperationPayload(candidate)
     if (digest !== unresolved.payloadDigest) {
-      setOperation({ status: 'BLOCKED', detail: 'The entered evidence does not match the unresolved operation. No protected field difference is disclosed.' })
+      setOperation({ status: 'BLOCKED', detail: 'The entered evidence does not match the unresolved repayment. Re-enter the same payment evidence; exact retry remains blocked.' })
       return
     }
     await postCommand(candidate, unresolved.operationId, digest, true)
@@ -248,7 +248,7 @@ export function StaffRepaymentEntryPage() {
       if (confirmedRefreshFailed) {
         await invalidateQueue()
         setConfirmedRefreshFailed(false)
-        setOperation({ status: 'RESOLVED', detail: 'The confirmed repayment is now reconciled with authoritative current state.' })
+        setOperation({ status: 'RESOLVED', detail: 'The repayment remains confirmed and the latest account information is now loaded.' })
       }
     } catch {
       // TanStack Query retains safe cached evidence and exposes the refetch error.
@@ -267,7 +267,7 @@ export function StaffRepaymentEntryPage() {
     {accountQuery.isError ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Latest account refresh unavailable</AlertTitle><AlertDescription>Cached evidence remains visible, but repayment confirmation and exact retry are disabled until Refresh succeeds.</AlertDescription></Alert> : null}
     {!safeAccount ? <Alert variant="destructive"><AlertTriangle /><AlertTitle>Servicing evidence unavailable</AlertTitle><AlertDescription>Unknown or contradictory evidence cannot authorize a financial command.</AlertDescription></Alert> : null}
     {!serviceableAccountStatuses.has(account.status) ? <Alert variant="information"><AlertTitle>Ordinary repayment unavailable</AlertTitle><AlertDescription>The backend reports {account.status}. CP8 does not expose settlement or administrative closure actions.</AlertDescription></Alert> : null}
-    <Card><CardHeader><CardTitle>Payment evidence</CardTitle><p className="text-sm text-muted-foreground">The backend allocates oldest installment first, then fee → interest → principal. No allocation or payoff preview is calculated here.</p></CardHeader><CardContent className="space-y-5">{unresolved ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Previous repayment result unknown</AlertTitle><AlertDescription>Only the original request UUID and SHA-256 payload digest survived reload. Re-enter the exact protected command evidence to retry; current account or history changes cannot prove success.</AlertDescription></Alert> : null}<div className="grid gap-4 lg:grid-cols-3"><label className="grid gap-2 text-sm font-semibold">External payment reference<input ref={referenceRef} autoComplete="off" maxLength={100} className="h-11 min-w-0 rounded-md border bg-card px-3 font-normal" value={form.externalPaymentReference} onChange={(event) => setForm((value) => ({ ...value, externalPaymentReference: event.target.value }))} /></label><label className="grid gap-2 text-sm font-semibold">Amount (whole VND)<input ref={amountRef} inputMode="numeric" autoComplete="off" className="h-11 min-w-0 rounded-md border bg-card px-3 font-normal" value={form.amount} onChange={(event) => setForm((value) => ({ ...value, amount: event.target.value }))} /></label><label className="grid gap-2 text-sm font-semibold">Payment value date<input ref={dateRef} type="date" className="h-11 min-w-0 rounded-md border bg-card px-3 font-normal" value={form.paymentValueDate} onChange={(event) => setForm((value) => ({ ...value, paymentValueDate: event.target.value }))} /></label></div>{formError ? <p role="alert" className="font-semibold text-danger">{formError}</p> : null}{unresolved ? <Button disabled={authoritativeEvidenceLocked || !canRecord} onClick={() => void retryExactOperation()}>Retry exact operation</Button> : <Button id="confirm-repayment-trigger" disabled={newRepaymentLocked || !canRecord} onClick={openConfirmation}>Review repayment</Button>}{operation.status !== 'DRAFT' ? <OperationStatusPanel status={operation.status} headingId="repayment-command-result" headingLabel={`Repayment result for account ${account.accountNumber}`} /> : null}{operation.detail ? <p aria-live="polite" className="text-sm font-medium">{operation.detail}</p> : null}{operation.error instanceof ApiError && operation.error.requestId ? <RequestCorrelation requestId={operation.error.requestId} /> : null}{confirmedRefreshFailed && result ? <Alert variant="success"><CheckCircle2 /><AlertTitle>Repayment command confirmed</AlertTitle><AlertDescription>{formatVnd(result.receivedAmount)} was confirmed for {formatDateOnly(result.paymentValueDate)}. Current account/history refresh remains unavailable; retry GET only.</AlertDescription></Alert> : null}</CardContent></Card>
+    <Card><CardHeader><CardTitle>Payment evidence</CardTitle><p className="text-sm text-muted-foreground">The backend allocates oldest installment first, then fee → interest → principal. No allocation or payoff preview is calculated here.</p></CardHeader><CardContent className="space-y-5">{unresolved ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Previous repayment result unknown</AlertTitle><AlertDescription>Meridian could not confirm the previous repayment. Do not record another payment. Re-enter the same payment evidence and retry the exact operation.</AlertDescription></Alert> : null}<div className="grid gap-4 lg:grid-cols-3"><label className="grid gap-2 text-sm font-semibold">External payment reference<input ref={referenceRef} autoComplete="off" maxLength={100} className="h-11 min-w-0 rounded-md border bg-card px-3 font-normal" value={form.externalPaymentReference} onChange={(event) => setForm((value) => ({ ...value, externalPaymentReference: event.target.value }))} /></label><label className="grid gap-2 text-sm font-semibold">Amount (whole VND)<input ref={amountRef} inputMode="numeric" autoComplete="off" className="h-11 min-w-0 rounded-md border bg-card px-3 font-normal" value={form.amount} onChange={(event) => setForm((value) => ({ ...value, amount: event.target.value }))} /></label><label className="grid gap-2 text-sm font-semibold">Payment value date<input ref={dateRef} type="date" className="h-11 min-w-0 rounded-md border bg-card px-3 font-normal" value={form.paymentValueDate} onChange={(event) => setForm((value) => ({ ...value, paymentValueDate: event.target.value }))} /></label></div>{formError ? <p role="alert" className="font-semibold text-danger">{formError}</p> : null}{unresolved ? <Button disabled={authoritativeEvidenceLocked || !canRecord} onClick={() => void retryExactOperation()}>Retry exact operation</Button> : <Button id="confirm-repayment-trigger" disabled={newRepaymentLocked || !canRecord} onClick={openConfirmation}>Review repayment</Button>}{operation.status !== 'DRAFT' ? <OperationStatusPanel status={operation.status} headingId="repayment-command-result" headingLabel={`Repayment result for account ${account.accountNumber}`} /> : null}{operation.detail ? <p aria-live="polite" className="text-sm font-medium">{operation.detail}</p> : null}{operation.error instanceof ApiError && operation.error.requestId ? <RequestCorrelation requestId={operation.error.requestId} /> : null}{confirmedRefreshFailed && result ? <Alert variant="success"><CheckCircle2 /><AlertTitle>Repayment command confirmed</AlertTitle><AlertDescription>{formatVnd(result.receivedAmount)} was confirmed for {formatDateOnly(result.paymentValueDate)}. The latest account information is still unavailable; use Refresh and do not record the payment again.</AlertDescription></Alert> : null}</CardContent></Card>
     {result ? <RepaymentOutcomePanel result={result} /> : null}
     <LoanAccountEvidence account={account} />
     <RepaymentHistoryPanel data={historyQuery.data} pending={historyQuery.isPending} error={historyQuery.error} fetching={historyQuery.isFetching} onRetry={() => void historyQuery.refetch()} onPage={setHistoryPage} />

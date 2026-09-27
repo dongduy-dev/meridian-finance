@@ -149,7 +149,8 @@ describe('Staff repayment entry', () => {
     await user.click(screen.getByRole('button', { name: 'Review repayment' }))
     await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
 
-    expect(await screen.findByText(/Current account or history changes cannot prove this request identity/i)).toBeVisible()
+    expect(await screen.findByText(/Current account or history information does not confirm this exact repayment/i)).toBeVisible()
+    expect(document.body).not.toHaveTextContent(/\b(?:POST|GET|UUID|SHA-256)\b|payload digest|request identity/i)
     await waitFor(() => expect(screen.getByRole('heading', { name: /Repayment result for account/i })).toHaveFocus())
     expect(repaymentPostCalls()).toHaveLength(1)
     const body = repaymentPostCalls()[0]?.[1]?.body as Record<string, unknown>
@@ -223,7 +224,7 @@ describe('Staff repayment entry', () => {
     await user.click(screen.getByRole('button', { name: 'Review repayment' }))
     await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
 
-    expect(await screen.findByText(/Current account or history changes cannot prove this request identity/i)).toBeVisible()
+    expect(await screen.findByText(/Current account or history information does not confirm this exact repayment/i)).toBeVisible()
     expect(await screen.findByText(/backend reports SETTLED/i)).toBeVisible()
     const retry = screen.getByRole('button', { name: 'Retry exact operation' })
     expect(retry).toBeEnabled()
@@ -258,7 +259,7 @@ describe('Staff repayment entry', () => {
     await enterEvidence(reloadUser, 'DIFFERENT-REFERENCE')
     await reloadUser.click(await screen.findByRole('button', { name: 'Retry exact operation' }))
 
-    expect(await screen.findByText(/does not match the unresolved operation/i)).toBeVisible()
+    expect(await screen.findByText(/does not match the unresolved repayment/i)).toBeVisible()
     expect(repaymentPostCalls()).toHaveLength(1)
     expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
     expect(sessionStorage.getItem('meridian.staff.unresolved-operations.v1')).not.toContain(protectedReference)
@@ -281,7 +282,7 @@ describe('Staff repayment entry', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
 
     expect(await screen.findByText(
-      /Repayment confirmed; refreshed state unavailable/i,
+      /Repayment confirmed; the latest account information is unavailable/i,
       undefined,
       { timeout: 3_000 },
     )).toBeVisible()

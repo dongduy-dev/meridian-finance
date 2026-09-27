@@ -37,7 +37,7 @@ export type OperationIdentityDecision =
 
 export class UnresolvedOperationConflictError extends Error {
   constructor() {
-    super('A previous operation result is still unknown. Refresh authoritative evidence before changing this command.')
+    super('A previous action result is still not confirmed. Review the latest information and retry the same action before changing it.')
     this.name = 'UnresolvedOperationConflictError'
   }
 }

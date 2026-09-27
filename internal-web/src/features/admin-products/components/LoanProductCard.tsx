@@ -31,8 +31,8 @@ type LimitFields = { minAmount: number; maxAmount: number }
 
 function commandMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message
-  if (error instanceof NetworkError) return 'The result is unknown because Meridian did not confirm the response. Refresh authoritative product state before retrying the same target state.'
-  return 'The product command was not confirmed. Refresh product state before trying again.'
+  if (error instanceof NetworkError) return 'Meridian could not confirm the product change. Refresh the latest product information before retrying the same target state.'
+  return 'The product change was not confirmed. Refresh the latest product information before trying again.'
 }
 
 export function LoanProductCard({ product, manager }: {

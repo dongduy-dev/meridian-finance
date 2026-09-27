@@ -103,7 +103,7 @@ describe('Staff verification workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Review verification completion' }))
     await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
-    expect(await screen.findByText(/authoritative read confirms the completed verification outcome/i)).toBeVisible()
+    expect(await screen.findByText(/verification outcome was confirmed after Meridian refreshed the review/i)).toBeVisible()
     const posts = vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
       String(path).endsWith('/unsecured-consumer-loan-verification/complete')
       && (options as RequestInit | undefined)?.method === 'POST')
@@ -131,7 +131,7 @@ describe('Staff verification workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
     expect(await screen.findByText(
-      /operation result is still unknown because authoritative state could not be refreshed/i,
+      /could not confirm the result or load the latest verification information/i,
       undefined,
       { timeout: 5_000 },
     )).toBeVisible()
@@ -144,7 +144,7 @@ describe('Staff verification workspace', () => {
     authoritativeReadAvailable = true
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
 
-    expect(await screen.findByText(/authoritative read confirms the completed verification outcome/i)).toBeVisible()
+    expect(await screen.findByText(/verification outcome was confirmed after Meridian refreshed the review/i)).toBeVisible()
     expect(completionPosts()).toHaveLength(1)
   })
 

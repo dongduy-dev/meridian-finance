@@ -87,7 +87,8 @@ describe('Administrative closure workspace', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review administrative closure' }))
     await user.click(screen.getByRole('button', { name: 'Confirm closure' }))
-    expect(await screen.findByText(/stable request UUID and minimal semantic digest were persisted/i)).toBeVisible()
+    expect(await screen.findByText(/closure result is not confirmed/i)).toBeVisible()
+    expect(document.body).not.toHaveTextContent(/\b(?:POST|GET|UUID|SHA-256)\b|payload digest|request identity/i)
     expect(closurePosts()).toHaveLength(1)
     const stored = sessionStorage.getItem('meridian.staff.unresolved-operations.v1') ?? ''
     expect(stored).toContain(requestId)
@@ -127,7 +128,7 @@ describe('Administrative closure workspace', () => {
     await user.click(await screen.findByRole('button', { name: 'Review administrative closure' }))
     await user.click(screen.getByRole('button', { name: 'Confirm closure' }))
     expect(await screen.findByText(
-      /Closure is confirmed\. Current account refresh failed/i,
+      /Closure is confirmed, but the latest account information is unavailable/i,
       {},
       { timeout: 5_000 },
     ))
@@ -135,7 +136,7 @@ describe('Administrative closure workspace', () => {
     expect(screen.getByRole('heading', { name: 'Administrative closure confirmed' })).toBeVisible()
     readsFail = false
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
-    expect(await screen.findByText(/confirmed closure is now reconciled/i)).toBeVisible()
+    expect(await screen.findByText(/closure remains confirmed and the latest account information is now loaded/i)).toBeVisible()
     expect(closurePosts()).toHaveLength(1)
   })
 

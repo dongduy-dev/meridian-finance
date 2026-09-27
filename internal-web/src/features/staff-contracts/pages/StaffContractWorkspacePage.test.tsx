@@ -150,7 +150,7 @@ describe('Staff contract workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Review evidenced acknowledgment' }))
     await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
 
-    await screen.findByText(/command response and refreshed authoritative contract case are confirmed/i)
+    await screen.findByText(/contract action was confirmed and the latest contract information is loaded/i)
     expect(submitted).toEqual({
       acknowledgmentRequestId: operationId,
       contractId: '22222222-2222-4222-8222-222222222222',
@@ -175,7 +175,7 @@ describe('Staff contract workspace', () => {
     await user.click(await screen.findByRole('button', { name: 'Review preparation' }))
     await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
 
-    await screen.findByText(/command response and refreshed authoritative contract case are confirmed/i)
+    await screen.findByText(/contract action was confirmed and the latest contract information is loaded/i)
     expect(submitted).toEqual({
       preparationRequestId: operationId,
       expectedCurrentContractVersion: 0,
@@ -198,7 +198,7 @@ describe('Staff contract workspace', () => {
     expect(screen.getAllByText(/financial terms and repayment items remain unchanged/i).length).toBeGreaterThan(0)
     await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
 
-    await screen.findByText(/backend rejected the command/i)
+    await screen.findByText(/action was rejected/i)
     expect(submitted).toEqual({
       preparationRequestId: operationId,
       expectedCurrentContractVersion: 2,
@@ -249,7 +249,7 @@ describe('Staff contract workspace', () => {
     expect(await screen.findByRole('heading', { name: 'Contract preparation result unknown' })).toBeVisible()
     expect(postCalls()).toHaveLength(1)
     await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
-    await screen.findByText(/command response and refreshed authoritative contract case are confirmed/i)
+    await screen.findByText(/contract action was confirmed and the latest contract information is loaded/i)
     expect(postCalls()).toHaveLength(2)
     expect(submitted[1]).toEqual(submitted[0])
     expect(submitted[0]).toMatchObject({ preparationRequestId: operationId, expectedCurrentContractVersion: 0 })
@@ -277,7 +277,7 @@ describe('Staff contract workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
 
     expect(await screen.findByRole('heading', { name: 'Contract preparation result unknown' })).toBeVisible()
-    expect(screen.getByText(/authoritative state was refreshed, but it cannot prove this exact request identity/i)).toBeVisible()
+    expect(screen.getByText(/could not confirm this action from the latest contract information/i)).toBeVisible()
     expect(screen.getByText(/Support reference: cp6-server-request/i)).toBeVisible()
     expect(postCalls()).toHaveLength(1)
     expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
@@ -291,7 +291,7 @@ describe('Staff contract workspace', () => {
     })
 
     await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
-    await screen.findByText(/command response and refreshed authoritative contract case are confirmed/i)
+    await screen.findByText(/contract action was confirmed and the latest contract information is loaded/i)
 
     expect(postCalls()).toHaveLength(2)
     expect(submitted[1]).toEqual(submitted[0])
@@ -335,7 +335,7 @@ describe('Staff contract workspace', () => {
     })
 
     await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
-    await screen.findByText(/command response and refreshed authoritative contract case are confirmed/i)
+    await screen.findByText(/contract action was confirmed and the latest contract information is loaded/i)
 
     expect(postCalls()).toHaveLength(2)
     expect(submitted[1]).toEqual(submitted[0])
@@ -361,11 +361,11 @@ describe('Staff contract workspace', () => {
     await user.click(await screen.findByRole('button', { name: 'Review readiness confirmation' }))
     await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
 
-    expect(await screen.findByText(/Command confirmed; refreshed state unavailable/i)).toBeVisible()
+    expect(await screen.findByText(/Action confirmed; the latest contract information is unavailable/i)).toBeVisible()
     expect(postCalls()).toHaveLength(1)
     readsAvailable = true
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
-    await screen.findByText(/confirmed command is now reconciled/i)
+    await screen.findByText(/action remains confirmed and the latest contract information is now loaded/i)
     expect(postCalls()).toHaveLength(1)
   })
 

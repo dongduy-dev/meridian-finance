@@ -100,12 +100,12 @@ export function IntakeOcrReviewPanel({
         const authoritative = await getIntakeOcrReview(manager, caseId, evidenceType, versionId)
         client.setQueryData(originationKeys.ocrReview(caseId, evidenceType, versionId), authoritative)
         if (authoritative.disposition === 'REVIEWED' && sameFields(authoritative.reviewedFields, reviewedFields)) {
-          setMessage('The completed OCR review was confirmed from the authoritative result.')
+          setMessage('The completed OCR review was confirmed after Meridian refreshed the result.')
           return
         }
       } catch { /* The result remains unknown and sensitive values are not retained. */ }
       setUnknown(true)
-      setMessage('The OCR review result is unknown. Refresh and compare the authoritative review before another explicit action.')
+      setMessage('Meridian could not confirm the OCR review. Refresh and compare the latest review before another action.')
     } finally {
       setSubmitting(false)
     }
@@ -123,7 +123,7 @@ export function IntakeOcrReviewPanel({
   const reconcile = async () => {
     const refreshed = await review.refetch()
     if (refreshed.data?.disposition === 'REVIEWED') {
-      setMessage('The authoritative final OCR review is shown below.')
+      setMessage('The latest final OCR review is shown below.')
     } else {
       setMessage('No final review was found. Review the fields before another explicit confirmation.')
     }
@@ -172,6 +172,6 @@ function ReviewFields({ data, intakeOpen, submitting, submit, message, unknown, 
     {reviewed ? <p className="text-sm font-medium">Final OCR review completed.</p> : null}
     {reviewed && apply ? <Button type="button" variant="outline" disabled={!intakeOpen} onClick={apply}>Apply reviewed values</Button> : null}
     {message ? <p role="alert" className="text-sm text-muted-foreground">{message}</p> : null}
-    {unknown ? <Button type="button" variant="outline" onClick={() => void reconcile()}>Refresh authoritative OCR review</Button> : null}
+    {unknown ? <Button type="button" variant="outline" onClick={() => void reconcile()}>Refresh OCR review</Button> : null}
   </div>
 }

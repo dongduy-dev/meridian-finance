@@ -14,12 +14,12 @@ export const operationStatuses = [
 export type OperationStatus = (typeof operationStatuses)[number]
 
 const presentation = {
-  DRAFT: { title: 'Ready to review', description: 'The operation has not been submitted.', variant: 'information', icon: Clock3 },
-  IN_FLIGHT: { title: 'Submitting operation', description: 'Wait for Meridian to confirm the result.', variant: 'information', icon: LoaderCircle },
-  RESULT_UNKNOWN: { title: 'Result not yet confirmed', description: 'Do not start a contradictory operation while the result is checked.', variant: 'warning', icon: AlertCircle },
-  RECONCILING: { title: 'Checking authoritative state', description: 'Meridian is reconciling the durable result.', variant: 'information', icon: LoaderCircle },
-  RESOLVED: { title: 'Operation confirmed', description: 'The authoritative result has been reconciled.', variant: 'success', icon: CheckCircle2 },
-  BLOCKED: { title: 'Operation blocked', description: 'Review the current authority before continuing.', variant: 'destructive', icon: ShieldAlert },
+  DRAFT: { title: 'Ready to review', description: 'This action has not been submitted.', variant: 'information', icon: Clock3 },
+  IN_FLIGHT: { title: 'Submitting action', description: 'Meridian is waiting for the result.', variant: 'information', icon: LoaderCircle },
+  RESULT_UNKNOWN: { title: 'Result not confirmed', description: 'Meridian could not confirm completion. Do not start a different conflicting action; use the recovery step shown.', variant: 'warning', icon: AlertCircle },
+  RECONCILING: { title: 'Checking result', description: 'Meridian is checking the latest information before another action is allowed.', variant: 'information', icon: LoaderCircle },
+  RESOLVED: { title: 'Result confirmed', description: 'The latest information confirms this action.', variant: 'success', icon: CheckCircle2 },
+  BLOCKED: { title: 'Action needs review', description: 'Review the latest information and the next step before continuing.', variant: 'destructive', icon: ShieldAlert },
 } as const
 
 type OperationStatusPanelProps = {

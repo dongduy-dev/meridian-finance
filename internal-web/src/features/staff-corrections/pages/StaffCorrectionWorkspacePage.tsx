@@ -290,5 +290,5 @@ export function StaffCorrectionWorkspacePage() {
 }
 
 function ActionError({ error }: { error: Error }) {
-  return <Alert variant="destructive"><AlertTriangle /><AlertTitle>Operation not confirmed</AlertTitle><AlertDescription>{error instanceof ApiError || error instanceof UnresolvedOperationConflictError ? error.message : 'The result is unknown. Reconcile before retrying with the retained operation identity.'}{error instanceof ApiError && error.requestId ? <RequestCorrelation requestId={error.requestId} /> : null}</AlertDescription></Alert>
+  return <Alert variant="destructive"><AlertTriangle /><AlertTitle>Operation not confirmed</AlertTitle><AlertDescription>{error instanceof ApiError || error instanceof UnresolvedOperationConflictError ? error.message : 'Meridian could not confirm the result. Review the latest correction information, then retry the same action.'}{error instanceof ApiError && error.requestId ? <RequestCorrelation requestId={error.requestId} /> : null}</AlertDescription></Alert>
 }
