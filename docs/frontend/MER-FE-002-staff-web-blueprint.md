@@ -1122,7 +1122,7 @@ The dedicated page contains:
 
 The command body must not acquire Customer, product, destination, amount, pricing, term, limit, account, or schedule fields. Those remain backend-derived from the ready contract.
 
-After success, Staff Web shows the safe returned disbursement/account identifiers, amount, value dates, activation time, and final schedule. It does not show the raw external transfer reference or claim Salary Advance exposure effects for UCL or Collateral.
+After success, Staff Web shows the safe returned disbursement/account identifiers, amount, value dates, activation time, and final schedule. An actor with `loan:read` receives navigation to the application-scoped LoanAccount workspace. Repayment, settlement, and closure commands remain in their servicing workspaces and do not appear in the disbursement workspace. The activation result does not show the raw external transfer reference or claim Salary Advance exposure effects for UCL or Collateral.
 
 The full destination exists only in workspace component memory after an explicit reveal. Staff Web clears it on hide, navigation, session or actor change, contract identity change, lifecycle change, successful disbursement, or the feature-local background timeout. A failed reveal POST is never retried automatically; another explicit reveal first revalidates the exact case and contract version.
 

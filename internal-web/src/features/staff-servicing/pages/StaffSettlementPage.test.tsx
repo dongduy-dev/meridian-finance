@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -87,6 +87,7 @@ describe('Administrative Full-Balance Settlement workspace', () => {
     expect(screen.getByRole('dialog')).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Confirm settlement' }))
     expect(await screen.findByRole('heading', { name: 'Settlement confirmed' })).toBeVisible()
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Settlement result for account/i })).toHaveFocus())
     expect(settlementPosts()).toHaveLength(1)
     expect(settlementPosts()[0]?.[1]?.body).toEqual({
       requestId,

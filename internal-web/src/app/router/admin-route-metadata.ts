@@ -8,6 +8,7 @@ import {
 export type AdminRouteDefinition = {
   path: `/admin${string}`
   label: string
+  documentTitle: string
   requiredPermissions: readonly BackOfficeAdministrationPermission[]
   navigation?: boolean
 }
@@ -15,18 +16,21 @@ export type AdminRouteDefinition = {
 export const ADMIN_HOME_ROUTE = {
   path: '/admin',
   label: 'Administration',
+  documentTitle: 'Back-Office Administration',
   requiredPermissions: BACK_OFFICE_ADMINISTRATION_PERMISSIONS,
 } as const satisfies AdminRouteDefinition
 
 export const ADMIN_PARTNERS_ROUTE = {
   path: '/admin/partners',
   label: 'Partners',
+  documentTitle: 'Partners',
   requiredPermissions: ['partner:read'],
 } as const satisfies AdminRouteDefinition
 
 export const ADMIN_PARTNER_DETAIL_ROUTE = {
   path: '/admin/partners/:partnerCompanyId',
   label: 'Partner detail',
+  documentTitle: 'Partner detail',
   requiredPermissions: ['partner:read'],
   navigation: false,
 } as const satisfies AdminRouteDefinition
@@ -34,18 +38,21 @@ export const ADMIN_PARTNER_DETAIL_ROUTE = {
 export const ADMIN_PARTNER_ELIGIBILITY_REVIEWS_ROUTE = {
   path: '/admin/partner-eligibility-reviews',
   label: 'Eligibility reviews',
+  documentTitle: 'Eligibility reviews',
   requiredPermissions: ['partner:read'],
 } as const satisfies AdminRouteDefinition
 
 export const ADMIN_PRODUCTS_ROUTE = {
   path: '/admin/products',
   label: 'Loan Products',
+  documentTitle: 'Loan Product Administration',
   requiredPermissions: ['loan:product:manage'],
 } as const satisfies AdminRouteDefinition
 
 export const ADMIN_USERS_ROUTE = {
   path: '/admin/users',
   label: 'Internal Users',
+  documentTitle: 'Internal User Administration',
   requiredPermissions: ['identity:user:manage'],
 } as const satisfies AdminRouteDefinition
 

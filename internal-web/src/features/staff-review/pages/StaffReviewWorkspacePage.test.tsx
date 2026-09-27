@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -70,6 +70,7 @@ describe('Staff review workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm review start' }))
 
     expect(await screen.findByText(/authoritative read confirms that review started/i)).toBeVisible()
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Review start result for UCL-20260905-000001/i })).toHaveFocus())
     expect(screen.queryByRole('button', { name: /recommend|approve|reject/i })).not.toBeInTheDocument()
     expect(vi.mocked(api.apiRequest).mock.calls.filter(([path]) => String(path).endsWith('/review/start'))).toHaveLength(1)
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: staffApplicationKeys.all })
@@ -107,9 +108,11 @@ describe('Staff review workspace', () => {
     expect(startPosts()).toHaveLength(1)
 
     authoritativeReadAvailable = true
-    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+    const refresh = screen.getByRole('button', { name: 'Refresh' })
+    await user.click(refresh)
 
     expect(await screen.findByText(/authoritative read confirms that review started/i)).toBeVisible()
+    expect(refresh).toHaveFocus()
     expect(startPosts()).toHaveLength(1)
   })
 
