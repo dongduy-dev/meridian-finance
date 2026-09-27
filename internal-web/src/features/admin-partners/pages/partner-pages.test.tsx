@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -137,7 +137,7 @@ describe('Partner administration pages', () => {
     })
   })
 
-  it('keeps detail editing and status change as distinct commands', async () => {
+  it('keeps detail editing distinct and confirms availability-reducing status changes', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
     vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
       const method = (options as RequestInit | undefined)?.method
@@ -156,7 +156,20 @@ describe('Partner administration pages', () => {
     await user.type(screen.getByLabelText('Company name'), 'Updated Ltd')
     await user.click(screen.getByRole('button', { name: 'Save details' }))
     expect(await screen.findByText('Company details updated.')).toBeVisible()
-    await user.click(screen.getByRole('button', { name: 'Set suspended' }))
+    const suspendedTrigger = screen.getByRole('button', { name: 'Set suspended' })
+    await user.click(suspendedTrigger)
+    let statusDialog = screen.getByRole('dialog', { name: 'Confirm Partner Company status' })
+    expect(statusDialog).toBeVisible()
+    expect(screen.getByText('ACTIVE → SUSPENDED')).toBeVisible()
+    expect(screen.getByText(/reduces future Salary Advance eligibility/i)).toBeVisible()
+    expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => path === `/partner-companies/${companyId}/status`)).toBe(false)
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(suspendedTrigger).toHaveFocus())
+    expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => path === `/partner-companies/${companyId}/status`)).toBe(false)
+
+    await user.click(suspendedTrigger)
+    statusDialog = screen.getByRole('dialog', { name: 'Confirm Partner Company status' })
+    await user.click(within(statusDialog).getByRole('button', { name: 'Set suspended' }))
     expect(await screen.findByText('Company status updated.')).toBeVisible()
 
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path, options]) =>
@@ -164,7 +177,37 @@ describe('Partner administration pages', () => {
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path, options]) =>
       path === `/partner-companies/${companyId}/status`
       && (options as RequestInit | undefined)?.method === 'POST'
-      && (options as { body?: unknown }).body !== undefined)).toBe(true)
+      && JSON.stringify((options as { body?: unknown }).body) === JSON.stringify({ status: 'SUSPENDED' }))).toBe(true)
+
+    await user.click(screen.getByRole('button', { name: 'Set inactive' }))
+    expect(screen.getByText('ACTIVE → INACTIVE')).toBeVisible()
+    statusDialog = screen.getByRole('dialog', { name: 'Confirm Partner Company status' })
+    await user.click(within(statusDialog).getByRole('button', { name: 'Set inactive' }))
+    await waitFor(() => expect(vi.mocked(api.apiRequest).mock.calls.some(([path, options]) =>
+      path === `/partner-companies/${companyId}/status`
+      && JSON.stringify((options as { body?: unknown }).body) === JSON.stringify({ status: 'INACTIVE' }))).toBe(true))
+  })
+
+  it('keeps Partner Company reactivation direct', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
+    const suspendedCompany = { ...company, status: 'SUSPENDED' }
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if ((options as RequestInit | undefined)?.method === 'POST' && String(path).endsWith('/status')) return company
+      if (String(path).endsWith('/employees?activeOnly=false')) return [employee]
+      if (String(path).endsWith('/employee-import-batches')) return []
+      if (String(path) === `/partner-companies/${companyId}`) return suspendedCompany
+      if (String(path) === '/partner-companies') return [suspendedCompany]
+      throw new Error(`Unexpected path ${path}`)
+    })
+    renderPath(`/admin/partners/${companyId}`)
+    const user = userEvent.setup()
+    await screen.findByRole('heading', { name: 'Acme Ltd' })
+    await user.click(screen.getByRole('button', { name: 'Set active' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Confirm Partner Company status' })).not.toBeInTheDocument()
+    await waitFor(() => expect(vi.mocked(api.apiRequest).mock.calls.some(([path, options]) =>
+      path === `/partner-companies/${companyId}/status`
+      && JSON.stringify((options as { body?: unknown }).body) === JSON.stringify({ status: 'ACTIVE' }))).toBe(true))
   })
 
   it('shows a confirmed mixed import and refreshes employees and history', async () => {
@@ -326,11 +369,44 @@ describe('Partner administration pages', () => {
     expect(screen.getByLabelText('Effective month')).toBeDisabled()
     expect(screen.getByLabelText('Partner Employee CSV')).toBeDisabled()
     expect(screen.getByLabelText('Enter manually')).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Discard and start a new import' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Leaving or reloading this page loses the local recovery information and does not prove that the original import failed/i)).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Retry exact import' }))
     expect(await screen.findByText('Employee import completed.')).toBeVisible()
     await waitFor(() => expect(submitted).toHaveLength(2))
     expect(submitted[1]).toEqual(submitted[0])
     expect(submitted[0]).toMatchObject({ requestId: '44444444-4444-4444-8444-444444444444', effectiveMonth: '2026-09' })
+  })
+
+  it('treats an idempotency conflict during exact import recovery as definitive', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue('44444444-4444-4444-8444-444444444444')
+    let attempts = 0
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if ((options as RequestInit | undefined)?.method === 'POST' && String(path).endsWith('/employee-import-batches')) {
+        attempts += 1
+        if (attempts === 1) throw new NetworkError('response lost')
+        throw new ApiError(409, 'IDEMPOTENCY_KEY_REUSED', 'Request ID was reused.', String(path), '2026-09-16T08:00:00Z')
+      }
+      if (String(path).endsWith('/employees?activeOnly=false')) return [employee]
+      if (String(path).endsWith('/employee-import-batches')) return []
+      if (String(path) === `/partner-companies/${companyId}`) return company
+      return [company]
+    })
+    renderPath(`/admin/partners/${companyId}`)
+    const user = userEvent.setup()
+    await screen.findByRole('heading', { name: 'Acme Ltd' })
+    await user.click(screen.getByLabelText('Enter manually'))
+    await user.type(screen.getByLabelText('Effective month'), '2026-09')
+    await user.type(screen.getByLabelText('Employee code'), 'EMP-NEW')
+    await user.type(screen.getByLabelText('Identity reference'), 'ID-NEW')
+    await user.click(screen.getByRole('button', { name: 'Import employees' }))
+    await user.click(await screen.findByRole('button', { name: 'Retry exact import' }))
+
+    expect(await screen.findByText('Request ID was reused.')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Retry exact import' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Effective month')).toBeEnabled()
+    expect(attempts).toBe(2)
   })
 
   it('bounds a large CSV preview while submitting every parsed row in order', async () => {

@@ -47,6 +47,7 @@ export function LoanProductCard({ product, manager }: {
   const [activationError, setActivationError] = useState<string>()
   const [limitPending, setLimitPending] = useState(false)
   const [activationPending, setActivationPending] = useState(false)
+  const [confirmingDeactivation, setConfirmingDeactivation] = useState(false)
 
   useEffect(() => {
     form.reset({ minAmount: product.minAmount, maxAmount: product.maxAmount })
@@ -82,8 +83,7 @@ export function LoanProductCard({ product, manager }: {
     }
   })
 
-  const changeActivation = async () => {
-    const target = !product.active
+  const changeActivation = async (target: boolean) => {
     setActivationPending(true)
     setActivationError(undefined)
     try {
@@ -138,11 +138,12 @@ export function LoanProductCard({ product, manager }: {
 
       <div className="space-y-3 rounded-md border p-4">
         <div><h3 className="font-semibold">Product availability</h3><p className="text-sm text-muted-foreground">{product.active ? 'Deactivation removes this product from Customer discovery and blocks future submission. Historical lending records are unchanged.' : 'Activation makes this product available for Customer discovery and future submission under current backend policy.'}</p></div>
-        <Button type="button" variant={product.active ? 'destructive' : 'default'} disabled={activationPending} onClick={() => void changeActivation()}>
+        <Button id={`product-activation-${product.productCode}-trigger`} type="button" variant={product.active ? 'destructive' : 'default'} disabled={activationPending} onClick={() => product.active ? setConfirmingDeactivation(true) : void changeActivation(true)}>
           {activationPending ? 'Waiting for confirmation…' : product.active ? 'Deactivate product' : 'Activate product'}
         </Button>
         {activationError ? <Alert variant="destructive"><AlertTitle>Activation state was not confirmed</AlertTitle><AlertDescription>{activationError}</AlertDescription></Alert> : null}
       </div>
     </CardContent>
+    {confirmingDeactivation ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby={`product-deactivation-${product.productCode}-title`}><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><h2 id={`product-deactivation-${product.productCode}-title`} className="text-xl font-semibold">Confirm product deactivation</h2><dl className="grid gap-3 text-sm"><div><dt className="text-muted-foreground">Loan Product</dt><dd className="font-semibold">{name} ({product.productCode})</dd></div><div><dt className="text-muted-foreground">Availability</dt><dd className="font-semibold">Active → Inactive</dd></div></dl><p className="text-sm text-muted-foreground">Deactivation removes this product from Customer discovery and blocks future submission. Historical lending records remain unchanged.</p><div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={() => { setConfirmingDeactivation(false); setTimeout(() => document.getElementById(`product-activation-${product.productCode}-trigger`)?.focus(), 0) }}>Cancel</Button><Button autoFocus variant="destructive" disabled={activationPending} onClick={() => { setConfirmingDeactivation(false); void changeActivation(false) }}>Deactivate product</Button></div></div></div> : null}
   </Card>
 }

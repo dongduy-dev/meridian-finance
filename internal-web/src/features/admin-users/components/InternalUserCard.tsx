@@ -42,6 +42,7 @@ export function InternalUserCard({ user, roles, manager }: {
   const [statusError, setStatusError] = useState<string>()
   const [rolePending, setRolePending] = useState<string>()
   const [roleError, setRoleError] = useState<string>()
+  const [statusConfirmation, setStatusConfirmation] = useState<Exclude<InternalUserStatus, 'ACTIVE'>>()
 
   const statusTarget = selectedStatus ?? (knownStatus ? user.status as InternalUserStatus : 'ACTIVE')
 
@@ -55,11 +56,11 @@ export function InternalUserCard({ user, roles, manager }: {
     await queryClient.invalidateQueries({ queryKey: adminUserKeys.list() }).catch(() => undefined)
   }
 
-  const submitStatus = async () => {
+  const submitStatus = async (target: InternalUserStatus) => {
     setStatusPending(true)
     setStatusError(undefined)
     try {
-      const returned = await changeInternalUserStatus(manager, user.userId, statusTarget)
+      const returned = await changeInternalUserStatus(manager, user.userId, target)
       setSelectedStatus(undefined)
       await retainAndRefresh(returned)
     } catch (error) {
@@ -116,9 +117,10 @@ export function InternalUserCard({ user, roles, manager }: {
           </select>
         </label>
         <Button
+          id={`internal-user-status-${user.userId}-trigger`}
           type="button"
           disabled={statusPending || (knownStatus && statusTarget === user.status)}
-          onClick={() => void submitStatus()}
+          onClick={() => statusTarget === 'ACTIVE' ? void submitStatus(statusTarget) : setStatusConfirmation(statusTarget)}
         >
           {statusPending ? 'Waiting for confirmation…' : 'Apply status'}
         </Button>
@@ -151,5 +153,6 @@ export function InternalUserCard({ user, roles, manager }: {
         {roleError ? <Alert variant="destructive"><AlertTitle>Role assignment was not confirmed</AlertTitle><AlertDescription>{roleError}</AlertDescription></Alert> : null}
       </section>
     </CardContent>
+    {statusConfirmation ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby={`internal-user-status-${user.userId}-title`}><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><h2 id={`internal-user-status-${user.userId}-title`} className="text-xl font-semibold">Confirm User access change</h2><dl className="grid gap-3 text-sm"><div><dt className="text-muted-foreground">Internal User</dt><dd className="font-semibold">{user.displayName} ({user.email})</dd></div><div><dt className="text-muted-foreground">Status change</dt><dd className="font-semibold">{displayStatus(user.status)} → {statusLabels[statusConfirmation]}</dd></div></dl><p className="text-sm text-muted-foreground">The User will lose access and all active sessions will be revoked. Reactivation does not restore those sessions.</p><div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={() => { setStatusConfirmation(undefined); setTimeout(() => document.getElementById(`internal-user-status-${user.userId}-trigger`)?.focus(), 0) }}>Cancel</Button><Button autoFocus variant="destructive" disabled={statusPending} onClick={() => { const target = statusConfirmation; setStatusConfirmation(undefined); void submitStatus(target) }}>Apply {statusLabels[statusConfirmation]} status</Button></div></div></div> : null}
   </Card>
 }
