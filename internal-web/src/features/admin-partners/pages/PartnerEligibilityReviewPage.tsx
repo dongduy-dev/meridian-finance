@@ -10,7 +10,7 @@ import { hasPermission } from '@/features/auth/model/access-control'
 import { useAuth } from '@/features/auth/model/auth-context'
 import { ApiError, NetworkError } from '@/lib/api'
 import { formatTimestamp } from '@/lib/format/presentation'
-import type { PartnerEligibilityReviewDecision } from '../api/contracts'
+import type { PartnerEligibilityReview, PartnerEligibilityReviewDecision } from '../api/contracts'
 import { decidePartnerEligibilityReview } from '../api/partner-admin-api'
 import { partnerEligibilityReviewQuery, partnerEligibilityReviewsQuery } from '../api/queries'
 import { PartnerQueryErrorPanel } from '../components/PartnerQueryErrorPanel'
@@ -25,6 +25,36 @@ const humanizeKnownValue = (value: string) =>
   value.toLowerCase().split('_').map((word) =>
     word.replace(/^./, (letter) => letter.toUpperCase())).join(' ')
 
+type DecisionConfirmation = {
+  decision: PartnerEligibilityReviewDecision
+  employeeCode?: string
+  reviewUpdatedAt: string
+}
+
+function refreshedDecisionMessage(
+  review: PartnerEligibilityReview | undefined,
+  attempted: PartnerEligibilityReviewDecision,
+): string {
+  const matchingApproval = attempted.outcome === 'APPROVE'
+    && review?.status === 'APPROVED'
+    && review.decisionOutcome === 'MANUAL_REVIEW_APPROVED'
+    && review.decisionReason === 'CURRENT_EMPLOYEE_CONFIRMED'
+    && review.selectedEmployee?.partnerEmployeeId === attempted.partnerEmployeeId
+  const matchingRejection = attempted.outcome === 'REJECT'
+    && review?.status === 'REJECTED'
+    && review.decisionOutcome === 'MANUAL_REVIEW_REJECTED'
+    && review.decisionReason === attempted.reasonCode
+    && review.selectedEmployee === null
+
+  if (matchingApproval || matchingRejection) {
+    return 'Your decision was confirmed after Meridian refreshed the review.'
+  }
+  if (review?.status === 'PENDING') {
+    return 'The decision was not confirmed. The review is still pending. Review the current evidence before submitting a decision again.'
+  }
+  return 'The review was completed with a different outcome. Your attempted decision was not confirmed.'
+}
+
 export function PartnerEligibilityReviewPage() {
   const { manager, state } = useAuth()
   const enabled = state.status === 'authenticated'
@@ -38,11 +68,13 @@ export function PartnerEligibilityReviewPage() {
   const [busy, setBusy] = useState(false)
   const [commandError, setCommandError] = useState<Error>()
   const [commandMessage, setCommandMessage] = useState<string>()
+  const [confirmation, setConfirmation] = useState<DecisionConfirmation>()
 
   const reconcile = async () => {
     const [detailResult, queueResult] = await Promise.all([detail.refetch(), queue.refetch()])
     if (detailResult.isError) throw detailResult.error
     if (queueResult.isError) throw queueResult.error
+    return detailResult.data
   }
 
   const decide = async (decision: PartnerEligibilityReviewDecision) => {
@@ -53,12 +85,13 @@ export function PartnerEligibilityReviewPage() {
     try {
       await decidePartnerEligibilityReview(manager, selectedReviewId, decision)
       await reconcile()
-      setCommandMessage('The authoritative review outcome was confirmed.')
+      setCommandMessage('Your decision was confirmed.')
     } catch (error) {
       if (error instanceof NetworkError || (error instanceof ApiError && error.status >= 500)) {
         try {
-          await reconcile()
-          setCommandMessage('The command result was uncertain. Meridian reconciled this review through an authoritative GET.')
+          const refreshed = await reconcile()
+          setSelectedEmployeeId('')
+          setCommandMessage(refreshedDecisionMessage(refreshed, decision))
         } catch {
           setCommandError(error instanceof Error ? error : new Error('Decision result is unknown.'))
         }
@@ -73,10 +106,22 @@ export function PartnerEligibilityReviewPage() {
   const review = detail.data
   const eligibleCandidates = review?.candidates.filter((candidate) =>
     candidate.active && candidate.employmentStatus === 'ACTIVE') ?? []
-  const effectiveSelectedEmployeeId = eligibleCandidates.some((candidate) =>
+  const selectedCandidate = eligibleCandidates.find((candidate) =>
     candidate.partnerEmployeeId === selectedEmployeeId)
-    ? selectedEmployeeId
-    : eligibleCandidates[0]?.partnerEmployeeId ?? ''
+  const activeConfirmation = confirmation && review?.status === 'PENDING'
+    && confirmation.reviewUpdatedAt === review.updatedAt
+    && (confirmation.decision.outcome === 'REJECT'
+      || selectedCandidate?.partnerEmployeeId === confirmation.decision.partnerEmployeeId)
+    ? confirmation
+    : undefined
+
+  const closeConfirmation = () => {
+    const triggerId = confirmation?.decision.outcome === 'APPROVE'
+      ? 'eligibility-approval-trigger'
+      : 'eligibility-rejection-trigger'
+    setConfirmation(undefined)
+    setTimeout(() => document.getElementById(triggerId)?.focus(), 0)
+  }
 
   return <section className="mx-auto max-w-7xl space-y-6">
     <div>
@@ -91,7 +136,7 @@ export function PartnerEligibilityReviewPage() {
         {queue.isError ? <PartnerQueryErrorPanel error={queue.error} onRetry={() => void queue.refetch()} /> : null}
         {queue.data?.items.length === 0 ? <p className="text-sm text-muted-foreground">No pending Partner eligibility reviews require action.</p> : null}
         {queue.data?.items.length ? <ul className="space-y-3">{queue.data.items.map((item) => <li key={item.reviewId}>
-          <button type="button" onClick={() => { setRequestedReviewId(item.reviewId); setSelectedEmployeeId('') }} className={`w-full rounded-md border p-3 text-left text-sm ${selectedReviewId === item.reviewId ? 'border-primary bg-muted' : ''}`}>
+          <button type="button" onClick={() => { setRequestedReviewId(item.reviewId); setSelectedEmployeeId(''); setConfirmation(undefined) }} className={`w-full rounded-md border p-3 text-left text-sm ${selectedReviewId === item.reviewId ? 'border-primary bg-muted' : ''}`}>
             <span className="block font-semibold">{item.partnerCompanyName}</span>
             <span className="mt-1 block text-muted-foreground">{item.partnerCompanyCode} · {item.effectiveMonth} · {humanizeKnownValue(item.triggerOutcome)}</span>
             <span className="mt-1 block">Requested employee code: {item.requestedEmployeeCode}</span>
@@ -118,14 +163,14 @@ export function PartnerEligibilityReviewPage() {
 
           <div>
             <h2 className="font-semibold">Current identity-matched candidates</h2>
-            {review.candidates.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">No current authoritative employee candidate matches the Customer identity evidence.</p> : <div className="mt-2 overflow-x-auto"><table className="w-full min-w-[34rem] text-left text-sm"><caption className="sr-only">Current Partner Employee candidates</caption><thead><tr className="border-b"><th className="p-2">Select</th><th className="p-2">Employee code</th><th className="p-2">Employment</th><th className="p-2">Active</th></tr></thead><tbody>{review.candidates.map((candidate) => <tr className="border-b" key={candidate.partnerEmployeeId}><td className="p-2"><input aria-label={`Select ${candidate.employeeCode}`} type="radio" name="candidate" value={candidate.partnerEmployeeId} checked={effectiveSelectedEmployeeId === candidate.partnerEmployeeId} disabled={!candidate.active || candidate.employmentStatus !== 'ACTIVE' || !canManage || !review.approvalAvailable} onChange={() => setSelectedEmployeeId(candidate.partnerEmployeeId)} /></td><td className="p-2 font-mono">{candidate.employeeCode}</td><td className="p-2">{humanizeKnownValue(candidate.employmentStatus)}</td><td className="p-2">{candidate.active ? 'Yes' : 'No'}</td></tr>)}</tbody></table></div>}
+            {review.candidates.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">No current authoritative employee candidate matches the Customer identity evidence.</p> : <div className="mt-2 overflow-x-auto"><table className="w-full min-w-[34rem] text-left text-sm"><caption className="sr-only">Current Partner Employee candidates</caption><thead><tr className="border-b"><th className="p-2">Select</th><th className="p-2">Employee code</th><th className="p-2">Employment</th><th className="p-2">Active</th></tr></thead><tbody>{review.candidates.map((candidate) => <tr className="border-b" key={candidate.partnerEmployeeId}><td className="p-2"><input aria-label={`Select ${candidate.employeeCode}`} type="radio" name="candidate" value={candidate.partnerEmployeeId} checked={selectedCandidate?.partnerEmployeeId === candidate.partnerEmployeeId} disabled={!candidate.active || candidate.employmentStatus !== 'ACTIVE' || !canManage || !review.approvalAvailable} onChange={() => { setSelectedEmployeeId(candidate.partnerEmployeeId); setConfirmation(undefined) }} /></td><td className="p-2 font-mono">{candidate.employeeCode}</td><td className="p-2">{humanizeKnownValue(candidate.employmentStatus)}</td><td className="p-2">{candidate.active ? 'Yes' : 'No'}</td></tr>)}</tbody></table></div>}
           </div>
 
           {review.decisionOutcome ? <Alert variant="information"><AlertTitle>Terminal outcome</AlertTitle><AlertDescription>{humanizeKnownValue(review.decisionOutcome)} · {review.decisionReason ? humanizeKnownValue(review.decisionReason) : 'Reason unavailable'} · {formatTimestamp(review.reviewedAt)}</AlertDescription></Alert> : null}
 
           {canManage && review.status === 'PENDING' ? <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
-            <div className="space-y-2"><p className="text-sm font-medium">Approve exact current employee</p><Button disabled={busy || !review.approvalAvailable || !effectiveSelectedEmployeeId || eligibleCandidates.length === 0} onClick={() => void decide({ outcome: 'APPROVE', partnerEmployeeId: effectiveSelectedEmployeeId, reasonCode: 'CURRENT_EMPLOYEE_CONFIRMED' })}>Approve selected employee</Button></div>
-            <div className="space-y-2"><label className="block text-sm font-medium">Rejection reason<select className="mt-1 flex h-10 w-full rounded-md border bg-background px-3" value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value as typeof rejectionReason)}>{rejectionReasons.map((reason) => <option key={reason} value={reason}>{humanizeKnownValue(reason)}</option>)}</select></label><Button variant="destructive" disabled={busy || !review.rejectionAvailable} onClick={() => void decide({ outcome: 'REJECT', partnerEmployeeId: null, reasonCode: rejectionReason })}>Reject review</Button></div>
+            <div className="space-y-2"><p className="text-sm font-medium">Approve exact current employee</p><Button id="eligibility-approval-trigger" disabled={busy || !review.approvalAvailable || !selectedCandidate} onClick={() => selectedCandidate && setConfirmation({ decision: { outcome: 'APPROVE', partnerEmployeeId: selectedCandidate.partnerEmployeeId, reasonCode: 'CURRENT_EMPLOYEE_CONFIRMED' }, employeeCode: selectedCandidate.employeeCode, reviewUpdatedAt: review.updatedAt })}>Review approval</Button></div>
+            <div className="space-y-2"><label className="block text-sm font-medium">Rejection reason<select className="mt-1 flex h-10 w-full rounded-md border bg-background px-3" value={rejectionReason} onChange={(event) => { setRejectionReason(event.target.value as typeof rejectionReason); setConfirmation(undefined) }}>{rejectionReasons.map((reason) => <option key={reason} value={reason}>{humanizeKnownValue(reason)}</option>)}</select></label><Button id="eligibility-rejection-trigger" variant="destructive" disabled={busy || !review.rejectionAvailable} onClick={() => setConfirmation({ decision: { outcome: 'REJECT', partnerEmployeeId: null, reasonCode: rejectionReason }, reviewUpdatedAt: review.updatedAt })}>Review rejection</Button></div>
           </div> : null}
 
           {commandMessage ? <Alert variant="information"><AlertTitle>Review refreshed</AlertTitle><AlertDescription>{commandMessage}</AlertDescription></Alert> : null}
@@ -133,6 +178,7 @@ export function PartnerEligibilityReviewPage() {
         </> : null}
       </CardContent></Card>
     </div>
+    {activeConfirmation && review ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="eligibility-confirm-title"><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><h2 id="eligibility-confirm-title" className="text-xl font-semibold">{activeConfirmation.decision.outcome === 'APPROVE' ? 'Confirm employment approval' : 'Confirm eligibility rejection'}</h2><dl className="grid gap-3 text-sm sm:grid-cols-2"><Fact label="Partner Company">{review.partnerCompany.name} ({review.partnerCompany.companyCode})</Fact><Fact label="Effective month">{review.effectiveMonth}</Fact>{activeConfirmation.decision.outcome === 'APPROVE' ? <Fact label="Selected employee">{activeConfirmation.employeeCode}</Fact> : <Fact label="Rejection reason">{humanizeKnownValue(activeConfirmation.decision.reasonCode)}</Fact>}</dl>{activeConfirmation.decision.outcome === 'APPROVE' ? <p className="text-sm text-muted-foreground">This confirms the selected current Partner employment for this Customer and may be used for Partner employment and Salary Advance eligibility. If a verified employment relationship belongs to another Partner, Meridian may replace it through this controlled approval.</p> : <p className="text-sm text-muted-foreground">This closes the review with the selected rejection reason. The rejection does not create or change a Partner Employee link.</p>}<div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={closeConfirmation}>Cancel</Button><Button autoFocus variant={activeConfirmation.decision.outcome === 'REJECT' ? 'destructive' : 'default'} disabled={busy} onClick={() => { const decision = activeConfirmation.decision; setConfirmation(undefined); void decide(decision) }}>{activeConfirmation.decision.outcome === 'APPROVE' ? 'Confirm approval' : 'Confirm rejection'}</Button></div></div></div> : null}
   </section>
 }
 

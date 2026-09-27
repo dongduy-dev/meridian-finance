@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -92,7 +92,7 @@ describe('Internal User administration page', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible()
   })
 
-  it('keeps status unchanged until confirmation and refreshes authoritative state afterward', async () => {
+  it('confirms suspension before the exact target-state command and restores focus on cancel', async () => {
     let authoritative = internalUser
     let confirm!: (value: unknown) => void
     let reads = 0
@@ -111,8 +111,24 @@ describe('Internal User administration page', () => {
     const user = userEvent.setup()
     await screen.findByRole('heading', { name: 'Loan Officer Demo' })
     await user.selectOptions(screen.getByLabelText('Target status'), 'SUSPENDED')
-    await user.click(screen.getByRole('button', { name: 'Apply status' }))
+    const trigger = screen.getByRole('button', { name: 'Apply status' })
+    await user.click(trigger)
+    let dialog = screen.getByRole('dialog', { name: 'Confirm User access change' })
+    expect(dialog).toHaveTextContent('Loan Officer Demo (loan.officer@meridian.local)')
+    expect(dialog).toHaveTextContent('Active → Suspended')
+    expect(dialog).toHaveTextContent(/lose access and all active sessions will be revoked/i)
+    expect(vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(0)
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(trigger).toHaveFocus())
+    expect(vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(0)
+
+    await user.click(trigger)
+    dialog = screen.getByRole('dialog', { name: 'Confirm User access change' })
+    await user.click(within(dialog).getByRole('button', { name: 'Apply Suspended status' }))
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0)
+    const statusCommand = vi.mocked(api.apiRequest).mock.calls.find(([path, options]) =>
+      String(path).endsWith('/status') && (options as RequestInit | undefined)?.method === 'PUT')
+    expect((statusCommand?.[1] as { body: unknown }).body).toEqual({ status: 'SUSPENDED' })
     confirm({ ...internalUser, status: 'SUSPENDED' })
     await waitFor(() => expect(reads).toBeGreaterThan(1))
     expect((await screen.findAllByText('Suspended')).length).toBeGreaterThan(0)
@@ -130,6 +146,7 @@ describe('Internal User administration page', () => {
     await screen.findByRole('heading', { name: 'Loan Officer Demo' })
     await user.selectOptions(screen.getByLabelText('Target status'), 'DISABLED')
     await user.click(screen.getByRole('button', { name: 'Apply status' }))
+    await user.click(within(screen.getByRole('dialog', { name: 'Confirm User access change' })).getByRole('button', { name: 'Apply Disabled status' }))
     expect(await screen.findByRole('heading', { name: 'Status was not confirmed' })).toBeVisible()
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0)
     expect(vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(1)
@@ -163,6 +180,26 @@ describe('Internal User administration page', () => {
     expect(await screen.findByRole('button', { name: 'Assign Approver' })).toBeVisible()
     const puts = vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')
     expect(puts.map(([, options]) => (options as { body: unknown }).body)).toEqual([{ assigned: true }, { assigned: false }])
+  })
+
+  it('keeps reactivation direct without a confirmation dialog', async () => {
+    const suspendedUser = { ...internalUser, status: 'SUSPENDED' }
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (String(path).endsWith('/assignable-roles')) return roles
+      if (!(options as RequestInit | undefined)?.method) return [suspendedUser]
+      return { ...suspendedUser, status: 'ACTIVE' }
+    })
+    renderPage()
+    const user = userEvent.setup()
+    await screen.findByRole('heading', { name: 'Loan Officer Demo' })
+    await user.selectOptions(screen.getByLabelText('Target status'), 'ACTIVE')
+    await user.click(screen.getByRole('button', { name: 'Apply status' }))
+
+    expect(screen.queryByRole('dialog', { name: 'Confirm User access change' })).not.toBeInTheDocument()
+    await waitFor(() => expect(vi.mocked(api.apiRequest).mock.calls.some(([path, options]) =>
+      String(path).endsWith('/status')
+      && (options as RequestInit | undefined)?.method === 'PUT'
+      && JSON.stringify((options as { body?: unknown }).body) === JSON.stringify({ status: 'ACTIVE' }))).toBe(true))
   })
 
   it('does not retry an unknown role result and preserves the confirmed assignment while refreshing', async () => {
@@ -220,6 +257,7 @@ describe('Internal User administration page', () => {
     await screen.findByRole('heading', { name: 'Loan Officer Demo' })
     await user.selectOptions(screen.getByLabelText('Target status'), 'DISABLED')
     await user.click(screen.getByRole('button', { name: 'Apply status' }))
+    await user.click(within(screen.getByRole('dialog', { name: 'Confirm User access change' })).getByRole('button', { name: 'Apply Disabled status' }))
     expect(await screen.findByRole('heading', { name: 'Staff sign in' })).toBeVisible()
   })
 })

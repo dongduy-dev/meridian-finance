@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -143,7 +143,7 @@ describe('Loan Product administration page', () => {
     expect(screen.getByText(/10.000.000/)).toBeVisible()
   })
 
-  it('changes activation only after confirmation and never retries a failed command', async () => {
+  it('confirms deactivation, keeps activation direct, and never retries a failed command', async () => {
     let confirm!: (value: unknown) => void
     let authoritative = salary
     vi.mocked(api.apiRequest).mockImplementation(async (_path, options) => {
@@ -158,16 +158,30 @@ describe('Loan Product administration page', () => {
     renderPage()
     const user = userEvent.setup()
     await screen.findByRole('heading', { name: 'Salary Advance' })
-    await user.click(screen.getByRole('button', { name: 'Deactivate product' }))
+    const trigger = screen.getByRole('button', { name: 'Deactivate product' })
+    await user.click(trigger)
+    let dialog = screen.getByRole('dialog', { name: 'Confirm product deactivation' })
+    expect(dialog).toHaveTextContent('Salary Advance (SALARY_ADVANCE)')
+    expect(dialog).toHaveTextContent(/removes this product from Customer discovery and blocks future submission/i)
+    expect(vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(0)
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(trigger).toHaveFocus())
+    expect(vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(0)
+
+    await user.click(trigger)
+    dialog = screen.getByRole('dialog', { name: 'Confirm product deactivation' })
+    await user.click(within(dialog).getByRole('button', { name: 'Deactivate product' }))
     expect(screen.getByText('Active')).toBeVisible()
     confirm({ ...salary, active: false })
     expect(await screen.findByText('Inactive')).toBeVisible()
 
+    const putsBeforeActivation = vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT').length
     vi.mocked(api.apiRequest).mockRejectedValueOnce(new ApiError(
       422, 'INVALID_PRODUCT_LIMITS', 'Rejected.', '/admin/loan-products/SALARY_ADVANCE/activation', 'now',
     ))
     await user.click(screen.getByRole('button', { name: 'Activate product' }))
     expect(await screen.findByRole('heading', { name: 'Activation state was not confirmed' })).toBeVisible()
     expect(screen.getByText('Inactive')).toBeVisible()
+    expect(vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(putsBeforeActivation + 1)
   })
 })
