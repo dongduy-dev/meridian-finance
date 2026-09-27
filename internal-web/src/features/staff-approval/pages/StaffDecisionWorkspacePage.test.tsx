@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -130,6 +130,7 @@ describe('Staff decision workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm decision' }))
 
     await screen.findByRole('heading', { name: 'Decision evidence changed' })
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Decision result for UCL-1/i })).toHaveFocus())
     expect(submittedBody).toMatchObject({
       action: selectedAction,
       expectedReviewRecommendationId: recommendationId,
@@ -267,7 +268,11 @@ describe('Staff decision workspace', () => {
     await user.click(await screen.findByRole('button', { name: 'Review decision' }))
     await user.click(screen.getByRole('button', { name: 'Confirm decision' }))
 
-    expect(await screen.findByText(/Command confirmed; refreshed state unavailable/i)).toBeVisible()
+    expect(await screen.findByText(
+      /Command confirmed; refreshed state unavailable/i,
+      undefined,
+      { timeout: 3_000 },
+    )).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
     expect(vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
       String(path).endsWith('/approval-decisions') && (options as RequestInit | undefined)?.method === 'POST')).toHaveLength(1)

@@ -22,13 +22,19 @@ const presentation = {
   BLOCKED: { title: 'Operation blocked', description: 'Review the current authority before continuing.', variant: 'destructive', icon: ShieldAlert },
 } as const
 
-export function OperationStatusPanel({ status }: { status: OperationStatus }) {
+type OperationStatusPanelProps = {
+  status: OperationStatus
+  headingId?: string
+  headingLabel?: string
+}
+
+export function OperationStatusPanel({ status, headingId, headingLabel }: OperationStatusPanelProps) {
   const item = presentation[status]
   const Icon = item.icon
   return (
     <Alert variant={item.variant} aria-live="polite">
       <Icon aria-hidden="true" className={status === 'IN_FLIGHT' || status === 'RECONCILING' ? 'animate-spin' : undefined} />
-      <AlertTitle>{item.title}</AlertTitle>
+      <AlertTitle id={headingId} tabIndex={headingId ? -1 : undefined} aria-label={headingLabel}>{item.title}</AlertTitle>
       <AlertDescription>{item.description}</AlertDescription>
     </Alert>
   )

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -65,6 +65,7 @@ describe('Administrative closure workspace', () => {
     expect(screen.getByRole('dialog')).toHaveTextContent('SETTLED')
     await user.click(screen.getByRole('button', { name: 'Confirm closure' }))
     expect(await screen.findByRole('heading', { name: 'Administrative closure confirmed' })).toBeVisible()
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Closure result for account/i })).toHaveFocus())
     expect(closurePosts()).toHaveLength(1)
     expect(closurePosts()[0]?.[1]?.body).toEqual({ requestId })
   })

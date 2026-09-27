@@ -77,6 +77,7 @@ describe('RecommendationPanel', () => {
       await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
       await screen.findByText(/confirms the exact recommendation/i)
+      await waitFor(() => expect(screen.getByRole('heading', { name: `Recommendation result for application ${applicationId}` })).toHaveFocus())
       expect(submittedBody).toMatchObject({
         action: selectedAction,
         expectedReviewCycleId: cycleId,

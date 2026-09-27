@@ -462,10 +462,13 @@ describe('Staff disbursement workspace', () => {
       undefined,
       { timeout: 3_000 },
     )).toBeVisible()
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Disbursement result for/i })).toHaveFocus())
     expect(disbursementPostCalls()).toHaveLength(1)
     readsAvailable = true
-    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+    const refresh = screen.getByRole('button', { name: 'Refresh' })
+    await user.click(refresh)
     expect(await screen.findByText(/confirmed disbursement is now reconciled/i)).toBeVisible()
+    expect(refresh).toHaveFocus()
     expect(disbursementPostCalls()).toHaveLength(1)
   })
 
@@ -476,7 +479,21 @@ describe('Staff disbursement workspace', () => {
     expect(await screen.findByRole('heading', { name: 'Activation result' })).toBeVisible()
     expect(screen.getByRole('heading', { name: 'Final repayment schedule' })).toBeVisible()
     expect(screen.getByText('LA-33333333333343338333333333333333')).toBeVisible()
+    expect(screen.queryByRole('link', { name: 'Open LoanAccount servicing' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /repay|settle|close|payoff/i })).not.toBeInTheDocument()
+    expect(document.body.textContent).not.toContain(secretReference)
+    expect(document.body.textContent).not.toContain(fullAccountNumber)
+  })
+
+  it('offers permission-aware navigation from activation evidence to LoanAccount servicing', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue({ ...staff, permissions: ['loan:disburse', 'loan:read'] })
+    vi.mocked(api.apiRequest).mockResolvedValue(disbursedCase())
+    renderPage()
+
+    const link = await screen.findByRole('link', { name: 'Open LoanAccount servicing' })
+    expect(link).toHaveAttribute('href', `/staff/applications/${applicationId}/loan-account`)
+    expect(screen.queryByRole('button', { name: /repay|settle|close|payoff/i })).not.toBeInTheDocument()
+    expect(disbursementPostCalls()).toHaveLength(0)
     expect(document.body.textContent).not.toContain(secretReference)
     expect(document.body.textContent).not.toContain(fullAccountNumber)
   })

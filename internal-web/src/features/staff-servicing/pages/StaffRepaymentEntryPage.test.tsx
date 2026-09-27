@@ -150,6 +150,7 @@ describe('Staff repayment entry', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
 
     expect(await screen.findByText(/Current account or history changes cannot prove this request identity/i)).toBeVisible()
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Repayment result for account/i })).toHaveFocus())
     expect(repaymentPostCalls()).toHaveLength(1)
     const body = repaymentPostCalls()[0]?.[1]?.body as Record<string, unknown>
     expect(body).toMatchObject({

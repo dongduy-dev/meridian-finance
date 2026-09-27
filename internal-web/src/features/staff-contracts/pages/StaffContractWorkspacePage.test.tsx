@@ -225,6 +225,7 @@ describe('Staff contract workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
 
     expect(await screen.findByRole('heading', { name: 'Readiness confirmed — not disbursed' })).toBeVisible()
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Contract command result for/i })).toHaveFocus())
     expect(submitted).toEqual({ confirmationRequestId: operationId, expectedContractVersion: 1 })
   })
 
