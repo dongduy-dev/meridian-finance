@@ -47,6 +47,18 @@ export const staffLoanApplicationPageSchema = z.object({
 })
 
 export const staffLoanApplicationCaseSchema = staffLoanApplicationItemSchema.extend({
+  customerContext: z.object({
+    customerNumber: z.string().trim().min(1),
+    fullName: z.string().trim().min(1).nullable(),
+    phoneNumber: z.string().trim().min(1).nullable(),
+  }).nullable(),
+  collateralContext: z.object({
+    collateralType: rawEnumValueSchema,
+    description: z.string().trim().min(1),
+    estimatedValue: moneySchema,
+    ownershipStatus: z.string().trim().min(1),
+    conditionNote: z.string().trim().min(1),
+  }).nullable(),
   customerReadiness: z.object({
     active: z.boolean(),
     profileComplete: z.boolean(),

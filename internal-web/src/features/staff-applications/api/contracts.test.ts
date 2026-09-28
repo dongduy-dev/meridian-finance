@@ -26,6 +26,8 @@ describe('Staff application response schemas', () => {
     }).items[0]?.status).toBe('FUTURE_APPLICATION_STATUS')
 
     const parsed = staffLoanApplicationCaseSchema.parse({
+      customerContext: null,
+      collateralContext: null,
       ...item,
       formalReviewRecorded: true,
       assignedLoanOfficer: {

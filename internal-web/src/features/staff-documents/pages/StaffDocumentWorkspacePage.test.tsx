@@ -8,7 +8,7 @@ import type { AuthResponse } from '@/features/auth/api/auth-api'
 import * as authApi from '@/features/auth/api/auth-api'
 import { AuthProvider } from '@/features/auth/model/auth-context'
 import * as api from '@/lib/api'
-import { NetworkError } from '@/lib/api'
+import { ApiError, NetworkError } from '@/lib/api'
 import { createQueryClient } from '@/lib/query/query-client'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
@@ -72,6 +72,25 @@ function fixture(evidenceStatus: string, overrides: Record<string, unknown> = {}
   }
 }
 
+const collateralCase = {
+  loanApplicationId: applicationId,
+  applicationNumber: 'COL-20260904-000001',
+  productCode: 'COLLATERAL_LOAN',
+  productType: 'SECURED',
+  originationChannel: 'CUSTOMER_DIGITAL',
+  requestedAmount: 100000000,
+  requestedTermMonths: 12,
+  status: 'UNDER_REVIEW',
+  submittedAt: '2026-09-04T08:00:00',
+  customerReadiness: { active: true, profileComplete: true, hasPrimaryActiveBankAccount: true, verificationStatus: 'VERIFIED' },
+  customerContext: null,
+  collateralContext: { collateralType: 'CAR', description: 'Vehicle', estimatedValue: 3200000000,
+    ownershipStatus: 'Owner', conditionNote: 'Very good' },
+  formalReviewRecorded: false,
+  assignedLoanOfficer: null,
+  lifecycleHistory: [],
+}
+
 function renderDocumentWorkspace(selectedVersionId = currentVersionId) {
   const router = createTestRouter([
     `/staff/applications/${applicationId}/documents?checklistItemId=${itemId}&documentVersionId=${selectedVersionId}`,
@@ -120,6 +139,45 @@ describe('Staff document workspace review eligibility', () => {
 
     expect(await screen.findByRole('heading', { name: 'Historical version selected' })).toBeVisible()
     expect(screen.queryByRole('heading', { name: 'Review outcome' })).not.toBeInTheDocument()
+  })
+
+  it('shows collateral facts beside the selected ownership evidence and review form', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue({ ...staff, permissions: ['document:review', 'loan:read'] })
+    const documentCase = fixture('AWAITING_REVIEW')
+    documentCase.items[0]!.documentType = 'COLLATERAL_OWNERSHIP_EVIDENCE'
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => path.endsWith('/documents') ? documentCase : collateralCase)
+    renderDocumentWorkspace()
+
+    expect(await screen.findByText('Submitted collateral facts')).toBeVisible()
+    expect(screen.getByText('Vehicle')).toBeVisible()
+    expect(screen.getByText('Very good')).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'evidence-2.pdf' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Review outcome' })).toBeVisible()
+  })
+
+  it('does not show collateral context for another document type', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue({ ...staff, permissions: ['document:review', 'loan:read'] })
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => path.endsWith('/documents') ? fixture('AWAITING_REVIEW') : collateralCase)
+    renderDocumentWorkspace()
+
+    expect(await screen.findByRole('heading', { name: 'Review outcome' })).toBeVisible()
+    expect(screen.queryByText('Submitted collateral facts')).not.toBeInTheDocument()
+    expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => path === `/staff/loan-applications/${applicationId}`)).toBe(false)
+  })
+
+  it('keeps document review available when supplemental application context fails', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue({ ...staff, permissions: ['document:review', 'loan:read'] })
+    const documentCase = fixture('AWAITING_REVIEW')
+    documentCase.items[0]!.documentType = 'COLLATERAL_OWNERSHIP_EVIDENCE'
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path.endsWith('/documents')) return documentCase
+      throw new ApiError(503, 'SYSTEM_STATE_CONFLICT', 'unsafe detail', path, '2026-09-04T08:00:00Z', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+    })
+    renderDocumentWorkspace()
+
+    expect(await screen.findByRole('heading', { name: 'Review outcome' })).toBeVisible()
+    expect(await screen.findByText(/application context/i)).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'evidence-2.pdf' })).toBeVisible()
   })
 
   it('shows initial upload only for assisted documents-pending applications with the exact permission', async () => {

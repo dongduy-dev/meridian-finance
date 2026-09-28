@@ -16,6 +16,8 @@ public record StaffLoanApplicationCaseDto(
         String status,
         LocalDateTime submittedAt,
         CustomerReadinessDto customerReadiness,
+        CustomerContextDto customerContext,
+        CollateralAssessmentSnapshotDto collateralContext,
         boolean formalReviewRecorded,
         StaffActorDto assignedLoanOfficer,
         List<LifecycleItemDto> lifecycleHistory
@@ -32,7 +34,7 @@ public record StaffLoanApplicationCaseDto(
     ) {
         this(loanApplicationId, applicationNumber, productCode, productType,
                 "CUSTOMER_DIGITAL", requestedAmount, requestedTermMonths, status,
-                submittedAt, customerReadiness, false, null, lifecycleHistory);
+                submittedAt, customerReadiness, null, null, false, null, lifecycleHistory);
     }
 
     public StaffLoanApplicationCaseDto(
@@ -43,7 +45,22 @@ public record StaffLoanApplicationCaseDto(
     ) {
         this(loanApplicationId, applicationNumber, productCode, productType, originationChannel,
                 requestedAmount, requestedTermMonths, status, submittedAt, customerReadiness,
-                false, null, lifecycleHistory);
+                null, null, false, null, lifecycleHistory);
+    }
+
+    public StaffLoanApplicationCaseDto(
+            UUID loanApplicationId, String applicationNumber, String productCode,
+            String productType, String originationChannel, BigDecimal requestedAmount,
+            int requestedTermMonths, String status, LocalDateTime submittedAt,
+            CustomerReadinessDto customerReadiness, boolean formalReviewRecorded,
+            StaffActorDto assignedLoanOfficer, List<LifecycleItemDto> lifecycleHistory
+    ) {
+        this(loanApplicationId, applicationNumber, productCode, productType, originationChannel,
+                requestedAmount, requestedTermMonths, status, submittedAt, customerReadiness,
+                null, null, formalReviewRecorded, assignedLoanOfficer, lifecycleHistory);
+    }
+
+    public record CustomerContextDto(String customerNumber, String fullName, String phoneNumber) {
     }
 
     public record StaffActorDto(UUID userId, String displayName, String email) {

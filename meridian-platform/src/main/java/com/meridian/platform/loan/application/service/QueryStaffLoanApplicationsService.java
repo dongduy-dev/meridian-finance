@@ -2,9 +2,13 @@ package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.dto.StaffLoanApplicationCaseDto;
 import com.meridian.platform.loan.application.dto.StaffLoanApplicationPageDto;
+import com.meridian.platform.loan.application.dto.CollateralAssessmentSnapshotDto;
 import com.meridian.platform.loan.application.port.in.QueryStaffLoanApplicationsUseCase;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot;
+import com.meridian.platform.loan.application.port.out.CustomerLoanCaseContactPort;
+import com.meridian.platform.loan.application.port.out.CustomerLoanCaseContactSnapshot;
+import com.meridian.platform.loan.application.port.out.CollateralRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
@@ -14,6 +18,7 @@ import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
 import com.meridian.platform.loan.domain.model.ProductCode;
+import com.meridian.platform.loan.domain.model.collateral.Collateral;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.AuthorizationException;
@@ -38,6 +43,8 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
     private final LoanApplicationRepository applications;
     private final LoanApplicationStatusTransitionRepository transitions;
     private final CustomerReadinessPort customerReadiness;
+    private final CustomerLoanCaseContactPort customerContacts;
+    private final CollateralRepository collaterals;
     private final LoanReviewCycleRepository reviewCycles;
     private final StaffActorDirectoryPort staffActors;
     private final CurrentUserProvider currentUserProvider;
@@ -46,6 +53,8 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
             LoanApplicationRepository applications,
             LoanApplicationStatusTransitionRepository transitions,
             CustomerReadinessPort customerReadiness,
+            CustomerLoanCaseContactPort customerContacts,
+            CollateralRepository collaterals,
             LoanReviewCycleRepository reviewCycles,
             StaffActorDirectoryPort staffActors,
             CurrentUserProvider currentUserProvider
@@ -53,6 +62,8 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
         this.applications = applications;
         this.transitions = transitions;
         this.customerReadiness = customerReadiness;
+        this.customerContacts = customerContacts;
+        this.collaterals = collaterals;
         this.reviewCycles = reviewCycles;
         this.staffActors = staffActors;
         this.currentUserProvider = currentUserProvider;
@@ -88,13 +99,23 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public StaffLoanApplicationCaseDto queryCase(UUID loanApplicationId) {
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
-        requireStaffReadAuthority(currentUserProvider.currentUser());
+        AuthenticatedUser actor = currentUserProvider.currentUser();
+        requireStaffReadAuthority(actor);
 
         LoanApplication application = applications.findById(loanApplicationId)
                 .orElseThrow(QueryStaffLoanApplicationsService::notFound);
         CustomerReadinessSnapshot readiness = customerReadiness
                 .findReadinessByCustomerId(application.customerId())
                 .orElseThrow(QueryStaffLoanApplicationsService::readinessUnavailable);
+        StaffLoanApplicationCaseDto.CustomerContextDto customerContext = null;
+        if (actor.hasPermission("customer:read")) {
+            CustomerLoanCaseContactSnapshot contact = customerContacts.findByCustomerId(application.customerId())
+                    .orElseThrow(QueryStaffLoanApplicationsService::contactUnavailable);
+            customerContext = new StaffLoanApplicationCaseDto.CustomerContextDto(
+                    contact.customerNumber(), contact.fullName(), contact.phoneNumber()
+            );
+        }
+        CollateralAssessmentSnapshotDto collateralContext = collateralContext(application);
         List<LoanApplicationStatusTransition> history = transitions
                 .findByLoanApplicationIdOrderBySequenceNumberAsc(application.id());
         var latestReviewCycle = reviewCycles.findLatestByLoanApplicationId(application.id()).orElse(null);
@@ -122,6 +143,8 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
                         readiness.hasPrimaryActiveBankAccount(),
                         readiness.verificationStatus()
                 ),
+                customerContext,
+                collateralContext,
                 latestReviewCycle != null,
                 latestReviewCycle == null ? null : toActor(
                         actorSummaries.get(latestReviewCycle.assignedLoanOfficerUserId())
@@ -129,6 +152,21 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
                 history.stream()
                         .map(transition -> toLifecycleItem(transition, actorSummaries))
                         .toList()
+        );
+    }
+
+    private CollateralAssessmentSnapshotDto collateralContext(LoanApplication application) {
+        if (application.productCode() != ProductCode.COLLATERAL_LOAN) {
+            return null;
+        }
+        List<Collateral> facts = collaterals.findByLoanApplicationId(application.id());
+        if (facts.size() != 1 || !application.id().equals(facts.getFirst().loanApplicationId())) {
+            throw collateralUnavailable();
+        }
+        Collateral collateral = facts.getFirst();
+        return new CollateralAssessmentSnapshotDto(
+                collateral.collateralType().name(), collateral.description(), collateral.estimatedValue(),
+                collateral.ownershipStatus(), collateral.conditionNote()
         );
     }
 
@@ -194,6 +232,18 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
         return new BusinessStateConflictException(
                 "SYSTEM_STATE_CONFLICT",
                 "Customer readiness evidence is unavailable."
+        );
+    }
+
+    private static BusinessStateConflictException contactUnavailable() {
+        return new BusinessStateConflictException(
+                "SYSTEM_STATE_CONFLICT", "Customer contact context is unavailable."
+        );
+    }
+
+    private static BusinessStateConflictException collateralUnavailable() {
+        return new BusinessStateConflictException(
+                "SYSTEM_STATE_CONFLICT", "Authoritative collateral facts are inconsistent."
         );
     }
 }
