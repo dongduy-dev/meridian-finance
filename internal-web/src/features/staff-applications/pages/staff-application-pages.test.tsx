@@ -56,6 +56,8 @@ const page = (overrides: Record<string, unknown> = {}) => ({
 
 const caseFixture = {
   ...item,
+  customerContext: null,
+  collateralContext: null,
   formalReviewRecorded: true,
   assignedLoanOfficer: {
     userId: '11111111-1111-4111-8111-111111111111',
@@ -218,6 +220,42 @@ describe('Staff application pages', () => {
 
     expect(await screen.findByText('Unassigned')).toBeVisible()
     expect(screen.queryByText('Assignment unavailable')).not.toBeInTheDocument()
+  })
+
+  it('shows current Customer contact only when the narrow context is returned', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff(['loan:read', 'customer:read']))
+    vi.mocked(api.apiRequest).mockResolvedValue({
+      ...caseFixture,
+      customerContext: { customerNumber: 'CUST-001', fullName: 'Nguyen Van A', phoneNumber: '0901234567' },
+    })
+    renderRoute(`/staff/applications/${applicationId}`)
+
+    expect(await screen.findByText('Current Customer contact')).toBeVisible()
+    expect(screen.getByText('CUST-001')).toBeVisible()
+    expect(screen.getByText('Nguyen Van A')).toBeVisible()
+    expect(screen.getByText('0901234567')).toBeVisible()
+    expect(screen.getByText(/not immutable application-submission evidence/i)).toBeVisible()
+  })
+
+  it('omits Customer contact when the case response has none', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(caseFixture)
+    renderRoute(`/staff/applications/${applicationId}`)
+
+    expect(await screen.findByRole('heading', { name: 'UCL-20260902-000001', level: 1 })).toBeVisible()
+    expect(screen.queryByText('Current Customer contact')).not.toBeInTheDocument()
+  })
+
+  it('shows collateral facts on a Collateral Loan case', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue({
+      ...caseFixture, productCode: 'COLLATERAL_LOAN',
+      collateralContext: { collateralType: 'CAR', description: 'Vehicle', estimatedValue: 3200000000,
+        ownershipStatus: 'Owner', conditionNote: 'Very good' },
+    })
+    renderRoute(`/staff/applications/${applicationId}`)
+
+    expect(await screen.findByText('Submitted collateral facts')).toBeVisible()
+    expect(screen.getByText('Vehicle')).toBeVisible()
+    expect(screen.getByText('Very good')).toBeVisible()
   })
 
   it.each([

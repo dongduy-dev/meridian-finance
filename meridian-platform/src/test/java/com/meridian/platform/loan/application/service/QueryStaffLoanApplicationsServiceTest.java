@@ -2,6 +2,9 @@ package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot;
+import com.meridian.platform.loan.application.port.out.CustomerLoanCaseContactPort;
+import com.meridian.platform.loan.application.port.out.CustomerLoanCaseContactSnapshot;
+import com.meridian.platform.loan.application.port.out.CollateralRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
@@ -14,6 +17,8 @@ import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionAction;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
+import com.meridian.platform.loan.domain.model.collateral.Collateral;
+import com.meridian.platform.loan.domain.model.collateral.CollateralType;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.AuthorizationException;
@@ -38,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -54,6 +60,8 @@ class QueryStaffLoanApplicationsServiceTest {
     @Mock LoanApplicationRepository applications;
     @Mock LoanApplicationStatusTransitionRepository transitions;
     @Mock CustomerReadinessPort customerReadiness;
+    @Mock CustomerLoanCaseContactPort customerContacts;
+    @Mock CollateralRepository collaterals;
     @Mock LoanReviewCycleRepository reviewCycles;
     @Mock StaffActorDirectoryPort staffActors;
     @Mock CurrentUserProvider currentUserProvider;
@@ -66,6 +74,8 @@ class QueryStaffLoanApplicationsServiceTest {
                 applications,
                 transitions,
                 customerReadiness,
+                customerContacts,
+                collaterals,
                 reviewCycles,
                 staffActors,
                 currentUserProvider
@@ -168,6 +178,118 @@ class QueryStaffLoanApplicationsServiceTest {
         assertEquals("Deni Loan Officer", result.lifecycleHistory().getLast().actor().displayName());
         assertEquals("deni@meridian.local", result.lifecycleHistory().getLast().actor().email());
         assertNull(result.lifecycleHistory().getFirst().actor());
+        assertNull(result.customerContext());
+        assertNull(result.collateralContext());
+        verifyNoInteractions(customerContacts, collaterals);
+    }
+
+    @Test
+    void authorizedCustomerContactUsesOnlyTheNarrowProvider() {
+        when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:read", "customer:read")));
+        when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application()));
+        when(customerReadiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED")
+        ));
+        when(customerContacts.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+                new CustomerLoanCaseContactSnapshot("CUST-001", "Nguyen Van A", "0901234567")
+        ));
+        when(transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(APPLICATION_ID))
+                .thenReturn(List.of());
+
+        var result = service.queryCase(APPLICATION_ID);
+
+        assertEquals("CUST-001", result.customerContext().customerNumber());
+        assertEquals("Nguyen Van A", result.customerContext().fullName());
+        assertEquals("0901234567", result.customerContext().phoneNumber());
+        assertEquals(3, result.customerContext().getClass().getRecordComponents().length);
+        verify(customerContacts).findByCustomerId(CUSTOMER_ID);
+    }
+
+    @Test
+    void missingAuthorizedCustomerContactIsSystemConflict() {
+        when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:read", "customer:read")));
+        when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application()));
+        when(customerReadiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED")
+        ));
+        when(customerContacts.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.empty());
+
+        var error = assertThrows(BusinessStateConflictException.class, () -> service.queryCase(APPLICATION_ID));
+        assertEquals("SYSTEM_STATE_CONFLICT", error.getErrorCode());
+    }
+
+    @Test
+    void collateralFactsComeFromTheSingleLoanOwnedRecord() {
+        when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:read")));
+        when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(collateralApplication()));
+        when(customerReadiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED")
+        ));
+        when(collaterals.findByLoanApplicationId(APPLICATION_ID)).thenReturn(List.of(collateral()));
+        when(transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(APPLICATION_ID))
+                .thenReturn(List.of());
+
+        var result = service.queryCase(APPLICATION_ID);
+
+        assertEquals("CAR", result.collateralContext().collateralType());
+        assertEquals("Vehicle", result.collateralContext().description());
+        assertEquals(new BigDecimal("3200000000"), result.collateralContext().estimatedValue());
+        assertNull(result.customerContext());
+        verifyNoInteractions(customerContacts);
+    }
+
+    @Test
+    void approverAndAccountingCaseReadsDoNotQueryCustomerContacts() {
+        when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application()));
+        when(customerReadiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED")
+        ));
+        when(transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(APPLICATION_ID))
+                .thenReturn(List.of());
+
+        for (String role : List.of("APPROVER", "ACCOUNTING_OFFICER")) {
+            when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(
+                    UUID.randomUUID(), "staff@meridian.test", "STAFF", null,
+                    Set.of(role), Set.of("loan:read")
+            ));
+            assertNull(service.queryCase(APPLICATION_ID).customerContext());
+        }
+        verifyNoInteractions(customerContacts);
+    }
+
+    @Test
+    void salaryAdvanceHasNoCollateralContext() {
+        when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:read")));
+        when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(new LoanApplication(
+                APPLICATION_ID, CUSTOMER_ID, UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+                "SA-20260902-000001", ProductCode.SALARY_ADVANCE, ProductType.SALARY_BASED,
+                LoanApplicationStatus.UNDER_REVIEW, new BigDecimal("3000000.00"), 1,
+                LocalDateTime.of(2026, 9, 2, 8, 0)
+        )));
+        when(customerReadiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED")
+        ));
+        when(transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(APPLICATION_ID))
+                .thenReturn(List.of());
+
+        assertNull(service.queryCase(APPLICATION_ID).collateralContext());
+        verifyNoInteractions(collaterals);
+    }
+
+    @Test
+    void missingOrMultipleCollateralFactsFailClosed() {
+        when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:read")));
+        when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(collateralApplication()));
+        when(customerReadiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED")
+        ));
+        when(collaterals.findByLoanApplicationId(APPLICATION_ID))
+                .thenReturn(List.of(), List.of(collateral(), collateral()));
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            var error = assertThrows(BusinessStateConflictException.class, () -> service.queryCase(APPLICATION_ID));
+            assertEquals("SYSTEM_STATE_CONFLICT", error.getErrorCode());
+        }
     }
 
     @Test
@@ -201,6 +323,23 @@ class QueryStaffLoanApplicationsServiceTest {
                 LoanApplicationStatus.UNDER_REVIEW,
                 new BigDecimal("12000000.00"),
                 6,
+                LocalDateTime.of(2026, 9, 2, 8, 0)
+        );
+    }
+
+    private static LoanApplication collateralApplication() {
+        return new LoanApplication(
+                APPLICATION_ID, CUSTOMER_ID, UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+                "COL-20260902-000001", ProductCode.COLLATERAL_LOAN, ProductType.SECURED,
+                LoanApplicationStatus.UNDER_REVIEW, new BigDecimal("12000000.00"), 6,
+                LocalDateTime.of(2026, 9, 2, 8, 0)
+        );
+    }
+
+    private static Collateral collateral() {
+        return new Collateral(
+                UUID.randomUUID(), APPLICATION_ID, CollateralType.CAR, "Vehicle",
+                new BigDecimal("3200000000"), "Owner", "Very good",
                 LocalDateTime.of(2026, 9, 2, 8, 0)
         );
     }

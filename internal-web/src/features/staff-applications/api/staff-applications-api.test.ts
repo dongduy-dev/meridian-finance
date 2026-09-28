@@ -44,6 +44,8 @@ describe('Staff application API', () => {
       ...item,
       formalReviewRecorded: false,
       assignedLoanOfficer: null,
+      customerContext: null,
+      collateralContext: null,
       customerReadiness: {
         active: true,
         profileComplete: true,

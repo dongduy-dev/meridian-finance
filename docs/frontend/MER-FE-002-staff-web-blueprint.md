@@ -201,7 +201,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 | Staff Customer intake read | `GET /api/v1/staff/customers/{customerId}` | Staff `customer:read` | Purpose-limited profile/readiness projection without protected identity material |
 | Intake evidence metadata | `GET /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence` | Staff `document:upload:intake` plus valid Loan intake authority | Controlled logical evidence and immutable version metadata; no storage keys or content |
 | Staff application discovery | `GET /api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20` | Staff `loan:read` | Cross-product safe facts, exact filters, deterministic page envelope |
-| Staff case foundation | `GET /api/v1/staff/loan-applications/{loanApplicationId}` | Staff `loan:read` | Safe header, purpose-limited Customer readiness, assigned Loan Officer summary, and ordered lifecycle transitions with purpose-limited Staff actor summaries or explicit System attribution |
+| Staff case foundation | `GET /api/v1/staff/loan-applications/{loanApplicationId}` | Staff `loan:read`; Customer contact also requires `customer:read` | Safe header, Customer readiness, nullable current Customer contact, Loan-owned Collateral facts, assigned Loan Officer summary, and ordered lifecycle transitions |
 | Assisted offer-response case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/offer-response` | Staff `loan:offer:respond:staff` plus Loan Officer role | Eligible Staff-assisted UCL or Collateral safe header, exact current offer, expiry/action state, and current signed-evidence metadata |
 | Staff document evidence | `GET /api/v1/staff/loan-applications/{loanApplicationId}/documents` | `document:review` | Checklist/readiness, exact current version, immutable version history, and safe review history |
 | Staff correction case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/corrections` | `loan:correction:staff` | Origination channel, latest request, mixed task composition, proof, purpose-limited assisted Customer instructions/actions, completion readiness, and current-actor maker-checker evidence |
@@ -277,13 +277,15 @@ There is no assignment model in the current backend. Labels such as â€œMy work,â
 
 ### 8.2 Case Workspace Projection
 
-The CP2 Staff case contract is an authorized, PII-minimized foundation that composes context-owned facts without exposing persistence internals. It currently returns:
+The Staff case contract composes purpose-limited context-owned facts without exposing persistence internals. It returns:
 
 - safe LoanApplication identity, number, product, requested terms, durable status, and submission time;
 - purpose-limited Customer readiness;
+- current Customer contact only when the actor also has `customer:read`;
+- Loan-owned Collateral facts for a Collateral Loan;
 - safe ordered LoanApplication lifecycle transitions.
 
-CP3 adds purpose-owned document and correction projections. Later operational sections still require richer projections for:
+Purpose-owned document and correction projections remain separate reads. Later operational sections use their own richer projections for:
 
 - product-specific verification summary and exact current cycle identity where an action requires it;
 - current review cycle and action eligibility;
@@ -932,13 +934,13 @@ The case header should contain only authoritative safe facts:
 - submitted time;
 - current operational stage or blocker when returned by the case projection.
 
-Customer identity details, Partner facts, income, collateral, document readiness, offer, contract, and LoanAccount state appear only in their authorized sections. The CP2 case projection populates the safe header, Overview readiness, and LoanApplication History only; it does not authorize or populate later workflow sections.
+Customer contact appears only for an actor with both `loan:read` and `customer:read`. The card labels it as the current mutable Customer record rather than application-submission evidence and displays only Customer number, name, and phone. Collateral Loan cases show the Loan-owned submitted asset facts in a read-only card. Partner facts, income, document readiness, offer, contract, and LoanAccount state appear only in their authorized sections. The ordinary case projection does not authorize later workflow actions.
 
 ### 22.2 Workspace Sections
 
 | Section | Purpose | Required authority |
 |---|---|---|
-| Overview | Safe application and Customer readiness summary | Executable CP2 Staff case projection |
+| Overview | Safe application, Customer readiness, permission-gated current contact, and Collateral Loan facts | Staff case projection; `customer:read` additionally gates contact |
 | Product verification | Salary Advance snapshot summary or UCL/Collateral manual cycle evidence | New Staff verification read |
 | Documents | Checklist, current versions, readiness, reviews, content actions | New Staff checklist/history read plus existing queue/content actions |
 | Corrections | Active request, Customer/Staff tasks, proof, completion and resubmission | Expanded correction projection plus current queue/commands |
@@ -988,6 +990,8 @@ Document review workspace composition:
 5. controlled waiver/replacement reason inputs;
 6. final exact-version confirmation;
 7. persistent reconciled result.
+
+For selected `COLLATERAL_OWNERSHIP_EVIDENCE`, the workspace places the read-only Loan-owned Collateral facts beside the exact document version and review form. It obtains them from the detailed Staff case only when the actor has `loan:read`. A failure of that supplemental case read is visible and retryable while the document checklist, selected version, and review form remain available. Other document types do not show Collateral context.
 
 `WAIVE_DOCUMENT` appears only with `document:waive`. Replacement requires the controlled replacement reason and Customer-visible instruction. Restricted Staff notes are labeled separately. Reviewing a stale version never switches to the new version automatically.
 

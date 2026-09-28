@@ -12,6 +12,7 @@ import { formatTimestamp, formatVnd } from '@/lib/format/presentation'
 import { uuidSchema } from '../api/contracts'
 import { staffApplicationCaseQuery } from '../api/queries'
 import { QueryErrorPanel } from '../components/QueryErrorPanel'
+import { CollateralFactsCard } from '../components/CollateralFactsCard'
 import { StatusBadge } from '../components/StatusBadge'
 import {
   applicationStatusLabel,
@@ -177,6 +178,16 @@ export function ApplicationCasePage() {
           </Card>
         </div>
       </section>
+
+      {data.customerContext ? <Card>
+        <CardHeader><CardTitle>Current Customer contact</CardTitle><p className="text-sm text-muted-foreground">Current Customer record. This is operational contact context, not immutable application-submission evidence.</p></CardHeader>
+        <CardContent><dl className="grid gap-4 sm:grid-cols-3">
+          <div><dt className="text-sm text-muted-foreground">Customer number</dt><dd className="mt-1 font-semibold">{data.customerContext.customerNumber}</dd></div>
+          <div><dt className="text-sm text-muted-foreground">Name</dt><dd className="mt-1 font-semibold">{data.customerContext.fullName ?? 'Not recorded'}</dd></div>
+          <div><dt className="text-sm text-muted-foreground">Phone</dt><dd className="mt-1 font-semibold">{data.customerContext.phoneNumber ?? 'Not recorded'}</dd></div>
+        </dl></CardContent>
+      </Card> : null}
+      {data.productCode === 'COLLATERAL_LOAN' && data.collateralContext ? <CollateralFactsCard collateral={data.collateralContext} /> : null}
 
       <section id="history" className="scroll-mt-4 space-y-4" aria-labelledby="history-heading">
         <div><p className="text-sm font-semibold text-muted-foreground">IMMUTABLE EVIDENCE</p><h2 id="history-heading" className="mt-1 text-xl font-semibold">Lifecycle history</h2><p className="mt-1 text-sm text-muted-foreground">Events appear in the order recorded for this application.</p></div>
