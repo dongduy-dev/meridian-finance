@@ -189,7 +189,7 @@ describe('Staff application pages', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled())
   })
 
-  it('renders missing Staff actor evidence safely without inventing an identity', async () => {
+  it('renders unresolved USER actor evidence neutrally without inventing an identity', async () => {
     vi.mocked(api.apiRequest).mockResolvedValue({
       ...caseFixture,
       assignedLoanOfficer: null,
@@ -202,7 +202,8 @@ describe('Staff application pages', () => {
 
     expect(await screen.findByText('Assignment unavailable')).toBeVisible()
     expect(screen.getByText('System')).toBeVisible()
-    expect(screen.getByText('Staff actor unavailable')).toBeVisible()
+    expect(screen.getByText('User actor unavailable')).toBeVisible()
+    expect(screen.queryByText('Staff actor unavailable')).not.toBeInTheDocument()
     expect(screen.queryByText(/Unknown Staff|Current user/)).not.toBeInTheDocument()
   })
 

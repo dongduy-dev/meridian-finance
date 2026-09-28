@@ -1028,7 +1028,7 @@ Completed outcome:
 - Customer-digital endpoints and `CUSTOMER_DIRECT_ACTION_NOT_ALLOWED` protection remain unchanged.
 - No generic Staff checklist-mutation requirement was introduced; the delivered mutation remains exact and task-scoped.
 
-### MER-FU-047 - Add controlled Loan Officer review-stewardship reassignment
+### MER-FU-048 - Add controlled Loan Officer review-stewardship reassignment
 
 Area: Loan / Approval / Staff Web
 
@@ -1036,7 +1036,7 @@ Type: Lending workflow administration
 
 Priority: P2
 
-Status: Planned
+Status: Deferred
 
 Blocking: No current blocker. New and proven historical review lineages remain usable by their assigned Loan Officer; unresolved legacy assignments fail closed.
 

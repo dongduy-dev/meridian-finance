@@ -284,11 +284,14 @@ public class ResubmitCustomerCorrectionService
             reviewCycleRepository.save(sourceCycle.corrected(now));
         }
         if (productResubmission.targetStatus() == LoanApplicationStatus.UNDER_REVIEW) {
+            LoanApplicationReviewCycle ownershipSourceCycle = sourceCycle == null
+                    ? reviewCycleRepository.findLatestByLoanApplicationId(loanApplicationId).orElse(null)
+                    : sourceCycle;
             reviewCycleRepository.save(LoanApplicationReviewCycle.active(
                     UUID.randomUUID(),
                     loanApplicationId,
                     nextReviewCycleNumber,
-                    requireAssignedLoanOfficer(sourceCycle),
+                    requireAssignedLoanOfficer(ownershipSourceCycle),
                     now
             ));
         }
