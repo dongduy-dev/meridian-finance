@@ -8,6 +8,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/features/auth/model/auth-context'
 import { hasPermission } from '@/features/auth/model/access-control'
 import { ApiError, NetworkError } from '@/lib/api'
+import { formatVnd } from '@/lib/format/presentation'
 import {
   decideOperationIdentity,
   digestFile,
@@ -23,7 +24,7 @@ import {
   updateCustomer, uploadEvidence,
 } from '../api/staff-origination-api'
 import { banksQuery, customerQuery, evidenceQuery, intakeCaseQuery, originationKeys } from '../api/queries'
-import type { CustomerProfileInput, StaffCustomer } from '../api/contracts'
+import type { CollateralLoanInput, CustomerProfileInput, StaffCustomer } from '../api/contracts'
 import {
   bankActionMatches, evidenceBaselineFrom, evidenceRecoveryResource, evidenceSemanticPayload,
   profileMatches,
@@ -33,6 +34,11 @@ import { IntakeOcrReviewPanel } from '../components/IntakeOcrReviewPanel'
 type ActionState = { status: OperationStatus; message?: string; error?: Error }
 type IntakeEvidenceType = 'CUSTOMER_IDENTITY' | 'UCL_PAPER_APPLICATION' | 'COLLATERAL_PAPER_APPLICATION'
 type OcrFormTarget = 'create-customer' | 'profile' | 'bank' | 'ucl' | 'collateral'
+type UclLoanInput = { requestedAmount: number; requestedTermMonths: number }
+type Confirmation =
+  | { kind: 'ucl'; input: UclLoanInput }
+  | { kind: 'collateral'; input: CollateralLoanInput }
+  | { kind: 'abandon' }
 type MutableFormControl = HTMLInputElement | HTMLSelectElement
 type AppliedOcrControl = {
   target: OcrFormTarget
@@ -44,6 +50,13 @@ type AppliedOcrControl = {
 }
 
 const collateralTypes = new Set(['MOTORBIKE', 'CAR', 'ELECTRONICS', 'PROPERTY_DOCUMENT', 'OTHER'])
+const collateralTypeLabels: Record<CollateralLoanInput['collateral']['type'], string> = {
+  MOTORBIKE: 'Motorbike',
+  CAR: 'Car',
+  ELECTRONICS: 'Electronics',
+  PROPERTY_DOCUMENT: 'Property document',
+  OTHER: 'Other',
+}
 
 function safePositiveInteger(value: string | undefined): string | undefined {
   if (!value || !/^[1-9]\d*$/.test(value.trim())) return undefined
@@ -111,6 +124,7 @@ export function AssistedOriginationWorkspacePage() {
   const [searchResult, setSearchResult] = useState<StaffCustomer>()
   const [actions, setActions] = useState<Record<string, ActionState>>({})
   const [ocrFreshnessMessage, setOcrFreshnessMessage] = useState<string>()
+  const [confirmation, setConfirmation] = useState<Confirmation>()
   const createCustomerForm = useRef<HTMLFormElement>(null)
   const profileForm = useRef<HTMLFormElement>(null)
   const bankForm = useRef<HTMLFormElement>(null)
@@ -487,16 +501,8 @@ export function AssistedOriginationWorkspacePage() {
     form.reset()
   }
 
-  const submitUcl = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const form = event.currentTarget
-    const data = new FormData(form)
-    const input = {
-      requestedAmount: Number(data.get('requestedAmount')),
-      requestedTermMonths: Number(data.get('requestedTermMonths')),
-    }
+  const submitUcl = async (input: UclLoanInput) => {
     const key = 'ucl-conversion'
-    if (!window.confirm('Create the real UCL Loan Application for this Customer?')) return
     setAction(key, { status: 'IN_FLIGHT' })
     try {
       const completed = await submitUclIntake(manager, assistedOriginationCaseId, input)
@@ -527,22 +533,8 @@ export function AssistedOriginationWorkspacePage() {
     }
   }
 
-  const submitCollateral = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const data = new FormData(event.currentTarget)
-    const input = {
-      requestedAmount: Number(data.get('requestedAmount')),
-      requestedTermMonths: Number(data.get('requestedTermMonths')),
-      collateral: {
-        type: String(data.get('collateralType')) as 'MOTORBIKE' | 'CAR' | 'ELECTRONICS' | 'PROPERTY_DOCUMENT' | 'OTHER',
-        description: String(data.get('description')),
-        estimatedValue: Number(data.get('estimatedValue')),
-        ownershipStatus: String(data.get('ownershipStatus')),
-        conditionNote: String(data.get('conditionNote')),
-      },
-    }
+  const submitCollateral = async (input: CollateralLoanInput) => {
     const key = 'collateral-conversion'
-    if (!window.confirm('Create the real Collateral Loan Application for this Customer?')) return
     setAction(key, { status: 'IN_FLIGHT' })
     try {
       const completed = await submitCollateralIntake(manager, assistedOriginationCaseId, input)
@@ -601,6 +593,53 @@ export function AssistedOriginationWorkspacePage() {
     }
   }
 
+  const openUclConfirmation = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    setConfirmation({
+      kind: 'ucl',
+      input: {
+        requestedAmount: Number(data.get('requestedAmount')),
+        requestedTermMonths: Number(data.get('requestedTermMonths')),
+      },
+    })
+  }
+
+  const openCollateralConfirmation = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    setConfirmation({
+      kind: 'collateral',
+      input: {
+        requestedAmount: Number(data.get('requestedAmount')),
+        requestedTermMonths: Number(data.get('requestedTermMonths')),
+        collateral: {
+          type: String(data.get('collateralType')) as CollateralLoanInput['collateral']['type'],
+          description: String(data.get('description')),
+          estimatedValue: Number(data.get('estimatedValue')),
+          ownershipStatus: String(data.get('ownershipStatus')),
+          conditionNote: String(data.get('conditionNote')),
+        },
+      },
+    })
+  }
+
+  const confirmationTriggerId = confirmation ? `${confirmation.kind}-confirmation-trigger` : ''
+  const closeConfirmation = () => {
+    const triggerId = confirmationTriggerId
+    setConfirmation(undefined)
+    setTimeout(() => document.getElementById(triggerId)?.focus(), 0)
+  }
+
+  const confirmAction = () => {
+    if (!confirmation) return
+    const pending = confirmation
+    setConfirmation(undefined)
+    if (pending.kind === 'ucl') void submitUcl(pending.input)
+    else if (pending.kind === 'collateral') void submitCollateral(pending.input)
+    else void abandon()
+  }
+
   return <section className="mx-auto max-w-6xl space-y-6">
     <div><Button asChild variant="link"><Link to="/staff/origination">← Paper intake</Link></Button><h1 data-route-heading tabIndex={-1} className="text-2xl font-semibold sm:text-3xl">{intake.data.productCode === 'UNSECURED_CONSUMER_LOAN' ? 'UCL' : 'Collateral Loan'} intake</h1><p className="mt-1 text-muted-foreground">Status: {intake.data.status}{intake.data.loanApplicationId ? ` · Loan Application ${intake.data.loanApplicationId}` : ' · No LoanApplication exists for this intake.'}</p>{intake.data.loanApplicationId ? <Button className="mt-3" asChild><Link to={`/staff/applications/${intake.data.loanApplicationId}/documents`}>Open application documents</Link></Button> : null}</div>
     {!open ? <div className="rounded-lg border border-warning/40 bg-warning/10 p-4">This intake is terminal. Customer association and evidence upload are disabled.</div> : null}
@@ -618,9 +657,10 @@ export function AssistedOriginationWorkspacePage() {
 
     {canEvidence ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Paper intake evidence</h2>{ocrFreshnessMessage ? <p role="alert" className="text-sm text-warning">{ocrFreshnessMessage}</p> : null}{evidence.isPending ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading evidence metadata…</p> : null}{evidence.isError ? <div><p role="alert">Evidence metadata could not be loaded.</p><Button className="mt-2" variant="outline" onClick={() => void evidence.refetch()}>Retry evidence</Button></div> : null}{evidence.isSuccess ? ['CUSTOMER_IDENTITY', selectedEvidenceType].map((type) => { const item = evidence.data.find((candidate) => candidate.evidenceType === type); const label = type === 'CUSTOMER_IDENTITY' ? 'Customer identity / CCCD' : 'Signed paper application'; const resource = evidenceRecoveryResource(assistedOriginationCaseId, type); const unresolved = findUnresolvedOperation('INTAKE_EVIDENCE_UPLOAD', resource); return <div key={type} className="space-y-3 rounded-md border p-3"><h3 className="font-medium">{label}</h3><p className="text-sm text-muted-foreground">{item ? `${item.versions.length} version(s); current ${item.currentVersionId}` : 'No evidence uploaded'}</p>{unresolved ? <p className="text-sm font-medium text-warning">A prior upload result is not confirmed. Reselect the exact same file to retry the same upload.</p> : null}<form className="flex flex-col gap-2 sm:flex-row" onSubmit={submitEvidence(type)}><Input aria-label={`${label} file`} type="file" name="file" required accept="application/pdf,image/jpeg,image/png" /><Button type="submit" disabled={!open || busy(actions[resource])}>{item ? 'Replace evidence' : 'Upload evidence'}</Button></form><ActionNotice action={actions[resource]} />{item?.currentVersionId ? <IntakeOcrReviewPanel key={`${type}:${item.currentVersionId}`} manager={manager} caseId={assistedOriginationCaseId} evidenceType={type} versionId={item.currentVersionId} intakeOpen={open} onApplyReviewedValues={applyReviewedOcrValues} /> : null}</div> }) : null}</article> : null}
 
-    {open && intake.data.productCode === 'UNSECURED_CONSUMER_LOAN' ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Create UCL application</h2><p className="text-sm text-muted-foreground">This consequential action creates the real Staff-assisted Loan Application and its required application-document checklist.</p><ul className="text-sm"><li>Selected Customer: {customer.data ? 'ready to evaluate' : 'not available'}</li><li>Profile: {customer.data?.profileCompletionStatus === 'COMPLETE' ? 'complete' : 'incomplete'}</li><li>Primary active bank account: {customer.data?.primaryActiveBankAccountPresent ? 'present' : 'missing'}</li><li>Signed UCL paper application: {evidence.data?.some((item) => item.evidenceType === 'UCL_PAPER_APPLICATION' && item.currentVersionId) ? 'present' : 'missing'}</li></ul><form ref={uclForm} className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submitUcl(event)}><label className="grid gap-1 text-sm font-medium">Requested amount<Input name="requestedAmount" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Requested term months<Input name="requestedTermMonths" type="number" min="1" step="1" required /></label><Button className="sm:col-span-2" disabled={locked(actions['ucl-conversion']) || !customer.data || customer.data.status !== 'ACTIVE' || customer.data.profileCompletionStatus !== 'COMPLETE' || !customer.data.primaryActiveBankAccountPresent || !evidence.data?.some((item) => item.evidenceType === 'UCL_PAPER_APPLICATION' && item.currentVersionId)}>Create UCL application</Button></form><ActionNotice action={actions['ucl-conversion']} /></article> : null}
-    {open && intake.data.productCode === 'COLLATERAL_LOAN' ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Create Collateral Loan application</h2><p className="text-sm text-muted-foreground">This consequential action creates the real Staff-assisted Loan Application, one structured Collateral fact, and its ownership-evidence checklist.</p><ul className="text-sm"><li>Selected Customer: {customer.data ? 'ready to evaluate' : 'not available'}</li><li>Profile: {customer.data?.profileCompletionStatus === 'COMPLETE' ? 'complete' : 'incomplete'}</li><li>Primary active bank account: {customer.data?.primaryActiveBankAccountPresent ? 'present' : 'missing'}</li><li>Signed Collateral paper application: {evidence.data?.some((item) => item.evidenceType === 'COLLATERAL_PAPER_APPLICATION' && item.currentVersionId) ? 'present' : 'missing'}</li></ul><form ref={collateralForm} className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submitCollateral(event)}><label className="grid gap-1 text-sm font-medium">Requested amount<Input name="requestedAmount" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Requested term months<Input name="requestedTermMonths" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Collateral type<select name="collateralType" required className="h-11 rounded-md border bg-background px-3"><option value="MOTORBIKE">Motorbike</option><option value="CAR">Car</option><option value="ELECTRONICS">Electronics</option><option value="PROPERTY_DOCUMENT">Property document</option><option value="OTHER">Other</option></select></label><label className="grid gap-1 text-sm font-medium">Estimated value<Input name="estimatedValue" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium sm:col-span-2">Description<Input name="description" maxLength={500} required /></label><label className="grid gap-1 text-sm font-medium">Ownership status<Input name="ownershipStatus" maxLength={200} required /></label><label className="grid gap-1 text-sm font-medium">Condition note<Input name="conditionNote" maxLength={500} required /></label><Button className="sm:col-span-2" disabled={locked(actions['collateral-conversion']) || !customer.data || customer.data.status !== 'ACTIVE' || customer.data.profileCompletionStatus !== 'COMPLETE' || !customer.data.primaryActiveBankAccountPresent || !evidence.data?.some((item) => item.evidenceType === 'COLLATERAL_PAPER_APPLICATION' && item.currentVersionId)}>Create Collateral Loan application</Button></form><ActionNotice action={actions['collateral-conversion']} /></article> : null}
+    {open && intake.data.productCode === 'UNSECURED_CONSUMER_LOAN' ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Create UCL application</h2><p className="text-sm text-muted-foreground">This consequential action creates the real Staff-assisted Loan Application and its required application-document checklist.</p><ul className="text-sm"><li>Selected Customer: {customer.data ? 'ready to evaluate' : 'not available'}</li><li>Profile: {customer.data?.profileCompletionStatus === 'COMPLETE' ? 'complete' : 'incomplete'}</li><li>Primary active bank account: {customer.data?.primaryActiveBankAccountPresent ? 'present' : 'missing'}</li><li>Signed UCL paper application: {evidence.data?.some((item) => item.evidenceType === 'UCL_PAPER_APPLICATION' && item.currentVersionId) ? 'present' : 'missing'}</li></ul><form ref={uclForm} className="grid gap-3 sm:grid-cols-2" onSubmit={openUclConfirmation}><label className="grid gap-1 text-sm font-medium">Requested amount<Input name="requestedAmount" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Requested term months<Input name="requestedTermMonths" type="number" min="1" step="1" required /></label><Button id="ucl-confirmation-trigger" className="sm:col-span-2" disabled={locked(actions['ucl-conversion']) || !customer.data || customer.data.status !== 'ACTIVE' || customer.data.profileCompletionStatus !== 'COMPLETE' || !customer.data.primaryActiveBankAccountPresent || !evidence.data?.some((item) => item.evidenceType === 'UCL_PAPER_APPLICATION' && item.currentVersionId)}>Create UCL application</Button></form><ActionNotice action={actions['ucl-conversion']} /></article> : null}
+    {open && intake.data.productCode === 'COLLATERAL_LOAN' ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Create Collateral Loan application</h2><p className="text-sm text-muted-foreground">This consequential action creates the real Staff-assisted Loan Application, one structured Collateral fact, and its ownership-evidence checklist.</p><ul className="text-sm"><li>Selected Customer: {customer.data ? 'ready to evaluate' : 'not available'}</li><li>Profile: {customer.data?.profileCompletionStatus === 'COMPLETE' ? 'complete' : 'incomplete'}</li><li>Primary active bank account: {customer.data?.primaryActiveBankAccountPresent ? 'present' : 'missing'}</li><li>Signed Collateral paper application: {evidence.data?.some((item) => item.evidenceType === 'COLLATERAL_PAPER_APPLICATION' && item.currentVersionId) ? 'present' : 'missing'}</li></ul><form ref={collateralForm} className="grid gap-3 sm:grid-cols-2" onSubmit={openCollateralConfirmation}><label className="grid gap-1 text-sm font-medium">Requested amount<Input name="requestedAmount" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Requested term months<Input name="requestedTermMonths" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium">Collateral type<select name="collateralType" required className="h-11 rounded-md border bg-background px-3"><option value="MOTORBIKE">Motorbike</option><option value="CAR">Car</option><option value="ELECTRONICS">Electronics</option><option value="PROPERTY_DOCUMENT">Property document</option><option value="OTHER">Other</option></select></label><label className="grid gap-1 text-sm font-medium">Estimated value<Input name="estimatedValue" type="number" min="1" step="1" required /></label><label className="grid gap-1 text-sm font-medium sm:col-span-2">Description<Input name="description" maxLength={500} required /></label><label className="grid gap-1 text-sm font-medium">Ownership status<Input name="ownershipStatus" maxLength={200} required /></label><label className="grid gap-1 text-sm font-medium">Condition note<Input name="conditionNote" maxLength={500} required /></label><Button id="collateral-confirmation-trigger" className="sm:col-span-2" disabled={locked(actions['collateral-conversion']) || !customer.data || customer.data.status !== 'ACTIVE' || customer.data.profileCompletionStatus !== 'COMPLETE' || !customer.data.primaryActiveBankAccountPresent || !evidence.data?.some((item) => item.evidenceType === 'COLLATERAL_PAPER_APPLICATION' && item.currentVersionId)}>Create Collateral Loan application</Button></form><ActionNotice action={actions['collateral-conversion']} /></article> : null}
 
-    {open ? <div className="space-y-3 rounded-lg border border-danger/30 p-4"><h2 className="font-semibold">Abandon intake</h2><p className="mt-1 text-sm text-muted-foreground">Abandonment is terminal and blocks further Customer association and paper-evidence changes.</p><Button className="mt-3" variant="destructive" disabled={locked(actions['abandon-intake'])} onClick={() => { if (window.confirm('Abandon this intake permanently?')) void abandon() }}>Abandon intake</Button><ActionNotice action={actions['abandon-intake']} /></div> : null}
+    {open ? <div className="space-y-3 rounded-lg border border-danger/30 p-4"><h2 className="font-semibold">Abandon intake</h2><p className="mt-1 text-sm text-muted-foreground">Abandonment is terminal and blocks further Customer association and paper-evidence changes.</p><Button id="abandon-confirmation-trigger" className="mt-3" variant="destructive" disabled={locked(actions['abandon-intake'])} onClick={() => setConfirmation({ kind: 'abandon' })}>Abandon intake</Button><ActionNotice action={actions['abandon-intake']} /></div> : null}
+    {confirmation ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="assisted-origination-confirmation-title"><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><h2 id="assisted-origination-confirmation-title" className="text-xl font-semibold">{confirmation.kind === 'ucl' ? 'Create UCL application?' : confirmation.kind === 'collateral' ? 'Create Collateral Loan application?' : 'Abandon intake?'}</h2><dl className="grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-muted-foreground">Customer</dt><dd className="font-semibold">{customer.data ? `${customer.data.customerNumber} · ${customer.data.profile?.fullName ?? 'Name unavailable'}` : 'Not selected'}</dd></div><div><dt className="text-muted-foreground">Product</dt><dd className="font-semibold">{intake.data.productCode === 'UNSECURED_CONSUMER_LOAN' ? 'Unsecured Consumer Loan' : 'Collateral Loan'}</dd></div>{confirmation.kind !== 'abandon' ? <><div><dt className="text-muted-foreground">Requested amount</dt><dd className="font-semibold">{formatVnd(confirmation.input.requestedAmount)}</dd></div><div><dt className="text-muted-foreground">Requested term</dt><dd className="font-semibold">{confirmation.input.requestedTermMonths} months</dd></div></> : null}{confirmation.kind === 'collateral' ? <><div><dt className="text-muted-foreground">Collateral type</dt><dd className="font-semibold">{collateralTypeLabels[confirmation.input.collateral.type]}</dd></div><div><dt className="text-muted-foreground">Estimated value</dt><dd className="font-semibold">{formatVnd(confirmation.input.collateral.estimatedValue)}</dd></div></> : null}</dl><p className="text-sm text-muted-foreground">{confirmation.kind === 'abandon' ? 'Abandonment is terminal and blocks further Customer association and paper-evidence changes.' : 'This creates the real LoanApplication from this completed paper intake.'}</p><div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={closeConfirmation}>Cancel</Button><Button autoFocus variant={confirmation.kind === 'abandon' ? 'destructive' : 'default'} disabled={confirmation.kind === 'ucl' ? locked(actions['ucl-conversion']) : confirmation.kind === 'collateral' ? locked(actions['collateral-conversion']) : locked(actions['abandon-intake'])} onClick={confirmAction}>{confirmation.kind === 'ucl' ? 'Create UCL application' : confirmation.kind === 'collateral' ? 'Create Collateral Loan application' : 'Abandon intake'}</Button></div></div></div> : null}
   </section>
 }

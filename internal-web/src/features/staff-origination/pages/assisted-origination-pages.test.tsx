@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -265,8 +265,7 @@ describe('assisted origination pages', () => {
     expect(screen.getByRole('button', { name: 'Create Collateral Loan application' })).toBeDisabled()
   })
 
-  it('submits exactly one structured Collateral after confirmation and exposes the completed application', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+  it('reviews, cancels, and submits exactly one captured Collateral command', async () => {
     let posts = 0
     let converted = false
     vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
@@ -302,9 +301,28 @@ describe('assisted origination pages', () => {
     await user.type(screen.getByLabelText('Estimated value'), '35000000')
     await user.type(screen.getByLabelText('Ownership status'), 'Owned by Customer')
     await user.type(screen.getByLabelText('Condition note'), 'Normal used condition')
-    await user.click(screen.getByRole('button', { name: 'Create Collateral Loan application' }))
+    const trigger = screen.getByRole('button', { name: 'Create Collateral Loan application' })
+    await user.click(trigger)
 
-    expect(confirm).toHaveBeenCalledTimes(1)
+    let dialog = await screen.findByRole('dialog', { name: 'Create Collateral Loan application?' })
+    expect(within(dialog).getByText(/CUS-000000123.*Paper Customer/)).toBeVisible()
+    expect(within(dialog).getByText('Collateral Loan')).toBeVisible()
+    expect(within(dialog).getByText(/25\.000\.000/)).toBeVisible()
+    expect(within(dialog).getByText('12 months')).toBeVisible()
+    expect(within(dialog).getByText('Motorbike')).toBeVisible()
+    expect(within(dialog).getByText(/35\.000\.000/)).toBeVisible()
+    expect(posts).toBe(0)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(posts).toBe(0)
+    expect(trigger).toHaveFocus()
+
+    await user.click(trigger)
+    dialog = await screen.findByRole('dialog', { name: 'Create Collateral Loan application?' })
+    fireEvent.change(screen.getByLabelText('Requested amount'), { target: { value: '99999999' } })
+    await user.click(within(dialog).getByRole('button', { name: 'Create Collateral Loan application' }))
+
     expect(await screen.findByRole('link', { name: 'Open application documents' })).toHaveAttribute(
       'href', `/staff/applications/${loanApplicationId}/documents`,
     )
@@ -313,7 +331,6 @@ describe('assisted origination pages', () => {
   })
 
   it('reconciles a lost Collateral conversion without automatically repeating the POST', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     let caseReads = 0
     let posts = 0
     vi.mocked(api.apiRequest).mockImplementation(async (path) => {
@@ -343,6 +360,7 @@ describe('assisted origination pages', () => {
     await user.type(screen.getByLabelText('Ownership status'), 'Owned by Customer')
     await user.type(screen.getByLabelText('Condition note'), 'Normal used condition')
     await user.click(screen.getByRole('button', { name: 'Create Collateral Loan application' }))
+    await user.click(within(await screen.findByRole('dialog', { name: 'Create Collateral Loan application?' })).getByRole('button', { name: 'Create Collateral Loan application' }))
 
     expect(await screen.findByRole('link', { name: 'Open application documents' })).toHaveAttribute(
       'href', `/staff/applications/${loanApplicationId}/documents`,
@@ -350,8 +368,7 @@ describe('assisted origination pages', () => {
     expect(posts).toBe(1)
   })
 
-  it('submits amount and term once and makes the completed application link authoritative', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
+  it('reviews, cancels, and submits exactly one captured UCL command', async () => {
     let posts = 0
     let converted = false
     vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
@@ -378,6 +395,23 @@ describe('assisted origination pages', () => {
     await waitFor(() => expect(submit).toBeEnabled())
     await user.click(submit)
 
+    let dialog = await screen.findByRole('dialog', { name: 'Create UCL application?' })
+    expect(within(dialog).getByText(/CUS-000000123.*Paper Customer/)).toBeVisible()
+    expect(within(dialog).getByText('Unsecured Consumer Loan')).toBeVisible()
+    expect(within(dialog).getByText(/10\.000\.000/)).toBeVisible()
+    expect(within(dialog).getByText('12 months')).toBeVisible()
+    expect(posts).toBe(0)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(posts).toBe(0)
+    expect(submit).toHaveFocus()
+
+    await user.click(submit)
+    dialog = await screen.findByRole('dialog', { name: 'Create UCL application?' })
+    fireEvent.change(screen.getByLabelText('Requested term months'), { target: { value: '24' } })
+    await user.click(within(dialog).getByRole('button', { name: 'Create UCL application' }))
+
     expect(await screen.findByRole('link', { name: 'Open application documents' })).toHaveAttribute(
       'href', `/staff/applications/${loanApplicationId}/documents`,
     )
@@ -389,7 +423,6 @@ describe('assisted origination pages', () => {
     ['COMPLETED', loanApplicationId, /application creation was confirmed after Meridian refreshed the intake/i],
     ['OPEN', null, /application creation was not confirmed and the intake is still open/i],
   ])('reconciles a lost conversion as %s without automatically repeating POST', async (status, resultId, message) => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     let caseReads = 0
     let posts = 0
     vi.mocked(api.apiRequest).mockImplementation(async (path) => {
@@ -416,6 +449,7 @@ describe('assisted origination pages', () => {
     const submit = screen.getByRole('button', { name: 'Create UCL application' })
     await waitFor(() => expect(submit).toBeEnabled())
     await user.click(submit)
+    await user.click(within(await screen.findByRole('dialog', { name: 'Create UCL application?' })).getByRole('button', { name: 'Create UCL application' }))
 
     if (status === 'COMPLETED') {
       expect(await screen.findByRole('link', { name: 'Open application documents' })).toHaveAttribute(
@@ -958,7 +992,6 @@ describe('assisted origination pages', () => {
   it('reconciles a lost abandonment without repeating the terminal command', async () => {
     let caseReads = 0
     let abandonPosts = 0
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
       if (path === `/staff/assisted-originations/${caseId}`) { caseReads += 1; return intake(caseReads === 1 ? {} : { status: 'ABANDONED', terminalAt: '2026-09-17T09:00:00' }) }
       if (path === `/staff/customers/${customerId}`) return customer
@@ -971,6 +1004,7 @@ describe('assisted origination pages', () => {
     const user = userEvent.setup()
     renderRoute(`/staff/origination/${caseId}`)
     await user.click(await screen.findByRole('button', { name: 'Abandon intake' }))
+    await user.click(within(await screen.findByRole('dialog', { name: 'Abandon intake?' })).getByRole('button', { name: 'Abandon intake' }))
 
     expect(await screen.findByRole('heading', { name: 'Paper intake', level: 1 })).toBeVisible()
     expect(abandonPosts).toBe(1)
