@@ -306,6 +306,12 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
         }
 
         @Override
+        public List<PartnerEmployee> findByPartnerCompanyIdAndImportBatchId(UUID partnerCompanyId, UUID importBatchId) {
+            return all.stream().filter(employee -> employee.partnerCompanyId().equals(partnerCompanyId))
+                    .filter(employee -> employee.importBatchId().equals(importBatchId)).toList();
+        }
+
+        @Override
         public List<PartnerEmployee> findActiveByPartnerCompanyId(UUID companyId) {
             return List.of();
         }

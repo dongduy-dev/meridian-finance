@@ -154,6 +154,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/partner-companies/{partnerCompanyId}` | `partner:read` | Return one Partner Company. |
 | GET | `/api/v1/partner-companies/verification-options` | `partner:employee:verify:own` | List active Partner Companies as a Customer-safe employee-verification selector. |
 | GET | `/api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=false` | `partner:read` | List Partner Employees; `activeOnly` defaults to `false`. |
+| GET | `/api/v1/partner-companies/{partnerCompanyId}/employees/current` | `partner:read` | Return the authoritative current-month employee snapshot. |
 | GET | `/api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | `partner:read` | List employee import batches. |
 | POST | `/api/v1/partner-companies` | `partner:manage` | Create a Partner Company. |
 | PUT | `/api/v1/partner-companies/{partnerCompanyId}` | `partner:manage` | Update the company name and Salary Advance policy limit. |
@@ -566,6 +567,8 @@ This authenticated Customer read requires `partner:employee:verify:own`. It retu
 ### 3.15 Partner staff reads
 
 The Partner Company, employee, and import-batch reads require `partner:read`. Partner Company responses include the configured Salary Advance policy limit. Partner Employee responses include employee code, identity reference, salary amount, Salary Advance limit, employment status, active state, company identity, and import-batch identity. These are restricted Staff contracts and must not be reused as Customer response shapes. Import-batch responses contain company identity, effective month, status, and valid/invalid row counts.
+
+The all-company employee read retains source rows from every import batch. Each Partner Employee row belongs to one batch; the same employee code may occur in different batches. `GET /api/v1/partner-companies/{partnerCompanyId}/employees/current` returns `{partnerCompanyId, effectiveMonth, authoritativeBatchId, employees}`. Partner derives `effectiveMonth` from its UTC clock and selects the latest `COMPLETED` batch for that company and month, ordered by batch creation time and ID descending. `employees` contains only that batch's rows, ordered by employee code. Without a completed batch for the current month, `authoritativeBatchId` is `null` and `employees` is empty; older or future batches do not substitute. Import-batch history remains available through the separate history read.
 
 ### 3.16 Partner administration commands
 

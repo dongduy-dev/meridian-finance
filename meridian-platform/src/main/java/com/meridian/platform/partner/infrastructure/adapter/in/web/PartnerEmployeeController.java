@@ -1,6 +1,7 @@
 package com.meridian.platform.partner.infrastructure.adapter.in.web;
 
 import com.meridian.platform.partner.application.dto.PartnerEmployeeDto;
+import com.meridian.platform.partner.application.dto.CurrentPartnerEmployeeSnapshotDto;
 import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeUseCase;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,5 +30,10 @@ public class PartnerEmployeeController {
             @RequestParam(defaultValue = "false") boolean activeOnly
     ) {
         return queryPartnerEmployeeUseCase.getPartnerEmployeesByCompanyId(partnerCompanyId, activeOnly);
+    }
+
+    @GetMapping("/current")
+    public CurrentPartnerEmployeeSnapshotDto getCurrentPartnerEmployeeSnapshot(@PathVariable UUID partnerCompanyId) {
+        return queryPartnerEmployeeUseCase.getCurrentPartnerEmployeeSnapshot(partnerCompanyId);
     }
 }

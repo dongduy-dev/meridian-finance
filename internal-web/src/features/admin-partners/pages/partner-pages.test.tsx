@@ -28,6 +28,7 @@ const employee = {
   identityReference: 'ID-SECRET', salaryAmount: 10_000_000, salaryAdvanceLimit: 4_000_000,
   employmentStatus: 'ACTIVE', active: true,
 }
+const snapshot = { partnerCompanyId: companyId, effectiveMonth: '2026-09', authoritativeBatchId: employee.importBatchId, employees: [employee] }
 const csvHeaders = 'employeeCode,identityReference,salaryAmount,salaryAdvanceLimit,employmentStatus,active'
 const csvRow = 'EMP-NEW,ID-NEW,10000000,4000000,ACTIVE,true'
 const actor = (permissions: string[]): AuthResponse => ({
@@ -51,7 +52,7 @@ function storedBrowserText() {
 function mockReads() {
   vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
     if ((options as RequestInit | undefined)?.method) throw new Error('Unexpected command')
-    if (String(path).endsWith('/employees?activeOnly=false')) return [employee]
+    if (String(path).endsWith('/employees/current')) return snapshot
     if (String(path).endsWith('/employee-import-batches')) return []
     if (String(path) === `/partner-companies/${companyId}`) return company
     if (String(path) === '/partner-companies') return [company]
@@ -79,6 +80,54 @@ describe('Partner administration pages', () => {
     expect(vi.mocked(api.apiRequest).mock.calls.every(([path]) => !String(path).includes('EMP-001') && !String(path).includes('ID-SECRET'))).toBe(true)
     expect(storedBrowserText()).not.toContain('EMP-001')
     expect(storedBrowserText()).not.toContain('ID-SECRET')
+  })
+
+  it('shows only current snapshot rows and marks only the backend-selected history batch', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read']))
+    const olderId = '44444444-4444-4444-8444-444444444444'
+    const failedId = '55555555-5555-4555-8555-555555555555'
+    const pendingId = '66666666-6666-4666-8666-666666666666'
+    const histories = [
+      { id: olderId, partnerCompanyId: companyId, effectiveMonth: '2026-08', status: 'COMPLETED', validRowCount: 1, invalidRowCount: 0 },
+      { id: employee.importBatchId, partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'COMPLETED', validRowCount: 1, invalidRowCount: 0 },
+      { id: failedId, partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'FAILED', validRowCount: 0, invalidRowCount: 1 },
+      { id: pendingId, partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'PENDING', validRowCount: 0, invalidRowCount: 0 },
+    ]
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (String(path).endsWith('/employees/current')) return snapshot
+      if (String(path).endsWith('/employee-import-batches')) return histories
+      if (String(path) === `/partner-companies/${companyId}`) return company
+      throw new Error(`Unexpected path ${path}`)
+    })
+
+    renderPath(`/admin/partners/${companyId}`)
+    const table = await screen.findByRole('table', { name: 'Current Partner Employee source rows' })
+    expect(table).toHaveTextContent('EMP-001')
+    expect(table.querySelectorAll('tbody tr')).toHaveLength(1)
+    expect(screen.getByText('2026-09', { selector: 'dd' })).toBeVisible()
+    expect(screen.getByText(employee.importBatchId, { selector: 'dd' })).toBeVisible()
+    const history = screen.getByRole('table', { name: 'Employee import history' })
+    expect(within(history).getByText(employee.importBatchId).closest('tr')).toHaveTextContent('Current')
+    for (const id of [olderId, failedId, pendingId]) {
+      expect(within(history).getByText(id).closest('tr')).not.toHaveTextContent('Current')
+    }
+  })
+
+  it('shows no current snapshot without displaying historical employees and retains history', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read']))
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (String(path).endsWith('/employees/current')) return { partnerCompanyId: companyId, effectiveMonth: '2026-09', authoritativeBatchId: null, employees: [] }
+      if (String(path).endsWith('/employee-import-batches')) return [{ id: employee.importBatchId, partnerCompanyId: companyId, effectiveMonth: '2026-08', status: 'COMPLETED', validRowCount: 1, invalidRowCount: 0 }]
+      if (String(path) === `/partner-companies/${companyId}`) return company
+      throw new Error(`Unexpected path ${path}`)
+    })
+
+    renderPath(`/admin/partners/${companyId}`)
+    expect(await screen.findByText(/No authoritative employee snapshot is available for 2026-09/)).toBeVisible()
+    expect(screen.queryByRole('table', { name: 'Current Partner Employee source rows' })).not.toBeInTheDocument()
+    const history = screen.getByRole('table', { name: 'Employee import history' })
+    expect(history).toHaveTextContent(employee.importBatchId)
+    expect(history).not.toHaveTextContent('Current')
   })
 
   it('shows company and import commands only with read plus manage', async () => {
@@ -143,7 +192,7 @@ describe('Partner administration pages', () => {
       const method = (options as RequestInit | undefined)?.method
       if (method === 'PUT') return { ...company, name: 'Updated Ltd' }
       if (method === 'POST' && String(path).endsWith('/status')) return { ...company, status: 'SUSPENDED' }
-      if (String(path).endsWith('/employees?activeOnly=false')) return [employee]
+      if (String(path).endsWith('/employees/current')) return snapshot
       if (String(path).endsWith('/employee-import-batches')) return []
       if (String(path) === `/partner-companies/${companyId}`) return company
       if (String(path) === '/partner-companies') return [company]
@@ -193,7 +242,7 @@ describe('Partner administration pages', () => {
     const suspendedCompany = { ...company, status: 'SUSPENDED' }
     vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
       if ((options as RequestInit | undefined)?.method === 'POST' && String(path).endsWith('/status')) return company
-      if (String(path).endsWith('/employees?activeOnly=false')) return [employee]
+      if (String(path).endsWith('/employees/current')) return snapshot
       if (String(path).endsWith('/employee-import-batches')) return []
       if (String(path) === `/partner-companies/${companyId}`) return suspendedCompany
       if (String(path) === '/partner-companies') return [suspendedCompany]
@@ -214,12 +263,16 @@ describe('Partner administration pages', () => {
     vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
     let employeeReads = 0
     let historyReads = 0
+    let imported = false
+    const newBatchId = '77777777-7777-4777-8777-777777777777'
+    const newEmployee = { ...employee, id: '88888888-8888-4888-8888-888888888888', importBatchId: newBatchId, employeeCode: 'EMP-NEW', identityReference: 'ID-NEW' }
     vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
       if ((options as RequestInit | undefined)?.method === 'POST' && String(path).endsWith('/employee-import-batches')) {
-        return { importBatchId: '77777777-7777-4777-8777-777777777777', partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'COMPLETED', validRowCount: 1, invalidRowCount: 1, rejections: [{ rowIndex: 2, errorCode: 'INVALID_SALARY_AMOUNT', reason: 'Salary amount must be nonnegative.' }] }
+        imported = true
+        return { importBatchId: newBatchId, partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'COMPLETED', validRowCount: 1, invalidRowCount: 1, rejections: [{ rowIndex: 2, errorCode: 'INVALID_SALARY_AMOUNT', reason: 'Salary amount must be nonnegative.' }] }
       }
-      if (String(path).endsWith('/employees?activeOnly=false')) { employeeReads += 1; return [employee] }
-      if (String(path).endsWith('/employee-import-batches')) { historyReads += 1; return [] }
+      if (String(path).endsWith('/employees/current')) { employeeReads += 1; return imported ? { partnerCompanyId: companyId, effectiveMonth: '2026-09', authoritativeBatchId: newBatchId, employees: [newEmployee] } : snapshot }
+      if (String(path).endsWith('/employee-import-batches')) { historyReads += 1; return imported ? [{ id: newBatchId, partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'COMPLETED', validRowCount: 1, invalidRowCount: 1 }] : [] }
       if (String(path) === `/partner-companies/${companyId}`) return company
       if (String(path) === '/partner-companies') return [company]
       throw new Error(`Unexpected path ${path}`)
@@ -247,6 +300,9 @@ describe('Partner administration pages', () => {
       expect(employeeReads).toBeGreaterThan(1)
       expect(historyReads).toBeGreaterThan(1)
     })
+    expect(screen.getByRole('table', { name: 'Current Partner Employee source rows' })).toHaveTextContent('EMP-NEW')
+    expect(screen.getByRole('table', { name: 'Current Partner Employee source rows' })).not.toHaveTextContent('EMP-001')
+    expect(within(screen.getByRole('table', { name: 'Employee import history' })).getByText(newBatchId).closest('tr')).toHaveTextContent('Current')
   })
 
   it('treats an idempotency conflict as definitive and does not offer exact retry', async () => {
@@ -255,7 +311,7 @@ describe('Partner administration pages', () => {
       if ((options as RequestInit | undefined)?.method === 'POST' && String(path).endsWith('/employee-import-batches')) {
         throw new ApiError(409, 'IDEMPOTENCY_KEY_REUSED', 'Request ID was reused.', String(path), '2026-09-16T08:00:00Z')
       }
-      if (String(path).endsWith('/employees?activeOnly=false')) return [employee]
+      if (String(path).endsWith('/employees/current')) return snapshot
       if (String(path).endsWith('/employee-import-batches')) return []
       if (String(path) === `/partner-companies/${companyId}`) return company
       return [company]
@@ -281,7 +337,7 @@ describe('Partner administration pages', () => {
         submitted = (options as { body: unknown }).body
         return { importBatchId: '55555555-5555-4555-8555-555555555555', partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'COMPLETED', validRowCount: 1, invalidRowCount: 0, rejections: [] }
       }
-      if (String(path).endsWith('/employees?activeOnly=false')) return [employee]
+      if (String(path).endsWith('/employees/current')) return snapshot
       if (String(path).endsWith('/employee-import-batches')) return []
       if (String(path) === `/partner-companies/${companyId}`) return company
       return [company]
@@ -348,7 +404,7 @@ describe('Partner administration pages', () => {
         if (attempts === 1) throw new NetworkError('response lost')
         return { importBatchId: '55555555-5555-4555-8555-555555555555', partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'COMPLETED', validRowCount: 1, invalidRowCount: 0, rejections: [] }
       }
-      if (String(path).endsWith('/employees?activeOnly=false')) return [employee]
+      if (String(path).endsWith('/employees/current')) return snapshot
       if (String(path).endsWith('/employee-import-batches')) return []
       if (String(path) === `/partner-companies/${companyId}`) return company
       return [company]
@@ -388,7 +444,7 @@ describe('Partner administration pages', () => {
         if (attempts === 1) throw new NetworkError('response lost')
         throw new ApiError(409, 'IDEMPOTENCY_KEY_REUSED', 'Request ID was reused.', String(path), '2026-09-16T08:00:00Z')
       }
-      if (String(path).endsWith('/employees?activeOnly=false')) return [employee]
+      if (String(path).endsWith('/employees/current')) return snapshot
       if (String(path).endsWith('/employee-import-batches')) return []
       if (String(path) === `/partner-companies/${companyId}`) return company
       return [company]
@@ -417,7 +473,7 @@ describe('Partner administration pages', () => {
         submittedRows = (options as { body: { rows: unknown[] } }).body.rows
         return { importBatchId: '55555555-5555-4555-8555-555555555555', partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'COMPLETED', validRowCount: 30, invalidRowCount: 0, rejections: [] }
       }
-      if (String(path).endsWith('/employees?activeOnly=false')) return [employee]
+      if (String(path).endsWith('/employees/current')) return snapshot
       if (String(path).endsWith('/employee-import-batches')) return []
       if (String(path) === `/partner-companies/${companyId}`) return company
       return [company]
