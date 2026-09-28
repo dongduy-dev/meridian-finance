@@ -9,6 +9,7 @@ import java.util.UUID;
 public interface PartnerEmployeeRepository {
     Optional<PartnerEmployee> findById(UUID partnerEmployeeId);
     List<PartnerEmployee> findByPartnerCompanyId(UUID partnerCompanyId);
+    List<PartnerEmployee> findByPartnerCompanyIdAndImportBatchId(UUID partnerCompanyId, UUID importBatchId);
     List<PartnerEmployee> findActiveByPartnerCompanyId(UUID companyId);
     List<PartnerEmployee> findByVerificationEvidence(
             UUID partnerCompanyId,

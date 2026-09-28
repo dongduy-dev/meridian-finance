@@ -24,6 +24,13 @@ export const partnerEmployeeSchema = z.object({
   active: z.boolean(),
 })
 
+export const currentPartnerEmployeeSnapshotSchema = z.object({
+  partnerCompanyId: meridianUuidSchema,
+  effectiveMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  authoritativeBatchId: meridianUuidSchema.nullable(),
+  employees: partnerEmployeeSchema.array(),
+})
+
 export const partnerImportBatchSchema = z.object({
   id: meridianUuidSchema,
   partnerCompanyId: meridianUuidSchema,
@@ -150,6 +157,7 @@ export const partnerEligibilityReviewDecisionSchema = z.discriminatedUnion('outc
 
 export type PartnerCompany = z.infer<typeof partnerCompanySchema>
 export type PartnerEmployee = z.infer<typeof partnerEmployeeSchema>
+export type CurrentPartnerEmployeeSnapshot = z.infer<typeof currentPartnerEmployeeSnapshotSchema>
 export type PartnerImportBatch = z.infer<typeof partnerImportBatchSchema>
 export type PartnerImportResult = z.infer<typeof partnerImportResultSchema>
 export type CreatePartnerCompanyInput = z.infer<typeof createPartnerCompanyInputSchema>

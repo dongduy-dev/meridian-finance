@@ -5,6 +5,7 @@ import com.meridian.platform.partner.application.dto.PartnerEmployeeImportResult
 import com.meridian.platform.partner.application.dto.PartnerEmployeeImportRowRequest;
 import com.meridian.platform.partner.application.port.in.ImportPartnerEmployeesUseCase;
 import com.meridian.platform.partner.application.port.in.QueryCustomerPartnerEmployeeLinkUseCase;
+import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeUseCase;
 import com.meridian.platform.partner.application.dto.CustomerPartnerEmployeeEligibilityDto;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
@@ -50,6 +51,9 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
 
     @Autowired
     private QueryCustomerPartnerEmployeeLinkUseCase eligibility;
+
+    @Autowired
+    private QueryPartnerEmployeeUseCase employeeQueries;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -145,6 +149,50 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
                 CustomerPartnerEmployeeEligibilityDto.Status.ELIGIBLE,
                 eligibility.inspectEligibility(customerId, linkId).status()
         );
+    }
+
+    @Test
+    void currentSnapshotSelectsLatestCompletedMonthBatchWithoutMergingHistoricalCodes() {
+        UUID companyId = createCompany("ACTIVE");
+        when(currentUserProvider.currentUser()).thenReturn(actor());
+        String code = "SAME-" + UUID.randomUUID().toString().substring(0, 8);
+        PartnerEmployeeImportResultDto older = imports.importEmployees(
+                companyId, request(UUID.randomUUID(), previousMonth(), code, "OLDER-ID", true));
+        insertBatch(companyId, YearMonth.now(clock).plusMonths(1).toString(), "COMPLETED");
+        for (String status : List.of("FAILED", "PENDING", "PROCESSING")) {
+            insertBatch(companyId, currentMonth(), status);
+        }
+
+        var missing = employeeQueries.getCurrentPartnerEmployeeSnapshot(companyId);
+        assertEquals(currentMonth(), missing.effectiveMonth());
+        assertEquals(null, missing.authoritativeBatchId());
+        assertEquals(List.of(), missing.employees());
+
+        PartnerEmployeeImportResultDto first = imports.importEmployees(
+                companyId, request(UUID.randomUUID(), currentMonth(), code, "FIRST-ID", true));
+        PartnerEmployeeImportResultDto second = imports.importEmployees(
+                companyId, request(UUID.randomUUID(), currentMonth(), code, "SECOND-ID", true));
+        jdbcTemplate.update("UPDATE partner_employee_import_batches SET created_at = ? WHERE id = ?",
+                LocalDateTime.of(2026, 1, 1, 0, 0), first.importBatchId());
+        jdbcTemplate.update("UPDATE partner_employee_import_batches SET created_at = ? WHERE id = ?",
+                LocalDateTime.of(2026, 1, 2, 0, 0), second.importBatchId());
+
+        var current = employeeQueries.getCurrentPartnerEmployeeSnapshot(companyId);
+        assertEquals(second.importBatchId(), current.authoritativeBatchId());
+        assertEquals(1, current.employees().size());
+        assertEquals(code, current.employees().getFirst().employeeCode());
+        assertEquals("SECOND-ID", current.employees().getFirst().identityReference());
+        assertEquals(second.importBatchId(), current.employees().getFirst().importBatchId());
+        assertEquals(3, employeeQueries.getPartnerEmployeesByCompanyId(companyId, false).size());
+        assertEquals(1, employeeQueries.getPartnerEmployeesByCompanyId(companyId, false).stream()
+                .filter(row -> row.importBatchId().equals(older.importBatchId())).count());
+    }
+
+    private void insertBatch(UUID companyId, String month, String status) {
+        jdbcTemplate.update("INSERT INTO partner_employee_import_batches "
+                        + "(id, partner_company_id, effective_month, status, valid_row_count, invalid_row_count, created_at, rejection_summary) "
+                        + "VALUES (?, ?, ?, ?, 0, 0, ?, '[]'::jsonb)",
+                UUID.randomUUID(), companyId, month, status, LocalDateTime.of(2026, 12, 1, 0, 0));
     }
 
     @Test

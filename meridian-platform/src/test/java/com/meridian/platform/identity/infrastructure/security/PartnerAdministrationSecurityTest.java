@@ -8,6 +8,9 @@ import com.meridian.platform.partner.application.port.in.QueryPartnerCompanyUseC
 import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeImportBatchUseCase;
 import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerCompanyController;
 import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerEmployeeImportBatchController;
+import com.meridian.platform.partner.infrastructure.adapter.in.web.PartnerEmployeeController;
+import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeUseCase;
+import com.meridian.platform.partner.application.dto.CurrentPartnerEmployeeSnapshotDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,9 +29,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = {PartnerCompanyController.class, PartnerEmployeeImportBatchController.class})
+@WebMvcTest(controllers = {PartnerCompanyController.class, PartnerEmployeeImportBatchController.class, PartnerEmployeeController.class})
 @Import({
         SecurityConfig.class,
         JwtAuthenticationFilter.class,
@@ -45,6 +50,7 @@ class PartnerAdministrationSecurityTest {
     @MockitoBean com.meridian.platform.identity.application.port.out.AccessTokenRevocationRepository accessTokenRevocationRepository;
     @MockitoBean QueryPartnerCompanyUseCase queryPartnerCompanyUseCase;
     @MockitoBean QueryPartnerEmployeeImportBatchUseCase queryPartnerEmployeeImportBatchUseCase;
+    @MockitoBean QueryPartnerEmployeeUseCase queryPartnerEmployeeUseCase;
     @MockitoBean ManagePartnerCompanyUseCase managePartnerCompanyUseCase;
     @MockitoBean ImportPartnerEmployeesUseCase importPartnerEmployeesUseCase;
 
@@ -88,6 +94,22 @@ class PartnerAdministrationSecurityTest {
                             .content(importRequest()))
                     .andExpect(status().isForbidden());
         }
+    }
+
+    @Test
+    void currentEmployeeSnapshotRequiresExactPartnerRead() throws Exception {
+        when(queryPartnerEmployeeUseCase.getCurrentPartnerEmployeeSnapshot(COMPANY_ID))
+                .thenReturn(new CurrentPartnerEmployeeSnapshotDto(COMPANY_ID, "2026-09", null, List.of()));
+        String path = "/api/v1/partner-companies/{companyId}/employees/current";
+        mockMvc.perform(get(path, COMPANY_ID).with(authority("partner:read")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.effectiveMonth").value("2026-09"))
+                .andExpect(jsonPath("$.authoritativeBatchId").value(org.hamcrest.Matchers.nullValue()));
+        for (String denied : List.of("partner:manage", "partner:read:all", "BACK_OFFICE_ADMIN")) {
+            mockMvc.perform(get(path, COMPANY_ID).with(authority(denied)))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(get(path, COMPANY_ID)).andExpect(status().isUnauthorized());
     }
 
     private static String companyRequest() {

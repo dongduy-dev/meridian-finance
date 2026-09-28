@@ -2,6 +2,7 @@ import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import {
   partnerCompanySchema,
   partnerEmployeeSchema,
+  currentPartnerEmployeeSnapshotSchema,
   partnerImportBatchSchema,
   partnerImportResultSchema,
   partnerEligibilityReviewSchema,
@@ -10,6 +11,7 @@ import {
   type ImportPartnerEmployeesInput,
   type PartnerCompany,
   type PartnerEmployee,
+  type CurrentPartnerEmployeeSnapshot,
   type PartnerImportBatch,
   type PartnerImportResult,
   type UpdatePartnerCompanyInput,
@@ -28,6 +30,10 @@ export async function getPartnerCompany(manager: AuthSessionManager, id: string)
 
 export async function getPartnerEmployees(manager: AuthSessionManager, id: string): Promise<PartnerEmployee[]> {
   return partnerEmployeeSchema.array().parse(await manager.protectedRequest<unknown>(`/partner-companies/${id}/employees?activeOnly=false`))
+}
+
+export async function getCurrentPartnerEmployeeSnapshot(manager: AuthSessionManager, id: string): Promise<CurrentPartnerEmployeeSnapshot> {
+  return currentPartnerEmployeeSnapshotSchema.parse(await manager.protectedRequest<unknown>(`/partner-companies/${id}/employees/current`))
 }
 
 export async function getPartnerImportBatches(manager: AuthSessionManager, id: string): Promise<PartnerImportBatch[]> {

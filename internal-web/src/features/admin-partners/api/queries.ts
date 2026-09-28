@@ -6,6 +6,7 @@ import {
   getPartnerEligibilityReview,
   getPartnerEligibilityReviews,
   getPartnerEmployees,
+  getCurrentPartnerEmployeeSnapshot,
   getPartnerImportBatches,
 } from './partner-admin-api'
 
@@ -14,6 +15,7 @@ export const partnerAdminKeys = {
   companies: () => [...partnerAdminKeys.all, 'companies'] as const,
   company: (id: string) => [...partnerAdminKeys.all, 'company', id] as const,
   employees: (id: string) => [...partnerAdminKeys.all, 'employees', id] as const,
+  currentEmployees: (id: string) => [...partnerAdminKeys.all, 'current-employees', id] as const,
   importBatches: (id: string) => [...partnerAdminKeys.all, 'import-batches', id] as const,
   eligibilityReviews: (page: number, size: number) => [...partnerAdminKeys.all, 'eligibility-reviews', page, size] as const,
   eligibilityReview: (reviewId: string) => [...partnerAdminKeys.all, 'eligibility-review', reviewId] as const,
@@ -29,6 +31,11 @@ export const partnerCompanyQuery = (manager: AuthSessionManager, id: string, ena
 
 export const partnerEmployeesQuery = (manager: AuthSessionManager, id: string, enabled: boolean) => queryOptions({
   queryKey: partnerAdminKeys.employees(id), queryFn: () => getPartnerEmployees(manager, id), enabled,
+  staleTime: 0, gcTime: 0, refetchOnWindowFocus: true,
+})
+
+export const currentPartnerEmployeeSnapshotQuery = (manager: AuthSessionManager, id: string, enabled: boolean) => queryOptions({
+  queryKey: partnerAdminKeys.currentEmployees(id), queryFn: () => getCurrentPartnerEmployeeSnapshot(manager, id), enabled,
   staleTime: 0, gcTime: 0, refetchOnWindowFocus: true,
 })
 
