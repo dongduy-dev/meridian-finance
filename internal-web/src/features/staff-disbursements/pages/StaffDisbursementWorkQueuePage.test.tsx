@@ -48,6 +48,8 @@ describe('Staff ready-disbursement queue', () => {
     const user = userEvent.setup()
 
     expect(await screen.findByText('UCL-20260910-000001')).toBeVisible()
+    expect(screen.getByText(/Applications ready for Accounting to record an external transfer and activate the LoanAccount/i)).toBeVisible()
+    expect(document.body.textContent).not.toMatch(/server-owned|backend-owned|authoritative queue/i)
     await user.selectOptions(screen.getByLabelText('Product'), 'UNSECURED_CONSUMER_LOAN')
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) =>
       String(path).includes('/staff/disbursement-work?')
@@ -78,7 +80,7 @@ describe('Staff ready-disbursement queue', () => {
     renderPage()
 
     expect(await screen.findByText('Work stage unavailable')).toBeVisible()
-    expect(screen.getByText(/Unknown operational evidence requires an authoritative refresh/)).toBeVisible()
+    expect(screen.getByText(/latest work information is incomplete or unrecognized/i)).toBeVisible()
     expect(screen.getByRole('link', { name: 'Inspect unavailable state' })).toBeVisible()
   })
 })

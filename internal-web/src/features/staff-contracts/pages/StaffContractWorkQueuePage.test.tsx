@@ -49,6 +49,8 @@ describe('Staff contract work queue', () => {
     renderPage()
     const user = userEvent.setup()
     expect(await screen.findByText('UCL-1')).toBeVisible()
+    expect(screen.getByText(/Applications that need contract preparation, Customer acknowledgment follow-up, or readiness work/i)).toBeVisible()
+    expect(document.body.textContent).not.toMatch(/server-owned|backend-owned|authoritative queue/i)
     await user.selectOptions(screen.getByLabelText('Product'), 'UNSECURED_CONSUMER_LOAN')
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) =>
       String(path).includes('productCode=UNSECURED_CONSUMER_LOAN'))).toBe(true)
@@ -82,7 +84,7 @@ describe('Staff contract work queue', () => {
 
     expect(await screen.findByText('Work stage unavailable')).toBeVisible()
     expect(screen.getByText(/Contract v1 · Status unavailable/)).toBeVisible()
-    expect(document.body.textContent).toContain('Unknown readiness blocker. Refresh authoritative evidence.')
-    expect(screen.getByText(/Unknown operational evidence requires an authoritative refresh/)).toBeVisible()
+    expect(document.body.textContent).toContain('Unknown readiness blocker. Refresh the latest contract information.')
+    expect(screen.getByText(/latest work information is incomplete or unrecognized/i)).toBeVisible()
   })
 })

@@ -225,7 +225,8 @@ describe('Staff repayment entry', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
 
     expect(await screen.findByText(/Current account or history information does not confirm this exact repayment/i)).toBeVisible()
-    expect(await screen.findByText(/backend reports SETTLED/i)).toBeVisible()
+    expect(await screen.findByText(/Ordinary repayment is unavailable for this account status/i)).toBeVisible()
+    expect(screen.queryByText(/backend reports|CP8/i)).not.toBeInTheDocument()
     const retry = screen.getByRole('button', { name: 'Retry exact operation' })
     expect(retry).toBeEnabled()
     expect(repaymentPostCalls()).toHaveLength(1)

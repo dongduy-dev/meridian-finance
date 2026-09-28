@@ -77,6 +77,8 @@ describe('Partner eligibility review page', () => {
     renderPage()
 
     expect(await screen.findByRole('heading', { name: 'Eligibility reviews' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Review detail' })).toBeVisible()
+    expect(document.body.textContent).not.toMatch(/authoritative review detail/i)
     expect(await screen.findByText('Requested employee code: EMP-001')).toBeVisible()
     expect(await screen.findByRole('heading', { name: 'Current identity-matched candidates' })).toBeVisible()
     expect(screen.getByText('EMP-001', { selector: 'td' })).toBeVisible()

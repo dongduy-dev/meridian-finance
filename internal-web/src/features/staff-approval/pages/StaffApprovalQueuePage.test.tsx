@@ -50,6 +50,8 @@ describe('Staff approval queue', () => {
     vi.mocked(api.apiRequest).mockResolvedValue(page(0, true))
     renderPage()
     expect(await screen.findByRole('heading', { name: 'Independent decision queue' })).toBeVisible()
+    expect(screen.getByText(/Applications ready for an independent Approver decision/i)).toBeVisible()
+    expect(document.body.textContent).not.toMatch(/server-owned|backend-owned|authoritative queue/i)
     expect(await screen.findByRole('heading', { name: 'No approval work' })).toBeVisible()
   })
 

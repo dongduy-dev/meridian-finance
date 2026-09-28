@@ -16,6 +16,6 @@ describe('structured correction validation', () => {
 
   it('rejects APPLICATION_TERMS and non-authoritative targets by construction', () => {
     expect(validateCorrectionTasks([{ optionIndex: 4, scope: 'DOCUMENT_REPLACEMENT', responsibleParty: 'CUSTOMER', instruction: 'Replace it.' }], options, 'CUSTOMER'))
-      .toMatch(/authoritative option/i)
+      .toMatch(/available option/i)
   })
 })

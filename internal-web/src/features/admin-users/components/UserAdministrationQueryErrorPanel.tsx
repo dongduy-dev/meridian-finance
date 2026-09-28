@@ -14,7 +14,7 @@ export function UserAdministrationQueryErrorPanel({ error, onRetry }: {
     <AlertTitle>{forbidden ? 'Internal User access changed' : 'Internal Users unavailable'}</AlertTitle>
     <AlertDescription>
       <p>{forbidden
-        ? 'Your session no longer has identity:user:manage. This workspace cannot load or change User authority.'
+        ? 'You no longer have access to Internal User administration. This workspace cannot load or change User access.'
         : 'Meridian could not verify the protected Internal User response. Try again when the service is available.'}</p>
       {!forbidden ? <Button className="mt-3" variant="outline" onClick={onRetry}>Try again</Button> : null}
       {error instanceof ApiError && error.requestId ? <RequestCorrelation requestId={error.requestId} /> : null}

@@ -433,7 +433,7 @@ describe('assisted origination pages', () => {
     renderRoute(`/staff/origination/${caseId}`)
 
     expect(await screen.findByRole('heading', { name: 'UCL intake', level: 1 })).toBeVisible()
-    expect(screen.getByText(/Customer intake permissions are required/)).toBeVisible()
+    expect(screen.getByText(/Customer intake access is required/)).toBeVisible()
     expect(vi.mocked(api.apiRequest).mock.calls.map(requestPath)).toEqual([`/staff/assisted-originations/${caseId}`])
   })
 

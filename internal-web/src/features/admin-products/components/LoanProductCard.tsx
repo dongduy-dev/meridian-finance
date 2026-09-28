@@ -121,7 +121,7 @@ export function LoanProductCard({ product, manager }: {
       {product.description ? <p className="text-sm leading-6 text-muted-foreground">{product.description}</p> : null}
 
       <form className="space-y-4 rounded-md border p-4" onSubmit={submitLimits}>
-        <div><h3 className="font-semibold">Amount limits</h3><p className="text-sm text-muted-foreground">Set the allowed range for future applications. Product-specific policy remains backend-owned.</p></div>
+        <div><h3 className="font-semibold">Amount limits</h3><p className="text-sm text-muted-foreground">Set the allowed range for future applications. Product-specific policy still applies.</p></div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-1 text-sm font-medium">Minimum amount
             <Input type="number" min="0" step="0.01" aria-invalid={Boolean(minError)} {...form.register('minAmount', { required: 'Minimum amount is required.', valueAsNumber: true, min: { value: 0, message: 'Minimum amount must be nonnegative.' } })} />
@@ -137,7 +137,7 @@ export function LoanProductCard({ product, manager }: {
       </form>
 
       <div className="space-y-3 rounded-md border p-4">
-        <div><h3 className="font-semibold">Product availability</h3><p className="text-sm text-muted-foreground">{product.active ? 'Deactivation removes this product from Customer discovery and blocks future submission. Historical lending records are unchanged.' : 'Activation makes this product available for Customer discovery and future submission under current backend policy.'}</p></div>
+        <div><h3 className="font-semibold">Product availability</h3><p className="text-sm text-muted-foreground">{product.active ? 'Deactivation removes this product from Customer discovery and blocks future submission. Historical lending records are unchanged.' : 'Activation makes this product available for Customer discovery and future submission under current product policy.'}</p></div>
         <Button id={`product-activation-${product.productCode}-trigger`} type="button" variant={product.active ? 'destructive' : 'default'} disabled={activationPending} onClick={() => product.active ? setConfirmingDeactivation(true) : void changeActivation(true)}>
           {activationPending ? 'Waiting for confirmation…' : product.active ? 'Deactivate product' : 'Activate product'}
         </Button>

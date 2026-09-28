@@ -157,7 +157,7 @@ export function ApplicationCasePage() {
             <CardContent>
               <dl className="grid gap-4 sm:grid-cols-2">
                 <div><dt className="text-sm text-muted-foreground">Application number</dt><dd className="mt-1 font-semibold">{data.applicationNumber}</dd></div>
-                <div><dt className="text-sm text-muted-foreground">Durable status</dt><dd className="mt-1 font-semibold">{applicationStatusLabel(data.status)}</dd></div>
+                <div><dt className="text-sm text-muted-foreground">Application status</dt><dd className="mt-1 font-semibold">{applicationStatusLabel(data.status)}</dd></div>
                 <div><dt className="text-sm text-muted-foreground">Product</dt><dd className="mt-1 font-semibold">{productLabel(data.productCode)}</dd></div>
                 <div><dt className="text-sm text-muted-foreground">Requested terms</dt><dd className="financial-value mt-1 font-semibold">{formatVnd(data.requestedAmount)} · {data.requestedTermMonths} months</dd></div>
               </dl>
@@ -178,7 +178,7 @@ export function ApplicationCasePage() {
       </section>
 
       <section id="history" className="scroll-mt-4 space-y-4" aria-labelledby="history-heading">
-        <div><p className="text-sm font-semibold text-muted-foreground">IMMUTABLE EVIDENCE</p><h2 id="history-heading" className="mt-1 text-xl font-semibold">Lifecycle history</h2><p className="mt-1 text-sm text-muted-foreground">Events appear in the authoritative order returned by Loan.</p></div>
+        <div><p className="text-sm font-semibold text-muted-foreground">IMMUTABLE EVIDENCE</p><h2 id="history-heading" className="mt-1 text-xl font-semibold">Lifecycle history</h2><p className="mt-1 text-sm text-muted-foreground">Events appear in the order recorded for this application.</p></div>
         <Card>
           <CardContent className="pt-6">
             {data.lifecycleHistory.length === 0 ? <p className="text-sm text-muted-foreground">No lifecycle history was returned for this application.</p> : (
@@ -198,7 +198,7 @@ export function ApplicationCasePage() {
         </Card>
       </section>
 
-      <Alert variant="information"><CircleUserRound aria-hidden="true" /><AlertTitle>Application overview</AlertTitle><AlertDescription>This overview remains read-only. Document review and Staff correction commands are available only through their permission-scoped workspaces.</AlertDescription></Alert>
+      <Alert variant="information"><CircleUserRound aria-hidden="true" /><AlertTitle>Application overview</AlertTitle><AlertDescription>This overview remains read-only. Document review and Staff correction actions are available in their dedicated workspaces.</AlertDescription></Alert>
     </section>
   )
 }

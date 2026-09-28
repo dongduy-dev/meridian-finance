@@ -44,6 +44,8 @@ describe('Staff servicing work queue', () => {
     const user = userEvent.setup()
 
     expect(await screen.findByText('UCL-20260910-000001')).toBeVisible()
+    expect(screen.getByText(/Active and overdue LoanAccounts available for servicing review and ordinary repayment work/i)).toBeVisible()
+    expect(document.body.textContent).not.toMatch(/server-owned|backend-owned|backend scheduler/i)
     await user.selectOptions(screen.getByLabelText('Product'), 'UNSECURED_CONSUMER_LOAN')
     await user.selectOptions(screen.getByLabelText('Serviceable status'), 'OVERDUE')
     await user.click(screen.getByRole('button', { name: 'Next' }))

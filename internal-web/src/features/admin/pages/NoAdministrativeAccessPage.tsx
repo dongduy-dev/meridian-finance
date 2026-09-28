@@ -20,7 +20,7 @@ export function NoAdministrativeAccessPage() {
         <Alert variant="warning">
           <LockKeyhole aria-hidden="true" />
           <AlertTitle>Access is not available</AlertTitle>
-          <AlertDescription>Your account is authenticated as {state.actor.email}, but it does not hold an exact capability for Back-Office Administration.</AlertDescription>
+          <AlertDescription>Your account is signed in as {state.actor.email}, but it does not have access to Back-Office Administration.</AlertDescription>
         </Alert>
         <Card>
           <CardHeader>

@@ -24,7 +24,7 @@ export function InternalUserAdministrationPage() {
       <div>
         <p className="text-sm font-semibold text-muted-foreground">IDENTITY ADMINISTRATION</p>
         <h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Internal Users</h1>
-        <p className="mt-2 max-w-3xl text-muted-foreground">Inspect internal Staff accounts, control administrative status, and assign predefined backend-owned roles.</p>
+        <p className="mt-2 max-w-3xl text-muted-foreground">Inspect internal Staff accounts, control administrative status, and assign predefined Staff roles.</p>
       </div>
       <Button variant="outline" disabled={users.isFetching || roles.isFetching} onClick={refresh}>
         {(users.isFetching || roles.isFetching) && !pending ? 'Refreshing…' : 'Refresh Users'}
