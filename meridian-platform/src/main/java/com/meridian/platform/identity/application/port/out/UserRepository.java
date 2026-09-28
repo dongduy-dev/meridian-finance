@@ -18,6 +18,8 @@ public interface UserRepository {
 
     void createCustomerUser(User user);
 
+    void createStaffUser(User user);
+
     void updateLoginProtection(UUID userId, int failedLoginAttempts, Instant lockedUntil);
 
     void replacePasswordAndClearLoginProtection(UUID userId, String passwordHash);

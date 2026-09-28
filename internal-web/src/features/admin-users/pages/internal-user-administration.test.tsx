@@ -55,6 +55,45 @@ describe('Internal User administration page', () => {
       String(path).endsWith('/assignable-roles') ? roles : [internalUser])
   })
 
+  it('creates a Staff User with backend roles and refreshes the authoritative list without a password field', async () => {
+    const newUser = { userId: '00000000-0000-0000-0000-000000000306', email: 'new@meridian.local',
+      displayName: 'New Staff', status: 'ACTIVE', assignedRoleCodes: ['APPROVER'] }
+    let authoritative = [internalUser]
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (String(path).endsWith('/assignable-roles')) return roles
+      if ((options as RequestInit | undefined)?.method === 'POST') { authoritative = [internalUser, newUser]; return newUser }
+      return authoritative
+    })
+    renderPage()
+    const user = userEvent.setup()
+    await screen.findByRole('heading', { name: 'Loan Officer Demo' })
+    await user.click(screen.getByRole('button', { name: 'Create Internal User' }))
+    expect(screen.getByText('The Staff member receives a secure link to set their password.')).toBeVisible()
+    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/customer/i)).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('Email'), 'NEW@MERIDIAN.LOCAL')
+    await user.type(screen.getByLabelText('Display name'), 'New Staff')
+    await user.click(screen.getByLabelText('Approver'))
+    await user.click(screen.getAllByRole('button', { name: 'Create Internal User' }).at(-1)!)
+    expect(await screen.findByRole('heading', { name: 'New Staff' })).toBeVisible()
+    expect(vi.mocked(api.apiRequest).mock.calls.find(([, options]) => (options as RequestInit | undefined)?.method === 'POST')?.[1])
+      .toMatchObject({ body: { email: 'new@meridian.local', displayName: 'New Staff', roleCodes: ['APPROVER'] } })
+  })
+
+  it('sends a setup link only on an explicit action and never retries an unknown result', async () => {
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (String(path).endsWith('/assignable-roles')) return roles
+      if ((options as RequestInit | undefined)?.method === 'POST') throw new NetworkError('response lost')
+      return [internalUser]
+    })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Loan Officer Demo' })
+    expect(vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'POST')).toHaveLength(0)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Send password setup link' }))
+    expect(await screen.findByText(/Delivery could not be confirmed/i)).toBeVisible()
+    expect(vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'POST')).toHaveLength(1)
+  })
+
   it('renders a deterministic-ID user without entering the unavailable state', async () => {
     vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/assignable-roles')
       ? [...roles, { code: 'FUTURE_ROLE', name: 'Future Role' }]

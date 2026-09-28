@@ -379,7 +379,7 @@ Status: Done
 Blocking: No current blocker.
 
 Outcome:
-Identity exposes purpose-limited Staff User and assignable-role discovery plus controlled User-status and per-role target-state commands under exact `identity:user:manage`. Real authority changes serialize on the User row, invalidate older access-token authority through a monotonic authorization version, revoke all refresh sessions when a User becomes inactive, and append actor-bound PII-safe business audit evidence. Internal Web provides the executable `/admin/users` workspace with non-optimistic commands, authoritative refresh after confirmed or unknown results, and zero retained query state after unmount.
+Identity exposes purpose-limited Staff User and assignable-role discovery, Staff User creation with predefined roles and a one-time password setup link, explicit setup-link recovery, plus controlled User-status and per-role target-state commands under exact `identity:user:manage`. Creation stores the Staff User, role assignments, digest-only setup token, and actor-bound PII-safe audit atomically; Notification sends the Internal Web fragment link after commit. Real authority changes serialize on the User row, invalidate older access-token authority through a monotonic authorization version, revoke all refresh sessions when a User becomes inactive, and append actor-bound PII-safe business audit evidence. Internal Web provides the executable `/admin/users` workspace with non-optimistic commands, authoritative refresh after confirmed or unknown results, and zero retained query state after unmount. `DISABLED` remains deprovisioning; no User hard delete is exposed.
 
 Suggested future branch name:
 `feature/admin-user-management-ui`

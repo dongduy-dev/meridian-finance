@@ -260,6 +260,7 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
                     || action == BusinessAuditAction.LOAN_PRODUCT_LIMITS_UPDATED
                     || action == BusinessAuditAction.LOAN_PRODUCT_ACTIVATED
                     || action == BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
+                    || action == BusinessAuditAction.IDENTITY_USER_CREATED
                     || action == BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     || action == BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
                     || action == BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
@@ -282,6 +283,9 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
     }
 
     private void assertV55IdentityActionsRejected(String schema) {
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema, BusinessAuditAction.IDENTITY_USER_CREATED.name()
+        ));
         assertThrows(DataAccessException.class, () -> insertAuditEvent(
                 schema, BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED.name()
         ));

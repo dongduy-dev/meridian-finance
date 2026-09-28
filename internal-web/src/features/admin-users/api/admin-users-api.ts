@@ -21,6 +21,21 @@ export async function getAssignableInternalRoles(
   )
 }
 
+export async function createInternalUser(
+  manager: AuthSessionManager,
+  request: { email: string; displayName: string; roleCodes: string[] },
+): Promise<InternalUser> {
+  return internalUserSchema.parse(await manager.protectedRequest<unknown>(
+    '/admin/internal-users', { method: 'POST', body: request },
+  ))
+}
+
+export async function sendInternalUserPasswordSetup(manager: AuthSessionManager, userId: string): Promise<void> {
+  await manager.protectedRequest<void>(
+    `/admin/internal-users/${encodeURIComponent(userId)}/password-setup`, { method: 'POST' },
+  )
+}
+
 export async function changeInternalUserStatus(
   manager: AuthSessionManager,
   userId: string,

@@ -4,6 +4,7 @@ import com.meridian.platform.identity.application.port.out.UserRepository;
 import com.meridian.platform.identity.domain.model.User;
 import com.meridian.platform.identity.domain.model.UserStatus;
 import com.meridian.platform.identity.domain.model.UserType;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -90,6 +91,29 @@ public class UserRepositoryAdapter implements UserRepository {
         );
         if (assigned != 1) {
             throw new IllegalStateException("CUSTOMER role is not configured.");
+        }
+    }
+
+    @Override
+    public void createStaffUser(User user) {
+        if (user.userType() != UserType.STAFF || user.customerId() != null) {
+            throw new IllegalArgumentException("Only unassociated Staff Users may be provisioned.");
+        }
+        int inserted = jdbcTemplate.update(
+                """
+                        INSERT INTO users (
+                            id, email, normalized_email, password_hash, user_type, status,
+                            display_name, customer_id, failed_login_attempts, locked_until,
+                            email_verified_at, authorization_version
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT ON CONSTRAINT uq_users_normalized_email DO NOTHING
+                        """,
+                user.id(), user.email(), user.email(), user.passwordHash(), user.userType().name(),
+                user.status().name(), user.displayName(), null, user.failedLoginAttempts(),
+                null, toLocalDateTime(user.emailVerifiedAt()), user.authorizationVersion()
+        );
+        if (inserted != 1) {
+            throw new BusinessStateConflictException("EMAIL_ALREADY_REGISTERED", "An account with this email already exists.");
         }
     }
 

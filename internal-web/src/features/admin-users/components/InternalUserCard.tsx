@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import { ApiError, NetworkError } from '@/lib/api'
-import { changeInternalUserRole, changeInternalUserStatus } from '../api/admin-users-api'
+import { changeInternalUserRole, changeInternalUserStatus, sendInternalUserPasswordSetup } from '../api/admin-users-api'
 import {
   knownInternalUserStatuses,
   type AssignableInternalRole,
@@ -43,6 +43,8 @@ export function InternalUserCard({ user, roles, manager }: {
   const [rolePending, setRolePending] = useState<string>()
   const [roleError, setRoleError] = useState<string>()
   const [statusConfirmation, setStatusConfirmation] = useState<Exclude<InternalUserStatus, 'ACTIVE'>>()
+  const [setupPending, setSetupPending] = useState(false)
+  const [setupFeedback, setSetupFeedback] = useState<string>()
 
   const statusTarget = selectedStatus ?? (knownStatus ? user.status as InternalUserStatus : 'ACTIVE')
 
@@ -85,6 +87,17 @@ export function InternalUserCard({ user, roles, manager }: {
     }
   }
 
+  const sendSetup = async () => {
+    setSetupPending(true)
+    setSetupFeedback(undefined)
+    try {
+      await sendInternalUserPasswordSetup(manager, user.userId)
+      setSetupFeedback('A fresh password setup link was issued. If it does not arrive, review delivery before sending another.')
+    } catch (error) {
+      setSetupFeedback(error instanceof ApiError ? error.message : 'Delivery could not be confirmed. Review the User before sending another link.')
+    } finally { setSetupPending(false) }
+  }
+
   const assignableCodes = new Set(roles.map((role) => role.code))
   const unknownAssignedRoles = user.assignedRoleCodes.filter((roleCode) => !assignableCodes.has(roleCode))
 
@@ -101,6 +114,14 @@ export function InternalUserCard({ user, roles, manager }: {
       </div>
     </CardHeader>
     <CardContent className="grid gap-6 lg:grid-cols-2">
+      <section className="space-y-2 rounded-md border p-4 lg:col-span-2">
+        <h3 className="font-semibold">Password setup</h3>
+        <p className="text-sm text-muted-foreground">Send a fresh one-time link to this Staff member. Sending a new link invalidates an older unused link.</p>
+        <Button type="button" variant="outline" disabled={setupPending || user.status !== 'ACTIVE'} onClick={() => void sendSetup()}>
+          {setupPending ? 'Sending…' : 'Send password setup link'}
+        </Button>
+        {setupFeedback ? <p role="status" className="text-sm">{setupFeedback}</p> : null}
+      </section>
       <section className="space-y-3 rounded-md border p-4" aria-labelledby={`status-${user.userId}`}>
         <div>
           <h3 id={`status-${user.userId}`} className="font-semibold">Administrative status</h3>
