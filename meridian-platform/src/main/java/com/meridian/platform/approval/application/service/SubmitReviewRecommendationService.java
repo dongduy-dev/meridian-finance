@@ -19,6 +19,7 @@ import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayload;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey;
+import com.meridian.platform.shared.domain.exception.AuthorizationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,10 +68,11 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
         Objects.requireNonNull(request, "request must not be null");
         Objects.requireNonNull(request.action(), "action must not be null");
-        UUID reviewCycleId = loanReviewCyclePort.findActiveReviewCycleId(loanApplicationId)
+        ApprovalLoanReviewCyclePort.ActiveReviewCycleSnapshot reviewCycle =
+                loanReviewCyclePort.findActiveReviewCycle(loanApplicationId)
                 .orElseThrow(() -> new BusinessStateConflictException(
                         "REVIEW_CYCLE_REQUIRED", "An active review cycle is required."));
-        if (!reviewCycleId.equals(request.expectedReviewCycleId())) {
+        if (!reviewCycle.reviewCycleId().equals(request.expectedReviewCycleId())) {
             throw new BusinessStateConflictException(
                     "STALE_REVIEW_CYCLE",
                     "The expected review cycle is no longer active."
@@ -79,6 +81,7 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
         validateCorrectionContract(request);
 
         AuthenticatedUser currentUser = currentUserProvider.currentUser();
+        requireAssignedLoanOfficer(reviewCycle, currentUser.userId());
         LocalDateTime now = LocalDateTime.now(clock);
         BusinessOperationContext operationContext = BusinessOperationContext.user(
                 UUID.randomUUID(),
@@ -89,7 +92,7 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
         ReviewRecommendation recommendation = ReviewRecommendation.recorded(
                 UUID.randomUUID(),
                 loanApplicationId,
-                reviewCycleId,
+                reviewCycle.reviewCycleId(),
                 currentUser.userId(),
                 request.action(),
                 request.reason(),
@@ -116,6 +119,24 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
         ));
 
         return approvalMapper.toDto(savedRecommendation);
+    }
+
+    private static void requireAssignedLoanOfficer(
+            ApprovalLoanReviewCyclePort.ActiveReviewCycleSnapshot reviewCycle,
+            UUID currentUserId
+    ) {
+        if (reviewCycle.assignedLoanOfficerUserId() == null) {
+            throw new BusinessStateConflictException(
+                    "SYSTEM_STATE_CONFLICT",
+                    "Loan review stewardship could not be resolved from legacy evidence."
+            );
+        }
+        if (!reviewCycle.assignedLoanOfficerUserId().equals(currentUserId)) {
+            throw new AuthorizationException(
+                    "LOAN_REVIEW_ASSIGNED_TO_ANOTHER_OFFICER",
+                    "The Loan Officer review is assigned to another Staff user."
+            );
+        }
     }
 
     private void validateCorrectionContract(ReviewRecommendationRequest request) {

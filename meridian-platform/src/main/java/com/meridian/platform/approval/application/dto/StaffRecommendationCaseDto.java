@@ -37,10 +37,14 @@ public record StaffRecommendationCaseDto(
     public record ReviewCycleDto(
             UUID reviewCycleId,
             int cycleNumber,
+            StaffActorDto assignedLoanOfficer,
             String status,
             LocalDateTime startedAt,
             LocalDateTime endedAt
     ) {
+    }
+
+    public record StaffActorDto(UUID userId, String displayName, String email) {
     }
 
     public record RecommendationDto(
@@ -49,6 +53,7 @@ public record StaffRecommendationCaseDto(
             String action,
             String reason,
             String reasonCode,
+            StaffActorDto recordedBy,
             LocalDateTime submittedAt
     ) {
     }

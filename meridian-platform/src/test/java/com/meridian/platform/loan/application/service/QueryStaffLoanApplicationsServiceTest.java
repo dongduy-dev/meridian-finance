@@ -4,7 +4,11 @@ import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
+import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
+import com.meridian.platform.loan.application.port.out.StaffActorDirectoryPort;
+import com.meridian.platform.loan.application.port.out.StaffActorSummary;
 import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionAction;
@@ -25,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -49,6 +54,8 @@ class QueryStaffLoanApplicationsServiceTest {
     @Mock LoanApplicationRepository applications;
     @Mock LoanApplicationStatusTransitionRepository transitions;
     @Mock CustomerReadinessPort customerReadiness;
+    @Mock LoanReviewCycleRepository reviewCycles;
+    @Mock StaffActorDirectoryPort staffActors;
     @Mock CurrentUserProvider currentUserProvider;
 
     private QueryStaffLoanApplicationsService service;
@@ -59,8 +66,12 @@ class QueryStaffLoanApplicationsServiceTest {
                 applications,
                 transitions,
                 customerReadiness,
+                reviewCycles,
+                staffActors,
                 currentUserProvider
         );
+        org.mockito.Mockito.lenient().when(staffActors.findByUserIds(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Map.of());
     }
 
     @Test
@@ -131,16 +142,32 @@ class QueryStaffLoanApplicationsServiceTest {
         ));
         when(transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(APPLICATION_ID))
                 .thenReturn(List.of(initialTransition(), reviewTransition()));
+        UUID reviewActorId = reviewTransition().actorUserId();
+        when(reviewCycles.findLatestByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.of(
+                LoanApplicationReviewCycle.active(
+                        UUID.randomUUID(), APPLICATION_ID, 1, reviewActorId,
+                        LocalDateTime.of(2026, 9, 2, 9, 0)
+                )
+        ));
+        when(staffActors.findByUserIds(Set.of(reviewActorId))).thenReturn(Map.of(
+                reviewActorId,
+                new StaffActorSummary(reviewActorId, "Deni Loan Officer", "deni@meridian.local")
+        ));
 
         var result = service.queryCase(APPLICATION_ID);
 
         assertEquals(APPLICATION_ID, result.loanApplicationId());
         assertEquals("VERIFIED", result.customerReadiness().verificationStatus());
+        assertEquals(true, result.formalReviewRecorded());
+        assertEquals("Deni Loan Officer", result.assignedLoanOfficer().displayName());
         assertEquals(2, result.lifecycleHistory().size());
         assertNull(result.lifecycleHistory().getFirst().fromStatus());
         assertEquals("SUBMIT_APPLICATION", result.lifecycleHistory().getFirst().action());
         assertEquals("START_REVIEW", result.lifecycleHistory().getLast().action());
         assertEquals("USER", result.lifecycleHistory().getLast().actorType());
+        assertEquals("Deni Loan Officer", result.lifecycleHistory().getLast().actor().displayName());
+        assertEquals("deni@meridian.local", result.lifecycleHistory().getLast().actor().email());
+        assertNull(result.lifecycleHistory().getFirst().actor());
     }
 
     @Test

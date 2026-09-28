@@ -4,5 +4,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface ApprovalLoanReviewCyclePort {
-    Optional<UUID> findActiveReviewCycleId(UUID loanApplicationId);
+    Optional<ActiveReviewCycleSnapshot> findActiveReviewCycle(UUID loanApplicationId);
+
+    record ActiveReviewCycleSnapshot(
+            UUID reviewCycleId,
+            UUID assignedLoanOfficerUserId
+    ) {
+    }
 }

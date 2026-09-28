@@ -360,6 +360,8 @@ Resubmission revalidates every affected business condition and routes the applic
 
 The Loan Officer reviews Customer readiness, product verification, document readiness, requested amount and term, product-specific facts, and internal evidence.
 
+The first successful start of Loan Officer review establishes one durable assigned Loan Officer for that application review lineage. That assignment is not implied by Staff-assisted intake, document review, correction handling, or product verification. Only the assigned Loan Officer may restart a later review cycle or record its recommendation. Approver return, correction, re-verification, and review restart preserve the same assignment; reassignment is outside the current boundary and requires a separate controlled administrative workflow.
+
 | Action | Next Status |
 |---|---|
 | `RECOMMEND_APPROVAL` | `APPROVAL_PENDING` |
@@ -370,6 +372,8 @@ The Loan Officer reviews Customer readiness, product verification, document read
 A revision action requires a controlled reason and task ownership. `RETURN_TO_CUSTOMER_REVISION` routes directly to the Customer for `CUSTOMER_DIGITAL` and through authorized Staff coordination for `STAFF_ASSISTED`; `REQUEST_STAFF_CORRECTION` remains a correction of Staff-controlled work. The recommendation and LoanApplication transition form one business outcome with the correction plan for a revision action and audit evidence for every action.
 
 Staff-assisted origination does not add a second maker-checker layer. A Staff actor who performed intake may perform later verification or Loan Officer review when otherwise authorized; the mandatory separation remains between the recommending Loan Officer and final Approver.
+
+Authorized Staff case reads show purpose-limited provenance for the assigned Loan Officer and recorded recommendation, decision, and lifecycle actors using only Staff user identity, display name, and email. System transitions remain explicitly identified as System. Missing legacy Staff identity evidence is shown as unavailable and must not be guessed from current permissions, roles, intake ownership, or later activity.
 
 ### 6.6 Approval Decision
 
@@ -819,6 +823,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | FR-DOC-003 | The system shall support immutable document versions, acceptance, waiver, replacement, controlled reasons, and readiness queries. |
 | FR-REV-001 | The system shall let Loan Officers recommend approval or rejection and request Customer or Staff correction. |
 | FR-REV-002 | The system shall route Customer-sourced correction directly to the Customer for Customer-digital applications and through authorized Staff coordination for Staff-assisted applications, while keeping Customer-sourced correction distinct from Staff correction. |
+| FR-REV-003 | The system shall establish durable Loan Officer stewardship on first review start, preserve it across later review cycles, and permit review restart and recommendation only for the assigned Loan Officer until a separately controlled reassignment capability exists. |
 | FR-APR-001 | The system shall let Approvers approve, reject, return to Loan Officer review, or request structured Customer or Staff correction. |
 | FR-APR-002 | The system shall enforce maker-checker separation between the Loan Officer recommendation and final Approver decision. |
 | FR-OFFER-001 | The system shall generate one immutable approved offer after approval, present it through the application's allowed channel, support idempotent Customer acceptance or decline recorded directly by the authenticated Customer or as an evidenced Staff-assisted Customer decision, and expire pending offers after the configured validity period. |
@@ -877,6 +882,8 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-025 | Contract readiness requires every required document item to be accepted, not required, or validly waived. |
 | BR-026 | Missing, rejected, expired, or replacement-required evidence must route to the correct operational task. Customer-sourced work routes directly to the Customer for `CUSTOMER_DIGITAL` and through authorized Staff coordination for `STAFF_ASSISTED`; Staff correction remains Staff-owned. |
 | BR-027 | Loan Officer review and Approver decision are separate responsibilities. |
+| BR-027A | First review start establishes one assigned Loan Officer for the application review lineage; later review cycles preserve that assignment, and only that actor may restart review or record a recommendation. |
+| BR-027B | Staff-assisted intake, verification, document work, and correction activity do not establish or transfer Loan Officer review stewardship. Unresolved legacy assignment fails closed rather than being inferred. |
 | BR-028 | One Staff actor cannot record both the recommendation and final decision for the same application. |
 | BR-029 | Rejection, return, Staff cancellation, request-more-information, Staff correction, manual override, waiver, and other controlled exception actions require a reason where defined. |
 | BR-030 | The Customer must accept valid approved terms before contract preparation and disbursement. Customer-digital acceptance is recorded by the authenticated Customer owner; Staff-assisted acceptance is an evidenced Customer decision recorded by authorized Staff. |

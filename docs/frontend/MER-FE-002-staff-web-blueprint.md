@@ -177,6 +177,8 @@ The permission sets above describe the current seeded roles; they are not a fron
 Maker-checker is a backend invariant and a visible operational constraint:
 
 - the Approver must differ from the Loan Officer who submitted the applicable recommendation;
+- the first successful review start establishes the assigned Loan Officer, and only that actor may restart review or submit the recommendation for later cycles;
+- intake, verification, document, and correction actors do not imply or transfer review assignment;
 - the Staff member who created a correction request cannot complete its Staff tasks;
 - the UI may explain a known separation before submission only when the relevant actor evidence is authoritative;
 - if actor evidence is not queryable, the UI must not claim that an action is eligible merely because permissions match;
@@ -199,7 +201,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 | Staff Customer intake read | `GET /api/v1/staff/customers/{customerId}` | Staff `customer:read` | Purpose-limited profile/readiness projection without protected identity material |
 | Intake evidence metadata | `GET /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence` | Staff `document:upload:intake` plus valid Loan intake authority | Controlled logical evidence and immutable version metadata; no storage keys or content |
 | Staff application discovery | `GET /api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20` | Staff `loan:read` | Cross-product safe facts, exact filters, deterministic page envelope |
-| Staff case foundation | `GET /api/v1/staff/loan-applications/{loanApplicationId}` | Staff `loan:read` | Safe header, purpose-limited Customer readiness, and ordered lifecycle transitions only |
+| Staff case foundation | `GET /api/v1/staff/loan-applications/{loanApplicationId}` | Staff `loan:read` | Safe header, purpose-limited Customer readiness, assigned Loan Officer summary, and ordered lifecycle transitions with purpose-limited Staff actor summaries or explicit System attribution |
 | Assisted offer-response case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/offer-response` | Staff `loan:offer:respond:staff` plus Loan Officer role | Eligible Staff-assisted UCL or Collateral safe header, exact current offer, expiry/action state, and current signed-evidence metadata |
 | Staff document evidence | `GET /api/v1/staff/loan-applications/{loanApplicationId}/documents` | `document:review` | Checklist/readiness, exact current version, immutable version history, and safe review history |
 | Staff correction case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/corrections` | `loan:correction:staff` | Origination channel, latest request, mixed task composition, proof, purpose-limited assisted Customer instructions/actions, completion readiness, and current-actor maker-checker evidence |
@@ -262,9 +264,9 @@ The linked document workspace exposes initial upload only when the application c
 | Staff correction tasks | Executable narrow queue | May ship first; show proof and maker-checker constraints |
 | Cross-product application discovery | Executable foundation | Exact product/status filters, deterministic paging, safe rows, and direct case links |
 | Applications awaiting verification | Executable status-filtered discovery | CP2 may discover by durable status; later workflow screens still require authoritative verification evidence |
-| Applications awaiting Loan Officer review | Executable status-filtered discovery | CP2 may discover by durable status; review action remains blocked on current-cycle evidence |
-| Applications awaiting recommendation | API dependency | Requires current review-cycle and recommendation eligibility facts |
-| Applications awaiting approval | API dependency | Requires latest recommendation evidence and maker-checker-safe case facts |
+| Applications awaiting Loan Officer review | Executable status-filtered discovery | Review projection owns readiness, current-cycle evidence, durable assignment, and current-actor start availability |
+| Applications awaiting recommendation | Executable status-filtered discovery plus case projection | Recommendation projection owns current-cycle assignment, recorded provenance, and current-actor availability |
+| Applications awaiting approval | Executable narrow queue and case projection | Latest recommendation, safe actor provenance, and maker-checker-safe decision facts are authoritative |
 | Contracts awaiting preparation or readiness | Executable narrow queue | Server-owned `CONTRACT_PENDING` membership and backend-derived preparation, acknowledgment, blocker, or confirm stage |
 | Disbursements awaiting transfer confirmation | Executable narrow queue | Server-owned `DISBURSEMENT_PENDING` membership with exact ready-contract and masked-destination evidence |
 | Active or overdue LoanAccounts | Executable purpose-specific queue | Staff servicing index owns `ACTIVE` / `OVERDUE` membership, server paging, product/status filters, and PII-minimized balances |
@@ -1010,7 +1012,7 @@ The task workspace shows origination channel, responsible party, scope, required
 
 ### 24.1 Start Review
 
-The Loan Officer sees authoritative verification, document readiness, and current status before “Start review.” The CP4 review projection supplies backend-derived readiness and the latest Loan-owned review cycle. The command has no body or business UUID, so the workspace reconciles an unknown response through that read and never automatically retries the POST.
+The Loan Officer sees authoritative verification, document readiness, current status, and the assigned Loan Officer before “Start review.” The review projection supplies backend-derived readiness, the latest Loan-owned review cycle, and current-actor `reviewStartAvailable`. First start assigns the authenticated Loan Officer. A later start is available only to that same actor; another Staff user sees the owner and an assignment-specific blocked explanation. An unresolved legacy owner remains unavailable rather than being inferred. The command has no body or business UUID, so the workspace reconciles an unknown response through that read and never automatically retries the POST.
 
 The same Loan Officer may complete UCL or Collateral verification and start review. This does not weaken the later Approver maker-checker rule.
 
@@ -1023,7 +1025,7 @@ Supported actions remain distinct:
 - `RETURN_TO_CUSTOMER_REVISION`;
 - `REQUEST_STAFF_CORRECTION`.
 
-The recommendation page presents the current review cycle, verification result, document evidence, and controlled action-specific fields. Rejection requires a reason. Revision/correction requires exact current review cycle, controlled reason code, and structured tasks within the product rules.
+The recommendation page presents the current review cycle, its assigned Loan Officer, verification result, document evidence, recorded recommendation actor when present, and controlled action-specific fields. `recommendationAvailable` is backend-derived for the current actor and is false for a non-owner even when that actor has `approval:recommend`. The workspace identifies the owner and renders no recommendation form in that case. Rejection requires a reason. Revision/correction requires exact current review cycle, controlled reason code, and structured tasks within the product rules.
 
 Recommendation POST has no client business UUID. The Approval-owned case projection exposes the durable recommendation for the displayed review cycle, so recovery proves the exact cycle and action before resolving or permitting a new explicit attempt.
 
@@ -1036,7 +1038,7 @@ Supported actions remain distinct:
 - `RETURN_TO_LOAN_OFFICER_REVIEW`;
 - `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`.
 
-The decision page must show the exact latest recommendation, recommending Loan Officer evidence needed for separation, product verification state, review cycle, documents/readiness, and any action-specific correction plan. It must not rely on the transient recommendation response from another browser session.
+The decision page must show the exact latest recommendation, its purpose-limited recommending Staff actor, the assigned Loan Officer, product verification state, review cycle, documents/readiness, recorded decision actors, and any action-specific correction plan. System actors are labeled System; unavailable legacy Staff actors are labeled unavailable without guessing. It must not rely on the transient recommendation response from another browser session.
 
 Approval POST has no client business UUID. The Approval-owned decision projection exposes the exact recommendation provenance, resulting decision, history, and current Loan state needed for durable recovery.
 
@@ -1045,6 +1047,7 @@ Approval may atomically create an immutable Customer offer. Staff Web must repor
 ### 24.4 Approval Integrity
 
 - A Staff user with both recommendation and decision permissions still cannot approve their own applicable recommendation.
+- An Approver return creates the next Loan-owned review cycle with the existing assigned Loan Officer; it does not assign the Approver or the next Staff user who opens the case.
 - UI warnings never promise eligibility when actor evidence is incomplete.
 - `MAKER_CHECKER_VIOLATION` remains a durable blocked result, not a generic form error.
 - A stale review cycle or changed verification forces case refetch and a new confirmation.

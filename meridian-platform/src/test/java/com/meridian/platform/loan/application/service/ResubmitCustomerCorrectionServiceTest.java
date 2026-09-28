@@ -25,6 +25,7 @@ import com.meridian.platform.loan.domain.model.collateral.CollateralLoanManualVe
 import com.meridian.platform.loan.domain.model.collateral.CollateralLoanVerification;
 import com.meridian.platform.loan.domain.model.collateral.CollateralType;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus;
 import com.meridian.platform.loan.domain.model.LoanCorrectionResponsibility;
@@ -178,6 +179,55 @@ class ResubmitCustomerCorrectionServiceTest {
         assertEquals("PENDING_MANUAL_REVIEW",
                 nextCycle.getValue().productVerificationResult().name());
         verifyNoInteractions(partnerEligibility, salaryLimits, salaryMovements, salaryVerifications);
+    }
+
+    @Test
+    void reviewCorrectionPreservesLoanOfficerStewardForLaterRestart() {
+        UUID sourceCycleId = UUID.fromString("dddddddd-dddd-4ddd-8ddd-dddddddddddd");
+        UUID assignedOfficerId = UUID.fromString("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
+        LoanApplicationReviewCycle sourceCycle = LoanApplicationReviewCycle.active(
+                sourceCycleId, APPLICATION_ID, 1, assignedOfficerId, NOW.minusDays(1)
+        ).requireCorrection(NOW.minusHours(3));
+        correction = new LoanCorrectionRequest(
+                CORRECTION_ID,
+                APPLICATION_ID,
+                sourceCycleId,
+                "RETURN_TO_CUSTOMER_REVISION",
+                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                assignedOfficerId,
+                LoanCorrectionRequestStatus.OPEN,
+                null,
+                NOW.minusHours(2),
+                null,
+                null,
+                null
+        );
+        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID)).thenReturn(Optional.of(correction));
+        when(corrections.findActiveRequestByApplicationIdForUpdate(APPLICATION_ID))
+                .thenReturn(Optional.of(correction));
+        when(reviewCycles.findByIdForUpdate(sourceCycleId)).thenReturn(Optional.of(sourceCycle));
+        when(reviewCycles.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        UnsecuredConsumerLoanVerification verified = pendingVerification().completeManualReview(
+                UnsecuredConsumerLoanManualVerificationOutcome.VERIFIED,
+                UUID.randomUUID(),
+                NOW.minusHours(4),
+                "Verified evidence."
+        );
+        when(uclVerifications.findLatestByLoanApplicationIdForUpdate(APPLICATION_ID))
+                .thenReturn(Optional.of(verified));
+
+        CorrectionResubmissionDto result = service.resubmit(
+                APPLICATION_ID,
+                new CorrectionResubmissionRequest(RESUBMISSION_ID)
+        );
+
+        assertEquals("SUBMITTED", result.loanApplicationStatus());
+        ArgumentCaptor<LoanApplicationReviewCycle> savedCycle = ArgumentCaptor.forClass(
+                LoanApplicationReviewCycle.class
+        );
+        verify(reviewCycles).save(savedCycle.capture());
+        assertEquals("CORRECTED", savedCycle.getValue().status().name());
+        assertEquals(assignedOfficerId, savedCycle.getValue().assignedLoanOfficerUserId());
     }
 
     @Test

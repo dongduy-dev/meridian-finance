@@ -11,6 +11,7 @@ import com.meridian.platform.loan.domain.model.collateral.CollateralLoanVerifica
 import com.meridian.platform.loan.domain.model.collateral.CollateralLoanManualVerificationOutcome;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanVerification;
@@ -19,6 +20,8 @@ import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.exception.AuthorizationException;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -41,6 +44,7 @@ import static org.mockito.Mockito.when;
 class StartLoanApplicationReviewServiceTest {
 
     private final UUID applicationId = UUID.randomUUID();
+    private final UUID loanOfficerUserId = UUID.fromString("00000000-0000-4000-8000-000000000302");
     private LoanApplicationRepository applicationRepository;
     private LoanDocumentChecklistPort documentChecklistPort;
     private UnsecuredConsumerLoanVerificationRepository uclVerificationRepository;
@@ -61,7 +65,7 @@ class StartLoanApplicationReviewServiceTest {
         auditPublisher = mock(BusinessAuditPublisher.class);
         CurrentUserProvider currentUserProvider = mock(CurrentUserProvider.class);
         when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(
-                UUID.randomUUID(),
+                loanOfficerUserId,
                 "loan.officer@meridian.local",
                 "STAFF",
                 null,
@@ -104,11 +108,39 @@ class StartLoanApplicationReviewServiceTest {
         when(applicationRepository.save(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         assertEquals("UNDER_REVIEW", service.startReview(applicationId).status());
+        ArgumentCaptor<LoanApplicationReviewCycle> cycle = ArgumentCaptor.forClass(
+                LoanApplicationReviewCycle.class
+        );
+        verify(reviewCycleRepository).save(cycle.capture());
+        assertEquals(loanOfficerUserId, cycle.getValue().assignedLoanOfficerUserId());
         verify(transitionRecorder).record(
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyList(),
                 org.mockito.ArgumentMatchers.isNull()
         );
+    }
+
+    @Test
+    void differentLoanOfficerCannotRestartReviewOwnedByPriorCycle() {
+        UUID priorOwner = UUID.fromString("00000000-0000-4000-8000-000000000399");
+        when(reviewCycleRepository.findLatestByLoanApplicationId(applicationId)).thenReturn(Optional.of(
+                LoanApplicationReviewCycle.active(
+                        UUID.randomUUID(), applicationId, 1, priorOwner,
+                        LocalDateTime.of(2026, 7, 18, 8, 0)
+                ).requireCorrection(LocalDateTime.of(2026, 7, 18, 9, 0)).corrected(
+                        LocalDateTime.of(2026, 7, 19, 7, 0)
+                )
+        ));
+        when(documentChecklistPort.isProcessingReady(applicationId)).thenReturn(true);
+
+        AuthorizationException exception = assertThrows(
+                AuthorizationException.class,
+                () -> service.startReview(applicationId)
+        );
+
+        assertEquals("LOAN_REVIEW_ASSIGNED_TO_ANOTHER_OFFICER", exception.getErrorCode());
+        verify(reviewCycleRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(applicationRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 
     @Test

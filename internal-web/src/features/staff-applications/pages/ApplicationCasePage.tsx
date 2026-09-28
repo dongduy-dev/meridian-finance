@@ -160,6 +160,7 @@ export function ApplicationCasePage() {
                 <div><dt className="text-sm text-muted-foreground">Application status</dt><dd className="mt-1 font-semibold">{applicationStatusLabel(data.status)}</dd></div>
                 <div><dt className="text-sm text-muted-foreground">Product</dt><dd className="mt-1 font-semibold">{productLabel(data.productCode)}</dd></div>
                 <div><dt className="text-sm text-muted-foreground">Requested terms</dt><dd className="financial-value mt-1 font-semibold">{formatVnd(data.requestedAmount)} · {data.requestedTermMonths} months</dd></div>
+                <div><dt className="text-sm text-muted-foreground">Assigned Loan Officer</dt><dd className="mt-1 font-semibold">{data.assignedLoanOfficer ? <><span className="block">{data.assignedLoanOfficer.displayName}</span><span className="block text-sm font-normal text-muted-foreground">{data.assignedLoanOfficer.email}</span></> : data.formalReviewRecorded ? 'Assignment unavailable' : 'Unassigned'}</dd></div>
               </dl>
             </CardContent>
           </Card>
@@ -187,7 +188,7 @@ export function ApplicationCasePage() {
                   <li key={`${index}-${item.occurredAt}-${item.action}`} className="relative pb-7 last:pb-0">
                     <span className="absolute -left-[1.82rem] top-1 grid size-3 rounded-full border-2 border-card bg-primary" aria-hidden="true" />
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div><p className="font-semibold">{transitionActionLabel(item.action)}</p><p className="mt-1 text-sm text-muted-foreground">{item.fromStatus ? `${applicationStatusLabel(item.fromStatus)} → ` : ''}{applicationStatusLabel(item.toStatus)} · {humanizeKnownValue(item.actorType)}</p></div>
+                      <div><p className="font-semibold">{transitionActionLabel(item.action)}</p><p className="mt-1 text-sm text-muted-foreground">{item.fromStatus ? `${applicationStatusLabel(item.fromStatus)} → ` : ''}{applicationStatusLabel(item.toStatus)}</p><p className="mt-1 text-sm text-muted-foreground">{item.actorType === 'SYSTEM' ? 'System' : item.actor ? `${item.actor.displayName} · ${item.actor.email}` : 'Staff actor unavailable'}</p></div>
                       <time className="shrink-0 text-sm text-muted-foreground" dateTime={item.occurredAt}>{formatTimestamp(item.occurredAt)}</time>
                     </div>
                   </li>

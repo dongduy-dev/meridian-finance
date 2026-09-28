@@ -20,6 +20,11 @@ export const uuidSchema = z.string().uuid()
 export const apiTimestampSchema = z.string().refine(isValidApiTimestamp, 'Invalid API timestamp')
 const rawEnumValueSchema = z.string().trim().min(1)
 const moneySchema = z.number().finite().int().positive()
+const staffActorSchema = z.object({
+  userId: uuidSchema,
+  displayName: z.string().trim().min(1),
+  email: z.string().trim().email(),
+})
 
 export const staffLoanApplicationItemSchema = z.object({
   loanApplicationId: uuidSchema,
@@ -48,11 +53,14 @@ export const staffLoanApplicationCaseSchema = staffLoanApplicationItemSchema.ext
     hasPrimaryActiveBankAccount: z.boolean(),
     verificationStatus: rawEnumValueSchema,
   }),
+  formalReviewRecorded: z.boolean(),
+  assignedLoanOfficer: staffActorSchema.nullable(),
   lifecycleHistory: z.array(z.object({
     fromStatus: rawEnumValueSchema.nullable(),
     toStatus: rawEnumValueSchema,
     action: rawEnumValueSchema,
     actorType: rawEnumValueSchema,
+    actor: staffActorSchema.nullable(),
     occurredAt: apiTimestampSchema,
   })),
 })

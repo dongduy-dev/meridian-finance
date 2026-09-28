@@ -23,6 +23,11 @@ vi.mock('@/lib/api', async () => {
 })
 
 const applicationId = '11111111-1111-4111-8111-111111111111'
+const assignedOfficer = {
+  userId: '22222222-2222-4222-8222-222222222222',
+  displayName: 'Deni Loan Officer',
+  email: 'officer@meridian.local',
+}
 const staff: AuthResponse = {
   tokenType: 'Bearer', accessToken: 'staff-token', expiresAt: '2026-09-05T10:00:00Z',
   userId: '22222222-2222-4222-8222-222222222222', email: 'officer@meridian.local',
@@ -37,8 +42,10 @@ function reviewCase(started: boolean) {
     documentReadiness: { uploadComplete: true, processingReady: true },
     productReadiness: { productVerificationResult: 'VERIFIED', readyForReview: true },
     reviewStartAvailable: !started,
+    assignedLoanOfficer: started ? assignedOfficer : null,
     currentReviewCycle: started ? {
       reviewCycleId: '33333333-3333-4333-8333-333333333333', cycleNumber: 1,
+      assignedLoanOfficer: assignedOfficer,
       status: 'ACTIVE', startedAt: '2026-09-05T08:10:00', endedAt: null,
     } : null,
   }
@@ -127,6 +134,28 @@ describe('Staff review workspace', () => {
     render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
 
     expect(await screen.findByText('State unavailable')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Start review' })).not.toBeInTheDocument()
+  })
+
+  it('shows the assigned Loan Officer while withholding review start from another officer', async () => {
+    const otherOfficer = {
+      userId: '99999999-9999-4999-8999-999999999999',
+      displayName: 'Minh Loan Officer',
+      email: 'minh.loan.officer@meridian.local',
+    }
+    const value = reviewCase(true)
+    vi.mocked(api.apiRequest).mockResolvedValue({
+      ...value,
+      applicationStatus: 'RETURNED_TO_REVIEW',
+      reviewStartAvailable: false,
+      assignedLoanOfficer: otherOfficer,
+      currentReviewCycle: { ...value.currentReviewCycle!, assignedLoanOfficer: otherOfficer },
+    })
+    const router = createTestRouter([`/staff/applications/${applicationId}/review`])
+    render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
+
+    expect(await screen.findByRole('heading', { name: 'Review assigned to Minh Loan Officer' })).toBeVisible()
+    expect(screen.getAllByText('minh.loan.officer@meridian.local').length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: 'Start review' })).not.toBeInTheDocument()
   })
 })

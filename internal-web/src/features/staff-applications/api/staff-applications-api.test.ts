@@ -42,6 +42,8 @@ describe('Staff application API', () => {
   it('loads the purpose-limited case through protected transport', async () => {
     const protectedRequest = vi.fn().mockResolvedValue({
       ...item,
+      formalReviewRecorded: false,
+      assignedLoanOfficer: null,
       customerReadiness: {
         active: true,
         profileComplete: true,

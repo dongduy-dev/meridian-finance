@@ -194,7 +194,7 @@ Collateral ownership evidence is Document-owned. Loan and Document associate the
 
 Loan owns `loan_application_review_cycles`, `loan_correction_requests`, `loan_correction_tasks`, and `loan_application_cancellations`.
 
-- Review cycles provide ordered application-review history and identify the active cycle.
+- Review cycles provide ordered application-review history, identify the active cycle, and retain the assigned Loan Officer for the complete review lineage. The assignment is a nullable foreign key to Identity-owned `users`: new executable cycles require it, while unresolved historical rows remain null rather than receiving an inferred owner. Migration backfill uses an exact cycle recommendation actor first, then an unambiguous first-cycle `START_REVIEW` transition at the cycle timestamp, and propagates only a proven immediately preceding owner.
 - A correction request records its source decision, audience, reason, lifecycle, and resubmission evidence.
 - Correction tasks preserve responsible party, document scope, proof baseline, audience-specific instruction, and completion identity.
 - Customer and Staff tasks remain distinct even when one mixed correction request contains both.
@@ -304,6 +304,7 @@ Audit events preserve operation, actor, action, entity, time, and a controlled P
 ### 8.3 Review, Correction, Document, and Approval
 
 - At most one review cycle is active for an application.
+- Executable active review cycles have one assigned Loan Officer; later cycles copy the proven preceding assignment. The partial assigned-officer/application/cycle index supports stewardship-scoped operational access without making unresolved legacy evidence appear complete.
 - Recommendation/cycle and decision/recommendation relationships preserve same-application provenance.
 - Maker-checker prevents the recommending Loan Officer from recording the Approver decision.
 - Correction task actor, scope, document type, checklist item, and proof baseline must form an allowed product-specific combination.

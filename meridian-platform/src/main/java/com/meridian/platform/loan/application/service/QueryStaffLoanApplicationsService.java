@@ -7,6 +7,9 @@ import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
+import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
+import com.meridian.platform.loan.application.port.out.StaffActorDirectoryPort;
+import com.meridian.platform.loan.application.port.out.StaffActorSummary;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
@@ -20,7 +23,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -31,17 +38,23 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
     private final LoanApplicationRepository applications;
     private final LoanApplicationStatusTransitionRepository transitions;
     private final CustomerReadinessPort customerReadiness;
+    private final LoanReviewCycleRepository reviewCycles;
+    private final StaffActorDirectoryPort staffActors;
     private final CurrentUserProvider currentUserProvider;
 
     public QueryStaffLoanApplicationsService(
             LoanApplicationRepository applications,
             LoanApplicationStatusTransitionRepository transitions,
             CustomerReadinessPort customerReadiness,
+            LoanReviewCycleRepository reviewCycles,
+            StaffActorDirectoryPort staffActors,
             CurrentUserProvider currentUserProvider
     ) {
         this.applications = applications;
         this.transitions = transitions;
         this.customerReadiness = customerReadiness;
+        this.reviewCycles = reviewCycles;
+        this.staffActors = staffActors;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -82,6 +95,16 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
         CustomerReadinessSnapshot readiness = customerReadiness
                 .findReadinessByCustomerId(application.customerId())
                 .orElseThrow(QueryStaffLoanApplicationsService::readinessUnavailable);
+        List<LoanApplicationStatusTransition> history = transitions
+                .findByLoanApplicationIdOrderBySequenceNumberAsc(application.id());
+        var latestReviewCycle = reviewCycles.findLatestByLoanApplicationId(application.id()).orElse(null);
+        Set<UUID> actorIds = new LinkedHashSet<>();
+        history.stream().map(LoanApplicationStatusTransition::actorUserId)
+                .filter(Objects::nonNull).forEach(actorIds::add);
+        if (latestReviewCycle != null && latestReviewCycle.assignedLoanOfficerUserId() != null) {
+            actorIds.add(latestReviewCycle.assignedLoanOfficerUserId());
+        }
+        Map<UUID, StaffActorSummary> actorSummaries = staffActors.findByUserIds(actorIds);
 
         return new StaffLoanApplicationCaseDto(
                 application.id(),
@@ -99,9 +122,12 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
                         readiness.hasPrimaryActiveBankAccount(),
                         readiness.verificationStatus()
                 ),
-                transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(application.id())
-                        .stream()
-                        .map(QueryStaffLoanApplicationsService::toLifecycleItem)
+                latestReviewCycle != null,
+                latestReviewCycle == null ? null : toActor(
+                        actorSummaries.get(latestReviewCycle.assignedLoanOfficerUserId())
+                ),
+                history.stream()
+                        .map(transition -> toLifecycleItem(transition, actorSummaries))
                         .toList()
         );
     }
@@ -121,14 +147,22 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
     }
 
     private static StaffLoanApplicationCaseDto.LifecycleItemDto toLifecycleItem(
-            LoanApplicationStatusTransition transition
+            LoanApplicationStatusTransition transition,
+            Map<UUID, StaffActorSummary> actorSummaries
     ) {
         return new StaffLoanApplicationCaseDto.LifecycleItemDto(
                 transition.fromStatus() == null ? null : transition.fromStatus().name(),
                 transition.toStatus().name(),
                 transition.action().name(),
                 transition.actorType().name(),
+                transition.actorUserId() == null ? null : toActor(actorSummaries.get(transition.actorUserId())),
                 transition.occurredAt()
+        );
+    }
+
+    private static StaffLoanApplicationCaseDto.StaffActorDto toActor(StaffActorSummary actor) {
+        return actor == null ? null : new StaffLoanApplicationCaseDto.StaffActorDto(
+                actor.userId(), actor.displayName(), actor.email()
         );
     }
 

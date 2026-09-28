@@ -7,6 +7,8 @@ import com.meridian.platform.loan.application.port.out.LoanApplicationRepository
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
+import com.meridian.platform.loan.application.port.out.StaffActorDirectoryPort;
+import com.meridian.platform.loan.application.port.out.StaffActorSummary;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
@@ -21,7 +23,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -34,6 +38,7 @@ public class QueryStaffLoanApplicationReviewService
     private final CollateralLoanVerificationRepository collateralVerifications;
     private final LoanReviewCycleRepository reviewCycles;
     private final LoanDocumentChecklistPort documents;
+    private final StaffActorDirectoryPort staffActors;
     private final CurrentUserProvider currentUserProvider;
 
     public QueryStaffLoanApplicationReviewService(
@@ -43,6 +48,7 @@ public class QueryStaffLoanApplicationReviewService
             CollateralLoanVerificationRepository collateralVerifications,
             LoanReviewCycleRepository reviewCycles,
             LoanDocumentChecklistPort documents,
+            StaffActorDirectoryPort staffActors,
             CurrentUserProvider currentUserProvider
     ) {
         this.applications = applications;
@@ -51,6 +57,7 @@ public class QueryStaffLoanApplicationReviewService
         this.collateralVerifications = collateralVerifications;
         this.reviewCycles = reviewCycles;
         this.documents = documents;
+        this.staffActors = staffActors;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -58,7 +65,8 @@ public class QueryStaffLoanApplicationReviewService
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public StaffLoanApplicationReviewDto query(UUID loanApplicationId) {
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
-        requireAuthority(currentUserProvider.currentUser());
+        AuthenticatedUser actor = currentUserProvider.currentUser();
+        requireAuthority(actor);
 
         LoanApplication application = applications.findById(loanApplicationId)
                 .orElseThrow(QueryStaffLoanApplicationReviewService::notFound);
@@ -70,6 +78,14 @@ public class QueryStaffLoanApplicationReviewService
         LoanApplicationReviewCycle currentCycle = reviewCycles
                 .findLatestByLoanApplicationId(application.id())
                 .orElse(null);
+        Map<UUID, StaffActorSummary> actorSummaries = currentCycle == null
+                || currentCycle.assignedLoanOfficerUserId() == null
+                ? Map.of()
+                : staffActors.findByUserIds(Set.of(currentCycle.assignedLoanOfficerUserId()));
+        StaffLoanApplicationReviewDto.StaffActorDto assignedLoanOfficer = currentCycle == null ? null
+                : toActor(actorSummaries.get(currentCycle.assignedLoanOfficerUserId()));
+        boolean ownershipAvailable = currentCycle == null
+                || actor.userId().equals(currentCycle.assignedLoanOfficerUserId());
 
         return new StaffLoanApplicationReviewDto(
                 application.id(),
@@ -88,14 +104,23 @@ public class QueryStaffLoanApplicationReviewService
                 ),
                 application.status() == LoanApplicationStatus.SUBMITTED
                         && readiness.processingReady()
-                        && productReady,
+                        && productReady
+                        && ownershipAvailable,
+                assignedLoanOfficer,
                 currentCycle == null ? null : new StaffLoanApplicationReviewDto.ReviewCycleDto(
                         currentCycle.id(),
                         currentCycle.cycleNumber(),
+                        assignedLoanOfficer,
                         currentCycle.status().name(),
                         currentCycle.startedAt(),
                         currentCycle.endedAt()
                 )
+        );
+    }
+
+    private static StaffLoanApplicationReviewDto.StaffActorDto toActor(StaffActorSummary actor) {
+        return actor == null ? null : new StaffLoanApplicationReviewDto.StaffActorDto(
+                actor.userId(), actor.displayName(), actor.email()
         );
     }
 

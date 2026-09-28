@@ -150,11 +150,13 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
                     activeCycle.complete(command.operationContext().occurredAt())
             );
             case RETURN_TO_LOAN_OFFICER_REVIEW -> {
+                UUID assignedLoanOfficerUserId = requireAssignedLoanOfficer(activeCycle);
                 reviewCycleRepository.save(activeCycle.supersede(command.operationContext().occurredAt()));
                 reviewCycleRepository.save(LoanApplicationReviewCycle.active(
                         UUID.randomUUID(),
                         loanApplication.id(),
                         reviewCycleRepository.nextCycleNumber(loanApplication.id()),
+                        assignedLoanOfficerUserId,
                         command.operationContext().occurredAt()
                 ));
             }
@@ -189,6 +191,16 @@ public class ApplyApprovalDecisionService implements ApplyApprovalDecisionUseCas
                 savedApplication.id(),
                 savedApplication.status().name()
         );
+    }
+
+    private static UUID requireAssignedLoanOfficer(LoanApplicationReviewCycle cycle) {
+        if (cycle.assignedLoanOfficerUserId() == null) {
+            throw new BusinessStateConflictException(
+                    "SYSTEM_STATE_CONFLICT",
+                    "Loan review stewardship could not be resolved from legacy evidence."
+            );
+        }
+        return cycle.assignedLoanOfficerUserId();
     }
 
     private void validateOperationContext(ApplyApprovalDecisionCommand command) {

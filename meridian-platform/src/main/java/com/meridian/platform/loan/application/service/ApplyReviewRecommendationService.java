@@ -12,6 +12,7 @@ import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionResult;
 import com.meridian.platform.loan.domain.model.LoanReviewRecommendationAction;
+import com.meridian.platform.shared.domain.exception.AuthorizationException;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
+import java.util.UUID;
 
 @Service
 public class ApplyReviewRecommendationService implements ApplyReviewRecommendationUseCase {
@@ -79,6 +81,7 @@ public class ApplyReviewRecommendationService implements ApplyReviewRecommendati
             throw new BusinessStateConflictException(
                     "STALE_REVIEW_CYCLE", "The recommendation review cycle is no longer active.");
         }
+        requireAssignedLoanOfficer(activeCycle, command.loanOfficerUserId());
 
         if (!documentChecklistPort.isProcessingReady(command.loanApplicationId())) {
             throw new BusinessStateConflictException(
@@ -109,6 +112,24 @@ public class ApplyReviewRecommendationService implements ApplyReviewRecommendati
                 savedApplication.id(),
                 savedApplication.status().name()
         );
+    }
+
+    private static void requireAssignedLoanOfficer(
+            LoanApplicationReviewCycle activeCycle,
+            UUID loanOfficerUserId
+    ) {
+        if (activeCycle.assignedLoanOfficerUserId() == null) {
+            throw new BusinessStateConflictException(
+                    "SYSTEM_STATE_CONFLICT",
+                    "Loan review stewardship could not be resolved from legacy evidence."
+            );
+        }
+        if (!activeCycle.assignedLoanOfficerUserId().equals(loanOfficerUserId)) {
+            throw new AuthorizationException(
+                    "LOAN_REVIEW_ASSIGNED_TO_ANOTHER_OFFICER",
+                    "The Loan Officer review is assigned to another Staff user."
+            );
+        }
     }
 
     private void validateOperationContext(ApplyReviewRecommendationCommand command) {

@@ -3,12 +3,18 @@ import { apiTimestampSchema, uuidSchema } from '@/features/staff-applications/ap
 import { correctionOptionSchema, type CorrectionTaskRequest } from '@/features/staff-review/api/contracts'
 
 const rawValue = z.string().trim().min(1)
+const staffActorSchema = z.object({
+  userId: uuidSchema,
+  displayName: z.string().trim().min(1),
+  email: z.string().trim().email(),
+})
 const recommendationSchema = z.object({
   recommendationId: uuidSchema,
   reviewCycleId: uuidSchema,
   action: rawValue,
   reason: z.string().nullable(),
   reasonCode: rawValue.nullable(),
+  recordedBy: staffActorSchema.nullable(),
   submittedAt: apiTimestampSchema,
 })
 const decisionSchema = z.object({
@@ -17,6 +23,7 @@ const decisionSchema = z.object({
   action: rawValue,
   reason: z.string().nullable(),
   reasonCode: rawValue.nullable(),
+  recordedBy: staffActorSchema.nullable(),
   decidedAt: apiTimestampSchema,
 })
 
@@ -37,6 +44,7 @@ export const staffDecisionCaseSchema = z.object({
     currentReviewCycle: z.object({
       reviewCycleId: uuidSchema,
       cycleNumber: z.number().int().positive(),
+      assignedLoanOfficer: staffActorSchema.nullable(),
       status: rawValue,
       startedAt: apiTimestampSchema,
       endedAt: apiTimestampSchema.nullable(),

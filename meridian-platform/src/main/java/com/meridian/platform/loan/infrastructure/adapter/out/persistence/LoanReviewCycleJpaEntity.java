@@ -24,6 +24,9 @@ public class LoanReviewCycleJpaEntity {
     @Column(name = "cycle_number", nullable = false)
     private int cycleNumber;
 
+    @Column(name = "assigned_loan_officer_user_id")
+    private UUID assignedLoanOfficerUserId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private LoanReviewCycleStatus status;
@@ -52,6 +55,7 @@ public class LoanReviewCycleJpaEntity {
     public void updateFrom(LoanApplicationReviewCycle cycle) {
         this.loanApplicationId = cycle.loanApplicationId();
         this.cycleNumber = cycle.cycleNumber();
+        this.assignedLoanOfficerUserId = cycle.assignedLoanOfficerUserId();
         this.status = cycle.status();
         this.startedAt = cycle.startedAt();
         this.endedAt = cycle.endedAt();
@@ -59,6 +63,8 @@ public class LoanReviewCycleJpaEntity {
     }
 
     public LoanApplicationReviewCycle toDomain() {
-        return new LoanApplicationReviewCycle(id, loanApplicationId, cycleNumber, status, startedAt, endedAt);
+        return new LoanApplicationReviewCycle(
+                id, loanApplicationId, cycleNumber, assignedLoanOfficerUserId, status, startedAt, endedAt
+        );
     }
 }
