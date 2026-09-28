@@ -191,7 +191,7 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
     private void insertBatch(UUID companyId, String month, String status) {
         jdbcTemplate.update("INSERT INTO partner_employee_import_batches "
                         + "(id, partner_company_id, effective_month, status, valid_row_count, invalid_row_count, created_at, rejection_summary) "
-                        + "VALUES (?, ?, ?, ?, 0, 0, ?, '{}'::jsonb)",
+                        + "VALUES (?, ?, ?, ?, 0, 0, ?, '[]'::jsonb)",
                 UUID.randomUUID(), companyId, month, status, LocalDateTime.of(2026, 12, 1, 0, 0));
     }
 
