@@ -56,6 +56,12 @@ const page = (overrides: Record<string, unknown> = {}) => ({
 
 const caseFixture = {
   ...item,
+  formalReviewRecorded: true,
+  assignedLoanOfficer: {
+    userId: '11111111-1111-4111-8111-111111111111',
+    displayName: 'Deni Loan Officer',
+    email: 'staff@meridian.local',
+  },
   customerReadiness: {
     active: true,
     profileComplete: true,
@@ -63,8 +69,10 @@ const caseFixture = {
     verificationStatus: 'VERIFIED',
   },
   lifecycleHistory: [
-    { fromStatus: null, toStatus: 'SUBMITTED', action: 'SUBMIT_APPLICATION', actorType: 'SYSTEM', occurredAt: '2026-09-02T08:00:00' },
-    { fromStatus: 'SUBMITTED', toStatus: 'UNDER_REVIEW', action: 'START_REVIEW', actorType: 'USER', occurredAt: '2026-09-02T09:00:00' },
+    { fromStatus: null, toStatus: 'SUBMITTED', action: 'SUBMIT_APPLICATION', actorType: 'SYSTEM', actor: null, occurredAt: '2026-09-02T08:00:00' },
+    { fromStatus: 'SUBMITTED', toStatus: 'UNDER_REVIEW', action: 'START_REVIEW', actorType: 'USER',
+      actor: { userId: '11111111-1111-4111-8111-111111111111', displayName: 'Deni Loan Officer', email: 'staff@meridian.local' },
+      occurredAt: '2026-09-02T09:00:00' },
   ],
 }
 
@@ -163,6 +171,9 @@ describe('Staff application pages', () => {
     await waitFor(() => expect(heading).toHaveFocus())
     expect(screen.getByText('Customer readiness')).toBeVisible()
     expect(screen.getByText('Primary bank account')).toBeVisible()
+    expect(screen.getAllByText('Deni Loan Officer').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('staff@meridian.local').length).toBeGreaterThan(0)
+    expect(screen.getByText('System')).toBeVisible()
     expect(screen.queryByText(/customer@example|0123456789|identity number/i)).not.toBeInTheDocument()
 
     const history = screen.getByRole('heading', { name: 'Lifecycle history' }).closest('section')!
@@ -176,6 +187,37 @@ describe('Staff application pages', () => {
     expect(screen.getByRole('heading', { name: 'UCL-20260902-000001', level: 1 })).toBeVisible()
     finishRefresh?.(caseFixture)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled())
+  })
+
+  it('renders unresolved USER actor evidence neutrally without inventing an identity', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue({
+      ...caseFixture,
+      assignedLoanOfficer: null,
+      lifecycleHistory: [
+        { ...caseFixture.lifecycleHistory[0] },
+        { ...caseFixture.lifecycleHistory[1], actor: null },
+      ],
+    })
+    renderRoute(`/staff/applications/${applicationId}`)
+
+    expect(await screen.findByText('Assignment unavailable')).toBeVisible()
+    expect(screen.getByText('System')).toBeVisible()
+    expect(screen.getByText('User actor unavailable')).toBeVisible()
+    expect(screen.queryByText('Staff actor unavailable')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Unknown Staff|Current user/)).not.toBeInTheDocument()
+  })
+
+  it('shows an application as unassigned before formal review is recorded', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue({
+      ...caseFixture,
+      formalReviewRecorded: false,
+      assignedLoanOfficer: null,
+      lifecycleHistory: [caseFixture.lifecycleHistory[0]],
+    })
+    renderRoute(`/staff/applications/${applicationId}`)
+
+    expect(await screen.findByText('Unassigned')).toBeVisible()
+    expect(screen.queryByText('Assignment unavailable')).not.toBeInTheDocument()
   })
 
   it.each([

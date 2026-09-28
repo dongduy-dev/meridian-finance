@@ -3,6 +3,8 @@ package com.meridian.platform.approval.application.service;
 import com.meridian.platform.approval.application.port.out.ApprovalDecisionRepository;
 import com.meridian.platform.approval.application.port.out.ApprovalLoanCasePort;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
+import com.meridian.platform.approval.application.port.out.StaffActorDirectoryPort;
+import com.meridian.platform.approval.application.port.out.StaffActorSummary;
 import com.meridian.platform.approval.application.dto.StaffApprovalQueuePageDto;
 import com.meridian.platform.approval.application.dto.StaffDecisionCaseDto;
 import com.meridian.platform.approval.application.dto.StaffRecommendationCaseDto;
@@ -25,6 +27,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.Arrays;
@@ -50,6 +53,7 @@ class QueryStaffApprovalWorkServiceTest {
     @Mock ApprovalLoanCasePort loanCases;
     @Mock ReviewRecommendationRepository recommendations;
     @Mock ApprovalDecisionRepository decisions;
+    @Mock StaffActorDirectoryPort staffActors;
     @Mock CurrentUserProvider currentUserProvider;
 
     private QueryStaffApprovalWorkService service;
@@ -57,13 +61,15 @@ class QueryStaffApprovalWorkServiceTest {
     @BeforeEach
     void setUp() {
         service = new QueryStaffApprovalWorkService(
-                loanCases, recommendations, decisions, currentUserProvider
+                loanCases, recommendations, decisions, staffActors, currentUserProvider
         );
+        org.mockito.Mockito.lenient().when(staffActors.findByUserIds(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Map.of());
     }
 
     @Test
     void recommendationReadUsesCurrentCycleAndBackendAvailability() {
-        when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:recommend")));
+        when(currentUserProvider.currentUser()).thenReturn(staff(OFFICER_ID, Set.of("approval:recommend")));
         when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("UNDER_REVIEW")));
         when(recommendations.findByReviewCycleId(CYCLE_ID)).thenReturn(Optional.empty());
 
@@ -77,8 +83,20 @@ class QueryStaffApprovalWorkServiceTest {
     }
 
     @Test
-    void returnedToReviewWithFreshActiveCycleAllowsNewRecommendation() {
+    void nonOwnerCanReadRecommendationCaseButCannotMutateIt() {
         when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:recommend")));
+        when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("UNDER_REVIEW")));
+        when(recommendations.findByReviewCycleId(CYCLE_ID)).thenReturn(Optional.empty());
+
+        StaffRecommendationCaseDto result = service.queryRecommendationCase(APPLICATION_ID);
+
+        assertFalse(result.recommendationAvailable());
+        assertEquals(CYCLE_ID, result.evidence().currentReviewCycle().reviewCycleId());
+    }
+
+    @Test
+    void returnedToReviewWithFreshActiveCycleAllowsNewRecommendation() {
+        when(currentUserProvider.currentUser()).thenReturn(staff(OFFICER_ID, Set.of("approval:recommend")));
         when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("RETURNED_TO_REVIEW")));
         when(recommendations.findByReviewCycleId(CYCLE_ID)).thenReturn(Optional.empty());
 
@@ -93,7 +111,7 @@ class QueryStaffApprovalWorkServiceTest {
 
     @Test
     void nonReviewStateDoesNotExposeRecommendationAction() {
-        when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:recommend")));
+        when(currentUserProvider.currentUser()).thenReturn(staff(OFFICER_ID, Set.of("approval:recommend")));
         when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("APPROVAL_PENDING")));
         when(recommendations.findByReviewCycleId(CYCLE_ID)).thenReturn(Optional.empty());
 
@@ -102,7 +120,7 @@ class QueryStaffApprovalWorkServiceTest {
 
     @Test
     void recommendationReadReturnsExactDurableCurrentCycleProvenance() {
-        when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:recommend")));
+        when(currentUserProvider.currentUser()).thenReturn(staff(OFFICER_ID, Set.of("approval:recommend")));
         when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("UNDER_REVIEW")));
         when(recommendations.findByReviewCycleId(CYCLE_ID)).thenReturn(Optional.of(recommendation()));
 
@@ -115,7 +133,7 @@ class QueryStaffApprovalWorkServiceTest {
     }
 
     @Test
-    void decisionReadExposesRelationInsteadOfActorIdentifiersAndReturnsHistory() {
+    void decisionReadExposesPurposeLimitedActorProvenanceAndReturnsHistory() {
         ReviewRecommendation recommendation = recommendation();
         ApprovalDecision decision = ApprovalDecision.recorded(
                 UUID.randomUUID(), APPLICATION_ID, RECOMMENDATION_ID, APPROVER_ID,
@@ -126,6 +144,10 @@ class QueryStaffApprovalWorkServiceTest {
         when(recommendations.findLatestByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.of(recommendation));
         when(decisions.findByLoanApplicationIdOrderByDecidedAtDesc(APPLICATION_ID)).thenReturn(List.of(decision));
         when(decisions.findByReviewRecommendationId(RECOMMENDATION_ID)).thenReturn(Optional.of(decision));
+        when(staffActors.findByUserIds(Set.of(OFFICER_ID, APPROVER_ID))).thenReturn(Map.of(
+                OFFICER_ID, new StaffActorSummary(OFFICER_ID, "Deni Loan Officer", "deni@meridian.local"),
+                APPROVER_ID, new StaffActorSummary(APPROVER_ID, "Ari Approver", "ari@meridian.local")
+        ));
 
         var result = service.queryDecisionCase(APPLICATION_ID);
 
@@ -133,6 +155,8 @@ class QueryStaffApprovalWorkServiceTest {
         assertFalse(result.decisionAvailable());
         assertEquals("APPROVE", result.latestDecision().action());
         assertEquals(1, result.decisionHistory().size());
+        assertEquals("Deni Loan Officer", result.recommendation().recordedBy().displayName());
+        assertEquals("Ari Approver", result.latestDecision().recordedBy().displayName());
     }
 
     @Test
@@ -248,7 +272,7 @@ class QueryStaffApprovalWorkServiceTest {
     }
 
     @Test
-    void purposeLimitedDtosHaveNoActorOrInternalNoteFields() {
+    void purposeLimitedDtosAllowOnlySafeActorSummaryAndExcludeRestrictedFields() {
         for (Class<?> type : List.of(
                 StaffRecommendationCaseDto.class,
                 StaffRecommendationCaseDto.RecommendationDto.class,
@@ -263,7 +287,17 @@ class QueryStaffApprovalWorkServiceTest {
             assertFalse(names.contains("approverUserId"));
             assertFalse(names.contains("internalNotes"));
             assertFalse(names.contains("customerId"));
+            assertFalse(names.contains("passwordHash"));
+            assertFalse(names.contains("roles"));
+            assertFalse(names.contains("permissions"));
+            assertFalse(names.contains("sessions"));
         }
+        Set<String> actorFields = Arrays.stream(
+                        StaffRecommendationCaseDto.StaffActorDto.class.getRecordComponents()
+                )
+                .map(component -> component.getName())
+                .collect(java.util.stream.Collectors.toSet());
+        assertEquals(Set.of("userId", "displayName", "email"), actorFields);
     }
 
     private static ApprovalLoanCasePort.CaseSnapshot caseSnapshot(String status) {
@@ -272,7 +306,9 @@ class QueryStaffApprovalWorkServiceTest {
                 BigDecimal.TEN, 6, status, NOW.minusHours(2),
                 new ApprovalLoanCasePort.DocumentReadinessSnapshot(true, true),
                 new ApprovalLoanCasePort.ProductReadinessSnapshot("VERIFIED", true),
-                new ApprovalLoanCasePort.ReviewCycleSnapshot(CYCLE_ID, 1, "ACTIVE", NOW.minusHours(1), null),
+                new ApprovalLoanCasePort.ReviewCycleSnapshot(
+                        CYCLE_ID, 1, OFFICER_ID, "ACTIVE", NOW.minusHours(1), null
+                ),
                 List.of(new ApprovalLoanCasePort.CorrectionOptionSnapshot(
                         "INCOME_PROOF", UUID.randomUUID(), UUID.randomUUID(),
                         List.of("DOCUMENT_REPLACEMENT", "DOCUMENT_REVIEW")

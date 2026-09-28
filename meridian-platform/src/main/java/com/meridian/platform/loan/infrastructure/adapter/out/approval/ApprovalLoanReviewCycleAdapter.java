@@ -16,8 +16,10 @@ public class ApprovalLoanReviewCycleAdapter implements ApprovalLoanReviewCyclePo
     }
 
     @Override
-    public Optional<UUID> findActiveReviewCycleId(UUID loanApplicationId) {
+    public Optional<ActiveReviewCycleSnapshot> findActiveReviewCycle(UUID loanApplicationId) {
         return reviewCycleRepository.findActiveByLoanApplicationId(loanApplicationId)
-                .map(cycle -> cycle.id());
+                .map(cycle -> new ActiveReviewCycleSnapshot(
+                        cycle.id(), cycle.assignedLoanOfficerUserId()
+                ));
     }
 }

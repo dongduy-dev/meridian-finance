@@ -21,6 +21,7 @@ import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.audit.BusinessAuditEntityType;
+import com.meridian.platform.shared.domain.exception.AuthorizationException;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
@@ -94,6 +95,11 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
             );
         }
 
+        LoanApplicationReviewCycle previousCycle = reviewCycleRepository
+                .findLatestByLoanApplicationId(loanApplication.id())
+                .orElse(null);
+        UUID assignedLoanOfficerUserId = assignedLoanOfficer(previousCycle, currentUser.userId());
+
         LoanApplicationTransitionResult transition = loanApplication.startReview();
         LoanApplication savedApplication = loanApplicationRepository.save(transition.loanApplication());
         LoanApplicationReviewCycle reviewCycle = reviewCycleRepository.save(
@@ -101,6 +107,7 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
                         UUID.randomUUID(),
                         savedApplication.id(),
                         reviewCycleRepository.nextCycleNumber(savedApplication.id()),
+                        assignedLoanOfficerUserId,
                         operationContext.occurredAt()
                 )
         );
@@ -135,6 +142,28 @@ public class StartLoanApplicationReviewService implements StartLoanApplicationRe
                 savedApplication.status().name(),
                 reviewCycle.id()
         );
+    }
+
+    private static UUID assignedLoanOfficer(
+            LoanApplicationReviewCycle previousCycle,
+            UUID currentUserId
+    ) {
+        if (previousCycle == null) {
+            return currentUserId;
+        }
+        if (previousCycle.assignedLoanOfficerUserId() == null) {
+            throw new BusinessStateConflictException(
+                    "SYSTEM_STATE_CONFLICT",
+                    "Loan review stewardship could not be resolved from legacy evidence."
+            );
+        }
+        if (!previousCycle.assignedLoanOfficerUserId().equals(currentUserId)) {
+            throw new AuthorizationException(
+                    "LOAN_REVIEW_ASSIGNED_TO_ANOTHER_OFFICER",
+                    "The Loan Officer review is assigned to another Staff user."
+            );
+        }
+        return previousCycle.assignedLoanOfficerUserId();
     }
 
     private void requireProductReadyForReview(LoanApplication loanApplication) {

@@ -66,7 +66,8 @@ class ApplyReviewRecommendationServiceTest {
         reviewCycleRepository = org.mockito.Mockito.mock(LoanReviewCycleRepository.class);
         org.mockito.Mockito.when(reviewCycleRepository.findActiveByLoanApplicationIdForUpdate(LOAN_APPLICATION_ID))
                 .thenReturn(Optional.of(LoanApplicationReviewCycle.active(
-                        REVIEW_CYCLE_ID, LOAN_APPLICATION_ID, 1, RECOMMENDED_AT.minusHours(1))));
+                        REVIEW_CYCLE_ID, LOAN_APPLICATION_ID, 1,
+                        LOAN_OFFICER_USER_ID, RECOMMENDED_AT.minusHours(1))));
         correctionWorkflowService = org.mockito.Mockito.mock(CustomerCorrectionWorkflowService.class);
         collateralVerificationRepository = org.mockito.Mockito.mock(CollateralLoanVerificationRepository.class);
         transitionRepository = new FakeLoanApplicationStatusTransitionRepository();

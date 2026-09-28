@@ -12,7 +12,7 @@ describe('staff review API', () => {
       requestedTermMonths: 12, applicationStatus: 'VERIFIED', submittedAt: '2026-09-05T08:00:00',
       documentReadiness: { uploadComplete: true, processingReady: true },
       productReadiness: { productVerificationResult: 'VERIFIED', readyForReview: true },
-      reviewStartAvailable: true, currentReviewCycle: null,
+      reviewStartAvailable: true, assignedLoanOfficer: null, currentReviewCycle: null,
     })
     const manager = { protectedRequest } as unknown as AuthSessionManager
 

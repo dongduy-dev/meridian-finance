@@ -16,6 +16,8 @@ public record StaffLoanApplicationCaseDto(
         String status,
         LocalDateTime submittedAt,
         CustomerReadinessDto customerReadiness,
+        boolean formalReviewRecorded,
+        StaffActorDto assignedLoanOfficer,
         List<LifecycleItemDto> lifecycleHistory
 ) {
     public StaffLoanApplicationCaseDto {
@@ -30,7 +32,21 @@ public record StaffLoanApplicationCaseDto(
     ) {
         this(loanApplicationId, applicationNumber, productCode, productType,
                 "CUSTOMER_DIGITAL", requestedAmount, requestedTermMonths, status,
-                submittedAt, customerReadiness, lifecycleHistory);
+                submittedAt, customerReadiness, false, null, lifecycleHistory);
+    }
+
+    public StaffLoanApplicationCaseDto(
+            UUID loanApplicationId, String applicationNumber, String productCode,
+            String productType, String originationChannel, BigDecimal requestedAmount,
+            int requestedTermMonths, String status, LocalDateTime submittedAt,
+            CustomerReadinessDto customerReadiness, List<LifecycleItemDto> lifecycleHistory
+    ) {
+        this(loanApplicationId, applicationNumber, productCode, productType, originationChannel,
+                requestedAmount, requestedTermMonths, status, submittedAt, customerReadiness,
+                false, null, lifecycleHistory);
+    }
+
+    public record StaffActorDto(UUID userId, String displayName, String email) {
     }
 
     public record CustomerReadinessDto(
@@ -46,7 +62,17 @@ public record StaffLoanApplicationCaseDto(
             String toStatus,
             String action,
             String actorType,
+            StaffActorDto actor,
             LocalDateTime occurredAt
     ) {
+        public LifecycleItemDto(
+                String fromStatus,
+                String toStatus,
+                String action,
+                String actorType,
+                LocalDateTime occurredAt
+        ) {
+            this(fromStatus, toStatus, action, actorType, null, occurredAt);
+        }
     }
 }

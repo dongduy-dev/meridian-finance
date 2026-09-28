@@ -7,6 +7,8 @@ import com.meridian.platform.approval.application.port.in.QueryStaffApprovalWork
 import com.meridian.platform.approval.application.port.out.ApprovalDecisionRepository;
 import com.meridian.platform.approval.application.port.out.ApprovalLoanCasePort;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
+import com.meridian.platform.approval.application.port.out.StaffActorDirectoryPort;
+import com.meridian.platform.approval.application.port.out.StaffActorSummary;
 import com.meridian.platform.approval.domain.model.ApprovalDecision;
 import com.meridian.platform.approval.domain.model.ReviewRecommendation;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
@@ -18,9 +20,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -31,17 +36,20 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
     private final ApprovalLoanCasePort loanCases;
     private final ReviewRecommendationRepository recommendations;
     private final ApprovalDecisionRepository decisions;
+    private final StaffActorDirectoryPort staffActors;
     private final CurrentUserProvider currentUserProvider;
 
     public QueryStaffApprovalWorkService(
             ApprovalLoanCasePort loanCases,
             ReviewRecommendationRepository recommendations,
             ApprovalDecisionRepository decisions,
+            StaffActorDirectoryPort staffActors,
             CurrentUserProvider currentUserProvider
     ) {
         this.loanCases = loanCases;
         this.recommendations = recommendations;
         this.decisions = decisions;
+        this.staffActors = staffActors;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -49,19 +57,22 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public StaffRecommendationCaseDto queryRecommendationCase(UUID loanApplicationId) {
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
-        requireAuthority(currentUserProvider.currentUser(), "approval:recommend");
+        AuthenticatedUser actor = currentUserProvider.currentUser();
+        requireAuthority(actor, "approval:recommend");
         ApprovalLoanCasePort.CaseSnapshot loanCase = requireCase(loanApplicationId);
         ReviewRecommendation recommendation = loanCase.currentReviewCycle() == null ? null
                 : recommendations.findByReviewCycleId(loanCase.currentReviewCycle().reviewCycleId()).orElse(null);
+        Map<UUID, StaffActorSummary> actorSummaries = staffActors.findByUserIds(actorIds(loanCase, recommendation));
         boolean available = recommendation == null
                 && recommendationSourceStatus(loanCase.applicationStatus())
                 && activeCycle(loanCase)
-                && loanCase.productReadiness().readyForDecision();
+                && loanCase.productReadiness().readyForDecision()
+                && actor.userId().equals(loanCase.currentReviewCycle().assignedLoanOfficerUserId());
         return new StaffRecommendationCaseDto(
                 loanCase.loanApplicationId(), loanCase.applicationNumber(), loanCase.productCode(),
                 loanCase.productType(), loanCase.requestedAmount(), loanCase.requestedTermMonths(),
-                loanCase.applicationStatus(), loanCase.submittedAt(), evidence(loanCase),
-                recommendation(recommendation), available, reasonCodes(loanCase.productCode()),
+                loanCase.applicationStatus(), loanCase.submittedAt(), evidence(loanCase, actorSummaries),
+                recommendation(recommendation, actorSummaries), available, reasonCodes(loanCase.productCode()),
                 correctionOptions(loanCase)
         );
     }
@@ -79,6 +90,9 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
                 .findByLoanApplicationIdOrderByDecidedAtDesc(loanApplicationId);
         ApprovalDecision latestDecision = recommendation == null ? null
                 : decisions.findByReviewRecommendationId(recommendation.id()).orElse(null);
+        Set<UUID> actorIds = actorIds(loanCase, recommendation);
+        history.stream().map(ApprovalDecision::approverUserId).forEach(actorIds::add);
+        Map<UUID, StaffActorSummary> actorSummaries = staffActors.findByUserIds(actorIds);
         validatePendingDecisionEvidence(loanCase, recommendation, latestDecision);
         boolean makerCheckerEligible = recommendation != null
                 && !recommendation.loanOfficerUserId().equals(actor.userId());
@@ -92,9 +106,10 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
         return new StaffDecisionCaseDto(
                 loanCase.loanApplicationId(), loanCase.applicationNumber(), loanCase.productCode(),
                 loanCase.productType(), loanCase.requestedAmount(), loanCase.requestedTermMonths(),
-                loanCase.applicationStatus(), loanCase.submittedAt(), evidence(loanCase),
-                recommendation(recommendation), makerCheckerEligible, available,
-                decision(latestDecision), history.stream().map(QueryStaffApprovalWorkService::decision).toList(),
+                loanCase.applicationStatus(), loanCase.submittedAt(), evidence(loanCase, actorSummaries),
+                recommendation(recommendation, actorSummaries), makerCheckerEligible, available,
+                decision(latestDecision, actorSummaries),
+                history.stream().map(value -> decision(value, actorSummaries)).toList(),
                 reasonCodes(loanCase.productCode()), correctionOptions(loanCase)
         );
     }
@@ -141,7 +156,10 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
         ));
     }
 
-    private static StaffRecommendationCaseDto.EvidenceDto evidence(ApprovalLoanCasePort.CaseSnapshot loanCase) {
+    private static StaffRecommendationCaseDto.EvidenceDto evidence(
+            ApprovalLoanCasePort.CaseSnapshot loanCase,
+            Map<UUID, StaffActorSummary> actorSummaries
+    ) {
         ApprovalLoanCasePort.ReviewCycleSnapshot cycle = loanCase.currentReviewCycle();
         return new StaffRecommendationCaseDto.EvidenceDto(
                 loanCase.documentReadiness().uploadComplete(),
@@ -149,22 +167,53 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
                 loanCase.productReadiness().productVerificationResult(),
                 loanCase.productReadiness().readyForDecision(),
                 cycle == null ? null : new StaffRecommendationCaseDto.ReviewCycleDto(
-                        cycle.reviewCycleId(), cycle.cycleNumber(), cycle.status(), cycle.startedAt(), cycle.endedAt()
+                        cycle.reviewCycleId(), cycle.cycleNumber(),
+                        actor(actorSummaries.get(cycle.assignedLoanOfficerUserId())),
+                        cycle.status(), cycle.startedAt(), cycle.endedAt()
                 )
         );
     }
 
-    private static StaffRecommendationCaseDto.RecommendationDto recommendation(ReviewRecommendation value) {
+    private static StaffRecommendationCaseDto.RecommendationDto recommendation(
+            ReviewRecommendation value,
+            Map<UUID, StaffActorSummary> actorSummaries
+    ) {
         return value == null ? null : new StaffRecommendationCaseDto.RecommendationDto(
                 value.id(), value.reviewCycleId(), value.action().name(), value.reason(),
-                value.reasonCode() == null ? null : value.reasonCode().name(), value.submittedAt()
+                value.reasonCode() == null ? null : value.reasonCode().name(),
+                actor(actorSummaries.get(value.loanOfficerUserId())), value.submittedAt()
         );
     }
 
-    private static StaffDecisionCaseDto.DecisionDto decision(ApprovalDecision value) {
+    private static StaffDecisionCaseDto.DecisionDto decision(
+            ApprovalDecision value,
+            Map<UUID, StaffActorSummary> actorSummaries
+    ) {
         return value == null ? null : new StaffDecisionCaseDto.DecisionDto(
                 value.id(), value.reviewRecommendationId(), value.action().name(), value.reason(),
-                value.reasonCode() == null ? null : value.reasonCode().name(), value.decidedAt()
+                value.reasonCode() == null ? null : value.reasonCode().name(),
+                actor(actorSummaries.get(value.approverUserId())), value.decidedAt()
+        );
+    }
+
+    private static Set<UUID> actorIds(
+            ApprovalLoanCasePort.CaseSnapshot loanCase,
+            ReviewRecommendation recommendation
+    ) {
+        Set<UUID> actorIds = new LinkedHashSet<>();
+        if (loanCase.currentReviewCycle() != null
+                && loanCase.currentReviewCycle().assignedLoanOfficerUserId() != null) {
+            actorIds.add(loanCase.currentReviewCycle().assignedLoanOfficerUserId());
+        }
+        if (recommendation != null) {
+            actorIds.add(recommendation.loanOfficerUserId());
+        }
+        return actorIds;
+    }
+
+    private static StaffRecommendationCaseDto.StaffActorDto actor(StaffActorSummary value) {
+        return value == null ? null : new StaffRecommendationCaseDto.StaffActorDto(
+                value.userId(), value.displayName(), value.email()
         );
     }
 

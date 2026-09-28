@@ -2,6 +2,11 @@ import { z } from 'zod'
 import { apiTimestampSchema, uuidSchema } from '@/features/staff-applications/api/contracts'
 
 const rawValue = z.string().trim().min(1)
+const staffActorSchema = z.object({
+  userId: uuidSchema,
+  displayName: z.string().trim().min(1),
+  email: z.string().trim().email(),
+})
 
 export const staffReviewCaseSchema = z.object({
   loanApplicationId: uuidSchema,
@@ -21,9 +26,11 @@ export const staffReviewCaseSchema = z.object({
     readyForReview: z.boolean(),
   }),
   reviewStartAvailable: z.boolean(),
+  assignedLoanOfficer: staffActorSchema.nullable(),
   currentReviewCycle: z.object({
     reviewCycleId: uuidSchema,
     cycleNumber: z.number().int().positive(),
+    assignedLoanOfficer: staffActorSchema.nullable(),
     status: rawValue,
     startedAt: apiTimestampSchema,
     endedAt: apiTimestampSchema.nullable(),
@@ -51,6 +58,7 @@ export type CorrectionResponsibility = 'CUSTOMER' | 'STAFF'
 const reviewCycleSchema = z.object({
   reviewCycleId: uuidSchema,
   cycleNumber: z.number().int().positive(),
+  assignedLoanOfficer: staffActorSchema.nullable(),
   status: rawValue,
   startedAt: apiTimestampSchema,
   endedAt: apiTimestampSchema.nullable(),
@@ -85,6 +93,7 @@ export const staffRecommendationCaseSchema = z.object({
     action: rawValue,
     reason: z.string().nullable(),
     reasonCode: rawValue.nullable(),
+    recordedBy: staffActorSchema.nullable(),
     submittedAt: apiTimestampSchema,
   }).nullable(),
   recommendationAvailable: z.boolean(),

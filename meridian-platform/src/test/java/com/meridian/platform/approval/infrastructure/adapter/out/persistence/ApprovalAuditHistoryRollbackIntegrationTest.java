@@ -449,11 +449,12 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
         jdbcTemplate.update(
                 """
                         insert into %s.loan_application_review_cycles (
-                            id, loan_application_id, cycle_number, status, started_at
-                        ) values (?, ?, 1, 'ACTIVE', ?)
+                            id, loan_application_id, cycle_number, assigned_loan_officer_user_id, status, started_at
+                        ) values (?, ?, 1, ?, 'ACTIVE', ?)
                         """.formatted(TEST_SCHEMA),
                 cycleId,
                 loanApplicationId,
+                LOAN_OFFICER_USER_ID,
                 NOW.minusHours(2)
         );
         return cycleId;

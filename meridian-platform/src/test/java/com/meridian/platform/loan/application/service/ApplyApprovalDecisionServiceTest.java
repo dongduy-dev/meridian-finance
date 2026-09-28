@@ -53,6 +53,7 @@ import com.meridian.platform.shared.domain.exception.BusinessRuleViolationExcept
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -65,6 +66,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,6 +76,7 @@ class ApplyApprovalDecisionServiceTest {
     private static final UUID DECISION_ID = UUID.fromString("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
     private static final UUID RECOMMENDATION_ID = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
     private static final UUID APPROVER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000303");
+    private static final UUID REVIEW_OWNER_USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000302");
     private static final UUID CUSTOMER_ID = UUID.fromString("99999999-9999-9999-9999-999999999999");
     private static final UUID LINK_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
     private static final UUID LIMIT_ID = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
@@ -104,7 +107,7 @@ class ApplyApprovalDecisionServiceTest {
         org.mockito.Mockito.when(reviewCycleRepository.findActiveByLoanApplicationIdForUpdate(LOAN_APPLICATION_ID))
                 .thenReturn(Optional.of(LoanApplicationReviewCycle.active(
                         UUID.fromString("abababab-abab-abab-abab-abababababab"),
-                        LOAN_APPLICATION_ID, 1, DECIDED_AT.minusHours(1))));
+                        LOAN_APPLICATION_ID, 1, REVIEW_OWNER_USER_ID, DECIDED_AT.minusHours(1))));
         org.mockito.Mockito.when(reviewCycleRepository.nextCycleNumber(LOAN_APPLICATION_ID)).thenReturn(2);
         org.mockito.Mockito.when(reviewCycleRepository.save(org.mockito.ArgumentMatchers.any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -222,6 +225,13 @@ class ApplyApprovalDecisionServiceTest {
         assertEquals("RETURNED_TO_REVIEW", result.status());
         assertEquals(LoanApplicationStatus.RETURNED_TO_REVIEW, loanApplicationRepository.savedApplication.status());
         assertNull(approvedOfferRepository.savedOffer);
+        ArgumentCaptor<LoanApplicationReviewCycle> cycles = ArgumentCaptor.forClass(
+                LoanApplicationReviewCycle.class
+        );
+        org.mockito.Mockito.verify(reviewCycleRepository, org.mockito.Mockito.times(2)).save(cycles.capture());
+        LoanApplicationReviewCycle returnedCycle = cycles.getAllValues().getLast();
+        assertEquals(REVIEW_OWNER_USER_ID, returnedCycle.assignedLoanOfficerUserId());
+        assertNotEquals(APPROVER_USER_ID, returnedCycle.assignedLoanOfficerUserId());
     }
 
     @Test

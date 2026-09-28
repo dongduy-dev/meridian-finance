@@ -27,6 +27,12 @@ describe('Staff application response schemas', () => {
 
     const parsed = staffLoanApplicationCaseSchema.parse({
       ...item,
+      formalReviewRecorded: true,
+      assignedLoanOfficer: {
+        userId: '11111111-1111-4111-8111-111111111111',
+        displayName: 'Deni Loan Officer',
+        email: 'deni.loan.officer@meridian.local',
+      },
       customerReadiness: {
         active: true,
         profileComplete: true,
@@ -38,10 +44,12 @@ describe('Staff application response schemas', () => {
         toStatus: 'FUTURE_APPLICATION_STATUS',
         action: 'FUTURE_TRANSITION_ACTION',
         actorType: 'SYSTEM',
+        actor: null,
         occurredAt: '2026-09-02T08:00:00.123456',
       }],
     })
     expect(parsed.lifecycleHistory[0]?.action).toBe('FUTURE_TRANSITION_ACTION')
+    expect(parsed.assignedLoanOfficer?.displayName).toBe('Deni Loan Officer')
   })
 
   it.each([

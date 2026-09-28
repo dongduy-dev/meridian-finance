@@ -25,6 +25,16 @@ const applicationId = '11111111-1111-4111-8111-111111111111'
 const recommendationId = '44444444-4444-4444-8444-444444444444'
 const cycleId = '33333333-3333-4333-8333-333333333333'
 const successorCycleId = '88888888-8888-4888-8888-888888888888'
+const assignedOfficer = {
+  userId: '99999999-9999-4999-8999-999999999999',
+  displayName: 'Deni Loan Officer',
+  email: 'officer@meridian.local',
+}
+const decidingActor = {
+  userId: '22222222-2222-4222-8222-222222222222',
+  displayName: 'Ari Approver',
+  email: 'approver@meridian.local',
+}
 const staff: AuthResponse = {
   tokenType: 'Bearer', accessToken: 'staff-token', expiresAt: '2026-09-06T10:00:00Z',
   userId: '22222222-2222-4222-8222-222222222222', email: 'approver@meridian.local',
@@ -33,16 +43,19 @@ const staff: AuthResponse = {
 
 function decisionCase(decided = false, eligible = true) {
   const decision = decided ? { decisionId: '77777777-7777-4777-8777-777777777777', reviewRecommendationId: recommendationId,
-    action: 'APPROVE', reason: null, reasonCode: null, decidedAt: '2026-09-06T08:30:00' } : null
+    action: 'APPROVE', reason: null, reasonCode: null, recordedBy: decidingActor,
+    decidedAt: '2026-09-06T08:30:00' } : null
   return {
     loanApplicationId: applicationId, applicationNumber: 'UCL-1', productCode: 'UNSECURED_CONSUMER_LOAN',
     productType: 'PERSONAL', requestedAmount: 10_000_000, requestedTermMonths: 6,
     applicationStatus: decided ? 'CUSTOMER_ACCEPTANCE_PENDING' : 'APPROVAL_PENDING', submittedAt: '2026-09-06T08:00:00',
     evidence: { uploadComplete: true, processingReady: true, productVerificationResult: 'VERIFIED', readyForDecision: true,
       currentReviewCycle: { reviewCycleId: cycleId, cycleNumber: 1,
+        assignedLoanOfficer: assignedOfficer,
         status: decided ? 'COMPLETED' : 'ACTIVE', startedAt: '2026-09-06T08:10:00', endedAt: decided ? '2026-09-06T08:30:00' : null } },
     recommendation: { recommendationId, reviewCycleId: cycleId,
-      action: 'RECOMMEND_APPROVAL', reason: null, reasonCode: null, submittedAt: '2026-09-06T08:20:00' },
+      action: 'RECOMMEND_APPROVAL', reason: null, reasonCode: null, recordedBy: assignedOfficer,
+      submittedAt: '2026-09-06T08:20:00' },
     makerCheckerEligible: eligible, decisionAvailable: eligible && !decided,
     latestDecision: decision, decisionHistory: decision ? [decision] : [],
     correctionReasonCodes: ['DOCUMENT_REPLACEMENT_REQUIRED', 'DOCUMENT_REVIEW_REQUIRED'],
@@ -59,6 +72,7 @@ function returnedToReviewCase() {
     action: 'RETURN_TO_LOAN_OFFICER_REVIEW',
     reason: 'Review the case again.',
     reasonCode: null,
+    recordedBy: decidingActor,
     decidedAt: '2026-09-06T08:30:00',
   }
   return {
@@ -69,6 +83,7 @@ function returnedToReviewCase() {
       currentReviewCycle: {
         reviewCycleId: successorCycleId,
         cycleNumber: 2,
+        assignedLoanOfficer: assignedOfficer,
         status: 'ACTIVE',
         startedAt: '2026-09-06T08:30:00',
         endedAt: null,
@@ -90,6 +105,16 @@ describe('Staff decision workspace', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(authApi.refresh).mockResolvedValue(staff)
+  })
+
+  it('shows recommendation and decision actor provenance', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(decisionCase(true))
+    renderPage()
+
+    expect(await screen.findByText('Deni Loan Officer')).toBeVisible()
+    expect(screen.getByText('officer@meridian.local')).toBeVisible()
+    expect(screen.getByText(/Ari Approver \(approver@meridian\.local\)/)).toBeVisible()
+    expect(screen.getByText(/Ari Approver · approver@meridian\.local/)).toBeVisible()
   })
 
   it.each([

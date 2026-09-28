@@ -6,6 +6,8 @@ import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
+import com.meridian.platform.loan.application.port.out.StaffActorDirectoryPort;
+import com.meridian.platform.loan.application.port.out.StaffActorSummary;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
@@ -26,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -49,6 +52,7 @@ class QueryStaffLoanApplicationReviewServiceTest {
     @Mock CollateralLoanVerificationRepository collateralVerifications;
     @Mock LoanReviewCycleRepository reviewCycles;
     @Mock LoanDocumentChecklistPort documents;
+    @Mock StaffActorDirectoryPort staffActors;
     @Mock CurrentUserProvider currentUserProvider;
 
     private QueryStaffLoanApplicationReviewService service;
@@ -62,8 +66,11 @@ class QueryStaffLoanApplicationReviewServiceTest {
                 collateralVerifications,
                 reviewCycles,
                 documents,
+                staffActors,
                 currentUserProvider
         );
+        org.mockito.Mockito.lenient().when(staffActors.findByUserIds(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(Map.of());
     }
 
     @Test
@@ -94,6 +101,7 @@ class QueryStaffLoanApplicationReviewServiceTest {
                 REVIEW_CYCLE_ID,
                 APPLICATION_ID,
                 2,
+                UUID.fromString("11111111-1111-4111-8111-111111111111"),
                 LoanReviewCycleStatus.ACTIVE,
                 NOW,
                 null
@@ -113,6 +121,37 @@ class QueryStaffLoanApplicationReviewServiceTest {
         assertFalse(result.reviewStartAvailable());
         assertEquals(REVIEW_CYCLE_ID, result.currentReviewCycle().reviewCycleId());
         assertEquals("ACTIVE", result.currentReviewCycle().status());
+    }
+
+    @Test
+    void priorReviewOwnerIsVisibleAndAnotherOfficerCannotRestartReview() {
+        UUID ownerId = UUID.fromString("11111111-1111-4111-8111-111111111111");
+        UUID otherOfficerId = UUID.fromString("22222222-2222-4222-8222-222222222222");
+        LoanApplicationReviewCycle priorCycle = LoanApplicationReviewCycle.active(
+                REVIEW_CYCLE_ID, APPLICATION_ID, 1, ownerId, NOW.minusHours(2)
+        ).requireCorrection(NOW.minusHours(1));
+        when(currentUserProvider.currentUser()).thenReturn(
+                staff(otherOfficerId, Set.of("loan:review"))
+        );
+        when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(
+                application(LoanApplicationStatus.SUBMITTED)
+        ));
+        when(documents.readiness(APPLICATION_ID)).thenReturn(
+                new LoanDocumentChecklistPort.ChecklistReadinessSnapshot(true, true)
+        );
+        when(uclVerifications.findLatestByLoanApplicationId(APPLICATION_ID)).thenReturn(
+                Optional.of(verification(ProductVerificationResult.VERIFIED))
+        );
+        when(reviewCycles.findLatestByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.of(priorCycle));
+        when(staffActors.findByUserIds(Set.of(ownerId))).thenReturn(Map.of(
+                ownerId, new StaffActorSummary(ownerId, "Deni Loan Officer", "deni@meridian.local")
+        ));
+
+        var result = service.query(APPLICATION_ID);
+
+        assertFalse(result.reviewStartAvailable());
+        assertEquals("Deni Loan Officer", result.assignedLoanOfficer().displayName());
+        assertEquals(ownerId, result.currentReviewCycle().assignedLoanOfficer().userId());
     }
 
     @Test
@@ -178,8 +217,12 @@ class QueryStaffLoanApplicationReviewServiceTest {
     }
 
     private static AuthenticatedUser staff(Set<String> permissions) {
+        return staff(UUID.randomUUID(), permissions);
+    }
+
+    private static AuthenticatedUser staff(UUID userId, Set<String> permissions) {
         return new AuthenticatedUser(
-                UUID.randomUUID(),
+                userId,
                 "staff@meridian.test",
                 "STAFF",
                 null,

@@ -156,10 +156,11 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
                     "The expected Loan Officer recommendation is no longer applicable."
             );
         }
-        UUID activeCycleId = loanReviewCyclePort.findActiveReviewCycleId(
+        UUID activeCycleId = loanReviewCyclePort.findActiveReviewCycle(
                         latestRecommendation.loanApplicationId())
                 .orElseThrow(() -> new BusinessStateConflictException(
-                        "REVIEW_CYCLE_REQUIRED", "An active review cycle is required."));
+                        "REVIEW_CYCLE_REQUIRED", "An active review cycle is required."))
+                .reviewCycleId();
         if (!activeCycleId.equals(request.expectedReviewCycleId())
                 || !activeCycleId.equals(latestRecommendation.reviewCycleId())) {
             throw new BusinessStateConflictException(

@@ -22,6 +22,11 @@ vi.mock('@/lib/api', async () => {
 
 const applicationId = '11111111-1111-4111-8111-111111111111'
 const cycleId = '33333333-3333-4333-8333-333333333333'
+const assignedOfficer = {
+  userId: '22222222-2222-4222-8222-222222222222',
+  displayName: 'Deni Loan Officer',
+  email: 'officer@meridian.local',
+}
 const staff: AuthResponse = {
   tokenType: 'Bearer', accessToken: 'staff-token', expiresAt: '2026-09-06T10:00:00Z',
   userId: '22222222-2222-4222-8222-222222222222', email: 'officer@meridian.local',
@@ -34,9 +39,11 @@ function recommendationCase(recorded = false) {
     productType: 'PERSONAL', requestedAmount: 10_000_000, requestedTermMonths: 6,
     applicationStatus: recorded ? 'APPROVAL_PENDING' : 'UNDER_REVIEW', submittedAt: '2026-09-06T08:00:00',
     evidence: { uploadComplete: true, processingReady: true, productVerificationResult: 'VERIFIED', readyForDecision: true,
-      currentReviewCycle: { reviewCycleId: cycleId, cycleNumber: 1, status: 'ACTIVE', startedAt: '2026-09-06T08:10:00', endedAt: null } },
+      currentReviewCycle: { reviewCycleId: cycleId, cycleNumber: 1, assignedLoanOfficer: assignedOfficer,
+        status: 'ACTIVE', startedAt: '2026-09-06T08:10:00', endedAt: null } },
     recommendation: recorded ? { recommendationId: '44444444-4444-4444-8444-444444444444', reviewCycleId: cycleId,
-      action: 'RECOMMEND_APPROVAL', reason: null, reasonCode: null, submittedAt: '2026-09-06T08:20:00' } : null,
+      action: 'RECOMMEND_APPROVAL', reason: null, reasonCode: null, recordedBy: assignedOfficer,
+      submittedAt: '2026-09-06T08:20:00' } : null,
     recommendationAvailable: !recorded,
     correctionReasonCodes: ['DOCUMENT_REPLACEMENT_REQUIRED', 'DOCUMENT_REVIEW_REQUIRED'],
     correctionOptions: [{ documentType: 'INCOME_PROOF', checklistItemId: '55555555-5555-4555-8555-555555555555',
@@ -96,6 +103,41 @@ describe('RecommendationPanel', () => {
 
     expect(await screen.findByRole('button', { name: 'Review recommendation' })).toBeVisible()
     expect(screen.queryByText('Recommendation is unavailable for the authoritative current state.')).not.toBeInTheDocument()
+  })
+
+  it('shows assignment context but no recommendation command to another Loan Officer', async () => {
+    const value = recommendationCase()
+    vi.mocked(api.apiRequest).mockResolvedValue({
+      ...value,
+      recommendationAvailable: false,
+      evidence: {
+        ...value.evidence,
+        currentReviewCycle: {
+          ...value.evidence.currentReviewCycle!,
+          assignedLoanOfficer: {
+            userId: '99999999-9999-4999-8999-999999999999',
+            displayName: 'Minh Loan Officer',
+            email: 'minh.loan.officer@meridian.local',
+          },
+        },
+      },
+    })
+
+    render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RecommendationPanel loanApplicationId={applicationId} /></AuthProvider></QueryClientProvider>)
+
+    expect(await screen.findByRole('heading', { name: 'Recommendation assigned to Minh Loan Officer' })).toBeVisible()
+    expect(screen.getByText(/only Minh Loan Officer .* can record its recommendation/i)).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Review recommendation' })).not.toBeInTheDocument()
+  })
+
+  it('identifies the Staff actor who recorded an existing recommendation', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(recommendationCase(true))
+
+    render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RecommendationPanel loanApplicationId={applicationId} /></AuthProvider></QueryClientProvider>)
+
+    expect(await screen.findByRole('heading', { name: 'Recommendation recorded' })).toBeVisible()
+    expect(screen.getByText(/Recorded by: Deni Loan Officer/)).toBeVisible()
+    expect(screen.getByText('officer@meridian.local')).toBeVisible()
   })
 
   it('reconciles a lost POST response by exact cycle and action without a second POST', async () => {

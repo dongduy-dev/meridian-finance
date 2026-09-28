@@ -10,6 +10,7 @@ public record LoanApplicationReviewCycle(
         UUID id,
         UUID loanApplicationId,
         int cycleNumber,
+        UUID assignedLoanOfficerUserId,
         LoanReviewCycleStatus status,
         LocalDateTime startedAt,
         LocalDateTime endedAt
@@ -28,9 +29,14 @@ public record LoanApplicationReviewCycle(
     }
 
     public static LoanApplicationReviewCycle active(
-            UUID id, UUID loanApplicationId, int cycleNumber, LocalDateTime startedAt
+            UUID id,
+            UUID loanApplicationId,
+            int cycleNumber,
+            UUID assignedLoanOfficerUserId,
+            LocalDateTime startedAt
     ) {
         return new LoanApplicationReviewCycle(id, loanApplicationId, cycleNumber,
+                Objects.requireNonNull(assignedLoanOfficerUserId, "assignedLoanOfficerUserId must not be null"),
                 LoanReviewCycleStatus.ACTIVE, startedAt, null);
     }
 
@@ -50,7 +56,7 @@ public record LoanApplicationReviewCycle(
         if (status != LoanReviewCycleStatus.CORRECTION_REQUIRED) {
             throw conflict("Only a correction-required review cycle can be corrected.");
         }
-        return new LoanApplicationReviewCycle(id, loanApplicationId, cycleNumber,
+        return new LoanApplicationReviewCycle(id, loanApplicationId, cycleNumber, assignedLoanOfficerUserId,
                 LoanReviewCycleStatus.CORRECTED, startedAt, Objects.requireNonNull(at));
     }
 
@@ -58,7 +64,7 @@ public record LoanApplicationReviewCycle(
         if (status != LoanReviewCycleStatus.ACTIVE) {
             throw conflict("Only an active review cycle can change state.");
         }
-        return new LoanApplicationReviewCycle(id, loanApplicationId, cycleNumber,
+        return new LoanApplicationReviewCycle(id, loanApplicationId, cycleNumber, assignedLoanOfficerUserId,
                 target, startedAt, Objects.requireNonNull(at));
     }
 

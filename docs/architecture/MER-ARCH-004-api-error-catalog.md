@@ -37,6 +37,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 403 | `CUSTOMER_CONTEXT_REQUIRED` | Customer context required | Use an authenticated customer-linked token for a customer-owned flow |
 | 403 | `SALARY_ADVANCE_READINESS_ACCESS_DENIED` | Salary Advance readiness access denied | Use an authenticated Customer principal with `loan:submit` |
 | 403 | `LOAN_REVIEW_ACCESS_DENIED` | Loan review access is denied. | Use a Staff principal with the exact `loan:review` permission |
+| 403 | `LOAN_REVIEW_ASSIGNED_TO_ANOTHER_OFFICER` | The Loan Officer review is assigned to another Staff user. | Use the assigned Loan Officer, or a future controlled reassignment workflow when one is approved |
 | 403 | `APPROVAL_WORK_ACCESS_DENIED` | Staff approval work access is denied. | Use a Staff principal with the exact `approval:recommend` or `approval:decide` permission required by the read |
 | 404 | `INTERNAL_USER_NOT_FOUND` | Internal User was not found. | Refresh the Staff User list and use an existing internal User ID |
 | 404 | `INTERNAL_ROLE_NOT_FOUND` | Internal role was not found. | Refresh assignable roles and use a predefined non-Customer role code |

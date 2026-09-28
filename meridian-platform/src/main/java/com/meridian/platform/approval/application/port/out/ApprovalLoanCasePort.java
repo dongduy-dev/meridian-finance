@@ -40,6 +40,7 @@ public interface ApprovalLoanCasePort {
     record ReviewCycleSnapshot(
             UUID reviewCycleId,
             int cycleNumber,
+            UUID assignedLoanOfficerUserId,
             String status,
             LocalDateTime startedAt,
             LocalDateTime endedAt

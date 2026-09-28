@@ -35,6 +35,7 @@ public record StaffDecisionCaseDto(
             String action,
             String reason,
             String reasonCode,
+            StaffRecommendationCaseDto.StaffActorDto recordedBy,
             LocalDateTime decidedAt
     ) {
     }

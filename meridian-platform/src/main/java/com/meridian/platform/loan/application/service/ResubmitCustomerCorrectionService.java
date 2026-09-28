@@ -273,8 +273,9 @@ public class ResubmitCustomerCorrectionService
         };
 
         int nextReviewCycleNumber = reviewCycleRepository.nextCycleNumber(loanApplicationId);
+        LoanApplicationReviewCycle sourceCycle = null;
         if (request.sourceReviewCycleId() != null) {
-            LoanApplicationReviewCycle sourceCycle = reviewCycleRepository
+            sourceCycle = reviewCycleRepository
                     .findByIdForUpdate(request.sourceReviewCycleId())
                     .orElseThrow(() -> new BusinessStateConflictException(
                             "REVIEW_CYCLE_CONFLICT",
@@ -283,10 +284,14 @@ public class ResubmitCustomerCorrectionService
             reviewCycleRepository.save(sourceCycle.corrected(now));
         }
         if (productResubmission.targetStatus() == LoanApplicationStatus.UNDER_REVIEW) {
+            LoanApplicationReviewCycle ownershipSourceCycle = sourceCycle == null
+                    ? reviewCycleRepository.findLatestByLoanApplicationId(loanApplicationId).orElse(null)
+                    : sourceCycle;
             reviewCycleRepository.save(LoanApplicationReviewCycle.active(
                     UUID.randomUUID(),
                     loanApplicationId,
                     nextReviewCycleNumber,
+                    requireAssignedLoanOfficer(ownershipSourceCycle),
                     now
             ));
         }
@@ -316,6 +321,16 @@ public class ResubmitCustomerCorrectionService
         ));
         auditPublisher.publish(new BusinessAuditEvent(operation, auditEntries));
         return toDto(resubmitted, savedApplication);
+    }
+
+    private static UUID requireAssignedLoanOfficer(LoanApplicationReviewCycle sourceCycle) {
+        if (sourceCycle == null || sourceCycle.assignedLoanOfficerUserId() == null) {
+            throw new BusinessStateConflictException(
+                    "SYSTEM_STATE_CONFLICT",
+                    "Loan review stewardship could not be resolved from legacy evidence."
+            );
+        }
+        return sourceCycle.assignedLoanOfficerUserId();
     }
 
     private ProductResubmission prepareSalaryAdvanceResubmission(

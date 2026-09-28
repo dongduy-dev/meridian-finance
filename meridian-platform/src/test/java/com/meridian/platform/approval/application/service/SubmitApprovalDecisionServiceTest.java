@@ -269,7 +269,10 @@ class SubmitApprovalDecisionServiceTest {
         return new SubmitApprovalDecisionService(
                 reviewRecommendationRepository,
                 approvalDecisionRepository,
-                ignored -> Optional.of(REVIEW_CYCLE_ID),
+                ignored -> Optional.of(new com.meridian.platform.approval.application.port.out
+                        .ApprovalLoanReviewCyclePort.ActiveReviewCycleSnapshot(
+                        REVIEW_CYCLE_ID, LOAN_OFFICER_USER_ID
+                )),
                 eventPublisher,
                 new FixedCurrentUserProvider(userId),
                 new ApprovalMapper(),

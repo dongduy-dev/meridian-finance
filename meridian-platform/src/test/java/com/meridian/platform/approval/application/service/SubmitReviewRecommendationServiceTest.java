@@ -20,6 +20,7 @@ import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.exception.AuthorizationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -58,7 +59,10 @@ class SubmitReviewRecommendationServiceTest {
         auditPublisher = new FakeBusinessAuditPublisher();
         service = new SubmitReviewRecommendationService(
                 repository,
-                ignored -> Optional.of(REVIEW_CYCLE_ID),
+                ignored -> Optional.of(new com.meridian.platform.approval.application.port.out
+                        .ApprovalLoanReviewCyclePort.ActiveReviewCycleSnapshot(
+                        REVIEW_CYCLE_ID, LOAN_OFFICER_USER_ID
+                )),
                 eventPublisher,
                 new FixedCurrentUserProvider(),
                 new ApprovalMapper(),
@@ -193,6 +197,43 @@ class SubmitReviewRecommendationServiceTest {
         );
 
         assertEquals("STALE_REVIEW_CYCLE", exception.getErrorCode());
+        assertNull(repository.savedRecommendation);
+        assertNull(auditPublisher.publishedEvent);
+        assertNull(eventPublisher.publishedEvent);
+    }
+
+    @Test
+    void rejectsRecommendationFromLoanOfficerWhoDoesNotOwnActiveCycle() {
+        UUID assignedOfficer = UUID.fromString("00000000-0000-4000-8000-000000000399");
+        service = new SubmitReviewRecommendationService(
+                repository,
+                ignored -> Optional.of(new com.meridian.platform.approval.application.port.out
+                        .ApprovalLoanReviewCyclePort.ActiveReviewCycleSnapshot(
+                        REVIEW_CYCLE_ID, assignedOfficer
+                )),
+                eventPublisher,
+                new FixedCurrentUserProvider(),
+                new ApprovalMapper(),
+                auditPublisher,
+                CLOCK
+        );
+
+        AuthorizationException exception = assertThrows(
+                AuthorizationException.class,
+                () -> service.submitReviewRecommendation(
+                        LOAN_APPLICATION_ID,
+                        new ReviewRecommendationRequest(
+                                ReviewRecommendationAction.RECOMMEND_APPROVAL,
+                                null,
+                                null,
+                                REVIEW_CYCLE_ID,
+                                null,
+                                null
+                        )
+                )
+        );
+
+        assertEquals("LOAN_REVIEW_ASSIGNED_TO_ANOTHER_OFFICER", exception.getErrorCode());
         assertNull(repository.savedRecommendation);
         assertNull(auditPublisher.publishedEvent);
         assertNull(eventPublisher.publishedEvent);

@@ -98,6 +98,7 @@ public class ApprovalLoanCaseAdapter implements ApprovalLoanCasePort {
                 currentCycle == null ? null : new ReviewCycleSnapshot(
                         currentCycle.id(),
                         currentCycle.cycleNumber(),
+                        currentCycle.assignedLoanOfficerUserId(),
                         currentCycle.status().name(),
                         currentCycle.startedAt(),
                         currentCycle.endedAt()

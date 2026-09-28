@@ -88,7 +88,9 @@ class LoanCorrectionAndReviewCycleTest {
     }
 
     private LoanApplicationReviewCycle activeCycle() {
-        return LoanApplicationReviewCycle.active(UUID.randomUUID(), UUID.randomUUID(), 1, STARTED_AT);
+        return LoanApplicationReviewCycle.active(
+                UUID.randomUUID(), UUID.randomUUID(), 1, UUID.randomUUID(), STARTED_AT
+        );
     }
 
     private LoanCorrectionTask openTask() {

@@ -1028,6 +1028,27 @@ Completed outcome:
 - Customer-digital endpoints and `CUSTOMER_DIRECT_ACTION_NOT_ALLOWED` protection remain unchanged.
 - No generic Staff checklist-mutation requirement was introduced; the delivered mutation remains exact and task-scoped.
 
+### MER-FU-048 - Add controlled Loan Officer review-stewardship reassignment
+
+Area: Loan / Approval / Staff Web
+
+Type: Lending workflow administration
+
+Priority: P2
+
+Status: Deferred
+
+Blocking: No current blocker. New and proven historical review lineages remain usable by their assigned Loan Officer; unresolved legacy assignments fail closed.
+
+Problem:
+The current manual-review contract establishes one durable Loan Officer on first review start and preserves that stewardship through Approver return, correction, re-verification, and later review cycles. No approved actor, reason vocabulary, lifecycle window, audit contract, concurrency rule, or HTTP capability exists for transferring that responsibility.
+
+Recommendation:
+Define one narrow controlled reassignment command with explicit authority, eligible lifecycle states, required reason, old/new Staff actor evidence, workflow locking, atomic history and PII-safe audit, stale-state protection, and Staff Web confirmation. Do not infer reassignment from case access, intake ownership, verification, correction handling, role membership, inactivity, or a different actor attempting review or recommendation.
+
+Suggested future branch name:
+`feature/loan-review-reassignment`
+
 ## Roadmap Boundary
 
 `README.md` owns project sequencing and roadmap presentation. This register owns the status, priority, rationale, and recommended action for individual follow-ups.
