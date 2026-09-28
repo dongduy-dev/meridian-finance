@@ -183,7 +183,7 @@ describe('RecommendationPanel', () => {
     expect(screen.getByDisplayValue('preserve this draft')).toBeVisible()
   })
 
-  it('renders an unknown durable recommendation action neutrally and fails closed', async () => {
+  it('renders an unknown recorded recommendation action neutrally and fails closed', async () => {
     const value = recommendationCase(true)
     vi.mocked(api.apiRequest).mockResolvedValue({
       ...value,
@@ -192,7 +192,7 @@ describe('RecommendationPanel', () => {
     })
     render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RecommendationPanel loanApplicationId={applicationId} /></AuthProvider></QueryClientProvider>)
 
-    const heading = await screen.findByRole('heading', { name: 'Durable recommendation recorded' })
+    const heading = await screen.findByRole('heading', { name: 'Recommendation recorded' })
     expect(heading.closest('[role="alert"]')).toHaveTextContent('Recommendation action unavailable')
     expect(screen.queryByRole('button', { name: 'Review recommendation' })).not.toBeInTheDocument()
   })

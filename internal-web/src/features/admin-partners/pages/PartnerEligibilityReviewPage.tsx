@@ -127,7 +127,7 @@ export function PartnerEligibilityReviewPage() {
     <div>
       <p className="text-sm font-semibold text-muted-foreground">PARTNER ADMINISTRATION</p>
       <h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Eligibility reviews</h1>
-      <p className="mt-2 text-muted-foreground">Inspect ambiguous Customer–Partner Employee matches against current authoritative Partner evidence.</p>
+      <p className="mt-2 text-muted-foreground">Inspect ambiguous Customer–Partner Employee matches against current Partner employment evidence.</p>
     </div>
 
     <div className="grid gap-6 lg:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.4fr)]">
@@ -145,7 +145,7 @@ export function PartnerEligibilityReviewPage() {
         </li>)}</ul> : null}
       </CardContent></Card>
 
-      <Card><CardHeader><CardTitle>Authoritative review detail</CardTitle></CardHeader><CardContent className="space-y-5">
+      <Card><CardHeader><CardTitle>Review detail</CardTitle></CardHeader><CardContent className="space-y-5">
         {!selectedReviewId ? <p className="text-sm text-muted-foreground">Select a pending review to inspect current evidence.</p> : null}
         {detail.isPending && selectedReviewId ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading review evidence…</div> : null}
         {detail.isError ? <PartnerQueryErrorPanel error={detail.error} onRetry={() => void detail.refetch()} /> : null}
@@ -163,7 +163,7 @@ export function PartnerEligibilityReviewPage() {
 
           <div>
             <h2 className="font-semibold">Current identity-matched candidates</h2>
-            {review.candidates.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">No current authoritative employee candidate matches the Customer identity evidence.</p> : <div className="mt-2 overflow-x-auto"><table className="w-full min-w-[34rem] text-left text-sm"><caption className="sr-only">Current Partner Employee candidates</caption><thead><tr className="border-b"><th className="p-2">Select</th><th className="p-2">Employee code</th><th className="p-2">Employment</th><th className="p-2">Active</th></tr></thead><tbody>{review.candidates.map((candidate) => <tr className="border-b" key={candidate.partnerEmployeeId}><td className="p-2"><input aria-label={`Select ${candidate.employeeCode}`} type="radio" name="candidate" value={candidate.partnerEmployeeId} checked={selectedCandidate?.partnerEmployeeId === candidate.partnerEmployeeId} disabled={!candidate.active || candidate.employmentStatus !== 'ACTIVE' || !canManage || !review.approvalAvailable} onChange={() => { setSelectedEmployeeId(candidate.partnerEmployeeId); setConfirmation(undefined) }} /></td><td className="p-2 font-mono">{candidate.employeeCode}</td><td className="p-2">{humanizeKnownValue(candidate.employmentStatus)}</td><td className="p-2">{candidate.active ? 'Yes' : 'No'}</td></tr>)}</tbody></table></div>}
+            {review.candidates.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">No current employee candidate matches the Customer identity evidence.</p> : <div className="mt-2 overflow-x-auto"><table className="w-full min-w-[34rem] text-left text-sm"><caption className="sr-only">Current Partner Employee candidates</caption><thead><tr className="border-b"><th className="p-2">Select</th><th className="p-2">Employee code</th><th className="p-2">Employment</th><th className="p-2">Active</th></tr></thead><tbody>{review.candidates.map((candidate) => <tr className="border-b" key={candidate.partnerEmployeeId}><td className="p-2"><input aria-label={`Select ${candidate.employeeCode}`} type="radio" name="candidate" value={candidate.partnerEmployeeId} checked={selectedCandidate?.partnerEmployeeId === candidate.partnerEmployeeId} disabled={!candidate.active || candidate.employmentStatus !== 'ACTIVE' || !canManage || !review.approvalAvailable} onChange={() => { setSelectedEmployeeId(candidate.partnerEmployeeId); setConfirmation(undefined) }} /></td><td className="p-2 font-mono">{candidate.employeeCode}</td><td className="p-2">{humanizeKnownValue(candidate.employmentStatus)}</td><td className="p-2">{candidate.active ? 'Yes' : 'No'}</td></tr>)}</tbody></table></div>}
           </div>
 
           {review.decisionOutcome ? <Alert variant="information"><AlertTitle>Terminal outcome</AlertTitle><AlertDescription>{humanizeKnownValue(review.decisionOutcome)} · {review.decisionReason ? humanizeKnownValue(review.decisionReason) : 'Reason unavailable'} · {formatTimestamp(review.reviewedAt)}</AlertDescription></Alert> : null}

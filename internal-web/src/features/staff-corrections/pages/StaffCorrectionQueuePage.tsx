@@ -26,7 +26,7 @@ export function StaffCorrectionQueuePage() {
   const updatePage = (next: number) => setParams(next === 0 ? new URLSearchParams() : new URLSearchParams({ page: String(next) }))
 
   return <section className="mx-auto max-w-[90rem] space-y-6">
-    <header><p className="text-sm font-semibold text-muted-foreground">CORRECTION OPERATIONS</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold sm:text-3xl">Staff corrections</h1><p className="mt-2 text-muted-foreground">Open Staff-owned tasks. Customer-owned work remains visible only in the case workspace.</p></header>
+    <header><p className="text-sm font-semibold text-muted-foreground">CORRECTION OPERATIONS</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold sm:text-3xl">Staff corrections</h1><p className="mt-2 text-muted-foreground">Applications with Staff correction tasks that still need action. Customer tasks remain available in the case workspace.</p></header>
     {page === undefined ? <Alert variant="warning"><ListChecks /><AlertTitle>Invalid page</AlertTitle><AlertDescription>Use a non-negative queue page.</AlertDescription></Alert> : null}
     {query.isPending && page !== undefined ? <div role="status" className="flex min-h-48 items-center justify-center gap-3 rounded-lg border bg-card"><Spinner /> Loading correction work…</div> : null}
     {query.isError && !query.data ? <QueryErrorPanel error={query.error} resource="correction queue" onRetry={() => void query.refetch()} /> : null}

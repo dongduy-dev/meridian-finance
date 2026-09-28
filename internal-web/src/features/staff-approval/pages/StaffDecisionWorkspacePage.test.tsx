@@ -282,7 +282,8 @@ describe('Staff decision workspace', () => {
     vi.mocked(api.apiRequest).mockResolvedValue(decisionCase(false, false))
     renderPage()
 
-    expect(await screen.findByRole('heading', { name: 'Maker-checker block' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Maker-checker requirement' })).toBeVisible()
+    expect(screen.getByText(/different authorized Approver must make the decision/i)).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
   })
 
@@ -303,7 +304,7 @@ describe('Staff decision workspace', () => {
     renderPage()
 
     const recommendation = await screen.findByRole('heading', { name: 'Recommendation being decided' })
-    const readiness = screen.getByRole('heading', { name: 'Authoritative readiness' })
+    const readiness = screen.getByRole('heading', { name: 'Decision readiness' })
     const decision = screen.getByRole('heading', { name: 'Record independent decision' })
     expect(recommendation.compareDocumentPosition(readiness) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
     expect(readiness.compareDocumentPosition(decision) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)

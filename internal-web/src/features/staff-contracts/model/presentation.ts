@@ -71,7 +71,7 @@ const statusLabels: Record<string, string> = {
 }
 
 export function blockerLabel(value: string) {
-  return blockerLabels[value] ?? 'Unknown readiness blocker. Refresh authoritative evidence.'
+  return blockerLabels[value] ?? 'Unknown readiness blocker. Refresh the latest contract information.'
 }
 
 export function contractStageLabel(value: string) {

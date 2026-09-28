@@ -106,7 +106,7 @@ export function InternalUserCard({ user, roles, manager }: {
           <h3 id={`status-${user.userId}`} className="font-semibold">Administrative status</h3>
           <p className="text-sm text-muted-foreground">Inactive Users lose access immediately and cannot refresh credentials.</p>
         </div>
-        {!knownStatus ? <p className="text-sm text-warning">The backend returned {displayStatus(user.status)}. Select a known target only after confirming the intended change.</p> : null}
+        {!knownStatus ? <p className="text-sm text-warning">Meridian returned an unrecognized status ({displayStatus(user.status)}). Confirm the intended target before changing it.</p> : null}
         <label className="block space-y-1 text-sm font-medium">Target status
           <select
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -130,7 +130,7 @@ export function InternalUserCard({ user, roles, manager }: {
       <section className="space-y-3 rounded-md border p-4" aria-labelledby={`roles-${user.userId}`}>
         <div>
           <h3 id={`roles-${user.userId}`} className="font-semibold">Predefined roles</h3>
-          <p className="text-sm text-muted-foreground">Roles are backend-owned permission bundles. Each action changes one assignment.</p>
+          <p className="text-sm text-muted-foreground">Roles group predefined Staff access. Each action changes one role assignment.</p>
         </div>
         {roles.map((role) => {
           const assigned = user.assignedRoleCodes.includes(role.code)
@@ -147,7 +147,7 @@ export function InternalUserCard({ user, roles, manager }: {
           </div>
         })}
         {unknownAssignedRoles.length ? <div className="rounded-md border border-dashed p-3 text-sm">
-          <p className="font-medium">Other assigned backend roles</p>
+          <p className="font-medium">Other assigned roles</p>
           <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{unknownAssignedRoles.join(', ')}</p>
         </div> : null}
         {roleError ? <Alert variant="destructive"><AlertTitle>Role assignment was not confirmed</AlertTitle><AlertDescription>{roleError}</AlertDescription></Alert> : null}

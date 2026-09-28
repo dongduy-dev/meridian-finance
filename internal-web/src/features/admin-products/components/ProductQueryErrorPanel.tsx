@@ -11,7 +11,7 @@ export function ProductQueryErrorPanel({ error, onRetry }: { error: unknown; onR
     <AlertTitle>{forbidden ? 'Loan Product access changed' : 'Loan Products unavailable'}</AlertTitle>
     <AlertDescription>
       <p>{forbidden
-        ? 'Your session no longer has loan:product:manage. Leave this route or sign in again after access is restored.'
+        ? 'You no longer have access to manage Loan Products. Leave this route or sign in again after access is restored.'
         : 'Meridian could not verify the protected Loan Product response. Try again when the service is available.'}</p>
       {!forbidden ? <Button className="mt-3" variant="outline" onClick={onRetry}>Try again</Button> : null}
       {error instanceof ApiError && error.requestId ? <RequestCorrelation requestId={error.requestId} /> : null}

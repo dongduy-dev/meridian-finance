@@ -31,7 +31,7 @@ const staff: AuthResponse = {
   permissions: ['loan:offer:respond:staff', 'document:upload:assisted-action'],
 }
 
-function fixture(status = 'PENDING') {
+function fixture(status = 'PENDING', declaredOfferDecision: 'ACCEPT' | 'DECLINE' = 'ACCEPT') {
   return {
     loanApplicationId: applicationId,
     applicationNumber: 'UCL-20260922-000001',
@@ -52,7 +52,7 @@ function fixture(status = 'PENDING') {
     },
     evidence: {
       documentId: '66666666-6666-4666-8666-666666666666', documentVersionId: evidenceVersionId,
-      evidenceType: 'CUSTOMER_OFFER_RESPONSE', declaredOfferDecision: 'ACCEPT', targetId: offerId,
+      evidenceType: 'CUSTOMER_OFFER_RESPONSE', declaredOfferDecision, targetId: offerId,
       targetVersion: null, versionNumber: 1, detectedMimeType: 'application/pdf', byteSize: 2048,
       uploadedAt: '2026-09-22T00:00:00',
     },
@@ -87,15 +87,45 @@ describe('Staff-assisted offer response workspace', () => {
     renderPage()
     const user = userEvent.setup()
 
-    expect(await screen.findByText(/recording actor, not decision subject/i)).toBeVisible()
+    expect(await screen.findByText(/Staff records the Customer's evidenced response/i)).toBeVisible()
+    expect(screen.getByRole('option', { name: 'Accept' })).toBeVisible()
+    expect(screen.getByRole('option', { name: 'Decline' })).toBeVisible()
+    expect(screen.queryByRole('option', { name: 'ACCEPT' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'DECLINE' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('checkbox'))
-    await user.click(screen.getByRole('button', { name: 'Record Customer ACCEPT' }))
+    await user.click(screen.getByRole('button', { name: 'Record Customer acceptance' }))
 
     await screen.findByText(/evidenced Customer decision was recorded/i)
     expect(submitted).toEqual({
       requestId,
       expectedApprovedOfferId: offerId,
       action: 'ACCEPT',
+      evidenceDocumentVersionId: evidenceVersionId,
+    })
+  })
+
+  it('presents Decline naturally while retaining the DECLINE command value', async () => {
+    let submitted: Record<string, unknown> | undefined
+    vi.mocked(api.apiRequest).mockImplementation(async (_path, options) => {
+      if ((options as RequestInit | undefined)?.method === 'POST') {
+        submitted = (options as { body: Record<string, unknown> }).body
+        return fixture('PENDING', 'DECLINE').approvedOffer
+      }
+      return fixture('PENDING', 'DECLINE')
+    })
+    renderPage()
+    const user = userEvent.setup()
+
+    await screen.findByText(/Staff records the Customer's evidenced response/i)
+    await user.selectOptions(screen.getByLabelText('Customer decision on signed form'), 'DECLINE')
+    expect(screen.getByText(/Customer's decision to decline this exact offer/i)).toBeVisible()
+    await user.click(screen.getByRole('checkbox'))
+    await user.click(screen.getByRole('button', { name: 'Record Customer decline' }))
+
+    expect(submitted).toEqual({
+      requestId,
+      expectedApprovedOfferId: offerId,
+      action: 'DECLINE',
       evidenceDocumentVersionId: evidenceVersionId,
     })
   })

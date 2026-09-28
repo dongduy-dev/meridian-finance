@@ -71,7 +71,7 @@ export function ApplicationSearchPage() {
           Applications
         </h1>
         <p className="mt-2 max-w-3xl text-muted-foreground">
-          Find lending applications by durable product and lifecycle status. Results contain no Customer profile or banking data.
+          Find lending applications by product and lifecycle status. Results contain no Customer profile or banking data.
         </p>
       </div>
 

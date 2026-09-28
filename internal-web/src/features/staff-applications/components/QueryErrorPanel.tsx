@@ -20,12 +20,12 @@ export function QueryErrorPanel({
     : missing ? 'Application unavailable'
       : caseResource ? 'Case data unavailable' : 'Work queue unavailable'
   const description = forbidden
-    ? 'Your current session no longer has the exact permission required for this workspace.'
+    ? 'You no longer have access to this workspace.'
     : missing
       ? 'This application cannot be opened from the current session.'
       : error instanceof ApiError
         ? 'Meridian could not load this operational read. Try again when the service is available.'
-        : 'The returned data could not be verified. No unverified application facts are displayed.'
+        : 'Meridian could not verify the response. No unverified application information is displayed.'
 
   return (
     <Alert variant={forbidden || missing ? 'warning' : 'destructive'}>

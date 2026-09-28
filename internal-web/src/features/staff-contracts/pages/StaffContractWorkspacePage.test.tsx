@@ -219,9 +219,11 @@ describe('Staff contract workspace', () => {
     })
     renderPage()
     const user = userEvent.setup()
-    expect(await screen.findByText(/POINT_IN_TIME_ADVISORY evidence can become stale/i)).toBeVisible()
+    expect(await screen.findByText(/Readiness shown here is a snapshot and can become outdated/i)).toBeVisible()
+    expect(screen.queryByText(/POINT_IN_TIME_ADVISORY|transactionally/i)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Review readiness confirmation' }))
-    expect(screen.getByText(/not transferred funds or an activated LoanAccount/i)).toBeVisible()
+    expect(screen.getByText(/does not mean funds were transferred or a LoanAccount was activated/i)).toBeVisible()
+    expect(screen.queryByText(/DISBURSEMENT_PENDING|CP7/i)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
 
     expect(await screen.findByRole('heading', { name: 'Readiness confirmed — not disbursed' })).toBeVisible()
@@ -378,7 +380,7 @@ describe('Staff contract workspace', () => {
     renderPage()
 
     expect(await screen.findByRole('heading', { name: 'Operational evidence unavailable' })).toBeVisible()
-    expect(screen.getByText('Unknown readiness blocker. Refresh authoritative evidence.')).toBeVisible()
+    expect(screen.getByText('Unknown readiness blocker. Refresh the latest contract information.')).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review readiness confirmation' })).not.toBeInTheDocument()
   })
 

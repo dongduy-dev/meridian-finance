@@ -25,7 +25,7 @@ export function DocumentReviewQueuePage() {
   const updatePage = (next: number) => setParams(next === 0 ? new URLSearchParams() : new URLSearchParams({ page: String(next) }))
 
   return <section className="mx-auto max-w-[90rem] space-y-6">
-    <header><p className="text-sm font-semibold text-muted-foreground">DOCUMENT OPERATIONS</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold sm:text-3xl">Document review</h1><p className="mt-2 text-muted-foreground">Review the exact immutable version returned by Meridian. This queue does not publish workload totals.</p></header>
+    <header><p className="text-sm font-semibold text-muted-foreground">DOCUMENT OPERATIONS</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold sm:text-3xl">Document review</h1><p className="mt-2 text-muted-foreground">Applications with documents waiting for Staff review. Open each item to review its exact immutable version.</p></header>
     {page === undefined ? <Alert variant="warning"><FileSearch2 /><AlertTitle>Invalid page</AlertTitle><AlertDescription>Use a non-negative queue page.</AlertDescription></Alert> : null}
     {query.isPending && page !== undefined ? <div role="status" className="flex min-h-48 items-center justify-center gap-3 rounded-lg border bg-card"><Spinner /> Loading review work…</div> : null}
     {query.isError && !query.data ? <QueryErrorPanel error={query.error} resource="document queue" onRetry={() => void query.refetch()} /> : null}
