@@ -26,7 +26,7 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V66. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion and downstream evidenced actions, Document-owned OCR processing and Staff review, protected Partner Company/import/eligibility-review, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
+The physical schema is the result of Flyway migrations V1 through V67. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion and downstream evidenced actions, Document-owned OCR processing and Staff review, protected Partner Company/import/eligibility-review, Loan Product, and Internal User administration, and Identity registration, existing-Customer digital activation, email verification, password reset, login, and session protection.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
@@ -127,7 +127,7 @@ The diagram shows ownership-relevant relationships, not a required physical-tabl
 
 Identity owns `users`, `roles`, `permissions`, `role_assignments`, `role_permissions`, `email_verification_tokens`, `password_reset_tokens`, `refresh_token_sessions`, and `access_token_revocations`.
 
-- A Customer login is associated through `users.customer_id`; Staff users have no Customer association.
+- A Customer login is associated through `users.customer_id`; Staff users have no Customer association. `uq_users_customer_id` permits multiple null Staff mappings but at most one User for each non-null Customer ID. V67 preflights duplicate mappings before adding the constraint and replaces the earlier partial unique index from V18.
 - `users` owns the consecutive failed-password count and temporary lock expiry separately from the administrative User status.
 - `users.authorization_version` is nonnegative Identity-owned credential-freshness state. Every real administrative status or role-assignment change increments it so an older access JWT cannot retain stale authority.
 - `users.email_verified_at` is Identity-owned account-security state. It is distinct from Customer-owned `customers.verification_status` and email confirmation never changes that business-verification state.

@@ -251,6 +251,14 @@ flowchart LR
 
 Every status and role command locks the target User before validating that it is internal Staff and before touching `role_assignments`. A same-target request returns the current projection without persistence, timestamp, version, session, or audit effects. A real change updates `users.updated_at` and increments `authorization_version` once. Role changes retain refresh sessions for an active User; a status change to `SUSPENDED` or `DISABLED` revokes all target-User refresh sessions in the same transaction. Reactivation increments the version but never restores a revoked token family. The audit entry records the authenticated actor, `IDENTITY_USER` target ID, controlled action, and status or role code without email or credential data.
 
+### 5.4 Existing Customer Digital Access
+
+The protected Staff Customer-intake activation and status routes require exact `customer:intake:manage` and an authenticated Staff User without a Customer association. Identity owns the User link and credential state. Its consumer-owned Customer verification port calls a Customer public application contract; Customer locks the selected aggregate, requires `ACTIVE` and an identity-bearing profile, and matches the presented identity fingerprint without exposing stored raw evidence. An incomplete business profile does not block this identity proof. The submitted reference remains transient and never enters an audit or response.
+
+Identity creates one `CUSTOMER` User for the unchanged `customerId`, a `CUSTOMER` role assignment, an unguessable hashed placeholder secret, a digest-only email-verification token, and one actor-bound `IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED` audit outcome in one transaction. The Customer lock serializes competing activation attempts for that Customer, while unique normalized-email and Customer mapping constraints remain final database authorities. An insert conflict is classified without querying inside an aborted transaction. No Customer or Loan aggregate is written.
+
+After the creation transaction commits, Identity calls its Notification output port to deliver a Customer Web verification fragment link with activation-specific copy. Delivery failure leaves the linked User and token durable. Email confirmation precedes the ordinary password-reset request and confirmation; Staff never chooses or learns the Customer password. The Staff client reconciles an unknown command result with the protected digital-access GET and does not automatically replay the POST. Customer-owned Loan reads use the original `customerId`; historical `STAFF_ASSISTED` applications retain their channel and have no manufactured digital action.
+
 ---
 
 ## 6. Partner Employee Verification

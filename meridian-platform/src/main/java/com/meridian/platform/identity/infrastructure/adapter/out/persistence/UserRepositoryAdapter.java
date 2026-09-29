@@ -49,6 +49,41 @@ public class UserRepositoryAdapter implements UserRepository {
     }
 
     @Override
+    public Optional<User> findByCustomerId(UUID customerId) {
+        List<UserRow> rows = jdbcTemplate.query(
+                """
+                        SELECT id, email, password_hash, user_type, status, display_name, customer_id,
+                               authorization_version, failed_login_attempts, locked_until, email_verified_at
+                        FROM users WHERE customer_id = ?
+                        """,
+                (resultSet, rowNum) -> mapUserRow(resultSet), customerId);
+        return rows.stream().findFirst().map(this::toDomain);
+    }
+
+    @Override
+    public boolean createLinkedCustomerUser(User user) {
+        if (user.userType() != UserType.CUSTOMER || user.customerId() == null) {
+            throw new IllegalArgumentException("Only Customer Users linked to a Customer may be created.");
+        }
+        int inserted = jdbcTemplate.update(
+                """
+                        INSERT INTO users (
+                            id, email, normalized_email, password_hash, user_type, status,
+                            display_name, customer_id, failed_login_attempts, locked_until,
+                            email_verified_at, authorization_version
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT DO NOTHING
+                        """,
+                user.id(), user.email(), user.email(), user.passwordHash(), user.userType().name(),
+                user.status().name(), user.displayName(), user.customerId(), user.failedLoginAttempts(),
+                toLocalDateTime(user.lockedUntil()), toLocalDateTime(user.emailVerifiedAt()),
+                user.authorizationVersion());
+        if (inserted == 0) return false;
+        assignCustomerRole(user.id());
+        return true;
+    }
+
+    @Override
     public void createCustomerUser(User user) {
         int inserted = jdbcTemplate.update(
                 """
@@ -79,6 +114,10 @@ public class UserRepositoryAdapter implements UserRepository {
             );
         }
 
+        assignCustomerRole(user.id());
+    }
+
+    private void assignCustomerRole(UUID userId) {
         int assigned = jdbcTemplate.update(
                 """
                         INSERT INTO role_assignments (id, user_id, role_id)
@@ -87,7 +126,7 @@ public class UserRepositoryAdapter implements UserRepository {
                         WHERE code = 'CUSTOMER'
                         """,
                 UUID.randomUUID(),
-                user.id()
+                userId
         );
         if (assigned != 1) {
             throw new IllegalStateException("CUSTOMER role is not configured.");

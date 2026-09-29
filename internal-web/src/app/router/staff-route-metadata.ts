@@ -34,6 +34,13 @@ export const STAFF_ORIGINATION_ROUTE = {
   requiredPermissions: ['loan:originate:staff'],
 } as const satisfies StaffRouteDefinition
 
+export const STAFF_CUSTOMER_ACCESS_ROUTE = {
+  path: '/staff/customer-access',
+  label: 'Customer digital access',
+  documentTitle: 'Customer digital access',
+  requiredPermissions: ['customer:intake:manage'],
+} as const satisfies StaffRouteDefinition
+
 export const STAFF_ORIGINATION_CASE_ROUTE = {
   path: '/staff/origination/:assistedOriginationCaseId',
   label: 'Assisted origination case',
@@ -196,6 +203,7 @@ export const STAFF_CLOSURE_CASE_ROUTE = {
 export const STAFF_ROUTES = [
   STAFF_HOME_ROUTE,
   STAFF_ORIGINATION_ROUTE,
+  STAFF_CUSTOMER_ACCESS_ROUTE,
   STAFF_APPLICATIONS_ROUTE,
   STAFF_DOCUMENT_QUEUE_ROUTE,
   STAFF_CORRECTION_QUEUE_ROUTE,
@@ -211,6 +219,7 @@ export const STAFF_EXECUTABLE_ROUTES = [
   STAFF_HOME_ROUTE,
   STAFF_APPLICATIONS_ROUTE,
   STAFF_ORIGINATION_ROUTE,
+  STAFF_CUSTOMER_ACCESS_ROUTE,
   STAFF_ORIGINATION_CASE_ROUTE,
   STAFF_APPLICATION_CASE_ROUTE,
   STAFF_OFFER_RESPONSE_ROUTE,

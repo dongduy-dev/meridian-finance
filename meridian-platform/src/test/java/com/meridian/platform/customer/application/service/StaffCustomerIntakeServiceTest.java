@@ -115,6 +115,18 @@ class StaffCustomerIntakeServiceTest {
     }
 
     @Test
+    void intakeManagerCanSearchWithoutGeneralCustomerReadPermission() {
+        Customer created = captureCreatedCustomer();
+        when(users.currentUser()).thenReturn(new AuthenticatedUser(
+                UUID.randomUUID(), "intake@meridian.local", "STAFF", null,
+                Set.of("LOAN_OFFICER"), Set.of("customer:intake:manage")));
+        when(customers.findByCustomerNumber("CUS-000000042")).thenReturn(Optional.of(created));
+
+        assertEquals(created.id(), service.search(
+                new StaffCustomerSearchRequest("CUS-000000042", null)).customerId());
+    }
+
+    @Test
     void staffWithoutTheExactMutationPermissionIsRejected() {
         when(users.currentUser()).thenReturn(new AuthenticatedUser(
                 UUID.randomUUID(), "reader@meridian.local", "STAFF", null,

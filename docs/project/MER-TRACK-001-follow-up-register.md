@@ -1028,6 +1028,29 @@ Completed outcome:
 - Customer-digital endpoints and `CUSTOMER_DIRECT_ACTION_NOT_ALLOWED` protection remain unchanged.
 - No generic Staff checklist-mutation requirement was introduced; the delivered mutation remains exact and task-scoped.
 
+### MER-FU-047 - Enable digital access for existing paper-originated Customers
+
+Area: Identity / Customer / Staff Web / Customer Web
+
+Type: Identity linkage and Customer access
+
+Priority: P1
+
+Status: In progress
+
+Blocking: PostgreSQL integration and full frontend verification are required before the checkpoint can be marked Done.
+
+Problem:
+A Staff-assisted Customer may have a valid Customer record and historical LoanApplications without an Identity User. Ordinary self-registration creates a different Customer, so it cannot safely recover that existing record's applications.
+
+Implemented boundary awaiting verification:
+
+- Exact `customer:intake:manage` Staff authority uses a standalone Customer digital-access workspace and protected status/enable routes. Staff re-enters the Customer's presented identity reference; Customer matches its protected fingerprint for the selected active identity-bearing record.
+- Identity links a single Customer User to the unchanged `customerId`, assigns only the Customer role, stores an unguessable placeholder password hash and a digest-only email-verification token, and records actor-bound PII-safe activation audit. A database constraint enforces one User per non-null Customer ID.
+- Notification sends a purpose-specific verification invitation after commit. The Customer verifies email control, then uses ordinary Forgot password and Reset password to choose a credential; Staff never chooses or receives it.
+- Activation does not create or merge a Customer, mutate profile or bank-account data, convert `STAFF_ASSISTED` applications, or grant Customer-digital actions on them. Authenticated Customer reads use the same `customerId` and can show those historical applications.
+- The Staff client reconciles unknown POST results through the protected status GET without automatic replay or persistent identity-reference storage.
+
 ### MER-FU-048 - Add controlled Loan Officer review-stewardship reassignment
 
 Area: Loan / Approval / Staff Web

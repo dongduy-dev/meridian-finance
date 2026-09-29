@@ -79,7 +79,7 @@ public class StaffCustomerIntakeService implements StaffCustomerIntakeUseCase {
     @Override
     @Transactional(readOnly = true)
     public CustomerDto search(StaffCustomerSearchRequest request) {
-        requireStaff(READ_PERMISSION);
+        requireStaffSearch();
         Objects.requireNonNull(request, "request must not be null");
         boolean byNumber = request.customerNumber() != null && !request.customerNumber().isBlank();
         boolean byIdentity = request.identityReference() != null && !request.identityReference().isBlank();
@@ -242,6 +242,15 @@ public class StaffCustomerIntakeService implements StaffCustomerIntakeUseCase {
                     "Staff Customer intake access is denied.");
         }
         return actor;
+    }
+
+    private void requireStaffSearch() {
+        AuthenticatedUser actor = currentUsers.currentUser();
+        if (!"STAFF".equals(actor.userType()) || actor.optionalCustomerId().isPresent()
+                || !(actor.hasPermission(READ_PERMISSION) || actor.hasPermission(MANAGE_PERMISSION))) {
+            throw new AuthorizationException("STAFF_CUSTOMER_INTAKE_ACCESS_DENIED",
+                    "Staff Customer intake access is denied.");
+        }
     }
 
     private Customer activeCustomer(UUID customerId, boolean forUpdate) {

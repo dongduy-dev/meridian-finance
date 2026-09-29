@@ -338,6 +338,16 @@ class PasswordLoginServiceTest {
         }
 
         @Override
+        public Optional<User> findByCustomerId(UUID customerId) {
+            throw new AssertionError("Customer mapping lookup should not be called.");
+        }
+
+        @Override
+        public boolean createLinkedCustomerUser(User user) {
+            throw new AssertionError("Linked Customer User creation should not be called.");
+        }
+
+        @Override
         public void createCustomerUser(User user) {
             throw new AssertionError("User creation should not be called.");
         }

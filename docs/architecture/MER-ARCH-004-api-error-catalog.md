@@ -32,6 +32,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 401 | `INVALID_EMAIL_VERIFICATION_TOKEN` | Email verification token is invalid or expired. | Request a replacement verification email and submit its token |
 | 401 | `INVALID_PASSWORD_RESET_TOKEN` | Password reset token is invalid or expired. | Request a replacement password-reset email and submit its token with a new password |
 | 409 | `EMAIL_ALREADY_REGISTERED` | An account with this email already exists. | Log in or use the account-recovery flow instead of registering again |
+| 409 | `CUSTOMER_DIGITAL_ACCESS_ALREADY_ENABLED` | Digital access is already enabled for this Customer. | Read the Customer's digital-access status before another enable request |
 | 403 | `ACCOUNT_SUSPENDED` | Account suspended | Contact support to review the account status |
 | 403 | `ACCESS_DENIED` | Access denied | Use a principal whose role includes the required permission |
 | 403 | `CUSTOMER_CONTEXT_REQUIRED` | Customer context required | Use an authenticated customer-linked token for a customer-owned flow |
@@ -53,6 +54,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 409 | `CUSTOMER_NOT_ACTIVE` | Customer not active | Restore the Customer to `ACTIVE` before using customer-owned lending flows |
 | 409 | `IDENTITY_REFERENCE_IMMUTABLE` | Identity reference immutable | Do not change the identity reference after the profile first becomes complete |
 | 409 | `IDENTITY_REFERENCE_ALREADY_IN_USE` | Identity reference already in use | Use an identity reference that does not belong to another Customer |
+| 422 | `CUSTOMER_DIGITAL_ACCESS_OWNERSHIP_NOT_VERIFIED` | Customer identity could not be verified for digital access. | Recheck the Customer's presented identity reference; do not enable access until it matches the selected Customer |
 | 422 | `PROFILE_INCOMPLETE` | Customer profile incomplete | Complete the required identity, contact, residential, employment, and consent fields |
 | 422 | `PRIMARY_BANK_ACCOUNT_REQUIRED` | Primary bank account required | Add or select a primary active bank account |
 | 409 | `BANK_ACCOUNT_UPDATE_NOT_ALLOWED` | Bank account update not allowed | Refresh the application state; bank-account changes are blocked in this status |
