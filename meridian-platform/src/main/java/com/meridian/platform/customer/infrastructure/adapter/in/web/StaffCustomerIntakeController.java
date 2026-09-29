@@ -33,7 +33,7 @@ public class StaffCustomerIntakeController {
     }
 
     @PostMapping("/search")
-    @PreAuthorize("hasAuthority('customer:read')")
+    @PreAuthorize("hasAnyAuthority('customer:read', 'customer:intake:manage')")
     public CustomerDto search(@Valid @RequestBody StaffCustomerSearchRequest request) {
         return useCase.search(request);
     }

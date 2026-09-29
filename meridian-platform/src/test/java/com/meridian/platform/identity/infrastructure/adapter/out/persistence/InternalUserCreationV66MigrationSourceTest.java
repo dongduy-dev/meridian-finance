@@ -27,8 +27,8 @@ class InternalUserCreationV66MigrationSourceTest {
         Set<String> expected = actions(previousActions);
         expected.add("IDENTITY_USER_CREATED");
         assertEquals(expected, actions(newActions));
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V66"));
-        assertTrue(snapshot.endsWith(migration));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V67"));
+        assertTrue(snapshot.contains(migration));
     }
 
     private static Set<String> actions(String sql) {

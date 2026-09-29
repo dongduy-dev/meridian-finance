@@ -300,6 +300,7 @@ Error-code label maps live in `lib/errors` for cross-cutting codes or in the own
 | Refresh rotates the cookie; reuse revokes the active token family. | The client allows only one refresh request at a time. |
 | Current-session logout revokes the presented refresh family and the presented valid access token, then clears the cookie. | The client sends both credentials when available and clears local auth state regardless of the response. |
 | Registration issues no credentials and requires email verification. | Registration succeeds into a verification-pending page, not the app shell. |
+| Staff may enable a Customer Web login for an existing identity-bearing Customer. | The Customer follows the existing `/verify-email` invitation, then uses Forgot password and Reset password to choose a credential; Customer Web does not register another Customer or offer a Staff activation form. |
 | Correct credentials for an unverified User return `EMAIL_VERIFICATION_REQUIRED`. | Login routes to the verification-pending experience. |
 | Unknown email, wrong password, and active temporary lock return the same `INVALID_CREDENTIALS`. | The UI must not claim that an account is locked or expose an attempt count. |
 | Password reset revokes every refresh family but does not enumerate and revoke existing access JWTs. | Reset success clears this tab's auth state and requires login; the UI must not promise immediate global access-token revocation. |
@@ -307,6 +308,8 @@ Error-code label maps live in `lib/errors` for cross-cutting codes or in the own
 | CORS permits explicit origins, credentials, required methods/headers, and exposes `X-Request-ID` and `Retry-After`. | Browser requests must use the configured origin and the client may display correlation and rate-limit recovery information. |
 
 Customer business `verificationStatus` is not Identity email verification. Customer Web must not label the profile field as an email-verification result.
+
+After an existing Customer activates digital access, Customer-owned application reads use the unchanged authenticated `customerId`. Historical `STAFF_ASSISTED` applications may appear in the ordinary application list, but their channel remains `STAFF_ASSISTED` and Customer Web must not infer a digital-only required action for them.
 
 `SameSite=Strict` cookie rules still apply after CORS grants an origin. Localhost ports are same-site, and deployment must keep Customer Web and the API in a compatible same-site arrangement unless a separately reviewed backend cookie policy changes. CORS alone cannot make the refresh cookie available to a cross-site deployment.
 

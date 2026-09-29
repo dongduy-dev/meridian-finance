@@ -58,7 +58,7 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
 
     @Test
     void installedLatestRetainsEveryKnownAuditActionAndRejectsUnknownAction() {
-        assertEquals("66", latestVersion(SCHEMA));
+        assertEquals("67", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -261,6 +261,7 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
                     || action == BusinessAuditAction.LOAN_PRODUCT_ACTIVATED
                     || action == BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
                     || action == BusinessAuditAction.IDENTITY_USER_CREATED
+                    || action == BusinessAuditAction.IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED
                     || action == BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     || action == BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
                     || action == BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
@@ -276,15 +277,18 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
                 schema,
                 BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED.name()
         ));
-        assertV55IdentityActionsRejected(schema);
+        assertLaterIdentityActionsRejected(schema);
         assertThrows(DataAccessException.class, () ->
                 insertAuditEvent(schema, "UNKNOWN_AUDIT_ACTION")
         );
     }
 
-    private void assertV55IdentityActionsRejected(String schema) {
+    private void assertLaterIdentityActionsRejected(String schema) {
         assertThrows(DataAccessException.class, () -> insertAuditEvent(
                 schema, BusinessAuditAction.IDENTITY_USER_CREATED.name()
+        ));
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema, BusinessAuditAction.IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED.name()
         ));
         assertThrows(DataAccessException.class, () -> insertAuditEvent(
                 schema, BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED.name()

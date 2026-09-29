@@ -16,7 +16,11 @@ public interface UserRepository {
 
     Optional<User> findByIdForUpdate(UUID userId);
 
+    Optional<User> findByCustomerId(UUID customerId);
+
     void createCustomerUser(User user);
+
+    boolean createLinkedCustomerUser(User user);
 
     void createStaffUser(User user);
 

@@ -254,7 +254,7 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 
 | Context | Responsibility |
 |---|---|
-| **Identity & Access** | Customer registration, User identity, credentials and email-verification state, JWT access, roles, permissions, and the complete platform's session lifecycle. |
+| **Identity & Access** | Customer registration, existing-Customer digital access, User identity, credentials and email-verification state, JWT access, roles, permissions, and the complete platform's session lifecycle. |
 | **Customer Management** | Customer lifecycle, profile readiness, mutable source bank accounts, ownership controls, and protection of Customer data. |
 | **Partner Management** | Partner Companies, Partner Employees, monthly imports, employment matching, and reusable Salary Advance employment links. |
 | **Loan Core / Lending Lifecycle** | Product policies, LoanApplication state, product verification, review and correction cycles, offers, contracts, activation, LoanAccount servicing, contractual payoff, Administrative Full-Balance Settlement, and administrative closure. |

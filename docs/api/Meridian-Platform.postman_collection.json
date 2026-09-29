@@ -1157,6 +1157,18 @@
                                       "response":  []
                                   },
                                   {
+                                      "name":  "Read existing Customer digital-access status",
+                                      "event":  [{"listen":  "test", "script":  {"type":  "text/javascript", "exec":  ["pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });", "const json = pm.response.json();", "pm.test(\"Safe digital-access projection\", function () { pm.expect(json.customerId).to.eql(pm.collectionVariables.get(\"staffAssistedCustomerId\")); pm.expect(json).to.have.property(\"enabled\"); pm.expect(json).not.to.have.property(\"passwordHash\"); pm.expect(json).not.to.have.property(\"identityReference\"); });"]}}],
+                                      "request":  {"method":  "GET", "header":  [], "url":  {"raw":  "{{baseUrl}}/api/v1/staff/customers/{{staffAssistedCustomerId}}/digital-access", "host":  ["{{baseUrl}}"], "path":  ["api", "v1", "staff", "customers", "{{staffAssistedCustomerId}}", "digital-access"]}},
+                                      "response":  []
+                                  },
+                                  {
+                                      "name":  "Enable existing Customer digital access (manual identity re-entry)",
+                                      "event":  [{"listen":  "test", "script":  {"type":  "text/javascript", "exec":  ["pm.test(\"Status is 201\", function () { pm.response.to.have.status(201); });", "const json = pm.response.json();", "pm.test(\"Existing Customer linked without credential disclosure\", function () { pm.expect(json.customerId).to.eql(pm.collectionVariables.get(\"staffAssistedCustomerId\")); pm.expect(json.enabled).to.eql(true); pm.expect(json.emailVerified).to.eql(false); pm.expect(json).not.to.have.property(\"identityReference\"); pm.expect(json).not.to.have.property(\"passwordHash\"); });"]}}],
+                                      "request":  {"method":  "POST", "header":  [{"key":  "Content-Type", "value":  "application/json", "type":  "text"}], "body":  {"mode":  "raw", "raw":  "{\n  \"email\": \"existing.customer@example.com\",\n  \"identityReference\": \"<re-enter Customer-presented identity reference>\"\n}", "options":  {"raw":  {"language":  "json"}}}, "url":  {"raw":  "{{baseUrl}}/api/v1/staff/customers/{{staffAssistedCustomerId}}/digital-access", "host":  ["{{baseUrl}}"], "path":  ["api", "v1", "staff", "customers", "{{staffAssistedCustomerId}}", "digital-access"]}},
+                                      "response":  []
+                                  },
+                                  {
                                       "name":  "Associate Customer with assisted-origination case",
                                       "event":  [
                                                     {

@@ -931,6 +931,7 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-071 | A Customer-sourced correction remains Customer-sourced even when authorized Staff coordinates it for a Staff-assisted application. Staff must obtain the requested information or evidence from the Customer before recording, uploading, and resubmitting it. |
 | BR-072 | OCR may propose data from paper evidence, but an authorized Staff user must confirm or correct proposed values before they mutate authoritative Customer or Loan state. OCR output and transcription confirmation do not establish Customer verification, document acceptance, product verification, or approval. |
 | BR-073 | When Staff-assisted intake creates a new Customer, creation of the Customer and required identity-bearing profile must fail as one business outcome when protected identity evidence duplicates another Customer; the failed attempt must not leave a separate incomplete Customer shell. |
+| BR-074 | An authorized Staff Customer-intake actor may enable Customer Web access for an existing active identity-bearing Customer only after matching the Customer's presented identity reference to that exact record. One Customer has at most one linked Customer User. The Customer must verify control of the activation email before choosing a password through account recovery. Activation preserves the Customer, profile, bank accounts, historical `STAFF_ASSISTED` application channels, and their lack of Customer-digital actions; it neither creates nor merges Customer records. |
 
 ---
 

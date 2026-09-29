@@ -221,6 +221,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 | Workspace | Commands available now |
 |---|---|
 | Assisted origination | Create/reopen/associate/abandon UCL or Collateral intake; create and maintain the selected Customer; manage masked bank accounts; upload or replace controlled paper intake evidence; explicitly request OCR, monitor safe status, finalize corrected structured suggestions beside the current evidence version, and copy finalized reviewed values into the existing unsaved forms; convert an eligible UCL or Collateral case into one Staff-assisted LoanApplication |
+| Customer digital access | Find one existing Customer by exact Customer number or identity reference; read digital-access status; verify the presented identity again and enable a Customer Web login without creating an intake case or changing the Customer or Loan record |
 | Verification | Start and complete UCL verification; start and complete exact numbered Collateral verification |
 | Review and approval | Start review; submit recommendation; submit independent decision |
 | Assisted offer response | Upload/replace exact signed Customer offer-response evidence and record the Customer's confirmed `ACCEPT` or `DECLINE` decision |
@@ -236,7 +237,8 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 - Customer-owned document checklist reads remain separate from the dedicated Staff document checklist/history projection.
 - Customer approved-offer reads do not provide a Staff approval-evidence view.
 - `audit:read` has no generic audit-query controller.
-- Staff Customer reads are purpose-limited to exact assisted-intake discovery and selected-Customer maintenance; they do not expose a broad Customer directory.
+- Staff Customer reads are purpose-limited to exact discovery for assisted intake or digital activation, selected-Customer maintenance, and selected-Customer digital-access status; they do not expose a broad Customer directory.
+- Customer digital access uses the same exact Customer search in a standalone `/staff/customer-access` workspace guarded by `customer:intake:manage`. The form contains email and identity-reference re-entry only. After confirmation it clears the identity input and reads the authoritative status. After an unknown result it performs GET reconciliation without automatic POST replay or persistent identity storage.
 - overdue evaluation is a scheduler-owned backend operation, not a manual Staff command.
 - Partner read endpoints are administration-oriented and do not form a safe lending case snapshot.
 
@@ -1314,6 +1316,7 @@ Each protected route declares:
 |---|---|---|---|---|
 | Login | Executable now | Session status | Authenticate | invalid credentials, throttled, unverified/inactive safe response, session restore |
 | Assisted origination index | Executable | Open UCL and Collateral intake | Start or reopen intake | empty, loading, forbidden, query failure |
+| Customer digital access | Executable | Exact Customer search and protected access status | Enable access for a verified existing Customer | no selection, missing/inactive Customer, identity mismatch, email conflict, already enabled, unknown result, loading/error/retry |
 | Assisted origination workspace | Executable | Intake, selected Customer/profile, masked bank accounts, intake evidence versions, and completed application link | Select/create/maintain Customer, upload/replace evidence, convert eligible UCL, abandon | exact-search miss, duplicate identity/account, missing paper application, stale evidence version, competing completion, result unknown, terminal case, partial permission, loading/error |
 | Document queue | Executable now | Awaiting-review list | Open exact version | empty, best-effort continuation, row no longer pending |
 | Document review | Foundation exists but projection missing | Exact version metadata/content and safe case facts | Record review outcome | content failure, stale version, waiver forbidden, result unknown |

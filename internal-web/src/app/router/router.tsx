@@ -10,6 +10,7 @@ import {
   STAFF_OFFER_RESPONSE_ROUTE,
   STAFF_APPLICATIONS_ROUTE,
   STAFF_ORIGINATION_ROUTE,
+  STAFF_CUSTOMER_ACCESS_ROUTE,
   STAFF_ORIGINATION_CASE_ROUTE,
   STAFF_HOME_ROUTE,
   STAFF_DOCUMENT_QUEUE_ROUTE,
@@ -46,6 +47,7 @@ const StaffLandingPage = lazy(() => import('@/features/staff/pages/StaffLandingP
 const ApplicationSearchPage = lazy(() => import('@/features/staff-applications/pages/ApplicationSearchPage').then((module) => ({ default: module.ApplicationSearchPage })))
 const AssistedOriginationListPage = lazy(() => import('@/features/staff-origination/pages/AssistedOriginationListPage').then((module) => ({ default: module.AssistedOriginationListPage })))
 const AssistedOriginationWorkspacePage = lazy(() => import('@/features/staff-origination/pages/AssistedOriginationWorkspacePage').then((module) => ({ default: module.AssistedOriginationWorkspacePage })))
+const CustomerDigitalAccessPage = lazy(() => import('@/features/staff-customer-access/pages/CustomerDigitalAccessPage').then((module) => ({ default: module.CustomerDigitalAccessPage })))
 const ApplicationCasePage = lazy(() => import('@/features/staff-applications/pages/ApplicationCasePage').then((module) => ({ default: module.ApplicationCasePage })))
 const StaffOfferResponseWorkspacePage = lazy(() => import('@/features/staff-offer-response/pages/StaffOfferResponseWorkspacePage').then((module) => ({ default: module.StaffOfferResponseWorkspacePage })))
 const DocumentReviewQueuePage = lazy(() => import('@/features/staff-documents/pages/DocumentReviewQueuePage').then((module) => ({ default: module.DocumentReviewQueuePage })))
@@ -88,6 +90,9 @@ export const routes: RouteObject[] = [{ element: <RouteFrame />, errorElement: <
     ] },
     { element: <StaffCapabilityRoute route={STAFF_ORIGINATION_ROUTE} />, children: [
       { path: STAFF_ORIGINATION_ROUTE.path, element: <Deferred><AssistedOriginationListPage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_CUSTOMER_ACCESS_ROUTE} />, children: [
+      { path: STAFF_CUSTOMER_ACCESS_ROUTE.path, element: <Deferred><CustomerDigitalAccessPage /></Deferred> },
     ] },
     { element: <StaffCapabilityRoute route={STAFF_ORIGINATION_CASE_ROUTE} />, children: [
       { path: STAFF_ORIGINATION_CASE_ROUTE.path, element: <Deferred><AssistedOriginationWorkspacePage /></Deferred> },

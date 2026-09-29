@@ -56,7 +56,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     @Test
     void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
-        assertEquals("66", latestVersion(SCHEMA));
+        assertEquals("67", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -217,6 +217,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.LOAN_PRODUCT_ACTIVATED
                     && action != BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
                     && action != BusinessAuditAction.IDENTITY_USER_CREATED
+                    && action != BusinessAuditAction.IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED
                     && action != BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
@@ -227,7 +228,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                 insertAuditEvent(schema, action.name());
             }
         }
-        assertV55IdentityActionsRejected(schema);
+        assertLaterIdentityActionsRejected(schema);
     }
 
     private void assertThroughV31ActionsAccepted(String schema) {
@@ -251,6 +252,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.LOAN_PRODUCT_ACTIVATED
                     && action != BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
                     && action != BusinessAuditAction.IDENTITY_USER_CREATED
+                    && action != BusinessAuditAction.IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED
                     && action != BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
@@ -265,12 +267,15 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                 schema,
                 BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED.name()
         ));
-        assertV55IdentityActionsRejected(schema);
+        assertLaterIdentityActionsRejected(schema);
     }
 
-    private void assertV55IdentityActionsRejected(String schema) {
+    private void assertLaterIdentityActionsRejected(String schema) {
         assertThrows(DataAccessException.class, () -> insertAuditEvent(
                 schema, BusinessAuditAction.IDENTITY_USER_CREATED.name()
+        ));
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema, BusinessAuditAction.IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED.name()
         ));
         assertThrows(DataAccessException.class, () -> insertAuditEvent(
                 schema, BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED.name()
