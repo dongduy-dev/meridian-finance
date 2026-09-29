@@ -35,6 +35,7 @@ import {
 import { ADMIN_HOME_ROUTE, ADMIN_PARTNER_DETAIL_ROUTE, ADMIN_PARTNER_ELIGIBILITY_REVIEWS_ROUTE, ADMIN_PARTNERS_ROUTE, ADMIN_PRODUCTS_ROUTE, ADMIN_USERS_ROUTE } from './admin-route-metadata'
 
 const LoginPage = lazy(() => import('@/features/auth/components/LoginPage').then((module) => ({ default: module.LoginPage })))
+const SetPasswordPage = lazy(() => import('@/features/auth/components/SetPasswordPage').then((module) => ({ default: module.SetPasswordPage })))
 const AdminLandingPage = lazy(() => import('@/features/admin/pages/AdminLandingPage').then((module) => ({ default: module.AdminLandingPage })))
 const PartnerCompanyListPage = lazy(() => import('@/features/admin-partners/pages/PartnerCompanyListPage').then((module) => ({ default: module.PartnerCompanyListPage })))
 const PartnerCompanyDetailPage = lazy(() => import('@/features/admin-partners/pages/PartnerCompanyDetailPage').then((module) => ({ default: module.PartnerCompanyDetailPage })))
@@ -74,6 +75,7 @@ function Deferred({ children }: { children: ReactNode }) {
 }
 
 export const routes: RouteObject[] = [{ element: <RouteFrame />, errorElement: <RouteErrorPage />, children: [
+  { path: '/set-password', element: <Deferred><SetPasswordPage /></Deferred> },
   { element: <LoginRoute />, children: [{ path: '/login', element: <Deferred><LoginPage /></Deferred> }] },
   { element: <ProtectedInternalRoute />, children: [
     { path: '/', element: <InternalHomeRoute /> },

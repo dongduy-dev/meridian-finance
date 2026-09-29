@@ -56,7 +56,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     @Test
     void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
-        assertEquals("65", latestVersion(SCHEMA));
+        assertEquals("66", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -216,6 +216,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.LOAN_PRODUCT_LIMITS_UPDATED
                     && action != BusinessAuditAction.LOAN_PRODUCT_ACTIVATED
                     && action != BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
+                    && action != BusinessAuditAction.IDENTITY_USER_CREATED
                     && action != BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
@@ -249,6 +250,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.LOAN_PRODUCT_LIMITS_UPDATED
                     && action != BusinessAuditAction.LOAN_PRODUCT_ACTIVATED
                     && action != BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
+                    && action != BusinessAuditAction.IDENTITY_USER_CREATED
                     && action != BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
@@ -267,6 +269,9 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
     }
 
     private void assertV55IdentityActionsRejected(String schema) {
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema, BusinessAuditAction.IDENTITY_USER_CREATED.name()
+        ));
         assertThrows(DataAccessException.class, () -> insertAuditEvent(
                 schema, BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED.name()
         ));

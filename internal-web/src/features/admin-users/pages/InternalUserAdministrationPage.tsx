@@ -1,13 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { hasPermission } from '@/features/auth/model/access-control'
 import { useAuth } from '@/features/auth/model/auth-context'
 import { assignableInternalRolesQuery, internalUsersQuery } from '../api/queries'
 import { InternalUserCard } from '../components/InternalUserCard'
+import { CreateInternalUserForm } from '../components/CreateInternalUserForm'
 import { UserAdministrationQueryErrorPanel } from '../components/UserAdministrationQueryErrorPanel'
 
 export function InternalUserAdministrationPage() {
+  const [creating, setCreating] = useState(false)
   const { manager, state } = useAuth()
   const enabled = state.status === 'authenticated' && hasPermission(state.actor, 'identity:user:manage')
   const users = useQuery(internalUsersQuery(manager, enabled))
@@ -24,12 +27,13 @@ export function InternalUserAdministrationPage() {
       <div>
         <p className="text-sm font-semibold text-muted-foreground">IDENTITY ADMINISTRATION</p>
         <h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Internal Users</h1>
-        <p className="mt-2 max-w-3xl text-muted-foreground">Inspect internal Staff accounts, control administrative status, and assign predefined Staff roles.</p>
+        <p className="mt-2 max-w-3xl text-muted-foreground">Create internal Staff accounts, control administrative status, and assign predefined Staff roles.</p>
       </div>
-      <Button variant="outline" disabled={users.isFetching || roles.isFetching} onClick={refresh}>
+      <div className="flex flex-wrap gap-2">{enabled && roles.data ? <Button onClick={() => setCreating(true)}>Create Internal User</Button> : null}<Button variant="outline" disabled={users.isFetching || roles.isFetching} onClick={refresh}>
         {(users.isFetching || roles.isFetching) && !pending ? 'Refreshing…' : 'Refresh Users'}
-      </Button>
+      </Button></div>
     </div>
+    {creating && roles.data ? <CreateInternalUserForm manager={manager} roles={roles.data} onClose={() => setCreating(false)} /> : null}
     {pending ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading Internal Users…</div> : null}
     {error && (!users.data || !roles.data) ? <UserAdministrationQueryErrorPanel error={error} onRetry={refresh} /> : null}
     {users.data?.length === 0 && roles.data ? <p className="rounded-md border p-5 text-sm text-muted-foreground">No internal Staff Users are available.</p> : null}

@@ -230,6 +230,8 @@ An amount-limit or activation command opens one application transaction, locks t
 
 Protected Staff User and predefined-role discovery plus status and role-assignment commands use `/api/v1/admin/internal-users` and require exact `identity:user:manage`. Identity returns a purpose-limited Staff projection and excludes Customer Users and credential internals.
 
+Staff provisioning uses the same protected boundary. Identity validates an unused normalized email and predefined non-Customer roles, then persists a Staff User without a Customer association, its role assignments, a digest-only password-reset token, and actor-bound PII-safe creation and role-grant audit evidence in one transaction. The placeholder password is an unguessable hash. Administrative provisioning marks the Staff email verified in Identity; Customer email verification remains separate. After commit, Identity calls a purpose-limited Notification contract that sends the setup fragment link to Internal Web. An explicit Staff-only resend locks the User, replaces an older unused token, and sends after commit. Delivery failure does not reverse durable Identity state; the administrator can request another link. The existing password-reset confirmation consumes the token, replaces the password, and revokes refresh sessions.
+
 ```mermaid
 flowchart LR
     Web["Internal Web"]

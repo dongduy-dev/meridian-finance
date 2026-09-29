@@ -316,6 +316,7 @@ Back-Office Administration does not provide an arbitrary JSON editor. Pricing al
 Internal User Administration provides a narrow Identity-owned surface under `/admin/users` for:
 
 - discovery of internal `STAFF` users;
+- creation of internal `STAFF` users with predefined roles and a Staff-owned password setup link;
 - inspection of safe user status and assigned roles;
 - target-state internal-user status changes among Identity's `ACTIVE`, `SUSPENDED`, and `DISABLED` states;
 - assignment and removal of predefined backend-owned roles.
@@ -326,15 +327,20 @@ Identity owns User status, roles, permissions, credential state, and authorizati
 |---|---|
 | Backend fact | Protected `GET /api/v1/admin/internal-users` requires exact `identity:user:manage` and returns only Staff Users in deterministic normalized-email and stable-ID order. |
 | Backend fact | Protected `GET /api/v1/admin/internal-users/assignable-roles` returns predefined non-Customer roles in deterministic role-code order; it does not expose a role or permission editor. |
+| Backend fact | Protected creation accepts email, display name, and at least one assignable Staff role. Identity creates an active Staff User with no Customer association and sends a one-time setup link to Internal Web after the durable transaction. The administrator receives no password or raw token. |
+| Backend fact | Protected password-setup resend applies only to active, verified Staff Users. It replaces an older unused reset/setup token and sends after commit; Customer Users cannot be targeted. |
 | Backend fact | Status and per-role target-state `PUT` commands require exact `identity:user:manage`, lock the target Staff User, and treat the same target state as a no-op without timestamp, authorization-version, refresh-session, or audit effects. |
 | Backend fact | A real status or role-assignment change increments Identity's authorization version. Older access JWTs fail as `401 INVALID_TOKEN` before their embedded authority is installed. |
 | Backend fact | Role changes leave active refresh sessions usable so refresh can issue current authority. Suspension or disablement revokes all target-User refresh sessions; reactivation does not restore them. |
 | Frontend decision | The page displays only User ID-bound safe facts, status, and backend-returned role codes. Email never enters URL state, query keys, browser persistence, operation recovery, logs, or telemetry. |
 | Frontend decision | User and assignable-role queries have zero retention after unmount and clear through the shared session boundary. Route authorization succeeds before either query runs. |
 | Frontend decision | Commands never update status or role assignment optimistically and never retry automatically. Confirmed success refreshes the protected User list; an unknown transport result preserves the last confirmed view and refreshes authoritative state before an explicit same-target retry. |
+| Frontend decision | The create form uses backend assignable roles and has no password, permission, Customer-link, or User-type field. A confirmed create refreshes the list. Setup resend requires an explicit action and does not retry automatically. |
 | Frontend decision | A target status of `SUSPENDED` or `DISABLED` requires confirmation that the User loses access and active refresh sessions are revoked. Reactivation to `ACTIVE` remains direct. Predefined role assignment and removal remain direct target-state actions and do not receive blanket confirmation. |
 
 When the target is the current actor, the normal protected refresh path observes the authorization-version mismatch. A still-active actor may refresh once into current roles and permissions; an inactive actor cannot refresh and the shared session manager clears the session. Route and navigation access then re-evaluate from the replaced actor rather than from the command response.
+
+The anonymous `/set-password` route captures a one-time token from the URL fragment, immediately removes the fragment, and retains the token only in memory until confirmation. It posts the token and a 12–72 character password to Identity's existing reset-confirmation contract. The form requires matching confirmation, clears local token state after success, and directs the Staff member to `/login`. Invalid or expired links direct the Staff member to request an administrator-issued replacement. Token values do not enter browser persistence, query keys, logs, telemetry, or request-correlation UI. `DISABLED` remains deprovisioning; no hard-delete control appears.
 
 `MER-FU-019` records the delivered user-management surface. `MER-FU-022` keeps full permission management deferred.
 
@@ -406,6 +412,7 @@ Each later checkpoint adds contract, query, command, error, responsive, and acce
 - internal-user discovery and safe status presentation;
 - supported internal-user status management;
 - predefined backend-owned role assignment;
+- Staff User creation with one-time password setup and explicit link recovery;
 - required Identity management use cases and APIs.
 
 The delivered Back-Office milestone stops after FE-CP4. Generic permission, configuration, and audit products and advanced Loan Product policy builders require separate decisions.

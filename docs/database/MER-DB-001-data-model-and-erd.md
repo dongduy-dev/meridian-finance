@@ -26,7 +26,7 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V64. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion and downstream evidenced actions, Document-owned OCR processing and Staff review, protected Partner Company/import/eligibility-review, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
+The physical schema is the result of Flyway migrations V1 through V66. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion and downstream evidenced actions, Document-owned OCR processing and Staff review, protected Partner Company/import/eligibility-review, Loan Product, and Internal User administration, and Identity registration, email verification, password reset, login, and session protection.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
@@ -281,6 +281,7 @@ Audit events preserve operation, actor, action, entity, time, and a controlled P
 - Normalized user email, Customer number, and stable business codes are unique within their namespaces.
 - Failed-login counts cannot be negative. A temporary login lock does not change `ACTIVE`, `SUSPENDED`, or `DISABLED` lifecycle state.
 - User authorization versions cannot be negative. A real Internal User status or role-assignment change increments the value under the same User-row lock; a same-target command leaves the value and timestamp unchanged.
+- Administratively provisioned Staff Users have no Customer association and receive an email-verification timestamp. Their first credential is an unguessable password hash; the existing password-reset-token table stores only the one-time setup-token digest. The audit-action constraint permits `IDENTITY_USER_CREATED`.
 - Email-verification digests are unique, each token expires after issuance, terminal timestamps cannot precede issuance, and at most one unconsumed, unrevoked token remains active for a User.
 - Refresh-token digests are unique, each token expires after issuance, and at most one unconsumed, unrevoked token remains active in a family.
 - Access-token revocation identity is unique, and each revocation expires after it is recorded. Repeated invalidation cannot create duplicate revocation state.

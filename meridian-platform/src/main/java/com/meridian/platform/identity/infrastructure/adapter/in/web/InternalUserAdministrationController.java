@@ -3,13 +3,16 @@ package com.meridian.platform.identity.infrastructure.adapter.in.web;
 import com.meridian.platform.identity.application.dto.AssignableInternalRoleDto;
 import com.meridian.platform.identity.application.dto.ChangeInternalUserRoleRequest;
 import com.meridian.platform.identity.application.dto.ChangeInternalUserStatusRequest;
+import com.meridian.platform.identity.application.dto.CreateInternalUserRequest;
 import com.meridian.platform.identity.application.dto.InternalUserDto;
 import com.meridian.platform.identity.application.port.in.ManageInternalUserUseCase;
+import com.meridian.platform.identity.application.port.in.ProvisionInternalUserUseCase;
 import com.meridian.platform.identity.application.port.in.QueryInternalUsersUseCase;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,13 +27,16 @@ public class InternalUserAdministrationController {
 
     private final QueryInternalUsersUseCase query;
     private final ManageInternalUserUseCase commands;
+    private final ProvisionInternalUserUseCase provisioning;
 
     public InternalUserAdministrationController(
             QueryInternalUsersUseCase query,
-            ManageInternalUserUseCase commands
+            ManageInternalUserUseCase commands,
+            ProvisionInternalUserUseCase provisioning
     ) {
         this.query = query;
         this.commands = commands;
+        this.provisioning = provisioning;
     }
 
     @GetMapping
@@ -43,6 +49,18 @@ public class InternalUserAdministrationController {
     @PreAuthorize("hasAuthority('identity:user:manage')")
     public List<AssignableInternalRoleDto> getAssignableRoles() {
         return query.findAssignableRoles();
+    }
+
+    @PostMapping
+    @PreAuthorize("hasAuthority('identity:user:manage')")
+    public InternalUserDto create(@Valid @RequestBody CreateInternalUserRequest request) {
+        return provisioning.create(request);
+    }
+
+    @PostMapping("/{userId}/password-setup")
+    @PreAuthorize("hasAuthority('identity:user:manage')")
+    public void sendPasswordSetup(@PathVariable UUID userId) {
+        provisioning.sendPasswordSetup(userId);
     }
 
     @PutMapping("/{userId}/status")

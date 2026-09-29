@@ -343,6 +343,11 @@ class PasswordLoginServiceTest {
         }
 
         @Override
+        public void createStaffUser(User user) {
+            throw new AssertionError("Staff User creation should not be called.");
+        }
+
+        @Override
         public void markEmailVerified(UUID userId, Instant verifiedAt) {
             throw new AssertionError("Email verification should not be called.");
         }

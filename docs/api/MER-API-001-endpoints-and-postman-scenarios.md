@@ -494,15 +494,33 @@ An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A supported code whose pro
 ```text
 GET /api/v1/admin/internal-users
 GET /api/v1/admin/internal-users/assignable-roles
+POST /api/v1/admin/internal-users
+POST /api/v1/admin/internal-users/{userId}/password-setup
 PUT /api/v1/admin/internal-users/{userId}/status
 PUT /api/v1/admin/internal-users/{userId}/roles/{roleCode}
 ```
 
-All four operations require exact `identity:user:manage`. A role name, permission prefix, `admin:config`, or generic Staff authentication does not authorize them.
+All six operations require exact `identity:user:manage`. A role name, permission prefix, `admin:config`, or generic Staff authentication does not authorize them.
 
 The User list contains only internal Users whose `userType` is `STAFF` and whose Customer association is absent, ordered by normalized email and stable User ID. Each purpose-limited response contains `userId`, `email`, `displayName`, User `status`, and ordered `assignedRoleCodes`. It excludes password and recovery state, failed-login or temporary-lock state, refresh/access-token metadata, authorization version, and Customer identity. Missing IDs and non-Staff targets share `404 INTERNAL_USER_NOT_FOUND` so the contract does not reveal whether an arbitrary Customer User exists.
 
 Assignable-role discovery returns `code` and `name` in role-code order for the predefined backend-owned internal roles. `CUSTOMER` is excluded. An unknown role or any nonassignable role code returns `404 INTERNAL_ROLE_NOT_FOUND`; the API does not expose role, permission, or role-to-permission editing.
+
+Creation accepts a normalized-email candidate, a trimmed display name, and one or more predefined Staff role codes:
+
+```json
+{
+  "email": "deni.loanofficer@meridian.local",
+  "displayName": "Deni Loan Officer",
+  "roleCodes": ["LOAN_OFFICER"]
+}
+```
+
+Identity trims and lowercases email, rejects an email belonging to any User with `409 EMAIL_ALREADY_REGISTERED`, and relies on the same database uniqueness constraint for concurrent creation. It validates every role against the assignable non-Customer set. The new User is `STAFF`, `ACTIVE`, has no Customer association, starts with authorization version zero, and receives exactly the selected roles. Administrative Staff provisioning marks the email verified as Identity account-security state; it does not run Customer registration or create a Customer. The response is the same safe Internal User projection as discovery. The request and response contain no administrator-selected password, password hash, or raw setup token.
+
+Identity stores an unguessable placeholder password hash and a one-time digest-only password-reset token in the creation transaction with role assignments and actor-bound creation/role-grant audit. After commit, Notification emails a fragment link to Internal Web `/set-password#token=...`. The Staff member uses the existing anonymous `POST /api/v1/auth/password-reset/confirm` contract to choose a 12–72 character password. The token is consumed once, and active refresh sessions are revoked. If mail delivery fails, the User remains created. An administrator can explicitly request `POST /{userId}/password-setup` to replace the active token and send a fresh link after commit; it returns no credential. The target must be active, verified internal Staff. Customer, missing, and associated Users return `404 INTERNAL_USER_NOT_FOUND`; inactive Staff return `409 INTERNAL_USER_NOT_ACTIVE`. Clients do not automatically retry either POST after an unknown transport result.
+
+`DISABLED` is administrative deprovisioning. The API provides no hard delete because durable lending and audit evidence may reference the Staff User ID.
 
 Status uses an explicit existing Identity target state:
 
