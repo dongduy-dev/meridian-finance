@@ -61,7 +61,7 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
             assertEquals(columnsBefore, columns(schema));
             assertEquals(indexesBefore, indexes(schema));
             assertEquals(constraintsBefore, unrelatedConstraints(schema));
-            assertAllKnownActionsAccepted(schema);
+            assertThroughV32ActionsAccepted(schema);
         } finally {
             dropSchema(schema);
         }
@@ -203,6 +203,7 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                     && action != BusinessAuditAction.LOAN_PRODUCT_ACTIVATED
                     && action != BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
                     && action != BusinessAuditAction.IDENTITY_USER_CREATED
+                    && action != BusinessAuditAction.IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED
                     && action != BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
                     && action != BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
@@ -213,7 +214,7 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                 insertAuditEvent(schema, action.name());
             }
         }
-        assertV55IdentityActionsRejected(schema);
+        assertLaterIdentityActionsRejected(schema);
     }
 
     private void assertV32ActionsRejected(String schema) {
@@ -227,7 +228,7 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
         ));
     }
 
-    private void assertAllKnownActionsAccepted(String schema) {
+    private void assertThroughV32ActionsAccepted(String schema) {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
             if (action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
                     || action == BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED
@@ -246,6 +247,7 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                     || action == BusinessAuditAction.LOAN_PRODUCT_ACTIVATED
                     || action == BusinessAuditAction.LOAN_PRODUCT_DEACTIVATED
                     || action == BusinessAuditAction.IDENTITY_USER_CREATED
+                    || action == BusinessAuditAction.IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED
                     || action == BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED
                     || action == BusinessAuditAction.IDENTITY_USER_ROLE_ASSIGNED
                     || action == BusinessAuditAction.IDENTITY_USER_ROLE_REMOVED
@@ -261,14 +263,17 @@ class RepaymentServicingAuditV32PostgreSqlIntegrationTest {
                 schema,
                 BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED.name()
         ));
-        assertV55IdentityActionsRejected(schema);
+        assertLaterIdentityActionsRejected(schema);
         assertThrows(DataAccessException.class,
                 () -> insertAuditEvent(schema, "UNKNOWN_AUDIT_ACTION"));
     }
 
-    private void assertV55IdentityActionsRejected(String schema) {
+    private void assertLaterIdentityActionsRejected(String schema) {
         assertThrows(DataAccessException.class, () -> insertAuditEvent(
                 schema, BusinessAuditAction.IDENTITY_USER_CREATED.name()
+        ));
+        assertThrows(DataAccessException.class, () -> insertAuditEvent(
+                schema, BusinessAuditAction.IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED.name()
         ));
         assertThrows(DataAccessException.class, () -> insertAuditEvent(
                 schema, BusinessAuditAction.IDENTITY_USER_STATUS_CHANGED.name()
