@@ -47,6 +47,7 @@ public class QueryStaffDisbursementWorkService implements QueryStaffDisbursement
     private final ManualDisbursementRepository manualDisbursements;
     private final RepaymentScheduleRepository repaymentSchedules;
     private final LoanContractMapper contractMapper;
+    private final AccountingCaseContextComposer accountingContext;
     private final CurrentUserProvider currentUserProvider;
 
     public QueryStaffDisbursementWorkService(
@@ -56,6 +57,7 @@ public class QueryStaffDisbursementWorkService implements QueryStaffDisbursement
             ManualDisbursementRepository manualDisbursements,
             RepaymentScheduleRepository repaymentSchedules,
             LoanContractMapper contractMapper,
+            AccountingCaseContextComposer accountingContext,
             CurrentUserProvider currentUserProvider
     ) {
         this.applications = applications;
@@ -64,6 +66,7 @@ public class QueryStaffDisbursementWorkService implements QueryStaffDisbursement
         this.manualDisbursements = manualDisbursements;
         this.repaymentSchedules = repaymentSchedules;
         this.contractMapper = contractMapper;
+        this.accountingContext = accountingContext;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -103,14 +106,14 @@ public class QueryStaffDisbursementWorkService implements QueryStaffDisbursement
         }
 
         LoanContract contract = requireReadyContract(application);
-        StaffDisbursementActivationDto activation;
+        CompletedActivation completed;
         WorkStage stage;
         if (application.status() == LoanApplicationStatus.DISBURSEMENT_PENDING) {
             requireNoActivationEvidence(application.id());
-            activation = null;
+            completed = null;
             stage = WorkStage.READY_TO_DISBURSE;
         } else {
-            activation = requireCompletedActivation(application, contract);
+            completed = requireCompletedActivation(application, contract);
             stage = WorkStage.DISBURSED;
         }
 
@@ -124,8 +127,10 @@ public class QueryStaffDisbursementWorkService implements QueryStaffDisbursement
                 application.status().name(),
                 application.submittedAt(),
                 contractMapper.toDto(contract),
-                activation,
-                stage.name()
+                completed == null ? null : completed.activation(),
+                stage.name(),
+                accountingContext.compose(application, contract,
+                        completed == null ? null : completed.disbursement())
         );
     }
 
@@ -171,7 +176,7 @@ public class QueryStaffDisbursementWorkService implements QueryStaffDisbursement
         }
     }
 
-    private StaffDisbursementActivationDto requireCompletedActivation(
+    private CompletedActivation requireCompletedActivation(
             LoanApplication application,
             LoanContract contract
     ) {
@@ -183,7 +188,7 @@ public class QueryStaffDisbursementWorkService implements QueryStaffDisbursement
         RepaymentSchedule schedule = repaymentSchedules.findByLoanApplicationId(application.id())
                 .orElseThrow(QueryStaffDisbursementWorkService::systemConflict);
         validateCompletedIdentity(application, contract, account, disbursement, schedule);
-        return new StaffDisbursementActivationDto(
+        return new CompletedActivation(new StaffDisbursementActivationDto(
                 account.id(),
                 account.accountNumber(),
                 account.status().name(),
@@ -197,7 +202,7 @@ public class QueryStaffDisbursementWorkService implements QueryStaffDisbursement
                 schedule.items().stream()
                         .map(QueryStaffDisbursementWorkService::toScheduleItem)
                         .toList()
-        );
+        ), disbursement);
     }
 
     private static void validateCompletedIdentity(
@@ -313,5 +318,8 @@ public class QueryStaffDisbursementWorkService implements QueryStaffDisbursement
     private enum WorkStage {
         READY_TO_DISBURSE,
         DISBURSED
+    }
+
+    private record CompletedActivation(StaffDisbursementActivationDto activation, ManualDisbursement disbursement) {
     }
 }

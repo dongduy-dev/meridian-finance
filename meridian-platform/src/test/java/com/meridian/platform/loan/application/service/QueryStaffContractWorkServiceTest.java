@@ -47,6 +47,7 @@ class QueryStaffContractWorkServiceTest {
     @Mock LoanContractRepository contracts;
     @Mock LoanAssistedActionEvidencePort assistedActionEvidence;
     @Mock QueryContractReadinessUseCase readiness;
+    @Mock AccountingCaseContextComposer accountingContext;
     @Mock CurrentUserProvider currentUserProvider;
 
     private QueryStaffContractWorkService service;
@@ -59,6 +60,7 @@ class QueryStaffContractWorkServiceTest {
                 assistedActionEvidence,
                 readiness,
                 new LoanContractMapper(),
+                accountingContext,
                 currentUserProvider
         );
     }

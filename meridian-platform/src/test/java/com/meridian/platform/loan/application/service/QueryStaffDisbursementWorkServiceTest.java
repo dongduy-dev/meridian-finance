@@ -54,6 +54,7 @@ class QueryStaffDisbursementWorkServiceTest {
     @Mock LoanAccountRepository loanAccounts;
     @Mock ManualDisbursementRepository manualDisbursements;
     @Mock RepaymentScheduleRepository repaymentSchedules;
+    @Mock AccountingCaseContextComposer accountingContext;
     @Mock CurrentUserProvider currentUserProvider;
 
     private QueryStaffDisbursementWorkService service;
@@ -67,6 +68,7 @@ class QueryStaffDisbursementWorkServiceTest {
                 manualDisbursements,
                 repaymentSchedules,
                 new LoanContractMapper(),
+                accountingContext,
                 currentUserProvider
         );
     }

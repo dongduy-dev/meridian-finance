@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.in.web;
 
 import com.meridian.platform.loan.application.dto.ContractReadinessDto;
+import com.meridian.platform.loan.application.dto.AccountingCaseContextDto;
 import com.meridian.platform.loan.application.dto.LoanContractBankAccountDto;
 import com.meridian.platform.loan.application.dto.LoanContractDto;
 import com.meridian.platform.loan.application.dto.LoanContractRepaymentItemDto;
@@ -57,6 +58,14 @@ class StaffContractWorkControllerTest {
                         .value("****7890"))
                 .andExpect(jsonPath("$.currentContract.repaymentPreview[0].totalDue").value(1100.00))
                 .andExpect(jsonPath("$.readiness.calculationSemantics").value("POINT_IN_TIME_ADVISORY"))
+                .andExpect(jsonPath("$.accountingContext.customer.customerNumber").value("CUS-001"))
+                .andExpect(jsonPath("$.accountingContext.customer.fullName").value("Ari Customer"))
+                .andExpect(jsonPath("$.accountingContext.handoff.approved.actor.displayName").value("Mina Accounting"))
+                .andExpect(jsonPath("$.accountingContext.handoff.customerAcknowledgment.mode")
+                        .value("CUSTOMER_SELF_SERVICE"))
+                .andExpect(jsonPath("$.accountingContext.handoff.customerAcknowledgment.recordedBy").isEmpty())
+                .andExpect(jsonPath("$.accountingContext.customer.phoneNumber").doesNotExist())
+                .andExpect(jsonPath("$.accountingContext.customer.identityReference").doesNotExist())
                 .andExpect(jsonPath("$.customerId").doesNotExist())
                 .andExpect(jsonPath("$.currentContract.fullAccountNumber").doesNotExist())
                 .andExpect(jsonPath("$.currentContract.preparationRequestId").doesNotExist())
@@ -80,13 +89,28 @@ class StaffContractWorkControllerTest {
                     "UCL-20260907-000001",
                     "UNSECURED_CONSUMER_LOAN",
                     "UNSECURED",
+                    "CUSTOMER_DIGITAL",
                     new BigDecimal("1000.00"),
                     1,
                     "CONTRACT_PENDING",
                     LocalDateTime.of(2026, 9, 7, 8, 0),
                     contract(),
                     readiness(),
-                    "READY_TO_CONFIRM"
+                    null,
+                    "READY_TO_CONFIRM",
+                    new AccountingCaseContextDto(
+                            new AccountingCaseContextDto.CustomerDto("CUS-001", "Ari Customer"),
+                            new AccountingCaseContextDto.HandoffDto(
+                                    new AccountingCaseContextDto.ActorEventDto(
+                                            new AccountingCaseContextDto.StaffActorDto(
+                                                    UUID.randomUUID(), "Mina Accounting", "mina@meridian.local"),
+                                            LocalDateTime.of(2026, 9, 7, 7, 0)),
+                                    null,
+                                    new AccountingCaseContextDto.AcknowledgmentDto(
+                                            "CUSTOMER_SELF_SERVICE", null,
+                                            LocalDateTime.of(2026, 9, 7, 8, 30), null),
+                                    null,
+                                    null))
             );
         }
 

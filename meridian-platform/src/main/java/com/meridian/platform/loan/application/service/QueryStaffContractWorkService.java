@@ -39,6 +39,7 @@ public class QueryStaffContractWorkService implements QueryStaffContractWorkUseC
     private final LoanAssistedActionEvidencePort assistedActionEvidence;
     private final QueryContractReadinessUseCase readiness;
     private final LoanContractMapper contractMapper;
+    private final AccountingCaseContextComposer accountingContext;
     private final CurrentUserProvider currentUserProvider;
 
     public QueryStaffContractWorkService(
@@ -47,6 +48,7 @@ public class QueryStaffContractWorkService implements QueryStaffContractWorkUseC
             LoanAssistedActionEvidencePort assistedActionEvidence,
             QueryContractReadinessUseCase readiness,
             LoanContractMapper contractMapper,
+            AccountingCaseContextComposer accountingContext,
             CurrentUserProvider currentUserProvider
     ) {
         this.applications = applications;
@@ -54,6 +56,7 @@ public class QueryStaffContractWorkService implements QueryStaffContractWorkUseC
         this.assistedActionEvidence = assistedActionEvidence;
         this.readiness = readiness;
         this.contractMapper = contractMapper;
+        this.accountingContext = accountingContext;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -105,7 +108,8 @@ public class QueryStaffContractWorkService implements QueryStaffContractWorkUseC
                 projection.contract(),
                 projection.readiness(),
                 projection.assistedAcknowledgmentEvidence(),
-                projection.stage().name()
+                projection.stage().name(),
+                accountingContext.compose(application, projection.current(), null)
         );
     }
 
@@ -140,6 +144,7 @@ public class QueryStaffContractWorkService implements QueryStaffContractWorkUseC
         validateReadinessIdentity(application, current, readinessSnapshot);
         WorkStage stage = classify(application, current, readinessSnapshot);
         return new Projection(
+                current,
                 current == null ? null : contractMapper.toDto(current),
                 contractMapper.toDto(readinessSnapshot),
                 current == null || !includeAssistedEvidence ? null : assistedActionEvidence.findContractEvidence(
@@ -264,6 +269,7 @@ public class QueryStaffContractWorkService implements QueryStaffContractWorkUseC
     }
 
     private record Projection(
+            LoanContract current,
             LoanContractDto contract,
             ContractReadinessDto readiness,
             AssistedActionEvidenceMetadataDto assistedAcknowledgmentEvidence,

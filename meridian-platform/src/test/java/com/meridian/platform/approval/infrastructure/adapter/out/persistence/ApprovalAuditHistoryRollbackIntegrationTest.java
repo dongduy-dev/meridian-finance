@@ -6,6 +6,8 @@ import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
 import com.meridian.platform.approval.application.dto.ReviewRecommendationRequest;
 import com.meridian.platform.approval.application.service.SubmitApprovalDecisionService;
 import com.meridian.platform.approval.application.service.SubmitReviewRecommendationService;
+import com.meridian.platform.approval.application.port.in.QueryApprovedOfferApprovalProvenanceUseCase;
+import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
 import com.meridian.platform.approval.domain.model.ApprovalDecisionAction;
 import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
 import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
@@ -27,6 +29,7 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -55,6 +58,12 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
     @Autowired
     private SubmitReviewRecommendationService submitReviewRecommendationService;
 
+    @Autowired
+    private QueryApprovedOfferApprovalProvenanceUseCase approvalProvenance;
+
+    @Autowired
+    private ApprovedOfferRepository approvedOffers;
+
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.flyway.schemas", () -> TEST_SCHEMA);
@@ -66,6 +75,23 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    @Transactional
+    void persistedApprovalMatchesTheExactOfferGenerationTimestamp() {
+        UUID loanApplicationId = insertApprovalPendingUclApplication();
+        UUID recommendationId = insertReviewRecommendation(loanApplicationId);
+        authenticateApprover();
+
+        submitApprovalDecisionService.submitApprovalDecision(loanApplicationId,
+                new ApprovalDecisionRequest(ApprovalDecisionAction.APPROVE, null, null,
+                        recommendationId, activeCycleId(loanApplicationId)));
+
+        var offer = approvedOffers.findByLoanApplicationId(loanApplicationId).orElseThrow();
+        var provenance = approvalProvenance.requireExactApproval(loanApplicationId, offer.generatedAt());
+        assertEquals(APPROVER_USER_ID, provenance.approverUserId());
+        assertEquals(offer.generatedAt(), provenance.approvedAt());
     }
 
     @Test

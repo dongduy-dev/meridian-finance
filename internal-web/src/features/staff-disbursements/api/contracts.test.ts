@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contractFixture } from '@/features/staff-contracts/api/contracts.test'
+import { accountingContextFixture, actorFixture, contractFixture } from '@/features/staff-contracts/api/contracts.test'
 import {
   disbursementDestinationRevealSchema,
   manualDisbursementConfirmationSchema,
@@ -24,6 +24,13 @@ export function pendingCase(overrides: Record<string, unknown> = {}) {
     submittedAt: '2026-09-10T07:00:00',
     currentContract: contractFixture('READY_FOR_DISBURSEMENT'),
     activation: null,
+    accountingContext: {
+      ...accountingContextFixture(),
+      handoff: {
+        ...accountingContextFixture().handoff,
+        readinessConfirmed: { actor: actorFixture, at: '2026-09-07T09:00:00' },
+      },
+    },
     workStage: 'READY_TO_DISBURSE',
     ...overrides,
   }
@@ -54,6 +61,13 @@ export function disbursedCase() {
     applicationStatus: 'DISBURSED',
     activation: activationFixture(),
     workStage: 'DISBURSED',
+    accountingContext: {
+      ...pendingCase().accountingContext,
+      handoff: {
+        ...pendingCase().accountingContext.handoff,
+        disbursementConfirmed: { actor: actorFixture, at: '2026-09-10T10:00:00' },
+      },
+    },
   })
 }
 
