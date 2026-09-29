@@ -112,6 +112,18 @@
                          "type":  "string"
                      },
                      {
+                         "key":  "internalUserCreationEmail",
+                         "value":  "",
+                         "type":  "string",
+                         "description":  "Generated fictional Staff email for the Internal User creation scenario; cleared after password-setup resend."
+                     },
+                     {
+                         "key":  "internalUserCreatedId",
+                         "value":  "",
+                         "type":  "string",
+                         "description":  "New Staff User ID for password-setup resend; separate from the seeded internalUserTargetId and cleared after resend."
+                     },
+                     {
                          "key":  "accessToken",
                          "value":  "",
                          "type":  "string",
@@ -1791,6 +1803,53 @@
                                          ]
                                      }
                                  }
+                             ]
+                         },
+                         {
+                             "name": "POST /api/v1/admin/internal-users - create fictional Staff User",
+                             "request": {
+                                 "method": "POST",
+                                 "header": [{"key": "Content-Type", "value": "application/json", "type": "text"}],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users",
+                                 "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{backOfficeAccessToken}}", "type": "string"}]},
+                                 "description": "Creates a new fictional Staff User with the existing LOAN_OFFICER role. The User remains durable; no hard-delete cleanup exists.",
+                                 "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{internalUserCreationEmail}}\",\n  \"displayName\": \"Postman Staff User\",\n  \"roleCodes\": [\"LOAN_OFFICER\"]\n}", "options": {"raw": {"language": "json"}}}
+                             },
+                             "response": [],
+                             "event": [
+                                 {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+                                     "pm.collectionVariables.unset(\"internalUserCreatedId\");",
+                                     "const suffix = pm.variables.replaceIn(\"{{$guid}}\").replace(/-/g, \"\");",
+                                     "pm.collectionVariables.set(\"internalUserCreationEmail\", `postman.staff.${suffix}@example.com`);"
+                                 ]}},
+                                 {"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                     "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                     "const json = pm.response.json();",
+                                     "pm.test(\"Created Staff User has the requested identity and role\", () => { pm.expect(json.email).to.eql(pm.collectionVariables.get(\"internalUserCreationEmail\")); pm.expect(json.displayName).to.eql(\"Postman Staff User\"); pm.expect(json.status).to.eql(\"ACTIVE\"); pm.expect(json.assignedRoleCodes).to.eql([\"LOAN_OFFICER\"]); pm.expect(json.userId).to.be.a(\"string\").and.not.empty; });",
+                                     "pm.test(\"Response is only the safe Internal User projection\", () => { pm.expect(json).to.have.all.keys(\"userId\", \"email\", \"displayName\", \"status\", \"assignedRoleCodes\"); [\"password\", \"passwordHash\", \"temporaryPassword\", \"setupToken\", \"token\", \"failedLoginAttempts\", \"authorizationVersion\", \"customerId\", \"refreshToken\", \"credentialHash\"].forEach(key => pm.expect(json).not.to.have.property(key)); });",
+                                     "if (pm.response.code === 200 && json.userId) { pm.collectionVariables.set(\"internalUserCreatedId\", json.userId); }"
+                                 ]}}
+                             ]
+                         },
+                         {
+                             "name": "POST /api/v1/admin/internal-users/{userId}/password-setup - resend created Staff setup",
+                             "request": {
+                                 "method": "POST",
+                                 "header": [],
+                                 "url": "{{baseUrl}}/api/v1/admin/internal-users/{{internalUserCreatedId}}/password-setup",
+                                 "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{backOfficeAccessToken}}", "type": "string"}]},
+                                 "description": "Requests a fresh setup email for the newly created Staff User. No raw setup token is returned or stored in collection variables."
+                             },
+                             "response": [],
+                             "event": [
+                                 {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+                                     "if (!pm.collectionVariables.get(\"internalUserCreatedId\")) { pm.execution.skipRequest(); }"
+                                 ]}},
+                                 {"listen": "test", "script": {"type": "text/javascript", "exec": [
+                                     "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                     "pm.test(\"Resend exposes no credential or setup token\", () => pm.expect(pm.response.text()).to.be.empty);",
+                                     "if (pm.response.code === 200 && pm.response.text() === \"\") { pm.collectionVariables.unset(\"internalUserCreatedId\"); pm.collectionVariables.unset(\"internalUserCreationEmail\"); }"
+                                 ]}}
                              ]
                          },
                          {
