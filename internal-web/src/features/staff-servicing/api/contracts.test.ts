@@ -9,6 +9,7 @@ import {
   approvedSettlementResultSchema,
   approvedSettlementEvidenceSchema,
   closedLoanAccountResultSchema,
+  staffServicingProvenanceSchema,
 } from './contracts'
 
 export const applicationId = '11111111-1111-4111-8111-111111111111'
@@ -248,11 +249,44 @@ export function historyFixture() {
   return { page: 0, size: 20, totalElements: 1, totalPages: 1, items: [item] }
 }
 
+export function provenanceFixture(status: 'ACTIVE' | 'SETTLED' | 'CLOSED' = 'ACTIVE') {
+  const staff = { userId: '77777777-7777-4777-8777-777777777777',
+    displayName: 'Mina Accounting', email: 'mina@meridian.local' }
+  const actor = { type: 'USER', staff }
+  return {
+    loanApplicationId: applicationId,
+    loanAccountId: accountId,
+    originatingDisbursement: { actor, at: '2026-09-01T10:00:00' },
+    repaymentHistory: {
+      ...historyFixture(),
+      items: historyFixture().items.map((financial) => ({ financial,
+        transactionType: 'REPAYMENT', actor })),
+    },
+    statusHistory: [
+      { sequenceNumber: 1, action: 'ACTIVATION_INITIALIZED', fromStatus: null,
+        toStatus: 'ACTIVE', actor, servicingEvaluationDate: '2026-09-01',
+        occurredAt: '2026-09-01T10:00:00' },
+      { sequenceNumber: 2, action: 'OVERDUE_EVALUATED', fromStatus: 'ACTIVE',
+        toStatus: 'OVERDUE', actor: { type: 'SYSTEM', staff: null },
+        servicingEvaluationDate: '2026-09-10', occurredAt: '2026-09-10T09:00:00' },
+      { sequenceNumber: 3, action: status === 'ACTIVE' ? 'REPAYMENT_RECORDED' : 'APPROVED_SETTLEMENT',
+        fromStatus: 'OVERDUE', toStatus: status === 'ACTIVE' ? 'ACTIVE' : 'SETTLED', actor,
+        servicingEvaluationDate: '2026-09-10', occurredAt: '2026-09-10T10:00:00' },
+      ...(status === 'CLOSED' ? [{ sequenceNumber: 4, action: 'ADMINISTRATIVE_CLOSURE',
+        fromStatus: 'SETTLED', toStatus: 'CLOSED', actor,
+        servicingEvaluationDate: '2026-09-10', occurredAt: '2026-09-10T11:00:00' }] : []),
+    ],
+    settlement: status === 'ACTIVE' ? null : { actor, at: '2026-09-10T10:00:00' },
+    closure: status === 'CLOSED' ? { actor, at: '2026-09-10T11:00:00' } : null,
+  }
+}
+
 describe('Staff servicing contracts', () => {
   it('parses safe queue, account, history, and repayment outcome contracts', () => {
     expect(staffServicingWorkPageSchema.parse(queueFixture()).items).toHaveLength(1)
     expect(loanAccountSchema.parse(accountFixture()).disbursementDestination.maskedAccountNumber).toBe('********')
     expect(repaymentHistoryPageSchema.parse(historyFixture()).items).toHaveLength(1)
+    expect(staffServicingProvenanceSchema.parse(provenanceFixture()).statusHistory).toHaveLength(3)
     expect(recordRepaymentResultSchema.parse(repaymentResultFixture()).idempotentReplay).toBe(false)
     expect(staffSettlementWorkPageSchema.parse(settlementQueueFixture()).items).toHaveLength(1)
     expect(staffClosureWorkPageSchema.parse(closureQueueFixture()).items[0]?.payoffProvenance)

@@ -3,6 +3,7 @@ import {
   loanAccountSchema,
   recordRepaymentResultSchema,
   repaymentHistoryPageSchema,
+  staffServicingProvenanceSchema,
   staffServicingWorkPageSchema,
   staffSettlementWorkPageSchema,
   staffClosureWorkPageSchema,
@@ -13,6 +14,7 @@ import {
   type RecordRepaymentRequest,
   type RecordRepaymentResult,
   type RepaymentHistoryPage,
+  type StaffServicingProvenance,
   type StaffServicingWorkFilters,
   type StaffServicingWorkPage,
   type StaffSettlementWorkPage,
@@ -56,6 +58,16 @@ export async function getRepaymentHistory(
     `/loan-applications/${loanApplicationId}/repayments?${search}`,
   )
   return repaymentHistoryPageSchema.parse(payload)
+}
+
+export async function getStaffServicingProvenance(
+  manager: AuthSessionManager, loanApplicationId: string, page: number, size: number,
+): Promise<StaffServicingProvenance> {
+  const search = new URLSearchParams({ page: String(page), size: String(size) })
+  const payload = await manager.protectedRequest<unknown>(
+    `/staff/loan-applications/${loanApplicationId}/servicing-provenance?${search}`,
+  )
+  return staffServicingProvenanceSchema.parse(payload)
 }
 
 export async function recordRepayment(

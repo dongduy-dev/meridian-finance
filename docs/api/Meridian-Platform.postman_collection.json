@@ -8444,6 +8444,43 @@
                                                 ]
                                   },
                                   {
+                                      "name":  "Staff reads LoanAccount servicing provenance",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/servicing-provenance?page=0\u0026size=20",
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{accountingAccessToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "description":  "Staff-only LoanAccount origin, USER/SYSTEM status timeline, and exact financial repayment actor attribution."
+                                                  },
+                                      "response":  [
+
+                                                   ],
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\"Status is 200\", () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "pm.test(\"Exact application and account provenance\", () =\u003e { pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"loanApplicationId\")); pm.expect(json.originatingDisbursement.actor.type).to.eql(\"USER\"); pm.expect(json.repaymentHistory.items).to.be.an(\"array\"); });"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
                                       "name":  "Conceal cross-Customer repayment history",
                                       "request":  {
                                                       "method":  "GET",
