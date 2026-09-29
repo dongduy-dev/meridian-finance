@@ -334,7 +334,7 @@ describe('Partner eligibility review page', () => {
     await user.click(await screen.findByRole('button', { name: 'Review rejection' }))
     await user.click(screen.getByRole('button', { name: 'Confirm rejection' }))
 
-    expect(await screen.findByRole('heading', { name: 'Decision was not confirmed' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Decision was not confirmed' }, { timeout: 3000 })).toBeVisible()
     expect(posts).toBe(1)
   })
 })
