@@ -57,12 +57,17 @@ class StaffContractWorkSecurityTest {
         )) {
             mockMvc.perform(get("/api/v1/staff/contract-work").with(authority(denied)))
                     .andExpect(status().isForbidden());
+            mockMvc.perform(get("/api/v1/staff/loan-applications/{loanApplicationId}/contract", APPLICATION_ID)
+                            .with(authority(denied)))
+                    .andExpect(status().isForbidden());
         }
     }
 
     @Test
     void anonymousRequestsAreUnauthorized() throws Exception {
         mockMvc.perform(get("/api/v1/staff/contract-work"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/staff/loan-applications/{loanApplicationId}/contract", APPLICATION_ID))
                 .andExpect(status().isUnauthorized());
     }
 

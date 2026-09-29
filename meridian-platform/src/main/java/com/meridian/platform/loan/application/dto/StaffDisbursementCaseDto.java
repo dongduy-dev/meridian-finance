@@ -15,6 +15,7 @@ public record StaffDisbursementCaseDto(
         LocalDateTime submittedAt,
         LoanContractDto currentContract,
         StaffDisbursementActivationDto activation,
-        String workStage
+        String workStage,
+        AccountingCaseContextDto accountingContext
 ) {
 }

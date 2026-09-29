@@ -212,7 +212,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 | Current contract | `GET /api/v1/loan-applications/{loanApplicationId}/contracts/current` | `loan:contract:read` | Known application only; masked destination |
 | Advisory readiness | `GET /api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness` | `loan:contract:read` | Point-in-time result; optional expected version |
 | Staff contract queue | `GET /api/v1/staff/contract-work?productCode={productCode}&page=0&size=25` | Staff `loan:contract:read` plus Accounting Officer role | Exact `CONTRACT_PENDING` membership, safe contract/readiness summary, product filter, and deterministic page envelope |
-| Staff contract case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/contract` | Staff `loan:contract:read` plus Accounting Officer role | `CONTRACT_PENDING` or `DISBURSEMENT_PENDING`; origination channel, masked contract, canonical readiness, current assisted acknowledgment evidence, and backend-derived work stage |
+| Staff contract case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/contract` | Staff `loan:contract:read` plus Accounting Officer role | `CONTRACT_PENDING` or `DISBURSEMENT_PENDING`; origination channel, masked contract, canonical readiness, current assisted acknowledgment evidence, purpose-limited Customer and handoff context, and backend-derived work stage |
 | LoanAccount detail | `GET /api/v1/loan-applications/{loanApplicationId}/loan-account` | `loan:read` | Known application only; safe terms, schedule, and servicing state |
 | Repayment history | `GET /api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read` | Known application only; immutable paged outcomes, no external references |
 
@@ -1085,6 +1085,8 @@ Accounting operations use the current masked contract as their authoritative sta
 
 The workspace presents:
 
+- Customer number and full name from the Accounting case context;
+- Approval, contract preparation, and readiness Staff actors and timestamps from Loan's handoff projection, plus Customer self-service or Staff-recorded acknowledgment provenance without treating the Customer as a Staff actor;
 - safe contract reference, ID, version, and status;
 - accepted immutable terms and provisional repayment items returned by the contract;
 - safe bank and account-holder facts with masked account number;
@@ -1122,12 +1124,15 @@ Disbursement is manual confirmation of an external transfer, not transfer initia
 The dedicated page contains:
 
 1. current ready contract and exact version;
-2. safe amount and schedule summary returned by the backend;
-3. explicit local-memory destination reveal;
-4. external transfer reference, disbursement value date, and first repayment date inputs;
-5. confirmation summary;
-6. exact request operation state;
-7. reconciled activation result and final schedule.
+2. purpose-limited Customer and handoff context, including the completed disbursement confirmer only after activation;
+3. safe amount and schedule summary returned by the backend;
+4. explicit local-memory destination reveal;
+5. external transfer reference, disbursement value date, and first repayment date inputs;
+6. confirmation summary;
+7. exact request operation state;
+8. reconciled activation result and final schedule.
+
+The handoff panel distinguishes Customer self-service acknowledgment from Staff-recorded Customer evidence. For the Staff-recorded branch, it labels the immutable evidence version against the exact current contract version. It shows no later-stage actor before that event exists. Staff Web renders the Loan case projection and does not infer actors from browser state, grant broad Customer access, or add Approval controls.
 
 The command body must not acquire Customer, product, destination, amount, pricing, term, limit, account, or schedule fields. Those remain backend-derived from the ready contract.
 

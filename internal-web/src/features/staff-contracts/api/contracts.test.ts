@@ -4,6 +4,28 @@ import { staffContractCaseSchema, staffContractWorkPageSchema } from './contract
 const applicationId = '11111111-1111-4111-8111-111111111111'
 const contractId = '22222222-2222-4222-8222-222222222222'
 
+export const actorFixture = {
+  userId: '66666666-6666-4666-8666-666666666666',
+  displayName: 'Mina Accounting',
+  email: 'mina@meridian.local',
+}
+
+export function accountingContextFixture() {
+  return {
+    customer: { customerNumber: 'CUS-000001', fullName: 'Ari Customer' },
+    handoff: {
+      approved: { actor: actorFixture, at: '2026-09-07T07:30:00' },
+      contractPrepared: { actor: actorFixture, at: '2026-09-07T08:00:00' },
+      customerAcknowledgment: {
+        mode: 'CUSTOMER_SELF_SERVICE', recordedBy: null,
+        at: '2026-09-07T08:30:00', evidenceDocumentVersionId: null,
+      },
+      readinessConfirmed: null,
+      disbursementConfirmed: null,
+    },
+  }
+}
+
 export function contractFixture(status = 'ACKNOWLEDGED') {
   return {
     contractId,
@@ -56,6 +78,7 @@ export function caseFixture(overrides: Record<string, unknown> = {}) {
       recomputedDuringConfirmation: true,
     },
     assistedAcknowledgmentEvidence: null,
+    accountingContext: accountingContextFixture(),
     workStage: 'READY_TO_CONFIRM',
     ...overrides,
   }

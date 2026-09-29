@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.in.web;
 
 import com.meridian.platform.loan.application.dto.LoanContractBankAccountDto;
+import com.meridian.platform.loan.application.dto.AccountingCaseContextDto;
 import com.meridian.platform.loan.application.dto.LoanContractDto;
 import com.meridian.platform.loan.application.dto.LoanContractRepaymentItemDto;
 import com.meridian.platform.loan.application.dto.StaffDisbursementActivationDto;
@@ -66,6 +67,10 @@ class StaffDisbursementWorkControllerTest {
                 .andExpect(jsonPath("$.activation.loanAccountId").value(ACCOUNT_ID.toString()))
                 .andExpect(jsonPath("$.activation.scheduleType").value("FINAL"))
                 .andExpect(jsonPath("$.activation.scheduleItems[0].dueDate").value("2026-10-10"))
+                .andExpect(jsonPath("$.accountingContext.customer.customerNumber").value("CUS-001"))
+                .andExpect(jsonPath("$.accountingContext.handoff.disbursementConfirmed.actor.displayName")
+                        .value("Mina Accounting"))
+                .andExpect(jsonPath("$.accountingContext.customer.phoneNumber").doesNotExist())
                 .andExpect(jsonPath("$.customerId").doesNotExist())
                 .andExpect(jsonPath("$.activation.externalTransferReference").doesNotExist())
                 .andExpect(jsonPath("$.activation.requestId").doesNotExist())
@@ -112,7 +117,19 @@ class StaffDisbursementWorkControllerTest {
                     LocalDateTime.of(2026, 9, 10, 8, 0),
                     contract(),
                     activation(),
-                    "DISBURSED"
+                    "DISBURSED",
+                    new AccountingCaseContextDto(
+                            new AccountingCaseContextDto.CustomerDto("CUS-001", "Ari Customer"),
+                            new AccountingCaseContextDto.HandoffDto(
+                                    new AccountingCaseContextDto.ActorEventDto(
+                                            new AccountingCaseContextDto.StaffActorDto(
+                                                    UUID.randomUUID(), "Mina Accounting", "mina@meridian.local"),
+                                            LocalDateTime.of(2026, 9, 10, 8, 0)),
+                                    null, null, null,
+                                    new AccountingCaseContextDto.ActorEventDto(
+                                            new AccountingCaseContextDto.StaffActorDto(
+                                                    UUID.randomUUID(), "Mina Accounting", "mina@meridian.local"),
+                                            LocalDateTime.of(2026, 9, 10, 10, 0))))
             );
         }
 

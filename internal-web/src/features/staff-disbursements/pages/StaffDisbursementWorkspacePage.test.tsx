@@ -95,6 +95,21 @@ describe('Staff disbursement workspace', () => {
     vi.restoreAllMocks()
   })
 
+  it('shows the Customer and handoff, adding the exact confirmer only for DISBURSED', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(pendingCase())
+    const pending = renderPage()
+    expect(await screen.findByText('CUS-000001')).toBeVisible()
+    expect(screen.getByText('Ari Customer')).toBeVisible()
+    expect(screen.getByText('Readiness confirmed by')).toBeVisible()
+    expect(screen.queryByText('Disbursement confirmed by')).not.toBeInTheDocument()
+    pending.unmount()
+
+    vi.mocked(api.apiRequest).mockResolvedValue(disbursedCase())
+    renderPage()
+    expect(await screen.findByText('Disbursement confirmed by')).toBeVisible()
+    expect(screen.getAllByText('Mina Accounting').length).toBeGreaterThan(0)
+  })
+
   it('renders masked authoritative evidence and only the three external-transfer inputs without revealing on load', async () => {
     vi.mocked(api.apiRequest).mockResolvedValue(pendingCase())
     renderPage()

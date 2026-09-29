@@ -11,7 +11,7 @@ import * as api from '@/lib/api'
 import { ApiError, NetworkError } from '@/lib/api'
 import { findUnresolvedOperation } from '@/lib/operation/unresolved-operation'
 import { createQueryClient } from '@/lib/query/query-client'
-import { caseFixture, contractFixture } from '../api/contracts.test'
+import { accountingContextFixture, actorFixture, caseFixture, contractFixture } from '../api/contracts.test'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
   const actual = await vi.importActual<typeof import('@/features/auth/api/auth-api')>('@/features/auth/api/auth-api')
@@ -45,6 +45,10 @@ function noContractCase() {
       blockerCodes: ['CURRENT_CONTRACT_MISSING'],
     },
     workStage: 'NEEDS_PREPARATION',
+    accountingContext: {
+      ...accountingContextFixture(),
+      handoff: { ...accountingContextFixture().handoff, contractPrepared: null, customerAcknowledgment: null },
+    },
   })
 }
 
@@ -60,6 +64,10 @@ function preparedCase(version = 1) {
       blockerCodes: ['ACKNOWLEDGMENT_MISSING'],
     },
     workStage: 'CUSTOMER_ACKNOWLEDGMENT_REQUIRED',
+    accountingContext: {
+      ...accountingContextFixture(),
+      handoff: { ...accountingContextFixture().handoff, customerAcknowledgment: null },
+    },
   })
 }
 
@@ -74,6 +82,13 @@ function confirmedCase() {
       blockerCodes: ['READINESS_ALREADY_CONFIRMED'],
     },
     workStage: 'READINESS_CONFIRMED',
+    accountingContext: {
+      ...accountingContextFixture(),
+      handoff: {
+        ...accountingContextFixture().handoff,
+        readinessConfirmed: { actor: actorFixture, at: '2026-09-07T09:00:00' },
+      },
+    },
   })
 }
 
@@ -83,7 +98,7 @@ function assistedPreparedCase() {
 
 function renderPage() {
   const router = createTestRouter([`/staff/applications/${applicationId}/contract`])
-  render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
+  return render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
 }
 
 function postCalls() {
@@ -97,6 +112,61 @@ describe('Staff contract workspace', () => {
     sessionStorage.clear()
     vi.mocked(authApi.refresh).mockResolvedValue(staff)
     vi.spyOn(crypto, 'randomUUID').mockReturnValue(operationId)
+  })
+
+  it('shows Customer and only the handoff stages that exist before preparation', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(noContractCase())
+    renderPage()
+
+    expect(await screen.findByText('CUS-000001')).toBeVisible()
+    expect(screen.getByText('Ari Customer')).toBeVisible()
+    expect(screen.getByText('Approved by')).toBeVisible()
+    expect(screen.queryByText('Contract prepared by')).not.toBeInTheDocument()
+    expect(screen.queryByText('Readiness confirmed by')).not.toBeInTheDocument()
+  })
+
+  it('distinguishes Customer self-service from Staff-recorded evidence and handles an unknown mode safely', async () => {
+    const digital = caseFixture()
+    vi.mocked(api.apiRequest).mockResolvedValue(digital)
+    const view = renderPage()
+    expect(await screen.findByText('Customer self-service')).toBeVisible()
+    expect(screen.queryByText(/Customer evidence recorded by/)).not.toBeInTheDocument()
+
+    view.unmount()
+    const assisted = {
+      ...digital,
+      accountingContext: {
+        ...digital.accountingContext,
+        handoff: {
+          ...digital.accountingContext.handoff,
+          customerAcknowledgment: {
+            mode: 'STAFF_RECORDED_CUSTOMER_EVIDENCE', recordedBy: actorFixture,
+            at: '2026-09-07T08:30:00',
+            evidenceDocumentVersionId: '77777777-7777-4777-8777-777777777777',
+          },
+        },
+      },
+    }
+    vi.mocked(api.apiRequest).mockResolvedValue(assisted)
+    const assistedView = renderPage()
+    expect(await screen.findByText(/Customer evidence recorded by Mina Accounting/)).toBeVisible()
+    expect(screen.getByText(/Immutable signed evidence for contract version 1/)).toBeVisible()
+
+    assistedView.unmount()
+    vi.mocked(api.apiRequest).mockResolvedValue({
+      ...assisted,
+      accountingContext: {
+        ...assisted.accountingContext,
+        handoff: {
+          ...assisted.accountingContext.handoff,
+          customerAcknowledgment: { ...assisted.accountingContext.handoff.customerAcknowledgment,
+            mode: 'UNKNOWN_MODE' },
+        },
+      },
+    })
+    renderPage()
+    expect(await screen.findByText('Acknowledgment mode unavailable')).toBeVisible()
+    expect(screen.queryByText(/Customer evidence recorded by/)).not.toBeInTheDocument()
   })
 
   it('renders immutable terms and only the masked destination without a Staff acknowledgment action', async () => {

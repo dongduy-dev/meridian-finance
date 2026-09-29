@@ -123,7 +123,7 @@ class LoanReviewStewardshipV65MigrationTest {
         assertTrue(migration.contains("assigned_loan_officer_user_id UUID"));
         assertTrue(migration.contains("fk_loan_review_cycles_assigned_loan_officer"));
         assertTrue(migration.contains("idx_loan_review_cycles_assigned_officer"));
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V67"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V68"));
         assertTrue(snapshot.contains("idx_loan_review_cycles_assigned_officer"));
     }
 

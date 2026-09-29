@@ -17,16 +17,7 @@ public record StaffContractCaseDto(
         LoanContractDto currentContract,
         ContractReadinessDto readiness,
         AssistedActionEvidenceMetadataDto assistedAcknowledgmentEvidence,
-        String workStage
+        String workStage,
+        AccountingCaseContextDto accountingContext
 ) {
-    public StaffContractCaseDto(
-            UUID loanApplicationId, String applicationNumber, String productCode, String productType,
-            BigDecimal requestedAmount, int requestedTermMonths, String applicationStatus,
-            LocalDateTime submittedAt, LoanContractDto currentContract, ContractReadinessDto readiness,
-            String workStage
-    ) {
-        this(loanApplicationId, applicationNumber, productCode, productType, "CUSTOMER_DIGITAL",
-                requestedAmount, requestedTermMonths, applicationStatus, submittedAt, currentContract,
-                readiness, null, workStage);
-    }
 }

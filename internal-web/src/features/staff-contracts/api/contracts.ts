@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { apiTimestampSchema, uuidSchema } from '@/features/staff-applications/api/contracts'
+import { accountingCaseContextSchema } from './accounting-context'
 
 const rawValue = z.string().trim().min(1)
 const moneySchema = z.number().finite().nonnegative()
@@ -90,6 +91,7 @@ const applicationHeaderShape = {
 export const staffContractCaseSchema = z.object({
   ...applicationHeaderShape,
   assistedAcknowledgmentEvidence: assistedActionEvidenceSchema.nullable(),
+  accountingContext: accountingCaseContextSchema,
 })
 
 export const staffContractWorkPageSchema = z.object({
