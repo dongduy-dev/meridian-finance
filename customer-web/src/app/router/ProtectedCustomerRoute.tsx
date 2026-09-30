@@ -26,7 +26,7 @@ function SessionCheckFailure() {
     <main className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
       <Card className="w-full max-w-lg">
         <CardHeader className="items-center text-center">
-          <MeridianLogo variant="primary" className="mb-5 w-36" />
+          <MeridianLogo variant="primary" className="mx-auto mb-5 w-36" />
           <h1 id="page-heading" tabIndex={-1} className="text-2xl font-semibold outline-none">
             We could not check your session
           </h1>

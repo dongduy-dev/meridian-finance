@@ -282,6 +282,24 @@ export function provenanceFixture(status: 'ACTIVE' | 'SETTLED' | 'CLOSED' = 'ACT
 }
 
 describe('Staff servicing contracts', () => {
+  it('accepts seeded Identity actors in USER provenance and retains strict repayment IDs', () => {
+    const seededUserId = '00000000-0000-0000-0000-000000000304'
+    const response = provenanceFixture()
+    response.originatingDisbursement.actor.staff!.userId = seededUserId
+    expect(staffServicingProvenanceSchema.parse(response).originatingDisbursement.actor.staff?.userId)
+      .toBe(seededUserId)
+    expect(staffServicingProvenanceSchema.safeParse({
+      ...response,
+      repaymentHistory: {
+        ...response.repaymentHistory,
+        items: response.repaymentHistory.items.map((item) => ({
+          ...item,
+          financial: { ...item.financial, repaymentTransactionId: seededUserId },
+        })),
+      },
+    }).success).toBe(false)
+  })
+
   it('parses safe queue, account, history, and repayment outcome contracts', () => {
     expect(staffServicingWorkPageSchema.parse(queueFixture()).items).toHaveLength(1)
     expect(loanAccountSchema.parse(accountFixture()).disbursementDestination.maskedAccountNumber).toBe('********')

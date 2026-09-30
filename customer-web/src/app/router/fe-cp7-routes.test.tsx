@@ -102,7 +102,9 @@ describe('FE-CP7 UCL origination', () => {
       return baseFetch(input, init)
     })
 
-    await user.type(await screen.findByRole('textbox', { name: /Requested amount/ }), '5000000')
+    const heading = await screen.findByRole('heading', { name: 'Choose your request' })
+    await waitFor(() => expect(heading).toHaveFocus())
+    await user.type(screen.getByRole('textbox', { name: /Requested amount/ }), '5000000')
     await user.selectOptions(screen.getByRole('combobox', { name: /Requested term/ }), '6')
     await user.click(screen.getByRole('button', { name: 'Review request' }))
     await user.click(await screen.findByRole('button', { name: 'Submit application' }))

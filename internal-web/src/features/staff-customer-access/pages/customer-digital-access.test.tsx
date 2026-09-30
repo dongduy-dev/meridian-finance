@@ -21,7 +21,7 @@ vi.mock('@/lib/api', async () => {
   return { ...actual, apiRequest: vi.fn() }
 })
 
-const customerId = '11111111-1111-4111-8111-111111111111'
+const customerId = '99999999-9999-9999-9999-999999999999'
 const customer = { customerId, customerNumber: 'CUS-000000123', status: 'ACTIVE',
   verificationStatus: 'UNVERIFIED', profileCompletionStatus: 'INCOMPLETE', primaryActiveBankAccountPresent: false,
   profile: { fullName: 'Existing Customer', phoneNumber: '0900000000', residentialAddress: 'Meridian Street',

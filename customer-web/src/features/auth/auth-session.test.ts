@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, NetworkError } from '@/lib/api'
+import type { ApiClient } from '@/lib/api'
 import { clearAccessCredential } from '@/lib/auth/access-credential'
 
-import type { AuthApi, AuthResponse } from './auth-api'
+import { createAuthApi, type AuthApi, type AuthResponse } from './auth-api'
 import { AuthSessionManager, CustomerSessionRequiredError } from './auth-session'
 
 function customerResponse(overrides: Partial<AuthResponse> = {}): AuthResponse {
@@ -41,6 +42,24 @@ function apiError(status: number, errorCode: string) {
 beforeEach(() => clearAccessCredential())
 
 describe('Customer auth session bootstrap', () => {
+  it('authenticates from a parsed refresh response containing seeded Meridian entity IDs', async () => {
+    const seeded = customerResponse({
+      userId: '00000000-0000-0000-0000-000000000301',
+      customerId: '99999999-9999-9999-9999-999999999999',
+    })
+    const request = vi.fn().mockResolvedValue(seeded)
+    const api = createAuthApi({ request: request as ApiClient['request'] })
+    const manager = new AuthSessionManager(api, vi.fn())
+
+    await manager.bootstrap()
+
+    expect(request).toHaveBeenCalledWith('/auth/refresh', expect.anything())
+    expect(manager.getSnapshot()).toMatchObject({
+      status: 'authenticated',
+      actor: { userId: seeded.userId, customerId: seeded.customerId },
+    })
+  })
+
   it('authenticates a Customer from one bootstrap refresh', async () => {
     const api = apiMock()
     const manager = new AuthSessionManager(api, vi.fn())

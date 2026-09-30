@@ -1,15 +1,16 @@
 import { z } from 'zod'
 
 import { apiClient, type ApiClient } from '@/lib/api'
+import { meridianUuidSchema } from '@/lib/validation/meridian-uuid'
 
 const authResponseSchema = z.object({
   tokenType: z.string().min(1),
   accessToken: z.string().min(1),
   expiresAt: z.string().min(1),
-  userId: z.string().uuid(),
+  userId: meridianUuidSchema,
   email: z.string().email(),
   userType: z.string().min(1),
-  customerId: z.string().uuid().nullable(),
+  customerId: meridianUuidSchema.nullable(),
   roles: z.array(z.string()),
   permissions: z.array(z.string()),
 })

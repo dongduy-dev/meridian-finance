@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { apiTimestampSchema, uuidSchema } from '@/features/staff-applications/api/contracts'
+import { meridianUuidSchema } from '@/lib/validation/meridian-uuid'
 
 const staffActorSchema = z.object({
-  userId: uuidSchema,
+  userId: meridianUuidSchema,
   displayName: z.string().trim().min(1),
   email: z.string().email(),
 })

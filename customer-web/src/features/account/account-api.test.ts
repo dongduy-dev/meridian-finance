@@ -46,6 +46,17 @@ function setup(responses: unknown[]) {
 }
 
 describe('Customer account API', () => {
+  it('accepts a seeded Customer entity ID while retaining strict runtime bank-account IDs', async () => {
+    const seededCustomerId = '99999999-9999-9999-9999-999999999999'
+    const seeded = setup([{ ...customer, customerId: seededCustomerId }])
+    await expect(seeded.api.getOwnCustomer()).resolves.toMatchObject({ customerId: seededCustomerId })
+
+    const invalidBankAccount = setup([[{
+      ...bankAccount, customerBankAccountId: seededCustomerId,
+    }]])
+    await expect(invalidBankAccount.api.getOwnBankAccounts()).rejects.toThrow()
+  })
+
   it('uses the exact protected Customer-owned paths and methods', async () => {
     const { api, coordinator, request } = setup([
       customer,

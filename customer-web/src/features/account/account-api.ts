@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { meridianUuidSchema } from '@/lib/validation/meridian-uuid'
 
 import {
   createProtectedApiClient,
@@ -17,7 +18,7 @@ const customerProfileSchema = z.object({
 })
 
 export const customerSchema = z.object({
-  customerId: z.string().uuid(),
+  customerId: meridianUuidSchema,
   customerNumber: z.string().min(1),
   status: z.string().min(1),
   verificationStatus: z.string().min(1),

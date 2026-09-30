@@ -16,6 +16,37 @@ const item = {
 }
 
 describe('Staff application response schemas', () => {
+  it('accepts seeded Identity users in assigned and lifecycle actor summaries, while retaining strict application IDs', () => {
+    const seededActor = {
+      userId: '00000000-0000-0000-0000-000000000302',
+      displayName: 'Loan Officer Demo',
+      email: 'loan.officer@meridian.local',
+    }
+    const caseResponse = {
+      ...item,
+      customerContext: null,
+      collateralContext: null,
+      customerReadiness: {
+        active: true, profileComplete: true, hasPrimaryActiveBankAccount: true,
+        verificationStatus: 'VERIFIED',
+      },
+      formalReviewRecorded: true,
+      assignedLoanOfficer: seededActor,
+      lifecycleHistory: [{
+        fromStatus: 'UNDER_REVIEW', toStatus: 'RETURNED_FOR_REVISION',
+        action: 'RETURN_TO_CUSTOMER_REVISION', actorType: 'USER', actor: seededActor,
+        occurredAt: '2026-09-02T09:00:00',
+      }],
+    }
+
+    const parsed = staffLoanApplicationCaseSchema.parse(caseResponse)
+    expect(parsed.assignedLoanOfficer?.userId).toBe(seededActor.userId)
+    expect(parsed.lifecycleHistory[0]?.actor?.userId).toBe(seededActor.userId)
+    expect(staffLoanApplicationCaseSchema.safeParse({
+      ...caseResponse, loanApplicationId: seededActor.userId,
+    }).success).toBe(false)
+  })
+
   it('accepts exact index and case contracts while preserving unknown enum strings', () => {
     expect(staffLoanApplicationPageSchema.parse({
       page: 0,

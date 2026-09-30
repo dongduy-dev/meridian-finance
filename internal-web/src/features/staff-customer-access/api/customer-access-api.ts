@@ -1,11 +1,12 @@
 import { z } from 'zod'
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import { searchCustomer } from '@/features/staff-origination/api/staff-origination-api'
+import { meridianUuidSchema } from '@/lib/validation/meridian-uuid'
 
 export { searchCustomer }
 
 export const digitalAccessSchema = z.object({
-  customerId: z.string().uuid(),
+  customerId: meridianUuidSchema,
   enabled: z.boolean(),
   email: z.string().nullable(),
   emailVerified: z.boolean(),

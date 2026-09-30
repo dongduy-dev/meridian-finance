@@ -119,6 +119,9 @@ interface FixtureState {
   resubmissionBodies: Array<Record<string, string>>
   cancellationBodies: Array<Record<string, string>>
   uploadPosts: number
+  checklistReads: number
+  detailReads: number
+  detailParseFailureAfterUpload?: boolean
 }
 
 function state(overrides: Partial<FixtureState> = {}): FixtureState {
@@ -132,6 +135,8 @@ function state(overrides: Partial<FixtureState> = {}): FixtureState {
     resubmissionBodies: [],
     cancellationBodies: [],
     uploadPosts: 0,
+    checklistReads: 0,
+    detailReads: 0,
     ...overrides,
   }
 }
@@ -178,9 +183,16 @@ function fixtureFetch(fixture: FixtureState) {
       if (fixture.taskQueryFailure) return error(url, 'QUERY_UNAVAILABLE', 400)
       return json(fixture.tasks.map((task) => task.correctionTaskId === supportingTaskId && fixture.taskCompleted ? { ...task, status: 'COMPLETED', completedAt: '2026-08-31T10:00:00' } : task))
     }
-    if (url.endsWith(`/loan-applications/${applicationId}/documents`) && method === 'GET') return json(fixture.checklist)
+    if (url.endsWith(`/loan-applications/${applicationId}/documents`) && method === 'GET') {
+      fixture.checklistReads += 1
+      return json(fixture.checklist)
+    }
     if (url.endsWith(`/loan-applications/${applicationId}`) && method === 'GET') {
+      fixture.detailReads += 1
       if (fixture.detailNotFound) return error(url, 'LOAN_APPLICATION_NOT_FOUND', 404)
+      if (fixture.detailParseFailureAfterUpload && fixture.uploadPosts > 0) {
+        return json({ ...fixture.detail, requestedAmount: 'invalid-amount' })
+      }
       if (fixture.cancelled) return json({ ...fixture.detail, status: 'CANCELLED' })
       if (fixture.resubmitted) return json({ ...fixture.detail, status: 'SUBMITTED' })
       return json(fixture.detail)
@@ -198,8 +210,9 @@ function renderRoute(path: string, fixture: FixtureState) {
   const fetchMock = vi.fn(fixtureFetch(fixture))
   vi.stubGlobal('fetch', fetchMock)
   const router = createTestRouter([path])
-  render(<AppProviders router={router} authManager={createTestAuthManager()} />)
-  return { fetchMock, router }
+  const authManager = createTestAuthManager()
+  render(<AppProviders router={router} authManager={authManager} />)
+  return { fetchMock, router, authManager }
 }
 
 afterEach(() => {
@@ -268,6 +281,44 @@ describe('FE-CP8 application tracking', () => {
 })
 
 describe('FE-CP8 Customer corrections', () => {
+  it('refetches checklist and application reads after a replacement upload', async () => {
+    const user = userEvent.setup()
+    const fixture = state()
+    const { authManager } = renderRoute(`/applications/${applicationId}/corrections`, fixture)
+    await screen.findByLabelText('Choose replacement file')
+    expect(fixture.checklistReads).toBe(1)
+    expect(fixture.detailReads).toBe(1)
+    expect(fixture.indexReads).toBe(1)
+
+    await user.upload(screen.getByLabelText('Choose replacement file'),
+      new File(['%PDF'], 'replacement.pdf', { type: 'application/pdf' }))
+    await user.click(screen.getByRole('button', { name: 'Replace document' }))
+
+    await waitFor(() => expect(fixture.uploadPosts).toBe(1))
+    await waitFor(() => {
+      expect(fixture.checklistReads).toBeGreaterThan(1)
+      expect(fixture.detailReads).toBeGreaterThan(1)
+      expect(fixture.indexReads).toBeGreaterThan(1)
+    })
+    expect(screen.getByRole('heading', { name: 'Update your application' })).toBeVisible()
+    expect(authManager.getSnapshot().status).toBe('authenticated')
+  })
+
+  it('keeps a post-upload detail parse failure local to the resource', async () => {
+    const user = userEvent.setup()
+    const fixture = state({ detailParseFailureAfterUpload: true })
+    const { authManager } = renderRoute(`/applications/${applicationId}/corrections`, fixture)
+    await screen.findByLabelText('Choose replacement file')
+
+    await user.upload(screen.getByLabelText('Choose replacement file'),
+      new File(['%PDF'], 'replacement.pdf', { type: 'application/pdf' }))
+    await user.click(screen.getByRole('button', { name: 'Replace document' }))
+
+    expect(await screen.findByText('Application details could not be loaded')).toBeVisible()
+    expect(screen.queryByText('We could not check your session')).not.toBeInTheDocument()
+    expect(authManager.getSnapshot().status).toBe('authenticated')
+  })
+
   it('describes a state conflict without claiming the application changed', () => {
     const message = correctionErrorMessage(new ApiError({
       status: 409,
@@ -384,6 +435,19 @@ describe('FE-CP8 narrow cancellation', () => {
 })
 
 describe('FE-CP8 route protection', () => {
+  it('shows session recovery only when bootstrap refresh genuinely fails', async () => {
+    const api = createAuthApiMock()
+    vi.mocked(api.refresh).mockRejectedValue(new ApiError({
+      status: 503, errorCode: 'SERVICE_TEMPORARILY_UNAVAILABLE', message: 'Unavailable.',
+    }))
+    const router = createTestRouter([`/applications/${applicationId}/corrections`])
+    render(<AppProviders router={router} authManager={new AuthSessionManager(api, vi.fn())} />)
+
+    expect(await screen.findByRole('heading', { name: 'We could not check your session' })).toBeVisible()
+    expect(screen.getByText('Session check interrupted')).toBeVisible()
+    expect(api.refresh).toHaveBeenCalledOnce()
+  })
+
   it.each([
     '/applications',
     `/applications/${applicationId}`,

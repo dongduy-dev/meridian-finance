@@ -65,7 +65,7 @@ describe('application routing and shell', () => {
         screen.queryByRole('dialog', { name: 'Menu' }),
       ).not.toBeInTheDocument(),
     )
-    expect(screen.getByRole('link', { name: 'Products' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: 'Products' })).toHaveAttribute(
       'aria-current',
       'page',
     )
