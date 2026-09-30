@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { meridianUuidSchema } from '@/lib/validation/meridian-uuid'
 
 const apiTimestampPattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?$/i
 
@@ -21,7 +22,7 @@ export const apiTimestampSchema = z.string().refine(isValidApiTimestamp, 'Invali
 const rawEnumValueSchema = z.string().trim().min(1)
 const moneySchema = z.number().finite().int().positive()
 const staffActorSchema = z.object({
-  userId: uuidSchema,
+  userId: meridianUuidSchema,
   displayName: z.string().trim().min(1),
   email: z.string().trim().email(),
 })

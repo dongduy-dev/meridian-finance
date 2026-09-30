@@ -19,6 +19,25 @@ function validResponse() {
 }
 
 describe('auth API boundary', () => {
+  it('accepts seeded Identity and Customer IDs while rejecting malformed identifiers', async () => {
+    const seeded = {
+      ...validResponse(),
+      userId: '00000000-0000-0000-0000-000000000301',
+      customerId: '99999999-9999-9999-9999-999999999999',
+    }
+    const request = vi.fn().mockResolvedValue(seeded)
+    const api = createAuthApi({ request: request as ApiClient['request'] })
+
+    await expect(api.login({ email: 'customer@example.com', password: 'not-retained' }))
+      .resolves.toMatchObject({ userId: seeded.userId, customerId: seeded.customerId })
+    await expect(api.refresh()).resolves.toMatchObject({
+      userId: seeded.userId, customerId: seeded.customerId,
+    })
+
+    request.mockResolvedValueOnce({ ...seeded, customerId: 'not-a-uuid' })
+    await expect(api.refresh()).rejects.toThrow()
+  })
+
   it('uses credentialed requests only for login, refresh, logout, and reset confirmation', async () => {
     const request = vi.fn().mockResolvedValue(validResponse())
     const api = createAuthApi({ request: request as ApiClient['request'] })

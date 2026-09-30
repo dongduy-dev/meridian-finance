@@ -85,6 +85,25 @@ export function caseFixture(overrides: Record<string, unknown> = {}) {
 }
 
 describe('Staff contract runtime contracts', () => {
+  it('accepts seeded Identity actors in accounting provenance', () => {
+    const value = caseFixture()
+    const seededActor = {
+      ...actorFixture,
+      userId: '00000000-0000-0000-0000-000000000303',
+    }
+    const parsed = staffContractCaseSchema.parse({
+      ...value,
+      accountingContext: {
+        ...value.accountingContext,
+        handoff: {
+          ...value.accountingContext.handoff,
+          approved: { actor: seededActor, at: '2026-09-07T07:30:00' },
+        },
+      },
+    })
+    expect(parsed.accountingContext?.handoff.approved.actor.userId).toBe(seededActor.userId)
+  })
+
   it('accepts the safe queue and case projections', () => {
     expect(staffContractCaseSchema.parse(caseFixture()).currentContract?.disbursementBankAccount.maskedAccountNumber)
       .toBe('****7890')

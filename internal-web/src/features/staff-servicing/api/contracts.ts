@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { apiTimestampSchema, uuidSchema } from '@/features/staff-applications/api/contracts'
+import { meridianUuidSchema } from '@/lib/validation/meridian-uuid'
 
 const rawValue = z.string().trim().min(1)
 const moneySchema = z.number().finite().nonnegative()
@@ -204,7 +205,7 @@ export const repaymentHistoryPageSchema = z.object({
 })
 
 const staffActorSchema = z.object({
-  userId: uuidSchema,
+  userId: meridianUuidSchema,
   displayName: rawValue,
   email: rawValue,
 })

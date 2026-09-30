@@ -1,10 +1,11 @@
 import { z } from 'zod'
 import { apiTimestampSchema, uuidSchema } from '@/features/staff-applications/api/contracts'
 import { correctionOptionSchema, type CorrectionTaskRequest } from '@/features/staff-review/api/contracts'
+import { meridianUuidSchema } from '@/lib/validation/meridian-uuid'
 
 const rawValue = z.string().trim().min(1)
 const staffActorSchema = z.object({
-  userId: uuidSchema,
+  userId: meridianUuidSchema,
   displayName: z.string().trim().min(1),
   email: z.string().trim().email(),
 })
