@@ -11,7 +11,8 @@ import { uuidSchema } from '@/features/staff-applications/api/contracts'
 import { QueryErrorPanel } from '@/features/staff-applications/components/QueryErrorPanel'
 import { LoanAccountEvidence } from '../components/LoanAccountEvidence'
 import { RepaymentHistoryPanel } from '../components/RepaymentHistoryPanel'
-import { loanAccountQuery, repaymentHistoryQuery } from '../api/queries'
+import { StaffServicingProvenancePanel } from '../components/StaffServicingProvenancePanel'
+import { loanAccountQuery, staffServicingProvenanceQuery } from '../api/queries'
 import { hasCoherentLoanAccount, serviceableAccountStatuses } from '../model/presentation'
 
 export function StaffLoanAccountWorkspacePage() {
@@ -28,7 +29,7 @@ export function StaffLoanAccountWorkspacePage() {
     && hasRole(state.actor, 'ACCOUNTING_OFFICER')
   const [historyPage, setHistoryPage] = useState(0)
   const accountQuery = useQuery(loanAccountQuery(manager, loanApplicationId, canRead && validId))
-  const historyQuery = useQuery(repaymentHistoryQuery(
+  const provenanceQuery = useQuery(staffServicingProvenanceQuery(
     manager,
     loanApplicationId,
     historyPage,
@@ -36,6 +37,10 @@ export function StaffLoanAccountWorkspacePage() {
     canRead && validId,
   ))
   const account = accountQuery.data
+  const provenance = provenanceQuery.data
+  const coherentProvenance = provenance?.loanApplicationId === account?.loanApplicationId
+    && provenance?.loanAccountId === account?.loanAccountId
+    && provenance?.statusHistory.at(-1)?.toStatus === account?.status
   const safeAccount = Boolean(account && hasCoherentLoanAccount(account))
   const recordAvailable = Boolean(account
     && canRecord
@@ -58,12 +63,13 @@ export function StaffLoanAccountWorkspacePage() {
 
   return <section className="mx-auto max-w-6xl space-y-6">
     <div className="flex flex-wrap gap-4"><Link className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline" to="/staff/work/servicing">← Servicing queue</Link><Link className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline" to={`/staff/applications/${loanApplicationId}`}>Application case</Link></div>
-    <header className="rounded-lg border bg-card p-5 shadow-soft sm:p-6"><div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm font-semibold text-muted-foreground">LOANACCOUNT SERVICING</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold sm:text-3xl">{account.accountNumber}</h1><p className="mt-2 break-all text-sm text-muted-foreground">Application {account.loanApplicationId}</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void Promise.all([accountQuery.refetch(), historyQuery.refetch()])} disabled={accountQuery.isFetching || historyQuery.isFetching}><RefreshCw className={accountQuery.isFetching ? 'animate-spin' : undefined} />Refresh</Button>{recordAvailable ? <Button asChild><Link to={`/staff/applications/${loanApplicationId}/repayments/new`}>Record repayment</Link></Button> : null}{settlementAvailable ? <Button asChild><Link to={`/staff/applications/${loanApplicationId}/settlement`}>Administrative Full-Balance Settlement</Link></Button> : null}{closureAvailable ? <Button asChild><Link to={`/staff/applications/${loanApplicationId}/closure`}>Administrative closure</Link></Button> : null}</div></div></header>
+    <header className="rounded-lg border bg-card p-5 shadow-soft sm:p-6"><div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm font-semibold text-muted-foreground">LOANACCOUNT SERVICING</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold sm:text-3xl">{account.accountNumber}</h1><p className="mt-2 break-all text-sm text-muted-foreground">Application {account.loanApplicationId}</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void Promise.all([accountQuery.refetch(), provenanceQuery.refetch()])} disabled={accountQuery.isFetching || provenanceQuery.isFetching}><RefreshCw className={accountQuery.isFetching ? 'animate-spin' : undefined} />Refresh</Button>{recordAvailable ? <Button asChild><Link to={`/staff/applications/${loanApplicationId}/repayments/new`}>Record repayment</Link></Button> : null}{settlementAvailable ? <Button asChild><Link to={`/staff/applications/${loanApplicationId}/settlement`}>Administrative Full-Balance Settlement</Link></Button> : null}{closureAvailable ? <Button asChild><Link to={`/staff/applications/${loanApplicationId}/closure`}>Administrative closure</Link></Button> : null}</div></div></header>
     {accountQuery.isError ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Latest account refresh unavailable</AlertTitle><AlertDescription>Cached financial evidence remains visible but cannot authorize a repayment until Refresh succeeds.</AlertDescription></Alert> : null}
     {!safeAccount ? <Alert variant="destructive"><AlertTriangle /><AlertTitle>LoanAccount evidence unavailable</AlertTitle><AlertDescription>Unknown or contradictory response evidence is shown only as a neutral inspection state. Repayment is disabled.</AlertDescription></Alert> : null}
     {safeAccount && account.status === 'SETTLED' ? <Alert variant="information"><AlertTitle>Financially settled account</AlertTitle><AlertDescription>Ordinary repayment is unavailable. An authorized Accounting Officer may open the separate administrative closure.</AlertDescription></Alert> : null}
     {safeAccount && account.status === 'CLOSED' ? <Alert variant="information"><AlertTitle>Closed account</AlertTitle><AlertDescription>This account is terminal and read-only.</AlertDescription></Alert> : null}
     <LoanAccountEvidence account={account} />
-    <RepaymentHistoryPanel data={historyQuery.data} pending={historyQuery.isPending} error={historyQuery.error} fetching={historyQuery.isFetching} onRetry={() => void historyQuery.refetch()} onPage={setHistoryPage} />
+    <StaffServicingProvenancePanel data={coherentProvenance ? provenance : undefined} pending={provenanceQuery.isPending} error={provenanceQuery.error ?? (provenance && !coherentProvenance ? new Error('Provenance account identifiers conflict.') : null)} onRetry={() => void provenanceQuery.refetch()} />
+    <RepaymentHistoryPanel data={coherentProvenance ? provenance?.repaymentHistory : undefined} pending={provenanceQuery.isPending} error={provenanceQuery.error ?? (provenance && !coherentProvenance ? new Error('Provenance account identifiers conflict.') : null)} fetching={provenanceQuery.isFetching} onRetry={() => void provenanceQuery.refetch()} onPage={setHistoryPage} />
   </section>
 }

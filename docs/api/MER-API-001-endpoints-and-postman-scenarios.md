@@ -258,6 +258,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/loan-applications/{loanApplicationId}/loan-account` | `loan:read:own` or `loan:read` | Return originated terms, final schedule, and servicing state. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/repayments` | `repayment:update` | Record or replay a manual Salary Advance, UCL, or Collateral Loan repayment. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read:own` or `loan:read` | Return immutable paged repayment history. |
+| GET | `/api/v1/staff/loan-applications/{loanApplicationId}/servicing-provenance?page=0&size=20` | Staff `loan:read` | Return the validated LoanAccount servicing timeline and paged financial repayment rows with Staff attribution. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/settlements` | `loan:settlement:approve` plus Approver role | Approve and apply an Administrative Full-Balance Settlement. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/settlements/approved` | `loan:settlement:approve` plus Approver role | Return PII-minimized immutable settlement facts for exact reload recovery. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/loan-account/closure` | `loan:account:close` plus Accounting Officer role | Close an eligible settled LoanAccount administratively. |
@@ -1722,7 +1723,7 @@ The response contains:
 | Final schedule | schedule ID/type/version, first/last due dates, immutable items |
 | Installment servicing | paid/outstanding components, derived status, evaluation date, last payment dates |
 
-The read does not decrypt the destination or perform allocation, overdue evaluation, mutation, audit, or history writes.
+The read does not decrypt the destination or perform allocation, overdue evaluation, mutation, audit, or history writes. Customer and Staff callers receive the same account DTO; it contains no Staff actor identity.
 
 An activated Collateral LoanAccount uses this same safe read contract before, during, and after servicing.
 
@@ -1774,7 +1775,18 @@ GET /api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20
 - Ordering is `recordedAt DESC`, then repayment transaction ID descending.
 - Historical outcomes are reconstructed from immutable transaction/allocation outcome evidence rather than recalculated from later account state.
 - The response excludes replay flags and external payment references.
+- The shared Customer-readable repayment DTO contains no Staff actor ID, name, email, or USER/SYSTEM actor type.
 - Customers require ownership plus `loan:read:own`; Staff use `loan:read`. `repayment:update` alone does not grant read access.
+
+### 8.2.1 Staff LoanAccount servicing provenance
+
+```text
+GET /api/v1/staff/loan-applications/{loanApplicationId}/servicing-provenance?page=0&size=20
+```
+
+An authenticated Staff actor with `loan:read` may inspect the LoanAccount's servicing provenance. Customer access and mutation-only permissions are denied. `page` defaults to `0`; `size` defaults to `20` and must be `1–100`. The response contains `loanApplicationId`, `loanAccountId`, the originating-disbursement actor and confirmation time, the complete ordered status-transition timeline, optional approved-settlement and administrative-closure actor events, and a `repaymentHistory` page. Each page item binds the existing financial repayment item to its exact `repaymentTransactionId`, `transactionType`, and recording actor within one consistent backend read. Page order and counts match the shared repayment history.
+
+An actor has `type: USER` with a safe Staff summary (`userId`, `displayName`, `email`) or `type: SYSTEM` with `staff: null`. Ordinary repayments need no LoanAccount status transition to retain recording attribution. Loan checks disbursement/activation, transition-chain, settlement/payment, and closure/transition evidence against the exact application and account. Contradictory evidence or an unresolved required Staff actor returns `409 SYSTEM_STATE_CONFLICT`. The response excludes operation/request IDs, external payment and transfer references, Customer identity, full destination, and audit identifiers.
 
 ### 8.3 Administrative Full-Balance Settlement
 

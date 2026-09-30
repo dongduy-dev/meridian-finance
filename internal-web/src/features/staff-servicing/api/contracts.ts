@@ -203,6 +203,47 @@ export const repaymentHistoryPageSchema = z.object({
   items: z.array(z.object(repaymentOutcomeFields)),
 })
 
+const staffActorSchema = z.object({
+  userId: uuidSchema,
+  displayName: rawValue,
+  email: rawValue,
+})
+
+const servicingActorSchema = z.object({
+  type: rawValue,
+  staff: staffActorSchema.nullable(),
+})
+
+const actorEventSchema = z.object({ actor: servicingActorSchema, at: apiTimestampSchema })
+
+export const staffServicingProvenanceSchema = z.object({
+  loanApplicationId: uuidSchema,
+  loanAccountId: uuidSchema,
+  originatingDisbursement: actorEventSchema,
+  repaymentHistory: z.object({
+    page: z.number().int().nonnegative(),
+    size: z.number().int().min(1).max(100),
+    totalElements: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+    items: z.array(z.object({
+      financial: z.object(repaymentOutcomeFields),
+      transactionType: rawValue,
+      actor: servicingActorSchema,
+    })),
+  }),
+  statusHistory: z.array(z.object({
+    sequenceNumber: z.number().int().positive(),
+    action: rawValue,
+    fromStatus: rawValue.nullable(),
+    toStatus: rawValue,
+    actor: servicingActorSchema,
+    servicingEvaluationDate: dateSchema,
+    occurredAt: apiTimestampSchema,
+  })),
+  settlement: actorEventSchema.nullable(),
+  closure: actorEventSchema.nullable(),
+})
+
 export const repaymentSemanticPayloadSchema = z.object({
   loanApplicationId: uuidSchema,
   externalPaymentReference: z.string().min(1),
@@ -222,6 +263,7 @@ export type StaffServicingWorkFilters = {
 }
 export type StaffTerminalWorkFilters = { productCode?: string; page: number; size: number }
 export type RepaymentHistoryPage = z.infer<typeof repaymentHistoryPageSchema>
+export type StaffServicingProvenance = z.infer<typeof staffServicingProvenanceSchema>
 export type RecordRepaymentResult = z.infer<typeof recordRepaymentResultSchema>
 export type RepaymentSemanticPayload = z.infer<typeof repaymentSemanticPayloadSchema>
 export type RecordRepaymentRequest = Omit<RepaymentSemanticPayload, 'loanApplicationId'> & { requestId: string }
