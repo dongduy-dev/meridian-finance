@@ -71,7 +71,7 @@ export function ApplicationSearchPage() {
           Applications
         </h1>
         <p className="mt-2 max-w-3xl text-muted-foreground">
-          Find lending applications by product and lifecycle status. Results contain no Customer profile or banking data.
+          Find applications by product and status.
         </p>
       </div>
 
@@ -112,7 +112,7 @@ export function ApplicationSearchPage() {
           <Search aria-hidden="true" />
           <AlertTitle>Invalid application filters</AlertTitle>
           <AlertDescription>
-            The URL contains a product, status, or page value this search does not support.
+            These filters cannot be used. Reset them to search again.
             <Button className="mt-3" variant="outline" onClick={reset}>Reset filters</Button>
           </AlertDescription>
         </Alert>
@@ -131,14 +131,14 @@ export function ApplicationSearchPage() {
       {data ? (
         <div className="space-y-4">
           {query.isError ? (
-            <Alert variant="warning"><Search aria-hidden="true" /><AlertTitle>Refresh incomplete</AlertTitle><AlertDescription>The previous verified results remain visible.</AlertDescription></Alert>
+            <Alert variant="warning"><Search aria-hidden="true" /><AlertTitle>Refresh incomplete</AlertTitle><AlertDescription>Previous results are shown. Refresh to check for updates.</AlertDescription></Alert>
           ) : null}
           {data.items.length === 0 ? (
             <div className="rounded-lg border bg-card p-8 text-center shadow-soft">
               <Search aria-hidden="true" className="mx-auto size-8 text-muted-foreground" />
               <h2 className="mt-3 text-lg font-semibold">{filtered ? 'No applications match these filters' : 'No applications are available'}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {filtered ? 'Reset the supported filters to widen this operational search.' : 'There are no Staff-readable lending applications in this result set.'}
+                {filtered ? 'Reset filters to see more applications.' : 'No applications were found.'}
               </p>
               {filtered ? <Button className="mt-4" variant="outline" onClick={reset}>Reset filters</Button> : null}
             </div>

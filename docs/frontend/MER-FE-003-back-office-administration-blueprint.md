@@ -350,6 +350,8 @@ The anonymous `/set-password` route captures a one-time token from the URL fragm
 
 Back-Office Administration uses the Internal Web visual language and targets the same WCAG 2.2 AA baseline as Staff Web.
 
+Back-Office Administration must follow the shared Internal Web operator-language and copy rules in [MER-FE-002 Section 17.4](MER-FE-002-staff-web-blueprint.md#174-operator-language-and-copy). Back-Office features retain ownership of their administrative business terminology.
+
 - Route changes move focus to the page heading without removing visible focus.
 - Desktop navigation becomes the existing responsive Sheet at narrow widths.
 - Navigation groups have distinct accessible labels.

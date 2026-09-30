@@ -50,7 +50,7 @@ export function StaffContractWorkQueuePage() {
     {query.isPending ? <div role="status" className="flex min-h-64 items-center justify-center gap-3 rounded-lg border bg-card"><Spinner /> Loading contract work…</div> : null}
     {query.isError && !data ? accountingRejected ? null : <QueryErrorPanel error={query.error} resource="queue" onRetry={() => void query.refetch()} /> : null}
     {data ? <>
-      {query.isError ? <Alert variant="warning"><Inbox /><AlertTitle>Latest queue refresh unavailable</AlertTitle><AlertDescription>The last validated page remains visible. Open cases only to inspect; refreshed evidence is required before any command.</AlertDescription></Alert> : null}
+      {query.isError ? <Alert variant="warning"><Inbox /><AlertTitle>Latest queue refresh unavailable</AlertTitle><AlertDescription>Previous results are shown. You may inspect a case, but refresh its details before taking action.</AlertDescription></Alert> : null}
       {data.items.length === 0 ? <Alert variant="information"><Inbox /><AlertTitle>No contract work</AlertTitle><AlertDescription>No applications match the selected filters.</AlertDescription></Alert> : <div className="grid gap-4">{data.items.map((item) => {
         const knownStage = knownContractWorkStages.has(item.workStage)
         const knownStatus = !item.currentContract || knownContractStatuses.has(item.currentContract.status)

@@ -157,7 +157,7 @@ function ReviewFields({ data, intakeOpen, submitting, submit, message, unknown, 
   const suggestions = new Map(data.suggestions.map((item) => [item.fieldName, item]))
   return <div className="space-y-3 border-t pt-3">
     <h4 className="font-medium">OCR field review</h4>
-    <p className="text-sm text-muted-foreground">OCR is advisory. Only a finalized review can be copied into the existing intake forms, and the existing Save, Add, or Create action is still required.</p>
+    <p className="text-sm text-muted-foreground">Check extracted values against the paper document. After finalizing the review, copy values to the intake forms and verify them before saving or creating the application.</p>
     <form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submit(event)}>
       {expectedFields(data.evidenceType).map(([name, label]) => {
         const suggestion = suggestions.get(name)

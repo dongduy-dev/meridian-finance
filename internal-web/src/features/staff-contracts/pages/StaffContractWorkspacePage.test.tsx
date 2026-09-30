@@ -215,10 +215,10 @@ describe('Staff contract workspace', () => {
     renderPage()
     const user = userEvent.setup()
 
-    expect(await screen.findByText(/Customer remains the decision subject/i)).toBeVisible()
+    expect(await screen.findByText(/Record the Customer's signed acknowledgment for the current contract version/i)).toBeVisible()
     await user.click(screen.getByRole('checkbox'))
-    await user.click(screen.getByRole('button', { name: 'Review evidenced acknowledgment' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Review signed acknowledgment' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm contract action' }))
 
     await screen.findByText(/contract action was confirmed and the latest contract information is loaded/i)
     expect(submitted).toEqual({
@@ -243,7 +243,7 @@ describe('Staff contract workspace', () => {
     renderPage()
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review preparation' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm contract action' }))
 
     await screen.findByText(/contract action was confirmed and the latest contract information is loaded/i)
     expect(submitted).toEqual({
@@ -266,7 +266,7 @@ describe('Staff contract workspace', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review regeneration' }))
     expect(screen.getAllByText(/financial terms and repayment items remain unchanged/i).length).toBeGreaterThan(0)
-    await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm contract action' }))
 
     await screen.findByText(/action was rejected/i)
     expect(submitted).toEqual({
@@ -289,12 +289,12 @@ describe('Staff contract workspace', () => {
     })
     renderPage()
     const user = userEvent.setup()
-    expect(await screen.findByText(/Readiness shown here is a snapshot and can become outdated/i)).toBeVisible()
+    expect(await screen.findByText(/These checks can become outdated/i)).toBeVisible()
     expect(screen.queryByText(/POINT_IN_TIME_ADVISORY|transactionally/i)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Review readiness confirmation' }))
     expect(screen.getByText(/does not mean funds were transferred or a loan account was activated/i)).toBeVisible()
     expect(screen.queryByText(/DISBURSEMENT_PENDING|CP7/i)).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm contract action' }))
 
     expect(await screen.findByRole('heading', { name: 'Readiness confirmed — not disbursed' })).toBeVisible()
     await waitFor(() => expect(screen.getByRole('heading', { name: /Contract action result for/i })).toHaveFocus())
@@ -316,7 +316,7 @@ describe('Staff contract workspace', () => {
     renderPage()
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review preparation' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm contract action' }))
 
     expect(await screen.findByRole('heading', { name: 'Contract preparation result unknown' })).toBeVisible()
     expect(postCalls()).toHaveLength(1)
@@ -346,7 +346,7 @@ describe('Staff contract workspace', () => {
     renderPage()
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review preparation' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm contract action' }))
 
     expect(await screen.findByRole('heading', { name: 'Contract preparation result unknown' })).toBeVisible()
     expect(screen.getByText(/could not confirm this action from the latest contract information/i)).toBeVisible()
@@ -397,7 +397,7 @@ describe('Staff contract workspace', () => {
     renderPage()
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review readiness confirmation' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm contract action' }))
 
     expect(await screen.findByRole('heading', { name: 'Readiness confirmation result unknown' })).toBeVisible()
     expect(postCalls()).toHaveLength(1)
@@ -431,7 +431,7 @@ describe('Staff contract workspace', () => {
     renderPage()
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review readiness confirmation' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm contract action' }))
 
     expect(await screen.findByText(/Action confirmed; the latest contract information is unavailable/i)).toBeVisible()
     expect(postCalls()).toHaveLength(1)
@@ -475,7 +475,7 @@ describe('Staff contract workspace', () => {
     renderPage()
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review preparation' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm contract action' }))
 
     expect(await screen.findByRole('heading', { name: 'Displayed version changed' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review preparation' })).not.toBeInTheDocument()

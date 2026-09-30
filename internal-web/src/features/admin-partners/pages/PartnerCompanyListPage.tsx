@@ -51,7 +51,7 @@ export function PartnerCompanyListPage() {
   })
 
   return <section className="mx-auto max-w-6xl space-y-6">
-    <div><p className="text-sm font-semibold text-muted-foreground">PARTNER ADMINISTRATION</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Partner Companies</h1><p className="mt-2 text-muted-foreground">Discover configured employers and open one company’s controlled administration workspace.</p></div>
+    <div><p className="text-sm font-semibold text-muted-foreground">PARTNER ADMINISTRATION</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Partner Companies</h1><p className="mt-2 text-muted-foreground">Find Partner companies and manage their details, employee imports, and status.</p></div>
     {canManage ? <Card><CardHeader><CardTitle>Create Partner Company</CardTitle></CardHeader><CardContent>
       <form className="grid gap-4 md:grid-cols-2" onSubmit={submit}>
         <label className="space-y-1 text-sm font-medium">Company code<Input {...form.register('companyCode')} maxLength={50} /></label>

@@ -36,7 +36,7 @@ export function AssistedOriginationListPage() {
   }
   const createLocked = createStatus === 'IN_FLIGHT' || createStatus === 'RECONCILING' || createStatus === 'RESULT_UNKNOWN'
   return <section className="mx-auto max-w-6xl space-y-6">
-    <div><p className="text-sm font-semibold text-muted-foreground">STAFF-ASSISTED ORIGINATION</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold sm:text-3xl">Paper intake</h1><p className="mt-2 text-muted-foreground">Open and continue UCL or Collateral Loan intake before a LoanApplication exists.</p></div>
+    <div><p className="text-sm font-semibold text-muted-foreground">STAFF-ASSISTED ORIGINATION</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold sm:text-3xl">Paper intake</h1><p className="mt-2 text-muted-foreground">Start or continue paper intake for an Unsecured Consumer Loan or Collateral Loan.</p></div>
     <div className="flex flex-wrap gap-3 rounded-lg border bg-card p-4">
       <Button disabled={createLocked} onClick={() => void start('UNSECURED_CONSUMER_LOAN')}>Start UCL intake</Button>
       <Button disabled={createLocked} variant="outline" onClick={() => void start('COLLATERAL_LOAN')}>Start Collateral intake</Button>

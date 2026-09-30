@@ -178,7 +178,7 @@ describe('Staff application pages', () => {
     expect(screen.getByText('System')).toBeVisible()
     expect(screen.queryByText(/customer@example|0123456789|identity number/i)).not.toBeInTheDocument()
 
-    const history = screen.getByRole('heading', { name: 'Lifecycle history' }).closest('section')!
+    const history = screen.getByRole('heading', { name: 'Application history' }).closest('section')!
     const evidence = within(history).getAllByRole('listitem')
     expect(evidence[0]).toHaveTextContent('Application submitted')
     expect(evidence[1]).toHaveTextContent('Loan Officer review started')
@@ -204,7 +204,7 @@ describe('Staff application pages', () => {
 
     expect(await screen.findByText('Assignment unavailable')).toBeVisible()
     expect(screen.getByText('System')).toBeVisible()
-    expect(screen.getByText('User actor unavailable')).toBeVisible()
+    expect(screen.getByText('User unavailable')).toBeVisible()
     expect(screen.queryByText('Staff actor unavailable')).not.toBeInTheDocument()
     expect(screen.queryByText(/Unknown Staff|Current user/)).not.toBeInTheDocument()
   })
@@ -230,11 +230,11 @@ describe('Staff application pages', () => {
     })
     renderRoute(`/staff/applications/${applicationId}`)
 
-    expect(await screen.findByText('Current Customer contact')).toBeVisible()
+    expect(await screen.findByText('Customer contact details')).toBeVisible()
     expect(screen.getByText('CUST-001')).toBeVisible()
     expect(screen.getByText('Nguyen Van A')).toBeVisible()
     expect(screen.getByText('0901234567')).toBeVisible()
-    expect(screen.getByText(/not immutable application-submission evidence/i)).toBeVisible()
+    expect(screen.getByText(/Application evidence remains unchanged/i)).toBeVisible()
   })
 
   it('omits Customer contact when the case response has none', async () => {
@@ -242,7 +242,7 @@ describe('Staff application pages', () => {
     renderRoute(`/staff/applications/${applicationId}`)
 
     expect(await screen.findByRole('heading', { name: 'UCL-20260902-000001', level: 1 })).toBeVisible()
-    expect(screen.queryByText('Current Customer contact')).not.toBeInTheDocument()
+    expect(screen.queryByText('Customer contact details')).not.toBeInTheDocument()
   })
 
   it('shows collateral facts on a Collateral Loan case', async () => {
@@ -261,7 +261,7 @@ describe('Staff application pages', () => {
   it.each([
     [403, 'Application access changed'],
     [404, 'Application unavailable'],
-    [503, 'Case data unavailable'],
+    [503, 'Application details unavailable'],
   ])('presents a safe case error for HTTP %s', async (status, heading) => {
     vi.mocked(api.apiRequest).mockRejectedValue(new ApiError(
       status,

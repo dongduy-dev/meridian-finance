@@ -24,13 +24,13 @@ export function NoAdministrativeAccessPage() {
         </Alert>
         <Card>
           <CardHeader>
-            <CardTitle>Session remains protected</CardTitle>
-            <CardDescription>Authentication does not imply administrative authorization.</CardDescription>
+            <CardTitle>Request access</CardTitle>
+            <CardDescription>Contact a Meridian administrator if you need access to Back-Office Administration.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="flex gap-3 text-sm text-muted-foreground">
               <LockKeyhole className="size-5 shrink-0 text-warning" />
-              No Partner, Product, User, configuration, or audit data has been loaded.
+              Continue in another work area or sign out.
             </div>
             <div className="flex flex-wrap gap-3">
               {hasStaffWebAccess(state.actor) ? <Button asChild><Link to="/staff">Return to Staff Operations</Link></Button> : null}

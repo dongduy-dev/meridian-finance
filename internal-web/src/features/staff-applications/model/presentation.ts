@@ -75,7 +75,7 @@ export function applicationStatusLabel(value: string): string {
 }
 
 export function transitionActionLabel(value: string): string {
-  return transitionActionLabels[value] ?? 'Lifecycle action unavailable'
+  return transitionActionLabels[value] ?? 'Application activity unavailable'
 }
 
 export function productLabel(value: string): string {

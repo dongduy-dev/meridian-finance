@@ -149,7 +149,7 @@ describe('Staff repayment entry', () => {
     await user.click(screen.getByRole('button', { name: 'Review repayment' }))
     await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
 
-    expect(await screen.findByText(/Current account or history information does not confirm this exact repayment/i)).toBeVisible()
+    expect(await screen.findByText(/The account balance and history cannot confirm this payment/i)).toBeVisible()
     expect(document.body).not.toHaveTextContent(/\b(?:POST|GET|UUID|SHA-256)\b|payload digest|request identity/i)
     await waitFor(() => expect(screen.getByRole('heading', { name: /Repayment result for account/i })).toHaveFocus())
     expect(repaymentPostCalls()).toHaveLength(1)
@@ -224,7 +224,7 @@ describe('Staff repayment entry', () => {
     await user.click(screen.getByRole('button', { name: 'Review repayment' }))
     await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
 
-    expect(await screen.findByText(/Current account or history information does not confirm this exact repayment/i)).toBeVisible()
+    expect(await screen.findByText(/The account balance and history cannot confirm this payment/i)).toBeVisible()
     expect(await screen.findByText(/Ordinary repayment is unavailable for this account status/i)).toBeVisible()
     expect(screen.queryByText(/backend reports|CP8/i)).not.toBeInTheDocument()
     const retry = screen.getByRole('button', { name: 'Retry this payment' })

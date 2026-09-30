@@ -188,7 +188,7 @@ describe('Staff document workspace review eligibility', () => {
       originationChannel: 'STAFF_ASSISTED', applicationStatus: 'DOCUMENTS_PENDING',
     })
 
-    expect(await screen.findByLabelText('Upload BANK_STATEMENT')).toBeVisible()
+    expect(await screen.findByLabelText('Upload Bank statement')).toBeVisible()
   })
 
   it.each([
@@ -202,7 +202,7 @@ describe('Staff document workspace review eligibility', () => {
     renderWorkspace('AWAITING_REVIEW', currentVersionId, { originationChannel, applicationStatus })
 
     expect(await screen.findByRole('heading', { name: 'evidence-2.pdf' })).toBeVisible()
-    expect(screen.queryByLabelText('Upload BANK_STATEMENT')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Upload Bank statement')).not.toBeInTheDocument()
   })
 
   it('reuses the request identity and original version baseline after a lost upload response', async () => {
@@ -222,7 +222,7 @@ describe('Staff document workspace review eligibility', () => {
     })
     const user = userEvent.setup()
     renderDocumentWorkspace()
-    const input = await screen.findByLabelText('Upload BANK_STATEMENT')
+    const input = await screen.findByLabelText('Upload Bank statement')
     const file = new File(['same application evidence'], 'income.pdf', { type: 'application/pdf' })
     await user.upload(input, file)
     fireEvent.submit(input.closest('form')!)
@@ -251,7 +251,7 @@ describe('Staff document workspace review eligibility', () => {
     })
     const user = userEvent.setup()
     renderDocumentWorkspace()
-    const input = await screen.findByLabelText('Upload BANK_STATEMENT')
+    const input = await screen.findByLabelText('Upload Bank statement')
     await user.upload(input, new File(['first'], 'income.pdf', { type: 'application/pdf' }))
     fireEvent.submit(input.closest('form')!)
     expect(await screen.findByText(/could not confirm the upload/i)).toBeVisible()

@@ -26,13 +26,13 @@ export function NoOperationalAccessPage() {
       </Alert>
       <Card>
         <CardHeader>
-          <CardTitle>Session remains protected</CardTitle>
-          <CardDescription>Authentication does not imply operational authorization.</CardDescription>
+          <CardTitle>Request access</CardTitle>
+          <CardDescription>Contact a Meridian administrator if you need access to Staff Operations.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="flex gap-3 text-sm text-muted-foreground">
             <LockKeyhole className="size-5 shrink-0 text-warning" />
-            No application or customer data has been loaded.
+            Continue in another work area or sign out.
           </div>
           <div className="flex flex-wrap gap-3">
             {hasAdministration ? <Button asChild><Link to="/admin">Go to Back-Office Administration</Link></Button> : null}

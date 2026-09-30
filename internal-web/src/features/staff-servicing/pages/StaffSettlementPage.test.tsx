@@ -141,7 +141,7 @@ describe('Administrative Full-Balance Settlement workspace', () => {
     const retry = await screen.findByRole('button', { name: 'Retry this settlement' })
     expect(retry).toBeEnabled()
     await user.click(retry)
-    expect(await screen.findByRole('heading', { name: 'Settlement recovered by exact replay' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Previously recorded settlement confirmed' })).toBeVisible()
     expect(settlementPosts()).toHaveLength(2)
     expect(settlementPosts()[1]?.[1]?.body).toEqual(settlementPosts()[0]?.[1]?.body)
     expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
@@ -229,7 +229,7 @@ describe('Administrative Full-Balance Settlement workspace', () => {
     contradictory.servicing.totalOutstanding = 1099
     vi.mocked(api.apiRequest).mockImplementation(async (path) => read(path, contradictory))
     renderPage()
-    expect(await screen.findByText('Contradictory Loan account information')).toBeVisible()
+    expect(await screen.findByText('Loan account details need review')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Review full-balance settlement' })).toBeDisabled()
     expect(settlementPosts()).toHaveLength(0)
   })

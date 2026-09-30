@@ -10,7 +10,7 @@ export function SessionStatusScreen() {
       <div className="max-w-md space-y-4 text-center">
         {state.status === 'checking' && !state.error ? <Spinner className="mx-auto" /> : null}
         <h1 className="text-xl font-semibold">Verifying your staff session</h1>
-        <p className="text-sm text-muted-foreground">Meridian keeps access credentials in memory and restores sessions through the protected refresh cookie.</p>
+        <p className="text-sm text-muted-foreground">Please wait while Meridian restores your session.</p>
         {state.status === 'checking' && state.error ? (
           <Alert variant="warning">
             <p>{state.error}</p>

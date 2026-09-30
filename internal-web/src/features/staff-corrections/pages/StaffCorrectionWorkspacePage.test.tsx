@@ -238,7 +238,7 @@ describe('Staff correction operation recovery', () => {
     const user = userEvent.setup()
 
     expect(await screen.findByRole('heading', { name: 'Customer-requested cancellation' })).toBeVisible()
-    expect(screen.getByText(/this is not a Staff decision to cancel/i)).toBeVisible()
+    expect(screen.getByText(/Record cancellation only at the Customer's signed request/i)).toBeVisible()
     await user.upload(
       screen.getByLabelText('Signed request'),
       new File(['signed request'], 'cancellation.pdf', { type: 'application/pdf' }),

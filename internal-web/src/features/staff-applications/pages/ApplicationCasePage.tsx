@@ -55,7 +55,7 @@ export function ApplicationCasePage() {
     return (
       <section className="mx-auto max-w-5xl space-y-5">
         <h1 data-route-heading tabIndex={-1} className="text-2xl font-semibold">Application unavailable</h1>
-        <Alert variant="warning"><History aria-hidden="true" /><AlertTitle>Application unavailable</AlertTitle><AlertDescription>This case route does not contain a valid application identifier.</AlertDescription></Alert>
+        <Alert variant="warning"><History aria-hidden="true" /><AlertTitle>Application unavailable</AlertTitle><AlertDescription>This application link is invalid. Open the application from the application list.</AlertDescription></Alert>
         <Button asChild variant="outline"><Link to="/staff/applications">Back to applications</Link></Button>
       </section>
     )
@@ -66,7 +66,7 @@ export function ApplicationCasePage() {
       <section className="mx-auto max-w-6xl space-y-5">
         <h1 tabIndex={-1} className="text-2xl font-semibold">Loading application case</h1>
         <div role="status" aria-live="polite" className="flex min-h-64 items-center justify-center gap-3 rounded-lg border bg-card text-sm text-muted-foreground">
-          <Spinner className="size-5" /> Loading verified case evidence…
+          <Spinner className="size-5" /> Loading application details…
         </div>
       </section>
     )
@@ -123,7 +123,7 @@ export function ApplicationCasePage() {
       <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center sm:justify-between" aria-live="polite">
         <div className="flex items-start gap-3 text-sm">
           <Clock3 aria-hidden="true" className="mt-0.5 size-5 text-information" />
-          <div><p className="font-semibold">Case evidence freshness</p><p className="text-muted-foreground">Last successful refresh: {refreshedAt}</p>{query.isStale ? <p className="mt-1 font-medium text-warning">This fetch is stale. Refresh before relying on it.</p> : null}</div>
+          <div><p className="font-semibold">Last updated</p><p className="text-muted-foreground">Last successful refresh: {refreshedAt}</p>{query.isStale ? <p className="mt-1 font-medium text-warning">These details may be out of date. Refresh before taking action.</p> : null}</div>
         </div>
         <Button variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>
           {query.isFetching ? <Spinner /> : <RefreshCw aria-hidden="true" />} {query.isFetching ? 'Refreshing…' : 'Refresh'}
@@ -131,7 +131,7 @@ export function ApplicationCasePage() {
       </div>
 
       {query.isError ? (
-        <Alert variant="warning"><RefreshCw aria-hidden="true" /><AlertTitle>Latest refresh unavailable</AlertTitle><AlertDescription>The last successfully validated case remains visible.</AlertDescription></Alert>
+        <Alert variant="warning"><RefreshCw aria-hidden="true" /><AlertTitle>Latest refresh unavailable</AlertTitle><AlertDescription>Previously loaded application details are shown.</AlertDescription></Alert>
       ) : null}
 
       <nav aria-label="Case workspace" className="flex gap-2 overflow-x-auto rounded-lg border bg-card p-2">
@@ -166,7 +166,7 @@ export function ApplicationCasePage() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>Customer readiness</CardTitle><p className="text-sm text-muted-foreground">Purpose-limited lending readiness only. No Customer profile or bank-account values are returned.</p></CardHeader>
+            <CardHeader><CardTitle>Customer readiness</CardTitle><p className="text-sm text-muted-foreground">Check the Customer requirements for this application.</p></CardHeader>
             <CardContent>
               <dl className="grid gap-3 sm:grid-cols-2">
                 <ReadinessFact label="Customer state" value={readiness.active ? 'Active' : 'Inactive'} positive={readiness.active} />
@@ -180,7 +180,7 @@ export function ApplicationCasePage() {
       </section>
 
       {data.customerContext ? <Card>
-        <CardHeader><CardTitle>Current Customer contact</CardTitle><p className="text-sm text-muted-foreground">Current Customer record. This is operational contact context, not immutable application-submission evidence.</p></CardHeader>
+        <CardHeader><CardTitle>Customer contact details</CardTitle><p className="text-sm text-muted-foreground">Current contact details are shown here. Application evidence remains unchanged.</p></CardHeader>
         <CardContent><dl className="grid gap-4 sm:grid-cols-3">
           <div><dt className="text-sm text-muted-foreground">Customer number</dt><dd className="mt-1 font-semibold">{data.customerContext.customerNumber}</dd></div>
           <div><dt className="text-sm text-muted-foreground">Name</dt><dd className="mt-1 font-semibold">{data.customerContext.fullName ?? 'Not recorded'}</dd></div>
@@ -190,16 +190,16 @@ export function ApplicationCasePage() {
       {data.productCode === 'COLLATERAL_LOAN' && data.collateralContext ? <CollateralFactsCard collateral={data.collateralContext} /> : null}
 
       <section id="history" className="scroll-mt-4 space-y-4" aria-labelledby="history-heading">
-        <div><p className="text-sm font-semibold text-muted-foreground">IMMUTABLE EVIDENCE</p><h2 id="history-heading" className="mt-1 text-xl font-semibold">Lifecycle history</h2><p className="mt-1 text-sm text-muted-foreground">Events appear in the order recorded for this application.</p></div>
+        <div><p className="text-sm font-semibold text-muted-foreground">APPLICATION HISTORY</p><h2 id="history-heading" className="mt-1 text-xl font-semibold">Application history</h2><p className="mt-1 text-sm text-muted-foreground">Events appear in the order recorded for this application.</p></div>
         <Card>
           <CardContent className="pt-6">
-            {data.lifecycleHistory.length === 0 ? <p className="text-sm text-muted-foreground">No lifecycle history was returned for this application.</p> : (
+            {data.lifecycleHistory.length === 0 ? <p className="text-sm text-muted-foreground">Application history is unavailable.</p> : (
               <ol className="relative space-y-0 border-l border-border pl-6">
                 {data.lifecycleHistory.map((item, index) => (
                   <li key={`${index}-${item.occurredAt}-${item.action}`} className="relative pb-7 last:pb-0">
                     <span className="absolute -left-[1.82rem] top-1 grid size-3 rounded-full border-2 border-card bg-primary" aria-hidden="true" />
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div><p className="font-semibold">{transitionActionLabel(item.action)}</p><p className="mt-1 text-sm text-muted-foreground">{item.fromStatus ? `${applicationStatusLabel(item.fromStatus)} → ` : ''}{applicationStatusLabel(item.toStatus)}</p><p className="mt-1 text-sm text-muted-foreground">{item.actorType === 'SYSTEM' ? 'System' : item.actor ? `${item.actor.displayName} · ${item.actor.email}` : 'User actor unavailable'}</p></div>
+                      <div><p className="font-semibold">{transitionActionLabel(item.action)}</p><p className="mt-1 text-sm text-muted-foreground">{item.fromStatus ? `${applicationStatusLabel(item.fromStatus)} → ` : ''}{applicationStatusLabel(item.toStatus)}</p><p className="mt-1 text-sm text-muted-foreground">{item.actorType === 'SYSTEM' ? 'System' : item.actor ? `${item.actor.displayName} · ${item.actor.email}` : 'User unavailable'}</p></div>
                       <time className="shrink-0 text-sm text-muted-foreground" dateTime={item.occurredAt}>{formatTimestamp(item.occurredAt)}</time>
                     </div>
                   </li>
