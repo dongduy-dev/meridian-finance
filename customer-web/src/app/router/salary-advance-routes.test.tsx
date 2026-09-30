@@ -834,7 +834,8 @@ describe('FE-CP6 focused Salary Advance application', () => {
   it('preserves in-memory values across Request and Review, uses browser history, and warns only on a real exit', async () => {
     const user = userEvent.setup()
     const { router } = renderRoute('/products/salary-advance/apply')
-    await screen.findByRole('heading', { name: 'Choose your request' })
+    const heading = await screen.findByRole('heading', { name: 'Choose your request' })
+    await waitFor(() => expect(heading).toHaveFocus())
 
     await user.type(await screen.findByRole('textbox', { name: /Requested amount/ }), '2000000')
     await user.click(screen.getByRole('link', { name: 'Back to product' }))
