@@ -5,10 +5,13 @@ export const knownAccountStatuses = new Set(['ACTIVE', 'OVERDUE', 'SETTLED', 'CL
 export const knownInstallmentStatuses = new Set(['NOT_DUE', 'DUE', 'PARTIALLY_PAID', 'PAID', 'OVERDUE'])
 export const knownAllocationComponents = new Set(['FEE', 'INTEREST', 'PRINCIPAL'])
 
+const statusLabels: Record<string, string> = {
+  ACTIVE: 'Active', OVERDUE: 'Overdue', SETTLED: 'Settled', CLOSED: 'Closed',
+  NOT_DUE: 'Not due', DUE: 'Due', PARTIALLY_PAID: 'Partially paid', PAID: 'Paid',
+}
+
 export function accountStatusLabel(value: string): string {
-  return knownAccountStatuses.has(value)
-    ? value.toLowerCase().replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
-    : 'Status unavailable'
+  return statusLabels[value] ?? 'Status unavailable'
 }
 
 export function hasCoherentLoanAccount(value: LoanAccount): boolean {

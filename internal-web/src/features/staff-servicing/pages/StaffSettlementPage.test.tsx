@@ -138,7 +138,7 @@ describe('Administrative Full-Balance Settlement workspace', () => {
     await enterEvidence(user)
     await user.click(screen.getByRole('button', { name: 'Review full-balance settlement' }))
     await user.click(screen.getByRole('button', { name: 'Confirm settlement' }))
-    const retry = await screen.findByRole('button', { name: 'Retry exact settlement' })
+    const retry = await screen.findByRole('button', { name: 'Retry this settlement' })
     expect(retry).toBeEnabled()
     await user.click(retry)
     expect(await screen.findByRole('heading', { name: 'Settlement recovered by exact replay' })).toBeVisible()
@@ -161,13 +161,13 @@ describe('Administrative Full-Balance Settlement workspace', () => {
     await enterEvidence(user)
     await user.click(screen.getByRole('button', { name: 'Review full-balance settlement' }))
     await user.click(screen.getByRole('button', { name: 'Confirm settlement' }))
-    await screen.findByRole('button', { name: 'Retry exact settlement' })
+    await screen.findByRole('button', { name: 'Retry this settlement' })
     first.unmount()
 
     renderPage()
     const reloadUser = userEvent.setup()
     await reloadUser.type(await screen.findByLabelText('External payment reference'), 'DIFFERENT-REFERENCE')
-    await reloadUser.click(await screen.findByRole('button', { name: 'Retry exact settlement' }))
+    await reloadUser.click(await screen.findByRole('button', { name: 'Retry this settlement' }))
     expect(await screen.findByText(/does not match the unresolved settlement/i)).toBeVisible()
     expect(settlementPosts()).toHaveLength(1)
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) =>
@@ -229,7 +229,7 @@ describe('Administrative Full-Balance Settlement workspace', () => {
     contradictory.servicing.totalOutstanding = 1099
     vi.mocked(api.apiRequest).mockImplementation(async (path) => read(path, contradictory))
     renderPage()
-    expect(await screen.findByText('Contradictory LoanAccount evidence')).toBeVisible()
+    expect(await screen.findByText('Contradictory Loan account information')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Review full-balance settlement' })).toBeDisabled()
     expect(settlementPosts()).toHaveLength(0)
   })

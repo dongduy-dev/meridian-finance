@@ -145,7 +145,7 @@ describe('Partner eligibility review page', () => {
     })
     renderPage()
 
-    expect(await screen.findByText(/Source Batch Replaced/)).toBeVisible()
+    expect(await screen.findByText(/newer employee import replaced this review/)).toBeVisible()
     expect(screen.getByRole('button', { name: 'Review approval' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Review rejection' })).toBeDisabled()
   })
@@ -204,7 +204,7 @@ describe('Partner eligibility review page', () => {
     await user.click(screen.getByRole('button', { name: 'Review rejection' }))
 
     expect(screen.getByRole('dialog', { name: 'Confirm eligibility rejection' })).toBeVisible()
-    expect(screen.getByText('Identity Evidence Mismatch', { selector: 'dd' })).toBeVisible()
+    expect(screen.getByText('Identity evidence does not match', { selector: 'dd' })).toBeVisible()
     expect(screen.getByText(/does not create or change a Partner Employee link/i)).toBeVisible()
     expect(vi.mocked(api.apiRequest).mock.calls.some(([, options]) => (options as RequestInit | undefined)?.method === 'POST')).toBe(false)
     await user.click(screen.getByRole('button', { name: 'Confirm rejection' }))
@@ -311,7 +311,7 @@ describe('Partner eligibility review page', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm rejection' }))
 
     expect(await screen.findByText(/completed with a different outcome/i)).toBeVisible()
-    expect(screen.getByText(/Manual Review Approved/)).toBeVisible()
+    expect(screen.getByText(/Employment confirmed/)).toBeVisible()
     expect(posts).toBe(1)
   })
 
@@ -336,5 +336,16 @@ describe('Partner eligibility review page', () => {
 
     expect(await screen.findByRole('heading', { name: 'Decision was not confirmed' }, { timeout: 3000 })).toBeVisible()
     expect(posts).toBe(1)
+  })
+
+  it('keeps an unfamiliar trigger neutral and disables manager decisions', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
+    mockReviewReads({ ...detail, triggerOutcome: 'FUTURE_TRIGGER' })
+    renderPage()
+
+    expect(await screen.findByText('Verification result unavailable')).toBeVisible()
+    expect(screen.queryByText('Future Trigger')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Review approval' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Review rejection' })).not.toBeInTheDocument()
   })
 })

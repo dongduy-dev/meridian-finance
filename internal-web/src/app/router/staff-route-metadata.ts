@@ -150,14 +150,14 @@ export const STAFF_DISBURSEMENT_CASE_ROUTE = {
 export const STAFF_SERVICING_QUEUE_ROUTE = {
   path: '/staff/work/servicing',
   label: 'Account servicing',
-  documentTitle: 'LoanAccount servicing queue',
+  documentTitle: 'Loan account servicing queue',
   requiredPermissions: ['loan:read'],
 } as const satisfies StaffRouteDefinition
 
 export const STAFF_LOAN_ACCOUNT_ROUTE = {
   path: '/staff/applications/:loanApplicationId/loan-account',
-  label: 'LoanAccount servicing',
-  documentTitle: 'LoanAccount servicing',
+  label: 'Loan account servicing',
+  documentTitle: 'Loan account servicing',
   requiredPermissions: ['loan:read'],
 } as const satisfies StaffRouteDefinition
 

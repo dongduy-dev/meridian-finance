@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
+import { RequestCorrelation } from '@/components/common/RequestCorrelation'
 import { hasPermission } from '@/features/auth/model/access-control'
 import { useAuth } from '@/features/auth/model/auth-context'
 import { ApiError } from '@/lib/api'
@@ -16,8 +17,8 @@ import { createPartnerCompany } from '../api/partner-admin-api'
 import { partnerAdminKeys, partnerCompaniesQuery } from '../api/queries'
 import { PartnerQueryErrorPanel } from '../components/PartnerQueryErrorPanel'
 
-const knownStatuses = new Set(['ACTIVE', 'INACTIVE', 'SUSPENDED'])
-const statusLabel = (value: string) => knownStatuses.has(value) ? value.replaceAll('_', ' ') : 'Unknown status'
+const statusLabels: Record<string, string> = { ACTIVE: 'Active', INACTIVE: 'Inactive', SUSPENDED: 'Suspended' }
+const statusLabel = (value: string) => statusLabels[value] ?? 'Status unavailable'
 
 export function PartnerCompanyListPage() {
   const { manager, state } = useAuth()
@@ -59,7 +60,7 @@ export function PartnerCompanyListPage() {
         <label className="space-y-1 text-sm font-medium">Salary Advance policy limit<Input type="number" min="0" step="0.01" {...form.register('salaryAdvancePolicyLimit', { valueAsNumber: true })} /></label>
         <div className="md:col-span-2"><Button type="submit" disabled={submitting}>{submitting ? 'Creating…' : 'Create company'}</Button></div>
       </form>
-      {commandError ? <Alert variant="destructive" className="mt-4"><AlertTitle>Company was not created</AlertTitle><AlertDescription>{commandError instanceof ApiError ? commandError.message : commandError.message}</AlertDescription></Alert> : null}
+      {commandError ? <Alert variant="destructive" className="mt-4"><AlertTitle>Company creation not confirmed</AlertTitle><AlertDescription>{commandError instanceof ApiError && commandError.errorCode === 'PARTNER_COMPANY_CODE_ALREADY_EXISTS' ? 'This company code is already in use. Review the company list before trying again.' : 'Meridian could not confirm the result. Refresh the company list before trying again.'}{commandError instanceof ApiError && commandError.requestId ? <RequestCorrelation requestId={commandError.requestId} /> : null}</AlertDescription></Alert> : null}
     </CardContent></Card> : null}
     <Card><CardHeader><CardTitle>Configured companies</CardTitle></CardHeader><CardContent>
       {companies.isPending ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading Partner Companies…</div> : null}

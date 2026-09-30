@@ -80,6 +80,7 @@ describe('Customer digital access Staff workflow', () => {
     await user.selectOptions(screen.getByLabelText('Exact search'), 'identity')
     await user.type(screen.getByLabelText('Exact value'), 'ID-EXACT')
     await user.click(screen.getByRole('button', { name: 'Search Customer' }))
+    expect(await screen.findByText('Status: Active')).toBeVisible()
     expect(vi.mocked(api.apiRequest).mock.calls.find(([path]) => String(path).endsWith('/search'))?.[1])
       .toMatchObject({ method: 'POST', body: { identityReference: 'ID-EXACT' } })
     expect(screen.queryByRole('button', { name: 'Enable digital access' })).not.toBeInTheDocument()

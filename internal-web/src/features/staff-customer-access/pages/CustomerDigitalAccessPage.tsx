@@ -10,6 +10,9 @@ import type { StaffCustomer } from '@/features/staff-origination/api/contracts'
 import { ApiError, NetworkError } from '@/lib/api'
 import { enableDigitalAccess, getDigitalAccess, searchCustomer } from '../api/customer-access-api'
 
+const customerStatusLabels: Record<string, string> = { ACTIVE: 'Active', SUSPENDED: 'Suspended', DISABLED: 'Disabled' }
+const customerStatusLabel = (value: string) => customerStatusLabels[value] ?? 'Status unavailable'
+
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.errorCode === 'EMAIL_ALREADY_REGISTERED') return 'An account with this email already exists.'
@@ -123,7 +126,7 @@ export function CustomerDigitalAccessPage() {
       <Button disabled={!allowed || searching}>{searching ? 'Searching…' : 'Search Customer'}</Button>
       {searchError ? <Alert variant="destructive">{searchError}</Alert> : null}
       {searchResult ? <div className="space-y-2 rounded-md border p-4"><p className="font-semibold">{searchResult.customerNumber} · {searchResult.profile?.fullName ?? 'Name unavailable'}</p>
-        <p className="text-sm text-muted-foreground">Status: {searchResult.status}</p>
+        <p className="text-sm text-muted-foreground">Status: {customerStatusLabel(searchResult.status)}</p>
         <Button type="button" variant="outline" onClick={() => { setSelected(searchResult); setEmail(''); setIdentityReference(''); setFeedback(undefined); setNeedsReconciliation(false) }}>Select Customer</Button>
       </div> : null}
     </form>

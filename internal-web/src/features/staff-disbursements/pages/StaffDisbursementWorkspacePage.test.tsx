@@ -382,7 +382,7 @@ describe('Staff disbursement workspace', () => {
     expect(findUnresolvedOperation('DISBURSEMENT_CONFIRMATION', applicationId)?.semanticPayload)
       .toBeUndefined()
 
-    await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Retry this disbursement' }))
     await waitFor(() => expect(disbursementPostCalls()).toHaveLength(2))
     expect(await screen.findByText(/previously recorded disbursement was confirmed through the exact retry/i)).toBeVisible()
     expect(disbursementPostCalls()).toHaveLength(2)
@@ -441,13 +441,13 @@ describe('Staff disbursement workspace', () => {
     user = userEvent.setup()
     expect(await screen.findByRole('heading', { name: 'Previous confirmation result unknown' })).toBeVisible()
     await enterEvidence(user, 'DIFFERENT-REFERENCE')
-    await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Retry this disbursement' }))
     expect(await screen.findByText(/does not match the unresolved disbursement/i)).toBeVisible()
     expect(disbursementPostCalls()).toHaveLength(1)
 
     await user.clear(screen.getByLabelText('External transfer reference'))
     await user.type(screen.getByLabelText('External transfer reference'), secretReference)
-    await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Retry this disbursement' }))
     await waitFor(() => expect(disbursementPostCalls()).toHaveLength(2))
     expect(await screen.findByText(/previously recorded disbursement was confirmed through the exact retry/i)).toBeVisible()
     expect(disbursementPostCalls()).toHaveLength(2)
@@ -495,18 +495,18 @@ describe('Staff disbursement workspace', () => {
     expect(await screen.findByRole('heading', { name: 'Activation result' })).toBeVisible()
     expect(screen.getByRole('heading', { name: 'Final repayment schedule' })).toBeVisible()
     expect(screen.getByText('LA-33333333333343338333333333333333')).toBeVisible()
-    expect(screen.queryByRole('link', { name: 'Open LoanAccount servicing' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Open loan account servicing' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /repay|settle|close|payoff/i })).not.toBeInTheDocument()
     expect(document.body.textContent).not.toContain(secretReference)
     expect(document.body.textContent).not.toContain(fullAccountNumber)
   })
 
-  it('offers permission-aware navigation from activation evidence to LoanAccount servicing', async () => {
+  it('offers permission-aware navigation from activation evidence to loan account servicing', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue({ ...staff, permissions: ['loan:disburse', 'loan:read'] })
     vi.mocked(api.apiRequest).mockResolvedValue(disbursedCase())
     renderPage()
 
-    const link = await screen.findByRole('link', { name: 'Open LoanAccount servicing' })
+    const link = await screen.findByRole('link', { name: 'Open loan account servicing' })
     expect(link).toHaveAttribute('href', `/staff/applications/${applicationId}/loan-account`)
     expect(screen.queryByRole('button', { name: /repay|settle|close|payoff/i })).not.toBeInTheDocument()
     expect(disbursementPostCalls()).toHaveLength(0)

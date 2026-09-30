@@ -48,7 +48,7 @@ describe('Staff ready-disbursement queue', () => {
     const user = userEvent.setup()
 
     expect(await screen.findByText('UCL-20260910-000001')).toBeVisible()
-    expect(screen.getByText(/Applications ready for Accounting to record an external transfer and activate the LoanAccount/i)).toBeVisible()
+    expect(screen.getByText(/Applications ready for Accounting to record an external transfer and activate the loan account/i)).toBeVisible()
     expect(document.body.textContent).not.toMatch(/server-owned|backend-owned|authoritative queue/i)
     await user.selectOptions(screen.getByLabelText('Product'), 'UNSECURED_CONSUMER_LOAN')
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) =>

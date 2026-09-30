@@ -144,6 +144,7 @@ describe('assisted origination pages', () => {
     renderRoute(`/staff/origination/${caseId}`)
 
     expect(await screen.findByRole('heading', { name: 'UCL intake', level: 1 })).toBeVisible()
+    expect(screen.getByText('Status: Open · No application has been created from this intake.')).toBeVisible()
     expect(await screen.findByText('Selected Customer · CUS-000000123')).toBeVisible()
     expect(screen.queryByText(/identityReference|fingerprint|ciphertext/i)).not.toBeInTheDocument()
 

@@ -18,5 +18,5 @@ export function ServicingStatusBadge({ status }: { status: string }) {
     treatment === 'success' && 'border-success/25 bg-success-subtle text-success',
     treatment === 'warning' && 'border-warning/25 bg-warning-subtle text-warning',
     treatment === 'information' && 'border-information/25 bg-information-subtle text-information',
-  )} title={known ? undefined : status}><Icon aria-hidden="true" className="size-3.5" />{known ? status.toLowerCase().replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase()) : accountStatusLabel(status)}</span>
+  )}><Icon aria-hidden="true" className="size-3.5" />{accountStatusLabel(status)}</span>
 }
