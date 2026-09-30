@@ -40,7 +40,7 @@ export function StaffDisbursementWorkQueuePage() {
     <header>
       <p className="text-sm font-semibold text-muted-foreground">ACCOUNTING WORK</p>
       <h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold sm:text-3xl">Ready-disbursement queue</h1>
-      <p className="mt-2 max-w-3xl text-muted-foreground">Applications ready for Accounting to record an external transfer and activate the LoanAccount.</p>
+      <p className="mt-2 max-w-3xl text-muted-foreground">Applications ready for Accounting to record an external transfer and activate the loan account.</p>
     </header>
     {!isAccounting || accountingRejected ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Accounting Officer access required</AlertTitle><AlertDescription>Accounting Officer access is required for disbursement operations.</AlertDescription></Alert> : null}
     <Card><CardHeader><CardTitle>Queue filter</CardTitle></CardHeader><CardContent><label className="grid max-w-md gap-2 text-sm font-semibold">Product<select className="h-11 rounded-md border bg-card px-3 font-normal" value={productCode} onChange={(event) => { setProductCode(event.target.value); setPage(0) }}><option value="">All products</option><option value="SALARY_ADVANCE">Salary Advance</option><option value="UNSECURED_CONSUMER_LOAN">Unsecured Consumer Loan</option><option value="COLLATERAL_LOAN">Collateral Loan</option></select></label></CardContent></Card>

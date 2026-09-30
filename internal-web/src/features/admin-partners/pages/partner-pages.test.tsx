@@ -123,7 +123,7 @@ describe('Partner administration pages', () => {
     })
 
     renderPath(`/admin/partners/${companyId}`)
-    expect(await screen.findByText(/No authoritative employee snapshot is available for 2026-09/)).toBeVisible()
+    expect(await screen.findByText(/No completed employee import is available for 2026-09/)).toBeVisible()
     expect(screen.queryByRole('table', { name: 'Current Partner Employee source rows' })).not.toBeInTheDocument()
     const history = screen.getByRole('table', { name: 'Employee import history' })
     expect(history).toHaveTextContent(employee.importBatchId)
@@ -153,7 +153,7 @@ describe('Partner administration pages', () => {
 
     expect(await screen.findByRole('heading', { name: 'Partner Companies' })).toBeVisible()
     expect(await screen.findByText('ACME')).toBeVisible()
-    expect(screen.getByText('Unknown status')).toBeVisible()
+    expect(screen.getByText('Status unavailable')).toBeVisible()
     expect(screen.getByRole('link', { name: 'Open' })).toHaveAttribute('href', `/admin/partners/${companyId}`)
     expect(screen.queryByRole('button', { name: 'Create company' })).not.toBeInTheDocument()
   })
@@ -186,6 +186,25 @@ describe('Partner administration pages', () => {
     })
   })
 
+  it('shows a duplicate company code as an operator decision without the API message', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if ((options as RequestInit | undefined)?.method === 'POST') {
+        throw new ApiError(409, 'PARTNER_COMPANY_CODE_ALREADY_EXISTS', 'Raw backend details', String(path), '2026-09-16T08:00:00Z')
+      }
+      return []
+    })
+    renderPath('/admin/partners')
+    const user = userEvent.setup()
+    await screen.findByText('No Partner Companies are configured.')
+    await user.type(screen.getByLabelText('Company code'), 'ACME')
+    await user.type(screen.getByLabelText('Company name'), 'Acme Ltd')
+    await user.click(screen.getByRole('button', { name: 'Create company' }))
+
+    expect(await screen.findByText(/company code is already in use/i)).toBeVisible()
+    expect(document.body.textContent).not.toContain('Raw backend details')
+  })
+
   it('keeps detail editing distinct and confirms availability-reducing status changes', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
     vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
@@ -209,7 +228,7 @@ describe('Partner administration pages', () => {
     await user.click(suspendedTrigger)
     let statusDialog = screen.getByRole('dialog', { name: 'Confirm Partner Company status' })
     expect(statusDialog).toBeVisible()
-    expect(screen.getByText('ACTIVE → SUSPENDED')).toBeVisible()
+    expect(screen.getByText('Active → Suspended')).toBeVisible()
     expect(screen.getByText(/reduces future Salary Advance eligibility/i)).toBeVisible()
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => path === `/partner-companies/${companyId}/status`)).toBe(false)
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -229,7 +248,7 @@ describe('Partner administration pages', () => {
       && JSON.stringify((options as { body?: unknown }).body) === JSON.stringify({ status: 'SUSPENDED' }))).toBe(true)
 
     await user.click(screen.getByRole('button', { name: 'Set inactive' }))
-    expect(screen.getByText('ACTIVE → INACTIVE')).toBeVisible()
+    expect(screen.getByText('Active → Inactive')).toBeVisible()
     statusDialog = screen.getByRole('dialog', { name: 'Confirm Partner Company status' })
     await user.click(within(statusDialog).getByRole('button', { name: 'Set inactive' }))
     await waitFor(() => expect(vi.mocked(api.apiRequest).mock.calls.some(([path, options]) =>
@@ -309,7 +328,7 @@ describe('Partner administration pages', () => {
     vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
     vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
       if ((options as RequestInit | undefined)?.method === 'POST' && String(path).endsWith('/employee-import-batches')) {
-        throw new ApiError(409, 'IDEMPOTENCY_KEY_REUSED', 'Request ID was reused.', String(path), '2026-09-16T08:00:00Z')
+        throw new ApiError(409, 'IDEMPOTENCY_KEY_REUSED', 'The saved import cannot be retried. Refresh the current employee list and import history before starting another import.', String(path), '2026-09-16T08:00:00Z')
       }
       if (String(path).endsWith('/employees/current')) return snapshot
       if (String(path).endsWith('/employee-import-batches')) return []
@@ -325,8 +344,8 @@ describe('Partner administration pages', () => {
     await user.type(screen.getByLabelText('Identity reference'), 'ID-NEW')
     await user.click(screen.getByRole('button', { name: 'Import employees' }))
 
-    expect(await screen.findByText('Request ID was reused.')).toBeVisible()
-    expect(screen.queryByRole('button', { name: 'Retry exact import' })).not.toBeInTheDocument()
+    expect(await screen.findByText('The saved import cannot be retried. Refresh the current employee list and import history before starting another import.')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Retry this import' })).not.toBeInTheDocument()
   })
 
   it('renders a valid CSV review and sends structured JSON without the raw file', async () => {
@@ -419,15 +438,15 @@ describe('Partner administration pages', () => {
       { type: 'text/csv' },
     ))
     await user.click(await screen.findByRole('button', { name: 'Import CSV rows' }))
-    expect(await screen.findByRole('heading', { name: 'Import result unknown' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'We could not confirm the import' })).toBeVisible()
     expect(storedBrowserText()).not.toContain('EMP-NEW')
     expect(storedBrowserText()).not.toContain('ID-NEW')
     expect(screen.getByLabelText('Effective month')).toBeDisabled()
     expect(screen.getByLabelText('Partner Employee CSV')).toBeDisabled()
     expect(screen.getByLabelText('Enter manually')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Discard and start a new import' })).not.toBeInTheDocument()
-    expect(screen.getByText(/Leaving or reloading this page loses the local recovery information and does not prove that the original import failed/i)).toBeVisible()
-    await user.click(screen.getByRole('button', { name: 'Retry exact import' }))
+    expect(screen.getByText(/leaving or reloading does not mean the import failed/i)).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Retry this import' }))
     expect(await screen.findByText('Employee import completed.')).toBeVisible()
     await waitFor(() => expect(submitted).toHaveLength(2))
     expect(submitted[1]).toEqual(submitted[0])
@@ -442,7 +461,7 @@ describe('Partner administration pages', () => {
       if ((options as RequestInit | undefined)?.method === 'POST' && String(path).endsWith('/employee-import-batches')) {
         attempts += 1
         if (attempts === 1) throw new NetworkError('response lost')
-        throw new ApiError(409, 'IDEMPOTENCY_KEY_REUSED', 'Request ID was reused.', String(path), '2026-09-16T08:00:00Z')
+        throw new ApiError(409, 'IDEMPOTENCY_KEY_REUSED', 'The saved import cannot be retried. Refresh the current employee list and import history before starting another import.', String(path), '2026-09-16T08:00:00Z')
       }
       if (String(path).endsWith('/employees/current')) return snapshot
       if (String(path).endsWith('/employee-import-batches')) return []
@@ -457,10 +476,10 @@ describe('Partner administration pages', () => {
     await user.type(screen.getByLabelText('Employee code'), 'EMP-NEW')
     await user.type(screen.getByLabelText('Identity reference'), 'ID-NEW')
     await user.click(screen.getByRole('button', { name: 'Import employees' }))
-    await user.click(await screen.findByRole('button', { name: 'Retry exact import' }))
+    await user.click(await screen.findByRole('button', { name: 'Retry this import' }))
 
-    expect(await screen.findByText('Request ID was reused.')).toBeVisible()
-    expect(screen.queryByRole('button', { name: 'Retry exact import' })).not.toBeInTheDocument()
+    expect(await screen.findByText('The saved import cannot be retried. Refresh the current employee list and import history before starting another import.')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Retry this import' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Effective month')).toBeEnabled()
     expect(attempts).toBe(2)
   })

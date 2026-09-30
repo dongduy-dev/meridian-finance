@@ -24,8 +24,8 @@ export function QueryErrorPanel({
     : missing
       ? 'This application cannot be opened from the current session.'
       : error instanceof ApiError
-        ? 'Meridian could not load this operational read. Try again when the service is available.'
-        : 'Meridian could not verify the response. No unverified application information is displayed.'
+        ? 'Meridian could not load the latest information. Try again before taking action.'
+        : 'Meridian could not read the response. Try again to load this information before taking action.'
 
   return (
     <Alert variant={forbidden || missing ? 'warning' : 'destructive'}>

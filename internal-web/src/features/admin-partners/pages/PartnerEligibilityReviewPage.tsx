@@ -21,9 +21,45 @@ const rejectionReasons = [
   'INSUFFICIENT_SOURCE_EVIDENCE',
 ] as const
 
-const humanizeKnownValue = (value: string) =>
-  value.toLowerCase().split('_').map((word) =>
-    word.replace(/^./, (letter) => letter.toUpperCase())).join(' ')
+const triggerLabels: Record<string, string> = {
+  MATCHED_ACTIVE: 'Active employee matched',
+  MATCHED_INACTIVE: 'Inactive employee matched',
+  NOT_FOUND: 'No matching employee found',
+  MULTIPLE_MATCHES: 'Multiple employees matched',
+  PENDING_MANUAL_REVIEW: 'Manual review needed',
+  MANUAL_REVIEW_APPROVED: 'Employment confirmed by review',
+  MANUAL_REVIEW_REJECTED: 'Employment not confirmed by review',
+}
+const reviewStatusLabels: Record<string, string> = {
+  PENDING: 'Pending review', APPROVED: 'Approved', REJECTED: 'Rejected', SUPERSEDED: 'Replaced by a later review',
+}
+const unavailableReasonLabels: Record<string, string> = {
+  REVIEW_RESOLVED: 'This review is complete',
+  PRIOR_EFFECTIVE_MONTH: 'The effective month is no longer current',
+  PARTNER_COMPANY_INACTIVE: 'The Partner Company is not active',
+  SOURCE_BATCH_REPLACED: 'A newer employee import replaced this review’s source',
+  CUSTOMER_IDENTITY_EVIDENCE_UNAVAILABLE: 'Current Customer identity evidence is unavailable',
+}
+const decisionLabels: Record<string, string> = {
+  MANUAL_REVIEW_APPROVED: 'Employment confirmed', MANUAL_REVIEW_REJECTED: 'Employment not confirmed',
+}
+const reasonLabels: Record<string, string> = {
+  CURRENT_EMPLOYEE_CONFIRMED: 'Current employee confirmed',
+  NO_ELIGIBLE_CURRENT_EMPLOYEE: 'No eligible current employee',
+  IDENTITY_EVIDENCE_MISMATCH: 'Identity evidence does not match',
+  INSUFFICIENT_SOURCE_EVIDENCE: 'Employment evidence is insufficient',
+}
+const employmentLabels: Record<string, string> = {
+  ACTIVE: 'Active', INACTIVE: 'Inactive', TERMINATED: 'Terminated', SUSPENDED: 'Suspended',
+}
+
+export const triggerLabel = (value: string) => triggerLabels[value] ?? 'Verification result unavailable'
+export const reviewStatusLabel = (value: string) => reviewStatusLabels[value] ?? 'Review status unavailable'
+export const unavailableReasonLabel = (value: string | null) =>
+  value ? unavailableReasonLabels[value] ?? 'Review availability cannot be determined' : 'Review availability cannot be determined'
+export const decisionLabel = (value: string) => decisionLabels[value] ?? 'Decision unavailable'
+export const reasonLabel = (value: string) => reasonLabels[value] ?? 'Reason unavailable'
+export const employmentLabel = (value: string) => employmentLabels[value] ?? 'Employment status unavailable'
 
 type DecisionConfirmation = {
   decision: PartnerEligibilityReviewDecision
@@ -104,11 +140,12 @@ export function PartnerEligibilityReviewPage() {
   }
 
   const review = detail.data
+  const knownTrigger = Boolean(review && Object.hasOwn(triggerLabels, review.triggerOutcome))
   const eligibleCandidates = review?.candidates.filter((candidate) =>
     candidate.active && candidate.employmentStatus === 'ACTIVE') ?? []
   const selectedCandidate = eligibleCandidates.find((candidate) =>
     candidate.partnerEmployeeId === selectedEmployeeId)
-  const activeConfirmation = confirmation && review?.status === 'PENDING'
+  const activeConfirmation = confirmation && review?.status === 'PENDING' && knownTrigger
     && confirmation.reviewUpdatedAt === review.updatedAt
     && (confirmation.decision.outcome === 'REJECT'
       || selectedCandidate?.partnerEmployeeId === confirmation.decision.partnerEmployeeId)
@@ -138,9 +175,9 @@ export function PartnerEligibilityReviewPage() {
         {queue.data?.items.length ? <ul className="space-y-3">{queue.data.items.map((item) => <li key={item.reviewId}>
           <button type="button" onClick={() => { setRequestedReviewId(item.reviewId); setSelectedEmployeeId(''); setConfirmation(undefined) }} className={`w-full rounded-md border p-3 text-left text-sm ${selectedReviewId === item.reviewId ? 'border-primary bg-muted' : ''}`}>
             <span className="block font-semibold">{item.partnerCompanyName}</span>
-            <span className="mt-1 block text-muted-foreground">{item.partnerCompanyCode} · {item.effectiveMonth} · {humanizeKnownValue(item.triggerOutcome)}</span>
+            <span className="mt-1 block text-muted-foreground">{item.partnerCompanyCode} · {item.effectiveMonth} · {triggerLabel(item.triggerOutcome)}</span>
             <span className="mt-1 block">Requested employee code: {item.requestedEmployeeCode}</span>
-            {!item.reviewable ? <span className="mt-1 block text-destructive">Not reviewable: {humanizeKnownValue(item.nonReviewableReason ?? 'REVIEW_UNAVAILABLE')}</span> : null}
+            {!item.reviewable ? <span className="mt-1 block text-destructive">Not reviewable: {unavailableReasonLabel(item.nonReviewableReason)}</span> : null}
           </button>
         </li>)}</ul> : null}
       </CardContent></Card>
@@ -153,32 +190,33 @@ export function PartnerEligibilityReviewPage() {
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <Fact label="Partner Company">{review.partnerCompany.name} ({review.partnerCompany.companyCode})</Fact>
             <Fact label="Effective month">{review.effectiveMonth}</Fact>
-            <Fact label="Trigger">{humanizeKnownValue(review.triggerOutcome)}</Fact>
-            <Fact label="Status">{humanizeKnownValue(review.status)}</Fact>
+            <Fact label="Trigger">{triggerLabel(review.triggerOutcome)}</Fact>
+            <Fact label="Status">{reviewStatusLabel(review.status)}</Fact>
             <Fact label="Requested employee code">{review.requestedEmployeeCode}</Fact>
             <Fact label="Created">{formatTimestamp(review.createdAt)}</Fact>
           </dl>
 
-          {review.nonReviewableReason ? <Alert variant="destructive"><AlertTitle>Review is not actionable</AlertTitle><AlertDescription>{humanizeKnownValue(review.nonReviewableReason)}. Fresh Customer verification may be required.</AlertDescription></Alert> : null}
+          {review.nonReviewableReason ? <Alert variant="destructive"><AlertTitle>Review is not actionable</AlertTitle><AlertDescription>{unavailableReasonLabel(review.nonReviewableReason)}. Refresh the review before taking another action.</AlertDescription></Alert> : null}
+          <Button variant="outline" disabled={detail.isFetching || queue.isFetching} onClick={() => void Promise.all([detail.refetch(), queue.refetch()])}>Refresh review</Button>
 
           <div>
             <h2 className="font-semibold">Current identity-matched candidates</h2>
-            {review.candidates.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">No current employee candidate matches the Customer identity evidence.</p> : <div className="mt-2 overflow-x-auto"><table className="w-full min-w-[34rem] text-left text-sm"><caption className="sr-only">Current Partner Employee candidates</caption><thead><tr className="border-b"><th className="p-2">Select</th><th className="p-2">Employee code</th><th className="p-2">Employment</th><th className="p-2">Active</th></tr></thead><tbody>{review.candidates.map((candidate) => <tr className="border-b" key={candidate.partnerEmployeeId}><td className="p-2"><input aria-label={`Select ${candidate.employeeCode}`} type="radio" name="candidate" value={candidate.partnerEmployeeId} checked={selectedCandidate?.partnerEmployeeId === candidate.partnerEmployeeId} disabled={!candidate.active || candidate.employmentStatus !== 'ACTIVE' || !canManage || !review.approvalAvailable} onChange={() => { setSelectedEmployeeId(candidate.partnerEmployeeId); setConfirmation(undefined) }} /></td><td className="p-2 font-mono">{candidate.employeeCode}</td><td className="p-2">{humanizeKnownValue(candidate.employmentStatus)}</td><td className="p-2">{candidate.active ? 'Yes' : 'No'}</td></tr>)}</tbody></table></div>}
+            {review.candidates.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">No current employee candidate matches the Customer identity evidence.</p> : <div className="mt-2 overflow-x-auto"><table className="w-full min-w-[34rem] text-left text-sm"><caption className="sr-only">Current Partner Employee candidates</caption><thead><tr className="border-b"><th className="p-2">Select</th><th className="p-2">Employee code</th><th className="p-2">Employment</th><th className="p-2">Active</th></tr></thead><tbody>{review.candidates.map((candidate) => <tr className="border-b" key={candidate.partnerEmployeeId}><td className="p-2"><input aria-label={`Select ${candidate.employeeCode}`} type="radio" name="candidate" value={candidate.partnerEmployeeId} checked={selectedCandidate?.partnerEmployeeId === candidate.partnerEmployeeId} disabled={!candidate.active || candidate.employmentStatus !== 'ACTIVE' || !canManage || !review.approvalAvailable} onChange={() => { setSelectedEmployeeId(candidate.partnerEmployeeId); setConfirmation(undefined) }} /></td><td className="p-2 font-mono">{candidate.employeeCode}</td><td className="p-2">{employmentLabel(candidate.employmentStatus)}</td><td className="p-2">{candidate.active ? 'Yes' : 'No'}</td></tr>)}</tbody></table></div>}
           </div>
 
-          {review.decisionOutcome ? <Alert variant="information"><AlertTitle>Terminal outcome</AlertTitle><AlertDescription>{humanizeKnownValue(review.decisionOutcome)} · {review.decisionReason ? humanizeKnownValue(review.decisionReason) : 'Reason unavailable'} · {formatTimestamp(review.reviewedAt)}</AlertDescription></Alert> : null}
+          {review.decisionOutcome ? <Alert variant="information"><AlertTitle>Terminal outcome</AlertTitle><AlertDescription>{decisionLabel(review.decisionOutcome)} · {review.decisionReason ? reasonLabel(review.decisionReason) : 'Reason unavailable'} · {formatTimestamp(review.reviewedAt)}</AlertDescription></Alert> : null}
 
-          {canManage && review.status === 'PENDING' ? <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
+          {canManage && review.status === 'PENDING' && knownTrigger ? <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
             <div className="space-y-2"><p className="text-sm font-medium">Approve exact current employee</p><Button id="eligibility-approval-trigger" disabled={busy || !review.approvalAvailable || !selectedCandidate} onClick={() => selectedCandidate && setConfirmation({ decision: { outcome: 'APPROVE', partnerEmployeeId: selectedCandidate.partnerEmployeeId, reasonCode: 'CURRENT_EMPLOYEE_CONFIRMED' }, employeeCode: selectedCandidate.employeeCode, reviewUpdatedAt: review.updatedAt })}>Review approval</Button></div>
-            <div className="space-y-2"><label className="block text-sm font-medium">Rejection reason<select className="mt-1 flex h-10 w-full rounded-md border bg-background px-3" value={rejectionReason} onChange={(event) => { setRejectionReason(event.target.value as typeof rejectionReason); setConfirmation(undefined) }}>{rejectionReasons.map((reason) => <option key={reason} value={reason}>{humanizeKnownValue(reason)}</option>)}</select></label><Button id="eligibility-rejection-trigger" variant="destructive" disabled={busy || !review.rejectionAvailable} onClick={() => setConfirmation({ decision: { outcome: 'REJECT', partnerEmployeeId: null, reasonCode: rejectionReason }, reviewUpdatedAt: review.updatedAt })}>Review rejection</Button></div>
+            <div className="space-y-2"><label className="block text-sm font-medium">Rejection reason<select className="mt-1 flex h-10 w-full rounded-md border bg-background px-3" value={rejectionReason} onChange={(event) => { setRejectionReason(event.target.value as typeof rejectionReason); setConfirmation(undefined) }}>{rejectionReasons.map((reason) => <option key={reason} value={reason}>{reasonLabel(reason)}</option>)}</select></label><Button id="eligibility-rejection-trigger" variant="destructive" disabled={busy || !review.rejectionAvailable} onClick={() => setConfirmation({ decision: { outcome: 'REJECT', partnerEmployeeId: null, reasonCode: rejectionReason }, reviewUpdatedAt: review.updatedAt })}>Review rejection</Button></div>
           </div> : null}
 
           {commandMessage ? <Alert variant="information"><AlertTitle>Review refreshed</AlertTitle><AlertDescription>{commandMessage}</AlertDescription></Alert> : null}
-          {commandError ? <Alert variant="destructive"><AlertTitle>Decision was not confirmed</AlertTitle><AlertDescription>{commandError.message}{commandError instanceof ApiError && commandError.requestId ? <RequestCorrelation requestId={commandError.requestId} /> : null}</AlertDescription></Alert> : null}
+          {commandError ? <Alert variant="destructive"><AlertTitle>Decision was not confirmed</AlertTitle><AlertDescription>Refresh this review before deciding whether to try again.{commandError instanceof ApiError && commandError.requestId ? <RequestCorrelation requestId={commandError.requestId} /> : null}</AlertDescription></Alert> : null}
         </> : null}
       </CardContent></Card>
     </div>
-    {activeConfirmation && review ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="eligibility-confirm-title"><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><h2 id="eligibility-confirm-title" className="text-xl font-semibold">{activeConfirmation.decision.outcome === 'APPROVE' ? 'Confirm employment approval' : 'Confirm eligibility rejection'}</h2><dl className="grid gap-3 text-sm sm:grid-cols-2"><Fact label="Partner Company">{review.partnerCompany.name} ({review.partnerCompany.companyCode})</Fact><Fact label="Effective month">{review.effectiveMonth}</Fact>{activeConfirmation.decision.outcome === 'APPROVE' ? <Fact label="Selected employee">{activeConfirmation.employeeCode}</Fact> : <Fact label="Rejection reason">{humanizeKnownValue(activeConfirmation.decision.reasonCode)}</Fact>}</dl>{activeConfirmation.decision.outcome === 'APPROVE' ? <p className="text-sm text-muted-foreground">This confirms the selected current Partner employment for this Customer and may be used for Partner employment and Salary Advance eligibility. If a verified employment relationship belongs to another Partner, Meridian may replace it through this controlled approval.</p> : <p className="text-sm text-muted-foreground">This closes the review with the selected rejection reason. The rejection does not create or change a Partner Employee link.</p>}<div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={closeConfirmation}>Cancel</Button><Button autoFocus variant={activeConfirmation.decision.outcome === 'REJECT' ? 'destructive' : 'default'} disabled={busy} onClick={() => { const decision = activeConfirmation.decision; setConfirmation(undefined); void decide(decision) }}>{activeConfirmation.decision.outcome === 'APPROVE' ? 'Confirm approval' : 'Confirm rejection'}</Button></div></div></div> : null}
+    {activeConfirmation && review ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="eligibility-confirm-title"><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><h2 id="eligibility-confirm-title" className="text-xl font-semibold">{activeConfirmation.decision.outcome === 'APPROVE' ? 'Confirm employment approval' : 'Confirm eligibility rejection'}</h2><dl className="grid gap-3 text-sm sm:grid-cols-2"><Fact label="Partner Company">{review.partnerCompany.name} ({review.partnerCompany.companyCode})</Fact><Fact label="Effective month">{review.effectiveMonth}</Fact>{activeConfirmation.decision.outcome === 'APPROVE' ? <Fact label="Selected employee">{activeConfirmation.employeeCode}</Fact> : <Fact label="Rejection reason">{reasonLabel(activeConfirmation.decision.reasonCode)}</Fact>}</dl>{activeConfirmation.decision.outcome === 'APPROVE' ? <p className="text-sm text-muted-foreground">This confirms the selected current Partner employment for this Customer and may be used for Partner employment and Salary Advance eligibility. If a verified employment relationship belongs to another Partner, Meridian may replace it through this controlled approval.</p> : <p className="text-sm text-muted-foreground">This closes the review with the selected rejection reason. The rejection does not create or change a Partner Employee link.</p>}<div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={closeConfirmation}>Cancel</Button><Button autoFocus variant={activeConfirmation.decision.outcome === 'REJECT' ? 'destructive' : 'default'} disabled={busy} onClick={() => { const decision = activeConfirmation.decision; setConfirmation(undefined); void decide(decision) }}>{activeConfirmation.decision.outcome === 'APPROVE' ? 'Confirm approval' : 'Confirm rejection'}</Button></div></div></div> : null}
   </section>
 }
 

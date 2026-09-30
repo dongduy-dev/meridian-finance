@@ -27,7 +27,7 @@ function commandMessage(error: unknown, resource: string): string {
 }
 
 function displayStatus(status: string): string {
-  return status in statusLabels ? statusLabels[status as InternalUserStatus] : `Unknown status (${status})`
+  return status in statusLabels ? statusLabels[status as InternalUserStatus] : 'Status unavailable'
 }
 
 export function InternalUserCard({ user, roles, manager }: {

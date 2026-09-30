@@ -79,8 +79,8 @@ describe('Staff verification workspace', () => {
       },
     })
     renderWorkspace()
-    expect(await screen.findByRole('heading', { name: 'Immutable Salary Advance verification' }, { timeout: 5_000 })).toBeVisible()
-    expect(screen.getByText(/not live Partner values/i)).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Salary Advance verification' }, { timeout: 5_000 })).toBeVisible()
+    expect(screen.getByText(/Later Partner updates do not change them/i)).toBeVisible()
     expect(screen.queryByRole('button', { name: /Start manual verification|Review verification completion/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Application overview/ })).not.toBeInTheDocument()
   })

@@ -256,7 +256,7 @@ describe('internal router access contract', () => {
     ['/staff/work/approvals', ['approval:decide'], 'Independent decision queue'],
     ['/staff/work/contracts', ['loan:contract:read'], 'Contract and readiness queue'],
     ['/staff/work/disbursements', ['loan:disburse'], 'Ready-disbursement queue'],
-    ['/staff/work/servicing', ['loan:read'], 'LoanAccount servicing queue'],
+    ['/staff/work/servicing', ['loan:read'], 'Loan account servicing queue'],
   ] as const)('allows %s only through its exact capability', async (path, permissions, heading) => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff([...permissions]))
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', { status: 200 })))
@@ -302,12 +302,12 @@ describe('internal router access contract', () => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff(['loan:read']))
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 500 })))
     renderRoute('/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/loan-account')
-    expect(await screen.findByRole('heading', { name: 'Loading LoanAccount workspace' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Loading loan account workspace' })).toBeVisible()
 
     vi.mocked(authApi.refresh).mockResolvedValue(staff(['repayment:update']))
     renderRoute('/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/repayments/new')
     expect(await screen.findByRole('heading', { name: 'Repayment workspace unavailable' })).toBeVisible()
-    expect(screen.getByRole('heading', { name: 'LoanAccount read authority required' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Loan account access required' })).toBeVisible()
   })
 
   it.each([

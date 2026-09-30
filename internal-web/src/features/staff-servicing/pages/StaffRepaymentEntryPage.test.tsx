@@ -185,8 +185,8 @@ describe('Staff repayment entry', () => {
     await enterEvidence(user, ' payment-sensitive-reference-987 ')
     await user.click(screen.getByRole('button', { name: 'Review repayment' }))
     await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
-    await screen.findByRole('button', { name: 'Retry exact operation' })
-    await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
+    await screen.findByRole('button', { name: 'Retry this payment' })
+    await user.click(screen.getByRole('button', { name: 'Retry this payment' }))
 
     expect(await screen.findByRole('heading', { name: 'Previously recorded repayment result' })).toBeVisible()
     expect(repaymentPostCalls()).toHaveLength(2)
@@ -227,7 +227,7 @@ describe('Staff repayment entry', () => {
     expect(await screen.findByText(/Current account or history information does not confirm this exact repayment/i)).toBeVisible()
     expect(await screen.findByText(/Ordinary repayment is unavailable for this account status/i)).toBeVisible()
     expect(screen.queryByText(/backend reports|CP8/i)).not.toBeInTheDocument()
-    const retry = screen.getByRole('button', { name: 'Retry exact operation' })
+    const retry = screen.getByRole('button', { name: 'Retry this payment' })
     expect(retry).toBeEnabled()
     expect(repaymentPostCalls()).toHaveLength(1)
 
@@ -252,13 +252,13 @@ describe('Staff repayment entry', () => {
     await enterEvidence(user)
     await user.click(screen.getByRole('button', { name: 'Review repayment' }))
     await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
-    await screen.findByRole('button', { name: 'Retry exact operation' })
+    await screen.findByRole('button', { name: 'Retry this payment' })
     first.unmount()
 
     renderPage()
     const reloadUser = userEvent.setup()
     await enterEvidence(reloadUser, 'DIFFERENT-REFERENCE')
-    await reloadUser.click(await screen.findByRole('button', { name: 'Retry exact operation' }))
+    await reloadUser.click(await screen.findByRole('button', { name: 'Retry this payment' }))
 
     expect(await screen.findByText(/does not match the unresolved repayment/i)).toBeVisible()
     expect(repaymentPostCalls()).toHaveLength(1)

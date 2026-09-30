@@ -145,7 +145,7 @@ describe('Administrative closure workspace', () => {
     contradictory.servicing.totalPaid = 1199
     vi.mocked(api.apiRequest).mockResolvedValue(contradictory)
     renderPage()
-    expect(await screen.findByText('Contradictory LoanAccount evidence')).toBeVisible()
+    expect(await screen.findByText('Contradictory Loan account information')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Review administrative closure' })).toBeDisabled()
     expect(closurePosts()).toHaveLength(0)
   })

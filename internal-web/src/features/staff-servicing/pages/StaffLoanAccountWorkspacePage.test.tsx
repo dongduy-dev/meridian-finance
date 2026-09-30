@@ -46,9 +46,9 @@ describe('Staff LoanAccount workspace', () => {
     expect(screen.getByText('********')).toBeVisible()
     expect(screen.queryByText('1234567890')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Current servicing summary' })).toBeVisible()
-    expect(screen.getByRole('heading', { name: 'Immutable final schedule' })).toBeVisible()
-    expect(screen.getByRole('heading', { name: 'Immutable repayment history' })).toBeVisible()
-    expect(screen.getByRole('heading', { name: 'Servicing provenance' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Final repayment schedule' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Repayment history' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Account activity' })).toBeVisible()
     expect(screen.getByText(/Confirmed by Mina Accounting/)).toBeVisible()
     expect(screen.getByText('Overdue evaluated').closest('li')).toHaveTextContent('Meridian system')
     expect(screen.queryByText(/System User|Unknown Staff/)).not.toBeInTheDocument()
@@ -74,7 +74,7 @@ describe('Staff LoanAccount workspace', () => {
 
   it('shows exact recorded-by attribution on the financial repayment row', async () => {
     renderPage()
-    await screen.findByRole('heading', { name: 'Immutable repayment history' })
+    await screen.findByRole('heading', { name: 'Repayment history' })
     fireEvent.click(document.querySelector('details summary')!)
     expect(await screen.findByText(/Recorded by Mina Accounting/)).toBeVisible()
   })
@@ -92,13 +92,17 @@ describe('Staff LoanAccount workspace', () => {
         const fixture = provenanceFixture()
         fixture.statusHistory[1]!.action = 'FUTURE_EVENT'
         fixture.statusHistory[1]!.actor.type = 'FUTURE_ACTOR'
+        fixture.statusHistory[1]!.toStatus = 'FUTURE_STATUS'
         return fixture
       }
       return accountFixture()
     })
     renderPage()
-    expect((await screen.findByText('Unknown servicing event')).closest('li'))
-      .toHaveTextContent('Provenance unavailable')
+    expect((await screen.findByText('Activity unavailable')).closest('li'))
+      .toHaveTextContent('Actor unavailable')
+    expect(screen.getByText('Activity unavailable').closest('li'))
+      .toHaveTextContent('Status unavailable')
+    expect(document.body.textContent).not.toContain('FUTURE_STATUS')
   })
 
   it('does not query Staff provenance for a Customer session', async () => {

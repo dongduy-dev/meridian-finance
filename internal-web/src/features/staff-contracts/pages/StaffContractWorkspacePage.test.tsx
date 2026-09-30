@@ -130,7 +130,7 @@ describe('Staff contract workspace', () => {
     vi.mocked(api.apiRequest).mockResolvedValue(digital)
     const view = renderPage()
     expect(await screen.findByText('Customer self-service')).toBeVisible()
-    expect(screen.queryByText(/Customer evidence recorded by/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Customer acknowledgment recorded by/)).not.toBeInTheDocument()
 
     view.unmount()
     const assisted = {
@@ -149,8 +149,8 @@ describe('Staff contract workspace', () => {
     }
     vi.mocked(api.apiRequest).mockResolvedValue(assisted)
     const assistedView = renderPage()
-    expect(await screen.findByText(/Customer evidence recorded by Mina Accounting/)).toBeVisible()
-    expect(screen.getByText(/Immutable signed evidence for contract version 1/)).toBeVisible()
+    expect(await screen.findByText(/Customer acknowledgment recorded by Mina Accounting/)).toBeVisible()
+    expect(screen.getByText(/Signed document for contract version 1/)).toBeVisible()
 
     assistedView.unmount()
     vi.mocked(api.apiRequest).mockResolvedValue({
@@ -165,8 +165,8 @@ describe('Staff contract workspace', () => {
       },
     })
     renderPage()
-    expect(await screen.findByText('Acknowledgment mode unavailable')).toBeVisible()
-    expect(screen.queryByText(/Customer evidence recorded by/)).not.toBeInTheDocument()
+    expect(await screen.findByText('Acknowledgment method unavailable')).toBeVisible()
+    expect(screen.queryByText(/Customer acknowledgment recorded by/)).not.toBeInTheDocument()
   })
 
   it('renders immutable terms and only the masked destination without a Staff acknowledgment action', async () => {
@@ -292,12 +292,12 @@ describe('Staff contract workspace', () => {
     expect(await screen.findByText(/Readiness shown here is a snapshot and can become outdated/i)).toBeVisible()
     expect(screen.queryByText(/POINT_IN_TIME_ADVISORY|transactionally/i)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Review readiness confirmation' }))
-    expect(screen.getByText(/does not mean funds were transferred or a LoanAccount was activated/i)).toBeVisible()
+    expect(screen.getByText(/does not mean funds were transferred or a loan account was activated/i)).toBeVisible()
     expect(screen.queryByText(/DISBURSEMENT_PENDING|CP7/i)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Confirm exact operation' }))
 
     expect(await screen.findByRole('heading', { name: 'Readiness confirmed — not disbursed' })).toBeVisible()
-    await waitFor(() => expect(screen.getByRole('heading', { name: /Contract command result for/i })).toHaveFocus())
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Contract action result for/i })).toHaveFocus())
     expect(submitted).toEqual({ confirmationRequestId: operationId, expectedContractVersion: 1 })
   })
 
@@ -320,7 +320,7 @@ describe('Staff contract workspace', () => {
 
     expect(await screen.findByRole('heading', { name: 'Contract preparation result unknown' })).toBeVisible()
     expect(postCalls()).toHaveLength(1)
-    await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Retry this action' }))
     await screen.findByText(/contract action was confirmed and the latest contract information is loaded/i)
     expect(postCalls()).toHaveLength(2)
     expect(submitted[1]).toEqual(submitted[0])
@@ -362,7 +362,7 @@ describe('Staff contract workspace', () => {
       },
     })
 
-    await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Retry this action' }))
     await screen.findByText(/contract action was confirmed and the latest contract information is loaded/i)
 
     expect(postCalls()).toHaveLength(2)
@@ -406,7 +406,7 @@ describe('Staff contract workspace', () => {
       semanticPayload: { loanApplicationId: applicationId, expectedContractVersion: 1 },
     })
 
-    await user.click(screen.getByRole('button', { name: 'Retry exact operation' }))
+    await user.click(screen.getByRole('button', { name: 'Retry this action' }))
     await screen.findByText(/contract action was confirmed and the latest contract information is loaded/i)
 
     expect(postCalls()).toHaveLength(2)

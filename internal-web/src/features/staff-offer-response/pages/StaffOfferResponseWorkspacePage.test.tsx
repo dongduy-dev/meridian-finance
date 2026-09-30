@@ -88,6 +88,7 @@ describe('Staff-assisted offer response workspace', () => {
     const user = userEvent.setup()
 
     expect(await screen.findByText(/Staff records the Customer's evidenced response/i)).toBeVisible()
+    expect(screen.getByText('Awaiting Customer response')).toBeVisible()
     expect(screen.getByRole('option', { name: 'Accept' })).toBeVisible()
     expect(screen.getByRole('option', { name: 'Decline' })).toBeVisible()
     expect(screen.queryByRole('option', { name: 'ACCEPT' })).not.toBeInTheDocument()
@@ -102,6 +103,15 @@ describe('Staff-assisted offer response workspace', () => {
       action: 'ACCEPT',
       evidenceDocumentVersionId: evidenceVersionId,
     })
+  })
+
+  it('shows an unfamiliar offer status neutrally', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(fixture('FUTURE_STATUS'))
+    renderPage()
+
+    expect(await screen.findByText('Offer status unavailable')).toBeVisible()
+    expect(screen.queryByText('FUTURE_STATUS')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Record Customer acceptance' })).toBeDisabled()
   })
 
   it('presents Decline naturally while retaining the DECLINE command value', async () => {

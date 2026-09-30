@@ -44,7 +44,7 @@ describe('Staff servicing work queue', () => {
     const user = userEvent.setup()
 
     expect(await screen.findByText('UCL-20260910-000001')).toBeVisible()
-    expect(screen.getByText(/Active and overdue LoanAccounts available for servicing review and ordinary repayment work/i)).toBeVisible()
+    expect(screen.getByText(/Active and overdue loan accounts available for servicing review and ordinary repayment work/i)).toBeVisible()
     expect(document.body.textContent).not.toMatch(/server-owned|backend-owned|backend scheduler/i)
     await user.selectOptions(screen.getByLabelText('Product'), 'UNSECURED_CONSUMER_LOAN')
     await user.selectOptions(screen.getByLabelText('Serviceable status'), 'OVERDUE')
@@ -64,7 +64,7 @@ describe('Staff servicing work queue', () => {
   it('renders ACTIVE and OVERDUE server states and fails closed for terminal or unknown values', async () => {
     vi.mocked(api.apiRequest).mockResolvedValue(queueFixture(0, 'OVERDUE'))
     renderPage()
-    expect(await screen.findByRole('link', { name: 'Open LoanAccount' }))
+    expect(await screen.findByRole('link', { name: 'Open loan account' }))
       .toHaveAttribute('href', '/staff/applications/11111111-1111-4111-8111-111111111111/loan-account')
     expect(screen.getAllByText('Overdue').length).toBeGreaterThan(0)
     expect(screen.queryByText(/Evaluate overdue/i)).not.toBeInTheDocument()
