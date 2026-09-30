@@ -1,10 +1,11 @@
 import expandedLogo from '@/assets/brand/meridian-logo-expanded.svg'
 import markLogo from '@/assets/brand/meridian-logo-mark.svg'
+import wordmarkLogo from '@/assets/brand/meridian-logo-wordmark.svg'
 import primaryLogo from '@/assets/brand/meridian-logo.svg'
 import { cn } from '@/lib/cn'
 
 export interface MeridianLogoProps {
-  variant?: 'primary' | 'expanded' | 'mark'
+  variant?: 'primary' | 'expanded' | 'mark' | 'wordmark'
   className?: string
   decorative?: boolean
 }
@@ -13,6 +14,7 @@ const logoByVariant = {
   primary: { src: primaryLogo, alt: 'Meridian' },
   expanded: { src: expandedLogo, alt: 'Meridian Finance' },
   mark: { src: markLogo, alt: 'Meridian' },
+  wordmark: { src: wordmarkLogo, alt: 'Meridian' },
 } as const
 
 export function MeridianLogo({

@@ -94,15 +94,15 @@ export function InternalShell({ area }: { area: InternalArea }) {
   )
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[17rem_1fr]">
+    <div className="min-h-screen lg:grid lg:grid-cols-[17rem_minmax(0,1fr)]">
       <a href="#main-content" className="sr-only z-[60] bg-white p-3 focus:not-sr-only focus:fixed focus:top-3 focus:left-3">Skip to main content</a>
-      <aside className="hidden min-h-screen flex-col bg-primary text-primary-foreground lg:flex">
-        <div className="flex h-16 items-center gap-3 border-b border-border bg-card px-6">
-          <MeridianLogo variant="mark" decorative className="size-10 shrink-0" />
-          <span className="text-lg font-semibold tracking-tight text-foreground">Meridian</span>
+      <aside className="hidden flex-col bg-primary text-primary-foreground lg:sticky lg:top-0 lg:flex lg:h-screen lg:overflow-hidden">
+        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-white/10 px-6">
+          <MeridianLogo variant="mark" decorative className="size-9 shrink-0" />
+          <MeridianLogo variant="wordmark" className="w-40 shrink-0" />
         </div>
-        {navigation()}
-        <div className="mt-auto">{identity}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto py-4">{navigation()}</div>
+        <div className="shrink-0">{identity}</div>
       </aside>
       <div className="min-w-0">
         <header className="flex h-16 min-w-0 items-center justify-between gap-4 border-b bg-card px-4 lg:px-8">
@@ -115,7 +115,7 @@ export function InternalShell({ area }: { area: InternalArea }) {
                 <div className="mt-auto">{identity}</div>
               </SheetContent>
             </Sheet> : null}
-            <MeridianLogo className="h-7 w-auto" />
+            <MeridianLogo variant="mark" className="size-8 shrink-0" />
           </div>
           <p className="hidden text-sm font-medium lg:block">Internal workspace</p>
           <p className="min-w-0 max-w-48 truncate text-sm text-muted-foreground lg:max-w-xs">{state.actor.email}</p>
