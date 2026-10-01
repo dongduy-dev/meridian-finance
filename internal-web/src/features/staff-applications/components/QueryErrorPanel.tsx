@@ -18,14 +18,14 @@ export function QueryErrorPanel({
   const missing = caseResource && error instanceof ApiError && error.status === 404
   const title = forbidden ? 'Application access changed'
     : missing ? 'Application unavailable'
-      : caseResource ? 'Case data unavailable' : 'Work queue unavailable'
+      : caseResource ? 'Application details unavailable' : 'Work queue unavailable'
   const description = forbidden
     ? 'You no longer have access to this workspace.'
     : missing
       ? 'This application cannot be opened from the current session.'
       : error instanceof ApiError
         ? 'Meridian could not load the latest information. Try again before taking action.'
-        : 'Meridian could not read the response. Try again to load this information before taking action.'
+        : 'Meridian could not load reliable details. Try again before taking action.'
 
   return (
     <Alert variant={forbidden || missing ? 'warning' : 'destructive'}>

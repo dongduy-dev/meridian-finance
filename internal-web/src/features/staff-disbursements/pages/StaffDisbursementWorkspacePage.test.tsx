@@ -384,7 +384,7 @@ describe('Staff disbursement workspace', () => {
 
     await user.click(screen.getByRole('button', { name: 'Retry this disbursement' }))
     await waitFor(() => expect(disbursementPostCalls()).toHaveLength(2))
-    expect(await screen.findByText(/previously recorded disbursement was confirmed through the exact retry/i)).toBeVisible()
+    expect(await screen.findByText(/retry confirmed the previously recorded disbursement/i)).toBeVisible()
     expect(disbursementPostCalls()).toHaveLength(2)
     expect(submitted[1]).toEqual(submitted[0])
     expect(submitted[0]).toEqual({
@@ -449,7 +449,7 @@ describe('Staff disbursement workspace', () => {
     await user.type(screen.getByLabelText('External transfer reference'), secretReference)
     await user.click(screen.getByRole('button', { name: 'Retry this disbursement' }))
     await waitFor(() => expect(disbursementPostCalls()).toHaveLength(2))
-    expect(await screen.findByText(/previously recorded disbursement was confirmed through the exact retry/i)).toBeVisible()
+    expect(await screen.findByText(/retry confirmed the previously recorded disbursement/i)).toBeVisible()
     expect(disbursementPostCalls()).toHaveLength(2)
     expect(submitted[1]).toEqual(submitted[0])
     expect(crypto.randomUUID).toHaveBeenCalledTimes(1)

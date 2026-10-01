@@ -49,7 +49,7 @@ export function DocumentContentViewer(props: Props) {
   }
 
   return <div className="space-y-3 rounded-lg border bg-muted/25 p-4">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">Sensitive document viewer</h3><p className="text-sm text-muted-foreground">Content stays in memory and is fetched only on request.</p></div>{content ? <Button variant="outline" onClick={close}><EyeOff /> Close viewer</Button> : <Button onClick={() => void view()} disabled={loading}>{loading ? <Spinner /> : <Eye />} View document</Button>}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">Document viewer</h3><p className="text-sm text-muted-foreground">Contains Customer information. Use only for this review.</p></div>{content ? <Button variant="outline" onClick={close}><EyeOff /> Close viewer</Button> : <Button onClick={() => void view()} disabled={loading}>{loading ? <Spinner /> : <Eye />} View document</Button>}</div>
     {error ? <Alert variant="warning"><EyeOff /><AlertTitle>Viewer unavailable</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
     {content ? <div className="overflow-hidden rounded-md border bg-background" aria-label={`Document viewer for ${props.filename}`}>
       {content.contentType === 'application/pdf'

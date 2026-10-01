@@ -22,7 +22,7 @@ const statusLabels: Record<InternalUserStatus, string> = {
 
 function commandMessage(error: unknown, resource: string): string {
   if (error instanceof ApiError) return error.message
-  if (error instanceof NetworkError) return `Meridian could not confirm the ${resource} change. The latest information was refreshed; review it before retrying the same target state.`
+  if (error instanceof NetworkError) return `Meridian could not confirm the ${resource} change. The latest information was refreshed; review it before retrying the same change.`
   return `The ${resource} change was not confirmed. Refresh the latest information before trying again.`
 }
 
@@ -125,9 +125,9 @@ export function InternalUserCard({ user, roles, manager }: {
       <section className="space-y-3 rounded-md border p-4" aria-labelledby={`status-${user.userId}`}>
         <div>
           <h3 id={`status-${user.userId}`} className="font-semibold">Administrative status</h3>
-          <p className="text-sm text-muted-foreground">Inactive Users lose access immediately and cannot refresh credentials.</p>
+          <p className="text-sm text-muted-foreground">Suspended and disabled Staff members lose access immediately and must sign in again after reactivation.</p>
         </div>
-        {!knownStatus ? <p className="text-sm text-warning">Meridian returned an unrecognized status ({displayStatus(user.status)}). Confirm the intended target before changing it.</p> : null}
+        {!knownStatus ? <p className="text-sm text-warning">Current status is unavailable ({displayStatus(user.status)}). Review the intended status before making a change.</p> : null}
         <label className="block space-y-1 text-sm font-medium">Target status
           <select
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -151,7 +151,7 @@ export function InternalUserCard({ user, roles, manager }: {
       <section className="space-y-3 rounded-md border p-4" aria-labelledby={`roles-${user.userId}`}>
         <div>
           <h3 id={`roles-${user.userId}`} className="font-semibold">Predefined roles</h3>
-          <p className="text-sm text-muted-foreground">Roles group predefined Staff access. Each action changes one role assignment.</p>
+          <p className="text-sm text-muted-foreground">Assign roles to manage Staff responsibilities and access.</p>
         </div>
         {roles.map((role) => {
           const assigned = user.assignedRoleCodes.includes(role.code)

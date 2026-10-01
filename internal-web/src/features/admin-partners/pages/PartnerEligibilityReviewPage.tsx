@@ -164,11 +164,11 @@ export function PartnerEligibilityReviewPage() {
     <div>
       <p className="text-sm font-semibold text-muted-foreground">PARTNER ADMINISTRATION</p>
       <h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Eligibility reviews</h1>
-      <p className="mt-2 text-muted-foreground">Inspect ambiguous Customer–Partner Employee matches against current Partner employment evidence.</p>
+      <p className="mt-2 text-muted-foreground">Review Customer employment matches using the current Partner employee records.</p>
     </div>
 
     <div className="grid gap-6 lg:grid-cols-[minmax(20rem,0.8fr)_minmax(0,1.4fr)]">
-      <Card><CardHeader><CardTitle>Pending shared queue</CardTitle></CardHeader><CardContent>
+      <Card><CardHeader><CardTitle>Pending reviews</CardTitle></CardHeader><CardContent>
         {queue.isPending ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading eligibility reviews…</div> : null}
         {queue.isError ? <PartnerQueryErrorPanel error={queue.error} onRetry={() => void queue.refetch()} /> : null}
         {queue.data?.items.length === 0 ? <p className="text-sm text-muted-foreground">No pending Partner eligibility reviews require action.</p> : null}
@@ -207,7 +207,7 @@ export function PartnerEligibilityReviewPage() {
           {review.decisionOutcome ? <Alert variant="information"><AlertTitle>Terminal outcome</AlertTitle><AlertDescription>{decisionLabel(review.decisionOutcome)} · {review.decisionReason ? reasonLabel(review.decisionReason) : 'Reason unavailable'} · {formatTimestamp(review.reviewedAt)}</AlertDescription></Alert> : null}
 
           {canManage && review.status === 'PENDING' && knownTrigger ? <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
-            <div className="space-y-2"><p className="text-sm font-medium">Approve exact current employee</p><Button id="eligibility-approval-trigger" disabled={busy || !review.approvalAvailable || !selectedCandidate} onClick={() => selectedCandidate && setConfirmation({ decision: { outcome: 'APPROVE', partnerEmployeeId: selectedCandidate.partnerEmployeeId, reasonCode: 'CURRENT_EMPLOYEE_CONFIRMED' }, employeeCode: selectedCandidate.employeeCode, reviewUpdatedAt: review.updatedAt })}>Review approval</Button></div>
+            <div className="space-y-2"><p className="text-sm font-medium">Approve selected employee</p><Button id="eligibility-approval-trigger" disabled={busy || !review.approvalAvailable || !selectedCandidate} onClick={() => selectedCandidate && setConfirmation({ decision: { outcome: 'APPROVE', partnerEmployeeId: selectedCandidate.partnerEmployeeId, reasonCode: 'CURRENT_EMPLOYEE_CONFIRMED' }, employeeCode: selectedCandidate.employeeCode, reviewUpdatedAt: review.updatedAt })}>Review approval</Button></div>
             <div className="space-y-2"><label className="block text-sm font-medium">Rejection reason<select className="mt-1 flex h-10 w-full rounded-md border bg-background px-3" value={rejectionReason} onChange={(event) => { setRejectionReason(event.target.value as typeof rejectionReason); setConfirmation(undefined) }}>{rejectionReasons.map((reason) => <option key={reason} value={reason}>{reasonLabel(reason)}</option>)}</select></label><Button id="eligibility-rejection-trigger" variant="destructive" disabled={busy || !review.rejectionAvailable} onClick={() => setConfirmation({ decision: { outcome: 'REJECT', partnerEmployeeId: null, reasonCode: rejectionReason }, reviewUpdatedAt: review.updatedAt })}>Review rejection</Button></div>
           </div> : null}
 

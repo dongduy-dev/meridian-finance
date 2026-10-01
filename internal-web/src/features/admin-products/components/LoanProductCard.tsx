@@ -31,7 +31,7 @@ type LimitFields = { minAmount: number; maxAmount: number }
 
 function commandMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message
-  if (error instanceof NetworkError) return 'Meridian could not confirm the product change. Refresh the latest product information before retrying the same target state.'
+  if (error instanceof NetworkError) return 'Meridian could not confirm the product change. Refresh the latest product information before retrying the same change.'
   return 'The product change was not confirmed. Refresh the latest product information before trying again.'
 }
 

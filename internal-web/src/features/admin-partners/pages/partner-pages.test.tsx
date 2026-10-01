@@ -101,7 +101,7 @@ describe('Partner administration pages', () => {
     })
 
     renderPath(`/admin/partners/${companyId}`)
-    const table = await screen.findByRole('table', { name: 'Current Partner Employee source rows' })
+    const table = await screen.findByRole('table', { name: 'Current Partner employees' })
     expect(table).toHaveTextContent('EMP-001')
     expect(table.querySelectorAll('tbody tr')).toHaveLength(1)
     expect(screen.getByText('2026-09', { selector: 'dd' })).toBeVisible()
@@ -124,7 +124,7 @@ describe('Partner administration pages', () => {
 
     renderPath(`/admin/partners/${companyId}`)
     expect(await screen.findByText(/No completed employee import is available for 2026-09/)).toBeVisible()
-    expect(screen.queryByRole('table', { name: 'Current Partner Employee source rows' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('table', { name: 'Current Partner employees' })).not.toBeInTheDocument()
     const history = screen.getByRole('table', { name: 'Employee import history' })
     expect(history).toHaveTextContent(employee.importBatchId)
     expect(history).not.toHaveTextContent('Current')
@@ -319,8 +319,8 @@ describe('Partner administration pages', () => {
       expect(employeeReads).toBeGreaterThan(1)
       expect(historyReads).toBeGreaterThan(1)
     })
-    expect(screen.getByRole('table', { name: 'Current Partner Employee source rows' })).toHaveTextContent('EMP-NEW')
-    expect(screen.getByRole('table', { name: 'Current Partner Employee source rows' })).not.toHaveTextContent('EMP-001')
+    expect(screen.getByRole('table', { name: 'Current Partner employees' })).toHaveTextContent('EMP-NEW')
+    expect(screen.getByRole('table', { name: 'Current Partner employees' })).not.toHaveTextContent('EMP-001')
     expect(within(screen.getByRole('table', { name: 'Employee import history' })).getByText(newBatchId).closest('tr')).toHaveTextContent('Current')
   })
 

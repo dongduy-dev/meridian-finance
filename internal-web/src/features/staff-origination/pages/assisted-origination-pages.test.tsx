@@ -204,7 +204,7 @@ describe('assisted origination pages', () => {
     })
     renderRoute(`/staff/origination/${caseId}`)
 
-    expect(await screen.findByText('This intake is terminal. Customer association and evidence upload are disabled.')).toBeVisible()
+    expect(await screen.findByText('This intake has ended. You can no longer change the selected Customer or upload evidence.')).toBeVisible()
     expect(await screen.findByRole('button', { name: 'Save profile' })).toBeDisabled()
     expect(await screen.findByRole('button', { name: 'Replace evidence' })).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Abandon intake' })).not.toBeInTheDocument()

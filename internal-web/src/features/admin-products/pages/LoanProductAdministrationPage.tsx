@@ -17,7 +17,7 @@ export function LoanProductAdministrationPage() {
       <div>
         <p className="text-sm font-semibold text-muted-foreground">LOAN PRODUCT ADMINISTRATION</p>
         <h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Loan Products</h1>
-        <p className="mt-2 max-w-3xl text-muted-foreground">Manage future product availability and amount ranges. Product identity, policy, and historical lending evidence remain read-only.</p>
+        <p className="mt-2 max-w-3xl text-muted-foreground">Manage lending product availability and application amount limits. Product policies and existing loans remain unchanged.</p>
       </div>
       <Button variant="outline" disabled={products.isFetching} onClick={() => void products.refetch()}>
         {products.isFetching && !products.isPending ? 'Refreshing…' : 'Refresh products'}

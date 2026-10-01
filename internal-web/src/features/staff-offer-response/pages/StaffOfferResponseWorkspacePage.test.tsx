@@ -87,7 +87,7 @@ describe('Staff-assisted offer response workspace', () => {
     renderPage()
     const user = userEvent.setup()
 
-    expect(await screen.findByText(/Staff records the Customer's evidenced response/i)).toBeVisible()
+    expect(await screen.findByText(/Staff records the response shown on the signed form/i)).toBeVisible()
     expect(screen.getByText('Awaiting Customer response')).toBeVisible()
     expect(screen.getByRole('option', { name: 'Accept' })).toBeVisible()
     expect(screen.getByRole('option', { name: 'Decline' })).toBeVisible()
@@ -96,7 +96,7 @@ describe('Staff-assisted offer response workspace', () => {
     await user.click(screen.getByRole('checkbox'))
     await user.click(screen.getByRole('button', { name: 'Record Customer acceptance' }))
 
-    await screen.findByText(/evidenced Customer decision was recorded/i)
+    await screen.findByText(/Customer decision was recorded/i)
     expect(submitted).toEqual({
       requestId,
       expectedApprovedOfferId: offerId,
@@ -126,7 +126,7 @@ describe('Staff-assisted offer response workspace', () => {
     renderPage()
     const user = userEvent.setup()
 
-    await screen.findByText(/Staff records the Customer's evidenced response/i)
+    await screen.findByText(/Staff records the response shown on the signed form/i)
     await user.selectOptions(screen.getByLabelText('Customer decision on signed form'), 'DECLINE')
     expect(screen.getByText(/Customer's decision to decline this exact offer/i)).toBeVisible()
     await user.click(screen.getByRole('checkbox'))

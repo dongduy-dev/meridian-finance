@@ -744,6 +744,27 @@ The interface should feel calm, exact, and accountable:
 
 “Approved,” “settled,” and “closed” are distinct labels. “Ready for disbursement” must never look like “disbursed.” “Settlement” must never be presented as a discount or write-off.
 
+### 17.4 Operator Language and Copy
+
+Internal Web copy must be written for lending and administrative operators. Visible text uses the business vocabulary needed for their work: applications, Customers, lending products, reviews, approvals, contracts, disbursements, payments, loan accounts, Partner records, Staff access, and administration.
+
+Copy must explain a business fact or next action: the current state, required evidence, a blocker, an authority or separation-of-duty restriction, a financial or workflow consequence, or recovery after an uncertain result. It must not narrate obvious screen mechanics, restate access already established, or explain implementation boundaries that do not affect the operator's decision. Short copy is preferred when the heading, field, or workflow already supplies the context.
+
+Visible copy must not expose implementation terminology merely because it appears in an API or domain model. Raw enum tokens, DTO or persistence terminology, code-style names such as `LoanAccount`, permission names, backend/server ownership language, and command, idempotency, or replay terminology must remain outside ordinary case presentation. Terms such as “provenance,” “authoritative,” and “immutable” may appear only when that exact concept is necessary for the operator's decision. Technical identifiers remain visible only when needed for evidence matching, reconciliation, support, or another operational task; they must not dominate normal case presentation.
+
+| Avoid in ordinary copy | Prefer |
+|---|---|
+| “available to your account” or “use the navigation to…” | The business task or a concise next action |
+| “backend-owned,” “server-owned,” or “operational read” | The business information or action |
+| “exact immutable version” or “authoritative snapshot” | “document version” or “recorded evidence,” with the required version distinction |
+| “lifecycle status” | “application status” or “status” |
+| `LoanAccount` or implementation explanations for absent DTO fields | “loan account” and only the operationally relevant limitation |
+| “provenance” or “exact operation” | “approval history,” “repayment history,” or “retry this payment,” as appropriate to the feature |
+
+Features retain ownership of their business labels, including “Customer contact details,” “document awaiting review,” and “current employee import.” Unknown backend values must use explicit neutral fallbacks. The client must never mechanically transform an unfamiliar enum into a plausible business label or enable an action from it.
+
+Copy changes must preserve evidence-version distinctions, maker-checker restrictions, uncertain financial-result recovery, sensitive bank-data handling, and material differences between current data and recorded historical evidence. These safeguards must be expressed in natural operator language rather than removed for brevity. For example, a current-contact panel may state “Current contact details are shown here. Application evidence remains unchanged.” A payment retry label must retain the same operation identity and unchanged payment details required by Section 14.
+
 ---
 
 ## 18. Layouts, Navigation, and Responsive Behavior

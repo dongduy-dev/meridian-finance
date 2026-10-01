@@ -235,7 +235,7 @@ describe('Staff decision workspace', () => {
     readsAvailable = true
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
 
-    expect(await screen.findByText(/decision and resulting Loan state are confirmed/i)).toBeVisible()
+    expect(await screen.findByText(/Decision recorded. Application status:/i)).toBeVisible()
     expect(posts()).toHaveLength(1)
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => String(path).includes('/approved-offer'))).toBe(false)
     expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: staffApplicationKeys.all })
@@ -271,7 +271,8 @@ describe('Staff decision workspace', () => {
     readsAvailable = true
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
 
-    expect(await screen.findByText(/decision and resulting Loan state are confirmed: RETURNED_TO_REVIEW/i)).toBeVisible()
+    expect(await screen.findByText(/Decision recorded. Application status: Returned to review/i)).toBeVisible()
+    expect(screen.queryByText(/Application status: RETURNED_TO_REVIEW/)).not.toBeInTheDocument()
     expect(posts()).toHaveLength(1)
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => String(path).includes('/approved-offer'))).toBe(false)
   })
@@ -294,7 +295,7 @@ describe('Staff decision workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm decision' }))
 
     expect(await screen.findByText(
-      /Command confirmed; refreshed state unavailable/i,
+      /Decision recorded; updated details could not be loaded/i,
       undefined,
       { timeout: 3_000 },
     )).toBeVisible()
@@ -328,7 +329,7 @@ describe('Staff decision workspace', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 })
     renderPage()
 
-    const recommendation = await screen.findByRole('heading', { name: 'Recommendation being decided' })
+    const recommendation = await screen.findByRole('heading', { name: 'Loan Officer recommendation' })
     const readiness = screen.getByRole('heading', { name: 'Decision readiness' })
     const decision = screen.getByRole('heading', { name: 'Record independent decision' })
     expect(recommendation.compareDocumentPosition(readiness) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
