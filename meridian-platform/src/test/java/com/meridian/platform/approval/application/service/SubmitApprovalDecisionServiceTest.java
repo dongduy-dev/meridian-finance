@@ -80,6 +80,7 @@ class SubmitApprovalDecisionServiceTest {
         assertEquals(APPROVER_USER_ID, result.approverUserId());
         assertEquals("APPROVE", result.action());
         assertEquals(NOW, result.decidedAt());
+        assertEquals("approved", approvalDecisionRepository.savedDecision.internalNotes());
         assertEquals(APPROVER_USER_ID, approvalDecisionRepository.savedDecision.approverUserId());
         assertEquals(result.decisionId(), eventPublisher.publishedEvent.decisionId());
         assertEquals(RECOMMENDATION_ID, eventPublisher.publishedEvent.reviewRecommendationId());
@@ -317,6 +318,13 @@ class SubmitApprovalDecisionServiceTest {
     }
 
     private static class FakeReviewRecommendationRepository implements ReviewRecommendationRepository {
+
+        @Override
+        public List<ReviewRecommendation> findByLoanApplicationIdOrderBySubmittedAtAsc(UUID loanApplicationId) {
+            return latestRecommendation.filter(value -> value.loanApplicationId().equals(loanApplicationId))
+                    .map(List::of).orElseGet(List::of);
+        }
+
 
         private Optional<ReviewRecommendation> latestRecommendation = Optional.of(recommendation());
 

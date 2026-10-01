@@ -1018,7 +1018,6 @@ class SecurityConfigTest {
                         loanOfficerUserId,
                         "RECOMMEND_APPROVAL",
                         null,
-                        null,
                         LocalDateTime.now()
                 ));
 
@@ -1071,7 +1070,6 @@ class SecurityConfigTest {
                         recommendationId,
                         approverUserId,
                         "APPROVE",
-                        null,
                         null,
                         LocalDateTime.now()
                 ));

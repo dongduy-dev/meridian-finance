@@ -4994,6 +4994,7 @@
                                                                                     "});",
                                                                                     "pm.test(\"Recommendation id is captured\", function () {",
                                                                                     "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json).not.to.have.property(\"internalNotes\");",
                                                                                     "    pm.expect(json.recommendationId).to.be.a(\"string\").and.not.empty;",
                                                                                     "    pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"loanApplicationId\"));",
                                                                                     "    pm.collectionVariables.set(\"reviewRecommendationId\", json.recommendationId);",
@@ -5062,6 +5063,7 @@
                                                                                     "});",
                                                                                     "pm.test(\"Approval decision id is captured\", function () {",
                                                                                     "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json).not.to.have.property(\"internalNotes\");",
                                                                                     "    pm.expect(json.decisionId).to.be.a(\"string\").and.not.empty;",
                                                                                     "    pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"loanApplicationId\"));",
                                                                                     "    pm.collectionVariables.set(\"approvalDecisionId\", json.decisionId);",
@@ -5083,6 +5085,138 @@
                                       "response":  [],
                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Durable decision is correlated exactly\", () => { pm.expect(json.latestDecision.decisionId).to.eql(pm.collectionVariables.get(\"approvalDecisionId\")); pm.expect(json.latestDecision.reviewRecommendationId).to.eql(pm.collectionVariables.get(\"reviewRecommendationId\")); });","pm.test(\"Decision read excludes restricted fields\", () => [\"customerId\",\"approverUserId\",\"loanOfficerUserId\",\"internalNotes\"].forEach(key => pm.expect(json).not.to.have.property(key)));"]}}]
                                   },
+                                 {
+                                     "name": "GET linked review history as Loan Officer",
+                                     "request": {
+                                         "method": "GET",
+                                         "header": [],
+                                         "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/review-history",
+                                         "auth": {
+                                             "type": "bearer",
+                                             "bearer": [
+                                                 {
+                                                     "key": "token",
+                                                     "value": "{{loanOfficerAccessToken}}",
+                                                     "type": "string"
+                                                 }
+                                             ]
+                                         },
+                                         "description": "Linked durable cycles, recommendations, and decisions. Credit notes are separately authorized; do not log, save, or export response note values."
+                                     },
+                                     "response": [],
+                                     "event": [
+                                         {
+                                             "listen": "test",
+                                             "script": {
+                                                 "type": "text/javascript",
+                                                 "exec": [
+                                                     "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                                     "const history = pm.response.json();",
+                                                     "pm.test(\"History is non-cacheable\", () => pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"));",
+                                                     "pm.test(\"Cycles retain ordering and exact linkage\", () => { let previous = 0; history.cycles.forEach(cycle => { pm.expect(cycle.cycleNumber).to.be.above(previous); previous = cycle.cycleNumber; if (cycle.recommendation) pm.expect(cycle.recommendation.reviewCycleId).to.eql(cycle.reviewCycleId); if (cycle.decision) { pm.expect(cycle.recommendation).not.to.eql(null); pm.expect(cycle.decision.reviewRecommendationId).to.eql(cycle.recommendation.recommendationId); } }); });",
+                                                     "pm.test(\"Denied credit notes are absent\", () => history.cycles.forEach(cycle => [cycle.recommendation, cycle.decision].filter(Boolean).forEach(action => { if (!action.internalNoteReadable) pm.expect(action).not.to.have.property(\"internalNotes\"); })));"
+                                                 ]
+                                             }
+                                         }
+                                     ]
+                                 },
+                                 {
+                                     "name": "GET linked review history as Approver",
+                                     "request": {
+                                         "method": "GET",
+                                         "header": [],
+                                         "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/review-history",
+                                         "auth": {
+                                             "type": "bearer",
+                                             "bearer": [
+                                                 {
+                                                     "key": "token",
+                                                     "value": "{{approverAccessToken}}",
+                                                     "type": "string"
+                                                 }
+                                             ]
+                                         },
+                                         "description": "Linked durable cycles, recommendations, and decisions. Credit notes are separately authorized; do not log, save, or export response note values."
+                                     },
+                                     "response": [],
+                                     "event": [
+                                         {
+                                             "listen": "test",
+                                             "script": {
+                                                 "type": "text/javascript",
+                                                 "exec": [
+                                                     "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                                     "const history = pm.response.json();",
+                                                     "pm.test(\"History is non-cacheable\", () => pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"));",
+                                                     "pm.test(\"Cycles retain ordering and exact linkage\", () => { let previous = 0; history.cycles.forEach(cycle => { pm.expect(cycle.cycleNumber).to.be.above(previous); previous = cycle.cycleNumber; if (cycle.recommendation) pm.expect(cycle.recommendation.reviewCycleId).to.eql(cycle.reviewCycleId); if (cycle.decision) { pm.expect(cycle.recommendation).not.to.eql(null); pm.expect(cycle.decision.reviewRecommendationId).to.eql(cycle.recommendation.recommendationId); } }); });",
+                                                     "pm.test(\"Denied credit notes are absent\", () => history.cycles.forEach(cycle => [cycle.recommendation, cycle.decision].filter(Boolean).forEach(action => { if (!action.internalNoteReadable) pm.expect(action).not.to.have.property(\"internalNotes\"); })));"
+                                                 ]
+                                             }
+                                         }
+                                     ]
+                                 },
+                                 {
+                                     "name": "GET linked review history as Accounting - 403",
+                                     "request": {
+                                         "method": "GET",
+                                         "header": [],
+                                         "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/review-history",
+                                         "auth": {
+                                             "type": "bearer",
+                                             "bearer": [
+                                                 {
+                                                     "key": "token",
+                                                     "value": "{{accountingAccessToken}}",
+                                                     "type": "string"
+                                                 }
+                                             ]
+                                         },
+                                         "description": "Linked durable cycles, recommendations, and decisions. Credit notes are separately authorized; do not log, save, or export response note values."
+                                     },
+                                     "response": [],
+                                     "event": [
+                                         {
+                                             "listen": "test",
+                                             "script": {
+                                                 "type": "text/javascript",
+                                                 "exec": [
+                                                     "pm.test(\"Status is 403\", () => pm.response.to.have.status(403));"
+                                                 ]
+                                             }
+                                         }
+                                     ]
+                                 },
+                                 {
+                                     "name": "GET linked review history as Customer - 403",
+                                     "request": {
+                                         "method": "GET",
+                                         "header": [],
+                                         "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/review-history",
+                                         "auth": {
+                                             "type": "bearer",
+                                             "bearer": [
+                                                 {
+                                                     "key": "token",
+                                                     "value": "{{customerAccessToken}}",
+                                                     "type": "string"
+                                                 }
+                                             ]
+                                         },
+                                         "description": "Linked durable cycles, recommendations, and decisions. Credit notes are separately authorized; do not log, save, or export response note values."
+                                     },
+                                     "response": [],
+                                     "event": [
+                                         {
+                                             "listen": "test",
+                                             "script": {
+                                                 "type": "text/javascript",
+                                                 "exec": [
+                                                     "pm.test(\"Status is 403\", () => pm.response.to.have.status(403));"
+                                                 ]
+                                             }
+                                         }
+                                     ]
+                                 },
                                   {
                                       "name":  "POST recommend rejection example",
                                       "request":  {
@@ -7849,6 +7983,7 @@
                                                                                     "});",
                                                                                     "pm.test(\"Access is denied\", function () {",
                                                                                     "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json).not.to.have.property(\"internalNotes\");",
                                                                                     "    pm.expect(json.errorCode).to.eql(\"ACCESS_DENIED\");",
                                                                                     "});"
                                                                                 ]
@@ -7976,6 +8111,7 @@
                                                                                     "});",
                                                                                     "pm.test(\"Access is denied\", function () {",
                                                                                     "    const json = pm.response.json();",
+                                                                                    "    pm.expect(json).not.to.have.property(\"internalNotes\");",
                                                                                     "    pm.expect(json.errorCode).to.eql(\"ACCESS_DENIED\");",
                                                                                     "});"
                                                                                 ]

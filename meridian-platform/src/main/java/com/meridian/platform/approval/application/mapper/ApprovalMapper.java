@@ -23,7 +23,6 @@ public class ApprovalMapper {
                 recommendation.loanOfficerUserId(),
                 recommendation.action().name(),
                 recommendation.reason(),
-                recommendation.internalNotes(),
                 recommendation.reasonCode() == null ? null : recommendation.reasonCode().name(),
                 recommendation.submittedAt()
         );
@@ -64,7 +63,6 @@ public class ApprovalMapper {
                 decision.action().name(),
                 decision.reason(),
                 decision.reasonCode() == null ? null : decision.reasonCode().name(),
-                decision.internalNotes(),
                 decision.decidedAt()
         );
     }

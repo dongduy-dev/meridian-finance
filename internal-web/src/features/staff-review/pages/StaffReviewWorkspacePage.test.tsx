@@ -12,6 +12,7 @@ import * as api from '@/lib/api'
 import { NetworkError } from '@/lib/api'
 import { createQueryClient } from '@/lib/query/query-client'
 import { applicationWorkspaceCase } from '@/test/application-workspace-fixture'
+import { reviewHistoryFixture } from '@/test/staff-review-history-fixture'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
   const actual = await vi.importActual<typeof import('@/features/auth/api/auth-api')>('@/features/auth/api/auth-api')
@@ -56,6 +57,18 @@ describe('Staff review workspace', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(authApi.refresh).mockResolvedValue(staff)
+  })
+
+  it('shows previous linked decisions and notes to a reviewer without granting Approver actions', async () => {
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/review-history')
+      ? reviewHistoryFixture() : reviewCase(true))
+    const router = createTestRouter([`/staff/applications/${applicationId}/review`])
+    render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
+    expect(await screen.findByText('Earlier decision rationale.')).toBeVisible()
+    expect(screen.getByText('Synthetic decision analysis.')).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Review Cycle 3' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: /approve|review decision|confirm decision/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Review recommendation' })).not.toBeInTheDocument()
   })
 
   it('reconciles a lost review-start response without retrying POST or requiring recommendation authority', async () => {

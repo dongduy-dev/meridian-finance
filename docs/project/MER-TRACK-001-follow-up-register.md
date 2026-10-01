@@ -785,6 +785,7 @@ Resolved scope:
 - Staff review-start projection with product/document readiness and the latest Loan-owned review cycle for no-business-UUID reconciliation.
 - Approval-owned current recommendation projection with review-cycle provenance, safe reason evidence, backend-derived availability, and authoritative structured correction options.
 - Approval-owned decision projection with recommendation provenance, current-actor maker-checker relation, latest decision and ordered decision history, resulting Loan state, and backend-derived availability.
+- Complete linked Review Cycle → Recommendation → Decision history in both operational workspaces, using stored cycle numbering and exact associations, safe Staff actors, normal rationale, and separately authorized internal credit notes. Recommendation/decision command responses exclude saved notes.
 - Purpose-limited Approver queue with exact `APPROVAL_PENDING` membership, deterministic paging/order, product filtering, and maker-checker availability without exposing internal actor identifiers.
 - Loan-owned Staff contract queue with exact `CONTRACT_PENDING` membership, deterministic paging/order, product filtering, safe current-contract/readiness composition, and backend-derived work stage; plus the corresponding `CONTRACT_PENDING` / `DISBURSEMENT_PENDING` case read.
 - Loan-owned Staff disbursement queue with exact `DISBURSEMENT_PENDING` membership, deterministic paging/order, product filtering, safe ready-contract composition, and backend-derived work stage; plus the corresponding repeatable-read `DISBURSEMENT_PENDING` / `DISBURSED` case with safe LoanAccount and final-schedule activation evidence.
@@ -798,7 +799,7 @@ Resolved scope:
 Still deferred:
 
 - Specialized Staff work queues beyond the executable document-review, Staff-correction, Approver, contract, disbursement, ordinary-repayment servicing, settlement, and closure queues, including verification/review queues and direct application-number lookup.
-- Action histories beyond the executable CP4 verification/review, CP5 recommendation/decision, CP6 contract/readiness, CP7 disbursement/activation, CP8 ordinary repayment-servicing, and CP9 settlement/closure evidence.
+- Action histories beyond the executable linked review/recommendation/decision history and CP4 verification/review, CP6 contract/readiness, CP7 disbursement/activation, CP8 ordinary repayment-servicing, and CP9 settlement/closure evidence, including historical correction provenance and separate Customer actor resolution. Restricted verification assessment and document-review note reads remain outside this linked credit-review scope.
 - Broader Dashboard aggregation beyond the narrow Customer indexes and action facts.
 - Additional workflow command suggestions beyond the proven Customer action categories.
 - Richer product-specific projections where the common reads are insufficient.

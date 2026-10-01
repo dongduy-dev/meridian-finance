@@ -6,6 +6,7 @@ import com.meridian.platform.loan.domain.model.LoanReviewCycleStatus;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -14,6 +15,12 @@ public class LoanReviewCycleRepositoryAdapter implements LoanReviewCycleReposito
 
     public LoanReviewCycleRepositoryAdapter(JpaLoanReviewCycleRepository repository) {
         this.repository = repository;
+    }
+
+    @Override
+    public List<LoanApplicationReviewCycle> findByLoanApplicationIdOrderByCycleNumberAsc(UUID loanApplicationId) {
+        return repository.findByLoanApplicationIdOrderByCycleNumberAsc(loanApplicationId).stream()
+                .map(LoanReviewCycleJpaEntity::toDomain).toList();
     }
 
     @Override
