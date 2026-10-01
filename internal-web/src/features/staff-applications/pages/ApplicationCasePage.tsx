@@ -16,7 +16,6 @@ import { CollateralFactsCard } from '../components/CollateralFactsCard'
 import { ApplicationWorkspaceShell, applicationWorkspaceCaseFacts } from '@/components/operations/ApplicationWorkspaceShell'
 import {
   applicationStatusLabel,
-  humanizeKnownValue,
   productLabel,
   transitionActionLabel,
 } from '../model/presentation'
@@ -131,7 +130,6 @@ export function ApplicationCasePage() {
                 <ReadinessFact label="Customer state" value={readiness.active ? 'Active' : 'Inactive'} positive={readiness.active} />
                 <ReadinessFact label="Profile" value={readiness.profileComplete ? 'Complete' : 'Incomplete'} positive={readiness.profileComplete} />
                 <ReadinessFact label="Primary bank account" value={readiness.hasPrimaryActiveBankAccount ? 'Available' : 'Missing'} positive={readiness.hasPrimaryActiveBankAccount} />
-                <ReadinessFact label="Verification status" value={humanizeKnownValue(readiness.verificationStatus)} positive={readiness.verificationStatus === 'VERIFIED'} />
               </dl>
             </CardContent>
           </Card>

@@ -197,6 +197,19 @@ describe('Staff application pages', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled())
   })
 
+  it('keeps Customer verification out of application readiness', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue({
+      ...caseFixture,
+      customerReadiness: { ...caseFixture.customerReadiness, verificationStatus: 'UNVERIFIED' },
+    })
+    renderRoute(`/staff/applications/${applicationId}`)
+    await screen.findByRole('heading', { name: 'Customer readiness' })
+    expect(screen.getByText('Active')).toBeVisible()
+    expect(screen.getByText('Complete')).toBeVisible()
+    expect(screen.getByText('Available')).toBeVisible()
+    expect(screen.queryByText(/Verification status|Customer verification|Unverified/i)).not.toBeInTheDocument()
+  })
+
   it('opens History after a delayed direct read and returns to Overview with accessible focus', async () => {
     vi.mocked(api.apiRequest).mockResolvedValue(caseFixture)
     const user = userEvent.setup()

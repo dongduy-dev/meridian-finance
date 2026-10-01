@@ -85,6 +85,7 @@ export function productLabel(value: string): string {
 // Existing Staff workspaces share these closed vocabularies. An unfamiliar API value
 // must never be turned into a plausible business status by changing its casing.
 const knownValueLabels: Record<string, string> = {
+  SECURED: 'Secured', UNSECURED: 'Unsecured', SALARY_BASED: 'Salary-based',
   SALARY_ADVANCE: 'Salary Advance',
   UNSECURED_CONSUMER_LOAN: 'Unsecured Consumer Loan',
   COLLATERAL_LOAN: 'Collateral Loan',

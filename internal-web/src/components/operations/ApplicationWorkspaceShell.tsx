@@ -60,9 +60,11 @@ export type ApplicationWorkspaceSection = (typeof sections)[number]['key']
 export function ApplicationWorkspaceNavigation({ actor, loanApplicationId, activeSection, children }: {
   actor: StaffActor | undefined
   loanApplicationId: string
-  activeSection: ApplicationWorkspaceSection
+  activeSection?: ApplicationWorkspaceSection
   children?: ReactNode
 }) {
+  if (!children && !sections.some(({ route }) => actor && canAccessStaffRoute(actor, route))) return null
+
   return <nav aria-label="Application sections" className="flex gap-2 overflow-x-auto rounded-lg border bg-card p-2">
     {sections.filter(({ route }) => actor && canAccessStaffRoute(actor, route)).map(({ key, label, route }) => (
       <Link key={key}
@@ -123,7 +125,7 @@ export function ApplicationWorkspaceShell({ actor, context, activeSection,
   updatedAt, refreshing, stale, onRefresh, contextUnavailable, onRetryContext, navigationExtra, children }: {
   actor: StaffActor | undefined
   context: ApplicationWorkspaceContext
-  activeSection: ApplicationWorkspaceSection
+  activeSection?: ApplicationWorkspaceSection
   updatedAt: number
   refreshing: boolean
   stale: boolean

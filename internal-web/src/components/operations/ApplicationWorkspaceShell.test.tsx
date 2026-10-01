@@ -27,9 +27,12 @@ describe('Application workspace presentation', () => {
     ['document:read', [], 'overview'],
   ] as const)('uses route capabilities for %s without implying access to other sections', (permission, labels, activeSection) => {
     renderShell([permission], activeSection)
-    const navigation = screen.getByRole('navigation', { name: 'Application sections' })
-    expect(within(navigation).queryAllByRole('link').map((link) => link.textContent)).toEqual(labels)
-    if (labels.length) expect(within(navigation).getByRole('link', { current: 'page' })).toHaveTextContent(labels[0]!)
+    const navigation = screen.queryByRole('navigation', { name: 'Application sections' })
+    if (labels.length) {
+      expect(navigation).toBeVisible()
+      expect(within(navigation!).getAllByRole('link').map((link) => link.textContent)).toEqual(labels)
+      expect(within(navigation!).getByRole('link', { current: 'page' })).toHaveTextContent(labels[0]!)
+    } else expect(navigation).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Back to applications/ }) !== null).toBe(permission === 'loan:read')
   })
 
