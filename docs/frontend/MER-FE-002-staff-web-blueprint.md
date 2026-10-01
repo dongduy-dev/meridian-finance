@@ -750,7 +750,9 @@ Internal Web copy must be written for lending and administrative operators. Visi
 
 Copy must explain a business fact or next action: the current state, required evidence, a blocker, an authority or separation-of-duty restriction, a financial or workflow consequence, or recovery after an uncertain result. It must not narrate obvious screen mechanics, restate access already established, or explain implementation boundaries that do not affect the operator's decision. Short copy is preferred when the heading, field, or workflow already supplies the context.
 
-Visible copy must not expose implementation terminology merely because it appears in an API or domain model. Raw enum tokens, DTO or persistence terminology, code-style names such as `LoanAccount`, permission names, backend/server ownership language, and command, idempotency, or replay terminology must remain outside ordinary case presentation. Terms such as “provenance,” “authoritative,” and “immutable” may appear only when that exact concept is necessary for the operator's decision. Technical identifiers remain visible only when needed for evidence matching, reconciliation, support, or another operational task; they must not dominate normal case presentation.
+Visible copy must not expose implementation terminology merely because it appears in an API or domain model. Raw enum tokens, DTO or persistence terminology, code-style names such as `LoanAccount`, permission names, backend/server ownership language, and command, idempotency, or replay terminology must remain outside ordinary case presentation. Terms such as “provenance,” “authoritative,” and “immutable” may appear only when that exact concept is necessary for the operator's decision.
+
+Business-facing references are the default UI identity: application number for a LoanApplication, cycle number for a review cycle, version number for a document version, contract version for a contract, and Customer number for Customer identity when the task requires it. Technical UUIDs remain internal unless the operator needs them for evidence matching, reconciliation, support, or another concrete operational task. A useful secondary technical ID appears as subordinate information or an explicit Copy ID action rather than the primary label. Command safety must continue to use exact IDs internally even when those IDs are not displayed. IDs required for an operational task must not be hidden merely for visual simplicity.
 
 | Avoid in ordinary copy | Prefer |
 |---|---|
@@ -952,13 +954,17 @@ An optional “All permitted work” landing may aggregate counts only after the
 The case header should contain only authoritative safe facts:
 
 - application number and safe ID copy control;
-- product code/type;
+- product name;
 - requested amount and term;
 - durable application status;
-- submitted time;
+- submitted time and origination channel;
 - current operational stage or blocker when returned by the case projection.
 
 Customer contact appears only for an actor with both `loan:read` and `customer:read`. The card labels it as the current mutable Customer record rather than application-submission evidence and displays only Customer number, name, and phone. Collateral Loan cases show the Loan-owned submitted asset facts in a read-only card. Partner facts, income, document readiness, offer, contract, and LoanAccount state appear only in their authorized sections. The ordinary case projection does not authorize later workflow actions.
+
+Application-owned Staff routes must retain one consistent application identity and section-navigation hierarchy. For the same actor with Staff application-case read authority, Overview, History, Verification, Review, Documents, and Corrections retain the same essential case context: business application number, current status, product name, requested amount, requested term, submitted time, origination channel, and subordinate Application ID copy control. Summary facts appear in amount, term, submitted time, and origination-channel order; Product type is not part of the persistent header. Feature routes own their queries, permissions, commands, and specialized body layouts, but must not present the same LoanApplication as unrelated workspaces.
+
+The business application number is the primary visible identity when the authorized projection provides it. Technical IDs remain subordinate and appear only for evidence matching, support, or another operational task. Section navigation is capability-aware and must not query or expose unauthorized feature data. Feature pages may supplement missing safe header facts through the existing Staff application-case read only when the actor has its exact authority. Reduced headers reflect authorized fact availability, not route-specific presentation choices. Supplemental pending or failed reads must not prevent authorized feature evidence or actions from remaining available; failed enrichment falls back to the feature-owned facts, and stale context is identified. Visual consistency does not authorize broader reads, merging purpose-limited backend projections, or inference of missing facts.
 
 ### 22.2 Workspace Sections
 

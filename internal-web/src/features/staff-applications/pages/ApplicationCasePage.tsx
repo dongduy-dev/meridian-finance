@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { Check, CircleUserRound, Clock3, Copy, History, RefreshCw } from 'lucide-react'
-import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { CircleUserRound, History, RefreshCw } from 'lucide-react'
+import { useEffect } from 'react'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,10 +13,9 @@ import { uuidSchema } from '../api/contracts'
 import { staffApplicationCaseQuery } from '../api/queries'
 import { QueryErrorPanel } from '../components/QueryErrorPanel'
 import { CollateralFactsCard } from '../components/CollateralFactsCard'
-import { StatusBadge } from '../components/StatusBadge'
+import { ApplicationWorkspaceShell, applicationWorkspaceCaseFacts } from '@/components/operations/ApplicationWorkspaceShell'
 import {
   applicationStatusLabel,
-  humanizeKnownValue,
   productLabel,
   transitionActionLabel,
 } from '../model/presentation'
@@ -36,20 +35,22 @@ function ReadinessFact({ label, value, positive }: { label: string; value: strin
 export function ApplicationCasePage() {
   const { manager, state } = useAuth()
   const { loanApplicationId = '' } = useParams()
-  const [copied, setCopied] = useState(false)
+  const { hash } = useLocation()
   const validId = uuidSchema.safeParse(loanApplicationId).success
   const canRead = state.status === 'authenticated' && hasPermission(state.actor, 'loan:read')
   const query = useQuery(staffApplicationCaseQuery(manager, loanApplicationId, canRead && validId))
   const data = query.data
 
-  const copyId = async () => {
-    try {
-      await navigator.clipboard.writeText(loanApplicationId)
-      setCopied(true)
-    } catch {
-      setCopied(false)
-    }
-  }
+  const caseLoaded = Boolean(data)
+  useEffect(() => {
+    if (!caseLoaded || (hash !== '#history' && hash !== '#overview')) return
+    const timer = setTimeout(() => {
+      const heading = document.getElementById(hash === '#history' ? 'history-heading' : 'overview-heading')
+      heading?.focus()
+      heading?.scrollIntoView?.({ block: 'start' })
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [hash, caseLoaded])
 
   if (!validId) {
     return (
@@ -84,74 +85,31 @@ export function ApplicationCasePage() {
 
   if (!data) return null
 
-  const refreshedAt = query.dataUpdatedAt
-    ? formatTimestamp(new Date(query.dataUpdatedAt).toISOString())
-    : 'Not refreshed'
   const readiness = data.customerReadiness
 
   return (
-    <section className="mx-auto max-w-6xl space-y-6">
-      <Link className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline" to="/staff/applications">← Back to applications</Link>
-
-      <header className="rounded-lg border bg-card p-5 shadow-soft sm:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-muted-foreground">APPLICATION CASE</p>
-            <h1 data-route-heading tabIndex={-1} className="mt-1 break-words text-2xl font-semibold tracking-tight sm:text-3xl">{data.applicationNumber}</h1>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <StatusBadge status={data.status} />
-              <span className="text-sm text-muted-foreground">{productLabel(data.productCode)}</span>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 text-sm lg:items-end">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Application ID</span>
-            <code className="max-w-full break-all rounded bg-muted px-2 py-1 text-xs">{data.loanApplicationId}</code>
-            <Button variant="outline" size="sm" onClick={() => void copyId()} aria-label="Copy application ID">
-              {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />} {copied ? 'ID copied' : 'Copy application ID'}
-            </Button>
-          </div>
-        </div>
-        <dl className="mt-6 grid gap-4 border-t pt-5 sm:grid-cols-2 lg:grid-cols-4">
-          <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Requested amount</dt><dd className="financial-value mt-1 font-semibold">{formatVnd(data.requestedAmount)}</dd></div>
-          <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Requested term</dt><dd className="mt-1 font-semibold">{data.requestedTermMonths} months</dd></div>
-          <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Product type</dt><dd className="mt-1 font-semibold">{humanizeKnownValue(data.productType)}</dd></div>
-          <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Origination channel</dt><dd className="mt-1 font-semibold">{humanizeKnownValue(data.originationChannel)}</dd></div>
-          <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Submitted</dt><dd className="mt-1 font-semibold">{formatTimestamp(data.submittedAt)}</dd></div>
-        </dl>
-      </header>
-
-      <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center sm:justify-between" aria-live="polite">
-        <div className="flex items-start gap-3 text-sm">
-          <Clock3 aria-hidden="true" className="mt-0.5 size-5 text-information" />
-          <div><p className="font-semibold">Last updated</p><p className="text-muted-foreground">Last successful refresh: {refreshedAt}</p>{query.isStale ? <p className="mt-1 font-medium text-warning">These details may be out of date. Refresh before taking action.</p> : null}</div>
-        </div>
-        <Button variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>
-          {query.isFetching ? <Spinner /> : <RefreshCw aria-hidden="true" />} {query.isFetching ? 'Refreshing…' : 'Refresh'}
-        </Button>
-      </div>
-
-      {query.isError ? (
-        <Alert variant="warning"><RefreshCw aria-hidden="true" /><AlertTitle>Latest refresh unavailable</AlertTitle><AlertDescription>Previously loaded application details are shown.</AlertDescription></Alert>
-      ) : null}
-
-      <nav aria-label="Case workspace" className="flex gap-2 overflow-x-auto rounded-lg border bg-card p-2">
-        <a href="#overview" className="inline-flex min-h-11 items-center rounded-md bg-selected px-4 text-sm font-semibold">Overview</a>
-        <a href="#history" className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">History</a>
-        {state.status === 'authenticated' && hasPermission(state.actor, 'loan:review') ? <Link to={`/staff/applications/${loanApplicationId}/verification`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Verification</Link> : null}
-        {state.status === 'authenticated' && hasPermission(state.actor, 'loan:review') ? <Link to={`/staff/applications/${loanApplicationId}/review`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Review</Link> : null}
-        {state.status === 'authenticated' && hasPermission(state.actor, 'document:review') ? <Link to={`/staff/applications/${loanApplicationId}/documents`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Documents</Link> : null}
-        {state.status === 'authenticated' && hasPermission(state.actor, 'loan:correction:staff') ? <Link to={`/staff/applications/${loanApplicationId}/corrections`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Corrections</Link> : null}
-        {data.originationChannel === 'STAFF_ASSISTED'
+    <ApplicationWorkspaceShell
+      actor={state.status === 'authenticated' ? state.actor : undefined}
+      context={{ source: 'case', facts: applicationWorkspaceCaseFacts(data) }}
+      activeSection={hash === '#history' ? 'history' : 'overview'}
+      updatedAt={query.dataUpdatedAt} refreshing={query.isFetching} stale={query.isStale}
+      onRefresh={() => void query.refetch()}
+      navigationExtra={
+        data.originationChannel === 'STAFF_ASSISTED'
           && data.status === 'CUSTOMER_ACCEPTANCE_PENDING'
           && state.status === 'authenticated'
           && hasPermission(state.actor, 'loan:offer:respond:staff')
           && hasRole(state.actor, 'LOAN_OFFICER')
           ? <Link to={`/staff/applications/${loanApplicationId}/offer-response`} className="inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold hover:bg-muted">Customer offer response</Link>
-          : null}
-      </nav>
+          : null
+      }
+    >
+      {query.isError ? (
+        <Alert variant="warning"><RefreshCw aria-hidden="true" /><AlertTitle>Latest refresh unavailable</AlertTitle><AlertDescription>Previously loaded application details are shown.</AlertDescription></Alert>
+      ) : null}
 
       <section id="overview" className="scroll-mt-4 space-y-4" aria-labelledby="overview-heading">
-        <div><p className="text-sm font-semibold text-muted-foreground">CASE OVERVIEW</p><h2 id="overview-heading" className="mt-1 text-xl font-semibold">Application and readiness</h2></div>
+        <div><p className="text-sm font-semibold text-muted-foreground">CASE OVERVIEW</p><h2 tabIndex={-1} id="overview-heading" className="mt-1 text-xl font-semibold">Application and readiness</h2></div>
         <div className="grid gap-5 lg:grid-cols-2">
           <Card>
             <CardHeader><CardTitle>Application facts</CardTitle></CardHeader>
@@ -172,7 +130,6 @@ export function ApplicationCasePage() {
                 <ReadinessFact label="Customer state" value={readiness.active ? 'Active' : 'Inactive'} positive={readiness.active} />
                 <ReadinessFact label="Profile" value={readiness.profileComplete ? 'Complete' : 'Incomplete'} positive={readiness.profileComplete} />
                 <ReadinessFact label="Primary bank account" value={readiness.hasPrimaryActiveBankAccount ? 'Available' : 'Missing'} positive={readiness.hasPrimaryActiveBankAccount} />
-                <ReadinessFact label="Verification status" value={humanizeKnownValue(readiness.verificationStatus)} positive={readiness.verificationStatus === 'VERIFIED'} />
               </dl>
             </CardContent>
           </Card>
@@ -190,7 +147,7 @@ export function ApplicationCasePage() {
       {data.productCode === 'COLLATERAL_LOAN' && data.collateralContext ? <CollateralFactsCard collateral={data.collateralContext} /> : null}
 
       <section id="history" className="scroll-mt-4 space-y-4" aria-labelledby="history-heading">
-        <div><p className="text-sm font-semibold text-muted-foreground">APPLICATION HISTORY</p><h2 id="history-heading" className="mt-1 text-xl font-semibold">Application history</h2><p className="mt-1 text-sm text-muted-foreground">Events appear in the order recorded for this application.</p></div>
+        <div><p className="text-sm font-semibold text-muted-foreground">APPLICATION HISTORY</p><h2 tabIndex={-1} id="history-heading" className="mt-1 text-xl font-semibold">Application history</h2><p className="mt-1 text-sm text-muted-foreground">Events appear in the order recorded for this application.</p></div>
         <Card>
           <CardContent className="pt-6">
             {data.lifecycleHistory.length === 0 ? <p className="text-sm text-muted-foreground">Application history is unavailable.</p> : (
@@ -211,6 +168,6 @@ export function ApplicationCasePage() {
       </section>
 
       <Alert variant="information"><CircleUserRound aria-hidden="true" /><AlertTitle>Application overview</AlertTitle><AlertDescription>This overview remains read-only. Document review and Staff correction actions are available in their dedicated workspaces.</AlertDescription></Alert>
-    </section>
+    </ApplicationWorkspaceShell>
   )
 }

@@ -114,6 +114,17 @@ describe('Staff contract workspace', () => {
     vi.spyOn(crypto, 'randomUUID').mockReturnValue(operationId)
   })
 
+  it('shares application chrome while retaining contract authority and stage', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(preparedCase())
+    renderPage()
+    await screen.findByRole('heading', { level: 1, name: caseFixture().applicationNumber })
+    expect(screen.getByText('APPLICATION CASE')).toBeVisible()
+    expect(screen.getByRole('heading', { level: 2, name: 'Contract and readiness' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeVisible()
+    expect(screen.queryByRole('link', { name: 'Overview' })).not.toBeInTheDocument()
+    expect(vi.mocked(api.apiRequest).mock.calls.every(([path]) => String(path).endsWith('/contract'))).toBe(true)
+  })
+
   it('shows Customer and only the handoff stages that exist before preparation', async () => {
     vi.mocked(api.apiRequest).mockResolvedValue(noContractCase())
     renderPage()
@@ -218,6 +229,8 @@ describe('Staff contract workspace', () => {
     expect(await screen.findByText(/Record the Customer's signed acknowledgment for the current contract version/i)).toBeVisible()
     await user.click(screen.getByRole('checkbox'))
     await user.click(screen.getByRole('button', { name: 'Review signed acknowledgment' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('contract version 1')
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('22222222-2222-4222-8222-222222222222')
     await user.click(screen.getByRole('button', { name: 'Confirm contract action' }))
 
     await screen.findByText(/contract action was confirmed and the latest contract information is loaded/i)

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -113,8 +113,95 @@ describe('Staff decision workspace', () => {
 
     expect(await screen.findByText('Deni Loan Officer')).toBeVisible()
     expect(screen.getByText('officer@meridian.local')).toBeVisible()
-    expect(screen.getByText(/Ari Approver \(approver@meridian\.local\)/)).toBeVisible()
-    expect(screen.getByText(/Ari Approver · approver@meridian\.local/)).toBeVisible()
+    expect(screen.getAllByText('Ari Approver')).toHaveLength(2)
+    expect(within(screen.getByRole('heading', { name: 'Decision outcome' }).parentElement!.parentElement!).getByText('approver@meridian.local')).toBeVisible()
+    expect(within(screen.getByRole('heading', { name: 'Decision history' }).parentElement!.parentElement!).getByText('approver@meridian.local')).toBeVisible()
+    expect(screen.getAllByText('Recorded by')).toHaveLength(3)
+    expect(screen.getAllByText('Recorded')).toHaveLength(3)
+  })
+
+  it.each(['RETURNED_TO_REVIEW', 'APPROVAL_PENDING'] as const)(
+    'retains server decision history without a current decision in %s across refresh and a fresh session',
+    async (applicationStatus) => {
+      const previous = returnedToReviewCase()
+      const value = {
+        ...previous,
+        applicationStatus,
+        latestDecision: null,
+        decisionAvailable: applicationStatus === 'APPROVAL_PENDING',
+        recommendation: applicationStatus === 'APPROVAL_PENDING' ? {
+          ...previous.recommendation,
+          recommendationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          reviewCycleId: successorCycleId,
+        } : null,
+        decisionHistory: [previous.decisionHistory[0], {
+          ...previous.decisionHistory[0],
+          decisionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          reviewRecommendationId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          action: 'REQUEST_CUSTOMER_OR_STAFF_CORRECTION',
+          reason: null,
+          reasonCode: 'DOCUMENT_REPLACEMENT_REQUIRED',
+          decidedAt: '2026-09-05T08:30:00',
+        }],
+      }
+      vi.mocked(api.apiRequest).mockResolvedValue(value)
+      const assertHistory = async () => {
+        const heading = await screen.findByRole('heading', { name: 'Decision history' })
+        const history = within(heading.parentElement!.parentElement!)
+        expect(history.getAllByRole('heading', { level: 3 }).map((item) => item.textContent))
+          .toEqual(['Return to Loan Officer', 'Request correction'])
+        expect(history.getAllByText('Ari Approver')).toHaveLength(2)
+        expect(history.getAllByText('approver@meridian.local')).toHaveLength(2)
+        expect(history.getByText('Reason: Review the case again.')).toBeVisible()
+        expect(history.getByText('Controlled reason: Document replacement required')).toBeVisible()
+        expect(screen.queryByRole('heading', { name: 'Decision outcome' })).not.toBeInTheDocument()
+        if (applicationStatus === 'APPROVAL_PENDING') {
+          expect(screen.getByRole('button', { name: 'Review decision' })).toBeVisible()
+        } else {
+          expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
+        }
+        expect(screen.getByText(applicationStatus === 'APPROVAL_PENDING' ? 'Approval pending' : 'Returned to review')).toBeVisible()
+      }
+      renderPage()
+      await assertHistory()
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Refresh' }))
+      await assertHistory()
+      cleanup()
+      renderPage(createQueryClient())
+      await assertHistory()
+      expect(vi.mocked(api.apiRequest).mock.calls.filter(([path]) => String(path).endsWith('/decision'))).toHaveLength(3)
+    },
+  )
+
+  it('uses shared application identity and business evidence without loan:read', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(decisionCase())
+    renderPage()
+    const user = userEvent.setup()
+    await screen.findByRole('heading', { level: 1, name: 'UCL-1' })
+    expect(screen.getByText('APPLICATION CASE')).toBeVisible()
+    expect(screen.getByRole('heading', { level: 2, name: 'Independent decision' })).toBeVisible()
+    expect(screen.getByText('Cycle 1')).toBeVisible()
+    expect(screen.queryByText(cycleId)).not.toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Application sections' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Review decision' }))
+    const confirmation = within(screen.getByRole('dialog'))
+    expect(confirmation.getByText('UCL-1')).toBeVisible()
+    expect(confirmation.getByText('Recommend approval')).toBeVisible()
+    expect(confirmation.getByText('Deni Loan Officer')).toBeVisible()
+    expect(confirmation.getByText('officer@meridian.local')).toBeVisible()
+    expect(confirmation.getByText('Cycle 1')).toBeVisible()
+    expect(confirmation.getByText('Submitted').nextElementSibling).not.toBeEmptyDOMElement()
+    expect(confirmation.queryByText(recommendationId)).not.toBeInTheDocument()
+    expect(confirmation.queryByText(cycleId)).not.toBeInTheDocument()
+    expect(vi.mocked(api.apiRequest).mock.calls.every(([path]) => String(path).endsWith('/decision'))).toBe(true)
+  })
+
+  it('does not label a prior recommendation with the successor cycle number', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(returnedToReviewCase())
+    renderPage()
+    expect(await screen.findByText('Cycle number unavailable')).toBeVisible()
+    expect(screen.queryByText(cycleId)).not.toBeInTheDocument()
+    expect(screen.getByText('Cycle 2 · Active')).toBeVisible()
   })
 
   it.each([
@@ -152,7 +239,7 @@ describe('Staff decision workspace', () => {
       await user.type(screen.getByLabelText('Staff instruction'), 'Review the replacement.')
     }
     await user.click(await screen.findByRole('button', { name: 'Review decision' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm decision' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
     await screen.findByRole('heading', { name: 'Decision evidence changed' })
     await waitFor(() => expect(screen.getByRole('heading', { name: /Decision result for UCL-1/i })).toHaveFocus())
@@ -194,7 +281,7 @@ describe('Staff decision workspace', () => {
     const user = userEvent.setup()
     await user.type(await screen.findByLabelText('Restricted internal notes'), 'preserve this decision draft')
     await user.click(screen.getByRole('button', { name: 'Review decision' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm decision' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
     expect(await screen.findByRole('heading', { name: 'Decision evidence changed' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
@@ -224,7 +311,7 @@ describe('Staff decision workspace', () => {
     renderPage(queryClient)
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review decision' }, { timeout: 5_000 }))
-    await user.click(screen.getByRole('button', { name: 'Confirm decision' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
     expect(await screen.findByText(/decision result is not confirmed/i)).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
@@ -260,7 +347,7 @@ describe('Staff decision workspace', () => {
     await user.click(await screen.findByLabelText('Return to Loan Officer review'))
     await user.type(screen.getByLabelText('Decision reason'), 'Review the case again.')
     await user.click(screen.getByRole('button', { name: 'Review decision' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm decision' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
     expect(await screen.findByText(/decision result is not confirmed/i)).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
@@ -292,7 +379,7 @@ describe('Staff decision workspace', () => {
     renderPage()
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review decision' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm decision' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
     expect(await screen.findByText(
       /Decision recorded; updated details could not be loaded/i,

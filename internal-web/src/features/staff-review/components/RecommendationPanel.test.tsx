@@ -84,7 +84,7 @@ describe('RecommendationPanel', () => {
       await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
       await screen.findByText(/recommendation was confirmed for the displayed review cycle/i)
-      await waitFor(() => expect(screen.getByRole('heading', { name: `Recommendation result for application ${applicationId}` })).toHaveFocus())
+      await waitFor(() => expect(screen.getByRole('heading', { name: `Recommendation result for UCL-1` })).toHaveFocus())
       expect(submittedBody).toMatchObject({
         action: selectedAction,
         expectedReviewCycleId: cycleId,
@@ -135,8 +135,10 @@ describe('RecommendationPanel', () => {
 
     render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RecommendationPanel loanApplicationId={applicationId} /></AuthProvider></QueryClientProvider>)
 
-    expect(await screen.findByRole('heading', { name: 'Recommendation recorded' })).toBeVisible()
-    expect(screen.getByText(/Recorded by: Deni Loan Officer/)).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Recommend approval' })).toBeVisible()
+    expect(screen.getByText('Recorded')).toBeVisible()
+    expect(screen.getByText('Recorded by')).toBeVisible()
+    expect(screen.getByText('Deni Loan Officer')).toBeVisible()
     expect(screen.getByText('officer@meridian.local')).toBeVisible()
   })
 
@@ -234,7 +236,7 @@ describe('RecommendationPanel', () => {
     })
     render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RecommendationPanel loanApplicationId={applicationId} /></AuthProvider></QueryClientProvider>)
 
-    const heading = await screen.findByRole('heading', { name: 'Recommendation recorded' })
+    const heading = await screen.findByRole('heading', { name: 'Recommendation action unavailable' })
     expect(heading.closest('[role="alert"]')).toHaveTextContent('Recommendation action unavailable')
     expect(screen.queryByRole('button', { name: 'Review recommendation' })).not.toBeInTheDocument()
   })

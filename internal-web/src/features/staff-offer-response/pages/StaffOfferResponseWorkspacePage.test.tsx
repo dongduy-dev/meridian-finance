@@ -89,6 +89,13 @@ describe('Staff-assisted offer response workspace', () => {
 
     expect(await screen.findByText(/Staff records the response shown on the signed form/i)).toBeVisible()
     expect(screen.getByText('Awaiting Customer response')).toBeVisible()
+    expect(screen.getByText('APPLICATION CASE')).toBeVisible()
+    expect(screen.getByRole('heading', { level: 1, name: 'UCL-20260922-000001' })).toBeVisible()
+    expect(screen.getByRole('heading', { level: 2, name: 'Customer offer response' })).toBeVisible()
+    expect(screen.queryByText('EVIDENCED CUSTOMER DECISION')).not.toBeInTheDocument()
+    expect(screen.getByText('Technical offer details').parentElement).not.toHaveAttribute('open')
+    expect(screen.queryByRole('link', { name: /Application case|Overview|Decision/ })).not.toBeInTheDocument()
+    expect(vi.mocked(api.apiRequest).mock.calls.every(([path]) => String(path).endsWith('/offer-response'))).toBe(true)
     expect(screen.getByRole('option', { name: 'Accept' })).toBeVisible()
     expect(screen.getByRole('option', { name: 'Decline' })).toBeVisible()
     expect(screen.queryByRole('option', { name: 'ACCEPT' })).not.toBeInTheDocument()

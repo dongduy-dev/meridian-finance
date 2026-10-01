@@ -11,6 +11,7 @@ import { staffApplicationKeys } from '@/features/staff-applications/api/queries'
 import * as api from '@/lib/api'
 import { NetworkError } from '@/lib/api'
 import { createQueryClient } from '@/lib/query/query-client'
+import { applicationWorkspaceCase } from '@/test/application-workspace-fixture'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
   const actual = await vi.importActual<typeof import('@/features/auth/api/auth-api')>('@/features/auth/api/auth-api')
@@ -65,6 +66,9 @@ describe('Staff review workspace', () => {
         started = true
         throw new NetworkError('connection lost')
       }
+      if (path === `/staff/loan-applications/${applicationId}`) return {
+        ...applicationWorkspaceCase, ...reviewCase(started), status: started ? 'UNDER_REVIEW' : 'VERIFIED',
+      }
       return reviewCase(started)
     })
     const router = createTestRouter([`/staff/applications/${applicationId}/review`])
@@ -73,7 +77,12 @@ describe('Staff review workspace', () => {
     render(<QueryClientProvider client={queryClient}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
     const user = userEvent.setup()
 
-    await user.click(await screen.findByRole('button', { name: 'Start review' }, { timeout: 5_000 }))
+    const identity = await screen.findByRole('heading', { name: 'UCL-20260905-000001', level: 1 })
+    await waitFor(() => expect(identity).toHaveFocus())
+    expect(screen.getByRole('link', { name: 'Review' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Verification' })).toBeVisible()
+    expect(screen.queryByRole('link', { name: 'Verification workspace' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Start review' }))
     await user.click(screen.getByRole('button', { name: 'Confirm review start' }))
 
     expect(await screen.findByText(/review start was confirmed after Meridian refreshed the review/i)).toBeVisible()
@@ -81,7 +90,7 @@ describe('Staff review workspace', () => {
     expect(screen.queryByRole('button', { name: /recommend|approve|reject/i })).not.toBeInTheDocument()
     expect(vi.mocked(api.apiRequest).mock.calls.filter(([path]) => String(path).endsWith('/review/start'))).toHaveLength(1)
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: staffApplicationKeys.all })
-    expect(screen.getByRole('link', { name: /Application overview/ })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Overview' })).toBeVisible()
   })
 
   it('keeps review start unresolved when reconciliation GET fails and unlocks only after a successful Refresh', async () => {
