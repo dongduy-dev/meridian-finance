@@ -7,6 +7,8 @@ import com.meridian.platform.loan.application.port.out.CollateralRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
+import com.meridian.platform.loan.application.port.out.StaffActorDirectoryPort;
+import com.meridian.platform.loan.application.port.out.StaffActorSummary;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
@@ -33,6 +35,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -44,6 +47,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.ArgumentMatchers.any;
 
 @ExtendWith(MockitoExtension.class)
 class QueryStaffLoanApplicationVerificationServiceTest {
@@ -62,6 +69,7 @@ class QueryStaffLoanApplicationVerificationServiceTest {
     @Mock CollateralRepository collaterals;
     @Mock LoanDocumentChecklistPort documents;
     @Mock CurrentUserProvider currentUserProvider;
+    @Mock StaffActorDirectoryPort staffActors;
 
     private QueryStaffLoanApplicationVerificationService service;
 
@@ -74,6 +82,7 @@ class QueryStaffLoanApplicationVerificationServiceTest {
                 collateralVerifications,
                 collaterals,
                 documents,
+                staffActors,
                 currentUserProvider
         );
     }
@@ -120,6 +129,7 @@ class QueryStaffLoanApplicationVerificationServiceTest {
         assertFalse(result.actions().startAvailable());
         assertFalse(result.actions().completeAvailable());
         assertTrue(result.correctionTargets().isEmpty());
+        verifyNoInteractions(staffActors);
     }
 
     @Test
@@ -131,6 +141,9 @@ class QueryStaffLoanApplicationVerificationServiceTest {
         );
         var first = completedUcl(1, ProductVerificationResult.REQUIRES_MORE_INFORMATION);
         var current = pendingUcl(2);
+        when(staffActors.findByUserIds(Set.of(first.reviewedByUserId()))).thenReturn(Map.of(
+                first.reviewedByUserId(), new StaffActorSummary(first.reviewedByUserId(), "Officer", "officer@meridian.test")
+        ));
         when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:review")));
         when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application));
         when(documents.readiness(APPLICATION_ID)).thenReturn(readiness(true, true));
@@ -165,6 +178,16 @@ class QueryStaffLoanApplicationVerificationServiceTest {
         assertTrue(result.actions().completeAvailable());
         assertEquals(1, result.correctionTargets().size());
         assertEquals("BANK_STATEMENT", result.correctionTargets().getFirst().documentType());
+        assertEquals("Restricted note", verification.history().getFirst().assessmentNote());
+        assertEquals(first.reviewedAt(), verification.history().getFirst().reviewedAt());
+        assertEquals(first.reviewedByUserId(), verification.history().getFirst().reviewedBy().userId());
+        assertEquals(current.sourceCorrectionRequestId(), verification.currentCycle().sourceCorrectionRequestId());
+        assertNull(verification.currentCycle().reviewedBy());
+        assertNull(verification.currentCycle().reviewedAt());
+        assertNull(verification.currentCycle().assessmentNote());
+        verify(staffActors).findByUserIds(Set.of(first.reviewedByUserId()));
+        verify(applications, never()).save(any());
+        verify(uclVerifications, never()).save(any());
     }
 
     @Test
@@ -210,9 +233,15 @@ class QueryStaffLoanApplicationVerificationServiceTest {
         for (AuthenticatedUser denied : List.of(
                 staff(Set.of("loan:read")),
                 staff(Set.of("approval:recommend")),
+                staff(Set.of("document:review")),
+                staff(Set.of("approval:decide:all")),
+                staff(Set.of("loan:disburse", "repayment:update")),
+                staff(Set.of("admin:config")),
                 staff(Set.of("loan:review:all")),
                 customer(Set.of("loan:review")),
-                customerShapedStaff(Set.of("loan:review"))
+                customerShapedStaff(Set.of("loan:review")),
+                customer(Set.of("approval:decide")),
+                customerShapedStaff(Set.of("approval:decide"))
         )) {
             when(currentUserProvider.currentUser()).thenReturn(denied);
             AuthorizationException error = assertThrows(
@@ -220,6 +249,57 @@ class QueryStaffLoanApplicationVerificationServiceTest {
             );
             assertEquals("LOAN_REVIEW_ACCESS_DENIED", error.getErrorCode());
         }
+        verifyNoInteractions(applications, documents, staffActors);
+    }
+
+    @Test
+    void approverReadsCollateralEvidenceWithoutOperationsAndMissingActorDoesNotEraseNote() {
+        var completed = new CollateralLoanVerification(VERIFICATION_ID, APPLICATION_ID, 2,
+                UUID.randomUUID(), ProductVerificationResult.VERIFIED, SUBMITTED_AT,
+                UUID.randomUUID(), SUBMITTED_AT.plusHours(1), "Recorded collateral assessment");
+        when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("approval:decide")));
+        when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application(
+                ProductCode.COLLATERAL_LOAN, ProductType.SECURED, LoanApplicationStatus.SUBMITTED)));
+        when(documents.readiness(APPLICATION_ID)).thenReturn(readiness(true, true));
+        when(collateralVerifications.findAllByLoanApplicationIdOrderByVerificationSequenceAsc(APPLICATION_ID))
+                .thenReturn(List.of(completed));
+        when(collaterals.findByLoanApplicationId(APPLICATION_ID)).thenReturn(List.of(collateral()));
+        when(staffActors.findByUserIds(Set.of(completed.reviewedByUserId()))).thenReturn(Map.of());
+
+        var result = service.query(APPLICATION_ID);
+        var evidence = (com.meridian.platform.loan.application.dto.StaffLoanApplicationVerificationDto.ManualVerificationDto)
+                result.productVerification();
+        assertEquals("Recorded collateral assessment", evidence.currentCycle().assessmentNote());
+        assertEquals("VERIFIED", evidence.currentCycle().productVerificationResult());
+        assertEquals(completed.sourceCorrectionRequestId(), evidence.currentCycle().sourceCorrectionRequestId());
+        assertEquals(completed.reviewedAt(), evidence.currentCycle().reviewedAt());
+        assertNull(evidence.currentCycle().reviewedBy());
+        assertFalse(result.actions().startAvailable());
+        assertFalse(result.actions().completeAvailable());
+        assertTrue(result.correctionTargets().isEmpty());
+        verify(documents, never()).currentVersionTargets(any());
+
+        when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:review", "approval:decide")));
+        assertEquals(evidence, service.query(APPLICATION_ID).productVerification());
+    }
+
+    @Test
+    void approverCannotOperatePendingCycleEvenWhenDocumentsAreReady() {
+        when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("approval:decide")));
+        when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application(
+                ProductCode.UNSECURED_CONSUMER_LOAN, ProductType.UNSECURED, LoanApplicationStatus.VERIFICATION_PENDING)));
+        when(documents.readiness(APPLICATION_ID)).thenReturn(readiness(true, true));
+        when(uclVerifications.findAllByLoanApplicationIdOrderByVerificationSequenceAsc(APPLICATION_ID))
+                .thenReturn(List.of(pendingUcl(1)));
+        var result = service.query(APPLICATION_ID);
+        assertFalse(result.actions().startAvailable());
+        assertFalse(result.actions().completeAvailable());
+        assertTrue(result.correctionTargets().isEmpty());
+        verifyNoInteractions(staffActors);
+        verify(documents, never()).currentVersionTargets(any());
+        when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:review", "approval:decide")));
+        var combined = service.query(APPLICATION_ID);
+        assertTrue(combined.actions().completeAvailable());
     }
 
     @Test

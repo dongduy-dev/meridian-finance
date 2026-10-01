@@ -781,6 +781,7 @@ Resolved scope:
 - Staff case header, purpose-limited Customer readiness, and immutable ordered LoanApplication transition history.
 - Staff submission-checklist, current-version, immutable version-history, and safe review-history projection for document operations.
 - Staff correction case projection with mixed task composition, backend-derived proof state, resubmission readiness, and current-actor maker-checker evidence.
+- Restricted verification assessment retrieval and shared presentation in assessment, Loan Officer review, and Approver decision workspaces are complete. The canonical Loan-owned read projects existing manual-cycle notes, reviewer/time, and source-correction linkage for exact `loan:review` or `approval:decide`; Approver-only access is read-only, and Salary Advance remains automated. No new persistence or permission grant was introduced.
 - Staff product-verification projection with Salary Advance immutable snapshots; UCL and Collateral authoritative current/ordered history; Collateral assessment facts; Document-port readiness and current-version correction targets; and backend-derived start/complete availability.
 - Staff review-start projection with product/document readiness and the latest Loan-owned review cycle for no-business-UUID reconciliation.
 - Approval-owned current recommendation projection with review-cycle provenance, safe reason evidence, backend-derived availability, and authoritative structured correction options.
@@ -799,7 +800,7 @@ Resolved scope:
 Still deferred:
 
 - Specialized Staff work queues beyond the executable document-review, Staff-correction, Approver, contract, disbursement, ordinary-repayment servicing, settlement, and closure queues, including verification/review queues and direct application-number lookup.
-- Action histories beyond the executable linked review/recommendation/decision history and CP4 verification/review, CP6 contract/readiness, CP7 disbursement/activation, CP8 ordinary repayment-servicing, and CP9 settlement/closure evidence, including historical correction provenance and separate Customer actor resolution. Restricted verification assessment and document-review note reads remain outside this linked credit-review scope.
+- Action histories beyond the executable linked review/recommendation/decision history and CP4 verification/review, CP6 contract/readiness, CP7 disbursement/activation, CP8 ordinary repayment-servicing, and CP9 settlement/closure evidence, including historical correction provenance and separate Customer actor resolution. Document restrictedStaffNotes retrieval and document-review historical provenance remain deferred; assisted-action actor provenance is also outside the completed assessment integration.
 - Broader Dashboard aggregation beyond the narrow Customer indexes and action facts.
 - Additional workflow command suggestions beyond the proven Customer action categories.
 - Richer product-specific projections where the common reads are insufficient.

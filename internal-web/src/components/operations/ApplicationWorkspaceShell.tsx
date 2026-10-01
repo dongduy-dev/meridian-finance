@@ -49,7 +49,7 @@ export function applicationWorkspaceCaseFacts(data: Omit<ApplicationWorkspaceCas
 const sections = [
   { key: 'overview', label: 'Overview', route: STAFF_APPLICATION_CASE_ROUTE },
   { key: 'history', label: 'History', route: STAFF_APPLICATION_CASE_ROUTE },
-  { key: 'verification', label: 'Verification', route: STAFF_VERIFICATION_CASE_ROUTE },
+  { key: 'verification', label: 'Product assessment', route: STAFF_VERIFICATION_CASE_ROUTE },
   { key: 'review', label: 'Review', route: STAFF_REVIEW_CASE_ROUTE },
   { key: 'documents', label: 'Documents', route: STAFF_DOCUMENT_CASE_ROUTE },
   { key: 'corrections', label: 'Corrections', route: STAFF_CORRECTION_CASE_ROUTE },

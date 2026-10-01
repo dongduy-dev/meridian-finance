@@ -9,7 +9,7 @@ const itemId = '33333333-3333-4333-8333-333333333333'
 const versionId = '44444444-4444-4444-8444-444444444444'
 
 function collateralCase(): StaffVerificationCase {
-  const cycle = { verificationId, verificationSequence: 1, productVerificationResult: 'PENDING_MANUAL_REVIEW', createdAt: '2026-09-05T08:00:00', reviewedAt: null }
+  const cycle = { verificationId, verificationSequence: 1, sourceCorrectionRequestId: null, reviewedBy: null, assessmentNote: null, productVerificationResult: 'PENDING_MANUAL_REVIEW', createdAt: '2026-09-05T08:00:00', reviewedAt: null }
   return {
     loanApplicationId: applicationId, applicationNumber: 'COL-20260905-000001',
     productCode: 'COLLATERAL_LOAN', productType: 'SECURED', requestedAmount: 50_000_000,

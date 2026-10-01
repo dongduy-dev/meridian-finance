@@ -21,7 +21,7 @@ function renderShell(permissions: string[], activeSection: ApplicationWorkspaceS
 describe('Application workspace presentation', () => {
   it.each([
     ['loan:read', ['Overview', 'History'], 'overview'],
-    ['loan:review', ['Verification', 'Review'], 'verification'],
+    ['loan:review', ['Product assessment', 'Review'], 'verification'],
     ['document:review', ['Documents'], 'documents'],
     ['loan:correction:staff', ['Corrections'], 'corrections'],
     ['document:read', [], 'overview'],
@@ -39,7 +39,7 @@ describe('Application workspace presentation', () => {
   it('keeps the six sections in order and calls only the supplied route refresh', async () => {
     const refresh = renderShell(['loan:read', 'loan:review', 'document:review', 'loan:correction:staff'], 'review')
     const navigation = screen.getByRole('navigation', { name: 'Application sections' })
-    expect(within(navigation).getAllByRole('link').map((link) => link.textContent)).toEqual(['Overview', 'History', 'Verification', 'Review', 'Documents', 'Corrections'])
+    expect(within(navigation).getAllByRole('link').map((link) => link.textContent)).toEqual(['Overview', 'History', 'Product assessment', 'Review', 'Documents', 'Corrections'])
     expect(within(navigation).getByRole('link', { current: 'page' })).toHaveTextContent('Review')
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('CL-20261001-000005')
     expect(screen.getByText('Returned for revision')).toBeVisible()

@@ -1,3 +1,5 @@
+import { staffVerificationKeys } from '@/features/staff-verification/api/queries'
+import { staffReviewKeys } from '@/features/staff-review/api/queries'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, CheckCircle2, FileUp, ShieldAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -121,6 +123,8 @@ export function StaffCorrectionWorkspacePage() {
 
   const reconcile = async (documentRelevant = false) => {
     const work = [
+      queryClient.invalidateQueries({ queryKey: staffVerificationKeys.all }),
+      queryClient.invalidateQueries({ queryKey: staffReviewKeys.all }),
       queryClient.invalidateQueries({ queryKey: staffCorrectionKeys.all }),
       queryClient.invalidateQueries({ queryKey: staffApplicationKeys.all }),
     ]

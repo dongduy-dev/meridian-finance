@@ -212,6 +212,35 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
     }
 
     @Test
+    void persistedAssessmentIsReadableByReviewerAndApproverWithoutWorkflowEffects() {
+        UUID applicationId = originateAndMakeProcessingReady();
+        useLoanOfficer();
+        verificationUseCase.startManualVerification(applicationId);
+        verificationUseCase.completeManualVerification(applicationId,
+                new CompleteUnsecuredConsumerLoanVerificationRequest("Persisted UCL assessment."));
+        int audits = count("SELECT count(*) FROM audit_events");
+        int transitions = count("SELECT count(*) FROM loan_application_status_transitions");
+
+        var officerRead = staffVerificationQuery.query(applicationId);
+        var manual = (com.meridian.platform.loan.application.dto.StaffLoanApplicationVerificationDto.ManualVerificationDto)
+                officerRead.productVerification();
+        assertEquals("Persisted UCL assessment.", manual.currentCycle().assessmentNote());
+        assertEquals(LOAN_OFFICER_USER_ID, manual.currentCycle().reviewedBy().userId());
+        assertEquals("VERIFIED", manual.currentCycle().productVerificationResult());
+        assertTrue(manual.currentCycle().reviewedAt() != null);
+        assertNull(manual.currentCycle().sourceCorrectionRequestId());
+        useApprover();
+        var approverRead = staffVerificationQuery.query(applicationId);
+        assertEquals(manual, approverRead.productVerification());
+        assertFalse(approverRead.actions().startAvailable());
+        assertFalse(approverRead.actions().completeAvailable());
+        assertTrue(approverRead.correctionTargets().isEmpty());
+        assertEquals(audits, count("SELECT count(*) FROM audit_events"));
+        assertEquals(transitions, count("SELECT count(*) FROM loan_application_status_transitions"));
+        assertEquals("SUBMITTED", status(applicationId));
+    }
+
+    @Test
     void documentBackedUclLifecycleReachesDisbursedWithoutSalaryExposure() {
         UUID applicationId = originateToApprovalPending();
         useApprover();
@@ -1001,6 +1030,14 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         assertEquals("PENDING_MANUAL_REVIEW",
                 productRead.currentCycle().productVerificationResult());
         assertEquals(3, verificationRead.correctionTargets().size());
+        assertEquals(LOAN_OFFICER_USER_ID, productRead.history().getFirst().reviewedBy().userId());
+        assertTrue(productRead.history().getFirst().assessmentNote() != null);
+        assertEquals(uuid("SELECT source_correction_request_id FROM unsecured_consumer_loan_verifications "
+                + "WHERE loan_application_id = ? AND verification_sequence = 2", applicationId),
+                productRead.currentCycle().sourceCorrectionRequestId());
+        assertNull(productRead.currentCycle().reviewedBy());
+        assertNull(productRead.currentCycle().reviewedAt());
+        assertNull(productRead.currentCycle().assessmentNote());
 
         verificationUseCase.startManualVerification(applicationId);
         verificationUseCase.completeManualVerification(

@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 
 @WebMvcTest(controllers = {
         StaffLoanApplicationVerificationController.class,
@@ -59,6 +60,15 @@ class StaffLoanReviewReadSecurityTest {
     }
 
     @Test
+    void approverCanReadAssessmentButCannotReadLoanOfficerReview() throws Exception {
+        mockMvc.perform(get(VERIFICATION_PATH, APPLICATION_ID).with(authority("approval:decide")))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store, private"));
+        mockMvc.perform(get(REVIEW_PATH, APPLICATION_ID).with(authority("approval:decide")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void anonymousRequestsAreUnauthorized() throws Exception {
         mockMvc.perform(get(VERIFICATION_PATH, APPLICATION_ID)).andExpect(status().isUnauthorized());
         mockMvc.perform(get(REVIEW_PATH, APPLICATION_ID)).andExpect(status().isUnauthorized());
@@ -78,7 +88,7 @@ class StaffLoanReviewReadSecurityTest {
                 "loan:read",
                 "approval:recommend",
                 "document:review",
-                "loan:review:all"
+                "loan:review:all", "approval:decide:all", "loan:disburse", "admin:config"
         )) {
             mockMvc.perform(get(VERIFICATION_PATH, APPLICATION_ID).with(authority(denied)))
                     .andExpect(status().isForbidden());

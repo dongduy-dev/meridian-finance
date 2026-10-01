@@ -1,3 +1,4 @@
+import { productAssessmentFixture } from '@/test/staff-verification-fixture'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -103,13 +104,24 @@ function renderPage(queryClient = createQueryClient()) {
 }
 
 describe('Staff decision workspace', () => {
+  it('lets an approval-only actor read assessment before recommendation without verification controls', async () => {
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/verification')
+      ? productAssessmentFixture() : String(path).endsWith('/review-history') ? reviewHistoryFixture() : decisionCase())
+    renderPage()
+    const assessment = await screen.findByText('Synthetic product assessment evidence.')
+    expect(assessment.compareDocumentPosition(screen.getByRole('heading', { name: 'Loan Officer recommendation' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.queryByLabelText('Assessment note')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Start manual verification|Review verification completion|Start review/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Open product assessment workspace' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Review decision' })).toBeVisible()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(authApi.refresh).mockResolvedValue(staff)
   })
 
   it('shows linked earlier cycles separately while confirming only the current expected identities', async () => {
-    vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/review-history')
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/verification') ? productAssessmentFixture() : String(path).endsWith('/review-history')
       ? reviewHistoryFixture() : decisionCase())
     renderPage()
     expect(await screen.findByText('Earlier recommendation rationale.')).toBeVisible()
@@ -131,7 +143,7 @@ describe('Staff decision workspace', () => {
       recommendation: { ...value.recommendation, internalNoteReadable: true },
       decision: { ...value.latestDecision!, internalNoteReadable: true },
     }]
-    vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/review-history')
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/verification') ? productAssessmentFixture() : String(path).endsWith('/review-history')
       ? history : value)
     renderPage()
 
@@ -183,7 +195,7 @@ describe('Staff decision workspace', () => {
       })
       linked.cycles[2]!.recommendation = value.recommendation
         ? { ...value.recommendation, internalNoteReadable: true } : null
-      vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/review-history')
+      vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/verification') ? productAssessmentFixture() : String(path).endsWith('/review-history')
         ? linked : value)
       const assertHistory = async () => {
         await screen.findByText('Review the case again.')
@@ -238,7 +250,7 @@ describe('Staff decision workspace', () => {
     expect(confirmation.queryByText(recommendationId)).not.toBeInTheDocument()
     expect(confirmation.queryByText(cycleId)).not.toBeInTheDocument()
     expect(vi.mocked(api.apiRequest).mock.calls.every(([path]) =>
-      [`/staff/loan-applications/${applicationId}/decision`, `/staff/loan-applications/${applicationId}/review-history`].includes(String(path)))).toBe(true)
+      [`/staff/loan-applications/${applicationId}/decision`, `/staff/loan-applications/${applicationId}/review-history`, `/staff/loan-applications/${applicationId}/verification`].includes(String(path)))).toBe(true)
   })
 
   it('does not label a prior recommendation with the successor cycle number', async () => {
@@ -324,7 +336,7 @@ describe('Staff decision workspace', () => {
     })
     renderPage()
     const user = userEvent.setup()
-    await user.type(await screen.findByLabelText('Restricted internal notes'), 'preserve this decision draft')
+    await user.type(await screen.findByLabelText('Internal credit note'), 'preserve this decision draft')
     await user.click(screen.getByRole('button', { name: 'Review decision' }))
     await user.click(screen.getByRole('button', { name: 'Confirm' }))
 

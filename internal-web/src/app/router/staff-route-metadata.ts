@@ -93,8 +93,8 @@ export const STAFF_CORRECTION_CASE_ROUTE = {
 
 export const STAFF_VERIFICATION_CASE_ROUTE = {
   path: '/staff/applications/:loanApplicationId/verification',
-  label: 'Product verification',
-  documentTitle: 'Product verification',
+  label: 'Product assessment',
+  documentTitle: 'Product assessment',
   requiredPermissions: ['loan:review'],
 } as const satisfies StaffRouteDefinition
 

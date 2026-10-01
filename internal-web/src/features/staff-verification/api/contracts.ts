@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { apiTimestampSchema, uuidSchema } from '@/features/staff-applications/api/contracts'
+import { meridianUuidSchema } from '@/lib/validation/meridian-uuid'
 
 const rawValue = z.string().trim().min(1)
 const money = z.number().finite().nonnegative()
@@ -17,9 +18,16 @@ const actionsSchema = z.object({
 const cycleSchema = z.object({
   verificationId: uuidSchema,
   verificationSequence: z.number().int().positive(),
+  sourceCorrectionRequestId: uuidSchema.nullable(),
   productVerificationResult: rawValue,
   createdAt: apiTimestampSchema,
   reviewedAt: apiTimestampSchema.nullable(),
+  reviewedBy: z.object({
+    userId: meridianUuidSchema,
+    displayName: z.string().trim().min(1),
+    email: z.email(),
+  }).nullable(),
+  assessmentNote: z.string().min(1).max(2000).nullable(),
 })
 
 const correctionTargetSchema = z.object({

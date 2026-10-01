@@ -2,6 +2,8 @@ package com.meridian.platform.loan.infrastructure.adapter.in.web;
 
 import com.meridian.platform.loan.application.dto.StaffLoanApplicationVerificationDto;
 import com.meridian.platform.loan.application.port.in.QueryStaffLoanApplicationVerificationUseCase;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,8 +25,9 @@ public class StaffLoanApplicationVerificationController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('loan:review')")
-    public StaffLoanApplicationVerificationDto query(@PathVariable UUID loanApplicationId) {
-        return queryVerification.query(loanApplicationId);
+    @PreAuthorize("hasAnyAuthority('loan:review', 'approval:decide')")
+    public ResponseEntity<StaffLoanApplicationVerificationDto> query(@PathVariable UUID loanApplicationId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore().cachePrivate())
+                .body(queryVerification.query(loanApplicationId));
     }
 }
