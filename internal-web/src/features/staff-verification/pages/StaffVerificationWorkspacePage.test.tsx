@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -40,12 +40,14 @@ const common = {
 
 function uclCase(result = 'PENDING_MANUAL_REVIEW') {
   const cycle = {
-    verificationId, verificationSequence: 1, productVerificationResult: result,
+    verificationId, verificationSequence: 1, sourceCorrectionRequestId: null, productVerificationResult: result,
+    reviewedBy: result === 'PENDING_MANUAL_REVIEW' ? null : { userId: '00000000-0000-0000-0000-000000000302', displayName: 'Loan Officer', email: 'officer@meridian.local' },
+    assessmentNote: result === 'PENDING_MANUAL_REVIEW' ? null : 'Evidence is complete.',
     createdAt: '2026-09-05T08:01:00', reviewedAt: result === 'PENDING_MANUAL_REVIEW' ? null : '2026-09-05T08:05:00',
   }
   return {
     ...common, productCode: 'UNSECURED_CONSUMER_LOAN',
-    applicationStatus: result === 'PENDING_MANUAL_REVIEW' ? 'VERIFICATION_PENDING' : 'VERIFIED',
+    applicationStatus: result === 'PENDING_MANUAL_REVIEW' ? 'VERIFICATION_PENDING' : 'SUBMITTED',
     actions: { startAvailable: false, completeAvailable: result === 'PENDING_MANUAL_REVIEW' },
     productVerification: { currentCycle: cycle, history: [cycle], collateral: null },
   }
@@ -71,7 +73,7 @@ describe('Staff verification workspace', () => {
 
   it('renders Salary Advance snapshots as read-only and does not expose manual actions', async () => {
     vi.mocked(api.apiRequest).mockResolvedValue({
-      ...common, productCode: 'SALARY_ADVANCE', applicationNumber: 'SA-20260905-000001', applicationStatus: 'VERIFIED',
+      ...common, productCode: 'SALARY_ADVANCE', applicationNumber: 'SA-20260905-000001', applicationStatus: 'SUBMITTED',
       actions: { startAvailable: false, completeAvailable: false },
       productVerification: {
         verificationSequence: 1, employeeVerificationOutcome: 'ELIGIBLE', productVerificationResult: 'VERIFIED',
@@ -80,15 +82,29 @@ describe('Staff verification workspace', () => {
       },
     })
     renderWorkspace()
-    expect(await screen.findByRole('heading', { name: 'Salary Advance verification' }, { timeout: 5_000 })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Automated product verification' }, { timeout: 5_000 })).toBeVisible()
     expect(screen.getByRole('heading', { name: 'SA-20260905-000001', level: 1 })).toBeVisible()
-    expect(screen.getByRole('link', { name: 'Verification' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Product assessment' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'Review' })).toBeVisible()
     expect(screen.queryByRole('link', { name: 'Overview' })).not.toBeInTheDocument()
     expect(api.apiRequest).toHaveBeenCalledTimes(1)
-    expect(screen.getByText(/Later Partner updates do not change them/i)).toBeVisible()
+    expect(screen.getByText(/Later Partner updates do not change it/i)).toBeVisible()
     expect(screen.queryByRole('button', { name: /Start manual verification|Review verification completion/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Application overview/ })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    { status: 'VERIFICATION_PENDING', result: 'FUTURE_RESULT' },
+    { status: 'FUTURE_STATUS', result: 'PENDING_MANUAL_REVIEW' },
+  ])('keeps unknown status/outcome evidence displayable without verification actions: $status / $result', async ({ status, result }) => {
+    vi.mocked(api.apiRequest).mockResolvedValue({ ...uclCase(result), applicationStatus: status,
+      actions: { startAvailable: true, completeAvailable: true } })
+    renderWorkspace()
+    expect(await screen.findByRole('heading', { name: 'Product assessment', level: 2 })).toBeVisible()
+    expect(screen.getByText('No verification action is available for the application\'s current state.')).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Start manual verification|Review verification completion/ })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Assessment note')).not.toBeInTheDocument()
+    if (result === 'FUTURE_RESULT') expect(screen.getByText('Verification result unavailable')).toBeVisible()
   })
 
   it('reconciles an unknown completion result with GET and never retries the POST', async () => {
@@ -101,7 +117,7 @@ describe('Staff verification workspace', () => {
       }
       if (path === `/staff/loan-applications/${applicationId}`) return {
         ...applicationWorkspaceCase, ...common, productCode: 'UNSECURED_CONSUMER_LOAN',
-        status: completed ? 'VERIFIED' : 'VERIFICATION_PENDING',
+        status: completed ? 'SUBMITTED' : 'VERIFICATION_PENDING',
       }
       return completed ? uclCase('VERIFIED') : uclCase()
     })
@@ -114,6 +130,9 @@ describe('Staff verification workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
     expect(await screen.findByText(/verification outcome was confirmed after Meridian refreshed the review/i)).toBeVisible()
+    expect(screen.getByText('Evidence is complete.')).toBeVisible()
+    expect(within(screen.getByRole('list', { name: 'Product assessment cycles' })).getByText('officer@meridian.local')).toBeVisible()
+    expect(screen.queryByLabelText('Assessment note')).not.toBeInTheDocument()
     const posts = vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
       String(path).endsWith('/unsecured-consumer-loan-verification/complete')
       && (options as RequestInit | undefined)?.method === 'POST')

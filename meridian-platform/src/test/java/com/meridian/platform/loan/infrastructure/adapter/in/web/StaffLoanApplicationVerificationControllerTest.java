@@ -15,6 +15,7 @@ import java.util.UUID;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 
 class StaffLoanApplicationVerificationControllerTest {
 
@@ -22,7 +23,7 @@ class StaffLoanApplicationVerificationControllerTest {
     private static final UUID VERIFICATION_ID = UUID.fromString("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
 
     @Test
-    void serializesPurposeLimitedManualVerificationEvidenceWithoutRestrictedFields() throws Exception {
+    void serializesRestrictedAssessmentEvidenceWithPrivateNoStoreResponse() throws Exception {
         QueryStaffLoanApplicationVerificationUseCase useCase = ignored -> new StaffLoanApplicationVerificationDto(
                 APPLICATION_ID,
                 "CL-20260905-000001",
@@ -61,9 +62,14 @@ class StaffLoanApplicationVerificationControllerTest {
                         APPLICATION_ID
                 ))
                 .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store, private"))
                 .andExpect(jsonPath("$.productVerification.currentCycle.verificationId")
                         .value(VERIFICATION_ID.toString()))
                 .andExpect(jsonPath("$.productVerification.history[0].verificationSequence").value(1))
+                .andExpect(jsonPath("$.productVerification.currentCycle.assessmentNote").value("Recorded assessment"))
+                .andExpect(jsonPath("$.productVerification.currentCycle.reviewedBy.userId")
+                        .value("00000000-0000-0000-0000-000000000302"))
+                .andExpect(jsonPath("$.productVerification.currentCycle.reviewedBy.email").value("officer@meridian.test"))
                 .andExpect(jsonPath("$.productVerification.collateral.collateralType").value("CAR"))
                 .andExpect(jsonPath("$.actions.completeAvailable").value(true))
                 .andExpect(jsonPath("$.correctionTargets[0].documentType")
@@ -80,9 +86,13 @@ class StaffLoanApplicationVerificationControllerTest {
         return new StaffLoanApplicationVerificationDto.VerificationCycleDto(
                 VERIFICATION_ID,
                 1,
-                "PENDING_MANUAL_REVIEW",
+                null,
+                "VERIFIED",
                 LocalDateTime.of(2026, 9, 5, 8, 0),
-                null
+                LocalDateTime.of(2026, 9, 5, 9, 0),
+                new StaffLoanApplicationVerificationDto.StaffActorDto(
+                        UUID.fromString("00000000-0000-0000-0000-000000000302"), "Officer", "officer@meridian.test"),
+                "Recorded assessment"
         );
     }
 }

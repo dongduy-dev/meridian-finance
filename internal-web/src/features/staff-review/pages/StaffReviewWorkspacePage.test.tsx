@@ -1,3 +1,4 @@
+import { productAssessmentFixture } from '@/test/staff-verification-fixture'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -54,13 +55,33 @@ function reviewCase(started: boolean) {
 }
 
 describe('Staff review workspace', () => {
+  it('places recorded assessment before credit review and preserves eligibility after an assessment read fails', async () => {
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/verification')
+      ? productAssessmentFixture() : String(path).endsWith('/review-history') ? reviewHistoryFixture() : reviewCase(false))
+    const queryClient = createQueryClient()
+    const router = createTestRouter([`/staff/applications/${applicationId}/review`])
+    render(<QueryClientProvider client={queryClient}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
+    const assessment = await screen.findByText('Synthetic product assessment evidence.')
+    const creditReview = screen.getByRole('heading', { name: 'Credit review' })
+    expect(screen.getByRole('heading', { name: 'Documents' }).compareDocumentPosition(assessment) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(assessment.compareDocumentPosition(creditReview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.queryByLabelText('Assessment note')).not.toBeInTheDocument()
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (String(path).endsWith('/verification')) throw new Error('assessment unavailable')
+      return reviewCase(false)
+    })
+    await queryClient.refetchQueries({ queryKey: ['staff-verification'] })
+    await waitFor(() => expect(screen.queryByText('Synthetic product assessment evidence.')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Start review' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(authApi.refresh).mockResolvedValue(staff)
   })
 
   it('shows previous linked decisions and notes to a reviewer without granting Approver actions', async () => {
-    vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/review-history')
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/verification') ? productAssessmentFixture() : String(path).endsWith('/review-history')
       ? reviewHistoryFixture() : reviewCase(true))
     const router = createTestRouter([`/staff/applications/${applicationId}/review`])
     render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
@@ -93,7 +114,7 @@ describe('Staff review workspace', () => {
     const identity = await screen.findByRole('heading', { name: 'UCL-20260905-000001', level: 1 })
     await waitFor(() => expect(identity).toHaveFocus())
     expect(screen.getByRole('link', { name: 'Review' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'Verification' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Product assessment' })).toBeVisible()
     expect(screen.queryByRole('link', { name: 'Verification workspace' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Start review' }))
     await user.click(screen.getByRole('button', { name: 'Confirm review start' }))

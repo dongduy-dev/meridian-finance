@@ -58,10 +58,16 @@ public record StaffLoanApplicationVerificationDto(
     public record VerificationCycleDto(
             UUID verificationId,
             int verificationSequence,
+            UUID sourceCorrectionRequestId,
             String productVerificationResult,
             LocalDateTime createdAt,
-            LocalDateTime reviewedAt
+            LocalDateTime reviewedAt,
+            StaffActorDto reviewedBy,
+            String assessmentNote
     ) {
+    }
+
+    public record StaffActorDto(UUID userId, String displayName, String email) {
     }
 
     public record CorrectionTargetDto(

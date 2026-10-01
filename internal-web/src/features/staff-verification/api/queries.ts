@@ -16,5 +16,6 @@ export function staffVerificationCaseQuery(
     queryKey: staffVerificationKeys.case(loanApplicationId),
     queryFn: () => getStaffVerificationCase(manager, loanApplicationId),
     enabled,
+    gcTime: 0,
   })
 }

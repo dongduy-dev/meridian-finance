@@ -86,6 +86,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -166,6 +167,35 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
     @AfterEach
     void clearUser() {
         currentUserProvider.clear();
+    }
+
+    @Test
+    void persistedAssessmentIsReadableByReviewerAndApproverWithoutWorkflowEffects() {
+        ReadyApplication ready = originateAndMakeProcessingReady();
+        useLoanOfficer();
+        UUID verificationId = verificationUseCase.startManualVerification(ready.applicationId()).verificationId();
+        verificationUseCase.completeManualVerification(ready.applicationId(),
+                new CompleteCollateralLoanVerificationRequest(verificationId,
+                        CollateralLoanManualVerificationOutcome.VERIFIED, "Persisted collateral assessment.", null, null));
+        int audits = count("SELECT count(*) FROM audit_events");
+        int transitions = count("SELECT count(*) FROM loan_application_status_transitions");
+        var officerRead = staffVerificationQuery.query(ready.applicationId());
+        var manual = (com.meridian.platform.loan.application.dto.StaffLoanApplicationVerificationDto.ManualVerificationDto)
+                officerRead.productVerification();
+        assertEquals(verificationId, manual.currentCycle().verificationId());
+        assertEquals("Persisted collateral assessment.", manual.currentCycle().assessmentNote());
+        assertEquals(LOAN_OFFICER_USER_ID, manual.currentCycle().reviewedBy().userId());
+        assertEquals("VERIFIED", manual.currentCycle().productVerificationResult());
+        assertTrue(manual.currentCycle().reviewedAt() != null);
+        useApprover();
+        var approverRead = staffVerificationQuery.query(ready.applicationId());
+        assertEquals(manual, approverRead.productVerification());
+        assertFalse(approverRead.actions().startAvailable());
+        assertFalse(approverRead.actions().completeAvailable());
+        assertTrue(approverRead.correctionTargets().isEmpty());
+        assertEquals(audits, count("SELECT count(*) FROM audit_events"));
+        assertEquals(transitions, count("SELECT count(*) FROM loan_application_status_transitions"));
+        assertEquals("SUBMITTED", status(ready.applicationId()));
     }
 
     @ParameterizedTest

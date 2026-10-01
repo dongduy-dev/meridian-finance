@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { staffVerificationCaseSchema } from './contracts'
+import { productAssessmentFixture } from '@/test/staff-verification-fixture'
 
 const common = {
   loanApplicationId: '11111111-1111-4111-8111-111111111111',
@@ -16,13 +17,29 @@ const common = {
 
 const cycle = {
   verificationId: '22222222-2222-4222-8222-222222222222',
-  verificationSequence: 1,
+  verificationSequence: 1, sourceCorrectionRequestId: null, reviewedBy: null, assessmentNote: null,
   productVerificationResult: 'PENDING_MANUAL_REVIEW',
   createdAt: '2026-09-05T08:01:00',
   reviewedAt: null,
 }
 
 describe('staff verification contract', () => {
+  it('accepts the deterministic Staff seed reviewer and keeps workflow IDs strict', () => {
+    const fixture = productAssessmentFixture()
+    expect(staffVerificationCaseSchema.parse(fixture)).toEqual(fixture)
+    for (const userId of ['00000000-0000-0000-0000-00000000030X', '00000000-0000-0000-0000-00000000302', ' 00000000-0000-0000-0000-000000000302']) {
+      expect(staffVerificationCaseSchema.safeParse({ ...fixture, productVerification: {
+        ...fixture.productVerification, currentCycle: { ...fixture.productVerification.currentCycle,
+          reviewedBy: { ...fixture.productVerification.currentCycle.reviewedBy, userId } },
+      } }).success).toBe(false)
+    }
+    for (const field of ['verificationId', 'sourceCorrectionRequestId']) {
+      expect(staffVerificationCaseSchema.safeParse({ ...fixture, productVerification: {
+        ...fixture.productVerification, currentCycle: { ...fixture.productVerification.currentCycle,
+          [field]: '00000000-0000-0000-0000-000000000302' },
+      } }).success).toBe(false)
+    }
+  })
   it.each([
     {
       ...common,

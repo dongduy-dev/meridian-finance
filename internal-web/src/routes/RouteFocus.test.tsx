@@ -41,7 +41,7 @@ describe('route focus', () => {
     ['/staff/work/closures', 'Closure work queue | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/documents', 'Application documents | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/corrections', 'Application corrections | Meridian'],
-    ['/staff/applications/11111111-1111-4111-8111-111111111111/verification', 'Product verification | Meridian'],
+    ['/staff/applications/11111111-1111-4111-8111-111111111111/verification', 'Product assessment | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/review', 'Loan Officer review | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/decision', 'Independent decision | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/contract', 'Contract and readiness | Meridian'],

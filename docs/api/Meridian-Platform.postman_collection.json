@@ -4551,6 +4551,133 @@
                                       "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"uclOfferScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Positive verification completed safely\", () => { pm.expect(json.status).to.eql(\"SUBMITTED\"); pm.expect(json.productVerificationResult).to.eql(\"VERIFIED\"); pm.expect(json.reviewedAt).to.be.a(\"string\"); pm.expect(json).not.to.have.property(\"reviewedByUserId\"); pm.expect(json).not.to.have.property(\"assessmentNote\"); });"]}}]
                                   },
                                   {
+                                    "name": "GET recorded Product Assessment - Loan Officer evidence",
+                                    "request": {
+                                      "method": "GET",
+                                      "header": [],
+                                      "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{uclLoanApplicationId}}/verification",
+                                      "auth": {
+                                        "type": "bearer",
+                                        "bearer": [
+                                          {
+                                            "key": "token",
+                                            "value": "{{loanOfficerAccessToken}}",
+                                            "type": "string"
+                                          }
+                                        ]
+                                      },
+                                      "description": "Purpose-specific restricted assessment read. Do not store or log assessment text; mutation responses remain minimal."
+                                    },
+                                    "response": [],
+                                    "event": [
+                                      {
+                                        "listen": "prerequest",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "if (pm.collectionVariables.get(\"uclOfferScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"
+                                          ]
+                                        }
+                                      },
+                                      {
+                                        "listen": "test",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                            "pm.test(\"Assessment response is private and non-cacheable\", () => pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store, private\"));",
+                                            "const cycle = pm.response.json().productVerification.currentCycle;",
+                                            "pm.test(\"Existing completed assessment has safe provenance\", () => { pm.expect(cycle.productVerificationResult).to.eql(\"VERIFIED\"); pm.expect(cycle.verificationSequence).to.eql(1); pm.expect(cycle.sourceCorrectionRequestId).to.eql(null); pm.expect(cycle.reviewedAt).to.be.a(\"string\"); pm.expect(Object.keys(cycle.reviewedBy).sort()).to.eql([\"displayName\", \"email\", \"userId\"]); pm.expect(cycle.assessmentNote === \"Income and employment evidence are consistent for Loan Officer review.\").to.eql(true); });"
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "GET recorded Product Assessment - Approver evidence",
+                                    "request": {
+                                      "method": "GET",
+                                      "header": [],
+                                      "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{uclLoanApplicationId}}/verification",
+                                      "auth": {
+                                        "type": "bearer",
+                                        "bearer": [
+                                          {
+                                            "key": "token",
+                                            "value": "{{approverAccessToken}}",
+                                            "type": "string"
+                                          }
+                                        ]
+                                      },
+                                      "description": "Purpose-specific restricted assessment read. Do not store or log assessment text; mutation responses remain minimal."
+                                    },
+                                    "response": [],
+                                    "event": [
+                                      {
+                                        "listen": "prerequest",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "if (pm.collectionVariables.get(\"uclOfferScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"
+                                          ]
+                                        }
+                                      },
+                                      {
+                                        "listen": "test",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                            "pm.test(\"Assessment response is private and non-cacheable\", () => pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store, private\"));",
+                                            "const cycle = pm.response.json().productVerification.currentCycle;",
+                                            "pm.test(\"Existing completed assessment has safe provenance\", () => { pm.expect(cycle.productVerificationResult).to.eql(\"VERIFIED\"); pm.expect(cycle.verificationSequence).to.eql(1); pm.expect(cycle.sourceCorrectionRequestId).to.eql(null); pm.expect(cycle.reviewedAt).to.be.a(\"string\"); pm.expect(Object.keys(cycle.reviewedBy).sort()).to.eql([\"displayName\", \"email\", \"userId\"]); pm.expect(cycle.assessmentNote === \"Income and employment evidence are consistent for Loan Officer review.\").to.eql(true); });",
+                                            "pm.test(\"Approver assessment read provides no verification operations\", () => { const json = pm.response.json(); pm.expect(json.actions).to.eql({startAvailable:false, completeAvailable:false}); pm.expect(json.correctionTargets).to.eql([]); });"
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "GET recorded Product Assessment - Accounting denied",
+                                    "request": {
+                                      "method": "GET",
+                                      "header": [],
+                                      "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{uclLoanApplicationId}}/verification",
+                                      "auth": {
+                                        "type": "bearer",
+                                        "bearer": [
+                                          {
+                                            "key": "token",
+                                            "value": "{{accountingAccessToken}}",
+                                            "type": "string"
+                                          }
+                                        ]
+                                      },
+                                      "description": "Purpose-specific restricted assessment read. Do not store or log assessment text; mutation responses remain minimal."
+                                    },
+                                    "response": [],
+                                    "event": [
+                                      {
+                                        "listen": "prerequest",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "if (pm.collectionVariables.get(\"uclOfferScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"
+                                          ]
+                                        }
+                                      },
+                                      {
+                                        "listen": "test",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "pm.test(\"Status is 403\", () => pm.response.to.have.status(403));"
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
                                       "name":  "POST complete prepared UCL verification as FAILED",
                                       "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{uclFailedVerificationApplicationId}}/unsecured-consumer-loan-verification/complete","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Prepared negative example. FAILED is terminal for this application and creates no correction.","body":{"mode":"raw","raw":"{\n  \"outcome\": \"FAILED\",\n  \"assessmentNote\": \"Submitted income evidence cannot support the requested obligation.\"\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
@@ -4674,6 +4801,133 @@
                                       "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/collateral-loan-verification/complete","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"description":"Completes exactly the captured verification cycle. The restricted assessment note and Staff identity are not returned.","body":{"mode":"raw","raw":"{\n  \"expectedVerificationId\": \"{{collateralVerificationId}}\",\n  \"outcome\": \"VERIFIED\",\n  \"assessmentNote\": \"Ownership evidence and recorded collateral facts are consistent for Loan Officer review.\"\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
                                       "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"Positive verification completed safely\", () => { pm.expect(json.verificationId).to.eql(pm.collectionVariables.get(\"collateralVerificationId\")); pm.expect(json.status).to.eql(\"SUBMITTED\"); pm.expect(json.productVerificationResult).to.eql(\"VERIFIED\"); pm.expect(json.reviewedAt).to.be.a(\"string\"); pm.expect(json).not.to.have.property(\"reviewedByUserId\"); pm.expect(json).not.to.have.property(\"assessmentNote\"); });"]}}]
+                                  },
+                                  {
+                                    "name": "GET recorded Product Assessment - Loan Officer evidence",
+                                    "request": {
+                                      "method": "GET",
+                                      "header": [],
+                                      "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{collateralLoanApplicationId}}/verification",
+                                      "auth": {
+                                        "type": "bearer",
+                                        "bearer": [
+                                          {
+                                            "key": "token",
+                                            "value": "{{loanOfficerAccessToken}}",
+                                            "type": "string"
+                                          }
+                                        ]
+                                      },
+                                      "description": "Purpose-specific restricted assessment read. Do not store or log assessment text; mutation responses remain minimal."
+                                    },
+                                    "response": [],
+                                    "event": [
+                                      {
+                                        "listen": "prerequest",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"
+                                          ]
+                                        }
+                                      },
+                                      {
+                                        "listen": "test",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                            "pm.test(\"Assessment response is private and non-cacheable\", () => pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store, private\"));",
+                                            "const cycle = pm.response.json().productVerification.currentCycle;",
+                                            "pm.test(\"Existing completed assessment has safe provenance\", () => { pm.expect(cycle.productVerificationResult).to.eql(\"VERIFIED\"); pm.expect(cycle.verificationSequence).to.eql(1); pm.expect(cycle.sourceCorrectionRequestId).to.eql(null); pm.expect(cycle.reviewedAt).to.be.a(\"string\"); pm.expect(Object.keys(cycle.reviewedBy).sort()).to.eql([\"displayName\", \"email\", \"userId\"]); pm.expect(cycle.assessmentNote === \"Ownership evidence and recorded collateral facts are consistent for Loan Officer review.\").to.eql(true); });"
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "GET recorded Product Assessment - Approver evidence",
+                                    "request": {
+                                      "method": "GET",
+                                      "header": [],
+                                      "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{collateralLoanApplicationId}}/verification",
+                                      "auth": {
+                                        "type": "bearer",
+                                        "bearer": [
+                                          {
+                                            "key": "token",
+                                            "value": "{{approverAccessToken}}",
+                                            "type": "string"
+                                          }
+                                        ]
+                                      },
+                                      "description": "Purpose-specific restricted assessment read. Do not store or log assessment text; mutation responses remain minimal."
+                                    },
+                                    "response": [],
+                                    "event": [
+                                      {
+                                        "listen": "prerequest",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"
+                                          ]
+                                        }
+                                      },
+                                      {
+                                        "listen": "test",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                            "pm.test(\"Assessment response is private and non-cacheable\", () => pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store, private\"));",
+                                            "const cycle = pm.response.json().productVerification.currentCycle;",
+                                            "pm.test(\"Existing completed assessment has safe provenance\", () => { pm.expect(cycle.productVerificationResult).to.eql(\"VERIFIED\"); pm.expect(cycle.verificationSequence).to.eql(1); pm.expect(cycle.sourceCorrectionRequestId).to.eql(null); pm.expect(cycle.reviewedAt).to.be.a(\"string\"); pm.expect(Object.keys(cycle.reviewedBy).sort()).to.eql([\"displayName\", \"email\", \"userId\"]); pm.expect(cycle.assessmentNote === \"Ownership evidence and recorded collateral facts are consistent for Loan Officer review.\").to.eql(true); });",
+                                            "pm.test(\"Approver assessment read provides no verification operations\", () => { const json = pm.response.json(); pm.expect(json.actions).to.eql({startAvailable:false, completeAvailable:false}); pm.expect(json.correctionTargets).to.eql([]); });"
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name": "GET recorded Product Assessment - Accounting denied",
+                                    "request": {
+                                      "method": "GET",
+                                      "header": [],
+                                      "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{collateralLoanApplicationId}}/verification",
+                                      "auth": {
+                                        "type": "bearer",
+                                        "bearer": [
+                                          {
+                                            "key": "token",
+                                            "value": "{{accountingAccessToken}}",
+                                            "type": "string"
+                                          }
+                                        ]
+                                      },
+                                      "description": "Purpose-specific restricted assessment read. Do not store or log assessment text; mutation responses remain minimal."
+                                    },
+                                    "response": [],
+                                    "event": [
+                                      {
+                                        "listen": "prerequest",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "if (pm.collectionVariables.get(\"collateralVerificationScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"
+                                          ]
+                                        }
+                                      },
+                                      {
+                                        "listen": "test",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "pm.test(\"Status is 403\", () => pm.response.to.have.status(403));"
+                                          ]
+                                        }
+                                      }
+                                    ]
                                   },
                                   {
                                       "name":  "POST start Collateral review after verification",

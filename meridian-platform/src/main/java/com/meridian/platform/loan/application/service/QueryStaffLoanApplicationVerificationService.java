@@ -9,6 +9,8 @@ import com.meridian.platform.loan.application.port.out.CollateralRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerificationRepository;
+import com.meridian.platform.loan.application.port.out.StaffActorDirectoryPort;
+import com.meridian.platform.loan.application.port.out.StaffActorSummary;
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
@@ -29,9 +31,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class QueryStaffLoanApplicationVerificationService
@@ -49,6 +53,7 @@ public class QueryStaffLoanApplicationVerificationService
     private final CollateralLoanVerificationRepository collateralVerifications;
     private final CollateralRepository collaterals;
     private final LoanDocumentChecklistPort documents;
+    private final StaffActorDirectoryPort staffActors;
     private final CurrentUserProvider currentUserProvider;
 
     public QueryStaffLoanApplicationVerificationService(
@@ -58,6 +63,7 @@ public class QueryStaffLoanApplicationVerificationService
             CollateralLoanVerificationRepository collateralVerifications,
             CollateralRepository collaterals,
             LoanDocumentChecklistPort documents,
+            StaffActorDirectoryPort staffActors,
             CurrentUserProvider currentUserProvider
     ) {
         this.applications = applications;
@@ -66,6 +72,7 @@ public class QueryStaffLoanApplicationVerificationService
         this.collateralVerifications = collateralVerifications;
         this.collaterals = collaterals;
         this.documents = documents;
+        this.staffActors = staffActors;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -73,14 +80,17 @@ public class QueryStaffLoanApplicationVerificationService
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public StaffLoanApplicationVerificationDto query(UUID loanApplicationId) {
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
-        requireAuthority(currentUserProvider.currentUser());
+        AuthenticatedUser actor = currentUserProvider.currentUser();
+        requireAuthority(actor);
 
         LoanApplication application = applications.findById(loanApplicationId)
                 .orElseThrow(QueryStaffLoanApplicationVerificationService::notFound);
         LoanDocumentChecklistPort.ChecklistReadinessSnapshot readiness = documents.readiness(
                 application.id()
         );
-        ProductProjection projection = productProjection(application, readiness.processingReady());
+        ProductProjection projection = productProjection(
+                application, readiness.processingReady(), actor.hasPermission("loan:review")
+        );
 
         return new StaffLoanApplicationVerificationDto(
                 application.id(),
@@ -100,11 +110,13 @@ public class QueryStaffLoanApplicationVerificationService
         );
     }
 
-    private ProductProjection productProjection(LoanApplication application, boolean processingReady) {
+    private ProductProjection productProjection(
+            LoanApplication application, boolean processingReady, boolean canReview
+    ) {
         return switch (application.productCode()) {
             case SALARY_ADVANCE -> salaryAdvanceProjection(application);
-            case UNSECURED_CONSUMER_LOAN -> uclProjection(application, processingReady);
-            case COLLATERAL_LOAN -> collateralProjection(application, processingReady);
+            case UNSECURED_CONSUMER_LOAN -> uclProjection(application, processingReady, canReview);
+            case COLLATERAL_LOAN -> collateralProjection(application, processingReady, canReview);
         };
     }
 
@@ -128,7 +140,9 @@ public class QueryStaffLoanApplicationVerificationService
         );
     }
 
-    private ProductProjection uclProjection(LoanApplication application, boolean processingReady) {
+    private ProductProjection uclProjection(
+            LoanApplication application, boolean processingReady, boolean canReview
+    ) {
         List<UnsecuredConsumerLoanVerification> history = uclVerifications
                 .findAllByLoanApplicationIdOrderByVerificationSequenceAsc(application.id());
         if (history.isEmpty()) {
@@ -138,18 +152,23 @@ public class QueryStaffLoanApplicationVerificationService
             );
         }
         UnsecuredConsumerLoanVerification current = history.getLast();
+        Map<UUID, StaffActorSummary> actors = resolveActors(history.stream()
+                .map(UnsecuredConsumerLoanVerification::reviewedByUserId)
+                .filter(Objects::nonNull).collect(Collectors.toSet()));
         return new ProductProjection(
-                manualActions(application, current.productVerificationResult(), processingReady),
+                manualActions(application, current.productVerificationResult(), processingReady && canReview),
                 new StaffLoanApplicationVerificationDto.ManualVerificationDto(
-                        toCycle(current),
-                        history.stream().map(QueryStaffLoanApplicationVerificationService::toCycle).toList(),
+                        toCycle(current, actors),
+                        history.stream().map(cycle -> toCycle(cycle, actors)).toList(),
                         null
                 ),
-                correctionTargets(application.id(), UCL_CORRECTION_TYPES)
+                canReview ? correctionTargets(application.id(), UCL_CORRECTION_TYPES) : List.of()
         );
     }
 
-    private ProductProjection collateralProjection(LoanApplication application, boolean processingReady) {
+    private ProductProjection collateralProjection(
+            LoanApplication application, boolean processingReady, boolean canReview
+    ) {
         List<CollateralLoanVerification> history = collateralVerifications
                 .findAllByLoanApplicationIdOrderByVerificationSequenceAsc(application.id());
         if (history.isEmpty()) {
@@ -164,11 +183,14 @@ public class QueryStaffLoanApplicationVerificationService
         }
         Collateral collateral = facts.getFirst();
         CollateralLoanVerification current = history.getLast();
+        Map<UUID, StaffActorSummary> actors = resolveActors(history.stream()
+                .map(CollateralLoanVerification::reviewedByUserId)
+                .filter(Objects::nonNull).collect(Collectors.toSet()));
         return new ProductProjection(
-                manualActions(application, current.productVerificationResult(), processingReady),
+                manualActions(application, current.productVerificationResult(), processingReady && canReview),
                 new StaffLoanApplicationVerificationDto.ManualVerificationDto(
-                        toCycle(current),
-                        history.stream().map(QueryStaffLoanApplicationVerificationService::toCycle).toList(),
+                        toCycle(current, actors),
+                        history.stream().map(cycle -> toCycle(cycle, actors)).toList(),
                         new CollateralAssessmentSnapshotDto(
                                 collateral.collateralType().name(),
                                 collateral.description(),
@@ -177,9 +199,9 @@ public class QueryStaffLoanApplicationVerificationService
                                 collateral.conditionNote()
                         )
                 ),
-                correctionTargets(
+                canReview ? correctionTargets(
                         application.id(), Set.of(DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE)
-                )
+                ) : List.of()
         );
     }
 
@@ -214,33 +236,49 @@ public class QueryStaffLoanApplicationVerificationService
     }
 
     private static StaffLoanApplicationVerificationDto.VerificationCycleDto toCycle(
-            UnsecuredConsumerLoanVerification verification
+            UnsecuredConsumerLoanVerification verification, Map<UUID, StaffActorSummary> actors
     ) {
         return new StaffLoanApplicationVerificationDto.VerificationCycleDto(
                 verification.id(),
                 verification.verificationSequence(),
+                verification.sourceCorrectionRequestId(),
                 verification.productVerificationResult().name(),
                 verification.createdAt(),
-                verification.reviewedAt()
+                verification.reviewedAt(),
+                toActor(verification.reviewedByUserId() == null ? null : actors.get(verification.reviewedByUserId())),
+                verification.assessmentNote()
         );
     }
 
     private static StaffLoanApplicationVerificationDto.VerificationCycleDto toCycle(
-            CollateralLoanVerification verification
+            CollateralLoanVerification verification, Map<UUID, StaffActorSummary> actors
     ) {
         return new StaffLoanApplicationVerificationDto.VerificationCycleDto(
                 verification.id(),
                 verification.verificationSequence(),
+                verification.sourceCorrectionRequestId(),
                 verification.productVerificationResult().name(),
                 verification.createdAt(),
-                verification.reviewedAt()
+                verification.reviewedAt(),
+                toActor(verification.reviewedByUserId() == null ? null : actors.get(verification.reviewedByUserId())),
+                verification.assessmentNote()
+        );
+    }
+
+    private Map<UUID, StaffActorSummary> resolveActors(Set<UUID> userIds) {
+        return userIds.isEmpty() ? Map.of() : staffActors.findByUserIds(userIds);
+    }
+
+    private static StaffLoanApplicationVerificationDto.StaffActorDto toActor(StaffActorSummary actor) {
+        return actor == null ? null : new StaffLoanApplicationVerificationDto.StaffActorDto(
+                actor.userId(), actor.displayName(), actor.email()
         );
     }
 
     private static void requireAuthority(AuthenticatedUser actor) {
         if (!"STAFF".equals(actor.userType())
                 || actor.optionalCustomerId().isPresent()
-                || !actor.hasPermission("loan:review")) {
+                || (!actor.hasPermission("loan:review") && !actor.hasPermission("approval:decide"))) {
             throw new AuthorizationException(
                     "LOAN_REVIEW_ACCESS_DENIED",
                     "Loan review access is denied."

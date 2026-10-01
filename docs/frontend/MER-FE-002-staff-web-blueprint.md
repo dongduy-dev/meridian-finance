@@ -1005,7 +1005,13 @@ Opening a confirmation freezes only the displayed review snapshot. Submission st
 | UCL | Loan Officer can start and complete manual verification with `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION` | The executable CP4 projection returns the current cycle and ordered history for action gating and lost-response reconciliation |
 | Collateral | Loan Officer starts numbered verification, receives restricted Collateral facts, and completes the exact `expectedVerificationId` | The executable CP4 projection keeps the assessment snapshot and authoritative cycle together; a stale ID preserves the form, refetches, disables action, and requires explicit re-review |
 
-Verification outcomes are not generic approval decisions. The UI keeps product verification, Loan Officer recommendation, and Approver decision visibly separate.
+The Loan Review workspace organizes Documents → Product Assessment / Verification → Credit Review → Recommendation → Review / Decision history. Document readiness links to the Document workspace without duplicating its review controls. Verification outcomes remain separate from credit review, recommendation, and the independent Approver decision; `VERIFIED` means evidence sufficiency for credit review, not credit approval.
+
+One shared read-only Product Assessment panel consumes verification GET in the verification, Loan Officer review, and Approver decision workspaces. Manual UCL/Collateral cycles show sequence, result, created/reviewed times, safe Staff reviewer, Verification assessment, and initial or post-correction provenance. The latest cycle remains explicit and history appears once; correction UUIDs are not the main presentation. Collateral retains its submitted assessment facts, while Salary Advance is labeled Automated product verification with no manual reviewer, note, or action. Missing Staff identity remains unavailable without hiding an authorized assessment. Unknown results render neutrally and never enable commands.
+
+The manual action form stays on `/verification` and explains that submitted assessment is saved as restricted lending evidence under MER-BIZ-001 Section 6.3. The review workspace links to that route when assessment is pending, consumes recorded assessment without asking for it again, and labels the recommendation note separately as Internal credit note. An Approver with exact `approval:decide` sees the same evidence without verification controls or mutation navigation.
+
+Verification GET uses the restricted-query pattern with `gcTime: 0`; existing session/logout/actor cleanup clears query data. A failed initial read or refresh shows a visible error and retry without rendering stale restricted evidence. Failure of this supplemental read does not create a new review/recommendation/decision business gate. Successful verification refreshes the saved assessment and invalidates review/recommendation projections; correction resubmission invalidates assessment/review projections so the next pending cycle becomes authoritative. Notes never enter browser storage, query keys, URLs, telemetry, analytics, or exports. Reviewer User IDs use `meridianUuidSchema`; workflow IDs retain strict `uuidSchema`.
 
 Assessment notes and controlled reasons are sensitive Staff evidence. `REQUIRES_MORE_INFORMATION` composes a structured correction plan under current product restrictions; the browser must not allow arbitrary task types or financial-term changes.
 
@@ -1046,7 +1052,7 @@ The task workspace shows origination channel, responsible party, scope, required
 
 ### 24.1 Start Review
 
-The Loan Officer sees authoritative verification, document readiness, current status, and the assigned Loan Officer before “Start review.” The review projection supplies backend-derived readiness, the latest Loan-owned review cycle, and current-actor `reviewStartAvailable`. First start assigns the authenticated Loan Officer. A later start is available only to that same actor; another Staff user sees the owner and an assignment-specific blocked explanation. An unresolved legacy owner remains unavailable rather than being inferred. The command has no body or business UUID, so the workspace reconciles an unknown response through that read and never automatically retries the POST.
+The Loan Officer consumes the recorded Product Assessment under Section 23.1 and sees document readiness, current status, and the assigned Loan Officer before “Start review.” The review projection supplies backend-derived readiness, the latest Loan-owned review cycle, and current-actor `reviewStartAvailable`. First start assigns the authenticated Loan Officer. A later start is available only to that same actor; another Staff user sees the owner and an assignment-specific blocked explanation. An unresolved legacy owner remains unavailable rather than being inferred. The command has no body or business UUID, so the workspace reconciles an unknown response through that read and never automatically retries the POST.
 
 The same Loan Officer may complete UCL or Collateral verification and start review. This does not weaken the later Approver maker-checker rule.
 
@@ -1072,7 +1078,7 @@ Supported actions remain distinct:
 - `RETURN_TO_LOAN_OFFICER_REVIEW`;
 - `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`.
 
-The decision page must show the exact latest recommendation, its purpose-limited recommending Staff actor, the assigned Loan Officer, product verification state, review cycle, documents/readiness, recorded decision actors, and any action-specific correction plan. System actors are labeled System; unavailable legacy Staff actors are labeled unavailable without guessing. It must not rely on the transient recommendation response from another browser session.
+The decision page places the shared Product Assessment panel before the exact latest recommendation and linked Review / Decision history, followed by independent decision controls. It must show the exact latest recommendation, its purpose-limited recommending Staff actor, the assigned Loan Officer, product verification state, review cycle, documents/readiness, recorded decision actors, and any action-specific correction plan. System actors are labeled System; unavailable legacy Staff actors are labeled unavailable without guessing. It must not rely on the transient recommendation response from another browser session.
 
 Approval POST has no client business UUID. The Approval-owned decision projection exposes the exact recommendation provenance, resulting decision, history, and current Loan state needed for durable recovery.
 
@@ -1619,7 +1625,7 @@ MER-FU-046 CP3 extends this existing workspace for Staff-assisted UCL and Collat
 - review start and current review-cycle evidence;
 - product-specific evidence panels without client pricing, LTV, or eligibility rules.
 
-The two CP4 case routes and their purpose-limited `loan:review` read contracts are executable in Internal Web. They operate without `loan:read`, use backend-derived action availability, reconcile no-business-UUID commands through GET without automatic POST retry, and keep restricted assessment notes in memory only. CP5 adds recommendation controls only for actors who also hold `approval:recommend`; the CP4 read/start capability remains unchanged. Specialized verification/review queues remain later scope.
+The two CP4 case routes are executable in Internal Web. Verification GET also supports read-only `approval:decide` access for the shared assessment panel; the mutation route and review GET retain exact `loan:review`. They operate without `loan:read`, use backend-derived action availability, reconcile no-business-UUID commands through GET without automatic POST retry, and keep restricted assessment notes in memory only. CP5 adds recommendation controls only for actors who also hold `approval:recommend`; review-start rules remain unchanged. Specialized verification/review queues remain later scope.
 
 ### Staff FE-CP5 — Recommendation and Independent Decision
 

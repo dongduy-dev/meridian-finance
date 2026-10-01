@@ -38,6 +38,7 @@ const featureFacts = {
 }
 const cycle = {
   verificationId: '22222222-2222-4222-8222-222222222222', verificationSequence: 1,
+  sourceCorrectionRequestId: null, reviewedBy: null, assessmentNote: 'Synthetic assessment requesting more evidence.',
   productVerificationResult: 'REQUIRES_MORE_INFORMATION', createdAt: caseFacts.submittedAt, reviewedAt: caseFacts.submittedAt,
 }
 const featureResponses: Record<string, unknown> = {
@@ -68,7 +69,7 @@ const featureResponses: Record<string, unknown> = {
   },
 }
 const featureRoutes = [
-  ['/verification', 'Verification', 'loan:review', 'Product verification'],
+  ['/verification', 'Product assessment', 'loan:review', 'Product assessment'],
   ['/review', 'Review', 'loan:review', 'Loan Officer review'],
   ['/documents', 'Documents', 'document:review', 'Application documents'],
   ['/corrections', 'Corrections', 'loan:correction:staff', 'Application corrections'],
@@ -138,7 +139,7 @@ describe('Independent feature authority and optional application context', () =>
     expect(within(header).queryByRole('button', { name: 'Copy application ID' }) !== null).toBe(route === '/documents')
     expect(screen.getByRole('link', { name: label, current: 'page' })).toBeVisible()
     const expectedReads = route === '/review'
-      ? [casePath + route, casePath + '/review-history'] : [casePath + route]
+      ? [casePath + route, casePath + '/review-history', casePath + '/verification'] : [casePath + route]
     await waitFor(() => expect(vi.mocked(api.apiRequest).mock.calls.map(([path]) => path).sort())
       .toEqual(expectedReads.sort()))
   })

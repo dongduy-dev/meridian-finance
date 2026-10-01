@@ -212,7 +212,7 @@ describe('RecommendationPanel', () => {
     })
     render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RecommendationPanel loanApplicationId={applicationId} /></AuthProvider></QueryClientProvider>)
     const user = userEvent.setup()
-    const notes = await screen.findByLabelText('Restricted internal notes')
+    const notes = await screen.findByLabelText('Internal credit note')
     await user.type(notes, 'preserve this draft')
     await user.click(screen.getByRole('button', { name: 'Review recommendation' }))
     await user.click(screen.getByRole('button', { name: 'Confirm' }))
@@ -256,7 +256,7 @@ describe('RecommendationPanel', () => {
     vi.mocked(api.apiRequest).mockResolvedValue(recommendationCase())
     render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RecommendationPanel loanApplicationId={applicationId} /></AuthProvider></QueryClientProvider>)
     const user = userEvent.setup()
-    await user.type(await screen.findByLabelText('Restricted internal notes'), 'restricted assessment')
+    await user.type(await screen.findByLabelText('Internal credit note'), 'restricted assessment')
 
     expect(vi.mocked(api.apiRequest).mock.calls.some(([, options]) =>
       (JSON.stringify((options as { body?: unknown } | undefined)?.body) ?? '').includes('restricted assessment'))).toBe(false)
