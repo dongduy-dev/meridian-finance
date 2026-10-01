@@ -1,8 +1,8 @@
 import type { StaffReviewHistory } from '@/features/staff-review-history/api/contracts'
 
 export const historyApplicationId = '11111111-1111-4111-8111-111111111111'
-const officer = { userId: '22222222-2222-4222-8222-222222222222', displayName: 'History Loan Officer', email: 'history.officer@meridian.local' }
-const approver = { userId: '99999999-9999-4999-8999-999999999999', displayName: 'History Approver', email: 'history.approver@meridian.local' }
+const officer = { userId: '00000000-0000-0000-0000-000000000302', displayName: 'History Loan Officer', email: 'history.officer@meridian.local' }
+const approver = { userId: '00000000-0000-0000-0000-000000000303', displayName: 'History Approver', email: 'history.approver@meridian.local' }
 const cycleId = '33333333-3333-4333-8333-333333333333'
 const recommendationId = '44444444-4444-4444-8444-444444444444'
 

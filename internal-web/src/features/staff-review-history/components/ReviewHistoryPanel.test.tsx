@@ -29,7 +29,7 @@ describe('ReviewHistoryPanel', () => {
   beforeEach(() => { vi.clearAllMocks(); vi.mocked(authApi.refresh).mockResolvedValue(staff) })
 
   it.each(['loan:review', 'approval:recommend', 'approval:decide'])(
-    'renders ordered read-only history with %s and distinct rationale and credit-note labels', async (permission) => {
+    'renders seeded Staff actors in ordered read-only history with %s and distinct rationale and credit-note labels', async (permission) => {
       vi.mocked(authApi.refresh).mockResolvedValue({ ...staff, permissions: [permission] })
       vi.mocked(api.apiRequest).mockResolvedValue(reviewHistoryFixture())
       renderPanel()
@@ -40,6 +40,7 @@ describe('ReviewHistoryPanel', () => {
       expect(first.getAllByText('Internal credit note')).toHaveLength(2)
       expect(first.getByText('Earlier recommendation rationale.')).toBeVisible()
       expect(first.getByText('Earlier decision rationale.')).toBeVisible()
+      expect(first.getAllByText('History Loan Officer')).toHaveLength(2)
       expect(first.getByText('History Approver')).toBeVisible()
       expect(screen.getByText('Assignment unavailable')).toBeVisible()
       expect(screen.getByText('Staff member unavailable')).toBeVisible()

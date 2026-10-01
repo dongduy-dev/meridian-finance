@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { apiTimestampSchema, uuidSchema } from '@/features/staff-applications/api/contracts'
+import { meridianUuidSchema } from '@/lib/validation/meridian-uuid'
 
 const token = z.string().trim().min(1)
-const actor = z.object({ userId: uuidSchema, displayName: token, email: z.email() })
+const actor = z.object({ userId: meridianUuidSchema, displayName: token, email: z.email() })
 const creditContext = {
   action: token,
   reason: z.string().nullable(),

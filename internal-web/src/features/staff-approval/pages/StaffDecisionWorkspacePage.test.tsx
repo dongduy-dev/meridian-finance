@@ -124,21 +124,31 @@ describe('Staff decision workspace', () => {
     expect(confirmation.queryByText('Synthetic recommendation analysis.')).not.toBeInTheDocument()
   })
 
-  it('shows recommendation and decision actor provenance', async () => {
-    vi.mocked(api.apiRequest).mockResolvedValue(decisionCase(true))
+  it('shows current actor provenance and only the linked historical presentation', async () => {
+    const value = decisionCase(true)
+    const history = reviewHistoryFixture()
+    history.cycles = [{ ...history.cycles[0]!,
+      recommendation: { ...value.recommendation, internalNoteReadable: true },
+      decision: { ...value.latestDecision!, internalNoteReadable: true },
+    }]
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/review-history')
+      ? history : value)
     renderPage()
 
-    expect(await screen.findByText('Deni Loan Officer')).toBeVisible()
-    expect(screen.getByText('officer@meridian.local')).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Review Cycle 1' })).toBeVisible()
+    expect(screen.getAllByText('Deni Loan Officer')).toHaveLength(2)
+    expect(screen.getAllByText('officer@meridian.local')).toHaveLength(2)
     expect(screen.getAllByText('Ari Approver')).toHaveLength(2)
     expect(within(screen.getByRole('heading', { name: 'Decision outcome' }).parentElement!.parentElement!).getByText('approver@meridian.local')).toBeVisible()
-    expect(within(screen.getByRole('heading', { name: 'Decision history' }).parentElement!.parentElement!).getByText('approver@meridian.local')).toBeVisible()
-    expect(screen.getAllByText('Recorded by')).toHaveLength(3)
-    expect(screen.getAllByText('Recorded')).toHaveLength(3)
+    expect(within(screen.getByRole('region', { name: 'Review Cycle 1' })).getByText('approver@meridian.local')).toBeVisible()
+    expect(screen.getAllByRole('heading', { name: 'Review and decision history' })).toHaveLength(1)
+    expect(screen.queryByRole('heading', { name: 'Decision history' })).not.toBeInTheDocument()
+    expect(screen.getAllByText('Recorded by')).toHaveLength(4)
+    expect(screen.getAllByText('Recorded')).toHaveLength(4)
   })
 
   it.each(['RETURNED_TO_REVIEW', 'APPROVAL_PENDING'] as const)(
-    'retains server decision history without a current decision in %s across refresh and a fresh session',
+    'retains linked history without a current decision in %s across refresh and a fresh session',
     async (applicationStatus) => {
       const previous = returnedToReviewCase()
       const value = {
@@ -151,8 +161,8 @@ describe('Staff decision workspace', () => {
           recommendationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
           reviewCycleId: successorCycleId,
         } : null,
-        decisionHistory: [previous.decisionHistory[0], {
-          ...previous.decisionHistory[0],
+        decisionHistory: [previous.decisionHistory[0]!, {
+          ...previous.decisionHistory[0]!,
           decisionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
           reviewRecommendationId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
           action: 'REQUEST_CUSTOMER_OR_STAFF_CORRECTION',
@@ -161,17 +171,34 @@ describe('Staff decision workspace', () => {
           decidedAt: '2026-09-05T08:30:00',
         }],
       }
-      vi.mocked(api.apiRequest).mockResolvedValue(value)
+      value.evidence.currentReviewCycle.cycleNumber = 3
+      const linked = reviewHistoryFixture()
+      linked.applicationStatus = applicationStatus
+      const historicalDecisions = [...value.decisionHistory].reverse()
+      linked.cycles.slice(0, 2).forEach((cycle, index) => {
+        const decision = historicalDecisions[index]!
+        cycle.status = 'COMPLETED'
+        cycle.recommendation!.recommendationId = decision.reviewRecommendationId
+        cycle.decision = { ...decision, internalNoteReadable: true }
+      })
+      linked.cycles[2]!.recommendation = value.recommendation
+        ? { ...value.recommendation, internalNoteReadable: true } : null
+      vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/review-history')
+        ? linked : value)
       const assertHistory = async () => {
-        const heading = await screen.findByRole('heading', { name: 'Decision history' })
+        await screen.findByText('Review the case again.')
+        const heading = screen.getByRole('heading', { name: 'Review and decision history' })
         const history = within(heading.parentElement!.parentElement!)
-        expect(history.getAllByRole('heading', { level: 3 }).map((item) => item.textContent))
-          .toEqual(['Return to Loan Officer', 'Request correction'])
+        expect(history.getAllByRole('heading', { level: 3, name: /^Review Cycle/ }).map((item) => item.textContent))
+          .toEqual(['Review Cycle 1', 'Review Cycle 2', 'Review Cycle 3'])
+        expect(within(screen.getByRole('region', { name: 'Review Cycle 1' })).getByRole('heading', { name: 'Request correction' })).toBeVisible()
+        expect(within(screen.getByRole('region', { name: 'Review Cycle 2' })).getByRole('heading', { name: 'Return to Loan Officer' })).toBeVisible()
         expect(history.getAllByText('Ari Approver')).toHaveLength(2)
         expect(history.getAllByText('approver@meridian.local')).toHaveLength(2)
-        expect(history.getByText('Reason: Review the case again.')).toBeVisible()
+        expect(history.getByText('Review the case again.')).toBeVisible()
         expect(history.getByText('Controlled reason: Document replacement required')).toBeVisible()
         expect(screen.queryByRole('heading', { name: 'Decision outcome' })).not.toBeInTheDocument()
+        expect(screen.queryByRole('heading', { name: 'Decision history' })).not.toBeInTheDocument()
         if (applicationStatus === 'APPROVAL_PENDING') {
           expect(screen.getByRole('button', { name: 'Review decision' })).toBeVisible()
         } else {
