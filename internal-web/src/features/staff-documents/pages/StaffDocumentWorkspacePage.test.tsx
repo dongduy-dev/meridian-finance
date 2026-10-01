@@ -122,6 +122,11 @@ describe('Staff document workspace review eligibility', () => {
     renderWorkspace('AWAITING_REVIEW')
 
     expect(await screen.findByRole('heading', { name: 'Review outcome' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Application', level: 1 })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Documents' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('link', { name: 'Overview' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy application ID' })).toBeVisible()
+    expect(vi.mocked(api.apiRequest).mock.calls.map(([path]) => path)).toEqual([`/staff/loan-applications/${applicationId}/documents`])
   })
 
   it.each(['ACCEPTED', 'WAIVED', 'REPLACEMENT_REQUESTED', 'FUTURE_REVIEW_STATE'])(
@@ -149,10 +154,23 @@ describe('Staff document workspace review eligibility', () => {
     renderDocumentWorkspace()
 
     expect(await screen.findByText('Submitted collateral facts')).toBeVisible()
+    expect(screen.getByRole('heading', { name: collateralCase.applicationNumber, level: 1 })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Documents' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByText('Vehicle')).toBeVisible()
     expect(screen.getByText('Very good')).toBeVisible()
     expect(screen.getByRole('heading', { name: 'evidence-2.pdf' })).toBeVisible()
     expect(screen.getByRole('heading', { name: 'Review outcome' })).toBeVisible()
+  })
+
+  it('keeps ownership-evidence review independent of loan:read', async () => {
+    const documentCase = fixture('AWAITING_REVIEW')
+    documentCase.items[0]!.documentType = 'COLLATERAL_OWNERSHIP_EVIDENCE'
+    vi.mocked(api.apiRequest).mockResolvedValue(documentCase)
+    renderDocumentWorkspace()
+    expect(await screen.findByRole('heading', { name: 'Review outcome' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Application', level: 1 })).toBeVisible()
+    expect(screen.queryByText('Submitted collateral facts')).not.toBeInTheDocument()
+    expect(vi.mocked(api.apiRequest).mock.calls.map(([path]) => path)).toEqual([`/staff/loan-applications/${applicationId}/documents`])
   })
 
   it('does not show collateral context for another document type', async () => {
@@ -162,7 +180,8 @@ describe('Staff document workspace review eligibility', () => {
 
     expect(await screen.findByRole('heading', { name: 'Review outcome' })).toBeVisible()
     expect(screen.queryByText('Submitted collateral facts')).not.toBeInTheDocument()
-    expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => path === `/staff/loan-applications/${applicationId}`)).toBe(false)
+    expect(await screen.findByRole('heading', { name: collateralCase.applicationNumber, level: 1 })).toBeVisible()
+    expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => path === `/staff/loan-applications/${applicationId}`)).toBe(true)
   })
 
   it('keeps document review available when supplemental application context fails', async () => {
@@ -176,7 +195,9 @@ describe('Staff document workspace review eligibility', () => {
     renderDocumentWorkspace()
 
     expect(await screen.findByRole('heading', { name: 'Review outcome' })).toBeVisible()
-    expect(await screen.findByText(/application context/i)).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Application context unavailable' }, { timeout: 5000 })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Application', level: 1 })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Documents' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('heading', { name: 'evidence-2.pdf' })).toBeVisible()
   })
 

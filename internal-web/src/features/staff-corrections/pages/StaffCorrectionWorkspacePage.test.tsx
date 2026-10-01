@@ -130,7 +130,10 @@ describe('Staff correction operation recovery', () => {
     renderWorkspace()
     const user = userEvent.setup()
 
-    await screen.findByRole('heading', { name: 'UCL-20260904-000001' })
+    const identity = await screen.findByRole('heading', { name: 'UCL-20260904-000001', level: 1 })
+    await waitFor(() => expect(identity).toHaveFocus())
+    expect(screen.getByRole('link', { name: 'Corrections', current: 'page' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('Unsecured Consumer Loan')).toBeVisible()
     await user.upload(
       screen.getByLabelText('Upload proof'),
       new File(['different bytes'], 'different.pdf', { type: 'application/pdf' }),
@@ -170,6 +173,32 @@ describe('Staff correction operation recovery', () => {
       String(path).endsWith(`/staff-corrections/tasks/${taskId}/complete`)
       && (options as { body?: { completionRequestId?: string } } | undefined)?.body?.completionRequestId === operationId,
     )).toBe(true))
+  })
+
+  it('preserves confirmed Staff resubmission and reconciles its request', async () => {
+    let submitted = false
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path.endsWith('/resubmit')) {
+        submitted = true
+        return { loanApplicationId: applicationId, status: 'SUBMITTED' }
+      }
+      const value = caseFixture('SATISFIED')
+      return { ...value, applicationStatus: submitted ? 'SUBMITTED' : value.applicationStatus,
+        correctionRequest: { ...value.correctionRequest, allTasksComplete: true,
+          staffResubmissionReady: !submitted, status: submitted ? 'RESUBMITTED' : 'OPEN',
+          tasks: value.correctionRequest.tasks.map((task) => ({ ...task, status: 'COMPLETED' })) } }
+    })
+    renderWorkspace()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Review Staff resubmission' }))
+    expect(screen.getByRole('dialog', { name: 'Confirm Staff resubmission' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Confirm resubmission' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Review Staff resubmission' })).not.toBeInTheDocument())
+    const posts = vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
+      path.endsWith('/resubmit') && (options as RequestInit)?.method === 'POST')
+    expect(posts).toHaveLength(1)
+    expect((posts[0]![1] as { body: { resubmissionRequestId: string } }).body.resubmissionRequestId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(screen.getByRole('link', { name: 'Corrections', current: 'page' })).toBeVisible()
   })
 
   it('labels an assisted Customer task and reuses its completion identity on the purpose-specific route', async () => {

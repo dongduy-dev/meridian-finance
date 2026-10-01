@@ -171,6 +171,12 @@ describe('Staff application pages', () => {
     const heading = await screen.findByRole('heading', { name: 'UCL-20260902-000001', level: 1 })
     expect(heading).toBeVisible()
     await waitFor(() => expect(heading).toHaveFocus())
+    expect(screen.getByRole('navigation', { name: 'Application sections' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute('href', `/staff/applications/${applicationId}#history`)
+    expect(screen.queryByRole('link', { name: 'Verification' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Copy application ID' }))
+    expect(await navigator.clipboard.readText()).toBe(applicationId)
     expect(screen.getByText('Customer readiness')).toBeVisible()
     expect(screen.getByText('Primary bank account')).toBeVisible()
     expect(screen.getAllByText('Deni Loan Officer').length).toBeGreaterThan(0)
@@ -189,6 +195,20 @@ describe('Staff application pages', () => {
     expect(screen.getByRole('heading', { name: 'UCL-20260902-000001', level: 1 })).toBeVisible()
     finishRefresh?.(caseFixture)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled())
+  })
+
+  it('opens History after a delayed direct read and returns to Overview with accessible focus', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(caseFixture)
+    const user = userEvent.setup()
+    const router = renderRoute(`/staff/applications/${applicationId}#history`)
+    const history = await screen.findByRole('heading', { name: 'Application history' })
+    await waitFor(() => expect(history).toHaveFocus())
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute('aria-current', 'location')
+    await user.click(screen.getByRole('link', { name: 'Overview' }))
+    await waitFor(() => expect(router.state.location.hash).toBe('#overview'))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Application and readiness' })).toHaveFocus())
+    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page')
+    expect(api.apiRequest).toHaveBeenCalledTimes(1)
   })
 
   it('renders unresolved USER actor evidence neutrally without inventing an identity', async () => {

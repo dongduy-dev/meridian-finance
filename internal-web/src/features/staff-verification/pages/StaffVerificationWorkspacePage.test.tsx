@@ -11,6 +11,7 @@ import { staffApplicationKeys } from '@/features/staff-applications/api/queries'
 import * as api from '@/lib/api'
 import { ApiError, NetworkError } from '@/lib/api'
 import { createQueryClient } from '@/lib/query/query-client'
+import { applicationWorkspaceCase } from '@/test/application-workspace-fixture'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
   const actual = await vi.importActual<typeof import('@/features/auth/api/auth-api')>('@/features/auth/api/auth-api')
@@ -80,6 +81,11 @@ describe('Staff verification workspace', () => {
     })
     renderWorkspace()
     expect(await screen.findByRole('heading', { name: 'Salary Advance verification' }, { timeout: 5_000 })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'SA-20260905-000001', level: 1 })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Verification' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Review' })).toBeVisible()
+    expect(screen.queryByRole('link', { name: 'Overview' })).not.toBeInTheDocument()
+    expect(api.apiRequest).toHaveBeenCalledTimes(1)
     expect(screen.getByText(/Later Partner updates do not change them/i)).toBeVisible()
     expect(screen.queryByRole('button', { name: /Start manual verification|Review verification completion/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Application overview/ })).not.toBeInTheDocument()
@@ -92,6 +98,10 @@ describe('Staff verification workspace', () => {
       if (String(path).endsWith('/unsecured-consumer-loan-verification/complete')) {
         completed = true
         throw new NetworkError('connection lost')
+      }
+      if (path === `/staff/loan-applications/${applicationId}`) return {
+        ...applicationWorkspaceCase, ...common, productCode: 'UNSECURED_CONSUMER_LOAN',
+        status: completed ? 'VERIFIED' : 'VERIFICATION_PENDING',
       }
       return completed ? uclCase('VERIFIED') : uclCase()
     })

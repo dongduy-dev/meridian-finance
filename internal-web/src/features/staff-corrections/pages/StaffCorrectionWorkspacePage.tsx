@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CheckCircle2, FileUp, RefreshCw, ShieldAlert } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, FileUp, ShieldAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -8,13 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { OperationStatusPanel, type OperationStatus } from '@/components/operations/OperationStatusPanel'
 import { RequestCorrelation } from '@/components/common/RequestCorrelation'
+import { ApplicationWorkspaceShell } from '@/components/operations/ApplicationWorkspaceShell'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/features/auth/model/auth-context'
 import { hasPermission, hasRole } from '@/features/auth/model/access-control'
 import { uuidSchema } from '@/features/staff-applications/api/contracts'
 import { QueryErrorPanel } from '@/features/staff-applications/components/QueryErrorPanel'
 import { humanizeKnownValue } from '@/features/staff-applications/model/presentation'
-import { staffApplicationKeys } from '@/features/staff-applications/api/queries'
+import { staffApplicationCaseQuery, staffApplicationKeys } from '@/features/staff-applications/api/queries'
 import { staffDocumentKeys } from '@/features/staff-documents/api/queries'
 import { uploadStaffDocument } from '@/features/staff-documents/api/staff-documents-api'
 import { ApiError, NetworkError } from '@/lib/api'
@@ -50,11 +51,11 @@ export function StaffCorrectionWorkspacePage() {
   const [params] = useSearchParams()
   const validId = uuidSchema.safeParse(loanApplicationId).success
   const allowed = state.status === 'authenticated' && hasPermission(state.actor, 'loan:correction:staff')
+  const canReadCase = state.status === 'authenticated' && hasPermission(state.actor, 'loan:read')
   const canUploadStaff = state.status === 'authenticated' && hasPermission(state.actor, 'document:upload:staff')
   const canUploadAssistedCorrection = state.status === 'authenticated'
     && hasPermission(state.actor, 'document:upload:assisted-correction')
   const canReview = state.status === 'authenticated' && hasPermission(state.actor, 'document:review')
-  const canReadCase = state.status === 'authenticated' && hasPermission(state.actor, 'loan:read')
   const canRecordAssistedCancellation = state.status === 'authenticated'
     && hasPermission(state.actor, 'loan:cancel:staff')
     && hasRole(state.actor, 'LOAN_OFFICER')
@@ -62,6 +63,7 @@ export function StaffCorrectionWorkspacePage() {
     && hasPermission(state.actor, 'document:upload:assisted-action')
     && canRecordAssistedCancellation
   const query = useQuery(staffCorrectionCaseQuery(manager, loanApplicationId, validId && allowed))
+  const caseQuery = useQuery(staffApplicationCaseQuery(manager, loanApplicationId, validId && allowed && canReadCase))
   const [files, setFiles] = useState<Record<string, File | undefined>>({})
   const [fileErrors, setFileErrors] = useState<Record<string, string | undefined>>({})
   const [actions, setActions] = useState<Record<string, ActionState>>({})
@@ -248,7 +250,7 @@ export function StaffCorrectionWorkspacePage() {
   }
 
   if (!validId) return <section className="mx-auto max-w-6xl space-y-5"><h1 data-route-heading tabIndex={-1} className="text-2xl font-semibold">Corrections unavailable</h1><Alert variant="warning"><AlertTriangle /><AlertTitle>Invalid application identifier</AlertTitle></Alert></section>
-  if (query.isPending) return <section className="mx-auto max-w-6xl space-y-5"><h1 data-route-heading tabIndex={-1} className="text-2xl font-semibold">Application corrections</h1><div role="status" className="flex min-h-64 items-center justify-center gap-3 rounded-lg border bg-card"><Spinner /> Loading correction evidence…</div></section>
+  if (query.isPending) return <section className="mx-auto max-w-6xl space-y-5"><h1 tabIndex={-1} className="text-2xl font-semibold">Application corrections</h1><div role="status" className="flex min-h-64 items-center justify-center gap-3 rounded-lg border bg-card"><Spinner /> Loading correction evidence…</div></section>
   if (query.isError && !query.data) return <section className="mx-auto max-w-6xl space-y-5"><h1 data-route-heading tabIndex={-1} className="text-2xl font-semibold">Application corrections</h1><QueryErrorPanel error={query.error} resource="correction evidence" onRetry={() => void query.refetch()} /></section>
   if (!query.data) return null
   const data = query.data
@@ -261,8 +263,25 @@ export function StaffCorrectionWorkspacePage() {
   const cancellationEvidenceState = cancellationEvidenceKey ? actions[cancellationEvidenceKey] : undefined
   const cancellationCommandState = actions[cancellationCommandKey]
 
-  return <section className="mx-auto max-w-7xl space-y-6">
-    <header className="rounded-lg border bg-card p-5"><p className="text-sm font-semibold text-muted-foreground">CORRECTION CASE</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold sm:text-3xl">{data.applicationNumber}</h1><p className="mt-2 text-sm text-muted-foreground">{humanizeKnownValue(data.productCode)} · {humanizeKnownValue(data.applicationStatus)}</p><div className="mt-4 flex flex-wrap gap-2"><Button variant="outline" onClick={() => void query.refetch()} disabled={query.isFetching}>{query.isFetching ? <Spinner /> : <RefreshCw />} Refresh proof</Button>{canReadCase ? <Button asChild variant="outline"><Link to={`/staff/applications/${loanApplicationId}`}>Application overview</Link></Button> : null}{canReview ? <Button asChild variant="outline"><Link to={`/staff/applications/${loanApplicationId}/documents`}>Documents</Link></Button> : null}</div></header>
+  const featureFacts = {
+    loanApplicationId: data.loanApplicationId, applicationNumber: data.applicationNumber,
+    applicationStatus: data.applicationStatus, productCode: data.productCode,
+    originationChannel: data.originationChannel,
+  }
+  const headerCase = canReadCase && caseQuery.isSuccess ? caseQuery.data : undefined
+
+  return <ApplicationWorkspaceShell
+    actor={state.status === 'authenticated' ? state.actor : undefined}
+    context={headerCase ? { source: 'case', facts: {
+      ...featureFacts, requestedAmount: headerCase.requestedAmount,
+      requestedTermMonths: headerCase.requestedTermMonths, submittedAt: headerCase.submittedAt,
+    } } : { source: 'feature', facts: featureFacts }} activeSection="corrections"
+    updatedAt={query.dataUpdatedAt} refreshing={query.isFetching || (canReadCase && caseQuery.isFetching)} stale={query.isStale || (canReadCase && caseQuery.isStale)}
+    contextUnavailable={canReadCase && caseQuery.isError}
+    onRetryContext={canReadCase ? () => void caseQuery.refetch() : undefined}
+    onRefresh={() => void Promise.all([query.refetch(), ...(canReadCase ? [caseQuery.refetch()] : [])])}
+  >
+    <h2 className="text-xl font-semibold">Application corrections</h2>
     {!request ? <div className="rounded-lg border bg-card p-8 text-center"><CheckCircle2 className="mx-auto size-8 text-success" /><h2 className="mt-3 text-lg font-semibold">No correction request</h2><p className="mt-1 text-sm text-muted-foreground">No correction evidence exists for this application.</p></div> : <>
       <Card><CardHeader><CardTitle>Correction request</CardTitle></CardHeader><CardContent><dl className="grid gap-4 sm:grid-cols-4"><div><dt className="text-sm text-muted-foreground">Status</dt><dd className="font-semibold">{humanizeKnownValue(request.status)}</dd></div><div><dt className="text-sm text-muted-foreground">Reason</dt><dd className="font-semibold">{humanizeKnownValue(request.reasonCode)}</dd></div><div><dt className="text-sm text-muted-foreground">Channel</dt><dd className="font-semibold">{humanizeKnownValue(data.originationChannel)}</dd></div><div><dt className="text-sm text-muted-foreground">Created</dt><dd className="font-semibold">{formatTimestamp(request.createdAt)}</dd></div></dl></CardContent></Card>
       {request.makerCheckerBlockedForCurrentActor ? <Alert variant="warning"><ShieldAlert /><AlertTitle>Separation of duties applies</AlertTitle><AlertDescription>You created this correction request. Another authorized Staff member must complete its Staff tasks.</AlertDescription></Alert> : null}
@@ -286,7 +305,7 @@ export function StaffCorrectionWorkspacePage() {
       {confirmingResubmission ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="resubmit-confirm-title"><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><div><h2 id="resubmit-confirm-title" className="text-xl font-semibold">Confirm Staff resubmission</h2><p className="mt-1 text-sm text-muted-foreground">Meridian checks the latest application requirements again before resubmitting.</p></div><dl className="grid gap-3 text-sm"><div><dt className="text-muted-foreground">Application</dt><dd className="font-semibold">{data.applicationNumber}</dd></div><div><dt className="text-muted-foreground">Current correction status</dt><dd className="font-semibold">{humanizeKnownValue(request.status)}</dd></div><div><dt className="text-muted-foreground">Required tasks</dt><dd className="font-semibold">All required tasks are complete</dd></div><div><dt className="text-muted-foreground">Final validation</dt><dd className="font-semibold">Customer, product, and document requirements will be checked again</dd></div></dl><div className="flex justify-end gap-2"><Button variant="outline" onClick={closeResubmissionConfirmation}>Cancel</Button><Button autoFocus onClick={() => { closeResubmissionConfirmation(); void runAction(resubmissionKey, 'STAFF_RESUBMISSION', { loanApplicationId }, (id) => resubmitStaffCorrection(manager, loanApplicationId, id), true) }}><CheckCircle2 /> Confirm resubmission</Button></div></div></div> : null}
       {confirmingCancellation ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="cancellation-confirm-title"><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><div><h2 id="cancellation-confirm-title" className="text-xl font-semibold">Confirm Customer-requested cancellation</h2><p className="mt-1 text-sm text-muted-foreground">The Customer requested and signed this cancellation. You are recording the Customer&apos;s request.</p></div><dl className="grid gap-3 text-sm"><div><dt className="text-muted-foreground">Application</dt><dd className="font-semibold">{data.applicationNumber}</dd></div><div><dt className="text-muted-foreground">Correction request</dt><dd className="break-all font-semibold">{assistedCancellation.correctionRequestId}</dd></div><div><dt className="text-muted-foreground">Evidence version</dt><dd className="break-all font-semibold">{assistedCancellation.evidence?.documentVersionId}</dd></div><div><dt className="text-muted-foreground">Outcome</dt><dd className="font-semibold">Correction and application are cancelled</dd></div></dl><div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setConfirmingCancellation(false)}>Back</Button><Button autoFocus variant="destructive" onClick={() => void recordCancellation()}>Record Customer request</Button></div></div></div> : null}
     </>}
-  </section>
+  </ApplicationWorkspaceShell>
 }
 
 function ActionError({ error }: { error: Error }) {
