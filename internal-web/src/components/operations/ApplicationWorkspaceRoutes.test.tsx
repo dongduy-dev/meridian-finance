@@ -41,6 +41,10 @@ const cycle = {
   productVerificationResult: 'REQUIRES_MORE_INFORMATION', createdAt: caseFacts.submittedAt, reviewedAt: caseFacts.submittedAt,
 }
 const featureResponses: Record<string, unknown> = {
+  '/review-history': {
+    loanApplicationId: caseFacts.loanApplicationId, applicationNumber: caseFacts.applicationNumber,
+    applicationStatus: caseFacts.status, cycles: [],
+  },
   '/verification': {
     ...featureFacts, documentReadiness: { uploadComplete: true, processingReady: true }, correctionTargets: [],
     actions: { startAvailable: false, completeAvailable: false },
@@ -133,7 +137,10 @@ describe('Independent feature authority and optional application context', () =>
     expect(within(header).queryByText('Requested amount') !== null).toBe(route === '/verification' || route === '/review')
     expect(within(header).queryByRole('button', { name: 'Copy application ID' }) !== null).toBe(route === '/documents')
     expect(screen.getByRole('link', { name: label, current: 'page' })).toBeVisible()
-    expect(vi.mocked(api.apiRequest).mock.calls.map(([path]) => path)).toEqual([casePath + route])
+    const expectedReads = route === '/review'
+      ? [casePath + route, casePath + '/review-history'] : [casePath + route]
+    await waitFor(() => expect(vi.mocked(api.apiRequest).mock.calls.map(([path]) => path).sort())
+      .toEqual(expectedReads.sort()))
   })
 
   it.each(featureRoutes)('keeps the feature usable while case context is pending on %s', async (route, _label, _permission, heading) => {

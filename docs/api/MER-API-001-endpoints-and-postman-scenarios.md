@@ -106,7 +106,7 @@ An identical logical replay returns the original result without another business
 
 Outside the login and refresh responses, JSON responses do not expose passwords or access tokens. Refresh-token values never appear in JSON. Public and Customer-facing responses must not expose unrestricted identity evidence, Partner salary evidence, full bank-account numbers, cryptographic envelope fields, document storage metadata, restricted Staff notes, external transfer/payment references, or internal audit/history identifiers.
 
-Authorized Staff endpoints return only the restricted operational fields defined for their contracts. Partner employee reads may return employment and salary evidence to callers with `partner:read`; recommendation and decision responses may return their own actor and internal-note fields to the authorized Staff caller. Product-verification completion responses never return the reviewer or restricted assessment note.
+Authorized Staff endpoints return only the restricted operational fields defined for their contracts. Partner employee reads may return employment and salary evidence to callers with `partner:read`; recommendation and decision command responses return safe operation evidence without `internalNotes`. Restricted credit notes are returned only through the authorized linked Staff review-history read defined in Section 5.0.1. Product-verification completion responses never return the reviewer or restricted assessment note.
 
 The contractual destination-reveal operation is the sole v1 JSON endpoint permitted to return the full immutable disbursement account number.
 
@@ -205,6 +205,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/corrections` | Staff with `loan:correction:staff` | Return the latest correction request, mixed task composition, proof state, and current-actor maker-checker evidence. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/verification` | Staff with `loan:review` | Return purpose-limited product-verification evidence, readiness, backend-derived action availability, and authoritative current/history cycles. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/review` | Staff with `loan:review` | Return purpose-limited review-start readiness and the latest Loan-owned review cycle. |
+| GET | `/api/v1/staff/loan-applications/{loanApplicationId}/review-history` | Staff with `loan:review`, `approval:recommend`, or `approval:decide` | Complete linked review cycles, recommendations, and decisions with separately authorized credit notes. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/cancel` | Customer with `loan:cancel:own` | Cancel an owned Salary Advance or UCL from `RETURNED_FOR_REVISION`; Salary Advance releases its reservation exactly once, while UCL has no exposure effect. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/start` | Staff with `loan:review` | Start manual UCL verification after document processing readiness. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete` | Staff with `loan:review` | Complete manual UCL verification as `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION`. |
@@ -1224,6 +1225,26 @@ These reads exclude restricted internal notes, Customer PII, document content, a
 
 Recommendation and decision POSTs have no business UUID and are never automatically retried. After an uncertain result, the client reads the corresponding projection and resolves only when the exact review-cycle/recommendation provenance and action prove the durable result. A failed reconciliation read leaves contradictory commands locked until an explicit successful refresh.
 
+### 5.0.1 Linked Staff review history
+
+```text
+GET /api/v1/staff/loan-applications/{loanApplicationId}/review-history
+```
+
+This Approval-owned read requires a Staff principal without Customer context and any one exact permission: `loan:review`, `approval:recommend`, or `approval:decide`. `loan:read` alone is insufficient. It composes existing Loan review cycles and Approval recommendation/decision evidence in one repeatable-read observation with one batched safe Staff actor lookup. It performs no workflow writes and requires no new history persistence. Successful responses carry `Cache-Control: no-store, private`.
+
+The response contains `loanApplicationId`, `applicationNumber`, `applicationStatus`, and `cycles` in ascending stored `cycleNumber` order. Each cycle contains `reviewCycleId`, `cycleNumber`, nullable `assignedLoanOfficer`, `status`, `startedAt`, nullable `endedAt`, nullable `recommendation`, and nullable `decision`. An application without recorded cycles returns an empty array. Partial cycles retain their null recommendation or decision; historical numbering is never recomputed.
+
+| Evidence | Fields |
+|---|---|
+| Recommendation | `recommendationId`, exact `reviewCycleId`, `action`, nullable `reason`, nullable `reasonCode`, `internalNoteReadable`, optional `internalNotes`, nullable `recordedBy`, `submittedAt` |
+| Decision | `decisionId`, exact `reviewRecommendationId`, `action`, nullable `reason`, nullable `reasonCode`, `internalNoteReadable`, optional `internalNotes`, nullable `recordedBy`, `decidedAt` |
+| Staff actor | `userId`, `displayName`, `email`; unresolved identity is null |
+
+Normal rationale is readable by every authorized history caller. Restricted credit-note audiences follow MER-BIZ-001 Section 6.5 and are evaluated separately against each stored cycle's assignment and action author using the caller's current permissions. `approval:decide` authorizes Approver note access; review/recommendation callers receive only notes authorized by the recorded assignment/authorship rule. `internalNoteReadable = false` omits `internalNotes` entirely. A permitted record without a saved note has `internalNoteReadable = true` and also omits `internalNotes`; the flag distinguishes restricted access from absence. Unresolved Staff display identity remains null without discarding action, time, reason, or an otherwise authorized note. Missing assignment grants no inferred decision-note access.
+
+Cycle association uses `reviewCycleId`; decision association uses `reviewRecommendationId`. Duplicate or inconsistent associations fail closed with `409 SYSTEM_STATE_CONFLICT`, rather than guessing from timestamps. Missing applications return `404 LOAN_APPLICATION_NOT_FOUND`; anonymous callers receive `401`, unauthorized callers `403`. Customer evidence, document content, assessment/document-review notes, correction provenance, audit/operation identifiers, external references, security state, and command-availability flags are excluded. Current action and uncertain-command reconciliation continue to use the existing recommendation/decision case reads and expected-ID guards.
+
 ### 5.1 Review recommendation
 
 Supported actions:
@@ -1280,7 +1301,7 @@ Representative Customer task:
 
 Staff tasks use `responsibleParty = STAFF` with `SUPPORTING_DOCUMENT_UPLOAD` or `DOCUMENT_REVIEW`.
 
-Success returns `201 Created` with recommendation, application, review-cycle, and Loan Officer identities; action, reason, reason code, restricted internal notes, and submission time. This Staff-only response is not part of any Customer read contract.
+Success returns `201 Created` with recommendation, application, review-cycle, and Loan Officer identities; action, reason, reason code, and submission time. `internalNotes` are accepted and persisted but never echoed in this response; authorized retrieval uses Section 5.0.1. This Staff-only response is not part of any Customer read contract.
 
 ### 5.2 Approval decision
 
@@ -1303,7 +1324,7 @@ Supported actions:
 
 Every decision requires the recommendation and review-cycle identifiers returned by the Staff decision projection. These expected-state identifiers must still identify the latest applicable recommendation and active review cycle; they are concurrency evidence, not a business operation UUID. The Approver must differ from the Loan Officer who submitted the applicable recommendation. Mixed corrections use separate Customer and Staff tasks.
 
-Success returns `201 Created` with decision, application, recommendation, and Approver identities; action, reason, reason code, restricted internal notes, and decision time. This Staff-only response is not exposed through Customer application, offer, contract, or LoanAccount reads.
+Success returns `201 Created` with decision, application, recommendation, and Approver identities; action, reason, reason code, and decision time. `internalNotes` are accepted and persisted but never echoed in this response; authorized retrieval uses Section 5.0.1. This Staff-only response is not exposed through Customer application, offer, contract, or LoanAccount reads.
 
 For UCL, `APPROVE` atomically records the decision, generates one immutable exact-request offer with `FLAT_ORIGINAL_PRINCIPAL` pricing and `MONTHLY_INSTALLMENT` items, and finishes in `CUSTOMER_ACCEPTANCE_PENDING`. `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and structured mixed Customer/Staff correction remain available common decisions under the UCL document restrictions.
 

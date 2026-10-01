@@ -57,7 +57,8 @@ class ApprovalDecisionControllerTest {
                 .andExpect(jsonPath("$.loanApplicationId").value(LOAN_APPLICATION_ID.toString()))
                 .andExpect(jsonPath("$.reviewRecommendationId").value(RECOMMENDATION_ID.toString()))
                 .andExpect(jsonPath("$.approverUserId").value(APPROVER_USER_ID.toString()))
-                .andExpect(jsonPath("$.action").value("APPROVE"));
+                .andExpect(jsonPath("$.action").value("APPROVE"))
+                .andExpect(jsonPath("$.internalNotes").doesNotExist());
     }
 
     @Test
@@ -146,7 +147,6 @@ class ApprovalDecisionControllerTest {
                     APPROVER_USER_ID,
                     request.action().name(),
                     request.reason(),
-                    request.internalNotes(),
                     LocalDateTime.now()
             );
         }

@@ -11,6 +11,7 @@ import { staffApplicationKeys } from '@/features/staff-applications/api/queries'
 import * as api from '@/lib/api'
 import { ApiError, NetworkError } from '@/lib/api'
 import { createQueryClient } from '@/lib/query/query-client'
+import { reviewHistoryFixture } from '@/test/staff-review-history-fixture'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
   const actual = await vi.importActual<typeof import('@/features/auth/api/auth-api')>('@/features/auth/api/auth-api')
@@ -107,6 +108,22 @@ describe('Staff decision workspace', () => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff)
   })
 
+  it('shows linked earlier cycles separately while confirming only the current expected identities', async () => {
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/review-history')
+      ? reviewHistoryFixture() : decisionCase())
+    renderPage()
+    expect(await screen.findByText('Earlier recommendation rationale.')).toBeVisible()
+    expect(screen.getByText('Synthetic recommendation analysis.')).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Review Cycle 3' })).toBeVisible()
+    const historical = within(screen.getByRole('region', { name: 'Review Cycle 1' }))
+    expect(historical.queryByRole('button')).not.toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Review decision' }))
+    const confirmation = within(screen.getByRole('dialog'))
+    expect(confirmation.getByText('Cycle 1')).toBeVisible()
+    expect(confirmation.queryByText('Earlier recommendation rationale.')).not.toBeInTheDocument()
+    expect(confirmation.queryByText('Synthetic recommendation analysis.')).not.toBeInTheDocument()
+  })
+
   it('shows recommendation and decision actor provenance', async () => {
     vi.mocked(api.apiRequest).mockResolvedValue(decisionCase(true))
     renderPage()
@@ -193,7 +210,8 @@ describe('Staff decision workspace', () => {
     expect(confirmation.getByText('Submitted').nextElementSibling).not.toBeEmptyDOMElement()
     expect(confirmation.queryByText(recommendationId)).not.toBeInTheDocument()
     expect(confirmation.queryByText(cycleId)).not.toBeInTheDocument()
-    expect(vi.mocked(api.apiRequest).mock.calls.every(([path]) => String(path).endsWith('/decision'))).toBe(true)
+    expect(vi.mocked(api.apiRequest).mock.calls.every(([path]) =>
+      [`/staff/loan-applications/${applicationId}/decision`, `/staff/loan-applications/${applicationId}/review-history`].includes(String(path)))).toBe(true)
   })
 
   it('does not label a prior recommendation with the successor cycle number', async () => {

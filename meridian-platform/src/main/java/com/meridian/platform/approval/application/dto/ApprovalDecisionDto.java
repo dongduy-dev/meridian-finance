@@ -11,7 +11,6 @@ public record ApprovalDecisionDto(
         String action,
         String reason,
         String reasonCode,
-        String internalNotes,
         LocalDateTime decidedAt
 ) {
     public ApprovalDecisionDto(
@@ -21,10 +20,9 @@ public record ApprovalDecisionDto(
             UUID approverUserId,
             String action,
             String reason,
-            String internalNotes,
             LocalDateTime decidedAt
     ) {
         this(decisionId, loanApplicationId, reviewRecommendationId, approverUserId,
-                action, reason, null, internalNotes, decidedAt);
+                action, reason, null, decidedAt);
     }
 }

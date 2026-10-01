@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -17,6 +18,12 @@ public class ReviewRecommendationRepositoryAdapter implements ReviewRecommendati
 
     public ReviewRecommendationRepositoryAdapter(JpaReviewRecommendationRepository jpaReviewRecommendationRepository) {
         this.jpaReviewRecommendationRepository = jpaReviewRecommendationRepository;
+    }
+
+    @Override
+    public List<ReviewRecommendation> findByLoanApplicationIdOrderBySubmittedAtAsc(UUID loanApplicationId) {
+        return jpaReviewRecommendationRepository.findByLoanApplicationIdOrderBySubmittedAtAscIdAsc(loanApplicationId)
+                .stream().map(ReviewRecommendationJpaEntity::toDomain).toList();
     }
 
     @Override

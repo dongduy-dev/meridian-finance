@@ -55,7 +55,8 @@ class ReviewRecommendationControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.loanApplicationId").value(LOAN_APPLICATION_ID.toString()))
                 .andExpect(jsonPath("$.loanOfficerUserId").value(LOAN_OFFICER_USER_ID.toString()))
-                .andExpect(jsonPath("$.action").value("RECOMMEND_APPROVAL"));
+                .andExpect(jsonPath("$.action").value("RECOMMEND_APPROVAL"))
+                .andExpect(jsonPath("$.internalNotes").doesNotExist());
     }
 
     @Test
@@ -116,7 +117,6 @@ class ReviewRecommendationControllerTest {
                     LOAN_OFFICER_USER_ID,
                     request.action().name(),
                     request.reason(),
-                    request.internalNotes(),
                     LocalDateTime.now()
             );
         }

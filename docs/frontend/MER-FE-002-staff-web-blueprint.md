@@ -1089,6 +1089,16 @@ Approval may atomically create an immutable Customer offer. Staff Web must repor
 
 ---
 
+### 24.4.1 Linked Review and Decision History
+
+Both the Loan Officer review/recommendation workspace and Approver decision workspace present the shared, read-only Review and Decision History section from the purpose-limited API in MER-API-001 Section 5.0.1. It runs only for a valid application identity and an authenticated actor with an exact review, recommendation, or decision capability. It does not call Approver workspace APIs on behalf of a Loan Officer or infer missing relationships in the browser.
+
+Each section uses the recorded cycle number and displays assignment, status, start/end times, the recommendation, and its linked decision. Earlier cycles and the latest recorded cycle are labeled separately from current action controls. Incomplete cycles show the missing action explicitly. Safe Staff summaries use the existing recorded-action presentation; unresolved assignment or actor is labeled unavailable. Unknown statuses/actions remain neutral and never enable commands.
+
+Normal `Reason` and `Internal credit note` have distinct labels and presentation. The browser renders only explicitly contracted, authorized note fields; a denied `internalNoteReadable` flag shows a restricted-access explanation, while a permitted absent note shows no note recorded. Note audiences remain defined by MER-BIZ-001 Section 6.5. History creates no decision authority, assignment, or historical action controls. Confirmation continues to capture the current case's exact expected cycle/recommendation IDs and preserves stale-state and maker-checker safeguards.
+
+History results remain in memory for the active page with no inactive query retention. Session/actor changes clear the shared query client. Notes never enter URLs, browser persistence, telemetry, logs, exports, or Customer Web. Loading, authoritative empty history, unavailable/forbidden reads, and explicit retry are separate states; a failed refresh hides stale history. Successful recommendation/decision reconciliation and explicit workspace refresh invalidate the corresponding historical read. Command response handling expects no `internalNotes`; submitted drafts remain local until the command is reconciled, and permitted saved context is read through history.
+
 ### 24.5 Evidenced Staff-Assisted Offer Response
 
 `/staff/applications/:loanApplicationId/offer-response` is a purpose-specific Loan Officer workspace gated by exact `loan:offer:respond:staff` authority and the Loan Officer role. The read runs only after the route guard succeeds and must return an eligible `STAFF_ASSISTED` UCL or Collateral application in `CUSTOMER_ACCEPTANCE_PENDING` with its exact pending offer and current safe evidence metadata. The ordinary application case remains read-only and links here only when its authoritative channel and status permit the operation.

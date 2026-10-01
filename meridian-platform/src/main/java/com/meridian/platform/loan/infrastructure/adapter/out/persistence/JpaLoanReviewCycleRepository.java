@@ -8,9 +8,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 public interface JpaLoanReviewCycleRepository extends JpaRepository<LoanReviewCycleJpaEntity, UUID> {
+    List<LoanReviewCycleJpaEntity> findByLoanApplicationIdOrderByCycleNumberAsc(UUID loanApplicationId);
+
     Optional<LoanReviewCycleJpaEntity> findByLoanApplicationIdAndStatus(
             UUID loanApplicationId, LoanReviewCycleStatus status
     );

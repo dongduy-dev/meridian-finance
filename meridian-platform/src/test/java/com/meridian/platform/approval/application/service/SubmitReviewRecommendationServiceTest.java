@@ -90,6 +90,7 @@ class SubmitReviewRecommendationServiceTest {
         assertEquals(LOAN_OFFICER_USER_ID, result.loanOfficerUserId());
         assertEquals("RECOMMEND_APPROVAL", result.action());
         assertEquals(NOW, result.submittedAt());
+        assertEquals("ready for approval", repository.savedRecommendation.internalNotes());
         assertEquals(LOAN_OFFICER_USER_ID, repository.savedRecommendation.loanOfficerUserId());
         assertEquals(result.recommendationId(), eventPublisher.publishedEvent.recommendationId());
         assertEquals(LOAN_APPLICATION_ID, eventPublisher.publishedEvent.loanApplicationId());
@@ -255,6 +256,13 @@ class SubmitReviewRecommendationServiceTest {
     }
 
     private static class FakeReviewRecommendationRepository implements ReviewRecommendationRepository {
+
+        @Override
+        public List<ReviewRecommendation> findByLoanApplicationIdOrderBySubmittedAtAsc(UUID loanApplicationId) {
+            return Optional.ofNullable(savedRecommendation).filter(value -> value.loanApplicationId().equals(loanApplicationId))
+                    .map(List::of).orElseGet(List::of);
+        }
+
 
         private ReviewRecommendation savedRecommendation;
 
