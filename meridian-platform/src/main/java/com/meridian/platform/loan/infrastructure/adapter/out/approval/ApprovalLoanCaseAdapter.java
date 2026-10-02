@@ -79,6 +79,7 @@ public class ApprovalLoanCaseAdapter implements ApprovalLoanCasePort {
                 .orElse(null);
         return new CaseSnapshot(
                 application.id(),
+                application.customerId(),
                 application.applicationNumber(),
                 application.productCode().name(),
                 application.productType().name(),

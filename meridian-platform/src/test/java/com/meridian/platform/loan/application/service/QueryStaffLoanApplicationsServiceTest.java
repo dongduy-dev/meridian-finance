@@ -209,6 +209,19 @@ class QueryStaffLoanApplicationsServiceTest {
     }
 
     @Test
+    void approverAccountingAndBackOfficeDoNotGainGenericCustomerContext() {
+        when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application()));
+        when(customerReadiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED")));
+        for (String role : List.of("APPROVER", "ACCOUNTING_OFFICER", "BACK_OFFICE_ADMIN")) {
+            when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(
+                    UUID.randomUUID(), "staff@meridian.test", "STAFF", null, Set.of(role), Set.of("loan:read")));
+            assertNull(service.queryCase(APPLICATION_ID).customerContext());
+        }
+        verifyNoInteractions(customerContacts);
+    }
+
+    @Test
     void missingAuthorizedCustomerContactIsSystemConflict() {
         when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:read", "customer:read")));
         when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application()));

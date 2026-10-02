@@ -102,7 +102,7 @@ Meridian is delivered as a modular-monolith backend with one database and multip
 |---|---|---|---|---|---|---|
 | Register and authenticate to Customer Web | Own account | No | No | No | No | Validate |
 | Authenticate to Internal Web | No | Yes | Yes | Yes | Yes | Validate |
-| Maintain Customer profile and bank accounts | Own profile and bank accounts | Staff-assisted selected Customer when authorized; otherwise view or review | View | View purpose-limited destination facts | Support as configured | Validate and audit |
+| Maintain Customer profile and bank accounts | Own profile and bank accounts | Staff-assisted selected Customer when authorized; otherwise view or review | No profile or bank-account access through decision authority | View purpose-limited destination facts | Support as configured | Validate and audit |
 | Manage products | No | No | No | No | Yes | Enforce active policy |
 | Manage Partner Companies and imports | No | No | No | No | Yes | Validate and store |
 | Perform Staff-assisted Customer intake | No | UCL and Collateral Loan when authorized | No | No | No | Validate and audit |
@@ -121,6 +121,20 @@ Meridian is delivered as a modular-monolith backend with one database and multip
 | View audit evidence | No | Authorized | Authorized | Authorized | Authorized | Record |
 
 Authentication and permission are necessary but not sufficient. The owning business capability also verifies resource ownership, status, maker-checker separation, and every applicable business rule. All Staff business actions record the authenticated Staff actor and the affected business subject. Staff-assisted processing never authenticates, impersonates, or acts as the Customer.
+
+### 4.3 Customer Operational Context
+
+Customer operational identity and contact access follows the lending task:
+
+| Staff role | Operational Customer context |
+|---|---|
+| Loan Officer | Customer name, Customer number, and current phone in the authorized application case |
+| Approver | Customer name and Customer number in the independent decision case; no phone or Identity Reference |
+| Accounting Officer | Customer name, Customer number, and current phone in contract and disbursement cases; no Identity Reference |
+
+Customer owns the mutable name and phone. Operational context must come from the Customer associated with the exact LoanApplication. The phone is current contact information, not immutable contract or application evidence. Missing or inconsistent required Customer context must block the case read rather than present partial or inferred identity.
+
+Workflow authority permits only its purpose-specific context; it does not grant a general Customer profile, Customer login identity, or bank-account access. Back-Office administration receives no generic lending Customer context. Separately authorized destination operations retain their own purpose boundary.
 
 ---
 

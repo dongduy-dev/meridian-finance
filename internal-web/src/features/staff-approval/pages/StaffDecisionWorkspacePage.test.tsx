@@ -51,6 +51,7 @@ function decisionCase(decided = false, eligible = true) {
     loanApplicationId: applicationId, applicationNumber: 'UCL-1', productCode: 'UNSECURED_CONSUMER_LOAN',
     productType: 'PERSONAL', requestedAmount: 10_000_000, requestedTermMonths: 6,
     applicationStatus: decided ? 'CUSTOMER_ACCEPTANCE_PENDING' : 'APPROVAL_PENDING', submittedAt: '2026-09-06T08:00:00',
+    customer: { customerNumber: 'CUS-000001', fullName: 'Ari Customer' },
     evidence: { uploadComplete: true, processingReady: true, productVerificationResult: 'VERIFIED', readyForDecision: true,
       currentReviewCycle: { reviewCycleId: cycleId, cycleNumber: 1,
         assignedLoanOfficer: assignedOfficer,
@@ -104,6 +105,23 @@ function renderPage(queryClient = createQueryClient()) {
 }
 
 describe('Staff decision workspace', () => {
+  it('shows only Customer business identity to an approval-only actor', async () => {
+    const customerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const value = { ...decisionCase(), customer: {
+      ...decisionCase().customer, customerId, phoneNumber: '0901234567',
+      identityReference: 'SYNTHETIC-IDENTITY', email: 'customer@meridian.local',
+    } }
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/verification')
+      ? productAssessmentFixture() : String(path).endsWith('/review-history') ? reviewHistoryFixture() : value)
+    renderPage()
+    expect(await screen.findByText('Ari Customer')).toBeVisible()
+    expect(screen.getByText('CUS-000001')).toBeVisible()
+    for (const forbidden of ['0901234567', 'SYNTHETIC-IDENTITY', customerId, 'customer@meridian.local', 'Identity Reference', 'Current phone']) {
+      expect(screen.queryByText(forbidden)).not.toBeInTheDocument()
+    }
+    expect(vi.mocked(api.apiRequest).mock.calls.every(([path]) => !String(path).includes('/customers'))).toBe(true)
+  })
+
   it('lets an approval-only actor read assessment before recommendation without verification controls', async () => {
     vi.mocked(api.apiRequest).mockImplementation(async (path) => String(path).endsWith('/verification')
       ? productAssessmentFixture() : String(path).endsWith('/review-history') ? reviewHistoryFixture() : decisionCase())

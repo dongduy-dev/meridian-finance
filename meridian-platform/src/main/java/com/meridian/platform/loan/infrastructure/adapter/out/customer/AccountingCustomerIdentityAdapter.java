@@ -19,6 +19,6 @@ public class AccountingCustomerIdentityAdapter implements AccountingCustomerIden
     @Override
     public Optional<AccountingCustomerIdentitySnapshot> findByCustomerId(UUID customerId) {
         return customers.findByCustomerId(customerId).map(identity ->
-                new AccountingCustomerIdentitySnapshot(identity.customerNumber(), identity.fullName()));
+                new AccountingCustomerIdentitySnapshot(identity.customerNumber(), identity.fullName(), identity.phoneNumber()));
     }
 }

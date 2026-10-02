@@ -68,9 +68,13 @@ class StaffDisbursementWorkControllerTest {
                 .andExpect(jsonPath("$.activation.scheduleType").value("FINAL"))
                 .andExpect(jsonPath("$.activation.scheduleItems[0].dueDate").value("2026-10-10"))
                 .andExpect(jsonPath("$.accountingContext.customer.customerNumber").value("CUS-001"))
+                .andExpect(jsonPath("$.accountingContext.customer.fullName").value("Ari Customer"))
+                .andExpect(jsonPath("$.accountingContext.customer.identityReference").doesNotExist())
                 .andExpect(jsonPath("$.accountingContext.handoff.disbursementConfirmed.actor.displayName")
                         .value("Mina Accounting"))
-                .andExpect(jsonPath("$.accountingContext.customer.phoneNumber").doesNotExist())
+                .andExpect(jsonPath("$.accountingContext.customer.phoneNumber").value("0901234567"))
+                .andExpect(jsonPath("$.accountingContext.customer.customerId").doesNotExist())
+                .andExpect(jsonPath("$.accountingContext.customer.accountNumber").doesNotExist())
                 .andExpect(jsonPath("$.customerId").doesNotExist())
                 .andExpect(jsonPath("$.activation.externalTransferReference").doesNotExist())
                 .andExpect(jsonPath("$.activation.requestId").doesNotExist())
@@ -119,7 +123,7 @@ class StaffDisbursementWorkControllerTest {
                     activation(),
                     "DISBURSED",
                     new AccountingCaseContextDto(
-                            new AccountingCaseContextDto.CustomerDto("CUS-001", "Ari Customer"),
+                            new AccountingCaseContextDto.CustomerDto("CUS-001", "Ari Customer", "0901234567"),
                             new AccountingCaseContextDto.HandoffDto(
                                     new AccountingCaseContextDto.ActorEventDto(
                                             new AccountingCaseContextDto.StaffActorDto(

@@ -17,6 +17,7 @@ export const accountingCaseContextSchema = z.object({
   customer: z.object({
     customerNumber: z.string().trim().min(1),
     fullName: z.string().trim().min(1),
+    phoneNumber: z.string().trim().min(1),
   }),
   handoff: z.object({
     approved: actorEventSchema,

@@ -16,6 +16,7 @@ import java.util.UUID;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 @WebMvcTest(controllers = StaffApprovalWorkController.class)
 @Import({
@@ -48,8 +49,30 @@ class StaffApprovalWorkSecurityTest {
     }
 
     @Test
+    void decisionAuthorityAloneReturnsOnlyCustomerNumberAndName() throws Exception {
+        org.mockito.Mockito.when(useCase.queryDecisionCase(APPLICATION_ID)).thenReturn(
+                new com.meridian.platform.approval.application.dto.StaffDecisionCaseDto(
+                        APPLICATION_ID, "UCL-1", "UNSECURED_CONSUMER_LOAN", "UNSECURED",
+                        java.math.BigDecimal.TEN, 6, "APPROVAL_PENDING", java.time.LocalDateTime.of(2026, 9, 6, 8, 0),
+                        new com.meridian.platform.approval.application.dto.StaffDecisionCaseDto.CustomerDto("CUS-001", "Ari Customer"),
+                        null, null, true, true, null, List.of(), List.of(), List.of()));
+        mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/decision", APPLICATION_ID)
+                        .with(authority("approval:decide")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.customer.customerNumber").value("CUS-001"))
+                .andExpect(jsonPath("$.customer.fullName").value("Ari Customer"))
+                .andExpect(jsonPath("$.customer.phoneNumber").doesNotExist())
+                .andExpect(jsonPath("$.customer.identityReference").doesNotExist())
+                .andExpect(jsonPath("$.customer.customerId").doesNotExist())
+                .andExpect(jsonPath("$.customer.userId").doesNotExist())
+                .andExpect(jsonPath("$.customer.email").doesNotExist())
+                .andExpect(jsonPath("$.customer.accountNumber").doesNotExist())
+                .andExpect(jsonPath("$.customerId").doesNotExist());
+    }
+
+    @Test
     void roleNamesPrefixesAndUnrelatedPermissionsAreForbidden() throws Exception {
-        for (String denied : List.of("APPROVER", "loan:read", "approval:decide:all", "approval:recommend:all")) {
+        for (String denied : List.of("APPROVER", "loan:read", "customer:read", "partner:read", "admin:config", "approval:decide:all", "approval:recommend:all")) {
             mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/decision", APPLICATION_ID)
                             .with(authority(denied)))
                     .andExpect(status().isForbidden());

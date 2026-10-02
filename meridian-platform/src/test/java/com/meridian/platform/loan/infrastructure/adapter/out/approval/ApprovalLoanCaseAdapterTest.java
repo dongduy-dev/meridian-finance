@@ -35,6 +35,31 @@ class ApprovalLoanCaseAdapterTest {
     @Mock LoanDocumentChecklistPort documents;
 
     @Test
+    void caseCarriesTheExactApplicationsCustomerLinkageOnlyInternally() {
+        UUID applicationId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+        LoanApplication application = new LoanApplication(
+                applicationId, customerId, UUID.randomUUID(), "UCL-1",
+                ProductCode.UNSECURED_CONSUMER_LOAN, ProductType.UNSECURED,
+                LoanApplicationStatus.APPROVAL_PENDING, BigDecimal.TEN, 6,
+                LocalDateTime.of(2026, 9, 6, 8, 0));
+        when(applications.findById(applicationId)).thenReturn(java.util.Optional.of(application));
+        when(documents.readiness(applicationId)).thenReturn(
+                new LoanDocumentChecklistPort.ChecklistReadinessSnapshot(true, true));
+        var verification = org.mockito.Mockito.mock(
+                com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanVerification.class);
+        when(verification.productVerificationResult()).thenReturn(
+                com.meridian.platform.loan.domain.model.ProductVerificationResult.VERIFIED);
+        when(uclVerifications.findLatestByLoanApplicationId(applicationId)).thenReturn(java.util.Optional.of(verification));
+        var adapter = new ApprovalLoanCaseAdapter(applications, salaryAdvanceVerifications,
+                uclVerifications, collateralVerifications, reviewCycles, documents);
+
+        var result = adapter.findCase(applicationId).orElseThrow();
+        assertEquals(applicationId, result.loanApplicationId());
+        assertEquals(customerId, result.customerId());
+    }
+
+    @Test
     void decisionQueueUsesExactServerSideStatusProductAndPaging() {
         UUID applicationId = UUID.randomUUID();
         LoanApplication application = new LoanApplication(

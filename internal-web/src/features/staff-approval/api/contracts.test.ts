@@ -18,6 +18,7 @@ describe('Staff approval response contracts', () => {
       productCode: 'UNSECURED_CONSUMER_LOAN', productType: 'UNSECURED',
       requestedAmount: 1, requestedTermMonths: 1, applicationStatus: 'APPROVED',
       submittedAt: '2026-09-06T08:00:00',
+      customer: { customerNumber: 'CUS-000001', fullName: 'Ari Customer' },
       evidence: { uploadComplete: true, processingReady: true, productVerificationResult: 'VERIFIED',
         readyForDecision: true, currentReviewCycle: null },
       recommendation: {
@@ -32,6 +33,14 @@ describe('Staff approval response contracts', () => {
     }
 
     expect(staffDecisionCaseSchema.parse(response).latestDecision?.recordedBy?.userId).toBe(actor.userId)
+    expect(staffDecisionCaseSchema.parse({ ...response, customer: {
+      ...response.customer, phoneNumber: '0901234567', customerId: actor.userId,
+      identityReference: 'SYNTHETIC-IDENTITY', email: 'customer@meridian.local',
+    } }).customer).toEqual(response.customer)
+    expect(staffDecisionCaseSchema.safeParse({ ...response, customer: undefined }).success).toBe(false)
+    expect(staffDecisionCaseSchema.safeParse({ ...response, customer: {
+      ...response.customer, fullName: ' ',
+    } }).success).toBe(false)
     expect(staffDecisionCaseSchema.safeParse({
       ...response, recommendation: { ...response.recommendation, recommendationId: actor.userId },
     }).success).toBe(false)
@@ -42,6 +51,7 @@ describe('Staff approval response contracts', () => {
       loanApplicationId: '11111111-1111-4111-8111-111111111111', applicationNumber: 'UCL-1',
       productCode: 'FUTURE_PRODUCT', productType: 'FUTURE_TYPE', requestedAmount: 1, requestedTermMonths: 1,
       applicationStatus: 'FUTURE_STATE', submittedAt: '2026-09-06T08:00:00',
+      customer: { customerNumber: 'CUS-000001', fullName: 'Ari Customer' },
       evidence: { uploadComplete: true, processingReady: true, productVerificationResult: 'FUTURE_RESULT',
         readyForDecision: false, currentReviewCycle: null },
       recommendation: null, makerCheckerEligible: false, decisionAvailable: false,

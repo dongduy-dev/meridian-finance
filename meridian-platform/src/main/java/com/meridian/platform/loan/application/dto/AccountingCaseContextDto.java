@@ -9,7 +9,7 @@ public record AccountingCaseContextDto(CustomerDto customer, HandoffDto handoff)
         return "AccountingCaseContextDto[customer=redacted, handoff=redacted]";
     }
 
-    public record CustomerDto(String customerNumber, String fullName) {
+    public record CustomerDto(String customerNumber, String fullName, String phoneNumber) {
         @Override
         public String toString() {
             return "CustomerDto[identity=redacted]";

@@ -37,6 +37,10 @@ export const staffDecisionCaseSchema = z.object({
   requestedTermMonths: z.number().int().positive(),
   applicationStatus: rawValue,
   submittedAt: apiTimestampSchema,
+  customer: z.object({
+    customerNumber: z.string().trim().min(1),
+    fullName: z.string().trim().min(1),
+  }),
   evidence: z.object({
     uploadComplete: z.boolean(),
     processingReady: z.boolean(),

@@ -1092,6 +1092,8 @@ Supported actions remain distinct:
 - `RETURN_TO_LOAN_OFFICER_REVIEW`;
 - `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`.
 
+The decision page presents a Customer card with name and Customer number from the decision projection, under exact `approval:decide` access. It does not fetch a separate Customer profile or show phone, Identity Reference, Customer UUID, or Customer login identity. MER-BIZ-001 Section 4.3 defines the role visibility boundary; MER-API-001 Section 5.0 defines the response contract.
+
 The decision page places the shared Product Assessment panel before the exact latest recommendation and linked Review / Decision history, followed by independent decision controls. It must show the exact latest recommendation, its purpose-limited recommending Staff actor, the assigned Loan Officer, product verification state, review cycle, documents/readiness, recorded decision actors, and any action-specific correction plan. System actors are labeled System; unavailable legacy Staff actors are labeled unavailable without guessing. It must not rely on the transient recommendation response from another browser session.
 
 Approval POST has no client business UUID. The Approval-owned decision projection exposes the exact recommendation provenance, resulting decision, history, and current Loan state needed for durable recovery.
@@ -1147,7 +1149,7 @@ Accounting operations use the current masked contract as their authoritative sta
 
 The workspace presents:
 
-- Customer number and full name from the Accounting case context;
+- Customer number, full name, and current phone from the shared Accounting case context;
 - Approval, contract preparation, and readiness Staff actors and timestamps from Loan's handoff projection, plus Customer self-service or Staff-recorded acknowledgment provenance without treating the Customer as a Staff actor;
 - safe contract reference, ID, version, and status;
 - accepted immutable terms and provisional repayment items returned by the contract;
@@ -1156,6 +1158,8 @@ The workspace presents:
 - point-in-time readiness and blocker codes;
 - version history only when a future authorized projection exposes it;
 - current action eligibility from authoritative state.
+
+The shared Customer panel displays the phone as Current phone in both contract and disbursement workspaces. It remains operational contact information, separate from immutable contract and handoff evidence, and excludes Identity Reference. It uses the existing Accounting case response without a separate Customer query or broader profile access.
 
 The acknowledgment panel identifies **Customer — self-service** or **Customer acknowledgment recorded by [Staff]**, while keeping the authorized Customer number/name separate. Both show the acknowledged current contract version and time; the assisted path also shows the exact consumed signed document version. Unknown acknowledgment modes render a neutral fallback. The existing Accounting context supplies these facts without another acknowledgment DTO or persistence record. Exact `loan:contract:read` with the Accounting Officer role permits View signed acknowledgment for the consumed document version; it grants no acknowledgment mutation authority. The same exact evidence link remains available in the disbursement handoff.
 

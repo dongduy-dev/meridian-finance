@@ -64,7 +64,9 @@ class StaffContractWorkControllerTest {
                 .andExpect(jsonPath("$.accountingContext.handoff.customerAcknowledgment.mode")
                         .value("CUSTOMER_SELF_SERVICE"))
                 .andExpect(jsonPath("$.accountingContext.handoff.customerAcknowledgment.recordedBy").isEmpty())
-                .andExpect(jsonPath("$.accountingContext.customer.phoneNumber").doesNotExist())
+                .andExpect(jsonPath("$.accountingContext.customer.phoneNumber").value("0901234567"))
+                .andExpect(jsonPath("$.accountingContext.customer.customerId").doesNotExist())
+                .andExpect(jsonPath("$.accountingContext.customer.accountNumber").doesNotExist())
                 .andExpect(jsonPath("$.accountingContext.customer.identityReference").doesNotExist())
                 .andExpect(jsonPath("$.customerId").doesNotExist())
                 .andExpect(jsonPath("$.currentContract.fullAccountNumber").doesNotExist())
@@ -99,7 +101,7 @@ class StaffContractWorkControllerTest {
                     null,
                     "READY_TO_CONFIRM",
                     new AccountingCaseContextDto(
-                            new AccountingCaseContextDto.CustomerDto("CUS-001", "Ari Customer"),
+                            new AccountingCaseContextDto.CustomerDto("CUS-001", "Ari Customer", "0901234567"),
                             new AccountingCaseContextDto.HandoffDto(
                                     new AccountingCaseContextDto.ActorEventDto(
                                             new AccountingCaseContextDto.StaffActorDto(

@@ -68,6 +68,7 @@ class AccountingCaseContextComposerTest {
         var result = composer.compose(application, null, null);
         assertEquals("CUS-001", result.customer().customerNumber());
         assertEquals("Ari Customer", result.customer().fullName());
+        assertEquals("0901234567", result.customer().phoneNumber());
         assertEquals(APPROVER_ID, result.handoff().approved().actor().userId());
         assertEquals(APPROVED_AT, result.handoff().approved().at());
         assertNull(result.handoff().contractPrepared());
@@ -75,6 +76,26 @@ class AccountingCaseContextComposerTest {
         assertNull(result.handoff().readinessConfirmed());
         assertNull(result.handoff().disbursementConfirmed());
         verify(actors).findByUserIds(Set.of(APPROVER_ID));
+    }
+
+    @Test
+    void currentPhoneRefreshDoesNotChangeHandoffEvidenceAndContextRemainsNarrow() {
+        stubCommon();
+        var before = composer.compose(application, LoanContractTestData.ready(), null);
+        when(customers.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+                new AccountingCustomerIdentitySnapshot("CUS-001", "Ari Customer", "0912345678")));
+        var after = composer.compose(application, LoanContractTestData.ready(), null);
+        assertEquals("0912345678", after.customer().phoneNumber());
+        assertEquals(before.handoff(), after.handoff());
+        assertEquals(Set.of("customerNumber", "fullName", "phoneNumber"), java.util.Arrays.stream(
+                after.customer().getClass().getRecordComponents()).map(c -> c.getName())
+                .collect(java.util.stream.Collectors.toSet()));
+        assertEquals("CustomerDto[identity=redacted]", after.customer().toString());
+        for (String phone : new String[] {null, " "}) {
+            when(customers.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+                    new AccountingCustomerIdentitySnapshot("CUS-001", "Ari Customer", phone)));
+            assertConflict(() -> composer.compose(application, null, null));
+        }
     }
 
     @Test
@@ -159,7 +180,7 @@ class AccountingCaseContextComposerTest {
         when(customers.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.empty());
         assertConflict(() -> composer.compose(application, null, null));
         when(customers.findByCustomerId(CUSTOMER_ID))
-                .thenReturn(Optional.of(new AccountingCustomerIdentitySnapshot("CUS-001", "Ari Customer")));
+                .thenReturn(Optional.of(new AccountingCustomerIdentitySnapshot("CUS-001", "Ari Customer", "0901234567")));
         when(approvals.requireExactApproval(APPLICATION_ID, APPROVED_AT))
                 .thenReturn(new ApprovedOfferApprovalSnapshot(APPROVER_ID, APPROVED_AT.plusSeconds(1)));
         assertConflict(() -> composer.compose(application, null, null));
@@ -179,7 +200,7 @@ class AccountingCaseContextComposerTest {
 
     private void stubCommon() {
         when(customers.findByCustomerId(CUSTOMER_ID))
-                .thenReturn(Optional.of(new AccountingCustomerIdentitySnapshot("CUS-001", "Ari Customer")));
+                .thenReturn(Optional.of(new AccountingCustomerIdentitySnapshot("CUS-001", "Ari Customer", "0901234567")));
         ApprovedOffer offer = mock(ApprovedOffer.class);
         when(offer.id()).thenReturn(LoanContractTestData.prepared().approvedOfferId());
         when(offer.loanApplicationId()).thenReturn(APPLICATION_ID);

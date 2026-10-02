@@ -5,6 +5,7 @@ import com.meridian.platform.approval.application.dto.StaffDecisionCaseDto;
 import com.meridian.platform.approval.application.dto.StaffRecommendationCaseDto;
 import com.meridian.platform.approval.application.port.in.QueryStaffApprovalWorkUseCase;
 import com.meridian.platform.approval.application.port.out.ApprovalDecisionRepository;
+import com.meridian.platform.approval.application.port.out.ApprovalCustomerIdentityPort;
 import com.meridian.platform.approval.application.port.out.ApprovalLoanCasePort;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.application.port.out.StaffActorDirectoryPort;
@@ -34,6 +35,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
     public static final int MAX_PAGE_SIZE = 100;
 
     private final ApprovalLoanCasePort loanCases;
+    private final ApprovalCustomerIdentityPort customers;
     private final ReviewRecommendationRepository recommendations;
     private final ApprovalDecisionRepository decisions;
     private final StaffActorDirectoryPort staffActors;
@@ -41,12 +43,14 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
 
     public QueryStaffApprovalWorkService(
             ApprovalLoanCasePort loanCases,
+            ApprovalCustomerIdentityPort customers,
             ReviewRecommendationRepository recommendations,
             ApprovalDecisionRepository decisions,
             StaffActorDirectoryPort staffActors,
             CurrentUserProvider currentUserProvider
     ) {
         this.loanCases = loanCases;
+        this.customers = customers;
         this.recommendations = recommendations;
         this.decisions = decisions;
         this.staffActors = staffActors;
@@ -94,6 +98,15 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
         history.stream().map(ApprovalDecision::approverUserId).forEach(actorIds::add);
         Map<UUID, StaffActorSummary> actorSummaries = staffActors.findByUserIds(actorIds);
         validatePendingDecisionEvidence(loanCase, recommendation, latestDecision);
+        if (!loanApplicationId.equals(loanCase.loanApplicationId()) || loanCase.customerId() == null) {
+            throw systemConflict();
+        }
+        var customer = customers.findByCustomerId(loanCase.customerId())
+                .orElseThrow(QueryStaffApprovalWorkService::systemConflict);
+        if (customer.customerNumber() == null || customer.customerNumber().isBlank()
+                || customer.fullName() == null || customer.fullName().isBlank()) {
+            throw systemConflict();
+        }
         boolean makerCheckerEligible = recommendation != null
                 && !recommendation.loanOfficerUserId().equals(actor.userId());
         boolean available = recommendation != null
@@ -106,7 +119,9 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
         return new StaffDecisionCaseDto(
                 loanCase.loanApplicationId(), loanCase.applicationNumber(), loanCase.productCode(),
                 loanCase.productType(), loanCase.requestedAmount(), loanCase.requestedTermMonths(),
-                loanCase.applicationStatus(), loanCase.submittedAt(), evidence(loanCase, actorSummaries),
+                loanCase.applicationStatus(), loanCase.submittedAt(),
+                new StaffDecisionCaseDto.CustomerDto(customer.customerNumber(), customer.fullName()),
+                evidence(loanCase, actorSummaries),
                 recommendation(recommendation, actorSummaries), makerCheckerEligible, available,
                 decision(latestDecision, actorSummaries),
                 history.stream().map(value -> decision(value, actorSummaries)).toList(),
