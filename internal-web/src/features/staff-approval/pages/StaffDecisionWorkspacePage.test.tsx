@@ -115,7 +115,14 @@ describe('Staff decision workspace', () => {
       ? productAssessmentFixture() : String(path).endsWith('/review-history') ? reviewHistoryFixture() : value)
     renderPage()
     expect(await screen.findByText('Ari Customer')).toBeVisible()
-    expect(screen.getByText('CUS-000001')).toBeVisible()
+    expect(screen.getByText('Customer')).toBeVisible()
+    expect(screen.getByText('Customer number')).toBeVisible()
+    expect(screen.getByText('Customer number').nextElementSibling).toHaveTextContent('CUS-000001')
+    expect(screen.getByText('Full name')).toBeVisible()
+    expect(screen.getByText('Full name').nextElementSibling).toHaveTextContent('Ari Customer')
+    expect(screen.getByText('Application ID')).toBeVisible()
+    expect(screen.getByText(applicationId)).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Copy application ID' })).toBeVisible()
     for (const forbidden of ['0901234567', 'SYNTHETIC-IDENTITY', customerId, 'customer@meridian.local', 'Identity Reference', 'Current phone']) {
       expect(screen.queryByText(forbidden)).not.toBeInTheDocument()
     }

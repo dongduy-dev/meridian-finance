@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { applicationWorkspaceCase, expectCanonicalApplicationHeader } from '@/test/application-workspace-fixture'
-import { ApplicationWorkspaceShell, applicationWorkspaceCaseFacts, type ApplicationWorkspaceSection } from './ApplicationWorkspaceShell'
+import { ApplicationWorkspaceHeader, ApplicationWorkspaceShell, applicationWorkspaceCaseFacts, type ApplicationWorkspaceSection } from './ApplicationWorkspaceShell'
 
 const applicationId = '11111111-1111-4111-8111-111111111111'
 const actor = { userId: applicationId, email: 'staff@meridian.local', roles: ['LOAN_OFFICER'], permissions: [] as string[] }
@@ -48,7 +48,7 @@ describe('Application workspace presentation', () => {
     expect(refresh).toHaveBeenCalledTimes(1)
   })
 
-  it('renders reduced authorized facts with neutral unknown values without incidental ID exposure', async () => {
+  it('renders reduced authorized facts with neutral unknown values and the subordinate Application ID', async () => {
     render(<MemoryRouter><ApplicationWorkspaceShell actor={{ ...actor, permissions: ['document:review'] }}
       context={{ source: 'feature', facts: { loanApplicationId: applicationId, applicationStatus: 'FUTURE_STATUS', productCode: 'FUTURE_PRODUCT', originationChannel: 'FUTURE_CHANNEL' } }}
       activeSection="documents" updatedAt={0} refreshing={false} stale={true} onRefresh={() => undefined}>
@@ -59,15 +59,29 @@ describe('Application workspace presentation', () => {
     expect(screen.getByText('Product unavailable')).toBeVisible()
     expect(screen.queryByText('Submitted')).not.toBeInTheDocument()
     expect(screen.getByText('Information unavailable')).toBeVisible()
-    expect(screen.queryByRole('button', { name: 'Copy application ID' })).not.toBeInTheDocument()
+    expect(screen.getByText('Application ID')).toBeVisible()
+    expect(screen.getByText(applicationId)).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Copy application ID' })).toBeVisible()
   })
 
-  it('copies the subordinate ID consistently for the canonical case header', async () => {
+  it.each(['case', 'document-evidence', 'feature'] as const)('shows and copies the subordinate Application ID for %s facts', async (source) => {
     const user = userEvent.setup()
-    renderShell(['loan:read'], 'corrections')
-    expectCanonicalApplicationHeader()
+    render(<ApplicationWorkspaceHeader context={{ source, facts: applicationWorkspaceCaseFacts(applicationWorkspaceCase) }} />)
+    expect(screen.getByText('Application ID')).toBeVisible()
+    expect(screen.getByText(applicationId)).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Copy application ID' }))
     expect(await navigator.clipboard.readText()).toBe(applicationId)
     expect(screen.getByRole('button', { name: 'Copy application ID' })).toHaveTextContent('ID copied')
+  })
+
+  it('keeps the copy control available without success feedback when clipboard access fails', async () => {
+    const user = userEvent.setup()
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('Clipboard unavailable'))
+    render(<ApplicationWorkspaceHeader context={{ source: 'feature', facts: { loanApplicationId: applicationId, applicationStatus: 'APPROVAL_PENDING' } }} />)
+    await user.click(screen.getByRole('button', { name: 'Copy application ID' }))
+    expect(writeText).toHaveBeenCalledWith(applicationId)
+    expect(screen.getByRole('button', { name: 'Copy application ID' })).toHaveTextContent('Copy application ID')
+    expect(screen.queryByText('ID copied')).not.toBeInTheDocument()
+    writeText.mockRestore()
   })
 })

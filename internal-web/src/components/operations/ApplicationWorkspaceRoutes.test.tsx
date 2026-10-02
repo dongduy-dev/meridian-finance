@@ -137,7 +137,9 @@ describe('Independent feature authority and optional application context', () =>
     await act(() => { queryClient.setQueryData(staffApplicationKeys.case(caseFacts.loanApplicationId), caseFacts) })
     const header = screen.getByRole('heading', { level: 1 }).closest('header')!
     expect(within(header).queryByText('Requested amount') !== null).toBe(route === '/verification' || route === '/review')
-    expect(within(header).queryByRole('button', { name: 'Copy application ID' }) !== null).toBe(route === '/documents')
+    expect(within(header).getByText('Application ID')).toBeVisible()
+    expect(within(header).getByText(caseFacts.loanApplicationId)).toBeVisible()
+    expect(within(header).getByRole('button', { name: 'Copy application ID' })).toBeVisible()
     expect(screen.getByRole('link', { name: label, current: 'page' })).toBeVisible()
     const expectedReads = route === '/review'
       ? [casePath + route, casePath + '/review-history', casePath + '/verification'] : [casePath + route]
@@ -166,7 +168,9 @@ describe('Independent feature authority and optional application context', () =>
       expect(await screen.findByRole('heading', { name: heading, level: 2 })).toBeVisible()
       expect(await screen.findByText('Application context unavailable')).toBeVisible()
       const header = screen.getByRole('heading', { level: 1 }).closest('header')!
-      expect(within(header).queryByRole('button', { name: 'Copy application ID' }) !== null).toBe(route === '/documents')
+      expect(within(header).getByText('Application ID')).toBeVisible()
+      expect(within(header).getByText(caseFacts.loanApplicationId)).toBeVisible()
+      expect(within(header).getByRole('button', { name: 'Copy application ID' })).toBeVisible()
       expect(within(header).queryByText('Requested amount') !== null).toBe(route === '/verification' || route === '/review')
       expect(screen.getByRole('button', { name: 'Retry application context' })).toBeVisible()
     })
@@ -207,7 +211,9 @@ describe('Independent feature authority and optional application context', () =>
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
     await screen.findByText('Application context unavailable')
     expect(screen.queryByText('Requested amount')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Copy application ID' })).not.toBeInTheDocument()
+    expect(screen.getByText('Application ID')).toBeVisible()
+    expect(screen.getByText(caseFacts.loanApplicationId)).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Copy application ID' })).toBeVisible()
     expect(screen.getByRole('heading', { name: 'No correction request' })).toBeVisible()
     const featureReads = vi.mocked(api.apiRequest).mock.calls.filter(([path]) => path === casePath + '/corrections').length
     unavailable = false
