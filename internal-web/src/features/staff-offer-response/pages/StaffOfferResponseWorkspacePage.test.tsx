@@ -75,7 +75,7 @@ describe('Staff-assisted offer response workspace', () => {
     vi.spyOn(crypto, 'randomUUID').mockReturnValue(requestId)
   })
 
-  it.each(['ACCEPT', 'DECLINE', 'FUTURE_DECISION'])('shows a completed %s as a Customer decision with a separate Staff recorder', async (action) => {
+  it.each(['ACCEPT', 'DECLINE', 'FUTURE_DECISION'])('shows a completed %s with safe wording and a separate Staff recorder', async (action) => {
     const value = fixture('ACCEPTED')
     vi.mocked(api.apiRequest).mockResolvedValue({
       ...value,
@@ -87,7 +87,8 @@ describe('Staff-assisted offer response workspace', () => {
     })
     renderPage()
     expect(await screen.findByText('Recorded Customer response')).toBeVisible()
-    expect(screen.getByText('Customer decision recorded from signed evidence')).toBeVisible()
+    expect(screen.getByText(action === 'FUTURE_DECISION'
+      ? 'Customer action recorded from signed evidence' : 'Customer decision recorded from signed evidence')).toBeVisible()
     expect(screen.getByText('Recorded by')).toBeVisible()
     expect(screen.getByText('Deni Loan Officer')).toBeVisible()
     expect(screen.getByText('deni@meridian.local')).toBeVisible()
