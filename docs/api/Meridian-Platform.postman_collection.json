@@ -8423,6 +8423,139 @@
                                 "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
                                 "pm.test(\"Exact filters are applied\", function () { const json = pm.response.json(); json.items.forEach(item => { pm.expect(item.productCode).to.eql(\"UNSECURED_CONSUMER_LOAN\"); pm.expect(item.accountStatus).to.eql(\"OVERDUE\"); }); });"
                             ]}}]
+                        },
+                        {
+                            "name": "Accounting - read current servicing Customer context",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/servicing-context",
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{accountingAccessToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "description": "Run after LoanAccount activation. Reads current Customer facts for the exact application/account. No Customer UUID, User identity, Identity Reference, email, address, bank, or employment fields. Do not log, save, or export Customer field values. Requires loan:read and ACCOUNTING_OFFICER with repayment:update or loan:account:close."
+                            },
+                            "response": [],
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                            "const json = pm.response.json();",
+                                            "pm.test(\"Exact servicing-context boundary\", () => { pm.expect(json).to.have.all.keys(\"loanApplicationId\", \"loanAccountId\", \"customer\"); pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"loanApplicationId\")); pm.expect(json.loanAccountId).to.be.a(\"string\").and.not.empty; pm.expect(json.customer).to.have.all.keys(\"customerNumber\", \"fullName\", \"phoneNumber\"); pm.expect(json.customer.customerNumber).to.be.a(\"string\").and.not.empty; pm.expect(json.customer.fullName).to.be.a(\"string\").and.not.empty; });",
+                                            "pm.test(\"Current contact is present\", () => pm.expect(json.customer.phoneNumber).to.be.a(\"string\").and.not.empty);"
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Approver - read current servicing Customer context",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/servicing-context",
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{approverAccessToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "description": "Run after LoanAccount activation. Reads current Customer facts for the exact application/account. No Customer UUID, User identity, Identity Reference, email, address, bank, or employment fields. Do not log, save, or export Customer field values. Requires loan:read plus APPROVER and loan:settlement:approve; phone is null."
+                            },
+                            "response": [],
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                            "const json = pm.response.json();",
+                                            "pm.test(\"Exact servicing-context boundary\", () => { pm.expect(json).to.have.all.keys(\"loanApplicationId\", \"loanAccountId\", \"customer\"); pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"loanApplicationId\")); pm.expect(json.loanAccountId).to.be.a(\"string\").and.not.empty; pm.expect(json.customer).to.have.all.keys(\"customerNumber\", \"fullName\", \"phoneNumber\"); pm.expect(json.customer.customerNumber).to.be.a(\"string\").and.not.empty; pm.expect(json.customer.fullName).to.be.a(\"string\").and.not.empty; });",
+                                            "pm.test(\"Approver receives no phone\", () => pm.expect(json.customer.phoneNumber).to.eql(null));"
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Loan Officer - read current servicing Customer context",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/servicing-context",
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{loanOfficerAccessToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "description": "Run after LoanAccount activation. Reads current Customer facts for the exact application/account. No Customer UUID, User identity, Identity Reference, email, address, bank, or employment fields. Do not log, save, or export Customer field values. Requires loan:read and customer:read."
+                            },
+                            "response": [],
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                            "const json = pm.response.json();",
+                                            "pm.test(\"Exact servicing-context boundary\", () => { pm.expect(json).to.have.all.keys(\"loanApplicationId\", \"loanAccountId\", \"customer\"); pm.expect(json.loanApplicationId).to.eql(pm.collectionVariables.get(\"loanApplicationId\")); pm.expect(json.loanAccountId).to.be.a(\"string\").and.not.empty; pm.expect(json.customer).to.have.all.keys(\"customerNumber\", \"fullName\", \"phoneNumber\"); pm.expect(json.customer.customerNumber).to.be.a(\"string\").and.not.empty; pm.expect(json.customer.fullName).to.be.a(\"string\").and.not.empty; });",
+                                            "pm.test(\"Current contact is present\", () => pm.expect(json.customer.phoneNumber).to.be.a(\"string\").and.not.empty);"
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Customer - deny Staff servicing Customer context",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/servicing-context",
+                                "auth": {
+                                    "type": "bearer",
+                                    "bearer": [
+                                        {
+                                            "key": "token",
+                                            "value": "{{customerAccessToken}}",
+                                            "type": "string"
+                                        }
+                                    ]
+                                },
+                                "description": "The ownership-scoped Customer LoanAccount read does not grant access to this Staff-purpose context."
+                            },
+                            "response": [],
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "pm.test(\"Status is 403\", () => pm.response.to.have.status(403));"
+                                        ]
+                                    }
+                                }
+                            ]
                         }
                     ]
                 },

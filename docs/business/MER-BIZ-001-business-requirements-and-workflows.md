@@ -129,10 +129,12 @@ Customer operational identity and contact access follows the lending task:
 | Staff role | Operational Customer context |
 |---|---|
 | Loan Officer | Customer name, Customer number, and current phone in the authorized application case |
-| Approver | Customer name and Customer number in the independent decision case; no phone or Identity Reference |
-| Accounting Officer | Customer name, Customer number, and current phone in contract and disbursement cases; no Identity Reference |
+| Approver | Customer name and Customer number in the independent decision case and in LoanAccount servicing with Administrative Full-Balance Settlement authority; no phone or Identity Reference |
+| Accounting Officer | Customer name, Customer number, and current phone in contract and disbursement cases and in LoanAccount servicing with repayment or administrative-closure authority; no Identity Reference |
 
-Customer owns the mutable name and phone. Operational context must come from the Customer associated with the exact LoanApplication. The phone is current contact information, not immutable contract or application evidence. Missing or inconsistent required Customer context must block the case read rather than present partial or inferred identity.
+Customer owns the mutable name and phone. Operational context must come from the Customer associated with the exact LoanApplication and, for servicing, its exact LoanAccount. The phone is current contact information, not immutable contract, application, or servicing evidence. Missing or inconsistent required Customer context must block the purpose-specific read rather than present partial or inferred identity.
+
+The generic Application Case retains its separate `customer:read` boundary. Approver and Accounting workflow authority does not grant contact in that generic case. Staff already entitled through `customer:read` may view current Customer number, name, and phone in LoanAccount servicing. Generic `loan:read` alone grants no Customer context, and a role name without the applicable operational authority is insufficient. Servicing Customer context is informational and does not affect financial calculations, repayment, settlement, or administrative closure.
 
 Workflow authority permits only its purpose-specific context; it does not grant a general Customer profile, Customer login identity, or bank-account access. Back-Office administration receives no generic lending Customer context. Separately authorized destination operations retain their own purpose boundary.
 

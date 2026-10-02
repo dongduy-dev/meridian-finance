@@ -266,7 +266,7 @@ class QueryStaffLoanApplicationsServiceTest {
         for (String role : List.of("APPROVER", "ACCOUNTING_OFFICER")) {
             when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(
                     UUID.randomUUID(), "staff@meridian.test", "STAFF", null,
-                    Set.of(role), Set.of("loan:read")
+                    Set.of(role), Set.of("loan:read", "repayment:update", "loan:account:close", "loan:settlement:approve")
             ));
             assertNull(service.queryCase(APPLICATION_ID).customerContext());
         }

@@ -1,6 +1,8 @@
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import {
   loanAccountSchema,
+  staffServicingCustomerContextSchema,
+  type StaffServicingCustomerContext,
   recordRepaymentResultSchema,
   repaymentHistoryPageSchema,
   staffServicingProvenanceSchema,
@@ -140,4 +142,13 @@ export async function closeLoanAccount(
     { method: 'POST', body: { requestId } },
   )
   return closedLoanAccountResultSchema.parse(payload)
+}
+
+export async function getStaffServicingCustomerContext(
+  manager: AuthSessionManager, loanApplicationId: string,
+): Promise<StaffServicingCustomerContext> {
+  const payload = await manager.protectedRequest<unknown>(
+    `/staff/loan-applications/${loanApplicationId}/servicing-context`,
+  )
+  return staffServicingCustomerContextSchema.parse(payload)
 }

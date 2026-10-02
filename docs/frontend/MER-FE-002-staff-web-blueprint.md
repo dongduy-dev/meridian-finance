@@ -216,6 +216,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 | LoanAccount detail | `GET /api/v1/loan-applications/{loanApplicationId}/loan-account` | `loan:read` | Known application only; safe terms, schedule, and servicing state |
 | Repayment history | `GET /api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read` | Known application only; immutable paged outcomes, no external references |
 | Servicing provenance | `GET /api/v1/staff/loan-applications/{loanApplicationId}/servicing-provenance?page=0&size=20` | Staff `loan:read` | Origin, USER/SYSTEM status timeline, Staff-attributed paged repayment rows, optional settlement and closure |
+| Servicing Customer context | `GET /api/v1/staff/loan-applications/{loanApplicationId}/servicing-context` | Staff `loan:read`; Customer fields follow the purpose authority in MER-API-001 Section 7.7.1 | Exact application/account linkage and nullable current Customer context; shared LoanAccount response remains unchanged |
 
 ### 7.2 Executable Commands
 
@@ -1232,6 +1233,12 @@ The existing application-scoped read can present:
 Staff Web never decrypts the destination from the account read, reconstructs balances from history, or recalculates installment status.
 
 The LoanAccount workspace presents Loan-owned servicing provenance beside the existing account evidence. It shows the originating disbursement actor, the ordered USER/SYSTEM status timeline, exact recorded-by identity on each financial repayment row, and settlement or closure actors only when their durable evidence exists. The Staff-specific read binds repayment attribution to the financial row by transaction ID in one backend snapshot. The browser renders SYSTEM as “Meridian system” without an Identity record and neutralizes unknown action or actor values. The shared Customer-readable account and repayment reads contain no Staff identity.
+
+The same workspace loads its Customer card through the separate Staff servicing-context read after authorized access and coherent account evidence. Accounting Officers with repayment or closure authority and Staff with `customer:read` see labeled Customer number, Full name, and Current phone facts. Approvers with Administrative Full-Balance Settlement authority see Customer number and Full name only, with no phone row. The backend enforces the exact field boundary described in MER-API-001 Section 7.7.1; generic `loan:read` alone does not trigger this query or render Customer context.
+
+The browser checks the returned application and account IDs before displaying the card. Loading is independent of financial evidence; an error or mismatched context suppresses the Customer card and offers Retry Customer context. Null context renders no card. Refresh reloads authorized Customer context alongside the existing account and provenance reads. Customer-context availability does not change repayment, settlement, or closure eligibility. The responsive fact grid uses the established Customer card pattern and keeps current contact separate from immutable servicing evidence.
+
+No Customer UUID or generic Customer-profile lookup is introduced. Customer context is not added to servicing queues, separate repayment-entry/settlement/closure pages, Customer Web, or the shared LoanAccount contract. Generic Application Case contact retains its `customer:read` rule in Section 22.1.
 
 ### 26.2 Repayment
 

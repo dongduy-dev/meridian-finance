@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { hasPermission, hasRole } from '@/features/auth/model/access-control'
 import { useAuth } from '@/features/auth/model/auth-context'
@@ -12,8 +13,12 @@ import { QueryErrorPanel } from '@/features/staff-applications/components/QueryE
 import { LoanAccountEvidence } from '../components/LoanAccountEvidence'
 import { RepaymentHistoryPanel } from '../components/RepaymentHistoryPanel'
 import { StaffServicingProvenancePanel } from '../components/StaffServicingProvenancePanel'
-import { loanAccountQuery, staffServicingProvenanceQuery } from '../api/queries'
+import { loanAccountQuery, staffServicingCustomerContextQuery, staffServicingProvenanceQuery } from '../api/queries'
 import { hasCoherentLoanAccount, serviceableAccountStatuses } from '../model/presentation'
+
+function CustomerFact({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="min-w-0"><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt><dd className="mt-1 break-words font-semibold">{children}</dd></div>
+}
 
 export function StaffLoanAccountWorkspacePage() {
   const { manager, state } = useAuth()
@@ -27,6 +32,11 @@ export function StaffLoanAccountWorkspacePage() {
   const canClose = state.status === 'authenticated'
     && hasPermission(state.actor, 'loan:account:close')
     && hasRole(state.actor, 'ACCOUNTING_OFFICER')
+  const canReadCustomerContext = state.status === 'authenticated' && (
+    hasPermission(state.actor, 'customer:read')
+    || (hasRole(state.actor, 'ACCOUNTING_OFFICER') && (canRecord || canClose))
+    || canSettle
+  )
   const [historyPage, setHistoryPage] = useState(0)
   const accountQuery = useQuery(loanAccountQuery(manager, loanApplicationId, canRead && validId))
   const provenanceQuery = useQuery(staffServicingProvenanceQuery(
@@ -42,6 +52,12 @@ export function StaffLoanAccountWorkspacePage() {
     && provenance?.loanAccountId === account?.loanAccountId
     && provenance?.statusHistory.at(-1)?.toStatus === account?.status
   const safeAccount = Boolean(account && hasCoherentLoanAccount(account))
+  const canLoadCustomerContext = canRead && validId && canReadCustomerContext && safeAccount
+  const customerQuery = useQuery(staffServicingCustomerContextQuery(manager, loanApplicationId, canLoadCustomerContext))
+  const coherentCustomerContext = customerQuery.data?.loanApplicationId === loanApplicationId
+    && customerQuery.data?.loanAccountId === account?.loanAccountId
+  const customer = canLoadCustomerContext && customerQuery.isSuccess && coherentCustomerContext
+    ? customerQuery.data.customer : null
   const recordAvailable = Boolean(account
     && canRecord
     && safeAccount
@@ -63,11 +79,14 @@ export function StaffLoanAccountWorkspacePage() {
 
   return <section className="mx-auto max-w-6xl space-y-6">
     <div className="flex flex-wrap gap-4"><Link className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline" to="/staff/work/servicing">← Servicing queue</Link><Link className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline" to={`/staff/applications/${loanApplicationId}`}>Application case</Link></div>
-    <header className="rounded-lg border bg-card p-5 shadow-soft sm:p-6"><div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm font-semibold text-muted-foreground">LOAN ACCOUNT SERVICING</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold sm:text-3xl">{account.accountNumber}</h1></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void Promise.all([accountQuery.refetch(), provenanceQuery.refetch()])} disabled={accountQuery.isFetching || provenanceQuery.isFetching}><RefreshCw className={accountQuery.isFetching ? 'animate-spin' : undefined} />Refresh</Button>{recordAvailable ? <Button asChild><Link to={`/staff/applications/${loanApplicationId}/repayments/new`}>Record repayment</Link></Button> : null}{settlementAvailable ? <Button asChild><Link to={`/staff/applications/${loanApplicationId}/settlement`}>Administrative Full-Balance Settlement</Link></Button> : null}{closureAvailable ? <Button asChild><Link to={`/staff/applications/${loanApplicationId}/closure`}>Administrative closure</Link></Button> : null}</div></div></header>
+    <header className="rounded-lg border bg-card p-5 shadow-soft sm:p-6"><div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-sm font-semibold text-muted-foreground">LOAN ACCOUNT SERVICING</p><h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold sm:text-3xl">{account.accountNumber}</h1></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void Promise.all([accountQuery.refetch(), provenanceQuery.refetch(), ...(canLoadCustomerContext ? [customerQuery.refetch()] : [])])} disabled={accountQuery.isFetching || provenanceQuery.isFetching || (canLoadCustomerContext && customerQuery.isFetching)}><RefreshCw className={accountQuery.isFetching ? 'animate-spin' : undefined} />Refresh</Button>{recordAvailable ? <Button asChild><Link to={`/staff/applications/${loanApplicationId}/repayments/new`}>Record repayment</Link></Button> : null}{settlementAvailable ? <Button asChild><Link to={`/staff/applications/${loanApplicationId}/settlement`}>Administrative Full-Balance Settlement</Link></Button> : null}{closureAvailable ? <Button asChild><Link to={`/staff/applications/${loanApplicationId}/closure`}>Administrative closure</Link></Button> : null}</div></div></header>
     {accountQuery.isError ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Latest account refresh unavailable</AlertTitle><AlertDescription>Previously loaded account information remains visible. Refresh before recording a payment.</AlertDescription></Alert> : null}
     {!safeAccount ? <Alert variant="destructive"><AlertTriangle /><AlertTitle>Loan account information unavailable</AlertTitle><AlertDescription>Account information is incomplete or inconsistent. Refresh before taking action.</AlertDescription></Alert> : null}
     {safeAccount && account.status === 'SETTLED' ? <Alert variant="information"><AlertTitle>Financially settled account</AlertTitle><AlertDescription>Ordinary repayment is unavailable. An authorized Accounting Officer may open the separate administrative closure.</AlertDescription></Alert> : null}
     {safeAccount && account.status === 'CLOSED' ? <Alert variant="information"><AlertTitle>Closed account</AlertTitle><AlertDescription>This account is closed. You can view its history; no further transactions can be recorded.</AlertDescription></Alert> : null}
+    {canLoadCustomerContext && customerQuery.isPending ? <div role="status" className="flex items-center gap-3 rounded-lg border bg-card p-5"><Spinner /> Loading Customer context…</div> : null}
+    {canLoadCustomerContext && (customerQuery.isError || (customerQuery.data && !coherentCustomerContext)) ? <Alert variant="warning"><AlertTriangle /><AlertTitle>Customer context unavailable</AlertTitle><AlertDescription><p>Customer details could not be confirmed for this loan account.</p><Button className="mt-3" variant="outline" onClick={() => void customerQuery.refetch()}>Retry Customer context</Button></AlertDescription></Alert> : null}
+    {customer ? <Card><CardHeader><CardTitle>Customer</CardTitle></CardHeader><CardContent><dl className="grid gap-4 sm:grid-cols-2"><CustomerFact label="Customer number">{customer.customerNumber}</CustomerFact><CustomerFact label="Full name">{customer.fullName}</CustomerFact>{customer.phoneNumber !== null ? <CustomerFact label="Current phone">{customer.phoneNumber}</CustomerFact> : null}</dl></CardContent></Card> : null}
     <LoanAccountEvidence account={account} />
     <StaffServicingProvenancePanel data={coherentProvenance ? provenance : undefined} pending={provenanceQuery.isPending} error={provenanceQuery.error ?? (provenance && !coherentProvenance ? new Error('Account activity does not match this loan account.') : null)} onRetry={() => void provenanceQuery.refetch()} />
     <RepaymentHistoryPanel data={coherentProvenance ? provenance?.repaymentHistory : undefined} pending={provenanceQuery.isPending} error={provenanceQuery.error ?? (provenance && !coherentProvenance ? new Error('Account activity does not match this loan account.') : null)} fetching={provenanceQuery.isFetching} onRetry={() => void provenanceQuery.refetch()} onPage={setHistoryPage} />

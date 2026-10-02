@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import type { StaffServicingWorkFilters, StaffTerminalWorkFilters } from './contracts'
-import { getApprovedSettlementEvidence, getLoanAccount, getRepaymentHistory, getStaffClosureWork, getStaffServicingProvenance, getStaffServicingWork, getStaffSettlementWork } from './staff-servicing-api'
+import { getApprovedSettlementEvidence, getLoanAccount, getRepaymentHistory, getStaffClosureWork, getStaffServicingCustomerContext, getStaffServicingProvenance, getStaffServicingWork, getStaffSettlementWork } from './staff-servicing-api'
 
 export const staffServicingKeys = {
   all: ['staff-servicing'] as const,
@@ -13,6 +13,7 @@ export const staffServicingKeys = {
     filters.page,
     filters.size,
   ] as const,
+  customerContext: (loanApplicationId: string) => ['staff-servicing', 'customer-context', loanApplicationId] as const,
   account: (loanApplicationId: string) => ['staff-servicing', 'account', loanApplicationId] as const,
   history: (loanApplicationId: string, page: number, size: number) => [
     'staff-servicing', 'history', loanApplicationId, page, size,
@@ -112,6 +113,16 @@ export function staffServicingProvenanceQuery(
   return queryOptions({
     queryKey: staffServicingKeys.provenance(loanApplicationId, page, size),
     queryFn: () => getStaffServicingProvenance(manager, loanApplicationId, page, size),
+    enabled,
+  })
+}
+
+export function staffServicingCustomerContextQuery(
+  manager: AuthSessionManager, loanApplicationId: string, enabled: boolean,
+) {
+  return queryOptions({
+    queryKey: staffServicingKeys.customerContext(loanApplicationId),
+    queryFn: () => getStaffServicingCustomerContext(manager, loanApplicationId),
     enabled,
   })
 }

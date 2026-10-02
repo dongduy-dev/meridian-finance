@@ -262,6 +262,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/loan-applications/{loanApplicationId}/repayments` | `repayment:update` | Record or replay a manual Salary Advance, UCL, or Collateral Loan repayment. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read:own` or `loan:read` | Return immutable paged repayment history. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/servicing-provenance?page=0&size=20` | Staff `loan:read` | Return the validated LoanAccount servicing timeline and paged financial repayment rows with Staff attribution. |
+| GET | `/api/v1/staff/loan-applications/{loanApplicationId}/servicing-context` | Staff `loan:read`; Customer fields require the purpose authority in Section 7.7.1 | Return current role-specific Customer context for the exact LoanApplication and LoanAccount, or null context. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/settlements` | `loan:settlement:approve` plus Approver role | Approve and apply an Administrative Full-Balance Settlement. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/settlements/approved` | `loan:settlement:approve` plus Approver role | Return PII-minimized immutable settlement facts for exact reload recovery. |
 | POST | `/api/v1/loan-applications/{loanApplicationId}/loan-account/closure` | `loan:account:close` plus Accounting Officer role | Close an eligible settled LoanAccount administratively. |
@@ -1791,6 +1792,27 @@ An activated Collateral LoanAccount uses this same safe read contract before, du
 
 For Customers, missing, foreign-owned, and unavailable accounts all return `404 LOAN_ACCOUNT_NOT_FOUND`.
 
+### 7.7.1 Staff LoanAccount Customer context
+
+```text
+GET /api/v1/staff/loan-applications/{loanApplicationId}/servicing-context
+```
+
+The read requires an authenticated Staff actor with exact `loan:read`. The response contains only `loanApplicationId`, `loanAccountId`, and nullable `customer`. Customer context follows this authority matrix; full contact authority takes precedence when an actor holds multiple capabilities:
+
+| Additional Staff authority | `customer` fields |
+|---|---|
+| Exact `customer:read` | `customerNumber`, `fullName`, current `phoneNumber` |
+| `ACCOUNTING_OFFICER` role plus exact `repayment:update` or `loan:account:close` | `customerNumber`, `fullName`, current `phoneNumber` |
+| `APPROVER` role plus exact `loan:settlement:approve`, without full contact authority | `customerNumber`, `fullName`, `phoneNumber: null` |
+| No qualifying purpose, including `loan:read` alone or role-only access | `customer: null`; no Customer lookup |
+
+Loan resolves the requested LoanApplication and its LoanAccount, verifies `DISBURSED` application state and exact application/account/Customer linkage, then uses a narrow Customer-owned servicing contract. Customer verifies the exact Customer and profile relationship and required fields. These are current mutable Customer facts, not historical application, contract, payment, settlement, or closure evidence. The identity-only projection does not read the phone.
+
+Missing applications return `404 LOAN_APPLICATION_NOT_FOUND`; missing accounts return `404 LOAN_ACCOUNT_NOT_FOUND`. Contradictory application/account linkage or missing/inconsistent required Customer source for an entitled actor returns `409 SYSTEM_STATE_CONFLICT` with no low-level source details. Customer actors and callers without `loan:read` are denied.
+
+The response excludes Customer UUID, Customer User identity, Identity Reference, email, address, bank information, and employment/profile expansion. The shared Customer/Staff LoanAccount DTO and generic Staff Application Case remain separate: the latter still requires `customer:read` for contact. This read performs no balance, allocation, exposure, state, history, audit, destination-reveal, or command mutation.
+
 ---
 
 ## 8. Repayment
@@ -1910,6 +1932,8 @@ docs/api/Meridian-Platform.postman_collection.json
 ```
 
 It authenticates role-specific demo actors, stores Bearer tokens, exercises refresh and current-session logout through the cookie jar, and covers the catalogue above, including protected Loan Product and Internal User administration, advisory Salary Advance readiness, durable LoanApplication status recovery, returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, intake OCR start/status/replay/stale-version and purpose-limited review behavior, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. Internal User scenarios cover discovery, predefined roles, reversible status and role targets, safe no-ops, stale-token rejection, missing/nonassignable targets, exact permission denial, and restoration of seeded status, role, access-token, and cookie state. UCL scenarios include all three verification outcomes, correction and re-verification, cancellation, outstanding-debt rejection, and product-generic servicing through closure. The Collateral folder covers prepared ownership evidence, exact-cycle manual verification, Loan Officer recommendation, all four Approver actions, exact offer assertions, Customer acceptance/decline, protected contract preparation, acknowledgment, readiness, destination reveal, activation replay, final schedule reads, ownership concealment, partial repayment and history, Administrative Full-Balance Settlement, and closure.
+
+The Staff LoanAccount servicing folder also checks current Customer context after activation: Accounting and Loan Officer receive the exact contact fields, Approver receives identity with a null phone, and Customer access is denied. These reads use existing role tokens and the activated `loanApplicationId`; assertions do not persist Customer field values.
 
 Complex correction scenarios require prepared application, review-cycle, checklist, and version variables. The optional cancellation folder requires `returnedCancellationScenarioEnabled=true` and a separate Customer-owned `cancellationLoanApplicationId` in `RETURNED_FOR_REVISION`; it confirms the command, exact replay, and terminal application GET without exposing internal evidence IDs. Seed fixtures and scenario-specific IDs belong to the collection or its environment, not this API contract.
 
