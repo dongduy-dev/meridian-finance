@@ -3,6 +3,8 @@ package com.meridian.platform.document.infrastructure.adapter.in.web;
 import com.meridian.platform.document.application.dto.StaffDocumentChecklistDto;
 import com.meridian.platform.document.application.port.in.QueryStaffDocumentChecklistUseCase;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,8 +22,9 @@ public class StaffDocumentReadController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('document:review')")
-    public StaffDocumentChecklistDto query(@PathVariable UUID loanApplicationId) {
-        return queryChecklist.query(loanApplicationId);
+    @PreAuthorize("hasAnyAuthority('document:review', 'approval:decide')")
+    public ResponseEntity<StaffDocumentChecklistDto> query(@PathVariable UUID loanApplicationId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore().cachePrivate())
+                .body(queryChecklist.query(loanApplicationId));
     }
 }

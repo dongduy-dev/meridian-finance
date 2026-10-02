@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.dto.StaffCorrectionCaseDto;
+import com.meridian.platform.loan.application.dto.StaffLoanApplicationCaseDto;
 import com.meridian.platform.loan.application.dto.AssistedActionEvidenceMetadataDto;
 import com.meridian.platform.loan.application.port.in.QueryStaffCorrectionCaseUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
@@ -8,6 +9,11 @@ import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationCancellationRepository;
 import com.meridian.platform.loan.application.port.out.LoanAssistedActionEvidencePort;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
+import com.meridian.platform.loan.application.port.out.WorkflowActorDirectoryPort;
+import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
+import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
+import com.meridian.platform.loan.domain.model.LoanApplicationTransitionAction;
+import com.meridian.platform.shared.domain.model.ActorType;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus;
@@ -28,6 +34,11 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Comparator;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -41,6 +52,8 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
     private final CustomerCorrectionDocumentProof customerDocumentProof;
     private final AssistedCustomerActionProvenanceComposer provenance;
     private final CurrentUserProvider currentUserProvider;
+    private final WorkflowActorDirectoryPort actors;
+    private final LoanApplicationStatusTransitionRepository transitions;
 
     public QueryStaffCorrectionCaseService(
             LoanApplicationRepository applications,
@@ -50,7 +63,9 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
             LoanDocumentChecklistPort documents,
             CustomerCorrectionDocumentProof customerDocumentProof,
             AssistedCustomerActionProvenanceComposer provenance,
-            CurrentUserProvider currentUserProvider
+            CurrentUserProvider currentUserProvider,
+            WorkflowActorDirectoryPort actors,
+            LoanApplicationStatusTransitionRepository transitions
     ) {
         this.applications = applications;
         this.corrections = corrections;
@@ -60,6 +75,8 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
         this.customerDocumentProof = customerDocumentProof;
         this.provenance = provenance;
         this.currentUserProvider = currentUserProvider;
+        this.actors = actors;
+        this.transitions = transitions;
     }
 
     @Override
@@ -70,13 +87,92 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
         LoanApplication application = applications.findById(loanApplicationId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "LOAN_APPLICATION_NOT_FOUND", "Loan Application was not found."));
-        LoanCorrectionRequest request = corrections.findLatestRequestByApplicationId(loanApplicationId)
-                .orElse(null);
+        List<LoanCorrectionRequest> requests = corrections.findRequestsByApplicationId(loanApplicationId);
+        LoanCorrectionRequest request = corrections.findLatestRequestByApplicationId(loanApplicationId).orElse(null);
         return new StaffCorrectionCaseDto(
                 application.id(), application.applicationNumber(), application.productCode().name(),
                 application.originationChannel().name(), application.status().name(),
                 request == null ? null : toRequest(application, request, actor),
+                history(application, requests),
                 assistedCancellation(application, request, actor));
+    }
+
+    private List<StaffCorrectionCaseDto.HistoricalRequestDto> history(
+            LoanApplication application, List<LoanCorrectionRequest> requests) {
+        if (requests.isEmpty()) return List.of();
+        var lifecycle = transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(application.id());
+        Map<UUID, List<LoanCorrectionTask>> tasks = new LinkedHashMap<>();
+        Set<UUID> actorIds = new HashSet<>();
+        requests.forEach(request -> {
+            if (!application.id().equals(request.loanApplicationId())) throw historyConflict();
+            if (request.createdByUserId() != null) actorIds.add(request.createdByUserId());
+            var rows = corrections.findTasksByRequestId(request.id()).stream()
+                    .sorted(Comparator.comparingInt(LoanCorrectionTask::sequence).thenComparing(LoanCorrectionTask::id)).toList();
+            if (rows.stream().anyMatch(task -> !request.id().equals(task.correctionRequestId()))) throw historyConflict();
+            rows.stream().map(LoanCorrectionTask::completedByUserId).filter(Objects::nonNull).forEach(actorIds::add);
+            tasks.put(request.id(), rows);
+        });
+        Map<UUID, LoanApplicationStatusTransition> resubmissions = new LinkedHashMap<>();
+        requests.forEach(request -> {
+            if (request.resubmittedAt() == null || request.status() != LoanCorrectionRequestStatus.RESUBMITTED
+                    || requests.stream().filter(other -> request.resubmittedAt().equals(other.resubmittedAt())).count() != 1) return;
+            var matches = lifecycle.stream().filter(row -> application.id().equals(row.loanApplicationId())
+                    && row.action() == LoanApplicationTransitionAction.RESUBMIT_CORRECTION
+                    && request.resubmittedAt().equals(row.occurredAt())).toList();
+            if (matches.size() != 1) return;
+            var row = matches.getFirst();
+            if (row.fromStatus() != LoanApplicationStatus.RETURNED_FOR_REVISION
+                    || (row.toStatus() != LoanApplicationStatus.SUBMITTED && row.toStatus() != LoanApplicationStatus.UNDER_REVIEW)) return;
+            resubmissions.put(request.id(), row);
+            if (row.actorUserId() != null) actorIds.add(row.actorUserId());
+        });
+        var summaries = actors.findByUserIds(actorIds);
+        return requests.stream().map(request -> {
+            var row = resubmissions.get(request.id());
+            var resubmitter = row == null ? unavailable() : row.actorType() == ActorType.SYSTEM
+                    ? new StaffCorrectionCaseDto.ActorDto("SYSTEM", null)
+                    : resolveActor(application, row.actorUserId(), summaries,
+                            tasks.get(request.id()).stream().noneMatch(task -> task.responsibleParty() == LoanCorrectionResponsibility.STAFF), true);
+            return new StaffCorrectionCaseDto.HistoricalRequestDto(request.id(), request.status().name(),
+                    request.reasonCode().name(), request.sourceAction(), request.sourceReviewCycleId(),
+                    resolveActor(application, request.createdByUserId(), summaries, false, true), request.createdAt(), request.readyAt(),
+                    request.resubmittedAt(), request.cancelledAt(), request.resubmittedAt() == null ? null : resubmitter,
+                    row == null ? null : row.toStatus().name(), tasks.get(request.id()).stream().map(task ->
+                    new StaffCorrectionCaseDto.HistoricalTaskDto(task.id(), task.sequence(), task.responsibleParty().name(),
+                            task.scope().name(), task.documentType() == null ? null : task.documentType().name(),
+                            task.checklistItemId(), task.baselineDocumentVersionId(), task.customerInstruction(),
+                            task.staffInstruction(), task.createdAt(), task.status().name(),
+                            task.completedAt() == null ? null : resolveActor(application, task.completedByUserId(), summaries,
+                                    task.responsibleParty() == LoanCorrectionResponsibility.CUSTOMER,
+                                    task.responsibleParty() == LoanCorrectionResponsibility.STAFF || application.permitsStaffMediatedCustomerCorrection()),
+                            task.completedAt())).toList());
+        }).toList();
+    }
+
+    private static StaffCorrectionCaseDto.ActorDto resolveActor(LoanApplication application, UUID id,
+            Map<UUID, WorkflowActorDirectoryPort.ActorSummary> actors, boolean allowCustomer, boolean allowStaff) {
+        var actor = id == null ? null : actors.get(id);
+        if (actor == null) return unavailable();
+        if (!id.equals(actor.userId())) throw historyConflict();
+        if ("CUSTOMER".equals(actor.userType())) {
+            if (!allowCustomer || !application.customerId().equals(actor.customerId()) || actor.staff() != null
+                    || application.originationChannel() != OriginationChannel.CUSTOMER_DIGITAL) throw historyConflict();
+            return new StaffCorrectionCaseDto.ActorDto("CUSTOMER_SELF_SERVICE", null);
+        }
+        if (!"STAFF".equals(actor.userType())) return unavailable();
+        if (!allowStaff || actor.customerId() != null) throw historyConflict();
+        var staff = actor.staff();
+        if (staff == null || !id.equals(staff.userId()) || staff.displayName() == null || staff.displayName().isBlank()
+                || staff.email() == null || staff.email().isBlank()) return unavailable();
+        return new StaffCorrectionCaseDto.ActorDto("STAFF", new StaffLoanApplicationCaseDto.StaffActorDto(id, staff.displayName(), staff.email()));
+    }
+
+    private static StaffCorrectionCaseDto.ActorDto unavailable() {
+        return new StaffCorrectionCaseDto.ActorDto("UNAVAILABLE", null);
+    }
+
+    private static BusinessStateConflictException historyConflict() {
+        return new BusinessStateConflictException("SYSTEM_STATE_CONFLICT", "Correction history evidence is inconsistent.");
     }
 
     private StaffCorrectionCaseDto.AssistedCancellationDto assistedCancellation(

@@ -61,7 +61,10 @@ function fixture(evidenceStatus: string, overrides: Record<string, unknown> = {}
       reviewHistory: evidenceStatus === 'AWAITING_REVIEW' || evidenceStatus === 'FUTURE_REVIEW_STATE'
         ? []
         : [{
+            reviewDecisionId: '99999999-9999-4999-8999-999999999999',
             documentVersionId: currentVersionId,
+            correctionReasonCode: null, customerInstruction: null, reviewer: null,
+            restrictedStaffNoteReadable: true, restrictedStaffNotes: null,
             outcome: evidenceStatus === 'ACCEPTED' ? 'ACCEPT_DOCUMENT'
               : evidenceStatus === 'WAIVED' ? 'WAIVE_DOCUMENT' : 'REQUEST_REPLACEMENT',
             waiverReasonCode: evidenceStatus === 'WAIVED' ? 'DOCUMENT_NOT_APPLICABLE' : null,
@@ -284,5 +287,70 @@ describe('Staff document workspace review eligibility', () => {
     const stored = sessionStorage.getItem('meridian.staff.unresolved-operations.v1') ?? ''
     expect(stored).not.toContain('income.pdf')
     expect(stored).not.toContain('first')
+  })
+})
+
+
+describe('Document provenance audiences and signed forms', () => {
+  beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); vi.mocked(authApi.refresh).mockResolvedValue(staff) })
+
+  it('lets an Approver inspect historical content and provenance with no review or upload controls', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue({ ...staff, roles: ['APPROVER'], permissions: ['approval:decide', 'document:upload:assisted', 'document:waive'] })
+    const base = fixture('AWAITING_REVIEW')
+    const value = { ...base, items: [{ ...base.items[0]!, reviewHistory: [{ reviewDecisionId: '99999999-9999-4999-8999-999999999999', documentVersionId: historicalVersionId,
+      outcome: 'REQUEST_REPLACEMENT', waiverReasonCode: null, correctionReasonCode: 'DOCUMENT_REPLACEMENT_REQUIRED', customerInstruction: 'Provide all pages',
+      reviewer: { userId: '00000000-0000-0000-0000-000000000302', displayName: 'Deni Loan Officer', email: 'deni@meridian.local' },
+      decidedAt: '2026-09-04T08:30:00', restrictedStaffNoteReadable: true, restrictedStaffNotes: 'Internal document assessment' }] }] }
+    vi.mocked(api.apiRequest).mockResolvedValue(value)
+    renderDocumentWorkspace(historicalVersionId)
+    expect(await screen.findByText('Deni Loan Officer')).toBeVisible()
+    expect(screen.getByText('Provide all pages')).toBeVisible()
+    expect(screen.getByText('Internal document assessment')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'View document' })).toBeVisible()
+    expect(screen.queryByRole('heading', { name: 'Review outcome' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Upload Bank statement')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Document review' })).not.toBeInTheDocument()
+    vi.mocked(api.apiRequest).mockRejectedValueOnce(new NetworkError())
+    await userEvent.setup().click(screen.getByRole('button', { name: 'View document' }))
+    expect(await screen.findByText('Viewer unavailable')).toBeVisible()
+    expect(api.apiRequest).toHaveBeenLastCalledWith(`/staff/loan-applications/${applicationId}/documents/${itemId}/versions/${historicalVersionId}/content`, expect.objectContaining({ responseType: 'blob' }))
+  })
+
+  it('shows all three signed form histories separately and opens the selected historical version', async () => {
+    const value = fixture('ACCEPTED', { originationChannel: 'STAFF_ASSISTED' })
+    const signed = ['CUSTOMER_OFFER_RESPONSE', 'CUSTOMER_CONTRACT_ACKNOWLEDGMENT', 'CUSTOMER_CANCELLATION_REQUEST'].map((evidenceType, index) => ({
+      documentId: `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa${index}`, evidenceType,
+      approvedOfferId: index === 0 ? itemId : null, declaredOfferDecision: index === 0 ? 'ACCEPT' : null,
+      loanContractId: index === 1 ? itemId : null, contractVersion: index === 1 ? 2 : null, correctionRequestId: index === 2 ? itemId : null,
+      currentVersion: version(currentVersionId, 2), versionHistory: [version(historicalVersionId, 1), version(currentVersionId, 2)],
+    }))
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => path.endsWith('/assisted-action-evidence') ? signed : value)
+    renderDocumentWorkspace()
+    expect(await screen.findByText('Customer cancellation request')).toBeVisible()
+    expect(screen.getByText('Customer offer response')).toBeVisible()
+    expect(screen.getByText('Customer decision: Accepted')).toBeVisible()
+    expect(screen.getByText('Customer contract acknowledgment')).toBeVisible()
+    await userEvent.setup().selectOptions(screen.getAllByLabelText('Signed evidence version')[0]!, historicalVersionId)
+    expect(screen.getByText('Historical signed evidence selected')).toBeVisible()
+    vi.mocked(api.apiRequest).mockRejectedValueOnce(new NetworkError())
+    await userEvent.setup().click(screen.getAllByRole('button', { name: 'View signed evidence' })[0]!)
+    expect(await screen.findByText('Viewer unavailable')).toBeVisible()
+    expect(api.apiRequest).toHaveBeenLastCalledWith(`/staff/loan-applications/${applicationId}/assisted-action-evidence/CUSTOMER_OFFER_RESPONSE/versions/${historicalVersionId}/content`, expect.objectContaining({ responseType: 'blob' }))
+    expect(screen.queryByRole('button', { name: /Upload signed|Record Customer/ })).not.toBeInTheDocument()
+  })
+
+  it('retries a signed metadata failure without losing the checklist', async () => {
+    let recovered = false
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (!path.endsWith('/assisted-action-evidence')) return fixture('ACCEPTED', { originationChannel: 'STAFF_ASSISTED' })
+      if (!recovered) throw new NetworkError()
+      return []
+    })
+    renderDocumentWorkspace()
+    expect(await screen.findByText('Meridian could not load reliable details. Try again before taking action.', {}, { timeout: 5000 })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'evidence-2.pdf' })).toBeVisible()
+    recovered = true
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('No signed Customer action evidence exists.')).toBeVisible()
   })
 })

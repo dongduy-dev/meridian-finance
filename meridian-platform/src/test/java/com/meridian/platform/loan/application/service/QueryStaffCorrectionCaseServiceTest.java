@@ -22,6 +22,8 @@ import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -53,21 +55,26 @@ class QueryStaffCorrectionCaseServiceTest {
     @Mock LoanDocumentChecklistPort documents;
     @Mock CurrentUserProvider currentUserProvider;
     @Mock AssistedCustomerActionProvenanceComposer provenance;
+    @Mock com.meridian.platform.loan.application.port.out.WorkflowActorDirectoryPort actors;
+    @Mock com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository transitions;
     private QueryStaffCorrectionCaseService service;
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
+                .thenAnswer(ignored -> corrections.findRequestsByApplicationId(APPLICATION_ID).stream().reduce((first, last) -> last));
+
         service = new QueryStaffCorrectionCaseService(
                 applications, corrections, cancellations, assistedEvidence, documents,
-                new CustomerCorrectionDocumentProof(documents), provenance, currentUserProvider);
+                new CustomerCorrectionDocumentProof(documents), provenance, currentUserProvider, actors, transitions);
         when(currentUserProvider.currentUser()).thenReturn(staff(CREATOR_ID));
         when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application()));
     }
 
     @Test
     void returnsSafeEmptyStateWhenNoCorrectionExists() {
-        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
-                .thenReturn(Optional.empty());
+        when(corrections.findRequestsByApplicationId(APPLICATION_ID))
+                .thenReturn(List.of());
 
         var result = service.query(APPLICATION_ID);
 
@@ -93,8 +100,8 @@ class QueryStaffCorrectionCaseServiceTest {
                 false, ITEM_ID, VERSION_ID, null, "Review replacement.",
                 LoanCorrectionTaskStatus.OPEN, null, null, null, NOW.minusHours(2));
         UUID replacementId = UUID.randomUUID();
-        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
-                .thenReturn(Optional.of(request));
+        when(corrections.findRequestsByApplicationId(APPLICATION_ID))
+                .thenReturn(List.of(request));
         when(corrections.findTasksByRequestId(REQUEST_ID))
                 .thenReturn(List.of(customer, staff));
         when(documents.requireCurrentVersion(APPLICATION_ID, ITEM_ID)).thenReturn(replacementId);
@@ -148,8 +155,8 @@ class QueryStaffCorrectionCaseServiceTest {
         LoanCorrectionRequest request = request(LoanCorrectionRequestStatus.OPEN);
         LoanCorrectionTask task = task(
                 1, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.OPEN);
-        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
-                .thenReturn(Optional.of(request));
+        when(corrections.findRequestsByApplicationId(APPLICATION_ID))
+                .thenReturn(List.of(request));
         when(corrections.findTasksByRequestId(REQUEST_ID)).thenReturn(List.of(task));
         when(documents.hasCurrentVersionDifferentFrom(ITEM_ID, VERSION_ID)).thenReturn(true);
 
@@ -168,8 +175,8 @@ class QueryStaffCorrectionCaseServiceTest {
     @Test
     void keepsCustomerDigitalCustomerTaskHiddenAndNonActionable() {
         LoanCorrectionRequest request = request(LoanCorrectionRequestStatus.OPEN);
-        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
-                .thenReturn(Optional.of(request));
+        when(corrections.findRequestsByApplicationId(APPLICATION_ID))
+                .thenReturn(List.of(request));
         when(corrections.findTasksByRequestId(REQUEST_ID)).thenReturn(List.of(task(
                 1, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.OPEN)));
 
@@ -205,8 +212,8 @@ class QueryStaffCorrectionCaseServiceTest {
                         "document:upload:assisted-action"
                 )));
         LoanCorrectionRequest request = request(LoanCorrectionRequestStatus.OPEN);
-        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
-                .thenReturn(Optional.of(request));
+        when(corrections.findRequestsByApplicationId(APPLICATION_ID))
+                .thenReturn(List.of(request));
         when(corrections.findTasksByRequestId(REQUEST_ID)).thenReturn(List.of(task(
                 1, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.OPEN)));
         UUID evidenceVersionId = UUID.randomUUID();
@@ -227,8 +234,8 @@ class QueryStaffCorrectionCaseServiceTest {
 
     @Test
     void keepsAssistedCancellationUnavailableForCustomerDigitalApplication() {
-        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
-                .thenReturn(Optional.of(request(LoanCorrectionRequestStatus.OPEN)));
+        when(corrections.findRequestsByApplicationId(APPLICATION_ID))
+                .thenReturn(List.of(request(LoanCorrectionRequestStatus.OPEN)));
         when(corrections.findTasksByRequestId(REQUEST_ID)).thenReturn(List.of(task(
                 1, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.OPEN)));
 
@@ -262,8 +269,8 @@ class QueryStaffCorrectionCaseServiceTest {
             List<LoanCorrectionTask> tasks,
             boolean expected
     ) {
-        when(corrections.findLatestRequestByApplicationId(APPLICATION_ID))
-                .thenReturn(Optional.of(request(status)));
+        when(corrections.findRequestsByApplicationId(APPLICATION_ID))
+                .thenReturn(List.of(request(status)));
         when(corrections.findTasksByRequestId(REQUEST_ID)).thenReturn(tasks);
 
         var result = service.query(APPLICATION_ID).correctionRequest();
@@ -277,6 +284,154 @@ class QueryStaffCorrectionCaseServiceTest {
                 CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED, UUID.randomUUID(), status,
                 null, NOW.minusHours(3), null, null
         );
+    }
+
+    @Test
+    void returnsEveryCorrectionAndSafeBatchedCreatorCompleterAndExactResubmitter() {
+        var application = application();
+        when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application));
+        UUID customerUserId = UUID.randomUUID();
+        UUID oldRequestId = UUID.randomUUID();
+        var old = historicalRequest(oldRequestId, NOW.minusDays(1), NOW.minusHours(2));
+        var latest = new LoanCorrectionRequest(REQUEST_ID, APPLICATION_ID, UUID.randomUUID(), "REQUEST_STAFF_CORRECTION",
+                CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED, CREATOR_ID, LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION,
+                null, NOW.minusHours(1), NOW, null);
+        var completed = new LoanCorrectionTask(UUID.randomUUID(), oldRequestId, 1, LoanCorrectionResponsibility.CUSTOMER,
+                LoanCorrectionScope.DOCUMENT_REPLACEMENT, DocumentType.BANK_STATEMENT, false, ITEM_ID, VERSION_ID,
+                "Replace statement.", null, LoanCorrectionTaskStatus.COMPLETED, customerUserId, UUID.randomUUID(),
+                NOW.minusHours(3), NOW.minusDays(1));
+        var staffTask = task(2, LoanCorrectionResponsibility.STAFF, LoanCorrectionTaskStatus.COMPLETED);
+        when(corrections.findRequestsByApplicationId(APPLICATION_ID)).thenReturn(List.of(old, latest));
+        when(corrections.findTasksByRequestId(oldRequestId)).thenReturn(List.of(completed));
+        when(corrections.findTasksByRequestId(REQUEST_ID)).thenReturn(List.of(staffTask));
+        when(transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(APPLICATION_ID))
+                .thenReturn(List.of(resubmission(customerUserId, old.resubmittedAt())));
+        when(actors.findByUserIds(org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Map.of(
+                CREATOR_ID, staffSummary(CREATOR_ID), staffTask.completedByUserId(), staffSummary(staffTask.completedByUserId()),
+                customerUserId, new com.meridian.platform.loan.application.port.out.WorkflowActorDirectoryPort
+                        .ActorSummary(customerUserId, "CUSTOMER", application.customerId(), null)));
+
+        var result = service.query(APPLICATION_ID);
+        assertEquals(REQUEST_ID, result.correctionRequest().correctionRequestId());
+        assertEquals(true, result.correctionRequest().makerCheckerBlockedForCurrentActor());
+        assertEquals(true, result.correctionRequest().staffResubmissionReady());
+        assertEquals(List.of(oldRequestId, REQUEST_ID), result.correctionHistory().stream().map(value -> value.correctionRequestId()).toList());
+        var history = result.correctionHistory().getFirst();
+        assertEquals(old.sourceReviewCycleId(), history.sourceReviewCycleId());
+        assertEquals(old.sourceAction(), history.sourceAction());
+        assertEquals("STAFF", history.createdBy().actorType());
+        assertEquals("CUSTOMER_SELF_SERVICE", history.tasks().getFirst().completedBy().actorType());
+        assertNull(history.tasks().getFirst().completedBy().staffActor());
+        assertEquals(VERSION_ID, history.tasks().getFirst().baselineDocumentVersionId());
+        assertEquals("Replace statement.", history.tasks().getFirst().customerInstruction());
+        assertEquals("CUSTOMER_SELF_SERVICE", history.resubmittedBy().actorType());
+        assertEquals("SUBMITTED", history.resultingApplicationStatus());
+        assertEquals(old.resubmittedAt(), history.resubmittedAt());
+        assertEquals(old.readyAt(), history.readyAt());
+        String json = tools.jackson.databind.json.JsonMapper.builder().findAndAddModules().build().writeValueAsString(result);
+        org.junit.jupiter.api.Assertions.assertFalse(json.contains(customerUserId.toString()));
+        org.junit.jupiter.api.Assertions.assertFalse(json.contains("resubmissionRequestId"));
+        org.junit.jupiter.api.Assertions.assertFalse(json.contains("completionRequestId"));
+        org.mockito.Mockito.verify(actors).findByUserIds(Set.of(CREATOR_ID, staffTask.completedByUserId(), customerUserId));
+        org.mockito.Mockito.verify(corrections, org.mockito.Mockito.never()).saveRequest(org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(corrections, org.mockito.Mockito.never()).saveTask(org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(applications, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void completedAssistedCustomerTaskPreservesStaffRecorderAndOrdersTasksBySequence() {
+        when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application(OriginationChannel.STAFF_ASSISTED)));
+        var request = historicalRequest(REQUEST_ID, NOW.minusDays(1), NOW);
+        var second = task(2, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.COMPLETED);
+        var first = task(1, LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionTaskStatus.COMPLETED);
+        when(corrections.findRequestsByApplicationId(APPLICATION_ID)).thenReturn(List.of(request));
+        when(corrections.findTasksByRequestId(REQUEST_ID)).thenReturn(List.of(second, first));
+        when(actors.findByUserIds(org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Map.of(
+                CREATOR_ID, staffSummary(CREATOR_ID), first.completedByUserId(), staffSummary(first.completedByUserId()),
+                second.completedByUserId(), staffSummary(second.completedByUserId())));
+        var history = service.query(APPLICATION_ID).correctionHistory().getFirst();
+        assertEquals(List.of(1, 2), history.tasks().stream().map(value -> value.sequence()).toList());
+        assertEquals("CUSTOMER", history.tasks().getFirst().responsibleParty());
+        assertEquals("STAFF", history.tasks().getFirst().completedBy().actorType());
+        assertEquals(first.completedByUserId(), history.tasks().getFirst().completedBy().staffActor().userId());
+        assertEquals("UNAVAILABLE", history.resubmittedBy().actorType());
+        assertEquals(false, service.query(APPLICATION_ID).correctionRequest().staffResubmissionReady());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ambiguous", "wrong-time", "wrong-state", "shared-time", "missing"})
+    void resubmitterIsUnavailableUnlessExistingDurableAssociationIsExactAndUnique(String scenario) {
+        var request = historicalRequest(REQUEST_ID, NOW.minusDays(1), NOW);
+        var transition = resubmission(CREATOR_ID, "wrong-time".equals(scenario) ? NOW.plusNanos(1000) : NOW);
+        if ("wrong-state".equals(scenario)) transition = new com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition(
+                transition.id(), APPLICATION_ID, transition.operationId(), 1, LoanApplicationStatus.UNDER_REVIEW,
+                transition.toStatus(), transition.action(), null, transition.actorType(), CREATOR_ID, NOW);
+        when(corrections.findRequestsByApplicationId(APPLICATION_ID)).thenReturn("shared-time".equals(scenario)
+                ? List.of(historicalRequest(UUID.randomUUID(), NOW.minusDays(2), NOW), request) : List.of(request));
+        when(transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(APPLICATION_ID)).thenReturn(
+                "ambiguous".equals(scenario) ? List.of(transition, resubmission(CREATOR_ID, NOW))
+                        : "missing".equals(scenario) ? List.of() : List.of(transition));
+        var result = service.query(APPLICATION_ID).correctionHistory().getLast();
+        assertEquals(NOW, result.resubmittedAt());
+        assertEquals("UNAVAILABLE", result.resubmittedBy().actorType());
+        assertNull(result.resultingApplicationStatus());
+    }
+
+    @Test
+    void foreignCustomerIdentityFailsClosedWithoutExposure() {
+        UUID foreignUserId = UUID.randomUUID();
+        var request = historicalRequest(REQUEST_ID, NOW.minusDays(1), NOW);
+        when(corrections.findRequestsByApplicationId(APPLICATION_ID)).thenReturn(List.of(request));
+        when(transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(APPLICATION_ID))
+                .thenReturn(List.of(resubmission(foreignUserId, NOW)));
+        when(actors.findByUserIds(org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Map.of(foreignUserId,
+                new com.meridian.platform.loan.application.port.out.WorkflowActorDirectoryPort.ActorSummary(
+                        foreignUserId, "CUSTOMER", UUID.randomUUID(), null)));
+        org.junit.jupiter.api.Assertions.assertThrows(com.meridian.platform.shared.domain.exception.BusinessStateConflictException.class,
+                () -> service.query(APPLICATION_ID));
+    }
+
+    @Test
+    void preservesExistingLatestActionProjectionInsteadOfSelectingAnActionFromHistoryOrder() {
+        var existingLatest = historicalRequest(REQUEST_ID, NOW, NOW.plusSeconds(1));
+        var other = historicalRequest(UUID.randomUUID(), NOW, NOW.plusSeconds(2));
+        when(corrections.findRequestsByApplicationId(APPLICATION_ID)).thenReturn(List.of(existingLatest, other));
+        org.mockito.Mockito.doReturn(Optional.of(existingLatest)).when(corrections).findLatestRequestByApplicationId(APPLICATION_ID);
+        var result = service.query(APPLICATION_ID);
+        assertEquals(REQUEST_ID, result.correctionRequest().correctionRequestId());
+        assertEquals(List.of(REQUEST_ID, other.id()), result.correctionHistory().stream().map(row -> row.correctionRequestId()).toList());
+    }
+
+    @Test
+    void identifiesAProvenSystemResubmissionWithoutManufacturingAUser() {
+        var request = historicalRequest(REQUEST_ID, NOW.minusDays(1), NOW);
+        when(corrections.findRequestsByApplicationId(APPLICATION_ID)).thenReturn(List.of(request));
+        when(transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(APPLICATION_ID)).thenReturn(List.of(
+                new com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition(UUID.randomUUID(), APPLICATION_ID,
+                        UUID.randomUUID(), 1, LoanApplicationStatus.RETURNED_FOR_REVISION, LoanApplicationStatus.SUBMITTED,
+                        com.meridian.platform.loan.domain.model.LoanApplicationTransitionAction.RESUBMIT_CORRECTION, null,
+                        com.meridian.platform.shared.domain.model.ActorType.SYSTEM, null, NOW)));
+        var actor = service.query(APPLICATION_ID).correctionHistory().getFirst().resubmittedBy();
+        assertEquals("SYSTEM", actor.actorType());
+        assertNull(actor.staffActor());
+    }
+
+    private static LoanCorrectionRequest historicalRequest(UUID id, LocalDateTime created, LocalDateTime resubmitted) {
+        return new LoanCorrectionRequest(id, APPLICATION_ID, UUID.randomUUID(), "REQUEST_CORRECTION",
+                CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED, CREATOR_ID, LoanCorrectionRequestStatus.RESUBMITTED,
+                UUID.randomUUID(), created, resubmitted.minusMinutes(1), resubmitted);
+    }
+
+    private static com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition resubmission(UUID actor, LocalDateTime at) {
+        return new com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition(UUID.randomUUID(), APPLICATION_ID,
+                UUID.randomUUID(), 1, LoanApplicationStatus.RETURNED_FOR_REVISION, LoanApplicationStatus.SUBMITTED,
+                com.meridian.platform.loan.domain.model.LoanApplicationTransitionAction.RESUBMIT_CORRECTION, null,
+                com.meridian.platform.shared.domain.model.ActorType.USER, actor, at);
+    }
+
+    private static com.meridian.platform.loan.application.port.out.WorkflowActorDirectoryPort.ActorSummary staffSummary(UUID id) {
+        return new com.meridian.platform.loan.application.port.out.WorkflowActorDirectoryPort.ActorSummary(id, "STAFF", null,
+                new com.meridian.platform.loan.application.port.out.StaffActorSummary(id, "Deni Loan Officer", "deni@meridian.test"));
     }
 
     private static LoanCorrectionTask task(

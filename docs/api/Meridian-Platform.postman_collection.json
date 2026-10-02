@@ -927,6 +927,376 @@
                       {"key":"assistedCancellationRequestId","value":"10000000-0000-4000-8000-000000000007","type":"string"}
                  ],
     "item":  [
+        {
+            "name": "00 Final Phase 3 Document and Correction Provenance Reads",
+            "description": "Prepare existing fictional Loan Application/checklist and signed-action fixture variables, then run these read-only scenarios after recording/replacement. See MER-API-001 Sections 5.6 and 5.7 for purpose-specific authorization. They do not create or mutate test applications.",
+            "item": [
+                {
+                    "name": "Loan Officer Document provenance",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{loanOfficerAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/documents",
+                        "description": "Exact document:review or approval:decide read. Review decisions bind immutable versions; authorized restricted Document notes are separate from Customer instructions. This request creates no mutation authority."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Private read\", () => { pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"); pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"private\"); });",
+                                    "const json = pm.response.json();",
+                                    "for (const item of json.items) { for (const review of item.reviewHistory) { pm.expect(review.reviewDecisionId).to.be.a(\"string\"); pm.expect(item.versionHistory.some(version => version.documentVersionId === review.documentVersionId)).to.eql(true); pm.expect(review).to.have.keys(\"reviewDecisionId\", \"documentVersionId\", \"outcome\", \"waiverReasonCode\", \"correctionReasonCode\", \"customerInstruction\", \"reviewer\", \"decidedAt\", \"restrictedStaffNoteReadable\", \"restrictedStaffNotes\"); if (review.reviewer) pm.expect(review.reviewer).to.have.keys(\"userId\", \"displayName\", \"email\"); if (!review.restrictedStaffNoteReadable) pm.expect(review.restrictedStaffNotes).to.eql(null); } }"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Read-only Approver Document provenance",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{approverAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/documents",
+                        "description": "Exact document:review or approval:decide read. Review decisions bind immutable versions; authorized restricted Document notes are separate from Customer instructions. This request creates no mutation authority."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Private read\", () => { pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"); pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"private\"); });",
+                                    "const json = pm.response.json();",
+                                    "for (const item of json.items) { for (const review of item.reviewHistory) { pm.expect(review.reviewDecisionId).to.be.a(\"string\"); pm.expect(item.versionHistory.some(version => version.documentVersionId === review.documentVersionId)).to.eql(true); pm.expect(review).to.have.keys(\"reviewDecisionId\", \"documentVersionId\", \"outcome\", \"waiverReasonCode\", \"correctionReasonCode\", \"customerInstruction\", \"reviewer\", \"decidedAt\", \"restrictedStaffNoteReadable\", \"restrictedStaffNotes\"); if (review.reviewer) pm.expect(review.reviewer).to.have.keys(\"userId\", \"displayName\", \"email\"); if (!review.restrictedStaffNoteReadable) pm.expect(review.restrictedStaffNotes).to.eql(null); } }"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Read-only Approver exact checklist content",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{approverAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/documents/{{checklistItemId}}/versions/{{documentVersionId}}/content",
+                        "description": "Requires approval:decide; exact selected version remains readable without document:review mutation authority."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Private read\", () => { pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"); pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"private\"); });",
+                                    "pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\"); pm.expect(pm.response.headers.get(\"Content-Disposition\")).to.include(\"attachment\");"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "All correction request and task provenance",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{loanOfficerAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{loanApplicationId}}/corrections",
+                        "description": "Requires loan:correction:staff. Ordered read-only history is separate from latest actionable correction. Customer actors expose no login identity; baseline links are not inferred completion proof."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json(); pm.expect(json.correctionHistory).to.be.an(\"array\");",
+                                    "const actors = []; let prior = null; for (const request of json.correctionHistory) { const key = request.createdAt + \":\" + request.correctionRequestId; if (prior !== null) pm.expect(key >= prior).to.eql(true); prior = key; actors.push(request.createdBy, request.resubmittedBy); let sequence = 0; for (const task of request.tasks) { pm.expect(task.sequence > sequence).to.eql(true); sequence = task.sequence; actors.push(task.completedBy); pm.expect(task).not.to.have.property(\"completionRequestId\"); } pm.expect(request).not.to.have.property(\"resubmissionRequestId\"); }",
+                                    "for (const actor of actors.filter(Boolean)) { pm.expect(actor).to.have.keys(\"actorType\", \"staffActor\"); if (actor.actorType === \"STAFF\" && actor.staffActor) pm.expect(actor.staffActor).to.have.keys(\"userId\", \"displayName\", \"email\"); else pm.expect(actor.staffActor).to.eql(null); }"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Reviewer signed-action metadata and history",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{loanOfficerAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/assisted-action-evidence",
+                        "description": "Read after upload/action completion. Metadata is filtered by exact permission and role; historical versions remain Document-owned."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Private read\", () => { pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"); pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"private\"); });",
+                                    "const documents = pm.response.json(); pm.expect(documents).to.be.an(\"array\");",
+                                    "for (const document of documents) { pm.expect(document).to.have.keys(\"documentId\", \"evidenceType\", \"approvedOfferId\", \"declaredOfferDecision\", \"loanContractId\", \"contractVersion\", \"correctionRequestId\", \"currentVersion\", \"versionHistory\"); let sequence = 0; for (const version of document.versionHistory) { pm.expect(version).to.have.keys(\"documentVersionId\", \"versionNumber\", \"originalFilename\", \"detectedMimeType\", \"byteSize\", \"uploadedAt\"); pm.expect(version.versionNumber > sequence).to.eql(true); sequence = version.versionNumber; } if (document.currentVersion) pm.expect(document.versionHistory.some(version => version.documentVersionId === document.currentVersion.documentVersionId)).to.eql(true); }"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Accounting signed-action metadata and history",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{accountingAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/assisted-action-evidence",
+                        "description": "Read after upload/action completion. Metadata is filtered by exact permission and role; historical versions remain Document-owned."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Private read\", () => { pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"); pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"private\"); });",
+                                    "const documents = pm.response.json(); pm.expect(documents).to.be.an(\"array\");",
+                                    "for (const document of documents) { pm.expect(document).to.have.keys(\"documentId\", \"evidenceType\", \"approvedOfferId\", \"declaredOfferDecision\", \"loanContractId\", \"contractVersion\", \"correctionRequestId\", \"currentVersion\", \"versionHistory\"); let sequence = 0; for (const version of document.versionHistory) { pm.expect(version).to.have.keys(\"documentVersionId\", \"versionNumber\", \"originalFilename\", \"detectedMimeType\", \"byteSize\", \"uploadedAt\"); pm.expect(version.versionNumber > sequence).to.eql(true); sequence = version.versionNumber; } if (document.currentVersion) pm.expect(document.versionHistory.some(version => version.documentVersionId === document.currentVersion.documentVersionId)).to.eql(true); }",
+                                    "pm.expect(documents.every(document => document.evidenceType === \"CUSTOMER_CONTRACT_ACKNOWLEDGMENT\")).to.eql(true);"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Cancellation signed-action metadata and history",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{loanOfficerAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{assistedCancellationLoanApplicationId}}/assisted-action-evidence",
+                        "description": "Read after upload/action completion. Metadata is filtered by exact permission and role; historical versions remain Document-owned."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Private read\", () => { pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"); pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"private\"); });",
+                                    "const documents = pm.response.json(); pm.expect(documents).to.be.an(\"array\");",
+                                    "for (const document of documents) { pm.expect(document).to.have.keys(\"documentId\", \"evidenceType\", \"approvedOfferId\", \"declaredOfferDecision\", \"loanContractId\", \"contractVersion\", \"correctionRequestId\", \"currentVersion\", \"versionHistory\"); let sequence = 0; for (const version of document.versionHistory) { pm.expect(version).to.have.keys(\"documentVersionId\", \"versionNumber\", \"originalFilename\", \"detectedMimeType\", \"byteSize\", \"uploadedAt\"); pm.expect(version.versionNumber > sequence).to.eql(true); sequence = version.versionNumber; } if (document.currentVersion) pm.expect(document.versionHistory.some(version => version.documentVersionId === document.currentVersion.documentVersionId)).to.eql(true); }"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Read exact consumed signed offer response",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{loanOfficerAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/assisted-action-evidence/CUSTOMER_OFFER_RESPONSE/versions/{{assistedOfferEvidenceVersionId}}/content",
+                        "description": "Uses the existing consumed-version fixture variable. Retain an older uploaded version in this variable to verify historical reading after replacement; never substitute the latest version for a completed action. No upload/recording authority is created."
+                    },
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (!pm.collectionVariables.get(\"assistedOfferEvidenceVersionId\")) pm.execution.skipRequest();"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Private read\", () => { pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"); pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"private\"); });",
+                                    "pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\"); pm.expect(pm.response.headers.get(\"Content-Disposition\")).to.include(\"attachment\"); pm.expect(Number(pm.response.headers.get(\"Content-Length\"))).to.be.above(0); pm.expect([\"application/pdf\", \"image/jpeg\", \"image/png\"]).to.include(pm.response.headers.get(\"Content-Type\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Read exact consumed signed contract acknowledgment",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{accountingAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/assisted-action-evidence/CUSTOMER_CONTRACT_ACKNOWLEDGMENT/versions/{{assistedContractEvidenceVersionId}}/content",
+                        "description": "Uses the existing consumed-version fixture variable. Retain an older uploaded version in this variable to verify historical reading after replacement; never substitute the latest version for a completed action. No upload/recording authority is created."
+                    },
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (!pm.collectionVariables.get(\"assistedContractEvidenceVersionId\")) pm.execution.skipRequest();"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Private read\", () => { pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"); pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"private\"); });",
+                                    "pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\"); pm.expect(pm.response.headers.get(\"Content-Disposition\")).to.include(\"attachment\"); pm.expect(Number(pm.response.headers.get(\"Content-Length\"))).to.be.above(0); pm.expect([\"application/pdf\", \"image/jpeg\", \"image/png\"]).to.include(pm.response.headers.get(\"Content-Type\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                },
+                {
+                    "name": "Read exact consumed signed cancellation request",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{loanOfficerAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{assistedCancellationLoanApplicationId}}/assisted-action-evidence/CUSTOMER_CANCELLATION_REQUEST/versions/{{assistedCancellationEvidenceVersionId}}/content",
+                        "description": "Uses the existing consumed-version fixture variable. Retain an older uploaded version in this variable to verify historical reading after replacement; never substitute the latest version for a completed action. No upload/recording authority is created."
+                    },
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (!pm.collectionVariables.get(\"assistedCancellationEvidenceVersionId\")) pm.execution.skipRequest();"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Private read\", () => { pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\"); pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"private\"); });",
+                                    "pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\"); pm.expect(pm.response.headers.get(\"Content-Disposition\")).to.include(\"attachment\"); pm.expect(Number(pm.response.headers.get(\"Content-Length\"))).to.be.above(0); pm.expect([\"application/pdf\", \"image/jpeg\", \"image/png\"]).to.include(pm.response.headers.get(\"Content-Type\"));"
+                                ]
+                            }
+                        }
+                    ],
+                    "response": []
+                }
+            ]
+        },
                  {
                      "name": "00 Evidenced Staff-Assisted Downstream Customer Decisions",
                      "description": "Representative Staff-mediated offer-response, contract-acknowledgment, and UCL Customer-requested cancellation contracts. The Customer remains the business subject; Loan Officer or Accounting Officer is the authenticated recording actor. Use only fictional signed-form files and prepared STAFF_ASSISTED fixtures.",
@@ -6922,7 +7292,7 @@
                                                                                   }
                                                                               ]
                                                                },
-                                                      "description":  "Requires document:review and returns a private attachment without storage metadata.",
+                                                      "description":  "Requires exact document:review or approval:decide and returns a private exact-version attachment without storage metadata.",
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "",

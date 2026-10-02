@@ -6,4 +6,6 @@ import java.util.UUID;
 
 public interface ReadDocumentContentUseCase {
     DocumentContentDto read(UUID loanApplicationId, UUID checklistItemId, UUID documentVersionId);
+
+    DocumentContentDto readAsStaff(UUID loanApplicationId, UUID checklistItemId, UUID documentVersionId);
 }

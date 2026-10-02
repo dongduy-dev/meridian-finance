@@ -6,6 +6,7 @@ import com.meridian.platform.document.domain.model.AssistedActionDocumentVersion
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -27,6 +28,23 @@ public class AssistedActionDocumentRepositoryAdapter implements AssistedActionDo
                 .orElseGet(() -> new AssistedActionDocumentJpaEntity(document));
         entity.update(document);
         return documents.saveAndFlush(entity).toDomain();
+    }
+
+    @Override
+    public List<AssistedActionDocument> findByLoanApplicationId(UUID loanApplicationId) {
+        return documents.findAllByLoanApplicationIdOrderByCreatedAtAscIdAsc(loanApplicationId)
+                .stream().map(AssistedActionDocumentJpaEntity::toDomain).toList();
+    }
+
+    @Override
+    public Optional<AssistedActionDocument> findDocumentById(UUID documentId) {
+        return documents.findById(documentId).map(AssistedActionDocumentJpaEntity::toDomain);
+    }
+
+    @Override
+    public List<AssistedActionDocumentVersion> findVersionsByDocumentId(UUID documentId) {
+        return versions.findAllByAssistedActionDocumentIdOrderByVersionNumberAscIdAsc(documentId)
+                .stream().map(AssistedActionDocumentVersionJpaEntity::toDomain).toList();
     }
 
     @Override public Optional<AssistedActionDocument> findOfferDocumentForUpdate(UUID applicationId, UUID offerId) {

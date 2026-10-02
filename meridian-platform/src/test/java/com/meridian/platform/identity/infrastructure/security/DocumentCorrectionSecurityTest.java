@@ -153,7 +153,7 @@ class DocumentCorrectionSecurityTest {
         when(queryStaffCorrectionTasksUseCase.findStaffTasks(any(), any(Integer.class), any(Integer.class)))
                 .thenReturn(List.of());
         when(queryDocumentReviewQueueUseCase.findAwaitingReview(0, 20)).thenReturn(List.of());
-        when(readDocumentContentUseCase.read(APPLICATION_ID, ITEM_ID, VERSION_ID))
+        when(readDocumentContentUseCase.readAsStaff(APPLICATION_ID, ITEM_ID, VERSION_ID))
                 .thenReturn(new DocumentContentDto(
                         "safe.pdf", "application/pdf", 4,
                         new ByteArrayInputStream(new byte[]{1, 2, 3, 4})
@@ -232,6 +232,36 @@ class DocumentCorrectionSecurityTest {
                         .with(user("intake-staff").authorities(
                                 new SimpleGrantedAuthority("document:upload:intake"))))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void approverCanReadEvidenceButCannotReviewWaiveUploadOrEnterReviewQueue() throws Exception {
+        var approver = user("approver").authorities(new SimpleGrantedAuthority("approval:decide"));
+        when(readDocumentContentUseCase.readAsStaff(APPLICATION_ID, ITEM_ID, VERSION_ID))
+                .thenAnswer(invocation -> new DocumentContentDto("evidence.pdf", "application/pdf", 4,
+                        new ByteArrayInputStream(new byte[]{1, 2, 3, 4})));
+        mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/documents", APPLICATION_ID).with(approver))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store, private"));
+        mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/documents/{item}/versions/{version}/content",
+                        APPLICATION_ID, ITEM_ID, VERSION_ID).with(approver))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store, private"));
+        mockMvc.perform(get("/api/v1/document-review-items").with(approver)).andExpect(status().isForbidden());
+        for (String outcome : List.of("ACCEPT_DOCUMENT", "WAIVE_DOCUMENT", "REQUEST_REPLACEMENT")) {
+            mockMvc.perform(post("/api/v1/loan-applications/{id}/document-review-items/{item}/reviews", APPLICATION_ID, ITEM_ID)
+                            .with(approver).contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                            .content("{\"reviewRequestId\":\"" + UUID.randomUUID() + "\",\"documentVersionId\":\"" + VERSION_ID
+                                    + "\",\"outcome\":\"" + outcome + "\"}"))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(multipart("/api/v1/staff/loan-applications/{id}/documents/{item}/versions", APPLICATION_ID, ITEM_ID)
+                        .with(approver).file("file", new byte[]{1, 2, 3}).param("uploadRequestId", UUID.randomUUID().toString()))
+                .andExpect(status().isForbidden());
+        org.mockito.Mockito.verifyNoInteractions(reviewDocumentUseCase, uploadDocumentUseCase);
+        for (String permission : List.of("loan:read", "approval:recommend", "loan:contract:read", "document:read", "audit:read")) {
+            mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/documents", APPLICATION_ID)
+                            .with(user("other").authorities(new SimpleGrantedAuthority(permission))))
+                    .andExpect(status().isForbidden());
+        }
     }
 
     @Test

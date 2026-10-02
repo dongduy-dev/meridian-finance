@@ -8,6 +8,7 @@ import type { AuthResponse } from '@/features/auth/api/auth-api'
 import * as authApi from '@/features/auth/api/auth-api'
 import { AuthProvider } from '@/features/auth/model/auth-context'
 import * as api from '@/lib/api'
+import { NetworkError } from '@/lib/api'
 import {
   bindUnresolvedOperations,
   digestFile,
@@ -55,6 +56,7 @@ function caseFixture(proofState: string, assisted = false, withCancellationEvide
     productCode: 'UNSECURED_CONSUMER_LOAN',
     originationChannel: assisted ? 'STAFF_ASSISTED' : 'CUSTOMER_DIGITAL',
     applicationStatus: 'RETURNED_FOR_REVISION',
+    correctionHistory: [],
     correctionRequest: {
       correctionRequestId: requestId,
       status: 'OPEN',
@@ -139,7 +141,14 @@ describe('Staff correction operation recovery', () => {
     expect(screen.queryByText('Customer decision recorded from signed evidence')).not.toBeInTheDocument()
     expect(screen.getByText('Recorded by')).toBeVisible()
     expect(screen.getByText('Deni Loan Officer')).toBeVisible()
-    expect(screen.getByText(new RegExp(cancellationEvidenceVersionId))).toBeVisible()
+    expect(screen.getByRole('button', { name: 'View signed request' })).toBeVisible()
+    vi.mocked(api.apiRequest).mockRejectedValueOnce(new NetworkError())
+    await userEvent.setup().click(screen.getByRole('button', { name: 'View signed request' }))
+    expect(await screen.findByText('Viewer unavailable')).toBeVisible()
+    expect(api.apiRequest).toHaveBeenLastCalledWith(
+      `/staff/loan-applications/${applicationId}/assisted-action-evidence/CUSTOMER_CANCELLATION_REQUEST/versions/${cancellationEvidenceVersionId}/content`,
+      expect.objectContaining({ responseType: 'blob' }),
+    )
     expect(screen.queryByRole('button', { name: 'Review Customer-requested cancellation' })).not.toBeInTheDocument()
     expect(screen.queryByText('Customer — self-service')).not.toBeInTheDocument()
   })

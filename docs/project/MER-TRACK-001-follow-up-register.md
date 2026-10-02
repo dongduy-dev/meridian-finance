@@ -781,6 +781,9 @@ Resolved scope:
 - Staff case header, purpose-limited Customer readiness, and immutable ordered LoanApplication transition history.
 - Staff submission-checklist, current-version, immutable version-history, and safe review-history projection for document operations.
 - Staff correction case projection with mixed task composition, backend-derived proof state, resubmission readiness, and current-actor maker-checker evidence.
+- Document provenance is complete for the Phase 3 boundary: exact version-bound decision/reviewer/reasons/instruction/time and authorized restricted Document notes; shared read-only Approver checklist/content access without command or queue expansion.
+- Correction provenance is complete for the Phase 3 boundary: every request/task in deterministic order, safe creator/completer, exact unique resubmission transition attribution, readiness/resubmission/cancellation times, and stored baseline links. Historical completion-proof versions were not persisted and remain explicitly unavailable; no reconstruction or migration was introduced.
+- Later signed offer-response, contract-acknowledgment, and cancellation-request inspection is complete through purpose-limited Document metadata/history and exact current/historical content reads, a separate Documents section, and specialized links to each action's consumed version. No new files, persistence history, or mutation authority were introduced.
 - Restricted verification assessment retrieval and shared presentation in assessment, Loan Officer review, and Approver decision workspaces are complete. The canonical Loan-owned read projects existing manual-cycle notes, reviewer/time, and source-correction linkage for exact `loan:review` or `approval:decide`; Approver-only access is read-only, and Salary Advance remains automated. No new persistence or permission grant was introduced.
 - Staff product-verification projection with Salary Advance immutable snapshots; UCL and Collateral authoritative current/ordered history; Collateral assessment facts; Document-port readiness and current-version correction targets; and backend-derived start/complete availability.
 - Staff review-start projection with product/document readiness and the latest Loan-owned review cycle for no-business-UUID reconciliation.
@@ -802,7 +805,7 @@ Resolved scope:
 Still deferred:
 
 - Specialized Staff work queues beyond the executable document-review, Staff-correction, Approver, contract, disbursement, ordinary-repayment servicing, settlement, and closure queues, including verification/review queues and direct application-number lookup.
-- Action histories beyond the executable linked review/recommendation/decision history and CP4 verification/review, CP6 contract/readiness, CP7 disbursement/activation, CP8 ordinary repayment-servicing, and CP9 settlement/closure evidence, including historical correction request/task/proof/resubmission provenance. Document restrictedStaffNotes retrieval and document-review historical provenance remain deferred.
+- Broader action histories beyond the executable specialized review/recommendation/decision, verification, Document, correction, signed Customer-action, contract/readiness, disbursement/activation, repayment-servicing, and settlement/closure projections. A generic cross-lifecycle timeline remains outside the Phase 3 provenance boundary.
 - Broader Dashboard aggregation beyond the narrow Customer indexes and action facts.
 - Additional workflow command suggestions beyond the proven Customer action categories.
 - Richer product-specific projections where the common reads are insufficient.
@@ -1023,6 +1026,7 @@ Completed outcome:
 - Loan Officer can record an evidenced Customer `ACCEPT` or `DECLINE` for the exact pending offer of a Staff-assisted UCL or Collateral application.
 - Accounting Officer can record an evidenced Customer acknowledgment for the exact current prepared contract version.
 - Document owns immutable signed-form versions; Loan stores the exact consumed version ID with Customer subject and Staff actor attribution.
+- Authorized Document reviewers and purpose-specific offer, Accounting, and correction readers can later inspect immutable signed-form metadata/history and exact content, including each completed action's consumed version. The shared Documents section and specialized View evidence links preserve the read/command boundary.
 - Loan Officer can upload Customer-provided replacement evidence against the exact active Customer-task baseline under `document:upload:assisted-correction`, record the Customer-owned task complete under `loan:correction:staff`, and resubmit a ready Customer-only assisted UCL or Collateral correction.
 - Staff-mediated completion preserves Customer proof rules and completion replay, records Staff actor and Customer/application subject audit facts, and does not apply Staff-task maker-checker to the Customer-owned task.
 - The Staff correction projection and workspace expose channel, Customer instruction, proof, and action availability only for eligible assisted cases; Customer-digital tasks remain separate.

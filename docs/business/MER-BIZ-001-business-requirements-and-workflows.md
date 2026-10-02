@@ -343,6 +343,13 @@ An authorized reviewer may:
 
 A replacement creates a new immutable version and invalidates the previous version's readiness effect.
 
+Document review evidence retains the exact reviewed version, reviewer, decision time, outcome, controlled waiver or replacement reason, Customer instruction, and separately restricted Document note. Authorized document reviewers and independent Approvers may inspect immutable current and historical evidence for their lending purpose. The note audience requires exact `document:review` or `approval:decide`; inspection alone grants no review, waiver, upload, or replacement authority. Missing historical reviewer identity must not erase the remaining recorded evidence. Restricted Document notes must not appear in Customer responses, correction instructions, logs, audit payloads, or general analytics.
+
+Authorized correction operators may inspect every recorded correction request and its task ownership, instructions, creator, completion evidence, and readiness/resubmission/cancellation times. Staff-recorded Customer work retains the Customer as its business source and identifies Staff separately as recorder. Customer self-service attribution must not disclose Customer login identity. Historical inspection does not permit task completion, resubmission, or bypass of the current maker-checker rules. A missing durable proof-version or actor association must remain unavailable rather than being reconstructed from later evidence.
+
+Signed Customer offer-response, contract-acknowledgment, and cancellation-request forms remain Document-owned immutable evidence. Authorized reviewers and the corresponding offer, accounting, or correction operators may inspect their purpose-specific historical versions after the action completes. The completed action identifies the exact form version consumed. Viewing does not reopen the action or grant its recording authority; Customer-facing paper-form inspection is outside this boundary.
+
+
 When evidence is missing or requires correction, the application uses:
 
 | Status | Use |

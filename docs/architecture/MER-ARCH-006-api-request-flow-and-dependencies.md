@@ -438,7 +438,7 @@ The intake-to-application command serializes the intake before application creat
 
 ### Staff Document Checklist and History Query
 
-`GET /api/v1/staff/loan-applications/{loanApplicationId}/documents` uses a dedicated Staff Document input port and query service. It requires `document:review` independently of the general `loan:read` case contract.
+`GET /api/v1/staff/loan-applications/{loanApplicationId}/documents` uses a dedicated Staff Document input port and query service. It requires a Staff-only principal and exact `document:review` or `approval:decide` independently of the general `loan:read` case contract. The latter audience inspects documents read-only and acquires no command or queue capability.
 
 ```mermaid
 flowchart LR
@@ -458,7 +458,15 @@ flowchart LR
     Service --> LoanPort --> LoanAdapter --> LoanPersistence
 ```
 
-Document owns checklist, version, and review-history projection. It obtains only application existence and safe status through the purpose-limited Loan contract. Deterministic repository queries read the existing immutable version and review rows; no parallel history store is created.
+Document owns checklist, version, and review-history projection. It obtains only application existence and safe status through the purpose-limited Loan contract. Deterministic repository queries read the existing immutable version and review rows; no parallel history store is created. One batched `DocumentStaffActorDirectoryPort` lookup uses Identity's public Staff-summary contract. Exact review-version associations are validated before returning separately labeled reasons, Customer instructions, and authorized restricted Document notes. Checklist and signed-form metadata use read-only repeatable-read snapshots.
+
+### Correction and Signed-Form History Reads
+
+Loan owns the specialized correction history projection. `LoanCorrectionRepository` returns every request in creation-time/identifier order and tasks in sequence/identifier order. A purpose-limited `WorkflowActorDirectoryPort` resolves creator, completer, and exactly matched resubmitter associations in one batch. Loan validates Customer ownership and permitted self-service versus Staff-recorded semantics; it never returns Customer login identity.
+
+Resubmitter attribution requires a unique request timestamp and one same-application `RESUBMIT_CORRECTION` lifecycle transition at that exact timestamp, from `RETURNED_FOR_REVISION` to `SUBMITTED` or `UNDER_REVIEW`. Missing or ambiguous evidence yields an unavailable actor rather than inference. Stored task baseline links remain baselines because correction tasks do not retain an exact completion-proof version. The latest correction remains the action projection, and history does not change command locks, idempotency, maker-checker, audit, or transaction rules.
+
+Document's `ReadStaffAssistedActionEvidenceUseCase` provides permitted signed-form metadata and exact immutable content. The service reads its existing assisted-action document/version repository and validates application, evidence type, logical-document ownership, and version before opening `DocumentStoragePort`. Historical viewing does not call upload target authorization, because completed or superseded action targets must remain inspectable. Loan-owned action state continues to identify the consumed version through its existing public contracts. No new aggregate, file copy, history table, or generic evidence engine is introduced. Exact per-type read audiences and HTTP error/header contracts are defined in MER-API-001 Section 5.7.
 
 ### Submission Command
 

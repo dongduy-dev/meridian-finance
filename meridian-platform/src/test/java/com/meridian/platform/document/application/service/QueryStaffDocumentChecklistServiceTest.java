@@ -21,6 +21,8 @@ import com.meridian.platform.shared.domain.exception.BusinessStateConflictExcept
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -50,17 +52,19 @@ class QueryStaffDocumentChecklistServiceTest {
     @Mock DocumentChecklistRepository checklists;
     @Mock DocumentRepository documents;
     @Mock CurrentUserProvider currentUserProvider;
+    @Mock com.meridian.platform.document.application.port.out.DocumentStaffActorDirectoryPort staffActors;
     private QueryStaffDocumentChecklistService service;
 
     @BeforeEach
     void setUp() {
         service = new QueryStaffDocumentChecklistService(
-                workflows, checklists, documents, currentUserProvider);
+                workflows, checklists, documents, currentUserProvider, staffActors);
     }
 
-    @Test
-    void returnsSafeDeterministicVersionAndReviewHistory() {
-        when(currentUserProvider.currentUser()).thenReturn(staff("document:review"));
+    @ParameterizedTest
+    @ValueSource(strings = {"document:review", "approval:decide"})
+    void returnsSafeDeterministicVersionAndReviewHistory(String permission) {
+        when(currentUserProvider.currentUser()).thenReturn(staff(permission));
         when(workflows.find(APPLICATION_ID)).thenReturn(new LoanDocumentWorkflowPort
                 .LoanDocumentWorkflowSnapshot(APPLICATION_ID, UUID.randomUUID(),
                 LoanApplicationStatus.SUBMITTED));
@@ -81,8 +85,16 @@ class QueryStaffDocumentChecklistServiceTest {
                 DECISION_ID, ITEM_ID, VERSION_TWO_ID, UUID.randomUUID(),
                 DocumentReviewOutcome.ACCEPT_DOCUMENT, null, null,
                 UUID.randomUUID(), NOW);
+        UUID reviewerId = UUID.fromString("00000000-0000-0000-0000-000000000302");
+        DocumentReviewDecision replacement = new DocumentReviewDecision(
+                UUID.randomUUID(), ITEM_ID, VERSION_ONE_ID, UUID.randomUUID(),
+                DocumentReviewOutcome.REQUEST_REPLACEMENT, null, "DOCUMENT_REPLACEMENT_REQUIRED",
+                "Send a legible statement.", "Restricted evidence assessment.", reviewerId, NOW.minusMinutes(30));
         when(documents.findReviewDecisionsByChecklistItemId(ITEM_ID))
-                .thenReturn(List.of(decision));
+                .thenReturn(List.of(replacement, decision));
+        when(staffActors.findByUserIds(Set.of(reviewerId, decision.reviewerUserId())))
+                .thenReturn(java.util.Map.of(reviewerId, new com.meridian.platform.document.application.port.out
+                        .DocumentStaffActorDirectoryPort.StaffActorSummary(reviewerId, "Deni Loan Officer", "deni@meridian.test")));
 
         var result = service.query(APPLICATION_ID);
 
@@ -90,8 +102,39 @@ class QueryStaffDocumentChecklistServiceTest {
         assertEquals(List.of(1, 2), result.items().getFirst().versionHistory().stream()
                 .map(version -> version.versionNumber()).toList());
         assertEquals("ACCEPTED", result.items().getFirst().evidenceStatus());
-        assertEquals(VERSION_TWO_ID,
+        assertEquals(VERSION_ONE_ID,
                 result.items().getFirst().reviewHistory().getFirst().documentVersionId());
+        var historical = result.items().getFirst().reviewHistory().getFirst();
+        assertEquals(replacement.id(), historical.reviewDecisionId());
+        assertEquals("DOCUMENT_REPLACEMENT_REQUIRED", historical.correctionReasonCode());
+        assertEquals("Send a legible statement.", historical.customerInstruction());
+        assertEquals(reviewerId, historical.reviewer().userId());
+        assertEquals(true, historical.restrictedStaffNoteReadable());
+        assertEquals("Restricted evidence assessment.", historical.restrictedStaffNotes());
+        assertEquals(replacement.decidedAt(), historical.decidedAt());
+        org.junit.jupiter.api.Assertions.assertNull(result.items().getFirst().reviewHistory().get(1).reviewer());
+        assertEquals(VERSION_TWO_ID, result.items().getFirst().currentVersion().documentVersionId());
+        org.mockito.Mockito.verify(documents, org.mockito.Mockito.never()).saveDocument(org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(documents, org.mockito.Mockito.never()).saveReviewDecision(org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(checklists, org.mockito.Mockito.never()).saveItem(org.mockito.ArgumentMatchers.any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"loan:read", "approval:recommend", "loan:contract:read", "loan:review", "document:read", "admin:config", "document:review:extra"})
+    void rejectsUnrelatedReadersBeforeLoadingEvidence(String permission) {
+        when(currentUserProvider.currentUser()).thenReturn(staff(permission));
+        assertThrows(AuthorizationException.class, () -> service.query(APPLICATION_ID));
+        org.mockito.Mockito.verifyNoInteractions(workflows, checklists, documents, staffActors);
+    }
+
+    @Test
+    void rejectsCustomerAndMixedCustomerContextEvenWithExactReadAuthority() {
+        for (String type : List.of("CUSTOMER", "STAFF")) {
+            when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(UUID.randomUUID(),
+                    "customer@meridian.test", type, UUID.randomUUID(), Set.of(), Set.of("approval:decide", "document:review")));
+            assertThrows(AuthorizationException.class, () -> service.query(APPLICATION_ID));
+        }
+        org.mockito.Mockito.verifyNoInteractions(workflows, checklists, documents, staffActors);
     }
 
     @Test

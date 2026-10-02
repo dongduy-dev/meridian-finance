@@ -8,10 +8,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface JpaLoanCorrectionRequestRepository extends JpaRepository<LoanCorrectionRequestJpaEntity, UUID> {
+
+    List<LoanCorrectionRequestJpaEntity> findAllByLoanApplicationIdOrderByCreatedAtAscIdAsc(UUID loanApplicationId);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select request from LoanCorrectionRequestJpaEntity request where request.loanApplicationId = :applicationId and request.status in :statuses")
     Optional<LoanCorrectionRequestJpaEntity> findActiveForUpdate(

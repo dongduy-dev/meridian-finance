@@ -9,6 +9,7 @@ describe('Staff correction contracts', () => {
       productCode: 'FUTURE_PRODUCT',
       originationChannel: 'FUTURE_CHANNEL',
       applicationStatus: 'FUTURE_STATUS',
+      correctionHistory: [],
       correctionRequest: null,
       assistedCancellation: {
         available: false,

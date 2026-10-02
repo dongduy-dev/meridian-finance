@@ -67,6 +67,12 @@ public class LoanCorrectionRepositoryAdapter implements LoanCorrectionRepository
     }
 
     @Override
+    public List<LoanCorrectionRequest> findRequestsByApplicationId(UUID loanApplicationId) {
+        return requestRepository.findAllByLoanApplicationIdOrderByCreatedAtAscIdAsc(loanApplicationId)
+                .stream().map(LoanCorrectionRequestJpaEntity::toDomain).toList();
+    }
+
+    @Override
     public Optional<LoanCorrectionRequest> findRequestById(UUID correctionRequestId) {
         return requestRepository.findById(correctionRequestId)
                 .map(LoanCorrectionRequestJpaEntity::toDomain);

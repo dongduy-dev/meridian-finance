@@ -20,6 +20,7 @@ export function staffCorrectionCaseQuery(manager: AuthSessionManager, loanApplic
   return queryOptions({
     queryKey: staffCorrectionKeys.case(loanApplicationId),
     queryFn: () => getStaffCorrectionCase(manager, loanApplicationId),
+    gcTime: 0,
     enabled,
   })
 }

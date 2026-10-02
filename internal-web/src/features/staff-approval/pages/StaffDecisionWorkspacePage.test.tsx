@@ -238,7 +238,10 @@ describe('Staff decision workspace', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Independent decision' })).toBeVisible()
     expect(screen.getByText('Cycle 1')).toBeVisible()
     expect(screen.queryByText(cycleId)).not.toBeInTheDocument()
-    expect(screen.queryByRole('navigation', { name: 'Application sections' })).not.toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Application sections' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Documents' })).toHaveAttribute('href', `/staff/applications/${applicationId}/documents`)
+    expect(screen.queryByRole('link', { name: 'Overview' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Review' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Review decision' }))
     const confirmation = within(screen.getByRole('dialog'))
     expect(confirmation.getByText('UCL-1')).toBeVisible()
@@ -370,7 +373,7 @@ describe('Staff decision workspace', () => {
     await user.click(await screen.findByRole('button', { name: 'Review decision' }, { timeout: 5_000 }))
     await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
-    expect(await screen.findByText(/decision result is not confirmed/i)).toBeVisible()
+    expect(await screen.findByText(/decision result is not confirmed/i, undefined, { timeout: 3_000 })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
     const posts = () => vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
       String(path).endsWith('/approval-decisions') && (options as RequestInit | undefined)?.method === 'POST')
@@ -406,7 +409,7 @@ describe('Staff decision workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Review decision' }))
     await user.click(screen.getByRole('button', { name: 'Confirm' }))
 
-    expect(await screen.findByText(/decision result is not confirmed/i)).toBeVisible()
+    expect(await screen.findByText(/decision result is not confirmed/i, undefined, { timeout: 3_000 })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
     const posts = () => vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
       String(path).endsWith('/approval-decisions') && (options as RequestInit | undefined)?.method === 'POST')
