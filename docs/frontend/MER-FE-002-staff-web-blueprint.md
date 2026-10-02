@@ -288,6 +288,8 @@ The Staff case contract composes purpose-limited context-owned facts without exp
 - Loan-owned Collateral facts for a Collateral Loan;
 - safe ordered LoanApplication lifecycle transitions.
 
+Lifecycle actors render from the response classification: `SYSTEM` as **System**, `STAFF` as display name and email, `CUSTOMER_SELF_SERVICE` as **Customer — self-service**, and `UNAVAILABLE` or an unknown value as **Actor unavailable**. The browser never infers Customer type from missing Staff data, action names, or channel and never renders Customer login identity. Validated assisted action wording identifies the Customer decision/request and labels Staff as **Recorded by**; generic history remains high-level.
+
 Purpose-owned document and correction projections remain separate reads. Later operational sections use their own richer projections for:
 
 - product-specific verification summary and exact current cycle identity where an action requires it;
@@ -1111,6 +1113,8 @@ History results remain in memory for the active page with no inactive query rete
 
 The workspace displays exact backend-owned offer terms and expiry, lets the operator choose the decision present on the signed form, and uploads or replaces `CUSTOMER_OFFER_RESPONSE` evidence using `document:upload:assisted-action`, `uploadRequestId`, and exact `expectedCurrentVersionId`. Recording stays disabled until the current evidence targets the displayed offer, declares the selected decision, and the operator confirms that the signed form records the Customer's exact decision. Staff Web does not present Staff as the decision subject.
 
+After completion, the offer workspace presents **Recorded Customer response**, the Customer decision from signed evidence, safe Staff **Recorded by**, recording time, and the exact consumed document version from `completedResponse`. It removes upload and command controls. Explicit retry of an unresolved exact request remains available under the existing recovery rules; provenance never enters browser persistence. Unknown response-only decisions render a neutral fallback and enable no actions.
+
 The Loan command uses one stable request UUID and stores only its non-sensitive semantic payload for unresolved-result recovery. A network or 5xx result never triggers an automatic POST retry. The workspace refetches authoritative state, retains the exact request identity and payload, and offers only an explicit exact replay. File bytes, filename, digest, signature, and form contents never enter browser persistence.
 
 ### 24.6 Evidenced Staff-Assisted UCL Cancellation
@@ -1119,7 +1123,9 @@ The Staff correction workspace presents “Customer-requested cancellation” as
 
 The operator uploads or replaces `CUSTOMER_CANCELLATION_REQUEST` evidence against the projected correction ID and exact current-version baseline. The UI must say that the Customer requested cancellation and that Staff records the request; it must not present Staff as deciding whether to cancel. Recording remains disabled until the backend reports current evidence for the displayed correction and the operator confirms the terminal consequence.
 
-The cancellation command sends one stable request UUID, the exact correction-request ID, and the exact evidence-document-version ID. Its unresolved operation stores only those non-sensitive semantic identifiers. A network or 5xx result never triggers an automatic POST retry; the workspace refetches the authoritative correction/application state and permits only an explicit exact replay when still unresolved. Successful cancellation removes the action through authoritative `CANCELLED` state. File bytes and sensitive file metadata never enter browser persistence.
+The cancellation command sends one stable request UUID, the exact correction-request ID, and the exact evidence-document-version ID. Its unresolved operation stores only those non-sensitive semantic identifiers. A network or 5xx result never triggers an automatic POST retry; the workspace refetches the authoritative correction/application state and permits only an explicit exact replay when still unresolved. Successful cancellation removes the action through authoritative `CANCELLED` state.
+
+The completed correction case presents **Customer-requested cancellation recorded** from `completedCancellation`, with separate Staff recorder, recording time, and the exact signed evidence version. It does not expose document contents or add historical correction-task provenance. File bytes and sensitive file metadata never enter browser persistence.
 
 ## 25. Contracts, Readiness, and Disbursement
 
@@ -1138,6 +1144,8 @@ The workspace presents:
 - point-in-time readiness and blocker codes;
 - version history only when a future authorized projection exposes it;
 - current action eligibility from authoritative state.
+
+The acknowledgment panel identifies **Customer — self-service** or **Customer acknowledgment recorded by [Staff]**, while keeping the authorized Customer number/name separate. Both show the acknowledged current contract version and time; the assisted path also shows the exact consumed signed document version. Unknown acknowledgment modes render a neutral fallback. The existing Accounting context supplies these facts without another DTO or persistence record.
 
 Version 1 preparation uses `expectedCurrentContractVersion = 0`. Regeneration requires the exact current version and supported `DISBURSEMENT_ACCOUNT_REFRESH` reason. The UI explains that regeneration preserves accepted financial terms, supersedes the prior operational version, refreshes the captured destination, and requires fresh Customer acknowledgment.
 

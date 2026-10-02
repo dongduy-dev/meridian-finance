@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { recordedCustomerActionSchema } from '@/components/operations/recorded-customer-action'
 import { apiTimestampSchema, uuidSchema } from '@/features/staff-applications/api/contracts'
 
 const rawValue = z.string().trim().min(1)
@@ -86,6 +87,7 @@ export const staffCorrectionCaseSchema = z.object({
     evidence: assistedCancellationEvidenceSchema.nullable(),
     evidenceUploadAvailable: z.boolean(),
     cancellationCommandAvailable: z.boolean(),
+    completedCancellation: recordedCustomerActionSchema(assistedCancellationEvidenceSchema).nullable(),
   }),
 })
 

@@ -554,6 +554,12 @@ Loan does not read Document persistence or Customer persistence. Document resolv
 
 Because verification start/completion and review start have no client business UUID, Internal Web never automatically retries their POSTs. After a lost response it performs the corresponding purpose-limited GET and reports only what the refreshed durable state proves. Collateral completion carries the displayed `expectedVerificationId`; a stale conflict preserves the in-memory form, refreshes the latest cycle, and requires an explicit new confirmation.
 
+### Workflow Actor and Assisted Customer Action Reads
+
+Loan composes Staff application lifecycle actors under the existing repeatable-read `loan:read` query. Its workflow-actor output port calls Identity's batched public classification contract through an Identity adapter; Loan never reads Identity persistence. The query requires matching `user_type = CUSTOMER` and application Customer association before returning `CUSTOMER_SELF_SERVICE`, with no Customer login fields. Staff summaries remain purpose-limited, System requires no User record, and missing legacy Users produce `UNAVAILABLE`.
+
+Completed assisted offer-response and UCL cancellation reads compose existing Loan-owned action records, exact workflow transitions, Document-owned version metadata, and safe Staff recorder summaries. They validate subject/target, action/state, actor, time, operation correspondence, and consumed evidence version under the owning read transaction. Contradictions return `SYSTEM_STATE_CONFLICT`; the reads create no history, audit, or action records. Generic lifecycle history uses only validated high-level Customer decision/request wording. Detailed completed provenance stays in the offer-response and correction-case contracts. Accounting acknowledgment retains its existing contract-bound Customer/Staff distinction.
+
 ---
 
 ## 8. Approval, Review, and Correction Coordination

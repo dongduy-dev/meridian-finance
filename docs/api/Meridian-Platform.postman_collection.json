@@ -956,6 +956,43 @@
                              "response": []
                          },
                          {
+                             "name": "Read completed assisted Customer offer response",
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                             "const json = pm.response.json();",
+                                             "const completed = json.completedResponse;",
+                                             "pm.expect(completed.action).to.eql(\"ACCEPT\");",
+                                             "pm.expect(completed.recordedBy).to.have.all.keys(\"userId\", \"displayName\", \"email\");",
+                                             "pm.expect(completed.recordedAt).to.eql(json.approvedOffer.acceptedAt);",
+                                             "pm.expect(completed.evidence.documentVersionId).to.eql(pm.collectionVariables.get(\"assistedOfferEvidenceVersionId\"));",
+                                             "pm.expect(completed).to.have.all.keys(\"action\", \"recordedBy\", \"recordedAt\", \"evidence\");"
+                                         ]
+                                     }
+                                 }
+                             ],
+                             "request": {
+                                 "method": "GET",
+                                 "header": [],
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{loanOfficerAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 },
+                                 "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/offer-response"
+                             },
+                             "response": []
+                         },
+                         {
                              "name": "Record evidenced assisted DECLINE on a fresh pending fixture",
                              "description": "Set assistedDownstreamLoanApplicationId, assistedOfferId, and evidence to a separate pending fixture whose signed form declares DECLINE.",
                              "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"body":{"mode":"raw","raw":"{\n  \"requestId\": \"{{assistedOfferDeclineRequestId}}\",\n  \"expectedApprovedOfferId\": \"{{assistedOfferId}}\",\n  \"action\": \"DECLINE\",\n  \"evidenceDocumentVersionId\": \"{{assistedOfferEvidenceVersionId}}\"\n}","options":{"raw":{"language":"json"}}},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedDownstreamLoanApplicationId}}/offer-response"},
@@ -989,6 +1026,44 @@
                              "name": "Record evidenced assisted UCL cancellation",
                              "event": [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.expect(json.resultingStatus).to.eql(\"CANCELLED\");","pm.expect(json.idempotentReplay).to.eql(false);"]}}],
                              "request": {"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{loanOfficerAccessToken}}","type":"string"}]},"body":{"mode":"raw","raw":"{\n  \"requestId\": \"{{assistedCancellationRequestId}}\",\n  \"expectedCorrectionRequestId\": \"{{assistedCancellationCorrectionRequestId}}\",\n  \"evidenceDocumentVersionId\": \"{{assistedCancellationEvidenceVersionId}}\"\n}","options":{"raw":{"language":"json"}}},"url":"{{baseUrl}}/api/v1/staff/loan-applications/{{assistedCancellationLoanApplicationId}}/cancellation"},
+                             "response": []
+                         },
+                         {
+                             "name": "Read completed Customer-requested cancellation",
+                             "event": [
+                                 {
+                                     "listen": "test",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                             "const json = pm.response.json();",
+                                             "const completed = json.assistedCancellation.completedCancellation;",
+                                             "pm.expect(json.assistedCancellation.available).to.eql(false);",
+                                             "pm.expect(json.assistedCancellation.cancellationCommandAvailable).to.eql(false);",
+                                             "pm.expect(completed.action).to.eql(\"CUSTOMER_REQUESTED_CANCELLATION\");",
+                                             "pm.expect(completed.recordedBy).to.have.all.keys(\"userId\", \"displayName\", \"email\");",
+                                             "pm.expect(completed.evidence.documentVersionId).to.eql(pm.collectionVariables.get(\"assistedCancellationEvidenceVersionId\"));",
+                                             "pm.expect(completed).to.have.all.keys(\"action\", \"recordedBy\", \"recordedAt\", \"evidence\");"
+                                         ]
+                                     }
+                                 }
+                             ],
+                             "request": {
+                                 "method": "GET",
+                                 "header": [],
+                                 "auth": {
+                                     "type": "bearer",
+                                     "bearer": [
+                                         {
+                                             "key": "token",
+                                             "value": "{{loanOfficerAccessToken}}",
+                                             "type": "string"
+                                         }
+                                     ]
+                                 },
+                                 "url": "{{baseUrl}}/api/v1/staff/loan-applications/{{assistedCancellationLoanApplicationId}}/corrections"
+                             },
                              "response": []
                          },
                          {

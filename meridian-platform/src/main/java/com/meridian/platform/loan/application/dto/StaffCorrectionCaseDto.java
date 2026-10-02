@@ -18,7 +18,8 @@ public record StaffCorrectionCaseDto(
             UUID correctionRequestId,
             AssistedActionEvidenceMetadataDto evidence,
             boolean evidenceUploadAvailable,
-            boolean cancellationCommandAvailable
+            boolean cancellationCommandAvailable,
+            RecordedCustomerActionDto completedCancellation
     ) {
     }
 

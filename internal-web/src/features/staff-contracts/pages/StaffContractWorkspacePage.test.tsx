@@ -140,7 +140,10 @@ describe('Staff contract workspace', () => {
     const digital = caseFixture()
     vi.mocked(api.apiRequest).mockResolvedValue(digital)
     const view = renderPage()
-    expect(await screen.findByText('Customer self-service')).toBeVisible()
+    expect(await screen.findByText('Customer — self-service')).toBeVisible()
+    expect(screen.getByText('Acknowledged contract version 1')).toBeVisible()
+    expect(screen.getByText(/Acknowledged at:/)).toBeVisible()
+    expect(screen.getByText('Ari Customer')).toBeVisible()
     expect(screen.queryByText(/Customer acknowledgment recorded by/)).not.toBeInTheDocument()
 
     view.unmount()

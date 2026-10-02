@@ -12,6 +12,7 @@ import com.meridian.platform.shared.domain.exception.BusinessStateConflictExcept
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -26,6 +27,7 @@ public class QueryAssistedApprovedOfferResponseService implements QueryAssistedA
     private final CurrentUserProvider currentUsers;
     private final ApprovedOfferMapper mapper;
     private final Clock clock;
+    private final AssistedCustomerActionProvenanceComposer provenance;
 
     public QueryAssistedApprovedOfferResponseService(
             LoanApplicationRepository applications,
@@ -33,7 +35,8 @@ public class QueryAssistedApprovedOfferResponseService implements QueryAssistedA
             LoanAssistedActionEvidencePort evidence,
             CurrentUserProvider currentUsers,
             ApprovedOfferMapper mapper,
-            Clock clock
+            Clock clock,
+            AssistedCustomerActionProvenanceComposer provenance
     ) {
         this.applications = applications;
         this.offers = offers;
@@ -41,10 +44,11 @@ public class QueryAssistedApprovedOfferResponseService implements QueryAssistedA
         this.currentUsers = currentUsers;
         this.mapper = mapper;
         this.clock = clock;
+        this.provenance = provenance;
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public AssistedOfferResponseCaseDto query(UUID loanApplicationId) {
         requireActor(currentUsers.currentUser());
         LoanApplication application = applications.findById(loanApplicationId)
@@ -60,8 +64,11 @@ public class QueryAssistedApprovedOfferResponseService implements QueryAssistedA
         ApprovedOffer offer = offers.findByLoanApplicationId(application.id())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "APPROVED_OFFER_NOT_FOUND", "Approved offer was not found."));
-        AssistedActionEvidenceMetadataDto metadata = evidence.findOfferEvidence(application.id(), offer.id())
-                .map(QueryAssistedApprovedOfferResponseService::toDto).orElse(null);
+        RecordedCustomerActionDto completedResponse = provenance.offer(application, offer);
+        AssistedActionEvidenceMetadataDto metadata = completedResponse == null
+                ? evidence.findOfferEvidence(application.id(), offer.id())
+                    .map(QueryAssistedApprovedOfferResponseService::toDto).orElse(null)
+                : completedResponse.evidence();
         String workState = application.status() == LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING
                 && offer.status() == ApprovedOfferStatus.PENDING && !offer.isExpiredAt(now)
                 ? "ACTION_AVAILABLE"
@@ -69,7 +76,7 @@ public class QueryAssistedApprovedOfferResponseService implements QueryAssistedA
         return new AssistedOfferResponseCaseDto(
                 application.id(), application.applicationNumber(), application.productCode().name(),
                 application.productType().name(), application.originationChannel().name(),
-                application.status().name(), application.submittedAt(), mapper.toDto(offer, now), metadata, workState);
+                application.status().name(), application.submittedAt(), mapper.toDto(offer, now), metadata, workState, completedResponse);
     }
 
     private static void requireActor(AuthenticatedUser actor) {

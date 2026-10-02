@@ -156,7 +156,7 @@ export function ApplicationCasePage() {
                   <li key={`${index}-${item.occurredAt}-${item.action}`} className="relative pb-7 last:pb-0">
                     <span className="absolute -left-[1.82rem] top-1 grid size-3 rounded-full border-2 border-card bg-primary" aria-hidden="true" />
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div><p className="font-semibold">{transitionActionLabel(item.action)}</p><p className="mt-1 text-sm text-muted-foreground">{item.fromStatus ? `${applicationStatusLabel(item.fromStatus)} → ` : ''}{applicationStatusLabel(item.toStatus)}</p><p className="mt-1 text-sm text-muted-foreground">{item.actorType === 'SYSTEM' ? 'System' : item.actor ? `${item.actor.displayName} · ${item.actor.email}` : 'User unavailable'}</p></div>
+                      <div><p className="font-semibold">{transitionActionLabel(item.action)}</p><p className="mt-1 text-sm text-muted-foreground">{item.fromStatus ? `${applicationStatusLabel(item.fromStatus)} → ` : ''}{applicationStatusLabel(item.toStatus)}</p><p className="mt-1 text-sm text-muted-foreground">{item.actorType === 'SYSTEM' ? 'System' : item.actorType === 'CUSTOMER_SELF_SERVICE' ? 'Customer — self-service' : item.actorType === 'STAFF' && item.actor ? `${item.action.endsWith('_RECORDED') ? 'Recorded by ' : ''}${item.actor.displayName} · ${item.actor.email}` : 'Actor unavailable'}</p></div>
                       <time className="shrink-0 text-sm text-muted-foreground" dateTime={item.occurredAt}>{formatTimestamp(item.occurredAt)}</time>
                     </div>
                   </li>

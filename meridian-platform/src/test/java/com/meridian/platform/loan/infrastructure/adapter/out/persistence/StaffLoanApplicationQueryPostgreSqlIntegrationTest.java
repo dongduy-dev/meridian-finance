@@ -45,6 +45,10 @@ class StaffLoanApplicationQueryPostgreSqlIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired LoanApplicationRepository applications;
     @Autowired LoanApplicationStatusTransitionRepository transitions;
+    @Autowired com.meridian.platform.loan.application.port.in.QueryStaffLoanApplicationsUseCase cases;
+    @Autowired com.meridian.platform.identity.application.port.in.QueryWorkflowActorSummariesUseCase actors;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.meridian.platform.shared.application.security.CurrentUserProvider currentUsers;
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
@@ -195,6 +199,34 @@ class StaffLoanApplicationQueryPostgreSqlIntegrationTest {
         assertEquals("SUBMIT_APPLICATION", result.getFirst().action().name());
         assertEquals(2, result.getLast().sequenceNumber());
         assertEquals("restricted decision note", result.getLast().reason());
+    }
+
+    @Test
+    void realCustomerAssociationAndPersistedSubmissionResolveSafelyWithoutReadEffects() {
+        Map<String, Object> customerUser = jdbc.queryForMap("select id, customer_id, email from " + SCHEMA
+                + ".users where user_type = 'CUSTOMER' order by id limit 1");
+        UUID userId = (UUID) customerUser.get("id");
+        UUID customerId = (UUID) customerUser.get("customer_id");
+        jdbc.update("update " + SCHEMA + ".loan_applications set customer_id=? where id=?", customerId, FIRST_ID);
+        transitions.save(new com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition(
+                UUID.randomUUID(), FIRST_ID, UUID.randomUUID(), 1, null, LoanApplicationStatus.SUBMITTED,
+                com.meridian.platform.loan.domain.model.LoanApplicationTransitionAction.SUBMIT_APPLICATION, null,
+                com.meridian.platform.shared.domain.model.ActorType.USER, userId, SHARED_SUBMISSION_TIME));
+        org.mockito.Mockito.when(currentUsers.currentUser()).thenReturn(
+                new com.meridian.platform.shared.application.security.AuthenticatedUser(UUID.randomUUID(),
+                        "staff@meridian.local", "STAFF", null, java.util.Set.of("LOAN_OFFICER"), java.util.Set.of("loan:read")));
+        long before = jdbc.queryForObject("select count(*) from " + SCHEMA + ".audit_events", Long.class);
+        var result = cases.queryCase(FIRST_ID);
+        assertEquals("CUSTOMER_SELF_SERVICE", result.lifecycleHistory().getFirst().actorType());
+        assertNull(result.lifecycleHistory().getFirst().actor());
+        var classification = actors.findByUserIds(java.util.Set.of(userId)).get(userId);
+        assertEquals(customerId, classification.customerId());
+        assertNull(classification.staff());
+        String json = tools.jackson.databind.json.JsonMapper.builder().findAndAddModules().build().writeValueAsString(result);
+        org.junit.jupiter.api.Assertions.assertFalse(json.contains(userId.toString()));
+        org.junit.jupiter.api.Assertions.assertFalse(json.contains((String) customerUser.get("email")));
+        assertEquals(before, jdbc.queryForObject("select count(*) from " + SCHEMA + ".audit_events", Long.class));
+        assertEquals(1, transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(FIRST_ID).size());
     }
 
     private void insertApplication(

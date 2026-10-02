@@ -8,6 +8,7 @@ import type { AuthResponse } from '@/features/auth/api/auth-api'
 import * as authApi from '@/features/auth/api/auth-api'
 import { AuthProvider } from '@/features/auth/model/auth-context'
 import * as api from '@/lib/api'
+import { NetworkError } from '@/lib/api'
 import { createQueryClient } from '@/lib/query/query-client'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
@@ -56,6 +57,7 @@ function fixture(status = 'PENDING', declaredOfferDecision: 'ACCEPT' | 'DECLINE'
       targetVersion: null, versionNumber: 1, detectedMimeType: 'application/pdf', byteSize: 2048,
       uploadedAt: '2026-09-22T00:00:00',
     },
+    completedResponse: null,
     workState: status === 'PENDING' ? 'ACTION_AVAILABLE' : 'COMPLETED',
   }
 }
@@ -71,6 +73,63 @@ describe('Staff-assisted offer response workspace', () => {
     sessionStorage.clear()
     vi.mocked(authApi.refresh).mockResolvedValue(staff)
     vi.spyOn(crypto, 'randomUUID').mockReturnValue(requestId)
+  })
+
+  it.each(['ACCEPT', 'DECLINE', 'FUTURE_DECISION'])('shows a completed %s as a Customer decision with a separate Staff recorder', async (action) => {
+    const value = fixture('ACCEPTED')
+    vi.mocked(api.apiRequest).mockResolvedValue({
+      ...value,
+      completedResponse: {
+        action, recordedBy: { userId: '00000000-0000-0000-0000-000000000302',
+          displayName: 'Deni Loan Officer', email: 'deni@meridian.local' },
+        recordedAt: '2026-09-22T00:00:00', evidence: value.evidence,
+      },
+    })
+    renderPage()
+    expect(await screen.findByText('Recorded Customer response')).toBeVisible()
+    expect(screen.getByText('Customer decision recorded from signed evidence')).toBeVisible()
+    expect(screen.getByText('Recorded by')).toBeVisible()
+    expect(screen.getByText('Deni Loan Officer')).toBeVisible()
+    expect(screen.getByText('deni@meridian.local')).toBeVisible()
+    expect(screen.getByText(action === 'ACCEPT' ? 'Accepted' : action === 'DECLINE' ? 'Declined' : 'Decision unavailable')).toBeVisible()
+    expect(screen.getByText(new RegExp(evidenceVersionId))).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Record Customer acceptance|Record Customer decline|Upload signed evidence|Replace signed evidence/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.queryByText('Customer — self-service')).not.toBeInTheDocument()
+  })
+
+  it('keeps exact retry available after a lost response even when the refreshed offer is completed', async () => {
+    let completed = false
+    const bodies: unknown[] = []
+    vi.mocked(api.apiRequest).mockImplementation(async (_path, options) => {
+      if ((options as RequestInit | undefined)?.method === 'POST') {
+        bodies.push((options as { body: unknown }).body)
+        completed = true
+        if (bodies.length === 1) throw new NetworkError()
+        return fixture('ACCEPTED').approvedOffer
+      }
+      const value = fixture(completed ? 'ACCEPTED' : 'PENDING')
+      return completed ? { ...value, completedResponse: {
+        action: 'ACCEPT', recordedBy: { userId: '00000000-0000-0000-0000-000000000302',
+          displayName: 'Deni Loan Officer', email: 'deni@meridian.local' },
+        recordedAt: '2026-09-22T00:00:00', evidence: value.evidence,
+      } } : value
+    })
+    renderPage()
+    const user = userEvent.setup()
+    await screen.findByRole('button', { name: 'Record Customer acceptance' })
+    await user.click(screen.getByRole('checkbox'))
+    await user.click(screen.getByRole('button', { name: 'Record Customer acceptance' }))
+    expect(await screen.findByText('Recorded Customer response')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Retry this response' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Record Customer acceptance' })).not.toBeInTheDocument()
+    expect(bodies).toHaveLength(1)
+    await user.click(screen.getByRole('button', { name: 'Retry this response' }))
+    await screen.findByText(/Customer decision was recorded/i)
+    expect(bodies).toHaveLength(2)
+    expect(bodies[1]).toEqual(bodies[0])
+    expect(bodies[0]).toEqual({ requestId, expectedApprovedOfferId: offerId,
+      action: 'ACCEPT', evidenceDocumentVersionId: evidenceVersionId })
   })
 
   it('records the Customer decision only after exact evidence and explicit confirmation', async () => {
@@ -118,7 +177,7 @@ describe('Staff-assisted offer response workspace', () => {
 
     expect(await screen.findByText('Offer status unavailable')).toBeVisible()
     expect(screen.queryByText('FUTURE_STATUS')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Record Customer acceptance' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Record Customer acceptance' })).not.toBeInTheDocument()
   })
 
   it('presents Decline naturally while retaining the DECLINE command value', async () => {

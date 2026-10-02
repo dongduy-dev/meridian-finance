@@ -21,7 +21,7 @@ export const uuidSchema = z.string().uuid()
 export const apiTimestampSchema = z.string().refine(isValidApiTimestamp, 'Invalid API timestamp')
 const rawEnumValueSchema = z.string().trim().min(1)
 const moneySchema = z.number().finite().int().positive()
-const staffActorSchema = z.object({
+export const staffActorSchema = z.object({
   userId: meridianUuidSchema,
   displayName: z.string().trim().min(1),
   email: z.string().trim().email(),

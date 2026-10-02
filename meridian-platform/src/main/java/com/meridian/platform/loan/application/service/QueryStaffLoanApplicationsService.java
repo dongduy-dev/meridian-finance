@@ -12,7 +12,7 @@ import com.meridian.platform.loan.application.port.out.CollateralRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
-import com.meridian.platform.loan.application.port.out.StaffActorDirectoryPort;
+import com.meridian.platform.loan.application.port.out.WorkflowActorDirectoryPort;
 import com.meridian.platform.loan.application.port.out.StaffActorSummary;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
@@ -46,7 +46,8 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
     private final CustomerLoanCaseContactPort customerContacts;
     private final CollateralRepository collaterals;
     private final LoanReviewCycleRepository reviewCycles;
-    private final StaffActorDirectoryPort staffActors;
+    private final WorkflowActorDirectoryPort workflowActors;
+    private final AssistedCustomerActionProvenanceComposer assistedActions;
     private final CurrentUserProvider currentUserProvider;
 
     public QueryStaffLoanApplicationsService(
@@ -56,7 +57,8 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
             CustomerLoanCaseContactPort customerContacts,
             CollateralRepository collaterals,
             LoanReviewCycleRepository reviewCycles,
-            StaffActorDirectoryPort staffActors,
+            WorkflowActorDirectoryPort workflowActors,
+            AssistedCustomerActionProvenanceComposer assistedActions,
             CurrentUserProvider currentUserProvider
     ) {
         this.applications = applications;
@@ -65,7 +67,8 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
         this.customerContacts = customerContacts;
         this.collaterals = collaterals;
         this.reviewCycles = reviewCycles;
-        this.staffActors = staffActors;
+        this.workflowActors = workflowActors;
+        this.assistedActions = assistedActions;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -125,7 +128,8 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
         if (latestReviewCycle != null && latestReviewCycle.assignedLoanOfficerUserId() != null) {
             actorIds.add(latestReviewCycle.assignedLoanOfficerUserId());
         }
-        Map<UUID, StaffActorSummary> actorSummaries = staffActors.findByUserIds(actorIds);
+        Map<UUID, WorkflowActorDirectoryPort.ActorSummary> actorSummaries = workflowActors.findByUserIds(actorIds);
+        Map<UUID, String> assistedWording = assistedActions.historyActions(application, history);
 
         return new StaffLoanApplicationCaseDto(
                 application.id(),
@@ -147,10 +151,10 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
                 collateralContext,
                 latestReviewCycle != null,
                 latestReviewCycle == null ? null : toActor(
-                        actorSummaries.get(latestReviewCycle.assignedLoanOfficerUserId())
+                        staffSummary(actorSummaries.get(latestReviewCycle.assignedLoanOfficerUserId()))
                 ),
                 history.stream()
-                        .map(transition -> toLifecycleItem(transition, actorSummaries))
+                        .map(transition -> toLifecycleItem(application, transition, actorSummaries, assistedWording))
                         .toList()
         );
     }
@@ -185,17 +189,45 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
     }
 
     private static StaffLoanApplicationCaseDto.LifecycleItemDto toLifecycleItem(
-            LoanApplicationStatusTransition transition,
-            Map<UUID, StaffActorSummary> actorSummaries
+            LoanApplication application, LoanApplicationStatusTransition transition,
+            Map<UUID, WorkflowActorDirectoryPort.ActorSummary> actors, Map<UUID, String> assistedWording
     ) {
+        String actorType = "SYSTEM";
+        StaffLoanApplicationCaseDto.StaffActorDto staff = null;
+        if (transition.actorUserId() != null) {
+            var actor = actors.get(transition.actorUserId());
+            actorType = "UNAVAILABLE";
+            if (actor != null) {
+                if (!transition.actorUserId().equals(actor.userId())) throw actorConflict();
+                if ("CUSTOMER".equals(actor.userType())) {
+                    if (!application.customerId().equals(actor.customerId()) || actor.staff() != null) throw actorConflict();
+                    actorType = "CUSTOMER_SELF_SERVICE";
+                } else if ("STAFF".equals(actor.userType())) {
+                    if (actor.customerId() != null) throw actorConflict();
+                    StaffActorSummary summary = staffSummary(actor);
+                    if (summary != null && actor.userId().equals(summary.userId())
+                            && summary.displayName() != null && !summary.displayName().isBlank()
+                            && summary.email() != null && !summary.email().isBlank()) {
+                        actorType = "STAFF";
+                        staff = toActor(summary);
+                    }
+                }
+            }
+        }
+        String assistedAction = assistedWording.get(transition.id());
+        if (assistedAction != null && "CUSTOMER_SELF_SERVICE".equals(actorType)) throw actorConflict();
         return new StaffLoanApplicationCaseDto.LifecycleItemDto(
                 transition.fromStatus() == null ? null : transition.fromStatus().name(),
-                transition.toStatus().name(),
-                transition.action().name(),
-                transition.actorType().name(),
-                transition.actorUserId() == null ? null : toActor(actorSummaries.get(transition.actorUserId())),
-                transition.occurredAt()
-        );
+                transition.toStatus().name(), assistedAction == null ? transition.action().name() : assistedAction,
+                actorType, staff, transition.occurredAt());
+    }
+
+    private static StaffActorSummary staffSummary(WorkflowActorDirectoryPort.ActorSummary actor) {
+        return actor != null && "STAFF".equals(actor.userType()) ? actor.staff() : null;
+    }
+
+    private static BusinessStateConflictException actorConflict() {
+        return new BusinessStateConflictException("SYSTEM_STATE_CONFLICT", "Workflow actor evidence is inconsistent.");
     }
 
     private static StaffLoanApplicationCaseDto.StaffActorDto toActor(StaffActorSummary actor) {
