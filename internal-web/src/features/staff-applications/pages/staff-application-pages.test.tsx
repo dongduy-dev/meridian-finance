@@ -72,7 +72,7 @@ const caseFixture = {
   },
   lifecycleHistory: [
     { fromStatus: null, toStatus: 'SUBMITTED', action: 'SUBMIT_APPLICATION', actorType: 'SYSTEM', actor: null, occurredAt: '2026-09-02T08:00:00' },
-    { fromStatus: 'SUBMITTED', toStatus: 'UNDER_REVIEW', action: 'START_REVIEW', actorType: 'USER',
+    { fromStatus: 'SUBMITTED', toStatus: 'UNDER_REVIEW', action: 'START_REVIEW', actorType: 'STAFF',
       actor: { userId: '11111111-1111-4111-8111-111111111111', displayName: 'Deni Loan Officer', email: 'staff@meridian.local' },
       occurredAt: '2026-09-02T09:00:00' },
   ],
@@ -92,6 +92,27 @@ describe('Staff application pages', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(authApi.refresh).mockResolvedValue(staff())
+  })
+
+  it('renders explicit Customer, Staff, System, unavailable and unknown actors without guessing', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue({
+      ...caseFixture,
+      lifecycleHistory: [
+        { ...caseFixture.lifecycleHistory[0], actorType: 'CUSTOMER_SELF_SERVICE', actor: null },
+        caseFixture.lifecycleHistory[1],
+        caseFixture.lifecycleHistory[0],
+        { ...caseFixture.lifecycleHistory[1], actorType: 'UNAVAILABLE', actor: null },
+        { ...caseFixture.lifecycleHistory[1], actorType: 'FUTURE_ACTOR',
+          actor: { userId: '00000000-0000-0000-0000-000000000302', displayName: 'Hidden future actor', email: 'hidden@meridian.local' } },
+      ],
+    })
+    renderRoute(`/staff/applications/${applicationId}`)
+    expect(await screen.findByText('Customer — self-service')).toBeVisible()
+    expect(screen.getByText('Deni Loan Officer · staff@meridian.local')).toBeVisible()
+    expect(screen.getByText('System')).toBeVisible()
+    expect(screen.getAllByText('Actor unavailable')).toHaveLength(2)
+    expect(screen.queryByText(/Hidden future actor|hidden@meridian.local/)).not.toBeInTheDocument()
+    expect(screen.queryByText('00000000-0000-0000-0000-000000000302')).not.toBeInTheDocument()
   })
 
   it('loads the safe default index, reflects filters and paging in the URL, and opens a case', async () => {
@@ -237,7 +258,7 @@ describe('Staff application pages', () => {
 
     expect(await screen.findByText('Assignment unavailable')).toBeVisible()
     expect(screen.getByText('System')).toBeVisible()
-    expect(screen.getByText('User unavailable')).toBeVisible()
+    expect(screen.getByText('Actor unavailable')).toBeVisible()
     expect(screen.queryByText('Staff actor unavailable')).not.toBeInTheDocument()
     expect(screen.queryByText(/Unknown Staff|Current user/)).not.toBeInTheDocument()
   })

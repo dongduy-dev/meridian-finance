@@ -52,13 +52,14 @@ class QueryStaffCorrectionCaseServiceTest {
     @Mock LoanAssistedActionEvidencePort assistedEvidence;
     @Mock LoanDocumentChecklistPort documents;
     @Mock CurrentUserProvider currentUserProvider;
+    @Mock AssistedCustomerActionProvenanceComposer provenance;
     private QueryStaffCorrectionCaseService service;
 
     @BeforeEach
     void setUp() {
         service = new QueryStaffCorrectionCaseService(
                 applications, corrections, cancellations, assistedEvidence, documents,
-                new CustomerCorrectionDocumentProof(documents), currentUserProvider);
+                new CustomerCorrectionDocumentProof(documents), provenance, currentUserProvider);
         when(currentUserProvider.currentUser()).thenReturn(staff(CREATOR_ID));
         when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application()));
     }

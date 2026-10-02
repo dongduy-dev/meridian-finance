@@ -39,6 +39,7 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
     private final LoanAssistedActionEvidencePort assistedEvidence;
     private final LoanDocumentChecklistPort documents;
     private final CustomerCorrectionDocumentProof customerDocumentProof;
+    private final AssistedCustomerActionProvenanceComposer provenance;
     private final CurrentUserProvider currentUserProvider;
 
     public QueryStaffCorrectionCaseService(
@@ -48,6 +49,7 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
             LoanAssistedActionEvidencePort assistedEvidence,
             LoanDocumentChecklistPort documents,
             CustomerCorrectionDocumentProof customerDocumentProof,
+            AssistedCustomerActionProvenanceComposer provenance,
             CurrentUserProvider currentUserProvider
     ) {
         this.applications = applications;
@@ -56,6 +58,7 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
         this.assistedEvidence = assistedEvidence;
         this.documents = documents;
         this.customerDocumentProof = customerDocumentProof;
+        this.provenance = provenance;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -81,6 +84,7 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
             LoanCorrectionRequest request,
             AuthenticatedUser actor
     ) {
+        var completed = provenance.cancellation(application, request);
         boolean eligible = request != null
                 && application.originationChannel() == OriginationChannel.STAFF_ASSISTED
                 && application.productCode() == ProductCode.UNSECURED_CONSUMER_LOAN
@@ -90,7 +94,8 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
                 && cancellations.findByLoanApplicationId(application.id()).isEmpty();
         if (!eligible) {
             return new StaffCorrectionCaseDto.AssistedCancellationDto(
-                    false, null, null, false, false);
+                    false, completed == null ? null : request.id(),
+                    completed == null ? null : completed.evidence(), false, false, completed);
         }
         AssistedActionEvidenceMetadataDto evidence = assistedEvidence
                 .findCancellationEvidence(application.id(), request.id())
@@ -103,7 +108,8 @@ public class QueryStaffCorrectionCaseService implements QueryStaffCorrectionCase
                 request.id(),
                 evidence,
                 commandAuthority && actor.hasPermission("document:upload:assisted-action"),
-                commandAuthority && evidence != null
+                commandAuthority && evidence != null,
+                null
         );
     }
 

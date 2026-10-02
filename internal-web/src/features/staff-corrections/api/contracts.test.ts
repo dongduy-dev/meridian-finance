@@ -16,6 +16,7 @@ describe('Staff correction contracts', () => {
         evidence: null,
         evidenceUploadAvailable: false,
         cancellationCommandAvailable: false,
+        completedCancellation: null,
       },
     }).correctionRequest).toBeNull()
   })

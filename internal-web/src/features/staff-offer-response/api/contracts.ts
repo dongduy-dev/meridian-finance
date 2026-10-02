@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { recordedCustomerActionSchema } from '@/components/operations/recorded-customer-action'
 import { apiTimestampSchema, uuidSchema } from '@/features/staff-applications/api/contracts'
 
 const money = z.number().finite().nonnegative()
@@ -37,7 +38,7 @@ export const actionEvidenceSchema = z.object({
   documentId: uuidSchema,
   documentVersionId: uuidSchema,
   evidenceType: z.string().trim().min(1),
-  declaredOfferDecision: z.enum(['ACCEPT', 'DECLINE']).nullable(),
+  declaredOfferDecision: z.string().trim().min(1).nullable(),
   targetId: uuidSchema,
   targetVersion: z.number().int().positive().nullable(),
   versionNumber: z.number().int().positive(),
@@ -57,6 +58,7 @@ export const assistedOfferResponseCaseSchema = z.object({
   approvedOffer: assistedOfferSchema,
   evidence: actionEvidenceSchema.nullable(),
   workState: z.string().trim().min(1),
+  completedResponse: recordedCustomerActionSchema(actionEvidenceSchema).nullable(),
 })
 
 export const uploadedEvidenceVersionSchema = z.object({

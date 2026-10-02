@@ -343,6 +343,8 @@ Public application contracts and event schemas must evolve without exposing inte
 
 Identity supplies authenticated actor and authorization facts to protected contexts. For an authorized operational case read, it may also resolve a finite batch of known Staff User IDs into purpose-limited display summaries containing only User ID, display name, and email. This is not a user-directory or role/permission query, and consuming contexts do not read Identity persistence directly.
 
+For LoanApplication lifecycle reads, Identity also classifies a finite batch of recorded User IDs through a purpose-limited workflow-actor contract. It returns User type, Customer association for Customer Users, and safe display identity only for Staff. Loan verifies that a Customer association equals the application Customer before projecting self-service; conflicting association returns `SYSTEM_STATE_CONFLICT`. Missing legacy Users remain unresolved. Customer login identity stays inside the backend boundary and is excluded from the Staff projection.
+
 Each business context remains responsible for its own ownership and business-rule checks. A permission authorizes an attempted capability; it does not prove that the requested Customer, application, document, contract, or account belongs to the actor.
 
 Customer self-service resolves the Customer through the login-to-Customer association. Staff-assisted capabilities authenticate the Staff user and carry the selected Customer separately as the business subject. No context may satisfy a Customer-owned check by impersonating Staff as the Customer or by creating a synthetic Customer session.

@@ -99,12 +99,14 @@ function caseFixture(proofState: string, assisted = false, withCancellationEvide
       } : null,
       evidenceUploadAvailable: true,
       cancellationCommandAvailable: withCancellationEvidence,
+      completedCancellation: null,
     } : {
       available: false,
       correctionRequestId: null,
       evidence: null,
       evidenceUploadAvailable: false,
       cancellationCommandAvailable: false,
+      completedCancellation: null,
     },
   }
 }
@@ -115,6 +117,31 @@ describe('Staff correction operation recovery', () => {
     sessionStorage.clear()
     vi.mocked(authApi.refresh).mockResolvedValue(staff)
     await bindUnresolvedOperations(staff)
+  })
+
+  it('shows completed Customer-requested cancellation and the Staff recorder without command controls', async () => {
+    const value = caseFixture('SATISFIED', true, true)
+    vi.mocked(api.apiRequest).mockResolvedValue({
+      ...value, applicationStatus: 'CANCELLED',
+      correctionRequest: { ...value.correctionRequest, status: 'CANCELLED', tasks: [] },
+      assistedCancellation: {
+        ...value.assistedCancellation, available: false, evidenceUploadAvailable: false,
+        cancellationCommandAvailable: false,
+        completedCancellation: { action: 'CUSTOMER_REQUESTED_CANCELLATION',
+          recordedBy: { userId: '00000000-0000-0000-0000-000000000302', displayName: 'Deni Loan Officer', email: 'deni@meridian.local' },
+          recordedAt: '2026-09-04T09:00:00', evidence: value.assistedCancellation.evidence },
+      },
+    })
+    renderWorkspace()
+    expect(await screen.findByText('Customer-requested cancellation recorded')).toBeVisible()
+    expect(screen.getByText('Customer request')).toBeVisible()
+    expect(screen.getByText('Customer request recorded from signed evidence')).toBeVisible()
+    expect(screen.queryByText('Customer decision recorded from signed evidence')).not.toBeInTheDocument()
+    expect(screen.getByText('Recorded by')).toBeVisible()
+    expect(screen.getByText('Deni Loan Officer')).toBeVisible()
+    expect(screen.getByText(new RegExp(cancellationEvidenceVersionId))).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Review Customer-requested cancellation' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Customer — self-service')).not.toBeInTheDocument()
   })
 
   it('blocks a changed Staff upload while the previous result is unresolved', async () => {

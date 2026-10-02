@@ -65,7 +65,7 @@ const featureResponses: Record<string, unknown> = {
     loanApplicationId: caseFacts.loanApplicationId, applicationNumber: caseFacts.applicationNumber,
     applicationStatus: caseFacts.status, productCode: caseFacts.productCode, originationChannel: caseFacts.originationChannel,
     correctionRequest: null,
-    assistedCancellation: { available: false, correctionRequestId: null, evidence: null, evidenceUploadAvailable: false, cancellationCommandAvailable: false },
+    assistedCancellation: { available: false, correctionRequestId: null, evidence: null, evidenceUploadAvailable: false, cancellationCommandAvailable: false, completedCancellation: null },
   },
 }
 const featureRoutes = [

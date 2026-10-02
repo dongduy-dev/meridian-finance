@@ -941,6 +941,8 @@ A transition and its financial, correction, document, offer, contract, exposure,
 | BR-073 | When Staff-assisted intake creates a new Customer, creation of the Customer and required identity-bearing profile must fail as one business outcome when protected identity evidence duplicates another Customer; the failed attempt must not leave a separate incomplete Customer shell. |
 | BR-074 | An authorized Staff Customer-intake actor may enable Customer Web access for an existing active identity-bearing Customer only after matching the Customer's presented identity reference to that exact record. One Customer has at most one linked Customer User. The Customer must verify control of the activation email before choosing a password through account recovery. Activation preserves the Customer, profile, bank accounts, historical `STAFF_ASSISTED` application channels, and their lack of Customer-digital actions; it neither creates nor merges Customer records. |
 
+Operational history identifies a Customer self-service action as **Customer — self-service** without exposing the Customer Identity User ID, login email, Identity display name, roles, permissions, session information, or credentials. An evidenced Staff-assisted Customer decision or request identifies the Customer as its source and Staff as its recorder. Staff-owned review and decision actions identify the Staff actor. System actions identify System; unresolved historical actors remain unavailable without guessing their identity. Customer number or name appears only through an already-authorized business Customer projection.
+
 ---
 
 ## 11. MVP Product Configuration

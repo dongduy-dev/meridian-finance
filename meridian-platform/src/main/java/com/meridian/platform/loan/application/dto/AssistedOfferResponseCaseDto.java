@@ -13,6 +13,7 @@ public record AssistedOfferResponseCaseDto(
         LocalDateTime submittedAt,
         ApprovedOfferDto approvedOffer,
         AssistedActionEvidenceMetadataDto evidence,
-        String workState
+        String workState,
+        RecordedCustomerActionDto completedResponse
 ) {
 }

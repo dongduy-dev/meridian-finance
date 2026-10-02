@@ -8,7 +8,7 @@ import com.meridian.platform.loan.application.port.out.CollateralRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
-import com.meridian.platform.loan.application.port.out.StaffActorDirectoryPort;
+import com.meridian.platform.loan.application.port.out.WorkflowActorDirectoryPort;
 import com.meridian.platform.loan.application.port.out.StaffActorSummary;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
@@ -63,7 +63,8 @@ class QueryStaffLoanApplicationsServiceTest {
     @Mock CustomerLoanCaseContactPort customerContacts;
     @Mock CollateralRepository collaterals;
     @Mock LoanReviewCycleRepository reviewCycles;
-    @Mock StaffActorDirectoryPort staffActors;
+    @Mock WorkflowActorDirectoryPort staffActors;
+    @Mock AssistedCustomerActionProvenanceComposer assistedActions;
     @Mock CurrentUserProvider currentUserProvider;
 
     private QueryStaffLoanApplicationsService service;
@@ -78,6 +79,7 @@ class QueryStaffLoanApplicationsServiceTest {
                 collaterals,
                 reviewCycles,
                 staffActors,
+                assistedActions,
                 currentUserProvider
         );
         org.mockito.Mockito.lenient().when(staffActors.findByUserIds(org.mockito.ArgumentMatchers.any()))
@@ -161,7 +163,8 @@ class QueryStaffLoanApplicationsServiceTest {
         ));
         when(staffActors.findByUserIds(Set.of(reviewActorId))).thenReturn(Map.of(
                 reviewActorId,
-                new StaffActorSummary(reviewActorId, "Deni Loan Officer", "deni@meridian.local")
+                new WorkflowActorDirectoryPort.ActorSummary(reviewActorId, "STAFF", null,
+                        new StaffActorSummary(reviewActorId, "Deni Loan Officer", "deni@meridian.local"))
         ));
 
         var result = service.queryCase(APPLICATION_ID);
@@ -174,7 +177,7 @@ class QueryStaffLoanApplicationsServiceTest {
         assertNull(result.lifecycleHistory().getFirst().fromStatus());
         assertEquals("SUBMIT_APPLICATION", result.lifecycleHistory().getFirst().action());
         assertEquals("START_REVIEW", result.lifecycleHistory().getLast().action());
-        assertEquals("USER", result.lifecycleHistory().getLast().actorType());
+        assertEquals("STAFF", result.lifecycleHistory().getLast().actorType());
         assertEquals("Deni Loan Officer", result.lifecycleHistory().getLast().actor().displayName());
         assertEquals("deni@meridian.local", result.lifecycleHistory().getLast().actor().email());
         assertNull(result.lifecycleHistory().getFirst().actor());
@@ -310,6 +313,62 @@ class QueryStaffLoanApplicationsServiceTest {
                 () -> service.queryCase(APPLICATION_ID)
         );
         assertEquals("SYSTEM_STATE_CONFLICT", unavailable.getErrorCode());
+    }
+
+    @Test
+    void classifiesCustomerStaffSystemAndUnavailableInOneBatchWithoutExposingCustomerLogin() {
+        UUID customerUserId = UUID.randomUUID(), missingId = UUID.randomUUID();
+        UUID staffId = reviewTransition().actorUserId();
+        prepareActorCase();
+        var customerSubmission = transition(1, null, LoanApplicationStatus.SUBMITTED,
+                LoanApplicationTransitionAction.SUBMIT_APPLICATION, ActorType.USER, customerUserId,
+                LocalDateTime.of(2026, 9, 2, 8, 0));
+        var customerResubmission = transition(3, LoanApplicationStatus.RETURNED_FOR_REVISION,
+                LoanApplicationStatus.SUBMITTED, LoanApplicationTransitionAction.RESUBMIT_CORRECTION,
+                ActorType.USER, customerUserId, LocalDateTime.of(2026, 9, 2, 10, 0));
+        var unavailable = transition(4, LoanApplicationStatus.SUBMITTED, LoanApplicationStatus.UNDER_REVIEW,
+                LoanApplicationTransitionAction.START_REVIEW, ActorType.USER, missingId,
+                LocalDateTime.of(2026, 9, 2, 11, 0));
+        when(transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(APPLICATION_ID)).thenReturn(
+                List.of(customerSubmission, reviewTransition(), customerResubmission, unavailable, initialTransition()));
+        when(staffActors.findByUserIds(Set.of(customerUserId, staffId, missingId))).thenReturn(Map.of(
+                customerUserId, new WorkflowActorDirectoryPort.ActorSummary(customerUserId, "CUSTOMER", CUSTOMER_ID, null),
+                staffId, new WorkflowActorDirectoryPort.ActorSummary(staffId, "STAFF", null,
+                        new StaffActorSummary(staffId, "Deni Loan Officer", "deni@meridian.local"))));
+        var result = service.queryCase(APPLICATION_ID);
+        assertEquals(List.of("CUSTOMER_SELF_SERVICE", "STAFF", "CUSTOMER_SELF_SERVICE", "UNAVAILABLE", "SYSTEM"),
+                result.lifecycleHistory().stream().map(item -> item.actorType()).toList());
+        assertNull(result.lifecycleHistory().getFirst().actor());
+        assertNull(result.lifecycleHistory().get(2).actor());
+        String json = tools.jackson.databind.json.JsonMapper.builder().findAndAddModules().build().writeValueAsString(result);
+        org.junit.jupiter.api.Assertions.assertFalse(json.contains(customerUserId.toString()));
+        org.junit.jupiter.api.Assertions.assertFalse(json.contains("customer@meridian.test"));
+        verify(staffActors).findByUserIds(Set.of(customerUserId, staffId, missingId));
+        org.mockito.Mockito.verifyNoMoreInteractions(staffActors);
+        verify(applications, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(transitions, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(customerContacts);
+    }
+
+    @Test
+    void contradictoryCustomerAssociationFailsClosedInsteadOfUsingStaffLookupAbsence() {
+        UUID userId = UUID.randomUUID();
+        prepareActorCase();
+        when(transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(APPLICATION_ID)).thenReturn(List.of(
+                transition(1, null, LoanApplicationStatus.SUBMITTED, LoanApplicationTransitionAction.SUBMIT_APPLICATION,
+                        ActorType.USER, userId, LocalDateTime.of(2026, 9, 2, 8, 0))));
+        when(staffActors.findByUserIds(Set.of(userId))).thenReturn(Map.of(userId,
+                new WorkflowActorDirectoryPort.ActorSummary(userId, "CUSTOMER", UUID.randomUUID(), null)));
+        var error = assertThrows(BusinessStateConflictException.class, () -> service.queryCase(APPLICATION_ID));
+        assertEquals("SYSTEM_STATE_CONFLICT", error.getErrorCode());
+        verify(applications, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    private void prepareActorCase() {
+        when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:read")));
+        when(applications.findById(APPLICATION_ID)).thenReturn(Optional.of(application()));
+        when(customerReadiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED")));
     }
 
     private static LoanApplication application() {

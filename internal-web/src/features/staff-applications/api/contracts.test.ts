@@ -34,7 +34,7 @@ describe('Staff application response schemas', () => {
       assignedLoanOfficer: seededActor,
       lifecycleHistory: [{
         fromStatus: 'UNDER_REVIEW', toStatus: 'RETURNED_FOR_REVISION',
-        action: 'RETURN_TO_CUSTOMER_REVISION', actorType: 'USER', actor: seededActor,
+        action: 'RETURN_TO_CUSTOMER_REVISION', actorType: 'STAFF', actor: seededActor,
         occurredAt: '2026-09-02T09:00:00',
       }],
     }
@@ -42,6 +42,7 @@ describe('Staff application response schemas', () => {
     const parsed = staffLoanApplicationCaseSchema.parse(caseResponse)
     expect(parsed.assignedLoanOfficer?.userId).toBe(seededActor.userId)
     expect(parsed.lifecycleHistory[0]?.actor?.userId).toBe(seededActor.userId)
+    expect(staffLoanApplicationCaseSchema.safeParse({ ...caseResponse, lifecycleHistory: [{ ...caseResponse.lifecycleHistory[0], actor: { ...seededActor, userId: 'invalid' } }] }).success).toBe(false)
     expect(staffLoanApplicationCaseSchema.safeParse({
       ...caseResponse, loanApplicationId: seededActor.userId,
     }).success).toBe(false)
