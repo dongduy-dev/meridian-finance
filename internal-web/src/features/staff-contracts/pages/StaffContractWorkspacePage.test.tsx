@@ -165,7 +165,12 @@ describe('Staff contract workspace', () => {
     const assistedView = renderPage()
     expect(await screen.findByText(/Customer acknowledgment recorded by Mina Accounting/)).toBeVisible()
     expect(screen.getByText(/Signed document for contract version 1/)).toBeVisible()
+    expect(screen.getByRole('button', { name: 'View signed acknowledgment' })).toBeVisible()
 
+    vi.mocked(api.apiRequest).mockRejectedValueOnce(new NetworkError())
+    await userEvent.setup().click(screen.getByRole('button', { name: 'View signed acknowledgment' }))
+    expect(await screen.findByText('Viewer unavailable')).toBeVisible()
+    expect(api.apiRequest).toHaveBeenLastCalledWith(`/staff/loan-applications/${applicationId}/assisted-action-evidence/CUSTOMER_CONTRACT_ACKNOWLEDGMENT/versions/77777777-7777-4777-8777-777777777777/content`, expect.objectContaining({ responseType: 'blob' }))
     assistedView.unmount()
     vi.mocked(api.apiRequest).mockResolvedValue({
       ...assisted,
@@ -449,7 +454,7 @@ describe('Staff contract workspace', () => {
     await user.click(await screen.findByRole('button', { name: 'Review readiness confirmation' }))
     await user.click(screen.getByRole('button', { name: 'Confirm contract action' }))
 
-    expect(await screen.findByText(/Action confirmed; the latest contract information is unavailable/i)).toBeVisible()
+    expect(await screen.findByText(/Action confirmed; the latest contract information is unavailable/i, undefined, { timeout: 3_000 })).toBeVisible()
     expect(postCalls()).toHaveLength(1)
     readsAvailable = true
     await user.click(screen.getByRole('button', { name: 'Refresh' }))

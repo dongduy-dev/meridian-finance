@@ -159,7 +159,7 @@ The same backend value must use the same label within Internal Web unless a clea
 | Accounting Officer | Contract preparation/readiness, evidenced Customer contract-acknowledgment recording, destination reveal, manual disbursement, repayment, and administrative closure | `loan:read`, `loan:contract:prepare`, `loan:contract:read`, `loan:contract:acknowledge:staff`, `document:upload:assisted-action`, `loan:disbursement:prepare`, `loan:disburse`, `repayment:update`, `loan:account:close`; acknowledgment and closure also require the Accounting Officer role |
 | Back-Office Admin | Back-Office Administration outside this blueprint; currently also holds the narrow Staff document-upload permission | `loan:product:manage`, `partner:read`, `partner:manage`, `identity:user:manage`, `admin:config`, `audit:read`, `document:upload:staff` |
 
-The permission sets above describe the current seeded roles; they are not a frontend role template. Identity supports composable role assignments, and authentication returns sets of roles and permissions. Staff Web therefore gates capabilities from permission and user-type facts, then lets the backend enforce both permission and any stricter business-role rule.
+The seeded legacy `document:read` permission does not authorize the executable Staff checklist or content read. The shared Documents route admits exact `document:review` or `approval:decide`; review-queue membership and review commands retain `document:review`. The permission sets above describe the current seeded roles; they are not a frontend role template. Identity supports composable role assignments, and authentication returns sets of roles and permissions. Staff Web therefore gates capabilities from permission and user-type facts, then lets the backend enforce both permission and any stricter business-role rule.
 
 ### 6.2 Permission-Gate Rules
 
@@ -1033,11 +1033,19 @@ For selected `COLLATERAL_OWNERSHIP_EVIDENCE`, the workspace places the read-only
 
 `WAIVE_DOCUMENT` appears only with `document:waive`. Replacement requires the controlled replacement reason and Customer-visible instruction. Restricted Staff notes are labeled separately. Reviewing a stale version never switches to the new version automatically.
 
+The selected-version panel shows only decisions bound to that immutable version: outcome, review time, safe Staff reviewer or unavailable fallback, waiver/replacement reason, Customer instruction, and separately labeled Restricted document note. Historical versions remain selectable and read-only; current-version labels and numbered version history make replacement explicit. Workflow/document IDs remain strict runtime UUIDs; safe reviewer IDs use `meridianUuidSchema` so seeded Staff actors remain valid. Notes render only when `restrictedStaffNoteReadable` authorizes them.
+
+An `approval:decide` actor without `document:review` uses the same Documents workspace and exact content viewer, with no review form, waiver control, upload/replacement control, or review-queue navigation. Capability guards succeed before queries. `loan:read` alone grants no document access.
+
+For Staff-assisted applications, a separate read-only Signed Customer action evidence section lists the permitted offer-response, contract-acknowledgment, and cancellation-request logical documents, target context, current metadata, and selectable immutable historical versions. It never inserts these forms into the underwriting checklist or readiness rules. Empty evidence, loading, failure/retry, unknown values, and denied purposes retain safe presentation. Content is fetched only after an explicit View action for the selected exact version; no recording controls appear in this section.
+
+Document/correction/signed metadata queries use `gcTime: 0`. Restricted notes, filenames, form metadata, and bytes remain in memory and never enter browser persistence, URLs, query keys, logs, analytics, or exports. Object URLs are revoked on close, version/application change, unmount, logout, or actor/authority change; late responses after cleanup do not create retained blobs. Query failures hide restricted evidence until an authoritative read succeeds.
+
 Manual review remains authoritative. Staff Web can explicitly request OCR for an exact current intake-evidence version, monitor the safe job status, review allowlisted suggestions with confidence, correct or omit values, and finalize one immutable review. Only a `REVIEWED` result exposes the explicit application action. That action copies permitted values into existing route-local Customer, bank-account, UCL, or Collateral form inputs; it does not invoke a mutation, alter consent, or bypass the existing Save, Add, Create, validation, permission, confirmation, or uncertain-result behavior.
 
 ### 23.3 Staff Correction Tasks
 
-The task workspace shows origination channel, responsible party, scope, required document/item, baseline version, purpose-limited instruction, proof status when authoritative, and maker-checker notice. Customer-digital Customer-owned tasks remain instruction-free and non-actionable in Staff Web. Eligible Staff-assisted Customer-owned tasks are labeled “Customer-sourced” so the operator is never presented as the business source.
+The current task workspace shows origination channel, responsible party, scope, required document/item, baseline version, purpose-limited instruction, proof status when authoritative, and maker-checker notice. Customer-digital Customer-owned tasks remain instruction-free and non-actionable in the current action projection. Eligible Staff-assisted Customer-owned tasks are labeled “Customer-sourced” so the operator is never presented as the business source.
 
 - `SUPPORTING_DOCUMENT_UPLOAD` exposes upload only with `document:upload:staff` and only for the open task.
 - an eligible Staff-assisted Customer upload exposes only with `document:upload:assisted-correction`, binds the exact task baseline, and reuses the existing upload unresolved-operation rules;
@@ -1047,6 +1055,10 @@ The task workspace shows origination channel, responsible party, scope, required
 - Mixed corrections remain blocked until both Customer and Staff work is complete.
 - Requested amount and term remain immutable through current correction flows.
 - UCL and Collateral product restrictions are rendered from the supported command contract, not generalized into arbitrary task construction.
+
+The separate Correction history section renders every request in backend order with numbered/latest labels, source action/cycle context, controlled reason, safe creator, readiness/resubmission/cancellation timestamps, uniquely proven resubmitter/resulting status, and tasks in sequence order. It preserves Customer and Staff instructions as distinct evidence. Customer self-service displays no login identity; assisted Customer tasks identify the Staff recorder while retaining Customer responsibility. Unknown or unresolved actors display unavailable without guessing. History has no upload, completion, resubmission, or cancellation controls.
+
+A baseline-document link opens the exact stored item/version only for the authorized Documents audience. The baseline is not completion proof: the retained task model has no exact proof-version reference, so the workspace explains that limitation instead of linking today's current version. Current task proof and maker-checker availability remain backend-authoritative.
 
 ---
 
@@ -1113,7 +1125,7 @@ History results remain in memory for the active page with no inactive query rete
 
 The workspace displays exact backend-owned offer terms and expiry, lets the operator choose the decision present on the signed form, and uploads or replaces `CUSTOMER_OFFER_RESPONSE` evidence using `document:upload:assisted-action`, `uploadRequestId`, and exact `expectedCurrentVersionId`. Recording stays disabled until the current evidence targets the displayed offer, declares the selected decision, and the operator confirms that the signed form records the Customer's exact decision. Staff Web does not present Staff as the decision subject.
 
-After completion, the offer workspace presents **Recorded Customer response**, the Customer decision from signed evidence, safe Staff **Recorded by**, recording time, and the exact consumed document version from `completedResponse`. It removes upload and command controls. Explicit retry of an unresolved exact request remains available under the existing recovery rules; provenance never enters browser persistence. Unknown response-only decisions render a neutral fallback and enable no actions.
+After completion, the offer workspace presents **Recorded Customer response**, the Customer decision from signed evidence, safe Staff **Recorded by**, recording time, and the exact consumed document version from `completedResponse`. A purpose-authorized View signed evidence control opens that exact consumed version through the Document content read. It removes upload and command controls. Explicit retry of an unresolved exact request remains available under the existing recovery rules; provenance never enters browser persistence. Unknown response-only decisions render a neutral fallback and enable no actions.
 
 The Loan command uses one stable request UUID and stores only its non-sensitive semantic payload for unresolved-result recovery. A network or 5xx result never triggers an automatic POST retry. The workspace refetches authoritative state, retains the exact request identity and payload, and offers only an explicit exact replay. File bytes, filename, digest, signature, and form contents never enter browser persistence.
 
@@ -1125,7 +1137,7 @@ The operator uploads or replaces `CUSTOMER_CANCELLATION_REQUEST` evidence agains
 
 The cancellation command sends one stable request UUID, the exact correction-request ID, and the exact evidence-document-version ID. Its unresolved operation stores only those non-sensitive semantic identifiers. A network or 5xx result never triggers an automatic POST retry; the workspace refetches the authoritative correction/application state and permits only an explicit exact replay when still unresolved. Successful cancellation removes the action through authoritative `CANCELLED` state.
 
-The completed correction case presents **Customer-requested cancellation recorded** from `completedCancellation`, with separate Staff recorder, recording time, and the exact signed evidence version. It does not expose document contents or add historical correction-task provenance. File bytes and sensitive file metadata never enter browser persistence.
+The completed correction case presents **Customer-requested cancellation recorded** from `completedCancellation`, with separate Staff recorder, recording time, and the exact signed evidence version. A purpose-authorized View signed request control opens the exact consumed cancellation form through the Document read. Correction history remains a separate read-only section under Section 23.3. File bytes and sensitive file metadata never enter browser persistence.
 
 ## 25. Contracts, Readiness, and Disbursement
 
@@ -1145,7 +1157,7 @@ The workspace presents:
 - version history only when a future authorized projection exposes it;
 - current action eligibility from authoritative state.
 
-The acknowledgment panel identifies **Customer — self-service** or **Customer acknowledgment recorded by [Staff]**, while keeping the authorized Customer number/name separate. Both show the acknowledged current contract version and time; the assisted path also shows the exact consumed signed document version. Unknown acknowledgment modes render a neutral fallback. The existing Accounting context supplies these facts without another DTO or persistence record.
+The acknowledgment panel identifies **Customer — self-service** or **Customer acknowledgment recorded by [Staff]**, while keeping the authorized Customer number/name separate. Both show the acknowledged current contract version and time; the assisted path also shows the exact consumed signed document version. Unknown acknowledgment modes render a neutral fallback. The existing Accounting context supplies these facts without another acknowledgment DTO or persistence record. Exact `loan:contract:read` with the Accounting Officer role permits View signed acknowledgment for the consumed document version; it grants no acknowledgment mutation authority. The same exact evidence link remains available in the disbursement handoff.
 
 Version 1 preparation uses `expectedCurrentContractVersion = 0`. Regeneration requires the exact current version and supported `DISBURSEMENT_ACCOUNT_REFRESH` reason. The UI explains that regeneration preserves accepted financial terms, supersedes the prior operational version, refreshes the captured destination, and requires fresh Customer acknowledgment.
 

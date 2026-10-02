@@ -18,13 +18,13 @@ class DocumentContentControllerTest {
 
     @Test
     void returnsAttachmentUsingDetectedMimeAndPrivateNoStoreHeaders() throws Exception {
-        ReadDocumentContentUseCase useCase = (applicationId, itemId, versionId) ->
-                new DocumentContentDto(
+        ReadDocumentContentUseCase useCase = org.mockito.Mockito.mock(ReadDocumentContentUseCase.class);
+        org.mockito.Mockito.when(useCase.read(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> new DocumentContentDto(
                         "recent-payslip.pdf",
                         "application/pdf",
                         5,
                         new ByteArrayInputStream(new byte[]{1, 2, 3, 4, 5})
-                );
+                ));
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(
                 new DocumentContentController(useCase)
         ).build();

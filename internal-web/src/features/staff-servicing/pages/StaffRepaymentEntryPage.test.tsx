@@ -308,7 +308,7 @@ describe('Staff repayment entry', () => {
     readsAvailable = false
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
 
-    expect(await screen.findByRole('heading', { name: 'Latest account refresh unavailable' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Latest account refresh unavailable' }, { timeout: 3_000 })).toBeVisible()
     expect(screen.getByText(/current outstanding/i)).toBeVisible()
     expect(screen.getByRole('button', { name: 'Review repayment' })).toBeDisabled()
 

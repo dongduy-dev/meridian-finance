@@ -37,17 +37,17 @@ public class DocumentContentController {
     }
 
     @GetMapping("/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content")
-    @PreAuthorize("hasAuthority('document:review')")
+    @PreAuthorize("hasAnyAuthority('document:review', 'approval:decide')")
     public ResponseEntity<InputStreamResource> readStaffDocument(
             @PathVariable UUID loanApplicationId,
             @PathVariable UUID checklistItemId,
             @PathVariable UUID documentVersionId
     ) {
-        return response(readDocumentContentUseCase.read(
+        return response(readDocumentContentUseCase.readAsStaff(
                 loanApplicationId, checklistItemId, documentVersionId));
     }
 
-    private ResponseEntity<InputStreamResource> response(DocumentContentDto document) {
+    static ResponseEntity<InputStreamResource> response(DocumentContentDto document) {
         ContentDisposition disposition = ContentDisposition.attachment()
                 .filename(document.originalFilename(), StandardCharsets.UTF_8)
                 .build();

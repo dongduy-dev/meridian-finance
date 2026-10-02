@@ -2,6 +2,9 @@ package com.meridian.platform.identity.infrastructure.security;
 
 import com.meridian.platform.document.application.port.in.ManageAssistedActionEvidenceUseCase;
 import com.meridian.platform.document.infrastructure.adapter.in.web.StaffAssistedActionEvidenceController;
+import com.meridian.platform.document.infrastructure.adapter.in.web.StaffAssistedActionEvidenceReadController;
+import com.meridian.platform.document.application.port.in.ReadStaffAssistedActionEvidenceUseCase;
+import com.meridian.platform.document.application.dto.DocumentContentDto;
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionOutcome;
 import com.meridian.platform.loan.application.dto.ApprovedOfferActionResult;
 import com.meridian.platform.loan.application.mapper.LoanContractMapper;
@@ -37,7 +40,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         StaffAssistedOfferResponseController.class,
         StaffAssistedContractAcknowledgmentController.class,
         StaffAssistedUclCancellationController.class,
-        StaffAssistedActionEvidenceController.class
+        StaffAssistedActionEvidenceController.class,
+        StaffAssistedActionEvidenceReadController.class
 })
 @Import({
         SecurityConfig.class, JwtAuthenticationFilter.class, SecurityErrorResponseWriter.class,
@@ -52,10 +56,39 @@ class StaffAssistedDownstreamSecurityTest {
     @MockitoBean RecordAssistedLoanContractAcknowledgmentUseCase recordAcknowledgment;
     @MockitoBean RecordAssistedUclCancellationUseCase recordCancellation;
     @MockitoBean ManageAssistedActionEvidenceUseCase evidence;
+    @MockitoBean ReadStaffAssistedActionEvidenceUseCase readEvidence;
     @MockitoBean LoanContractMapper mapper;
     @MockitoBean LoanApplicationCancellationApiMapper cancellationMapper;
 
     private final UUID applicationId = UUID.randomUUID();
+
+    @Test
+    void signedEvidenceReadRequiresExactPurposePermissionAndUsesPrivateBinaryHeadersForEveryType() throws Exception {
+        String listPath = "/api/v1/staff/loan-applications/{id}/assisted-action-evidence";
+        when(readEvidence.query(any())).thenReturn(java.util.List.of());
+        mockMvc.perform(get(listPath, applicationId)).andExpect(status().isUnauthorized());
+        for (String denied : new String[]{"loan:read", "audit:read", "admin:config", "approval:decide", "document:read", "document:review:extra"}) {
+            mockMvc.perform(get(listPath, applicationId).with(authority(denied))).andExpect(status().isForbidden());
+        }
+        for (String permission : new String[]{"document:review", "loan:offer:respond:staff", "loan:contract:read", "loan:correction:staff"}) {
+            mockMvc.perform(get(listPath, applicationId).with(authority(permission))).andExpect(status().isOk())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control", "no-store, private"));
+        }
+        for (var type : com.meridian.platform.document.domain.model.AssistedActionEvidenceType.values()) {
+            byte[] bytes = "%PDF-1.7 signed historical evidence".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            when(readEvidence.read(any(), any(), any())).thenReturn(new DocumentContentDto(
+                    "signed.pdf", "application/pdf", bytes.length, new java.io.ByteArrayInputStream(bytes)));
+            mockMvc.perform(get(listPath + "/{type}/versions/{version}/content", applicationId, type, UUID.randomUUID())
+                            .with(authority("document:review")))
+                    .andExpect(status().isOk())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(bytes))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control", "no-store, private"))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Type", "application/pdf"))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("X-Content-Type-Options", "nosniff"))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Length", String.valueOf(bytes.length)))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Disposition", org.hamcrest.Matchers.startsWith("attachment;")));
+        }
+    }
 
     @Test
     void offerReadAndCommandRequireExactStaffOfferAuthority() throws Exception {

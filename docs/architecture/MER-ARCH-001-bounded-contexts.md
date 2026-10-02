@@ -158,7 +158,7 @@ When confirmed intake becomes a `LoanApplication`, Loan records the origination 
 
 Loan owns the structured lending facts needed to evaluate and service a product.
 
-Document Management owns uploaded supporting files, document versions, and document-review decisions. For Collateral Loan, Document owns the required ownership-evidence file and its review state, while Loan owns the submitted ownership status and other structured Collateral facts. A supporting document may evidence a Loan-owned fact without transferring that lending concept to Document Management.
+Document Management owns uploaded supporting files, document versions, and document-review decisions. It also owns signed Customer offer-response, contract-acknowledgment, and cancellation-request files and their immutable version history. Loan owns the exact consumed version reference on each recorded business action; it does not copy bytes, storage metadata, or Document persistence. For Collateral Loan, Document owns the required ownership-evidence file and its review state, while Loan owns the submitted ownership status and other structured Collateral facts. A supporting document may evidence a Loan-owned fact without transferring that lending concept to Document Management.
 
 ### Salary Advance Ownership
 
@@ -183,7 +183,7 @@ Loan owns the immutable, contract-bound disbursement destination used after Cust
 
 A material change to a contract-bound destination before readiness requires a new contract version. Supersession must not silently alter accepted financial terms, repayment items, or Customer acknowledgment evidence.
 
-For a Staff-assisted application, the Customer remains the source of the offer decision and contract acknowledgment while authorized Staff records the evidenced action. Loan owns the resulting offer-response and contract-acknowledgment state; Document owns any paper evidence that supports the recorded action. Staff must not be represented as the Customer actor.
+For a Staff-assisted application, the Customer remains the source of the offer decision and contract acknowledgment while authorized Staff records the evidenced action. Loan owns the resulting offer-response and contract-acknowledgment state; Document owns any paper evidence that supports the recorded action. Staff must not be represented as the Customer actor. Purpose-limited Document review and Loan correction reads resolve safe Staff summaries through Identity public contracts and consuming-context output ports. Customer self-service attribution uses only a validated association to the application Customer and never exposes login identity. Missing durable actor or proof associations remain unavailable; audit storage is not a workflow projection source.
 
 ### Product Policy Ownership
 

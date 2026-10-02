@@ -1,9 +1,47 @@
 import { z } from 'zod'
 import { recordedCustomerActionSchema } from '@/components/operations/recorded-customer-action'
-import { apiTimestampSchema, uuidSchema } from '@/features/staff-applications/api/contracts'
+import { apiTimestampSchema, staffActorSchema, uuidSchema } from '@/features/staff-applications/api/contracts'
 
 const rawValue = z.string().trim().min(1)
 const nullableTimestamp = apiTimestampSchema.nullable()
+
+export const correctionActorSchema = z.object({
+  actorType: rawValue,
+  staffActor: staffActorSchema.nullable(),
+}).refine((actor) => actor.actorType === 'STAFF' ? actor.staffActor !== null : actor.staffActor === null)
+
+export const historicalCorrectionSchema = z.object({
+  correctionRequestId: uuidSchema,
+  status: rawValue,
+  reasonCode: rawValue,
+  sourceAction: rawValue,
+  sourceReviewCycleId: uuidSchema.nullable(),
+  createdBy: correctionActorSchema,
+  createdAt: apiTimestampSchema,
+  readyAt: nullableTimestamp,
+  resubmittedAt: nullableTimestamp,
+  cancelledAt: nullableTimestamp,
+  resubmittedBy: correctionActorSchema.nullable(),
+  resultingApplicationStatus: rawValue.nullable(),
+  tasks: z.array(z.object({
+    taskId: uuidSchema,
+    sequence: z.number().int().positive(),
+    responsibleParty: rawValue,
+    scope: rawValue,
+    documentType: rawValue.nullable(),
+    checklistItemId: uuidSchema.nullable(),
+    baselineDocumentVersionId: uuidSchema.nullable(),
+    customerInstruction: z.string().nullable(),
+    staffInstruction: z.string().nullable(),
+    createdAt: apiTimestampSchema,
+    status: rawValue,
+    completedBy: correctionActorSchema.nullable(),
+    completedAt: nullableTimestamp,
+  })),
+})
+
+export type HistoricalCorrection = z.infer<typeof historicalCorrectionSchema>
+export type CorrectionActor = z.infer<typeof correctionActorSchema>
 
 export const assistedCancellationEvidenceSchema = z.object({
   documentId: uuidSchema,
@@ -54,6 +92,7 @@ export const staffCorrectionCaseSchema = z.object({
   productCode: rawValue,
   originationChannel: rawValue,
   applicationStatus: rawValue,
+  correctionHistory: z.array(historicalCorrectionSchema),
   correctionRequest: z.object({
     correctionRequestId: uuidSchema,
     status: rawValue,

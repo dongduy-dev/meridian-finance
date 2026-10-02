@@ -81,7 +81,7 @@ export const STAFF_DOCUMENT_CASE_ROUTE = {
   path: '/staff/applications/:loanApplicationId/documents',
   label: 'Application documents',
   documentTitle: 'Application documents',
-  requiredPermissions: ['document:review'],
+  requiredPermissions: ['document:review', 'approval:decide'],
 } as const satisfies StaffRouteDefinition
 
 export const STAFF_CORRECTION_CASE_ROUTE = {

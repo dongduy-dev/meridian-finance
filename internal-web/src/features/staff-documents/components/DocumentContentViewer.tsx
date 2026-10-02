@@ -1,55 +1,68 @@
 import { Eye, EyeOff } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import type { ApiBinaryResponse } from '@/lib/api'
-import { getDocumentContent } from '../api/staff-documents-api'
+import { getAssistedActionEvidenceContent, getDocumentContent } from '../api/staff-documents-api'
 
 type Props = {
   manager: AuthSessionManager
   loanApplicationId: string
-  checklistItemId: string
   documentVersionId: string
   filename: string
-}
+  buttonLabel?: string
+} & ({ checklistItemId: string; evidenceType?: never } | { evidenceType: string; checklistItemId?: never })
 export function DocumentContentViewer(props: Props) {
+  const session = useSyncExternalStore(props.manager.subscribe, props.manager.getSnapshot, props.manager.getSnapshot)
+  const authority = session.status === 'authenticated'
+    ? `${session.actor.userId}:${[...session.actor.permissions].sort().join(',')}:${[...session.actor.roles].sort().join(',')}`
+    : session.status
+  if (session.status !== 'authenticated') return null
+  return <ContentViewer key={`${authority}:${props.loanApplicationId}:${props.checklistItemId ?? props.evidenceType}:${props.documentVersionId}`} {...props} />
+}
+
+function ContentViewer(props: Props) {
   const [content, setContent] = useState<(ApiBinaryResponse & { url: string }) | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>()
+  const generation = useRef(0)
+  const objectUrl = useRef<string | null>(null)
 
   const close = () => setContent((current) => {
     if (current) URL.revokeObjectURL(current.url)
+    objectUrl.current = null
     return null
   })
 
   useEffect(() => () => {
-    setContent((current) => {
-      if (current) URL.revokeObjectURL(current.url)
-      return null
-    })
-  }, [props.documentVersionId])
+    generation.current += 1
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current)
+  }, [])
 
   const view = async () => {
     setLoading(true); setError(undefined)
+    const requestGeneration = generation.current
     try {
-      const result = await getDocumentContent(
-        props.manager, props.loanApplicationId, props.checklistItemId, props.documentVersionId,
-      )
+      const result = props.evidenceType
+        ? await getAssistedActionEvidenceContent(props.manager, props.loanApplicationId, props.evidenceType, props.documentVersionId)
+        : await getDocumentContent(props.manager, props.loanApplicationId, props.checklistItemId!, props.documentVersionId)
+      if (generation.current !== requestGeneration) return
       if (!['application/pdf', 'image/jpeg', 'image/png'].includes(result.contentType)) {
         setError('This document type cannot be displayed safely.')
         return
       }
-      close()
-      setContent({ ...result, url: URL.createObjectURL(result.blob) })
+      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current)
+      objectUrl.current = URL.createObjectURL(result.blob)
+      setContent({ ...result, url: objectUrl.current })
     } catch {
-      setError('Document content could not be loaded. Refresh the evidence and try again.')
-    } finally { setLoading(false) }
+      if (generation.current === requestGeneration) setError('Document content could not be loaded. Refresh the evidence and try again.')
+    } finally { if (generation.current === requestGeneration) setLoading(false) }
   }
 
   return <div className="space-y-3 rounded-lg border bg-muted/25 p-4">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">Document viewer</h3><p className="text-sm text-muted-foreground">Contains Customer information. Use only for this review.</p></div>{content ? <Button variant="outline" onClick={close}><EyeOff /> Close viewer</Button> : <Button onClick={() => void view()} disabled={loading}>{loading ? <Spinner /> : <Eye />} View document</Button>}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">Document viewer</h3><p className="text-sm text-muted-foreground">Contains Customer information. Use only for this case.</p></div>{content ? <Button variant="outline" onClick={close}><EyeOff /> Close viewer</Button> : <Button onClick={() => void view()} disabled={loading}>{loading ? <Spinner /> : <Eye />} {props.buttonLabel ?? 'View document'}</Button>}</div>
     {error ? <Alert variant="warning"><EyeOff /><AlertTitle>Viewer unavailable</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
     {content ? <div className="overflow-hidden rounded-md border bg-background" aria-label={`Document viewer for ${props.filename}`}>
       {content.contentType === 'application/pdf'

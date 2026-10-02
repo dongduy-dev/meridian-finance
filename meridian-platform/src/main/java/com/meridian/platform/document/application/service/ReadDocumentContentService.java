@@ -51,10 +51,25 @@ public class ReadDocumentContentService implements ReadDocumentContentUseCase {
             UUID documentVersionId
     ) {
         AuthenticatedUser user = currentUserProvider.currentUser();
-        LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot workflow =
-                workflowPort.find(loanApplicationId);
+        var workflow = workflowPort.find(loanApplicationId);
         authorize(user, workflow.customerId());
+        return readVersion(loanApplicationId, checklistItemId, documentVersionId);
+    }
 
+    @Override
+    @Transactional(readOnly = true)
+    public DocumentContentDto readAsStaff(UUID loanApplicationId, UUID checklistItemId, UUID documentVersionId) {
+        AuthenticatedUser user = currentUserProvider.currentUser();
+        if (!"STAFF".equals(user.userType()) || user.optionalCustomerId().isPresent()
+                || !(user.hasPermission("document:review") || user.hasPermission("approval:decide"))) {
+            throw new AuthorizationException("DOCUMENT_ACCESS_DENIED", "Staff document evidence read authority is required.");
+        }
+        workflowPort.find(loanApplicationId);
+        return readVersion(loanApplicationId, checklistItemId, documentVersionId);
+    }
+
+    private DocumentContentDto readVersion(UUID loanApplicationId,
+            UUID checklistItemId, UUID documentVersionId) {
         DocumentChecklist checklist = checklistRepository.findByLoanApplicationIdAndStage(
                         loanApplicationId, DocumentChecklistStage.SUBMISSION)
                 .orElseThrow(() -> new EntityNotFoundException(

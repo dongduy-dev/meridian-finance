@@ -93,7 +93,14 @@ describe('Staff-assisted offer response workspace', () => {
     expect(screen.getByText('Deni Loan Officer')).toBeVisible()
     expect(screen.getByText('deni@meridian.local')).toBeVisible()
     expect(screen.getByText(action === 'ACCEPT' ? 'Accepted' : action === 'DECLINE' ? 'Declined' : 'Decision unavailable')).toBeVisible()
-    expect(screen.getByText(new RegExp(evidenceVersionId))).toBeVisible()
+    expect(screen.getByRole('button', { name: 'View signed evidence' })).toBeVisible()
+    vi.mocked(api.apiRequest).mockRejectedValueOnce(new NetworkError())
+    await userEvent.setup().click(screen.getByRole('button', { name: 'View signed evidence' }))
+    expect(await screen.findByText('Viewer unavailable')).toBeVisible()
+    expect(api.apiRequest).toHaveBeenLastCalledWith(
+      `/staff/loan-applications/${applicationId}/assisted-action-evidence/CUSTOMER_OFFER_RESPONSE/versions/${evidenceVersionId}/content`,
+      expect.objectContaining({ responseType: 'blob' }),
+    )
     expect(screen.queryByRole('button', { name: /Record Customer acceptance|Record Customer decline|Upload signed evidence|Replace signed evidence/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     expect(screen.queryByText('Customer — self-service')).not.toBeInTheDocument()

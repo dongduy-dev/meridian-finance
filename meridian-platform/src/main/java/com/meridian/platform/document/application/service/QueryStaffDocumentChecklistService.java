@@ -4,6 +4,7 @@ import com.meridian.platform.document.application.dto.StaffDocumentChecklistDto;
 import com.meridian.platform.document.application.port.in.QueryStaffDocumentChecklistUseCase;
 import com.meridian.platform.document.application.port.out.DocumentChecklistRepository;
 import com.meridian.platform.document.application.port.out.DocumentRepository;
+import com.meridian.platform.document.application.port.out.DocumentStaffActorDirectoryPort;
 import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
 import com.meridian.platform.document.domain.model.DocumentChecklist;
 import com.meridian.platform.document.domain.model.DocumentChecklistItem;
@@ -24,7 +25,10 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class QueryStaffDocumentChecklistService implements QueryStaffDocumentChecklistUseCase {
@@ -32,17 +36,20 @@ public class QueryStaffDocumentChecklistService implements QueryStaffDocumentChe
     private final DocumentChecklistRepository checklists;
     private final DocumentRepository documents;
     private final CurrentUserProvider currentUserProvider;
+    private final DocumentStaffActorDirectoryPort staffActors;
 
     public QueryStaffDocumentChecklistService(
             LoanDocumentWorkflowPort workflows,
             DocumentChecklistRepository checklists,
             DocumentRepository documents,
-            CurrentUserProvider currentUserProvider
+            CurrentUserProvider currentUserProvider,
+            DocumentStaffActorDirectoryPort staffActors
     ) {
         this.workflows = workflows;
         this.checklists = checklists;
         this.documents = documents;
         this.currentUserProvider = currentUserProvider;
+        this.staffActors = staffActors;
     }
 
     @Override
@@ -58,7 +65,14 @@ public class QueryStaffDocumentChecklistService implements QueryStaffDocumentChe
         DocumentChecklist checklist = checklists.findByLoanApplicationIdAndStage(
                         loanApplicationId, DocumentChecklistStage.SUBMISSION)
                 .orElseThrow(QueryStaffDocumentChecklistService::notFound);
-        List<ItemProjection> projections = checklist.items().stream().map(this::toItem).toList();
+        Map<UUID, List<DocumentReviewDecision>> reviewsByItem = checklist.items().stream().collect(
+                Collectors.toMap(DocumentChecklistItem::id,
+                        item -> documents.findReviewDecisionsByChecklistItemId(item.id())));
+        Set<UUID> reviewerIds = reviewsByItem.values().stream().flatMap(List::stream)
+                .map(DocumentReviewDecision::reviewerUserId).collect(Collectors.toSet());
+        var reviewers = staffActors.findByUserIds(reviewerIds);
+        List<ItemProjection> projections = checklist.items().stream()
+                .map(item -> toItem(item, reviewsByItem.get(item.id()), reviewers)).toList();
         DocumentChecklistReadiness readiness = DocumentChecklistReadiness.from(
                 projections.stream().map(ItemProjection::state).toList());
         return new StaffDocumentChecklistDto(
@@ -72,7 +86,8 @@ public class QueryStaffDocumentChecklistService implements QueryStaffDocumentChe
         );
     }
 
-    private ItemProjection toItem(DocumentChecklistItem item) {
+    private ItemProjection toItem(DocumentChecklistItem item, List<DocumentReviewDecision> reviews,
+                                 Map<UUID, DocumentStaffActorDirectoryPort.StaffActorSummary> reviewers) {
         StoredDocument document = documents.findDocumentByChecklistItemId(item.id()).orElse(null);
         List<DocumentVersion> versions = document == null
                 ? List.of()
@@ -81,7 +96,6 @@ public class QueryStaffDocumentChecklistService implements QueryStaffDocumentChe
                 ? null
                 : versions.stream().filter(version -> version.id().equals(document.currentVersionId()))
                 .findFirst().orElseThrow(QueryStaffDocumentChecklistService::stateConflict);
-        List<DocumentReviewDecision> reviews = documents.findReviewDecisionsByChecklistItemId(item.id());
         if (reviews.stream().anyMatch(review -> versions.stream()
                 .noneMatch(version -> version.id().equals(review.documentVersionId())))) {
             throw stateConflict();
@@ -101,7 +115,7 @@ public class QueryStaffDocumentChecklistService implements QueryStaffDocumentChe
                 evidenceStatus(currentVersion, outcome), state.uploadComplete(), state.processingReady(),
                 currentVersion == null ? null : toVersion(currentVersion),
                 versions.stream().map(QueryStaffDocumentChecklistService::toVersion).toList(),
-                reviews.stream().map(QueryStaffDocumentChecklistService::toReview).toList()
+                reviews.stream().map(review -> toReview(review, reviewers)).toList()
         ));
     }
 
@@ -111,11 +125,18 @@ public class QueryStaffDocumentChecklistService implements QueryStaffDocumentChe
                 version.detectedMimeType(), version.byteSize(), version.uploadedAt());
     }
 
-    private static StaffDocumentChecklistDto.ReviewDto toReview(DocumentReviewDecision review) {
+    private static StaffDocumentChecklistDto.ReviewDto toReview(DocumentReviewDecision review,
+            Map<UUID, DocumentStaffActorDirectoryPort.StaffActorSummary> reviewers) {
+        var actor = reviewers.get(review.reviewerUserId());
+        var reviewer = actor == null || !review.reviewerUserId().equals(actor.userId())
+                || actor.displayName() == null || actor.displayName().isBlank()
+                || actor.email() == null || actor.email().isBlank() ? null
+                : new StaffDocumentChecklistDto.StaffActorDto(actor.userId(), actor.displayName(), actor.email());
         return new StaffDocumentChecklistDto.ReviewDto(
-                review.documentVersionId(), review.outcome().name(),
+                review.id(), review.documentVersionId(), review.outcome().name(),
                 review.waiverReasonCode() == null ? null : review.waiverReasonCode().name(),
-                review.decidedAt());
+                review.correctionReasonCode(), review.customerInstruction(), reviewer,
+                review.decidedAt(), true, review.restrictedStaffNotes());
     }
 
     private static String evidenceStatus(DocumentVersion version, DocumentReviewOutcome outcome) {
@@ -127,7 +148,7 @@ public class QueryStaffDocumentChecklistService implements QueryStaffDocumentChe
 
     private static void requireAuthority(AuthenticatedUser actor) {
         if (!"STAFF".equals(actor.userType()) || actor.optionalCustomerId().isPresent()
-                || !actor.hasPermission("document:review")) {
+                || !(actor.hasPermission("document:review") || actor.hasPermission("approval:decide"))) {
             throw new AuthorizationException("DOCUMENT_ACCESS_DENIED", "Staff document access is denied.");
         }
     }

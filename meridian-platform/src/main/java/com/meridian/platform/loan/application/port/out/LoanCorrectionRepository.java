@@ -20,6 +20,8 @@ public interface LoanCorrectionRepository {
 
     Optional<LoanCorrectionRequest> findLatestRequestByApplicationId(UUID loanApplicationId);
 
+    List<LoanCorrectionRequest> findRequestsByApplicationId(UUID loanApplicationId);
+
     Optional<LoanCorrectionRequest> findRequestById(UUID correctionRequestId);
 
     Optional<LoanCorrectionTask> findTaskByIdForUpdate(UUID taskId);

@@ -4,6 +4,7 @@ import {
   documentReviewQueueItemSchema,
   documentReviewResultSchema,
   staffDocumentChecklistSchema,
+  assistedActionEvidenceSchema,
 } from './contracts'
 
 export type ReviewDocumentInput = {
@@ -37,6 +38,22 @@ export async function getDocumentContent(
 ) {
   return manager.protectedRequest<ApiBinaryResponse>(
     `/staff/loan-applications/${loanApplicationId}/documents/${checklistItemId}/versions/${documentVersionId}/content`,
+    { responseType: 'blob' },
+  )
+}
+
+export async function getAssistedActionEvidence(manager: AuthSessionManager, loanApplicationId: string) {
+  const payload = await manager.protectedRequest<unknown>(
+    `/staff/loan-applications/${loanApplicationId}/assisted-action-evidence`,
+  )
+  return assistedActionEvidenceSchema.array().parse(payload)
+}
+
+export async function getAssistedActionEvidenceContent(
+  manager: AuthSessionManager, loanApplicationId: string, evidenceType: string, documentVersionId: string,
+) {
+  return manager.protectedRequest<ApiBinaryResponse>(
+    `/staff/loan-applications/${loanApplicationId}/assisted-action-evidence/${evidenceType}/versions/${documentVersionId}/content`,
     { responseType: 'blob' },
   )
 }

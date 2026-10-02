@@ -5,9 +5,12 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 public interface JpaAssistedActionDocumentRepository extends JpaRepository<AssistedActionDocumentJpaEntity, UUID> {
+
+    List<AssistedActionDocumentJpaEntity> findAllByLoanApplicationIdOrderByCreatedAtAscIdAsc(UUID loanApplicationId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select document from AssistedActionDocumentJpaEntity document "

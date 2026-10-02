@@ -1,8 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { SignedEvidenceViewer } from '@/features/staff-documents/components/SignedEvidenceViewer'
 import { formatTimestamp } from '@/lib/format/presentation'
 
-export function RecordedCustomerActionPanel({ title, value }: {
+export function RecordedCustomerActionPanel({ title, value, loanApplicationId, evidenceType }: {
   title: string
+  loanApplicationId?: string
+  evidenceType?: string
   value: {
     action: string
     recordedBy: { displayName: string; email: string }
@@ -22,7 +25,8 @@ export function RecordedCustomerActionPanel({ title, value }: {
       <div><dt className="text-sm text-muted-foreground">Customer action</dt><dd className="mt-1">Customer {actionKind} recorded from signed evidence</dd></div>
       <div><dt className="text-sm text-muted-foreground">Recorded by</dt><dd className="mt-1 font-semibold">{value.recordedBy.displayName}<span className="block break-all text-sm font-normal text-muted-foreground">{value.recordedBy.email}</span></dd></div>
       <div><dt className="text-sm text-muted-foreground">Recorded at</dt><dd className="mt-1">{formatTimestamp(value.recordedAt)}</dd></div>
-      <div className="sm:col-span-2"><dt className="text-sm text-muted-foreground">Signed evidence</dt><dd className="mt-1 break-all">Version {value.evidence.versionNumber} · document reference {value.evidence.documentVersionId}</dd></div>
+      <div className="sm:col-span-2"><dt className="text-sm text-muted-foreground">Signed evidence</dt><dd className="mt-1 break-all">Version {value.evidence.versionNumber}</dd></div>
     </dl>
+    {loanApplicationId && evidenceType ? <div className="mt-4"><SignedEvidenceViewer loanApplicationId={loanApplicationId} evidenceType={evidenceType} documentVersionId={value.evidence.documentVersionId} label={evidenceType === 'CUSTOMER_CANCELLATION_REQUEST' ? 'View signed request' : 'View signed evidence'} /></div> : null}
   </CardContent></Card>
 }

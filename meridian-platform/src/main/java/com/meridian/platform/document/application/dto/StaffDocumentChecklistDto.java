@@ -53,10 +53,19 @@ public record StaffDocumentChecklistDto(
     }
 
     public record ReviewDto(
+            UUID reviewDecisionId,
             UUID documentVersionId,
             String outcome,
             String waiverReasonCode,
-            LocalDateTime decidedAt
+            String correctionReasonCode,
+            String customerInstruction,
+            StaffActorDto reviewer,
+            LocalDateTime decidedAt,
+            boolean restrictedStaffNoteReadable,
+            String restrictedStaffNotes
     ) {
+    }
+
+    public record StaffActorDto(UUID userId, String displayName, String email) {
     }
 }

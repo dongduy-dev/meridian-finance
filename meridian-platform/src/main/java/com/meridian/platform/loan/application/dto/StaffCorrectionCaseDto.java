@@ -11,8 +11,34 @@ public record StaffCorrectionCaseDto(
         String originationChannel,
         String applicationStatus,
         CorrectionRequestDto correctionRequest,
+        List<HistoricalRequestDto> correctionHistory,
         AssistedCancellationDto assistedCancellation
 ) {
+    public StaffCorrectionCaseDto {
+        correctionHistory = List.copyOf(correctionHistory);
+    }
+
+    public record ActorDto(String actorType, StaffLoanApplicationCaseDto.StaffActorDto staffActor) {
+    }
+
+    public record HistoricalRequestDto(
+            UUID correctionRequestId, String status, String reasonCode, String sourceAction,
+            UUID sourceReviewCycleId, ActorDto createdBy, LocalDateTime createdAt, LocalDateTime readyAt,
+            LocalDateTime resubmittedAt, LocalDateTime cancelledAt, ActorDto resubmittedBy,
+            String resultingApplicationStatus, List<HistoricalTaskDto> tasks
+    ) {
+        public HistoricalRequestDto {
+            tasks = List.copyOf(tasks);
+        }
+    }
+
+    public record HistoricalTaskDto(
+            UUID taskId, int sequence, String responsibleParty, String scope, String documentType,
+            UUID checklistItemId, UUID baselineDocumentVersionId, String customerInstruction,
+            String staffInstruction, LocalDateTime createdAt, String status,
+            ActorDto completedBy, LocalDateTime completedAt
+    ) {
+    }
     public record AssistedCancellationDto(
             boolean available,
             UUID correctionRequestId,
