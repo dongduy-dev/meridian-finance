@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +9,7 @@ import * as authApi from '@/features/auth/api/auth-api'
 import { AuthProvider } from '@/features/auth/model/auth-context'
 import * as api from '@/lib/api'
 import { ApiError, NetworkError } from '@/lib/api'
+import { formatTimestamp, formatVnd } from '@/lib/format/presentation'
 import { findUnresolvedOperation } from '@/lib/operation/unresolved-operation'
 import { createQueryClient } from '@/lib/query/query-client'
 import {
@@ -19,6 +20,7 @@ import {
   pendingCase,
   queueFixture,
 } from '../api/contracts.test'
+import { staffDisbursementKeys } from '../api/queries'
 import { REVEALED_DESTINATION_BACKGROUND_TIMEOUT_MS } from './StaffDisbursementWorkspacePage'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
@@ -113,11 +115,34 @@ describe('Staff disbursement workspace', () => {
     expect(screen.getAllByText('Mina Accounting').length).toBeGreaterThan(0)
   })
 
-  it('renders masked authoritative evidence and only the three external-transfer inputs without revealing on load', async () => {
+  it('renders shared application identity and specialized masked disbursement evidence without revealing on load', async () => {
     vi.mocked(api.apiRequest).mockResolvedValue(pendingCase())
     renderPage()
 
-    expect(await screen.findByRole('heading', { name: 'UCL-20260910-000001' })).toBeVisible()
+    const applicationHeading = await screen.findByRole('heading', { name: 'UCL-20260910-000001', level: 1 })
+    expect(applicationHeading).toBeVisible()
+    const header = within(applicationHeading.closest('header')!)
+    expect(header.getByText('APPLICATION CASE')).toBeVisible()
+    expect(header.getByText('Application ID')).toBeVisible()
+    expect(header.getByText(applicationId)).toBeVisible()
+    expect(header.getByRole('button', { name: 'Copy application ID' })).toBeVisible()
+    expect(header.getByText('Disbursement pending')).toBeVisible()
+    expect(header.getByText('Unsecured Consumer Loan')).toBeVisible()
+    const facts = pendingCase()
+    expect(header.getByText('Requested amount').nextElementSibling?.textContent).toBe(formatVnd(facts.requestedAmount))
+    expect(header.getByText('Requested term').nextElementSibling).toHaveTextContent('2 months')
+    expect(header.getByText('Submitted').nextElementSibling).toHaveTextContent(formatTimestamp(facts.submittedAt))
+    expect(header.queryByText('Origination channel')).not.toBeInTheDocument()
+    expect(header.queryByText('Contract')).not.toBeInTheDocument()
+    const disbursementHeading = screen.getByRole('heading', { name: 'Disbursement and activation', level: 2 })
+    const workspace = within(disbursementHeading.parentElement!.parentElement!)
+    expect(workspace.getByText('Ready to disburse')).toBeVisible()
+    expect(workspace.getByText(facts.currentContract.contractReference)).toBeVisible()
+    expect(workspace.getByText('Exact version').nextElementSibling).toHaveTextContent('1')
+    expect(workspace.getByText('Contract status').nextElementSibling).toHaveTextContent('Ready for disbursement')
+    expect(applicationHeading.compareDocumentPosition(disbursementHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByText('Last updated')).toBeVisible()
+    expect(screen.getAllByRole('button', { name: 'Refresh' })).toHaveLength(1)
     expect(screen.getByText('****7890')).toBeVisible()
     expect(screen.queryByText(fullAccountNumber)).not.toBeInTheDocument()
     expect(screen.getByLabelText('External transfer reference')).toBeVisible()
@@ -129,6 +154,52 @@ describe('Staff disbursement workspace', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Review disbursement confirmation' }))
     expect(screen.getByText(/Enter the external transfer reference/)).toBeVisible()
     expect(screen.getByLabelText('External transfer reference')).toHaveFocus()
+  })
+
+  it.each([
+    { permissions: ['loan:disburse'], sections: [] },
+    { permissions: ['loan:disburse', 'loan:read'], sections: ['Overview', 'History'] },
+  ])('keeps application navigation scoped to $permissions', async ({ permissions, sections }) => {
+    vi.mocked(authApi.refresh).mockResolvedValue({ ...staff, permissions })
+    vi.mocked(api.apiRequest).mockResolvedValue(pendingCase())
+    renderPage()
+    await screen.findByRole('heading', { name: 'Disbursement and activation' })
+    expect(screen.getByRole('link', { name: '← Disbursement queue' })).toHaveAttribute('href', '/staff/work/disbursements')
+    const navigation = screen.queryByRole('navigation', { name: 'Application sections' })
+    if (sections.length) {
+      expect(within(navigation!).getAllByRole('link').map((link) => link.textContent)).toEqual(sections)
+      expect(screen.getAllByRole('link', { name: 'Application case' })).toHaveLength(1)
+      expect(screen.getByRole('link', { name: 'Application case' })).toHaveAttribute('href', `/staff/applications/${applicationId}`)
+    } else {
+      expect(navigation).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'Application case' })).not.toBeInTheDocument()
+    }
+    expect(vi.mocked(api.apiRequest).mock.calls.map(([path]) => path)).toEqual([`/staff/loan-applications/${applicationId}/disbursement`])
+  })
+
+  it('uses shared refresh feedback while refreshing only the authoritative disbursement case', async () => {
+    const refreshed = deferred<ReturnType<typeof pendingCase>>()
+    let reads = 0
+    vi.mocked(api.apiRequest).mockImplementation(async () => ++reads === 1 ? pendingCase() : refreshed.promise)
+    const { queryClient } = renderPage()
+    await screen.findByRole('heading', { name: 'Disbursement and activation' })
+    expect(screen.getByText(/Last successful refresh:/)).toHaveTextContent(
+      formatTimestamp(new Date(queryClient.getQueryState(staffDisbursementKeys.case(applicationId))!.dataUpdatedAt).toISOString()),
+    )
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Refresh' }))
+    expect(screen.getByRole('button', { name: 'Refreshing…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Reveal destination' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Review disbursement confirmation' })).toBeDisabled()
+    expect(vi.mocked(api.apiRequest).mock.calls.map(([path]) => path)).toEqual([
+      `/staff/loan-applications/${applicationId}/disbursement`,
+      `/staff/loan-applications/${applicationId}/disbursement`,
+    ])
+    await act(async () => refreshed.resolve(pendingCase()))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled())
+    expect(screen.getByRole('button', { name: 'Reveal destination' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Review disbursement confirmation' })).toBeEnabled()
+    expect(disbursementPostCalls()).toHaveLength(0)
+    expect(revealCalls()).toHaveLength(0)
   })
 
   it('keeps reveal data out of query and browser storage and clears it on hide and back navigation', async () => {
@@ -145,7 +216,9 @@ describe('Staff disbursement workspace', () => {
     expect(JSON.stringify(queryClient.getQueryCache().getAll().map((entry) => entry.state.data)))
       .not.toContain(fullAccountNumber)
     expect(JSON.stringify(sessionStorage)).not.toContain(fullAccountNumber)
-    expect(screen.queryByRole('button', { name: /copy/i })).not.toBeInTheDocument()
+    const destination = screen.getByRole('heading', { name: 'Contract-bound destination' }).parentElement!.parentElement!
+    expect(within(destination).queryByRole('button', { name: /copy/i })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /copy/i })).toEqual([screen.getByRole('button', { name: 'Copy application ID' })])
 
     await user.click(screen.getByRole('button', { name: 'Hide destination' }))
     expect(screen.queryByText(fullAccountNumber)).not.toBeInTheDocument()
