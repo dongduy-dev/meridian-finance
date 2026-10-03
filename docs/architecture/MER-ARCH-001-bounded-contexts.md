@@ -86,13 +86,17 @@ Identity remains the only owner of the login-to-Customer association. Customer o
 | Aspect | Detail |
 |---|---|
 | **Responsibilities** | Customer lifecycle, profile management, profile completeness, identity and verification status, bank-account management, Customer ownership checks, Staff-assisted Customer intake support, and protection of sensitive Customer data. |
-| **Owns** | `Customer`, Customer profile information, verification state, Customer status, bank accounts, primary-account designation, and source identity or bank-account evidence. |
+| **Owns** | `Customer`, Customer profile information, identity-verification state and history, Customer status, bank accounts, primary-account designation, and source identity or bank-account evidence. |
 | **Public Capabilities** | Manage Customer profile and bank-account data through Customer self-service or authorized Staff-assisted commands; select or create a Customer for Staff-assisted intake; query Customer readiness for lending; resolve purpose-limited identity evidence for employment verification; provide eligible bank-account facts for contract preparation and disbursement. |
 | **Publishes** | Representative events include Customer created, profile updated, verification status changed, bank account added or deactivated, primary bank account changed, and Customer suspended or reactivated. |
 | **Consumes** | Authenticated Customer or Staff actor and authorization facts from Identity & Access. |
 | **Must Not Own** | User credentials, Partner employee relationships, `LoanApplication` state, lending exposure, operational contracts, approval decisions, or repayment servicing. |
 
 Customer owns source identity and bank-account information and protects sensitive values at rest. Other contexts receive only purpose-limited facts, masked representations, or explicitly protected values through narrow application contracts.
+
+Customer owns `CustomerIdentityVerification` attempts and the aggregate verification summary. Document owns Customer-level identity files and immutable versions. Customer's evidence port calls Document public application contracts; assisted evidence uses Loan's narrow case-selected-Customer authorization contract and Document's exact intake-version validation. Identity owns only the permissions and authenticated reviewer facts.
+
+Loan consumes a purpose-limited readiness result with a successful verification reference for new UCL and Collateral origination. Loan stores only that stable reference, never identity evidence or verification internals. A later Customer full-name change invalidates current readiness without changing previous verification history or submitted applications. The business lifecycle is defined in [MER-BIZ-001 Section 5.9.1](../business/MER-BIZ-001-business-requirements-and-workflows.md#591-customer-identity-verification).
 
 A Customer business record is independent of a login account. Customer self-service resolves the Customer through the authenticated Customer identity. Staff-assisted commands instead authenticate the Staff user and identify the selected Customer as the business subject. They must use purpose-specific Staff capabilities and must not obtain Customer authority by treating Staff as the Customer.
 
@@ -317,7 +321,7 @@ A notification failure must not rewrite or reverse the business outcome that tri
 | Operational contracts and contract-bound destinations | Loan Core |
 | Contract readiness and disbursement evidence | Loan Core |
 | LoanAccounts, schedules, repayments, overdue state, contractual payoff, Administrative Full-Balance Settlement, administrative closure | Loan Core |
-| Staff-assisted paper evidence, application checklists, document versions, review decisions, readiness | Document Management |
+| Customer-level identity files, Staff-assisted paper evidence, application checklists, document versions, review decisions, readiness | Document Management |
 | OCR jobs and extracted document evidence | Document Management |
 | Immutable cross-cutting audit evidence | Audit & Compliance Controls |
 | Templates and message-delivery state | Notification |

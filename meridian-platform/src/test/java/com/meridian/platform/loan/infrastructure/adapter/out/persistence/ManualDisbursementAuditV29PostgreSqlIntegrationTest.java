@@ -58,7 +58,7 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
 
     @Test
     void installedLatestRetainsEveryKnownAuditActionAndRejectsUnknownAction() {
-        assertEquals("68", latestVersion(SCHEMA));
+        assertEquals("69", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -240,7 +240,7 @@ class ManualDisbursementAuditV29PostgreSqlIntegrationTest {
 
     private void assertActionsThroughV29Accepted(String schema) {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
-            if (action == BusinessAuditAction
+            if (action.name().startsWith("CUSTOMER_IDENTITY_") || action == BusinessAuditAction
                     .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED
                     || action == BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
                     || action == BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Customer } from '@/features/account/account-api'
+import { useOwnIdentityHistory } from '@/features/account/identity-queries'
 import { cn } from '@/lib/cn'
 
 const customerStatusLabels: Record<string, string> = {
@@ -70,13 +71,16 @@ function ReadinessItem({
 }
 
 export function AccountReadinessCard({ customer }: { customer: Customer }) {
+  const identity = useOwnIdentityHistory()
+  const pending = identity.data?.[0]?.status === 'PENDING_REVIEW'
+  const identityDescription = customer.verificationStatus === 'VERIFIED' ? 'Identity verified.' : pending ? 'Identity evidence submitted; review pending.' : customer.verificationStatus === 'REJECTED' ? 'Verification could not be completed. Review the reason and submit replacement evidence.' : identity.isError ? 'Identity review status could not be confirmed. Open identity verification.' : 'Submit identity evidence for Staff review before UCL or Collateral origination.'
   const profileComplete = customer.profileCompletionStatus === 'COMPLETE'
   return (
     <Card>
       <CardHeader>
         <CardTitle>Account setup</CardTitle>
         <CardDescription>
-          Complete these details before applying. Account setup does not indicate loan eligibility.
+          Review your account setup. Identity verification is required for UCL and Collateral Loan applications. Account setup does not indicate loan eligibility.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -89,6 +93,9 @@ export function AccountReadinessCard({ customer }: { customer: Customer }) {
             href="/account/profile"
             action="Complete profile"
           />
+          <ReadinessItem complete={customer.verificationStatus === 'VERIFIED'} icon={UserRound}
+            title="Identity verification" description={identityDescription}
+            href="/account/identity-verification" action="Open identity verification" />
           <ReadinessItem
             complete={customer.primaryActiveBankAccountPresent}
             icon={Landmark}
@@ -101,7 +108,7 @@ export function AccountReadinessCard({ customer }: { customer: Customer }) {
         <div className="flex flex-wrap gap-x-6 gap-y-2 rounded-md bg-information-subtle px-4 py-3 text-sm text-information">
           <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
           <span><strong>Account status:</strong> {safeLabel(customerStatusLabels, customer.status)}</span>
-          <span><strong>Profile verification:</strong> {safeLabel(verificationStatusLabels, customer.verificationStatus)}</span>
+          <span><strong>Identity verification:</strong> {safeLabel(verificationStatusLabels, customer.verificationStatus)}</span>
         </div>
       </CardContent>
     </Card>

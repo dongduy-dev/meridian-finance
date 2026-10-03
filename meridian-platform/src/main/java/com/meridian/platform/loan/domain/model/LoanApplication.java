@@ -19,7 +19,8 @@ public record LoanApplication(
         LoanApplicationStatus status,
         BigDecimal requestedAmount,
         int requestedTermMonths,
-        LocalDateTime submittedAt
+        LocalDateTime submittedAt,
+        UUID identityVerificationId
 ) {
 
     public LoanApplication {
@@ -37,6 +38,19 @@ public record LoanApplication(
                 && originationChannel != OriginationChannel.CUSTOMER_DIGITAL) {
             throw new IllegalArgumentException("Salary Advance permits only Customer-digital origination.");
         }
+    }
+
+    public LoanApplication(UUID id, UUID customerId, UUID loanProductId, String applicationNumber,
+            ProductCode productCode, ProductType productType, OriginationChannel originationChannel,
+            LoanApplicationStatus status, BigDecimal requestedAmount, int requestedTermMonths, LocalDateTime submittedAt) {
+        this(id, customerId, loanProductId, applicationNumber, productCode, productType, originationChannel,
+                status, requestedAmount, requestedTermMonths, submittedAt, null);
+    }
+    public LoanApplication withIdentityVerification(UUID verificationId) {
+        if (productCode == ProductCode.SALARY_ADVANCE || identityVerificationId != null)
+            throw new IllegalStateException("Identity verification provenance cannot be replaced.");
+        return new LoanApplication(id, customerId, loanProductId, applicationNumber, productCode, productType,
+                originationChannel, status, requestedAmount, requestedTermMonths, submittedAt, Objects.requireNonNull(verificationId));
     }
 
     private static final Set<LoanApplicationStatus> LOAN_OFFICER_RECOMMENDATION_SOURCE_STATUSES = Set.of(
@@ -417,7 +431,8 @@ public record LoanApplication(
                 nextStatus,
                 requestedAmount,
                 requestedTermMonths,
-                submittedAt
+                submittedAt,
+                identityVerificationId
         );
     }
 }

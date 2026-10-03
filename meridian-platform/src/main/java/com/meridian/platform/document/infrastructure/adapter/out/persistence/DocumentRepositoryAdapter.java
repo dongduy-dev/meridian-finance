@@ -14,15 +14,18 @@ import java.util.UUID;
 public class DocumentRepositoryAdapter implements DocumentRepository {
 
     private final JpaDocumentRepository documentRepository;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
     private final JpaDocumentVersionRepository versionRepository;
     private final JpaDocumentReviewDecisionRepository reviewDecisionRepository;
 
     public DocumentRepositoryAdapter(
             JpaDocumentRepository documentRepository,
             JpaDocumentVersionRepository versionRepository,
-            JpaDocumentReviewDecisionRepository reviewDecisionRepository
+            JpaDocumentReviewDecisionRepository reviewDecisionRepository,
+            org.springframework.jdbc.core.JdbcTemplate jdbc
     ) {
         this.documentRepository = documentRepository;
+        this.jdbc = jdbc;
         this.versionRepository = versionRepository;
         this.reviewDecisionRepository = reviewDecisionRepository;
     }
@@ -97,6 +100,7 @@ public class DocumentRepositoryAdapter implements DocumentRepository {
 
     @Override
     public boolean existsStorageReference(String storageKey) {
-        return versionRepository.existsByStorageKey(storageKey);
+        return versionRepository.existsByStorageKey(storageKey)
+                || Boolean.TRUE.equals(jdbc.queryForObject("select exists (select 1 from customer_identity_document_versions where storage_key = ? union all select 1 from intake_document_versions where storage_key = ? union all select 1 from assisted_action_document_versions where storage_key = ?)", Boolean.class, storageKey, storageKey, storageKey));
     }
 }

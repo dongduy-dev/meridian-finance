@@ -22,6 +22,7 @@ const submissionErrorMessages: Record<string, string> = {
   PRODUCT_NOT_FOUND: 'This product is no longer available.',
   CUSTOMER_NOT_ACTIVE: 'Your account must be active before submission.',
   PROFILE_INCOMPLETE: 'Complete your profile before submission.',
+  CUSTOMER_IDENTITY_VERIFICATION_REQUIRED: 'Complete identity verification before submitting this application.',
   PRIMARY_BANK_ACCOUNT_REQUIRED: 'An active primary bank account is required before submission.',
   PRODUCT_INACTIVE: 'This product is no longer active for new applications.',
   PRODUCT_POLICY_INVALID: 'Applications for this loan are temporarily unavailable.',
@@ -36,6 +37,7 @@ const submissionErrorMessages: Record<string, string> = {
 
 const errorActions: Record<string, { label: string; to: string }> = {
   PROFILE_INCOMPLETE: { label: 'Open profile', to: '/account/profile' },
+  CUSTOMER_IDENTITY_VERIFICATION_REQUIRED: { label: 'Open identity verification', to: '/account/identity-verification' },
   PRIMARY_BANK_ACCOUNT_REQUIRED: { label: 'Open bank accounts', to: '/account/bank-accounts' },
 }
 

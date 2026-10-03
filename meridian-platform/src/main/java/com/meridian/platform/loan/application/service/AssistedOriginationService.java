@@ -127,6 +127,20 @@ public class AssistedOriginationService
         return new AuthorizedAssistedOrigination(assistedCase.id(), assistedCase.productCode().name());
     }
 
+    @Override
+    @Transactional
+    public UUID authorizeIdentityVerification(UUID caseId, boolean requireOpen) {
+        AuthenticatedUser actor = currentUsers.currentUser();
+        if (!"STAFF".equals(actor.userType()) || actor.optionalCustomerId().isPresent()
+                || !actor.hasPermission("customer:identity:verify"))
+            throw new AuthorizationException("IDENTITY_VERIFICATION_ACCESS_DENIED", "Customer identity verification access is denied.");
+        AssistedOriginationCase value = find(caseId, true);
+        if (requireOpen) value.requireOpen();
+        if (value.customerId() == null) throw new BusinessStateConflictException("ASSISTED_ORIGINATION_CUSTOMER_REQUIRED",
+                "A selected Customer is required before identity verification.");
+        return value.customerId();
+    }
+
     private AuthenticatedUser requireStaff() {
         AuthenticatedUser actor = currentUsers.currentUser();
         if (!"STAFF".equals(actor.userType()) || actor.optionalCustomerId().isPresent()

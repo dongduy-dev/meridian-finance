@@ -265,6 +265,27 @@ Customer owns the mutable source profile and bank-account data. A Customer busin
 
 For Staff-assisted intake, Staff records Customer-provided profile, bank-account, and consent facts as the authenticated actor. Consent belongs to the Customer and must be supported by the signed paper loan application; Meridian does not treat Staff confirmation as Customer consent and does not require a separate consent document for that application.
 
+### 5.9.1 Customer Identity Verification
+
+Customer identity verification belongs to the Customer and is reusable for later loans. Profile completion, email confirmation, document upload, OCR extraction, and OCR transcription review do not establish identity verification.
+
+An active Customer with a complete identity-bearing profile may submit one identity-document file for manual review before bank-account setup or any loan application. Document owns the file and immutable versions. Customer owns each ordered verification attempt, its exact evidence reference, source, manual-review method, outcome, and submission/reviewer times. Digital evidence is Customer-level. Staff-assisted verification references the exact `CUSTOMER_IDENTITY` intake version associated with the case-selected Customer; its bytes are not copied into another store or application checklist.
+
+| Action | Attempt outcome | Customer summary |
+|---|---|---|
+| Submit evidence | `PENDING_REVIEW` | `UNVERIFIED` |
+| Authorized Loan Officer verifies matching identity | `VERIFIED` | `VERIFIED` |
+| Authorized Loan Officer rejects with a controlled reason | `REJECTED` | `REJECTED` |
+| Submit replacement evidence | New `PENDING_REVIEW`; earlier pending attempt becomes `SUPERSEDED` | `UNVERIFIED` |
+
+Completed decisions remain immutable. Replacement preserves earlier attempts and exact versions. A reviewer must inspect the exact current evidence, attest that it supports the Customer identity, and re-enter the Identity Reference presented on that document. Customer compares its protected fingerprint without revealing the stored reference. Rejection uses only identity-reference mismatch, name mismatch, unreadable evidence, or unacceptable evidence. Competing decisions produce one terminal outcome; exact replay produces no duplicate effects.
+
+A material full-name change after verification returns the Customer summary to `UNVERIFIED` and requires fresh evidence and review for future UCL or Collateral origination. The same rule applies to Customer and authorized Staff profile updates. Phone, residential address, employment status, employer name, and bank-account changes do not invalidate identity verification. Identity Reference remains immutable after profile completion. Earlier verification and LoanApplication evidence remain unchanged.
+
+New UCL and Collateral origination, through either channel, requires a verified Customer with current successful verification evidence. An existing verified Customer may reuse that result without another identity document solely because another loan is requested. Salary Advance retains its separate Partner employee-verification requirements. Applications already created before this requirement continue through their existing downstream lifecycle without a new Customer identity gate.
+
+Manual Staff document review is an MVP identity foundation. It does not authenticate document genuineness independently and makes no regulatory-compliance or production eKYC claim. Biometrics, face matching, liveness, NFC, authoritative-government checks, external eKYC providers, screening, and risk scoring are outside this workflow.
+
 ### 5.10 Staff-Assisted Intake
 
 Staff-assisted intake is the temporary branch workflow that converts Customer-provided paper information and evidence into structured Meridian data before a UCL or Collateral Loan `LoanApplication` exists. It is not a loan decision, does not create financial exposure, and does not enter product verification, review, or approval.
@@ -294,7 +315,7 @@ All products use the same lifecycle authority but may enter document and verific
 
 ### 6.1 Pre-Submission Readiness and Guards
 
-**Customer readiness.** Before submission, the Customer must be active, the required profile must be complete, required consent must be satisfied, and the selected product's bank-account readiness requirement must be satisfied. Customer profile completeness and bank-account readiness are separate controls. A Staff-assisted Customer does not need a Customer Web login to satisfy Customer readiness.
+**Customer readiness.** Before submission, the Customer must be active, the required profile must be complete, required consent must be satisfied, and the selected product's bank-account readiness requirement must be satisfied. Customer profile completeness, Customer identity verification, and bank-account readiness are separate controls. New UCL and Collateral submissions additionally require the Customer verification defined in Section 5.9.1. A Staff-assisted Customer does not need a Customer Web login to satisfy Customer readiness.
 
 Submission evaluates the Customer's current authoritative profile and eligible bank-account facts. For Staff-assisted origination, consent may be recorded only from Customer-provided signed application evidence as defined in Section 5.9. Section 5.9 defines Customer source-data ownership and mutation rules.
 

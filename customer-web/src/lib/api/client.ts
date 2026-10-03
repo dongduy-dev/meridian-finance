@@ -8,6 +8,7 @@ const GENERIC_ERROR_MESSAGE = 'The request could not be completed.'
 
 export interface ApiRequestOptions
   extends Omit<RequestInit, 'body' | 'credentials' | 'headers' | 'signal'> {
+  responseType?: 'blob'
   body?: BodyInit | null
   credentials?: RequestCredentials
   headers?: HeadersInit
@@ -84,6 +85,7 @@ export function createApiClient({
   ): Promise<TResponse> {
     const {
       body,
+      responseType,
       credentials = 'same-origin',
       headers: suppliedHeaders,
       json,
@@ -135,6 +137,7 @@ export function createApiClient({
       return undefined as TResponse
     }
 
+    if (responseType === 'blob') return await response.blob() as TResponse
     return (await readJson(response)) as TResponse
   }
 

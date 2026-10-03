@@ -26,7 +26,7 @@ Meridian uses one PostgreSQL database. Sharing a database does not create shared
 
 ## 3. Current Physical Schema and Planned Concepts
 
-The physical schema is the result of Flyway migrations V1 through V68. V68 is an intentional no-op. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion and downstream evidenced actions, Document-owned OCR processing and Staff review, protected Partner Company/import/eligibility-review, Loan Product, and Internal User administration, and Identity registration, existing-Customer digital activation, email verification, password reset, login, and session protection.
+The physical schema is the result of Flyway migrations V1 through V69. V68 is an intentional no-op; V69 defines Customer identity verification and Document-owned digital identity evidence. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion and downstream evidenced actions, Document-owned OCR processing and Staff review, protected Partner Company/import/eligibility-review, Loan Product, and Internal User administration, and Identity registration, existing-Customer digital activation, email verification, password reset, login, and session protection.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
@@ -61,6 +61,12 @@ erDiagram
 
     CUSTOMER ||--|| CUSTOMER_PROFILE : owns
     CUSTOMER ||--o{ BANK_ACCOUNT : owns
+    CUSTOMER ||--o{ CUSTOMER_IDENTITY_VERIFICATION : records
+    CUSTOMER ||--o| CUSTOMER_IDENTITY_DOCUMENT : evidence_for
+    CUSTOMER_IDENTITY_DOCUMENT ||--|{ CUSTOMER_IDENTITY_DOCUMENT_VERSION : versions
+    CUSTOMER_IDENTITY_DOCUMENT_VERSION o|--o| CUSTOMER_IDENTITY_VERIFICATION : digital_evidence
+    INTAKE_DOCUMENT_VERSION o|--o| CUSTOMER_IDENTITY_VERIFICATION : assisted_evidence
+    CUSTOMER_IDENTITY_VERIFICATION o|--o{ LOAN_APPLICATION : consumed_at_origination
     CUSTOMER ||--o{ EMPLOYMENT_LINK : verifies
     PARTNER_COMPANY ||--o{ EMPLOYEE_IMPORT_BATCH : receives
     EMPLOYEE_IMPORT_BATCH ||--o{ PARTNER_EMPLOYEE : supplies
@@ -149,6 +155,12 @@ Customer owns `customers`, `customer_profiles`, and `customer_bank_accounts`.
 - One Customer may own multiple bank accounts, but Customer enforces the primary-account invariant for active accounts.
 
 Customer owns the mutable source account. Loan does not share or copy Customer's ciphertext or fingerprint. When an accepted offer proceeds to contract, Loan obtains eligible destination facts through Customer's contract and owns a separate immutable, purpose-protected contract snapshot.
+
+Customer also owns `customer_identity_verifications`. Each ordered attempt binds one exact digital or intake version, the submitted full-name context, source, manual-review method, state, controlled rejection reason, submitter, reviewer, completion time, and decision request ID. One Customer has at most one pending attempt. Terminal rows and all evidence linkage are immutable. No presented Identity Reference is stored in this history.
+
+Document owns `customer_identity_documents` and `customer_identity_document_versions`: one digital identity document per Customer, immutable versions, unique upload request and storage keys, protected current-version/baseline associations, validated filename/MIME/size/hash metadata, and uploader/time. Source-specific generated foreign keys bind each Customer verification to the correct version table. The verification trigger additionally validates exact current evidence, Customer ownership, assisted case-selected Customer, identity evidence type, and active complete matching profile.
+
+`loan_applications.identity_verification_id` is immutable nullable external provenance. New UCL and Collateral commands bind the successful Customer-owned result; the database rejects foreign-Customer, nonverified, or Salary Advance references. Historical applications retain null. This reference does not make Loan the owner of identity files or verification decisions.
 
 ### 6.3 Partner
 

@@ -826,6 +826,7 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
                 "cl-cp2-" + unique + "@meridian.test",
                 "cl-cp2-" + unique + "@meridian.test",
                 customerId);
+        com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbc, customerId);
         return new Fixture(customerId, customerUserId);
     }
 

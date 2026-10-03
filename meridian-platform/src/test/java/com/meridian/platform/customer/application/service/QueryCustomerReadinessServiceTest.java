@@ -36,7 +36,7 @@ class QueryCustomerReadinessServiceTest {
                         completeProfile(),
                         List.of(bankAccount(true, CustomerBankAccountStatus.ACTIVE))
                 )
-        ));
+        ), org.mockito.Mockito.mock(com.meridian.platform.customer.application.port.out.CustomerIdentityVerificationRepository.class));
 
         CustomerReadinessSnapshot snapshot = service.findReadinessByCustomerId(CUSTOMER_ID).orElseThrow();
 
@@ -59,7 +59,7 @@ class QueryCustomerReadinessServiceTest {
                         null,
                         List.of()
                 )
-        ));
+        ), org.mockito.Mockito.mock(com.meridian.platform.customer.application.port.out.CustomerIdentityVerificationRepository.class));
 
         CustomerReadinessSnapshot snapshot = service.findReadinessByCustomerId(CUSTOMER_ID).orElseThrow();
 
@@ -71,7 +71,7 @@ class QueryCustomerReadinessServiceTest {
 
     @Test
     void returnsEmptyWhenCustomerIsMissing() {
-        QueryCustomerReadinessService service = new QueryCustomerReadinessService(new FakeCustomerRepository(null));
+        QueryCustomerReadinessService service = new QueryCustomerReadinessService(new FakeCustomerRepository(null), org.mockito.Mockito.mock(com.meridian.platform.customer.application.port.out.CustomerIdentityVerificationRepository.class));
 
         assertTrue(service.findReadinessByCustomerId(CUSTOMER_ID).isEmpty());
     }

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { StrictMode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { queryClient } from '@/app/providers/query-client'
 import { AppProviders } from '@/app/providers/AppProviders'
 import type { AuthApi } from '@/features/auth/auth-api'
 import { AuthSessionManager } from '@/features/auth/auth-session'
@@ -41,6 +42,8 @@ async function completeLogin(user: ReturnType<typeof userEvent.setup>) {
 
 afterEach(() => {
   window.history.replaceState(null, '', '/')
+  queryClient.clear()
+  vi.unstubAllGlobals()
 })
 
 describe('Customer authentication routes', () => {
@@ -228,6 +231,7 @@ describe('Customer authentication routes', () => {
   })
 
   it('clears locally and returns to Login even when logout transport fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ errorCode: 'SERVICE_TEMPORARILY_UNAVAILABLE', message: 'Unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } })))
     const user = userEvent.setup()
     const api = createAuthApiMock()
     vi.mocked(api.logout).mockRejectedValue(new NetworkError())

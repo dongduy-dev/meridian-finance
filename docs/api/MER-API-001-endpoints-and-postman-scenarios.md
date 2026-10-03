@@ -175,6 +175,10 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/staff/customers/{customerId}/bank-accounts` | Staff with `customer:intake:manage` | Add a protected bank account. |
 | POST | `/api/v1/staff/customers/{customerId}/bank-accounts/{customerBankAccountId}/make-primary` | Staff with `customer:intake:manage` | Make an active selected-Customer account primary. |
 | POST | `/api/v1/staff/customers/{customerId}/bank-accounts/{customerBankAccountId}/deactivate` | Staff with `customer:intake:manage` | Deactivate a selected-Customer account subject to aggregate rules. |
+| GET | `/api/v1/customers/me/identity-verifications` | Customer `customer:identity:read:own` | Ordered own identity-verification history; Section 3.20. |
+| POST | `/api/v1/customers/me/identity-verifications` | Customer `customer:identity:write:own` | Customer-level single-file identity submission; Section 3.20. |
+| GET | `/api/v1/customers/me/identity-verifications/{verificationId}/content` | Customer `customer:identity:read:own` | Exact own identity evidence; Section 3.20. |
+
 
 ### 2.2 Origination, review, approval, corrections, and documents
 
@@ -232,6 +236,13 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/assisted-action-evidence/{evidenceType}/versions/{documentVersionId}/content` | Exact type-specific Staff audience in Section 5.7 | Stream the exact current or historical signed evidence version. |
 | POST | `/api/v1/staff/loan-applications/{loanApplicationId}/cancellation` | Staff with `loan:cancel:staff` and the Loan Officer role | Record an evidenced Customer-requested cancellation for the exact active correction of a Staff-assisted UCL. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | Staff with exact `document:review` or `approval:decide` | Stream the exact immutable checklist version for review or read-only decision inspection. |
+| GET | `/api/v1/staff/customer-identity-verifications` | Staff `customer:identity:verify` | Pending identity queue; Section 3.20. |
+| GET | `/api/v1/staff/customer-identity-verifications/{verificationId}` | Staff `customer:identity:verify` | Exact identity detail; Section 3.20. |
+| GET | `/api/v1/staff/customer-identity-verifications/{verificationId}/content` | Staff `customer:identity:verify` | Exact identity file; Section 3.20. |
+| POST | `/api/v1/staff/customer-identity-verifications/{verificationId}/verify` | Staff `customer:identity:verify` | Manual attestation with transient confirmation; Section 3.20. |
+| POST | `/api/v1/staff/customer-identity-verifications/{verificationId}/reject` | Staff `customer:identity:verify` | Controlled rejection; Section 3.20. |
+| POST | `/api/v1/staff/assisted-originations/{caseId}/identity-verifications` | Staff `customer:identity:verify` | Exact current intake-version binding; Section 3.20. |
+
 
 ### 2.3 Offers, contracts, disbursement, account, and servicing
 
@@ -810,7 +821,7 @@ POST /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/unsecured-c
 }
 ```
 
-The command locks the case and requires an `OPEN` UCL intake, a selected Customer, current authoritative Customer readiness, a current signed `UCL_PAPER_APPLICATION`, an active UCL product, valid product amount and term, no blocking UCL application, and no outstanding UCL LoanAccount. Success returns `201 Created` and atomically creates one `STAFF_ASSISTED` UCL application in `DOCUMENTS_PENDING`, the normal `INCOME_PROOF`, `BANK_STATEMENT`, and `EMPLOYMENT_PROOF` checklist, the initial `PENDING_MANUAL_REVIEW` verification, lifecycle/audit evidence, and the completed-case application link. The intake paper evidence remains Document-owned and is not copied into the application checklist.
+The command locks the case and requires an `OPEN` UCL intake, a selected Customer, current authoritative Customer readiness including successful identity verification, a current signed `UCL_PAPER_APPLICATION`, an active UCL product, valid product amount and term, no blocking UCL application, and no outstanding UCL LoanAccount. Success returns `201 Created` and atomically creates one `STAFF_ASSISTED` UCL application in `DOCUMENTS_PENDING`, the normal `INCOME_PROOF`, `BANK_STATEMENT`, and `EMPLOYMENT_PROOF` checklist, the initial `PENDING_MANUAL_REVIEW` verification, lifecycle/audit evidence, and the completed-case application link. The intake paper evidence remains Document-owned and is not copied into the application checklist.
 
 Collateral conversion is:
 
@@ -832,13 +843,39 @@ POST /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/collateral-
 }
 ```
 
-The authenticated actor must be Staff without Customer context and must hold `loan:originate:staff`. The command locks and requires an `OPEN` Collateral case with a selected Customer, current authoritative Customer readiness, a current signed `COLLATERAL_PAPER_APPLICATION`, an active Collateral product, valid amount and term, one valid structured Collateral fact, and no blocking Collateral application. Existing Collateral LoanAccount state adds no product-specific origination restriction.
+The authenticated actor must be Staff without Customer context and must hold `loan:originate:staff`. The command locks and requires an `OPEN` Collateral case with a selected Customer, current authoritative Customer readiness including successful identity verification, a current signed `COLLATERAL_PAPER_APPLICATION`, an active Collateral product, valid amount and term, one valid structured Collateral fact, and no blocking Collateral application. Existing Collateral LoanAccount state adds no product-specific origination restriction.
 
 Success returns `201 Created` and atomically creates one `STAFF_ASSISTED` Collateral application in `DOCUMENTS_PENDING`, exactly one structured Collateral row, the normal required `COLLATERAL_OWNERSHIP_EVIDENCE` checklist item, the initial `PENDING_MANUAL_REVIEW` Collateral verification, lifecycle/audit evidence, and the completed-case application link. Estimated value remains advisory; the command performs no automated valuation or loan-to-value decision. `COLLATERAL_PAPER_APPLICATION` and `CUSTOMER_IDENTITY` remain pre-application intake evidence and are not copied into the application checklist.
 
 The case GET is the authoritative uncertain-result reconciliation read. `COMPLETED` plus a non-null `loanApplicationId` proves success. A client must not automatically repeat the conversion POST after network loss; an authoritative `OPEN` result requires explicit operator confirmation before a new attempt.
 
 ---
+
+### 3.20 Customer Identity Verification
+
+| Method | Endpoint | Exact authority | Result |
+|---|---|---|---|
+| GET | `/api/v1/customers/me/identity-verifications` | Customer `customer:identity:read:own` | Ordered own history, newest first |
+| POST | `/api/v1/customers/me/identity-verifications` | Customer `customer:identity:write:own` | Submit one digital identity file; `201` pending attempt or recorded exact replay |
+| GET | `/api/v1/customers/me/identity-verifications/{verificationId}/content` | Customer `customer:identity:read:own` | Exact own evidence content; foreign and missing attempts share `404` |
+| GET | `/api/v1/staff/customer-identity-verifications?page=0&size=25` | Staff `customer:identity:verify` | Pending queue; page 0–10000, size 1–100 |
+| GET | `/api/v1/staff/customer-identity-verifications/{verificationId}` | Staff `customer:identity:verify` | Exact verification detail |
+| GET | `/api/v1/staff/customer-identity-verifications/{verificationId}/content` | Staff `customer:identity:verify` | Exact bound evidence content |
+| POST | `/api/v1/staff/customer-identity-verifications/{verificationId}/verify` | Staff `customer:identity:verify` | Manual verified outcome; `200` |
+| POST | `/api/v1/staff/customer-identity-verifications/{verificationId}/reject` | Staff `customer:identity:verify` | Controlled rejected outcome; `200` |
+| POST | `/api/v1/staff/assisted-originations/{caseId}/identity-verifications` | Staff `customer:identity:verify` | Bind exact current intake evidence; `201` |
+
+Identity seeds the two own capabilities to `CUSTOMER` and the dedicated review capability only to `LOAN_OFFICER`. `customer:read`, `loan:read`, generic `document:review`, and application-document own permissions grant no identity-verification access. Approver, Accounting, and Back-Office seeded accounts have no access. The capability does not require generic Customer-directory authority.
+
+Digital submission is multipart with `file`, UUID `uploadRequestId`, and nullable UUID `expectedCurrentVersionId`. It accepts one PDF/JPEG/PNG up to 10 MiB under the normal signature, MIME, and filename rules. Ownership comes from authentication; no Customer ID is accepted. The Customer must be active with a complete profile; bank-account and loan readiness are not prerequisites. Exact request replay matches Customer, baseline, filename, MIME, size, bytes hash, and actor. Different logical content with the same request ID returns `409 IDEMPOTENCY_KEY_REUSED`; a changed baseline returns `409 IDENTITY_VERIFICATION_EVIDENCE_STALE`.
+
+Assisted binding accepts only `{ "documentVersionId": "<UUID>" }`. The server resolves the case-selected Customer and validates the exact current `CUSTOMER_IDENTITY` version. A new attempt requires an open case. An already verified Customer reuses existing readiness for later assisted loans without a new identity file. Replacing a pending attempt preserves it as `SUPERSEDED`; replacing rejected evidence creates a new pending attempt. Upload never means verified.
+
+VERIFY accepts `{ "requestId": "<UUID>", "documentVersionId": "<UUID>", "presentedIdentityReference": "<reference shown on exact evidence>" }`. The transient reference is at most 100 characters, submitted only in the body, compared against Customer's protected fingerprint, and excluded from persistence, responses, logs, and audit. Mismatch returns `422 IDENTITY_REFERENCE_MISMATCH` without completing the attempt. REJECT accepts request/version IDs and exactly one `rejectionReason`: `IDENTITY_REFERENCE_MISMATCH`, `NAME_MISMATCH`, `UNREADABLE_EVIDENCE`, or `UNACCEPTABLE_EVIDENCE`; it accepts no presented reference or free text. Both commands require pending/current evidence, active complete matching Customer context, and dedicated Staff authority. Exact request/outcome/reason/reviewer replay returns the recorded result; conflicting terminal or stale commands return `409`.
+
+Safe history/detail fields are `verificationId`, `sequence`, `customerNumber`, submitted `fullName`, `source`, `method`, `status`, controlled nullable `rejectionReason`, `submittedAt`, `completedAt`, and `evidence`. Evidence contains only `versionId`, `versionNumber`, `filename`, `mimeType`, `byteSize`, and `uploadedAt`. Queue rows set `evidence` to null. No Customer UUID, raw Identity Reference, email, phone, address, bank information, storage key, hash, ciphertext, fingerprint, reviewer notes, or login identity is returned. Content reads return the exact immutable file with attachment disposition, `Cache-Control: private, no-store`, and `X-Content-Type-Options: nosniff` after authorization.
+
+Full-name updates through either profile channel invalidate a verified summary while preserving historical decisions. Other mutable contact, employment, and bank facts do not invalidate it. New digital and assisted UCL/Collateral submission require current verified readiness and retain its stable reference internally; failure is `422 CUSTOMER_IDENTITY_VERIFICATION_REQUIRED`. Historical applications and Salary Advance do not acquire this guard. See the [error catalog](../architecture/MER-ARCH-004-api-error-catalog.md) for identity workflow failures.
 
 ## 4. Salary Advance, UCL, and Collateral Loan Origination
 
@@ -995,7 +1032,7 @@ The authenticated Customer supplies only the requested amount and term:
 }
 ```
 
-The API derives Customer identity from the Bearer token and does not accept `customerId`. The Customer must be active, have a complete required profile and a primary active bank account, and hold `loan:submit`. The active catalog product must be `UNSECURED_CONSUMER_LOAN` / `UNSECURED`. Amounts must be whole VND from 2,000,000 through 50,000,000 inclusive. Supported terms are 3, 6, 9, and 12 months.
+The API derives Customer identity from the Bearer token and does not accept `customerId`. The Customer must be active, have a complete required profile, current successful Customer identity verification, and a primary active bank account, and hold `loan:submit`. The active catalog product must be `UNSECURED_CONSUMER_LOAN` / `UNSECURED`. Amounts must be whole VND from 2,000,000 through 50,000,000 inclusive. Supported terms are 3, 6, 9, and 12 months.
 
 Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `status`, `requestedAmount`, `requestedTermMonths`, `productVerificationResult`, and `submittedAt`. Loan records the application in `DOCUMENTS_PENDING`, stores `PENDING_MANUAL_REVIEW` as its product-verification result, and creates required `INCOME_PROOF`, `BANK_STATEMENT`, and `EMPLOYMENT_PROOF` checklist items.
 
@@ -1007,7 +1044,7 @@ Important errors:
 |---|---|
 | `404` | `CUSTOMER_NOT_FOUND` or `PRODUCT_NOT_FOUND` |
 | `409` | `CUSTOMER_NOT_ACTIVE`, `BLOCKING_APPLICATION_EXISTS`, `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, or `SYSTEM_STATE_CONFLICT` |
-| `422` | `PROFILE_INCOMPLETE`, `PRIMARY_BANK_ACCOUNT_REQUIRED`, `PRODUCT_INACTIVE`, `PRODUCT_POLICY_INVALID`, `INVALID_PRODUCT_AMOUNT`, or `INVALID_PRODUCT_TERM` |
+| `422` | `PROFILE_INCOMPLETE`, `CUSTOMER_IDENTITY_VERIFICATION_REQUIRED`, `PRIMARY_BANK_ACCOUNT_REQUIRED`, `PRODUCT_INACTIVE`, `PRODUCT_POLICY_INVALID`, `INVALID_PRODUCT_AMOUNT`, or `INVALID_PRODUCT_TERM` |
 
 ### 4.5 Submit Collateral Loan application
 
@@ -1031,7 +1068,7 @@ The authenticated Customer supplies the requested terms and exactly one structur
 }
 ```
 
-The API derives Customer identity from the Bearer token and rejects unknown top-level or Collateral fields. The Customer must be active, have a complete required profile and a primary active bank account, and hold `loan:submit`. The active catalog product must be `COLLATERAL_LOAN` / `SECURED`. The requested amount must be whole VND and within the current active product minimum and maximum. Supported terms are exactly 6, 12, 18, and 24 months. `estimatedValue` must be positive whole VND, but the endpoint performs no loan-to-value calculation or comparison between requested and estimated values. `description`, `ownershipStatus`, and `conditionNote` are required nonblank Customer-submitted text, normalized by trimming before storage, and limited to 500, 200, and 500 characters respectively.
+The API derives Customer identity from the Bearer token and rejects unknown top-level or Collateral fields. The Customer must be active, have a complete required profile, current successful Customer identity verification, and a primary active bank account, and hold `loan:submit`. The active catalog product must be `COLLATERAL_LOAN` / `SECURED`. The requested amount must be whole VND and within the current active product minimum and maximum. Supported terms are exactly 6, 12, 18, and 24 months. `estimatedValue` must be positive whole VND, but the endpoint performs no loan-to-value calculation or comparison between requested and estimated values. `description`, `ownershipStatus`, and `conditionNote` are required nonblank Customer-submitted text, normalized by trimming before storage, and limited to 500, 200, and 500 characters respectively.
 
 Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `status`, `requestedAmount`, `requestedTermMonths`, `collateralType`, `productVerificationResult`, `evidenceRequirements`, and `submittedAt`. Each safe evidence requirement contains `checklistItemId`, `documentType`, and `requirementStatus`. The response returns one required `COLLATERAL_OWNERSHIP_EVIDENCE` item, allowing the Customer to call the existing document-version upload endpoint without exposing document contents or internal review evidence.
 
@@ -1046,7 +1083,7 @@ Important errors:
 | `400` | `VALIDATION_FAILED` for malformed input, unknown fields, unsupported Collateral type, or Bean Validation failure |
 | `404` | `CUSTOMER_NOT_FOUND` or `PRODUCT_NOT_FOUND` |
 | `409` | `CUSTOMER_NOT_ACTIVE`, `BLOCKING_APPLICATION_EXISTS`, `COLLATERAL_VERIFICATION_REQUIRED`, or `SYSTEM_STATE_CONFLICT` |
-| `422` | `PROFILE_INCOMPLETE`, `PRIMARY_BANK_ACCOUNT_REQUIRED`, `PRODUCT_INACTIVE`, `PRODUCT_POLICY_INVALID`, `INVALID_PRODUCT_AMOUNT`, `INVALID_PRODUCT_TERM`, `INVALID_COLLATERAL_DETAILS`, or `PRODUCT_VERIFICATION_PENDING` |
+| `422` | `PROFILE_INCOMPLETE`, `CUSTOMER_IDENTITY_VERIFICATION_REQUIRED`, `PRIMARY_BANK_ACCOUNT_REQUIRED`, `PRODUCT_INACTIVE`, `PRODUCT_POLICY_INVALID`, `INVALID_PRODUCT_AMOUNT`, `INVALID_PRODUCT_TERM`, `INVALID_COLLATERAL_DETAILS`, or `PRODUCT_VERIFICATION_PENDING` |
 
 ### 4.6 Start UCL manual verification
 

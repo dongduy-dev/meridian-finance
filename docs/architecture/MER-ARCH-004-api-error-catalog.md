@@ -63,6 +63,20 @@ Reserved codes are listed separately. They do not become part of an executable A
 
 ---
 
+### 3.1 Customer Identity Verification
+
+| HTTP | Error code | Meaning | Caller action |
+|---|---|---|---|
+| 403 | `IDENTITY_VERIFICATION_ACCESS_DENIED` | Customer identity verification access is denied | Use the exact own capability or dedicated Staff review capability |
+| 404 | `IDENTITY_VERIFICATION_NOT_FOUND` | Verification missing or concealed | Own reads conceal foreign Customer attempts with the same result |
+| 404 | `IDENTITY_EVIDENCE_NOT_FOUND` | Exact identity evidence missing or inconsistent | Reconcile the case and exact version; never select arbitrary evidence |
+| 409 | `IDENTITY_VERIFICATION_EVIDENCE_STALE` | Exact evidence or full-name context changed | Submit and review the authoritative current evidence |
+| 409 | `IDENTITY_VERIFICATION_ALREADY_COMPLETED` | A conflicting terminal decision exists | Read the recorded outcome; only exact logical replay succeeds |
+| 409 | `IDENTITY_VERIFICATION_NOT_ALLOWED` | Customer identity is already verified | Reuse the valid Customer verification |
+| 422 | `INVALID_IDENTITY_VERIFICATION_REQUEST` | Missing confirmation, invalid rejection shape, or invalid queue pagination | Supply the controlled operation fields |
+| 422 | `IDENTITY_REFERENCE_MISMATCH` | Presented reference differs from protected Customer evidence | Re-check the exact document; the attempt remains pending |
+| 422 | `CUSTOMER_IDENTITY_VERIFICATION_REQUIRED` | New UCL or Collateral origination lacks current successful Customer verification | Complete Customer identity verification before submitting |
+
 ## 4. Loan Product and Application
 
 | HTTP Status | Error Code | Message | Resolution |

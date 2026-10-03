@@ -56,6 +56,9 @@ public class LoanApplicationJpaEntity {
     @Column(name = "requested_term_months", nullable = false)
     private int requestedTermMonths;
 
+    @Column(name = "identity_verification_id", updatable = false)
+    private UUID identityVerificationId;
+
     @Column(name = "submitted_at", nullable = false)
     private LocalDateTime submittedAt;
 
@@ -81,6 +84,7 @@ public class LoanApplicationJpaEntity {
         this.productCode = source.productCode();
         this.productType = source.productType();
         this.originationChannel = source.originationChannel();
+        this.identityVerificationId = source.identityVerificationId();
         applyMutableFields(source);
     }
 
@@ -98,6 +102,8 @@ public class LoanApplicationJpaEntity {
         this.requestedTermMonths = loanApplication.requestedTermMonths();
         this.submittedAt = loanApplication.submittedAt();
     }
+    public UUID getIdentityVerificationId() { return identityVerificationId; }
+
     public UUID getId() {
         return id;
     }

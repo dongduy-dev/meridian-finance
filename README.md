@@ -356,6 +356,7 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 
 ### Phase 4 — Operational Maturity
 
+- [x] Customer-level manual identity verification with immutable evidence and new UCL/Collateral origination readiness
 - [ ] Production object storage, malware scanning, retention, and recovery controls
 - [ ] Evaluate Redis for distributed rate limiting, session controls, and short-lived caching
 - [ ] Prometheus metrics and Grafana dashboards

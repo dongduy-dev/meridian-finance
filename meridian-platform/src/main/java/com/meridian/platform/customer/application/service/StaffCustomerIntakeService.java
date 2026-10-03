@@ -174,6 +174,14 @@ public class StaffCustomerIntakeService implements StaffCustomerIntakeUseCase {
                 && saved.profileCompletionStatus() == ProfileCompletionStatus.COMPLETE) {
             entries.add(profileAudit(BusinessAuditAction.CUSTOMER_PROFILE_COMPLETED, saved));
         }
+        if (customer.verificationStatus() == com.meridian.platform.customer.domain.model.VerificationStatus.VERIFIED
+                && saved.verificationStatus() != com.meridian.platform.customer.domain.model.VerificationStatus.VERIFIED) {
+            auditPublisher.publish(BusinessAuditEvent.single(
+                    BusinessOperationContext.user(UUID.randomUUID(), actor.userId(), now),
+                    new BusinessAuditEntry(BusinessAuditAction.CUSTOMER_IDENTITY_VERIFICATION_INVALIDATED, BusinessAuditEntityType.CUSTOMER,
+                            saved.id(), BusinessAuditPayload.builder().put(BusinessAuditPayloadKey.CUSTOMER_ID, saved.id()).build())));
+        }
+
         auditPublisher.publish(new BusinessAuditEvent(
                 BusinessOperationContext.user(UUID.randomUUID(), actor.userId(), now), entries));
         return mapper.toCustomerDto(saved);

@@ -5,6 +5,7 @@ import { cn } from '@/lib/cn'
 
 const destinations = [
   { label: 'Profile', href: '/account/profile', icon: UserRound },
+  { label: 'Identity verification', href: '/account/identity-verification', icon: UserRound },
   { label: 'Bank accounts', href: '/account/bank-accounts', icon: Landmark },
 ]
 

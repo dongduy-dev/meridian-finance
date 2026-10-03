@@ -34,6 +34,7 @@ function response(body: unknown, status = 200) {
 
 function baseFetch(input: RequestInfo | URL, init?: RequestInit) {
   const url = String(input)
+  if (url.endsWith('/customers/me')) return Promise.resolve(response({ customerId: '22222222-2222-4222-8222-222222222222', customerNumber: 'CUS-001', status: 'ACTIVE', verificationStatus: 'VERIFIED', profileCompletionStatus: 'COMPLETE', primaryActiveBankAccountPresent: true, profile: null }))
   if (url.endsWith('/loan-products/UNSECURED_CONSUMER_LOAN')) return Promise.resolve(response(uclProduct))
   if (url.endsWith('/loan-products/COLLATERAL_LOAN')) return Promise.resolve(response(collateralProduct))
   if (url.endsWith('/loan-applications/unsecured-consumer-loan')) return Promise.resolve(response(application, 201))

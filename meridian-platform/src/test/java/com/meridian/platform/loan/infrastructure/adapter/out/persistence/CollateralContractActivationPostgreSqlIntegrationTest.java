@@ -670,6 +670,8 @@ class CollateralContractActivationPostgreSqlIntegrationTest {
                 customerUserId, "cl-cp4-" + unique + "@meridian.test",
                 "cl-cp4-" + unique + "@meridian.test", customerId
         );
+        com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbc, customerId);
+
     }
 
     private void useCustomer(Fixture fixture) {

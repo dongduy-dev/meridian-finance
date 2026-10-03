@@ -56,7 +56,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     @Test
     void cleanV1ThroughLatestAcceptsAllKnownActionsAndRejectsUnknownAction() {
-        assertEquals("68", latestVersion(SCHEMA));
+        assertEquals("69", latestVersion(SCHEMA));
         assertAllKnownActionsAccepted(SCHEMA);
     }
 
@@ -196,7 +196,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     private void assertPreviousActionsAccepted(String schema) {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
-            if (action != BusinessAuditAction
+            if (!action.name().startsWith("CUSTOMER_IDENTITY_") && action != BusinessAuditAction
                     .LOAN_CONTRACT_DISBURSEMENT_DESTINATION_REVEALED
                     && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
                     && action != BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED
@@ -233,7 +233,7 @@ class DisbursementDestinationRevealAuditV31PostgreSqlIntegrationTest {
 
     private void assertThroughV31ActionsAccepted(String schema) {
         for (BusinessAuditAction action : BusinessAuditAction.values()) {
-            if (action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
+            if (!action.name().startsWith("CUSTOMER_IDENTITY_") && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_APPLICATION_SUBMITTED
                     && action != BusinessAuditAction.COLLATERAL_LOAN_APPLICATION_SUBMITTED
                     && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_STARTED
                     && action != BusinessAuditAction.UNSECURED_CONSUMER_LOAN_VERIFICATION_COMPLETED

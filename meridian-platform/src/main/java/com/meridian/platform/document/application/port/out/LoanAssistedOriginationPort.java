@@ -8,6 +8,10 @@ public interface LoanAssistedOriginationPort {
 
     AuthorizedIntake authorizeMutation(UUID caseId);
 
+    default UUID authorizeIdentityVerification(UUID caseId, boolean requireOpen) {
+        throw new UnsupportedOperationException("Customer identity verification binding is not implemented.");
+    }
+
     record AuthorizedIntake(UUID caseId, String productCode) {
     }
 }
