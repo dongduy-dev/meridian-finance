@@ -11366,7 +11366,7 @@ BEGIN
         RAISE EXCEPTION 'Loan identity verification provenance is immutable';
     END IF;
     IF TG_OP = 'INSERT' AND NEW.identity_verification_id IS NOT NULL AND
-        (NEW.product_code NOT IN ('UNSECURED_CONSUMER_LOAN', 'COLLATERAL_LOAN') OR NOT EXISTS (
+        (NEW.product_code NOT IN ('SALARY_ADVANCE', 'UNSECURED_CONSUMER_LOAN', 'COLLATERAL_LOAN') OR NOT EXISTS (
             SELECT 1 FROM customer_identity_verifications v WHERE v.id = NEW.identity_verification_id
                 AND v.customer_id = NEW.customer_id AND v.status = 'VERIFIED')) THEN
         RAISE EXCEPTION 'Loan identity verification provenance is invalid';

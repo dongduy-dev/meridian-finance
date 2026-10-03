@@ -160,7 +160,7 @@ Customer also owns `customer_identity_verifications`. Each ordered attempt binds
 
 Document owns `customer_identity_documents` and `customer_identity_document_versions`: one digital identity document per Customer, immutable versions, unique upload request and storage keys, protected current-version/baseline associations, validated filename/MIME/size/hash metadata, and uploader/time. Source-specific generated foreign keys bind each Customer verification to the correct version table. The verification trigger additionally validates exact current evidence, Customer ownership, assisted case-selected Customer, identity evidence type, and active complete matching profile.
 
-`loan_applications.identity_verification_id` is immutable nullable external provenance. New UCL and Collateral commands bind the successful Customer-owned result; the database rejects foreign-Customer, nonverified, or Salary Advance references. Historical applications retain null. This reference does not make Loan the owner of identity files or verification decisions.
+`loan_applications.identity_verification_id` is immutable nullable external provenance. New Salary Advance, UCL, and Collateral commands bind the exact current successful Customer-owned result. The database permits valid provenance for all three products and rejects foreign-Customer or nonverified references and any provenance replacement. Historical applications retain null and remain usable through their existing downstream lifecycle. This reference does not make Loan the owner of identity files or verification decisions.
 
 ### 6.3 Partner
 

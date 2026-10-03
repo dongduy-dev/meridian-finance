@@ -875,7 +875,7 @@ VERIFY accepts `{ "requestId": "<UUID>", "documentVersionId": "<UUID>", "present
 
 Safe history/detail fields are `verificationId`, `sequence`, `customerNumber`, submitted `fullName`, `source`, `method`, `status`, controlled nullable `rejectionReason`, `submittedAt`, `completedAt`, and `evidence`. Evidence contains only `versionId`, `versionNumber`, `filename`, `mimeType`, `byteSize`, and `uploadedAt`. Queue rows set `evidence` to null. No Customer UUID, raw Identity Reference, email, phone, address, bank information, storage key, hash, ciphertext, fingerprint, reviewer notes, or login identity is returned. Content reads return the exact immutable file with attachment disposition, `Cache-Control: private, no-store`, and `X-Content-Type-Options: nosniff` after authorization.
 
-Full-name updates through either profile channel invalidate a verified summary while preserving historical decisions. Other mutable contact, employment, and bank facts do not invalidate it. New digital and assisted UCL/Collateral submission require current verified readiness and retain its stable reference internally; failure is `422 CUSTOMER_IDENTITY_VERIFICATION_REQUIRED`. Historical applications and Salary Advance do not acquire this guard. See the [error catalog](../architecture/MER-ARCH-004-api-error-catalog.md) for identity workflow failures.
+Full-name updates through either profile channel invalidate a verified summary while preserving historical decisions. Other mutable contact, employment, and bank facts do not invalidate it. New Salary Advance, UCL, and Collateral submission require current verified readiness and retain the exact successful verification reference internally; failure is `422 CUSTOMER_IDENTITY_VERIFICATION_REQUIRED`. Salary Advance remains Customer-digital only and retains its separate Partner Employee requirements; UCL and Collateral retain both permitted channels. Historical applications do not acquire this origination guard. See the [error catalog](../architecture/MER-ARCH-004-api-error-catalog.md) for identity workflow failures.
 
 ## 4. Salary Advance, UCL, and Collateral Loan Origination
 
@@ -889,7 +889,7 @@ This Customer-only read requires `loan:submit` and derives Customer identity fro
 
 The response contains `productCode`, the reusable `customerPartnerEmployeeLinkId` when currently eligible, `employeeVerificationStatus`, `partnerEligibilityStatus`, `limitStatus`, `totalAmount`, `usedAmount`, `reservedAmount`, `availableAmount`, `lastRefreshAt`, `applicationAllowed`, and ordered `blockerCodes`. It excludes Customer identity, Partner Employee and import-batch identity, Partner salary/evidence, Salary Advance limit and verification identity, workflow recommendations, and internal audit/history evidence.
 
-Important blockers include Customer/profile/bank readiness, `EMPLOYEE_NOT_VERIFIED`, `SALARY_ADVANCE_ELIGIBILITY_DATA_STALE`, `SALARY_ADVANCE_LIMIT_UNAVAILABLE`, `INSUFFICIENT_AVAILABLE_LIMIT`, `BLOCKING_APPLICATION_EXISTS`, `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, `PRODUCT_NOT_AVAILABLE`, and safe `SYSTEM_STATE_CONFLICT`. Current eligibility requires the authoritative latest valid completed Partner import batch for the current UTC effective month; stale evidence remains blocked until re-verification refreshes the reusable link.
+Important blockers include Customer/profile/bank readiness, `CUSTOMER_IDENTITY_VERIFICATION_REQUIRED`, `EMPLOYEE_NOT_VERIFIED`, `SALARY_ADVANCE_ELIGIBILITY_DATA_STALE`, `SALARY_ADVANCE_LIMIT_UNAVAILABLE`, `INSUFFICIENT_AVAILABLE_LIMIT`, `BLOCKING_APPLICATION_EXISTS`, `OUTSTANDING_LOAN_ACCOUNT_EXISTS`, `PRODUCT_NOT_AVAILABLE`, and safe `SYSTEM_STATE_CONFLICT`. Customer identity readiness requires `VERIFIED` with a valid current successful verification reference. Partner eligibility remains separate and requires the authoritative latest valid completed Partner import batch for the current UTC effective month; stale evidence remains blocked until re-verification refreshes the reusable link.
 
 ### 4.2 LoanApplication read projections
 
@@ -1002,7 +1002,7 @@ Neither response exposes Customer PII, raw document contents, internal operation
 
 Success returns `201 Created`.
 
-The authenticated Customer must satisfy Customer readiness, Partner eligibility, product, amount, term, document, blocking-application, outstanding-debt, and available-limit requirements.
+The authenticated Customer must satisfy Customer readiness, including current successful Customer identity verification, plus Partner eligibility, product, amount, term, document, blocking-application, outstanding-debt, and available-limit requirements. Submission obtains locked Customer readiness and records the exact successful identity-verification reference as immutable internal LoanApplication provenance.
 
 The response contains the application identity and number, authenticated `customerId`, product code/type, status, requested terms, reusable employee-link ID, product-verification result, total/used/reserved/available limit snapshots, and submission time. It excludes employee code, identity evidence, salary, Partner import-batch identity, bank-account data, and internal history/audit evidence.
 
@@ -1013,6 +1013,7 @@ Important errors:
 | `409` | `BLOCKING_APPLICATION_EXISTS` |
 | `409` | `OUTSTANDING_LOAN_ACCOUNT_EXISTS` |
 | `422` | `EMPLOYEE_NOT_VERIFIED` |
+| `422` | `CUSTOMER_IDENTITY_VERIFICATION_REQUIRED` |
 | `422` | `SALARY_ADVANCE_ELIGIBILITY_DATA_STALE` |
 | `422` | `INVALID_PRODUCT_AMOUNT` |
 | `422` | Applicable Salary Advance eligibility or limit code from the error catalogue |

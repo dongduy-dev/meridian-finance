@@ -47,7 +47,7 @@ public record LoanApplication(
                 status, requestedAmount, requestedTermMonths, submittedAt, null);
     }
     public LoanApplication withIdentityVerification(UUID verificationId) {
-        if (productCode == ProductCode.SALARY_ADVANCE || identityVerificationId != null)
+        if (identityVerificationId != null)
             throw new IllegalStateException("Identity verification provenance cannot be replaced.");
         return new LoanApplication(id, customerId, loanProductId, applicationNumber, productCode, productType,
                 originationChannel, status, requestedAmount, requestedTermMonths, submittedAt, Objects.requireNonNull(verificationId));

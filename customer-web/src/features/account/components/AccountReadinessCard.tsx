@@ -73,14 +73,14 @@ function ReadinessItem({
 export function AccountReadinessCard({ customer }: { customer: Customer }) {
   const identity = useOwnIdentityHistory()
   const pending = identity.data?.[0]?.status === 'PENDING_REVIEW'
-  const identityDescription = customer.verificationStatus === 'VERIFIED' ? 'Identity verified.' : pending ? 'Identity evidence submitted; review pending.' : customer.verificationStatus === 'REJECTED' ? 'Verification could not be completed. Review the reason and submit replacement evidence.' : identity.isError ? 'Identity review status could not be confirmed. Open identity verification.' : 'Submit identity evidence for Staff review before UCL or Collateral origination.'
+  const identityDescription = customer.verificationStatus === 'VERIFIED' ? 'Identity verified.' : pending ? 'Identity evidence submitted; review pending.' : customer.verificationStatus === 'REJECTED' ? 'Verification could not be completed. Review the reason and submit replacement evidence.' : identity.isError ? 'Identity review status could not be confirmed. Open identity verification.' : 'Submit identity evidence for Staff review before applying for a loan.'
   const profileComplete = customer.profileCompletionStatus === 'COMPLETE'
   return (
     <Card>
       <CardHeader>
         <CardTitle>Account setup</CardTitle>
         <CardDescription>
-          Review your account setup. Identity verification is required for UCL and Collateral Loan applications. Account setup does not indicate loan eligibility.
+          Review your account setup. Identity verification is required before applying for Meridian lending products. Account setup does not indicate loan eligibility.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

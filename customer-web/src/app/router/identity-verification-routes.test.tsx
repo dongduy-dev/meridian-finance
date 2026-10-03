@@ -55,7 +55,7 @@ it('shows verified identity and no upload form', async () => {
   expect(await screen.findByRole('heading', { name: 'Identity verified' })).toBeVisible()
   expect(screen.queryByLabelText(/Identity document/)).not.toBeInTheDocument()
 })
-it.each(['/products/unsecured-consumer-loan/apply', '/products/collateral-loan/apply'])('blocks %s before loading the product form', async path => {
+it.each(['/products/salary-advance/apply', '/products/unsecured-consumer-loan/apply', '/products/collateral-loan/apply'])('blocks %s before loading the product form', async path => {
   let requests = 0
   renderRoute(path, async input => { requests++; expect(String(input)).toContain('/customers/me'); return response(customer) })
   expect(await screen.findByRole('heading', { name: 'Complete identity verification before applying' })).toBeVisible()
@@ -66,6 +66,12 @@ it('guards own identity queries before a missing capability', async () => {
   const fetcher = vi.fn<typeof fetch>()
   renderRoute('/account/identity-verification', fetcher, [])
   expect(await screen.findByText('Own identity verification access is required.')).toBeVisible(); expect(fetcher).not.toHaveBeenCalled()
+})
+it('describes identity verification as required for all Meridian lending products in account setup', async () => {
+  renderRoute('/account/profile', async input => String(input).endsWith('/customers/me') ? response(customer) : response([]))
+  expect(await screen.findByText('Review your account setup. Identity verification is required before applying for Meridian lending products. Account setup does not indicate loan eligibility.')).toBeVisible()
+  expect(await screen.findByText('Submit identity evidence for Staff review before applying for a loan.')).toBeVisible()
+  expect(screen.queryByText(/UCL or Collateral/i)).not.toBeInTheDocument()
 })
 it('refreshes an uncertain upload result without automatically retrying POST', async () => {
   let posts = 0

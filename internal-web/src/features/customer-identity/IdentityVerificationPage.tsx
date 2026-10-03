@@ -3,10 +3,20 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/features/auth/model/auth-context'
 import { hasPermission } from '@/features/auth/model/access-control'
 import { DocumentContentViewer } from '@/features/staff-documents/components/DocumentContentViewer'
 import { identityQueue, identityDetail, decideIdentity, rejectionReasons } from './api'
+
+const decisionErrors: Record<string, { title: string; description: string }> = {
+  IDENTITY_REFERENCE_MISMATCH: { title: 'Identity Reference does not match', description: 'The reference entered does not match the Customer profile. Check the identity document and try again.' },
+  INVALID_IDENTITY_VERIFICATION_REQUEST: { title: 'Check the identity review details', description: 'Enter the reference shown on the document or select a controlled rejection reason, then try again.' },
+  VALIDATION_FAILED: { title: 'Check the identity review details', description: 'Check the required review fields and try again.' },
+  IDENTITY_VERIFICATION_EVIDENCE_STALE: { title: 'Identity evidence has changed', description: 'The evidence or Customer identity details have changed. Submit current evidence for review.' },
+  IDENTITY_VERIFICATION_ALREADY_COMPLETED: { title: 'Identity review already completed', description: 'Another decision has completed this review. Check the refreshed verification outcome.' },
+}
 
 export function IdentityVerificationPage() {
   const { state } = useAuth()
@@ -25,14 +35,22 @@ function IdentityWorkspace({ verificationId }: { verificationId?: string }) {
   const [reason, setReason] = useState('UNREADABLE_EVIDENCE')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string>()
+  const [decisionError, setDecisionError] = useState<{ title: string; description: string }>()
   const [uncertain, setUncertain] = useState(false)
   const decide = async (verify: boolean) => {
     const v = detail.data
     if (!v?.evidence || busy) return
-    setBusy(true); setMessage(undefined)
+    setBusy(true); setMessage(undefined); setDecisionError(undefined)
     const presented = reference; setReference('')
     try { await decideIdentity(manager, v.verificationId, verify, v.evidence.versionId, presented, reason); setMessage('Manual identity review completed.'); await client.invalidateQueries({ queryKey: ['staff-origination'] }); await client.invalidateQueries({ queryKey: ['customer-identity', 'queue'] }) }
-    catch { setUncertain(true); setMessage('The decision was not confirmed. Refresh its authoritative state before acting again.') }
+    catch (error) {
+      if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408 && error.errorCode !== 'UNEXPECTED_RESPONSE') {
+        setUncertain(false)
+        setDecisionError(decisionErrors[error.errorCode] ?? { title: 'Identity review could not be completed', description: 'Check your review authority and the refreshed verification details before trying again.' })
+      } else {
+        setUncertain(true); setMessage('The decision was not confirmed. Refresh its authoritative state before acting again.')
+      }
+    }
     finally { setReference(''); await detail.refetch(); setBusy(false) }
   }
   const v = detail.data
@@ -43,6 +61,7 @@ function IdentityWorkspace({ verificationId }: { verificationId?: string }) {
     {query.isPending ? <p role="status">Loading verification…</p> : null}
     {query.isError ? <p role="alert">Verification could not be loaded.</p> : null}
     {message ? <p role="status">{message}</p> : null}
+    {decisionError ? <Alert variant="destructive"><AlertTitle>{decisionError.title}</AlertTitle><AlertDescription>{decisionError.description}</AlertDescription></Alert> : null}
     <Button variant="outline" disabled={busy} onClick={() => { setReference(''); void query.refetch().then(result => { if (!result.isError) setUncertain(false) }) }}>Refresh</Button>
     {!verificationId && queue.data ? <>
       {queue.data.length === 0 ? <p>No pending identity verifications.</p> : queue.data.map(row => <article key={row.verificationId} className="rounded-lg border bg-card p-4">

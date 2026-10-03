@@ -63,7 +63,7 @@ function OwnIdentityWorkspace() {
     } catch { if (generation === contentGeneration.current) setMessage('Evidence could not be downloaded. Refresh and try again.') }
   }
   return <div className="space-y-6">
-    <PageHeader eyebrow="Your account" title="Identity verification" description="Submit one identity document for manual Staff review. Verification is required before applying for an Unsecured Consumer Loan or Collateral Loan." />
+    <PageHeader eyebrow="Your account" title="Identity verification" description="Submit one identity document for manual Staff review. Verification is required before applying for a Meridian loan." />
     <AccountNavigation />
     {history.isPending || customer.isPending ? <p role="status">Loading identity verification…</p> : null}
     {history.isError || customer.isError ? <><AccountErrorFeedback error={history.error ?? customer.error} title="Identity verification could not be loaded" /><Button onClick={() => void refresh()}>Try again</Button></> : null}

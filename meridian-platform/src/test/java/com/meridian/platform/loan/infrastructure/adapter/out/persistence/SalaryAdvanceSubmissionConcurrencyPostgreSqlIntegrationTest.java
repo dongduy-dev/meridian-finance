@@ -161,6 +161,46 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
     }
 
     @Test
+    void criticalCustomerChangeSerializesBeforeSubmissionWithoutFinancialResidue() throws Exception {
+        CountDownLatch customerLocked = new CountDownLatch(1);
+        CountDownLatch releaseChange = new CountDownLatch(1);
+        CountDownLatch submissionStarted = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<?> change = executor.submit(() -> transactionTemplate.executeWithoutResult(status -> {
+                jdbcTemplate.queryForObject("select id from customers where id=? for update", UUID.class, fixture.customerId());
+                jdbcTemplate.update("update customer_profiles set full_name='Changed Fictional Identity' where customer_id=?", fixture.customerId());
+                jdbcTemplate.update("update customers set verification_status='UNVERIFIED' where id=?", fixture.customerId());
+                customerLocked.countDown();
+                await(releaseChange);
+            }));
+            assertTrue(customerLocked.await(5, TimeUnit.SECONDS));
+            Future<SubmissionOutcome> submission = executor.submit(() -> {
+                submissionStarted.countDown();
+                try {
+                    return SubmissionOutcome.success(submissionUseCase.startSalaryAdvanceApplication(
+                            new SalaryAdvanceApplicationRequest(fixture.firstLinkId(), REQUESTED_AMOUNT, 1)));
+                } catch (Throwable failure) {
+                    return SubmissionOutcome.failure(failure);
+                }
+            });
+            try {
+                assertTrue(submissionStarted.await(5, TimeUnit.SECONDS));
+                assertThrows(java.util.concurrent.TimeoutException.class, () -> submission.get(300, TimeUnit.MILLISECONDS));
+            } finally {
+                releaseChange.countDown();
+            }
+            change.get(5, TimeUnit.SECONDS);
+            var failure = assertInstanceOf(com.meridian.platform.shared.domain.exception.BusinessRuleViolationException.class,
+                    submission.get(15, TimeUnit.SECONDS).failure());
+            assertEquals("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED", failure.getErrorCode());
+            assertEquals(0, count("select count(*) from loan_applications where customer_id=?", fixture.customerId()));
+            assertEquals(0, count("select count(*) from salary_advance_limits where customer_id=?", fixture.customerId()));
+            assertEquals(0, count("select count(*) from salary_advance_verifications where customer_id=?", fixture.customerId()));
+            assertEquals(0, count("select count(*) from audit_events where actor_user_id=?", fixture.userId()));
+        }
+    }
+
+    @Test
     void concurrentDifferentAmountSubmissionsOnCurrentLinkLeaveNoLoserFinancialResidue() throws Exception {
         List<SubmissionOutcome> outcomes = submitConcurrently(
                 fixture.firstLinkId(), REQUESTED_AMOUNT,
@@ -321,6 +361,12 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
     }
 
     private void assertCompleteWinnerState(UUID winnerLinkId, BigDecimal winningAmount) {
+        UUID verifiedIdentity = jdbcTemplate.queryForObject(
+                "select id from customer_identity_verifications where customer_id=? and status='VERIFIED'",
+                UUID.class, fixture.customerId());
+        assertEquals(verifiedIdentity, jdbcTemplate.queryForObject(
+                "select identity_verification_id from loan_applications where customer_id=?",
+                UUID.class, fixture.customerId()));
         assertEquals(1, count(
                 "SELECT count(*) FROM salary_advance_limit_movements WHERE movement_type = 'RESERVED' "
                         + "AND loan_application_id IN (SELECT id FROM loan_applications WHERE customer_id = ?)",
@@ -448,6 +494,7 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
                 FIRST_IMPORT_BATCH_ID,
                 "MER-EMP-001"
         );
+        com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbcTemplate, customerId);
         return new Fixture(customerId, userId, firstLinkId);
     }
 

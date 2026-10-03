@@ -88,6 +88,9 @@ public class QuerySalaryAdvanceReadinessService implements QuerySalaryAdvanceRea
         if (!customer.profileComplete()) {
             blockers.add("PROFILE_INCOMPLETE");
         }
+        if (!"VERIFIED".equals(customer.verificationStatus()) || customer.identityVerificationId() == null) {
+            blockers.add("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED");
+        }
         if (!customer.hasPrimaryActiveBankAccount()) {
             blockers.add("PRIMARY_BANK_ACCOUNT_REQUIRED");
         }

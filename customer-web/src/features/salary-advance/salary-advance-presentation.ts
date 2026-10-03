@@ -36,6 +36,12 @@ const blockerPresentations: Record<string, BlockerPresentation> = {
     tone: 'warning',
     action: { label: 'Manage bank accounts', to: '/account/bank-accounts' },
   },
+  CUSTOMER_IDENTITY_VERIFICATION_REQUIRED: {
+    title: 'Complete identity verification',
+    description: 'Verified Customer identity is required before submitting a Salary Advance application. Employment verification remains a separate requirement.',
+    tone: 'warning',
+    action: { label: 'Open identity verification', to: '/account/identity-verification' },
+  },
   PRODUCT_NOT_AVAILABLE: {
     title: 'Salary Advance is not available',
     description: 'The Salary Advance product is not currently available for new applications.',

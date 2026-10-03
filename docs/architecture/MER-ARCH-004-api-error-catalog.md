@@ -75,7 +75,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 409 | `IDENTITY_VERIFICATION_NOT_ALLOWED` | Customer identity is already verified | Reuse the valid Customer verification |
 | 422 | `INVALID_IDENTITY_VERIFICATION_REQUEST` | Missing confirmation, invalid rejection shape, or invalid queue pagination | Supply the controlled operation fields |
 | 422 | `IDENTITY_REFERENCE_MISMATCH` | Presented reference differs from protected Customer evidence | Re-check the exact document; the attempt remains pending |
-| 422 | `CUSTOMER_IDENTITY_VERIFICATION_REQUIRED` | New UCL or Collateral origination lacks current successful Customer verification | Complete Customer identity verification before submitting |
+| 422 | `CUSTOMER_IDENTITY_VERIFICATION_REQUIRED` | New Salary Advance, UCL, or Collateral origination lacks current successful Customer verification | Complete Customer identity verification before submitting |
 
 ## 4. Loan Product and Application
 

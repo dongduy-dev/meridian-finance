@@ -340,6 +340,7 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                 partnerEmployeeId,
                 importBatchId
         );
+        com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbc, customerId);
         return new Fixture(
                 customerId,
                 customerUserId,

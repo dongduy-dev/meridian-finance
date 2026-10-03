@@ -82,7 +82,7 @@ export const routes: RouteObject[] = [
           },
           {
             path: 'products/salary-advance/apply',
-            element: <SalaryAdvanceApplicationPage />,
+            element: <IdentityOriginationGuard><SalaryAdvanceApplicationPage /></IdentityOriginationGuard>,
           },
           {
             path: 'products/unsecured-consumer-loan/apply',

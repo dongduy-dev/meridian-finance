@@ -246,7 +246,50 @@ class CustomerIdentityVerificationPostgreSqlIntegrationTest {
             }
             assertEquals(3, jdbc.queryForObject("select count(*) from information_schema.tables where table_schema=? and table_name in ('customer_identity_documents','customer_identity_document_versions','customer_identity_verifications')", Integer.class, schema));
             assertEquals(1, jdbc.queryForObject("select count(*) from information_schema.columns where table_schema=? and table_name='loan_applications' and column_name='identity_verification_id'", Integer.class, schema));
+            String snapshotTrigger = jdbc.queryForObject("select pg_get_functiondef(p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname=? and p.proname='enforce_loan_identity_provenance'", String.class, schema);
+            String migrationTrigger = jdbc.queryForObject("select pg_get_functiondef(p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname=? and p.proname='enforce_loan_identity_provenance'", String.class, SCHEMA);
+            assertEquals(migrationTrigger.replace("\r\n", "\n"), snapshotTrigger.replace(schema + ".", SCHEMA + ".").replace("\r\n", "\n"));
         } finally { jdbc.execute("drop schema if exists " + schema + " cascade"); }
+    }
+
+    @Test void allThreeProductsBindOnlySameCustomerVerifiedIdentityAndCannotReplaceIt() {
+        var verification = upload();
+        for (ProductCode product : ProductCode.values()) {
+            assertTrue(assertThrows(org.springframework.dao.DataAccessException.class,
+                    () -> insertLoan(product, customerId, verification.verificationId())).getMostSpecificCause()
+                    .getMessage().contains("Loan identity verification provenance is invalid"));
+        }
+        staff(); service.decide(verification.verificationId(), true, verifyRequest(verification));
+        UUID otherCustomer = UUID.randomUUID();
+        jdbc.update("insert into customers (id,customer_number,status,verification_status,profile_completion_status) values (?,?,'ACTIVE','UNVERIFIED','INCOMPLETE')", otherCustomer, "CUS-" + otherCustomer);
+        for (ProductCode product : ProductCode.values()) {
+            UUID application = insertLoan(product, customerId, verification.verificationId());
+            assertEquals(verification.verificationId(), jdbc.queryForObject("select identity_verification_id from loan_applications where id=?", UUID.class, application));
+            assertTrue(assertThrows(org.springframework.dao.DataAccessException.class,
+                    () -> insertLoan(product, otherCustomer, verification.verificationId())).getMostSpecificCause()
+                    .getMessage().contains("Loan identity verification provenance is invalid"));
+            for (UUID replacement : Arrays.asList(UUID.randomUUID(), null)) {
+                assertTrue(assertThrows(org.springframework.dao.DataAccessException.class,
+                        () -> jdbc.update("update loan_applications set identity_verification_id=? where id=?", replacement, application))
+                        .getMostSpecificCause().getMessage().contains("Loan identity verification provenance is immutable"));
+            }
+            assertEquals(verification.verificationId(), jdbc.queryForObject("select identity_verification_id from loan_applications where id=?", UUID.class, application));
+        }
+    }
+
+    @Test void historicalNullProvenanceAllowsOrdinaryUpdatesForAllThreeProducts() {
+        for (ProductCode product : ProductCode.values()) {
+            UUID application = insertLoan(product, customerId, null);
+            jdbc.update("update loan_applications set status='CANCELLED',updated_at=now() where id=?", application);
+            assertNull(jdbc.queryForObject("select identity_verification_id from loan_applications where id=?", UUID.class, application));
+            assertEquals("CANCELLED", jdbc.queryForObject("select status from loan_applications where id=?", String.class, application));
+        }
+    }
+
+    private UUID insertLoan(ProductCode product, UUID owner, UUID verification) {
+        UUID application = UUID.randomUUID();
+        jdbc.update("insert into loan_applications (id,customer_id,loan_product_id,application_number,product_code,product_type,status,requested_amount,requested_term_months,submitted_at,identity_verification_id) select ?,?,id,?,product_code,product_type,'CANCELLED',3000000,1,now(),? from loan_products where product_code=?", application, owner, "IDV-" + application, verification, product.name());
+        return application;
     }
     @Test void permissionSeedOnlyGrantsReviewerToLoanOfficer() {
         assertEquals(List.of("LOAN_OFFICER"), jdbc.queryForList("select r.code from roles r join role_permissions rp on rp.role_id=r.id join permissions p on p.id=rp.permission_id where p.code='customer:identity:verify'", String.class));

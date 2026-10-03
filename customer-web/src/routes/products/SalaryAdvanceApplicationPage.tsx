@@ -47,6 +47,7 @@ const submissionErrorMessages: Record<string, string> = {
   PRODUCT_NOT_FOUND: 'The Salary Advance product is no longer available.',
   CUSTOMER_NOT_ACTIVE: 'Your account is no longer active for Salary Advance applications.',
   PROFILE_INCOMPLETE: 'Complete your profile before submitting this application.',
+  CUSTOMER_IDENTITY_VERIFICATION_REQUIRED: 'Complete identity verification before submitting this application.',
   PRIMARY_BANK_ACCOUNT_REQUIRED: 'An active primary bank account is now required before submission.',
   PRODUCT_INACTIVE: 'Salary Advance is no longer active for new applications.',
   PRODUCT_POLICY_INVALID: 'Salary Advance applications are temporarily unavailable.',
@@ -64,6 +65,7 @@ const submissionErrorMessages: Record<string, string> = {
 
 const submissionErrorActions: Record<string, { label: string; to: string }> = {
   PROFILE_INCOMPLETE: { label: 'Open profile', to: '/account/profile' },
+  CUSTOMER_IDENTITY_VERIFICATION_REQUIRED: { label: 'Open identity verification', to: '/account/identity-verification' },
   PRIMARY_BANK_ACCOUNT_REQUIRED: { label: 'Open bank accounts', to: '/account/bank-accounts' },
   EMPLOYEE_NOT_VERIFIED: { label: 'Return to employment verification', to: '/products/salary-advance' },
   SALARY_ADVANCE_ELIGIBILITY_DATA_STALE: { label: 'Return to employment verification', to: '/products/salary-advance' },
