@@ -131,6 +131,9 @@ describe('Staff contract workspace', () => {
 
     expect(await screen.findByText('CUS-000001')).toBeVisible()
     expect(screen.getByText('Ari Customer')).toBeVisible()
+    expect(screen.getByText('0901234567')).toBeVisible()
+    expect(screen.getByText('Current phone')).toBeVisible()
+    expect(screen.queryByText('Identity Reference')).not.toBeInTheDocument()
     expect(screen.getByText('Approved by')).toBeVisible()
     expect(screen.queryByText('Contract prepared by')).not.toBeInTheDocument()
     expect(screen.queryByText('Readiness confirmed by')).not.toBeInTheDocument()

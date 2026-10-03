@@ -80,7 +80,6 @@ export function ApplicationWorkspaceNavigation({ actor, loanApplicationId, activ
 
 export function ApplicationWorkspaceHeader({ context }: { context: ApplicationWorkspaceContext }) {
   const identity: FeatureFacts = context.facts
-  const showApplicationId = context.source === 'case' || context.source === 'document-evidence'
   const [copiedId, setCopiedId] = useState<string>()
   const copied = copiedId === identity.loanApplicationId
   const copyId = async () => {
@@ -104,13 +103,13 @@ export function ApplicationWorkspaceHeader({ context }: { context: ApplicationWo
           {identity.productCode ? <span className="text-sm text-muted-foreground">{productLabel(identity.productCode)}</span> : null}
         </div>
       </div>
-      {showApplicationId ? <div className="flex flex-col gap-2 text-sm lg:items-end">
+      <div className="flex flex-col gap-2 text-sm lg:items-end">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Application ID</span>
         <code className="max-w-full break-all rounded bg-muted px-2 py-1 text-xs">{identity.loanApplicationId}</code>
         <Button variant="outline" size="sm" onClick={() => void copyId()} aria-label="Copy application ID">
           {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />} {copied ? 'ID copied' : 'Copy application ID'}
         </Button>
-      </div> : null}
+      </div>
     </div>
     {hasSummary ? <dl className="mt-6 grid gap-4 border-t pt-5 sm:grid-cols-2 lg:grid-cols-4">
       {identity.requestedAmount !== undefined ? <div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Requested amount</dt><dd className="financial-value mt-1 font-semibold">{formatVnd(identity.requestedAmount)}</dd></div> : null}

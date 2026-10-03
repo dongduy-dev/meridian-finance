@@ -51,7 +51,8 @@ public class AccountingCaseContextComposer {
     ) {
         var customer = customers.findByCustomerId(application.customerId()).orElseThrow(AccountingCaseContextComposer::conflict);
         if (customer.customerNumber() == null || customer.customerNumber().isBlank()
-                || customer.fullName() == null || customer.fullName().isBlank()) {
+                || customer.fullName() == null || customer.fullName().isBlank()
+                || customer.phoneNumber() == null || customer.phoneNumber().isBlank()) {
             throw conflict();
         }
         var offer = offers.findByLoanApplicationId(application.id()).orElseThrow(AccountingCaseContextComposer::conflict);
@@ -123,7 +124,7 @@ public class AccountingCaseContextComposer {
                             assisted.recordedAt(), assisted.evidenceDocumentVersionId());
         }
         return new AccountingCaseContextDto(
-                new AccountingCaseContextDto.CustomerDto(customer.customerNumber(), customer.fullName()),
+                new AccountingCaseContextDto.CustomerDto(customer.customerNumber(), customer.fullName(), customer.phoneNumber()),
                 new AccountingCaseContextDto.HandoffDto(
                         event(actors, approval.approverUserId(), approval.approvedAt()),
                         contract == null ? null : event(actors, contract.preparedByUserId(), contract.preparedAt()),

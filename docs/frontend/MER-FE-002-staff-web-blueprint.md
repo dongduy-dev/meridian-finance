@@ -216,6 +216,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 | LoanAccount detail | `GET /api/v1/loan-applications/{loanApplicationId}/loan-account` | `loan:read` | Known application only; safe terms, schedule, and servicing state |
 | Repayment history | `GET /api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read` | Known application only; immutable paged outcomes, no external references |
 | Servicing provenance | `GET /api/v1/staff/loan-applications/{loanApplicationId}/servicing-provenance?page=0&size=20` | Staff `loan:read` | Origin, USER/SYSTEM status timeline, Staff-attributed paged repayment rows, optional settlement and closure |
+| Servicing Customer context | `GET /api/v1/staff/loan-applications/{loanApplicationId}/servicing-context` | Staff `loan:read`; Customer fields follow the purpose authority in MER-API-001 Section 7.7.1 | Exact application/account linkage and nullable current Customer context; shared LoanAccount response remains unchanged |
 
 ### 7.2 Executable Commands
 
@@ -966,6 +967,8 @@ Customer contact appears only for an actor with both `loan:read` and `customer:r
 
 Application-owned Staff routes must retain one consistent application identity and section-navigation hierarchy. For the same actor with Staff application-case read authority, Overview, History, Verification, Review, Documents, and Corrections retain the same essential case context: business application number, current status, product name, requested amount, requested term, submitted time, origination channel, and subordinate Application ID copy control. Summary facts appear in amount, term, submitted time, and origination-channel order; Product type is not part of the persistent header. Feature routes own their queries, permissions, commands, and specialized body layouts, but must not present the same LoanApplication as unrelated workspaces.
 
+Independent Decision, Contract, and Disbursement use the same shared Application Case header with the safe application facts supplied by their own authorized case projections, including origination channel. The shared header presents these facts without requiring supplemental `loan:read` or changing feature-specific Customer visibility.
+
 The business application number is the primary visible identity when the authorized projection provides it. Technical IDs remain subordinate and appear only for evidence matching, support, or another operational task. Section navigation is capability-aware and must not query or expose unauthorized feature data. Feature pages may supplement missing safe header facts through the existing Staff application-case read only when the actor has its exact authority. Reduced headers reflect authorized fact availability, not route-specific presentation choices. Supplemental pending or failed reads must not prevent authorized feature evidence or actions from remaining available; failed enrichment falls back to the feature-owned facts, and stale context is identified. Visual consistency does not authorize broader reads, merging purpose-limited backend projections, or inference of missing facts.
 
 ### 22.2 Workspace Sections
@@ -1092,6 +1095,10 @@ Supported actions remain distinct:
 - `RETURN_TO_LOAN_OFFICER_REVIEW`;
 - `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`.
 
+The decision page passes the decision projection's requested amount, requested term, submitted time, and origination channel to the shared header defined in Section 22.1. It does not infer the channel or render a separate local application header.
+
+The decision page presents a Customer card with name and Customer number from the decision projection, under exact `approval:decide` access. It does not fetch a separate Customer profile or show phone, Identity Reference, Customer UUID, or Customer login identity. MER-BIZ-001 Section 4.3 defines the role visibility boundary; MER-API-001 Section 5.0 defines the response contract.
+
 The decision page places the shared Product Assessment panel before the exact latest recommendation and linked Review / Decision history, followed by independent decision controls. It must show the exact latest recommendation, its purpose-limited recommending Staff actor, the assigned Loan Officer, product verification state, review cycle, documents/readiness, recorded decision actors, and any action-specific correction plan. System actors are labeled System; unavailable legacy Staff actors are labeled unavailable without guessing. It must not rely on the transient recommendation response from another browser session.
 
 Approval POST has no client business UUID. The Approval-owned decision projection exposes the exact recommendation provenance, resulting decision, history, and current Loan state needed for durable recovery.
@@ -1147,7 +1154,7 @@ Accounting operations use the current masked contract as their authoritative sta
 
 The workspace presents:
 
-- Customer number and full name from the Accounting case context;
+- Customer number, full name, and current phone from the shared Accounting case context;
 - Approval, contract preparation, and readiness Staff actors and timestamps from Loan's handoff projection, plus Customer self-service or Staff-recorded acknowledgment provenance without treating the Customer as a Staff actor;
 - safe contract reference, ID, version, and status;
 - accepted immutable terms and provisional repayment items returned by the contract;
@@ -1156,6 +1163,8 @@ The workspace presents:
 - point-in-time readiness and blocker codes;
 - version history only when a future authorized projection exposes it;
 - current action eligibility from authoritative state.
+
+The shared Customer panel displays the phone as Current phone in both contract and disbursement workspaces. It remains operational contact information, separate from immutable contract and handoff evidence, and excludes Identity Reference. It uses the existing Accounting case response without a separate Customer query or broader profile access.
 
 The acknowledgment panel identifies **Customer — self-service** or **Customer acknowledgment recorded by [Staff]**, while keeping the authorized Customer number/name separate. Both show the acknowledged current contract version and time; the assisted path also shows the exact consumed signed document version. Unknown acknowledgment modes render a neutral fallback. The existing Accounting context supplies these facts without another acknowledgment DTO or persistence record. Exact `loan:contract:read` with the Accounting Officer role permits View signed acknowledgment for the consumed document version; it grants no acknowledgment mutation authority. The same exact evidence link remains available in the disbursement handoff.
 
@@ -1184,6 +1193,8 @@ The browser does not reimplement document, Customer, reservation, product-verifi
 ### 25.3 Disbursement
 
 Disbursement is manual confirmation of an external transfer, not transfer initiation.
+
+The disbursement case projection supplies requested amount, requested term, submitted time, and origination channel to the shared header defined in Section 22.1, retaining its subordinate Application ID and copy control. The specialized Disbursement and activation section remains below that header.
 
 The dedicated page contains:
 
@@ -1228,6 +1239,12 @@ The existing application-scoped read can present:
 Staff Web never decrypts the destination from the account read, reconstructs balances from history, or recalculates installment status.
 
 The LoanAccount workspace presents Loan-owned servicing provenance beside the existing account evidence. It shows the originating disbursement actor, the ordered USER/SYSTEM status timeline, exact recorded-by identity on each financial repayment row, and settlement or closure actors only when their durable evidence exists. The Staff-specific read binds repayment attribution to the financial row by transaction ID in one backend snapshot. The browser renders SYSTEM as “Meridian system” without an Identity record and neutralizes unknown action or actor values. The shared Customer-readable account and repayment reads contain no Staff identity.
+
+The same workspace loads its Customer card through the separate Staff servicing-context read after authorized access and coherent account evidence. Accounting Officers with repayment or closure authority and Staff with `customer:read` see labeled Customer number, Full name, and Current phone facts. Approvers with Administrative Full-Balance Settlement authority see Customer number and Full name only, with no phone row. The backend enforces the exact field boundary described in MER-API-001 Section 7.7.1; generic `loan:read` alone does not trigger this query or render Customer context.
+
+The browser checks the returned application and account IDs before displaying the card. Loading is independent of financial evidence; an error or mismatched context suppresses the Customer card and offers Retry Customer context. Null context renders no card. Refresh reloads authorized Customer context alongside the existing account and provenance reads. Customer-context availability does not change repayment, settlement, or closure eligibility. The responsive fact grid uses the established Customer card pattern and keeps current contact separate from immutable servicing evidence.
+
+No Customer UUID or generic Customer-profile lookup is introduced. Customer context is not added to servicing queues, separate repayment-entry/settlement/closure pages, Customer Web, or the shared LoanAccount contract. Generic Application Case contact retains its `customer:read` rule in Section 22.1.
 
 ### 26.2 Repayment
 

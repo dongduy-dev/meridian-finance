@@ -278,3 +278,15 @@ export type ApproveSettlementRequest = Omit<SettlementSemanticPayload, 'loanAppl
 export type ApprovedSettlementResult = z.infer<typeof approvedSettlementResultSchema>
 export type ApprovedSettlementEvidence = z.infer<typeof approvedSettlementEvidenceSchema>
 export type ClosedLoanAccountResult = z.infer<typeof closedLoanAccountResultSchema>
+
+export const staffServicingCustomerContextSchema = z.object({
+  loanApplicationId: uuidSchema,
+  loanAccountId: uuidSchema,
+  customer: z.object({
+    customerNumber: z.string().trim().min(1),
+    fullName: z.string().trim().min(1),
+    phoneNumber: z.string().trim().min(1).nullable(),
+  }).strict().nullable(),
+}).strict()
+
+export type StaffServicingCustomerContext = z.infer<typeof staffServicingCustomerContextSchema>

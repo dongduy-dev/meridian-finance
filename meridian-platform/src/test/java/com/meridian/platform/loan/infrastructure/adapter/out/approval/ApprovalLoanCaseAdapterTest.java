@@ -8,10 +8,13 @@ import com.meridian.platform.loan.application.port.out.SalaryAdvanceVerification
 import com.meridian.platform.loan.application.port.out.UnsecuredConsumerLoanVerificationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -33,6 +36,34 @@ class ApprovalLoanCaseAdapterTest {
     @Mock CollateralLoanVerificationRepository collateralVerifications;
     @Mock LoanReviewCycleRepository reviewCycles;
     @Mock LoanDocumentChecklistPort documents;
+
+    @ParameterizedTest
+    @EnumSource(OriginationChannel.class)
+    void caseCarriesTheExactApplicationsChannelAndCustomerLinkageOnlyInternally(OriginationChannel channel) {
+        UUID applicationId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+        LoanApplication application = new LoanApplication(
+                applicationId, customerId, UUID.randomUUID(), "UCL-1",
+                ProductCode.UNSECURED_CONSUMER_LOAN, ProductType.UNSECURED,
+                channel,
+                LoanApplicationStatus.APPROVAL_PENDING, BigDecimal.TEN, 6,
+                LocalDateTime.of(2026, 9, 6, 8, 0));
+        when(applications.findById(applicationId)).thenReturn(java.util.Optional.of(application));
+        when(documents.readiness(applicationId)).thenReturn(
+                new LoanDocumentChecklistPort.ChecklistReadinessSnapshot(true, true));
+        var verification = org.mockito.Mockito.mock(
+                com.meridian.platform.loan.domain.model.unsecured.UnsecuredConsumerLoanVerification.class);
+        when(verification.productVerificationResult()).thenReturn(
+                com.meridian.platform.loan.domain.model.ProductVerificationResult.VERIFIED);
+        when(uclVerifications.findLatestByLoanApplicationId(applicationId)).thenReturn(java.util.Optional.of(verification));
+        var adapter = new ApprovalLoanCaseAdapter(applications, salaryAdvanceVerifications,
+                uclVerifications, collateralVerifications, reviewCycles, documents);
+
+        var result = adapter.findCase(applicationId).orElseThrow();
+        assertEquals(applicationId, result.loanApplicationId());
+        assertEquals(customerId, result.customerId());
+        assertEquals(channel.name(), result.originationChannel());
+    }
 
     @Test
     void decisionQueueUsesExactServerSideStatusProductAndPaging() {

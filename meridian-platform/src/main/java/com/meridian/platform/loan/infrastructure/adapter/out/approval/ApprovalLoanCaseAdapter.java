@@ -79,6 +79,7 @@ public class ApprovalLoanCaseAdapter implements ApprovalLoanCasePort {
                 .orElse(null);
         return new CaseSnapshot(
                 application.id(),
+                application.customerId(),
                 application.applicationNumber(),
                 application.productCode().name(),
                 application.productType().name(),
@@ -86,6 +87,7 @@ public class ApprovalLoanCaseAdapter implements ApprovalLoanCasePort {
                 application.requestedTermMonths(),
                 application.status().name(),
                 application.submittedAt(),
+                application.originationChannel().name(),
                 new DocumentReadinessSnapshot(
                         documentReadiness.uploadComplete(),
                         documentReadiness.processingReady()

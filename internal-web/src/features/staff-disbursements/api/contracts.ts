@@ -79,6 +79,7 @@ export const staffDisbursementCaseSchema = z.object({
   requestedTermMonths: z.number().int().positive(),
   applicationStatus: rawValue,
   submittedAt: apiTimestampSchema,
+  originationChannel: rawValue,
   currentContract: loanContractSchema,
   activation: disbursementActivationSchema.nullable(),
   workStage: rawValue,

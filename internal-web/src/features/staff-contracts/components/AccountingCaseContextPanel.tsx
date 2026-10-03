@@ -17,7 +17,7 @@ export function AccountingCaseContextPanel({ context, contractVersion, loanAppli
 }) {
   const acknowledgment = context.handoff.customerAcknowledgment
   return <div className="grid gap-5 lg:grid-cols-2">
-    <Card><CardHeader><CardTitle>Customer</CardTitle></CardHeader><CardContent><dl className="grid gap-4 sm:grid-cols-2"><div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer number</dt><dd className="mt-1 font-semibold">{context.customer.customerNumber}</dd></div><div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Full name</dt><dd className="mt-1 font-semibold">{context.customer.fullName}</dd></div></dl></CardContent></Card>
+    <Card><CardHeader><CardTitle>Customer</CardTitle></CardHeader><CardContent><dl className="grid gap-4 sm:grid-cols-2"><div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer number</dt><dd className="mt-1 font-semibold">{context.customer.customerNumber}</dd></div><div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Full name</dt><dd className="mt-1 font-semibold">{context.customer.fullName}</dd></div><div><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Current phone</dt><dd className="mt-1 break-words font-semibold">{context.customer.phoneNumber}</dd></div></dl></CardContent></Card>
     <Card><CardHeader><CardTitle>Approval and contract history</CardTitle></CardHeader><CardContent><dl className="grid gap-4 sm:grid-cols-2">
       <ActorEvent label="Approved by" event={context.handoff.approved} />
       {context.handoff.contractPrepared ? <ActorEvent label="Contract prepared by" event={context.handoff.contractPrepared} /> : null}

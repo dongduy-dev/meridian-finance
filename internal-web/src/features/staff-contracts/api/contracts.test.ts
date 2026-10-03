@@ -12,7 +12,7 @@ export const actorFixture = {
 
 export function accountingContextFixture() {
   return {
-    customer: { customerNumber: 'CUS-000001', fullName: 'Ari Customer' },
+    customer: { customerNumber: 'CUS-000001', fullName: 'Ari Customer', phoneNumber: '0901234567' },
     handoff: {
       approved: { actor: actorFixture, at: '2026-09-07T07:30:00' },
       contractPrepared: { actor: actorFixture, at: '2026-09-07T08:00:00' },
@@ -105,6 +105,17 @@ describe('Staff contract runtime contracts', () => {
   })
 
   it('accepts the safe queue and case projections', () => {
+    const value = caseFixture()
+    const parsed = staffContractCaseSchema.parse({ ...value, accountingContext: {
+      ...value.accountingContext, customer: { ...value.accountingContext.customer,
+        customerId: '99999999-9999-4999-8999-999999999999', identityReference: 'SYNTHETIC-IDENTITY',
+      },
+    } })
+    expect(parsed.accountingContext.customer).toEqual(value.accountingContext.customer)
+    expect(parsed.accountingContext.customer.phoneNumber).toBe('0901234567')
+    expect(staffContractCaseSchema.safeParse({ ...value, accountingContext: {
+      ...value.accountingContext, customer: { ...value.accountingContext.customer, phoneNumber: '' },
+    } }).success).toBe(false)
     expect(staffContractCaseSchema.parse(caseFixture()).currentContract?.disbursementBankAccount.maskedAccountNumber)
       .toBe('****7890')
     expect(staffContractWorkPageSchema.parse({

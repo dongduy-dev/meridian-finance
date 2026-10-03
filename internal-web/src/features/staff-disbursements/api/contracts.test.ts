@@ -22,6 +22,7 @@ export function pendingCase(overrides: Record<string, unknown> = {}) {
     requestedTermMonths: 2,
     applicationStatus: 'DISBURSEMENT_PENDING',
     submittedAt: '2026-09-10T07:00:00',
+    originationChannel: 'CUSTOMER_DIGITAL',
     currentContract: contractFixture('READY_FOR_DISBURSEMENT'),
     activation: null,
     accountingContext: {
@@ -120,8 +121,12 @@ export function confirmationFixture(idempotentReplay = false) {
 }
 
 describe('Staff disbursement runtime contracts', () => {
-  it('accepts safe pending and completed projections', () => {
-    expect(staffDisbursementCaseSchema.parse(pendingCase()).workStage).toBe('READY_TO_DISBURSE')
+  it.each(['CUSTOMER_DIGITAL', 'STAFF_ASSISTED', 'FUTURE_CHANNEL'])('accepts exact %s channel and safe pending/completed projections', (channel) => {
+    const pending = pendingCase({ originationChannel: channel })
+    expect(staffDisbursementCaseSchema.parse(pending).workStage).toBe('READY_TO_DISBURSE')
+    expect(staffDisbursementCaseSchema.parse(pending).originationChannel).toBe(channel)
+    expect(staffDisbursementCaseSchema.safeParse({ ...pending, originationChannel: undefined }).success).toBe(false)
+    expect(staffDisbursementCaseSchema.safeParse({ ...pending, originationChannel: ' ' }).success).toBe(false)
     expect(staffDisbursementCaseSchema.parse(disbursedCase()).activation?.scheduleType).toBe('FINAL')
     expect(staffDisbursementWorkPageSchema.parse(queueFixture()).items).toHaveLength(1)
     expect(manualDisbursementConfirmationSchema.parse(confirmationFixture()).idempotentReplay).toBe(false)

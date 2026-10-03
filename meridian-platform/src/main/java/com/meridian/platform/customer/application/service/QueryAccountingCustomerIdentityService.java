@@ -24,7 +24,8 @@ public class QueryAccountingCustomerIdentityService implements QueryAccountingCu
         Objects.requireNonNull(customerId, "customerId must not be null");
         return customers.findById(customerId).map(customer -> new AccountingCustomerIdentity(
                 customer.customerNumber(),
-                customer.profile() == null ? null : customer.profile().fullName()
+                customer.profile() == null ? null : customer.profile().fullName(),
+                customer.profile() == null ? null : customer.profile().phoneNumber()
         ));
     }
 }

@@ -13,6 +13,7 @@ public record StaffDisbursementCaseDto(
         int requestedTermMonths,
         String applicationStatus,
         LocalDateTime submittedAt,
+        String originationChannel,
         LoanContractDto currentContract,
         StaffDisbursementActivationDto activation,
         String workStage,

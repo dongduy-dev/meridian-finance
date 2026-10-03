@@ -14,6 +14,8 @@ public record StaffDecisionCaseDto(
         int requestedTermMonths,
         String applicationStatus,
         LocalDateTime submittedAt,
+        String originationChannel,
+        CustomerDto customer,
         StaffRecommendationCaseDto.EvidenceDto evidence,
         StaffRecommendationCaseDto.RecommendationDto recommendation,
         boolean makerCheckerEligible,
@@ -27,6 +29,18 @@ public record StaffDecisionCaseDto(
         decisionHistory = List.copyOf(decisionHistory);
         correctionReasonCodes = List.copyOf(correctionReasonCodes);
         correctionOptions = List.copyOf(correctionOptions);
+    }
+
+    @Override
+    public String toString() {
+        return "StaffDecisionCaseDto[loanApplicationId=" + loanApplicationId + ", customer=redacted]";
+    }
+
+    public record CustomerDto(String customerNumber, String fullName) {
+        @Override
+        public String toString() {
+            return "CustomerDto[identity=redacted]";
+        }
     }
 
     public record DecisionDto(

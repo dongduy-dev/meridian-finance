@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   loanAccountSchema,
+  staffServicingCustomerContextSchema,
   recordRepaymentResultSchema,
   repaymentHistoryPageSchema,
   staffServicingWorkPageSchema,
@@ -339,5 +340,25 @@ describe('Staff servicing contracts', () => {
       ...settlementEvidenceFixture(),
       externalPaymentReference: 'SECRET',
     })).not.toThrow()
+  })
+})
+
+export function customerContextFixture(phoneNumber: string | null = '0901234567') {
+  return { loanApplicationId: applicationId, loanAccountId: accountId,
+    customer: { customerNumber: 'CUS-000001', fullName: 'Ari Customer', phoneNumber } }
+}
+
+describe('Staff servicing Customer context contract', () => {
+  it('accepts current contact, business identity, and no-context projections', () => {
+    expect(staffServicingCustomerContextSchema.parse(customerContextFixture()).customer?.phoneNumber).toBe('0901234567')
+    expect(staffServicingCustomerContextSchema.parse(customerContextFixture(null)).customer?.phoneNumber).toBeNull()
+    expect(staffServicingCustomerContextSchema.parse({ ...customerContextFixture(), customer: null }).customer).toBeNull()
+  })
+  it('rejects unrelated PII and incomplete authoritative identity', () => {
+    for (const extra of [{ customerId: accountId }, { identityReference: 'RESTRICTED' }, { email: 'customer@test' }, { bankAccount: '1234567890' }]) {
+      expect(staffServicingCustomerContextSchema.safeParse({ ...customerContextFixture(),
+        customer: { ...customerContextFixture().customer, ...extra } }).success).toBe(false)
+    }
+    expect(staffServicingCustomerContextSchema.safeParse({ ...customerContextFixture(), customer: { customerNumber: '', fullName: 'Ari Customer', phoneNumber: null } }).success).toBe(false)
   })
 })

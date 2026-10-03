@@ -14,6 +14,7 @@ public interface ApprovalLoanCasePort {
 
     record CaseSnapshot(
             UUID loanApplicationId,
+            UUID customerId,
             String applicationNumber,
             String productCode,
             String productType,
@@ -21,6 +22,7 @@ public interface ApprovalLoanCasePort {
             int requestedTermMonths,
             String applicationStatus,
             LocalDateTime submittedAt,
+            String originationChannel,
             DocumentReadinessSnapshot documentReadiness,
             ProductReadinessSnapshot productReadiness,
             ReviewCycleSnapshot currentReviewCycle,

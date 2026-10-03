@@ -1,6 +1,8 @@
 package com.meridian.platform.approval.application.service;
 
 import com.meridian.platform.approval.application.port.out.ApprovalDecisionRepository;
+import com.meridian.platform.approval.application.port.out.ApprovalCustomerIdentityPort;
+import com.meridian.platform.approval.application.port.out.ApprovalCustomerIdentitySnapshot;
 import com.meridian.platform.approval.application.port.out.ApprovalLoanCasePort;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.application.port.out.StaffActorDirectoryPort;
@@ -19,6 +21,8 @@ import com.meridian.platform.shared.domain.exception.BusinessStateConflictExcept
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -50,7 +54,10 @@ class QueryStaffApprovalWorkServiceTest {
     private static final UUID APPROVER_ID = UUID.fromString("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 9, 6, 9, 0);
 
+    private static final UUID CUSTOMER_ID = UUID.randomUUID();
+
     @Mock ApprovalLoanCasePort loanCases;
+    @Mock ApprovalCustomerIdentityPort customers;
     @Mock ReviewRecommendationRepository recommendations;
     @Mock ApprovalDecisionRepository decisions;
     @Mock StaffActorDirectoryPort staffActors;
@@ -61,8 +68,10 @@ class QueryStaffApprovalWorkServiceTest {
     @BeforeEach
     void setUp() {
         service = new QueryStaffApprovalWorkService(
-                loanCases, recommendations, decisions, staffActors, currentUserProvider
+                loanCases, customers, recommendations, decisions, staffActors, currentUserProvider
         );
+        org.mockito.Mockito.lenient().when(customers.findByCustomerId(CUSTOMER_ID))
+                .thenReturn(Optional.of(new ApprovalCustomerIdentitySnapshot("CUS-001", "Ari Customer")));
         org.mockito.Mockito.lenient().when(staffActors.findByUserIds(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(Map.of());
     }
@@ -132,15 +141,16 @@ class QueryStaffApprovalWorkServiceTest {
         assertEquals("RECOMMEND_APPROVAL", result.recommendation().action());
     }
 
-    @Test
-    void decisionReadExposesPurposeLimitedActorProvenanceAndReturnsHistory() {
+    @ParameterizedTest
+    @ValueSource(strings = {"CUSTOMER_DIGITAL", "STAFF_ASSISTED"})
+    void decisionReadExposesExactChannelPurposeLimitedActorProvenanceAndHistory(String channel) {
         ReviewRecommendation recommendation = recommendation();
         ApprovalDecision decision = ApprovalDecision.recorded(
                 UUID.randomUUID(), APPLICATION_ID, RECOMMENDATION_ID, APPROVER_ID,
                 ApprovalDecisionAction.APPROVE, null, null, "restricted", NOW
         );
         when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:decide")));
-        when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("CUSTOMER_ACCEPTANCE_PENDING")));
+        when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("CUSTOMER_ACCEPTANCE_PENDING", channel)));
         when(recommendations.findLatestByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.of(recommendation));
         when(decisions.findByLoanApplicationIdOrderByDecidedAtDesc(APPLICATION_ID)).thenReturn(List.of(decision));
         when(decisions.findByReviewRecommendationId(RECOMMENDATION_ID)).thenReturn(Optional.of(decision));
@@ -151,6 +161,10 @@ class QueryStaffApprovalWorkServiceTest {
 
         var result = service.queryDecisionCase(APPLICATION_ID);
 
+        assertEquals("CUS-001", result.customer().customerNumber());
+        assertEquals("Ari Customer", result.customer().fullName());
+        assertEquals(channel, result.originationChannel());
+        verify(customers).findByCustomerId(CUSTOMER_ID);
         assertTrue(result.makerCheckerEligible());
         assertFalse(result.decisionAvailable());
         assertEquals("APPROVE", result.latestDecision().action());
@@ -272,7 +286,36 @@ class QueryStaffApprovalWorkServiceTest {
     }
 
     @Test
+    void unresolvedOrIncompleteCustomerIdentityFailsClosed() {
+        when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:decide")));
+        when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("CUSTOMER_ACCEPTANCE_PENDING")));
+        for (Optional<ApprovalCustomerIdentitySnapshot> identity : List.of(
+                Optional.<ApprovalCustomerIdentitySnapshot>empty(),
+                Optional.of(new ApprovalCustomerIdentitySnapshot(null, "Ari Customer")),
+                Optional.of(new ApprovalCustomerIdentitySnapshot("CUS-001", " ")))) {
+            when(customers.findByCustomerId(CUSTOMER_ID)).thenReturn(identity);
+            assertEquals("SYSTEM_STATE_CONFLICT", assertThrows(BusinessStateConflictException.class,
+                    () -> service.queryDecisionCase(APPLICATION_ID)).getErrorCode());
+        }
+    }
+
+    @Test
+    void contradictoryLoanCaseLinkageFailsClosedBeforeCustomerLookup() {
+        when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:decide")));
+        var wrongCase = org.mockito.Mockito.mock(ApprovalLoanCasePort.CaseSnapshot.class);
+        when(wrongCase.loanApplicationId()).thenReturn(UUID.randomUUID());
+        when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(wrongCase));
+        assertThrows(BusinessStateConflictException.class, () -> service.queryDecisionCase(APPLICATION_ID));
+        org.mockito.Mockito.verifyNoInteractions(customers);
+    }
+
+    @Test
     void purposeLimitedDtosAllowOnlySafeActorSummaryAndExcludeRestrictedFields() {
+        assertEquals(Set.of("customerNumber", "fullName"), Arrays.stream(
+                StaffDecisionCaseDto.CustomerDto.class.getRecordComponents())
+                .map(component -> component.getName()).collect(java.util.stream.Collectors.toSet()));
+        var customer = new StaffDecisionCaseDto.CustomerDto("CUS-001", "Ari Customer");
+        assertEquals("CustomerDto[identity=redacted]", customer.toString());
         for (Class<?> type : List.of(
                 StaffRecommendationCaseDto.class,
                 StaffRecommendationCaseDto.RecommendationDto.class,
@@ -301,9 +344,13 @@ class QueryStaffApprovalWorkServiceTest {
     }
 
     private static ApprovalLoanCasePort.CaseSnapshot caseSnapshot(String status) {
+        return caseSnapshot(status, "CUSTOMER_DIGITAL");
+    }
+
+    private static ApprovalLoanCasePort.CaseSnapshot caseSnapshot(String status, String channel) {
         return new ApprovalLoanCasePort.CaseSnapshot(
-                APPLICATION_ID, "UCL-1", "UNSECURED_CONSUMER_LOAN", "PERSONAL",
-                BigDecimal.TEN, 6, status, NOW.minusHours(2),
+                APPLICATION_ID, CUSTOMER_ID, "UCL-1", "UNSECURED_CONSUMER_LOAN", "PERSONAL",
+                BigDecimal.TEN, 6, status, NOW.minusHours(2), channel,
                 new ApprovalLoanCasePort.DocumentReadinessSnapshot(true, true),
                 new ApprovalLoanCasePort.ProductReadinessSnapshot("VERIFIED", true),
                 new ApprovalLoanCasePort.ReviewCycleSnapshot(
