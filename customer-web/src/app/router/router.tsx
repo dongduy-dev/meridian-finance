@@ -11,6 +11,8 @@ import { ResetPasswordPage } from '@/routes/auth/ResetPasswordPage'
 import { VerificationPendingPage } from '@/routes/auth/VerificationPendingPage'
 import { VerifyEmailPage } from '@/routes/auth/VerifyEmailPage'
 import { BankAccountsPage } from '@/routes/account/BankAccountsPage'
+import { IdentityVerificationPage } from '@/routes/account/IdentityVerificationPage'
+import { IdentityOriginationGuard } from '@/features/account/components/IdentityOriginationGuard'
 import { ProfilePage } from '@/routes/account/ProfilePage'
 import { DashboardPage } from '@/routes/dashboard/DashboardPage'
 import { ProductCataloguePage } from '@/routes/products/ProductCataloguePage'
@@ -72,6 +74,7 @@ export const routes: RouteObject[] = [
                 children: [
                   { index: true, element: <Navigate replace to="profile" /> },
                   { path: 'profile', element: <ProfilePage /> },
+                  { path: 'identity-verification', element: <IdentityVerificationPage /> },
                   { path: 'bank-accounts', element: <BankAccountsPage /> },
                 ],
               },
@@ -79,15 +82,15 @@ export const routes: RouteObject[] = [
           },
           {
             path: 'products/salary-advance/apply',
-            element: <SalaryAdvanceApplicationPage />,
+            element: <IdentityOriginationGuard><SalaryAdvanceApplicationPage /></IdentityOriginationGuard>,
           },
           {
             path: 'products/unsecured-consumer-loan/apply',
-            element: <UnsecuredConsumerLoanApplicationPage />,
+            element: <IdentityOriginationGuard><UnsecuredConsumerLoanApplicationPage /></IdentityOriginationGuard>,
           },
           {
             path: 'products/collateral-loan/apply',
-            element: <CollateralLoanApplicationPage />,
+            element: <IdentityOriginationGuard><CollateralLoanApplicationPage /></IdentityOriginationGuard>,
           },
           {
             path: 'applications/:loanApplicationId/documents',

@@ -531,6 +531,16 @@ Collateral validates and persists one structured asset with type, description, e
 
 No Staff-assisted Salary Advance submission variant exists.
 
+### Customer Identity Verification and Origination Readiness
+
+Customer own-evidence commands authenticate the Customer before storage access, derive ownership from the principal, lock the Customer, and validate the active complete profile. A Customer-owned evidence port calls Document's public contract to validate and store one immutable digital version in the same transaction. The verification attempt, aggregate summary, exact version reference, and required audit commit together. Document deletes a newly committed storage object after transaction rollback and includes identity versions in orphan-reference checks.
+
+For assisted evidence, the dedicated review capability first locks the Loan-owned case and resolves its selected Customer through a narrow public contract. Customer then locks that Customer; Document locks the `CUSTOMER_IDENTITY` document and validates its exact current version. No identity bytes or arbitrary browser-provided Customer ownership move through Loan.
+
+A decision acquires the request-identity lock, checks replay, locks the assisted case when applicable, then locks Customer and exact Document evidence in that order. Customer reloads the attempt under its aggregate lock and rejects stale full-name or version context. VERIFY compares the transient presented Identity Reference against the Customer-owned fingerprint using constant-time equality. The response and audit contain no presented value. Terminal decisions, summary, and audit are atomic.
+
+New Salary Advance, UCL, and Collateral origination paths obtain locked Customer readiness before the established Customer/product serialization and product-specific guards. The Customer row lock serializes submission against full-name invalidation and verification decisions. Readiness requires both `VERIFIED` and the latest successful attempt matching the current full name; an unsupported legacy summary cannot satisfy it. Loan persists only the successful verification UUID. Salary Advance retains its additional Partner eligibility, limit locking, and exposure reservation rules. Downstream workflows do not acquire this origination guard. Historical null provenance is preserved.
+
 ### UCL Manual Verification
 
 UCL verification start and completion acquire the LoanApplication workflow lock, the application row, and the authoritative latest UCL verification row. Completion rechecks Document processing readiness and atomically persists the verification result, LoanApplication transition, status history, PII-safe audit, and any structured `REQUIRES_MORE_INFORMATION` correction. `VERIFIED` opens Loan Officer review, `FAILED` ends the application as `VERIFICATION_FAILED`, and correctable evidence issues use `REQUIRES_MORE_INFORMATION` followed by a linked pending re-verification cycle after resubmission.

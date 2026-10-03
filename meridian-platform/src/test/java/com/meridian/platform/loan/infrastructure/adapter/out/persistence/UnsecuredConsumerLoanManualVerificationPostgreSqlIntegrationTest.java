@@ -2065,6 +2065,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 "ucl-cp2-" + unique + "@meridian.test",
                 "ucl-cp2-" + unique + "@meridian.test",
                 customerId);
+        com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbcTemplate, customerId);
         return new Fixture(customerId, customerUserId);
     }
 

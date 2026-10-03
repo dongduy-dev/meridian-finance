@@ -191,7 +191,7 @@ export function ProfilePage() {
                       Identity reference: On file
                     </div>
                     <p className="mt-2 text-sm leading-5 text-muted-foreground">
-                      Your identity reference is securely stored and is not shown here after verification. It cannot be changed from your profile.
+                      Your identity reference is securely stored and is not displayed after profile completion. It cannot be changed from your profile.
                     </p>
                   </div>
                 ) : (

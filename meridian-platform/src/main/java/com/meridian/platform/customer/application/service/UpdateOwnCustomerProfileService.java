@@ -99,6 +99,14 @@ public class UpdateOwnCustomerProfileService implements UpdateOwnCustomerProfile
         Customer updatedCustomer = customer.updateProfile(newProfile, now);
         Customer savedCustomer = customerRepository.save(updatedCustomer);
 
+        if (customer.verificationStatus() == com.meridian.platform.customer.domain.model.VerificationStatus.VERIFIED
+                && savedCustomer.verificationStatus() != com.meridian.platform.customer.domain.model.VerificationStatus.VERIFIED) {
+            businessAuditPublisher.publish(BusinessAuditEvent.single(
+                    BusinessOperationContext.user(UUID.randomUUID(), currentUser.userId(), now),
+                    new BusinessAuditEntry(BusinessAuditAction.CUSTOMER_IDENTITY_VERIFICATION_INVALIDATED, BusinessAuditEntityType.CUSTOMER,
+                            savedCustomer.id(), BusinessAuditPayload.builder().put(BusinessAuditPayloadKey.CUSTOMER_ID, savedCustomer.id()).build())));
+        }
+
         businessAuditPublisher.publish(new BusinessAuditEvent(
                 BusinessOperationContext.user(UUID.randomUUID(), currentUser.userId(), now),
                 auditEntries(savedCustomer, previousProfile == null, previousCompletionStatus)

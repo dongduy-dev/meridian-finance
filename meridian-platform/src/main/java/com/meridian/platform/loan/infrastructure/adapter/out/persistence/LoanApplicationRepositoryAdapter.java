@@ -200,7 +200,8 @@ public class LoanApplicationRepositoryAdapter implements LoanApplicationReposito
                 entity.getStatus(),
                 entity.getRequestedAmount(),
                 entity.getRequestedTermMonths(),
-                entity.getSubmittedAt()
+                entity.getSubmittedAt(),
+                entity.getIdentityVerificationId()
         );
     }
 }

@@ -953,6 +953,7 @@ describe('FE-CP6 focused Salary Advance application', () => {
   })
 
   it.each([
+    ['CUSTOMER_IDENTITY_VERIFICATION_REQUIRED', 'Complete identity verification before submitting this application.'],
     ['SYSTEM_STATE_CONFLICT', "We couldn't confirm the latest Salary Advance information. Review the latest status and try again if appropriate."],
     ['SALARY_ADVANCE_ELIGIBILITY_DATA_STALE', 'Your employment verification needs to be refreshed before submission.'],
     ['BLOCKING_APPLICATION_EXISTS', 'You already have a Salary Advance application in progress. You can submit another after it is no longer active.'],
@@ -960,7 +961,7 @@ describe('FE-CP6 focused Salary Advance application', () => {
     const user = userEvent.setup()
     renderRoute('/products/salary-advance/apply', async (input, init) => {
       if (String(input).endsWith('/loan-applications/salary-advance')) {
-        return errorResponse(errorCode, 409, '/api/v1/loan-applications/salary-advance')
+        return errorResponse(errorCode, errorCode === 'CUSTOMER_IDENTITY_VERIFICATION_REQUIRED' ? 422 : 409, '/api/v1/loan-applications/salary-advance')
       }
       return defaultFetch(input, init)
     })
@@ -972,6 +973,9 @@ describe('FE-CP6 focused Salary Advance application', () => {
     await user.click(await screen.findByRole('button', { name: 'Submit application' }))
 
     expect(await screen.findByText(expectedMessage)).toBeVisible()
+    if (errorCode === 'CUSTOMER_IDENTITY_VERIFICATION_REQUIRED') {
+      expect(screen.getByRole('link', { name: 'Open identity verification' })).toHaveAttribute('href', '/account/identity-verification')
+    }
     expect(screen.queryByText(/application details changed|your information changed|finish or close/i)).not.toBeInTheDocument()
   })
 

@@ -46,7 +46,7 @@ class CollateralLoanPricingV46PostgreSqlIntegrationTest {
 
             migrate(schema, null);
 
-            assertEquals("68", latestVersion(schema));
+            assertEquals("69", latestVersion(schema));
             assertExecutablePolicy(schema);
         } finally {
             drop(schema);

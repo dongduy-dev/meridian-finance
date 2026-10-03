@@ -287,6 +287,18 @@ Error-code label maps live in `lib/errors` for cross-cutting codes or in the own
 
 ---
 
+### 7.6 Customer Identity Verification Workspace
+
+`/account/identity-verification` uses exact `customer:identity:read:own` before queries and `customer:identity:write:own` for upload. Account navigation links to this Customer-level workspace. Account setup distinguishes profile completion, identity verification, and bank readiness. It resolves pending state from authoritative verification history; an upload or completed profile never displays verified identity.
+
+The workspace shows incomplete-profile guidance, pending review, verified status, controlled rejection reasons, replacement upload, and preserved attempt/version history. One PDF/JPEG/PNG file may be submitted before bank setup. The browser sends only file, upload request ID, and exact digital predecessor; it supplies no Customer ownership ID. Content uses the exact protected evidence endpoint and temporary object URLs that are revoked after download.
+
+Salary Advance, UCL, and Collateral application entry routes show actionable identity guidance before loading the application form when Customer verification is not `VERIFIED`. Account setup and identity guidance describe this common requirement for all Meridian lending products. The backend remains authoritative at submission and requires current successful verification provenance. Salary Advance keeps its additional Partner Employee and limit readiness, with actionable guidance for `CUSTOMER_IDENTITY_VERIFICATION_REQUIRED`. Profile wording describes profile completion without calling it identity verification.
+
+An uncertain upload disables further submission until a successful history GET refresh. The client does not automatically retry the POST or persist evidence bytes. Session loss clears private query state through the shared auth boundary. The Staff transient-reference confirmation is defined only in MER-FE-002; Customer Web has no stored-reference reveal operation.
+
+---
+
 ## 8. Authentication and Session Model
 
 ### 8.1 Verified Backend Facts

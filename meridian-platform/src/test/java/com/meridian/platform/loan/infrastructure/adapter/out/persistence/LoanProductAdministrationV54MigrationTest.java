@@ -75,7 +75,7 @@ class LoanProductAdministrationV54MigrationTest {
         assertTrue(migration.contains("'LOAN_PRODUCT_LIMITS_UPDATED'"));
         assertTrue(migration.contains("'LOAN_PRODUCT_ACTIVATED'"));
         assertTrue(migration.contains("'LOAN_PRODUCT_DEACTIVATED'"));
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V68"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V69"));
         assertTrue(snapshot.contains("'LOAN_PRODUCT_LIMITS_UPDATED'"));
     }
 

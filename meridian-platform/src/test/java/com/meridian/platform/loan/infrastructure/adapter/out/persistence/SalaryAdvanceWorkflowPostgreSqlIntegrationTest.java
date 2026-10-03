@@ -879,6 +879,7 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
                 IMPORT_BATCH_ID,
                 "test-identity-" + linkId
         );
+        com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbcTemplate, customerId);
         return new Fixture(customerId, customerUserId, linkId);
     }
 

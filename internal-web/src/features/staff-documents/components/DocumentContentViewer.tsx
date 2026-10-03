@@ -1,3 +1,4 @@
+import { identityContent } from '@/features/customer-identity/api'
 import { Eye, EyeOff } from 'lucide-react'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -9,18 +10,18 @@ import { getAssistedActionEvidenceContent, getDocumentContent } from '../api/sta
 
 type Props = {
   manager: AuthSessionManager
-  loanApplicationId: string
-  documentVersionId: string
+  loanApplicationId?: string
+  documentVersionId?: string
   filename: string
   buttonLabel?: string
-} & ({ checklistItemId: string; evidenceType?: never } | { evidenceType: string; checklistItemId?: never })
+} & ({ checklistItemId: string; evidenceType?: never; identityVerificationId?: never } | { evidenceType: string; checklistItemId?: never; identityVerificationId?: never } | { identityVerificationId: string; checklistItemId?: never; evidenceType?: never })
 export function DocumentContentViewer(props: Props) {
   const session = useSyncExternalStore(props.manager.subscribe, props.manager.getSnapshot, props.manager.getSnapshot)
   const authority = session.status === 'authenticated'
     ? `${session.actor.userId}:${[...session.actor.permissions].sort().join(',')}:${[...session.actor.roles].sort().join(',')}`
     : session.status
   if (session.status !== 'authenticated') return null
-  return <ContentViewer key={`${authority}:${props.loanApplicationId}:${props.checklistItemId ?? props.evidenceType}:${props.documentVersionId}`} {...props} />
+  return <ContentViewer key={`${authority}:${props.loanApplicationId}:${props.identityVerificationId ?? props.checklistItemId ?? props.evidenceType}:${props.documentVersionId}`} {...props} />
 }
 
 function ContentViewer(props: Props) {
@@ -45,9 +46,9 @@ function ContentViewer(props: Props) {
     setLoading(true); setError(undefined)
     const requestGeneration = generation.current
     try {
-      const result = props.evidenceType
-        ? await getAssistedActionEvidenceContent(props.manager, props.loanApplicationId, props.evidenceType, props.documentVersionId)
-        : await getDocumentContent(props.manager, props.loanApplicationId, props.checklistItemId!, props.documentVersionId)
+      const result = props.identityVerificationId ? await identityContent(props.manager, props.identityVerificationId) : props.evidenceType
+        ? await getAssistedActionEvidenceContent(props.manager, props.loanApplicationId!, props.evidenceType, props.documentVersionId!)
+        : await getDocumentContent(props.manager, props.loanApplicationId!, props.checklistItemId!, props.documentVersionId!)
       if (generation.current !== requestGeneration) return
       if (!['application/pdf', 'image/jpeg', 'image/png'].includes(result.contentType)) {
         setError('This document type cannot be displayed safely.')

@@ -90,6 +90,18 @@ class StartAssistedUnsecuredConsumerLoanServiceTest {
     }
 
     @Test
+    void refusesUnverifiedRejectedOrUnprovenSelectedCustomer() {
+        when(cases.findByIdForUpdate(CASE_ID)).thenReturn(Optional.of(openCase()));
+        for (String status : List.of("UNVERIFIED", "REJECTED", "VERIFIED")) {
+            when(customers.findOriginationReadinessForUpdate(CUSTOMER_ID)).thenReturn(Optional.of(
+                    new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, status, null)));
+            assertEquals("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED", assertThrows(BusinessRuleViolationException.class,
+                    () -> service.submit(CASE_ID, request())).getErrorCode());
+        }
+        verify(applications, never()).save(any());
+    }
+
+    @Test
     void rejectsNonStaffMissingPermissionAndStaffCustomerContext() {
         when(currentUsers.currentUser()).thenReturn(new AuthenticatedUser(
                 STAFF_ID, "customer@meridian.local", "CUSTOMER", CUSTOMER_ID,
@@ -137,8 +149,8 @@ class StartAssistedUnsecuredConsumerLoanServiceTest {
     @Test
     void createsStaffAssistedUclAndCompletesCaseWithSameBusinessOutcome() {
         when(cases.findByIdForUpdate(CASE_ID)).thenReturn(Optional.of(openCase()));
-        when(customers.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
-                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "UNVERIFIED")));
+        when(customers.findOriginationReadinessForUpdate(CUSTOMER_ID)).thenReturn(Optional.of(
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED", UUID.fromString("abababab-abab-4bab-8bab-abababababab"))));
         when(products.findByProductCode(ProductCode.UNSECURED_CONSUMER_LOAN)).thenReturn(Optional.of(PRODUCT));
         when(outstandingAccounts.inspect(CUSTOMER_ID, ProductCode.UNSECURED_CONSUMER_LOAN))
                 .thenReturn(OutstandingLoanAccountQuery.GuardResult.CLEAR);

@@ -561,6 +561,7 @@ class CollateralLoanServicingPostgreSqlIntegrationTest {
                 "update customers set profile_completion_status = 'COMPLETE' where id = ?",
                 activated.customerId()
         );
+        com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbc, activated.customerId());
     }
 
     private RecordRepaymentUseCase.Command repaymentCommand(

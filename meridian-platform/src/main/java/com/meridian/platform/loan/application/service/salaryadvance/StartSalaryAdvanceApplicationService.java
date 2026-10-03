@@ -124,7 +124,7 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
                 currentUser.userId(),
                 now
         );
-        validateCustomerReadiness(customerId);
+        UUID identityVerificationId = validateCustomerReadiness(customerId);
 
         LoanProduct salaryAdvanceProduct = loanProductRepository.findByProductCode(ProductCode.SALARY_ADVANCE)
                 .orElseThrow(() -> new EntityNotFoundException(
@@ -181,7 +181,9 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
                 initialStatus
         );
 
-        LoanApplication savedApplication = loanApplicationRepository.save(submission.loanApplication());
+        LoanApplication savedApplication = loanApplicationRepository.save(
+                submission.loanApplication().withIdentityVerification(identityVerificationId)
+        );
         documentChecklistPort.createSubmissionChecklist(
                 savedApplication.id(),
                 savedApplication.productCode(),
@@ -220,8 +222,8 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
         ));
     }
 
-    private void validateCustomerReadiness(UUID customerId) {
-        CustomerReadinessSnapshot readiness = customerReadinessPort.findReadinessByCustomerId(customerId)
+    private UUID validateCustomerReadiness(UUID customerId) {
+        CustomerReadinessSnapshot readiness = customerReadinessPort.findOriginationReadinessForUpdate(customerId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "CUSTOMER_NOT_FOUND",
                         "Customer was not found."
@@ -238,12 +240,19 @@ public class StartSalaryAdvanceApplicationService implements StartSalaryAdvanceA
                     "Customer profile must be complete before creating a Salary Advance application."
             );
         }
+        if (!"VERIFIED".equals(readiness.verificationStatus()) || readiness.identityVerificationId() == null) {
+            throw new BusinessRuleViolationException(
+                    "CUSTOMER_IDENTITY_VERIFICATION_REQUIRED",
+                    "Customer identity verification is required before creating a loan application."
+            );
+        }
         if (!readiness.hasPrimaryActiveBankAccount()) {
             throw new BusinessRuleViolationException(
                     "PRIMARY_BANK_ACCOUNT_REQUIRED",
                     "Customer must have a primary active bank account before creating a Salary Advance application."
             );
         }
+        return readiness.identityVerificationId();
     }
 
     private VerifiedPartnerEmployeeLinkSnapshot requireEligiblePartnerEmployeeLink(

@@ -66,12 +66,17 @@ public record Customer(
                 id,
                 customerNumber,
                 status,
-                verificationStatus,
+                verificationStatus == VerificationStatus.VERIFIED && profile != null
+                        && !profile.fullName().equals(newProfile.fullName()) ? VerificationStatus.UNVERIFIED : verificationStatus,
                 completionStatus,
                 timestampedProfile,
                 bankAccounts,
                 createdAt,
                 now);
+    }
+
+    public Customer withVerificationStatus(VerificationStatus status, LocalDateTime now) {
+        return new Customer(id, customerNumber, this.status, status, profileCompletionStatus, profile, bankAccounts, createdAt, now);
     }
 
     public Customer addBankAccount(CustomerBankAccount account, LocalDateTime now) {

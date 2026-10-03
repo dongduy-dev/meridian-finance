@@ -96,6 +96,18 @@ class StartAssistedCollateralLoanServiceTest {
     }
 
     @Test
+    void refusesUnverifiedRejectedOrUnprovenSelectedCustomer() {
+        when(cases.findByIdForUpdate(CASE_ID)).thenReturn(Optional.of(openCase()));
+        for (String status : List.of("UNVERIFIED", "REJECTED", "VERIFIED")) {
+            when(customers.findOriginationReadinessForUpdate(CUSTOMER_ID)).thenReturn(Optional.of(
+                    new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, status, null)));
+            assertEquals("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED", assertThrows(BusinessRuleViolationException.class,
+                    () -> service.submit(CASE_ID, request())).getErrorCode());
+        }
+        verify(applications, never()).save(any());
+    }
+
+    @Test
     void rejectsNonStaffMissingPermissionAndStaffCustomerContext() {
         when(currentUsers.currentUser()).thenReturn(new AuthenticatedUser(
                 STAFF_ID, "customer@meridian.local", "CUSTOMER", CUSTOMER_ID,
@@ -152,8 +164,8 @@ class StartAssistedCollateralLoanServiceTest {
     @Test
     void createsOneStaffAssistedCollateralAndCompletesCase() {
         when(cases.findByIdForUpdate(CASE_ID)).thenReturn(Optional.of(openCase()));
-        when(customers.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
-                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "UNVERIFIED")));
+        when(customers.findOriginationReadinessForUpdate(CUSTOMER_ID)).thenReturn(Optional.of(
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED", UUID.fromString("abababab-abab-4bab-8bab-abababababab"))));
         when(products.findByProductCode(ProductCode.COLLATERAL_LOAN)).thenReturn(Optional.of(PRODUCT));
         when(checklists.resolveSubmissionInitialState(ProductCode.COLLATERAL_LOAN))
                 .thenReturn(new LoanDocumentChecklistPort.SubmissionChecklistInitialState(false));

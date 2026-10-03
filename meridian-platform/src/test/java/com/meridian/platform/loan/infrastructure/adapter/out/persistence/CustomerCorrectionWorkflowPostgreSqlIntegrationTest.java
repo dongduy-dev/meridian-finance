@@ -1240,6 +1240,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """, linkId, customerId, PARTNER_COMPANY_ID, PARTNER_EMPLOYEE_ID, IMPORT_BATCH_ID,
                 "test-identity-" + linkId);
+        com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbcTemplate, customerId);
         return new Fixture(customerId, customerUserId, linkId);
     }
 

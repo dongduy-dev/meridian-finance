@@ -34,6 +34,15 @@ export const STAFF_ORIGINATION_ROUTE = {
   requiredPermissions: ['loan:originate:staff'],
 } as const satisfies StaffRouteDefinition
 
+export const STAFF_IDENTITY_QUEUE_ROUTE = {
+  path: '/staff/customer-identity-verifications', label: 'Identity verification', documentTitle: 'Customer identity verification',
+  requiredPermissions: ['customer:identity:verify'],
+} as const satisfies StaffRouteDefinition
+export const STAFF_IDENTITY_DETAIL_ROUTE = {
+  path: '/staff/customer-identity-verifications/:verificationId', label: 'Identity verification detail', documentTitle: 'Customer identity verification',
+  requiredPermissions: ['customer:identity:verify'],
+} as const satisfies StaffRouteDefinition
+
 export const STAFF_CUSTOMER_ACCESS_ROUTE = {
   path: '/staff/customer-access',
   label: 'Customer digital access',
@@ -204,6 +213,7 @@ export const STAFF_ROUTES = [
   STAFF_HOME_ROUTE,
   STAFF_ORIGINATION_ROUTE,
   STAFF_CUSTOMER_ACCESS_ROUTE,
+  STAFF_IDENTITY_QUEUE_ROUTE,
   STAFF_APPLICATIONS_ROUTE,
   STAFF_DOCUMENT_QUEUE_ROUTE,
   STAFF_CORRECTION_QUEUE_ROUTE,
@@ -220,7 +230,9 @@ export const STAFF_EXECUTABLE_ROUTES = [
   STAFF_APPLICATIONS_ROUTE,
   STAFF_ORIGINATION_ROUTE,
   STAFF_CUSTOMER_ACCESS_ROUTE,
+  STAFF_IDENTITY_QUEUE_ROUTE,
   STAFF_ORIGINATION_CASE_ROUTE,
+  STAFF_IDENTITY_DETAIL_ROUTE,
   STAFF_APPLICATION_CASE_ROUTE,
   STAFF_OFFER_RESPONSE_ROUTE,
   STAFF_DOCUMENT_QUEUE_ROUTE,

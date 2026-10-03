@@ -65,6 +65,7 @@ class StartSalaryAdvanceApplicationServiceTest {
 
     private final UUID customerId = UUID.fromString("99999999-9999-9999-9999-999999999999");
     private final UUID linkId = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
+    private final UUID identityVerificationId = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
     private final UUID partnerCompanyId = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private final UUID partnerEmployeeId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb01");
     private final UUID importBatchId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1");
@@ -91,7 +92,7 @@ class StartSalaryAdvanceApplicationServiceTest {
         salaryAdvanceLimitRepository = new FakeSalaryAdvanceLimitRepository();
         salaryAdvanceLimitMovementRepository = new FakeSalaryAdvanceLimitMovementRepository();
         salaryAdvanceVerificationRepository = new FakeSalaryAdvanceVerificationRepository();
-        customerReadinessPort = new FakeCustomerReadinessPort(readiness(true, true, true, "UNVERIFIED"));
+        customerReadinessPort = new FakeCustomerReadinessPort(readiness(true, true, true, "VERIFIED"));
         partnerEligibilityPort = new FakePartnerEligibilityPort(verifiedPartnerSnapshot(limit(6_000_000)));
         transitionRepository = new FakeLoanApplicationStatusTransitionRepository();
         auditPublisher = new FakeBusinessAuditPublisher();
@@ -138,6 +139,8 @@ class StartSalaryAdvanceApplicationServiceTest {
         assertTrue(salaryAdvanceLimitRepository.lockAcquired);
         assertTrue(loanApplicationRepository.customerProductLockAcquired);
         assertEquals(LoanApplicationStatus.SUBMITTED, loanApplicationRepository.savedApplications.get(0).status());
+        assertEquals(identityVerificationId, loanApplicationRepository.savedApplications.getFirst().identityVerificationId());
+        assertTrue(customerReadinessPort.originationLockAcquired);
         assertEquals(2, salaryAdvanceLimitMovementRepository.savedMovements.size());
         assertEquals(SalaryAdvanceLimitMovementType.INITIALIZED,
                 salaryAdvanceLimitMovementRepository.savedMovements.get(0).movementType());
@@ -210,7 +213,7 @@ class StartSalaryAdvanceApplicationServiceTest {
 
     @Test
     void failsBeforeLoanSideEffectsWhenPrimaryBankAccountIsMissing() {
-        customerReadinessPort.snapshot = Optional.of(readiness(true, true, false, "UNVERIFIED"));
+        customerReadinessPort.snapshot = Optional.of(readiness(true, true, false, "VERIFIED"));
 
         BusinessRuleViolationException exception = assertThrows(
                 BusinessRuleViolationException.class,
@@ -479,6 +482,21 @@ class StartSalaryAdvanceApplicationServiceTest {
         return new SalaryAdvanceApplicationRequest(linkId, requestedAmount, requestedTermMonths);
     }
 
+    @Test
+    void unevidencedIdentityFailsBeforeApplicationAndReservationSideEffects() {
+        for (var readiness : List.of(
+                readiness(true, true, true, "UNVERIFIED"),
+                readiness(true, true, true, "REJECTED"),
+                new CustomerReadinessSnapshot(customerId, true, true, true, "VERIFIED", null))) {
+            customerReadinessPort.snapshot = Optional.of(readiness);
+            BusinessRuleViolationException failure = assertThrows(BusinessRuleViolationException.class,
+                    () -> service.startSalaryAdvanceApplication(request(limit(3_000_000), 1)));
+            assertEquals("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED", failure.getErrorCode());
+            assertTrue(customerReadinessPort.originationLockAcquired);
+            assertNoLoanSideEffectsBeforeReadinessPasses();
+        }
+    }
+
     private CustomerReadinessSnapshot readiness(
             boolean active,
             boolean profileComplete,
@@ -490,7 +508,8 @@ class StartSalaryAdvanceApplicationServiceTest {
                 active,
                 profileComplete,
                 hasPrimaryActiveBankAccount,
-                verificationStatus
+                verificationStatus,
+                "VERIFIED".equals(verificationStatus) ? identityVerificationId : null
         );
     }
 
@@ -766,6 +785,7 @@ class StartSalaryAdvanceApplicationServiceTest {
     private static class FakeCustomerReadinessPort implements CustomerReadinessPort {
 
         private Optional<CustomerReadinessSnapshot> snapshot;
+        private boolean originationLockAcquired;
 
         private FakeCustomerReadinessPort(CustomerReadinessSnapshot snapshot) {
             this.snapshot = Optional.of(snapshot);
@@ -774,6 +794,12 @@ class StartSalaryAdvanceApplicationServiceTest {
         @Override
         public Optional<CustomerReadinessSnapshot> findReadinessByCustomerId(UUID customerId) {
             return snapshot.filter(value -> value.customerId().equals(customerId));
+        }
+
+        @Override
+        public Optional<CustomerReadinessSnapshot> findOriginationReadinessForUpdate(UUID customerId) {
+            originationLockAcquired = true;
+            return findReadinessByCustomerId(customerId);
         }
     }
     private static class FakePartnerEligibilityPort implements PartnerEligibilityPort {

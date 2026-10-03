@@ -76,7 +76,7 @@ final class CollateralLoanOrigination {
             BusinessOperationContext operation,
             LocalDateTime now
     ) {
-        validateCustomerReadiness(customerId);
+        UUID identityVerificationId = validateCustomerReadiness(customerId);
         LoanProduct product = products.findByProductCode(ProductCode.COLLATERAL_LOAN)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "PRODUCT_NOT_FOUND", "Collateral Loan product was not found."));
@@ -99,7 +99,7 @@ final class CollateralLoanOrigination {
                 formatApplicationNumber(applications.nextApplicationNumberSequence(), now),
                 requestedAmount, requestedTermMonths, channel, now, initialStatus);
 
-        LoanApplication savedApplication = applications.save(submission.loanApplication());
+        LoanApplication savedApplication = applications.save(submission.loanApplication().withIdentityVerification(identityVerificationId));
         Collateral savedCollateral = collaterals.save(policy.createCollateral(
                 UUID.randomUUID(), savedApplication, details.type(), details.description(),
                 details.estimatedValue(), details.ownershipStatus(), details.conditionNote(), now));
@@ -115,8 +115,8 @@ final class CollateralLoanOrigination {
         return new Result(savedApplication, savedCollateral, verification, checklist);
     }
 
-    private void validateCustomerReadiness(UUID customerId) {
-        CustomerReadinessSnapshot readiness = customers.findReadinessByCustomerId(customerId)
+    private UUID validateCustomerReadiness(UUID customerId) {
+        CustomerReadinessSnapshot readiness = customers.findOriginationReadinessForUpdate(customerId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "CUSTOMER_NOT_FOUND", "Customer was not found."));
         if (!readiness.active()) {
@@ -129,11 +129,16 @@ final class CollateralLoanOrigination {
                     "PROFILE_INCOMPLETE",
                     "Customer profile must be complete before creating a Collateral Loan application.");
         }
+        if (!"VERIFIED".equals(readiness.verificationStatus()) || readiness.identityVerificationId() == null) {
+            throw new BusinessRuleViolationException("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED",
+                    "Complete Customer identity verification before applying for this product.");
+        }
         if (!readiness.hasPrimaryActiveBankAccount()) {
             throw new BusinessRuleViolationException(
                     "PRIMARY_BANK_ACCOUNT_REQUIRED",
                     "Customer must have a primary active bank account before creating a Collateral Loan application.");
         }
+        return readiness.identityVerificationId();
     }
 
     private void assertNoBlockingApplicationExists(UUID customerId) {

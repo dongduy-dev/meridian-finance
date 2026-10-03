@@ -11,6 +11,7 @@ import {
   STAFF_APPLICATIONS_ROUTE,
   STAFF_ORIGINATION_ROUTE,
   STAFF_CUSTOMER_ACCESS_ROUTE,
+  STAFF_IDENTITY_QUEUE_ROUTE, STAFF_IDENTITY_DETAIL_ROUTE,
   STAFF_ORIGINATION_CASE_ROUTE,
   STAFF_HOME_ROUTE,
   STAFF_DOCUMENT_QUEUE_ROUTE,
@@ -71,6 +72,8 @@ const StaffClosureWorkQueuePage = lazy(() => import('@/features/staff-servicing/
 const StaffClosurePage = lazy(() => import('@/features/staff-servicing/pages/StaffClosurePage').then((module) => ({ default: module.StaffClosurePage })))
 const NotFoundPage = lazy(() => import('@/routes/NotFoundPage').then((module) => ({ default: module.NotFoundPage })))
 
+const IdentityVerificationPage = lazy(() => import('@/features/customer-identity/IdentityVerificationPage').then(module => ({ default: module.IdentityVerificationPage })))
+
 function RouteFrame() { return <><RouteFocus /><Outlet /></> }
 function Deferred({ children }: { children: ReactNode }) {
   return <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading workspace…</div>}>{children}</Suspense>
@@ -84,6 +87,12 @@ export const routes: RouteObject[] = [{ element: <RouteFrame />, errorElement: <
     { element: <InternalShell area="staff" />, children: [
     { element: <StaffCapabilityRoute route={STAFF_HOME_ROUTE} />, children: [
       { path: STAFF_HOME_ROUTE.path, element: <Deferred><StaffLandingPage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_IDENTITY_QUEUE_ROUTE} />, children: [
+      { path: STAFF_IDENTITY_QUEUE_ROUTE.path, element: <Deferred><IdentityVerificationPage /></Deferred> },
+    ] },
+    { element: <StaffCapabilityRoute route={STAFF_IDENTITY_DETAIL_ROUTE} />, children: [
+      { path: STAFF_IDENTITY_DETAIL_ROUTE.path, element: <Deferred><IdentityVerificationPage /></Deferred> },
     ] },
     { element: <StaffCapabilityRoute route={STAFF_APPLICATIONS_ROUTE} />, children: [
       { path: STAFF_APPLICATIONS_ROUTE.path, element: <Deferred><ApplicationSearchPage /></Deferred> },

@@ -342,6 +342,8 @@ class UnsecuredConsumerLoanOriginationPostgreSqlIntegrationTest {
                         + "VALUES (?, ?, ?, 'test-password-hash', 'CUSTOMER', 'ACTIVE', 'UCL Test Customer', ?)",
                 createdUserId, "ucl-" + suffix + "@meridian.test", "ucl-" + suffix + "@meridian.test",
                 createdCustomerId);
+        com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbcTemplate, createdCustomerId);
+
     }
 
     private int count(String sql, Object... arguments) {

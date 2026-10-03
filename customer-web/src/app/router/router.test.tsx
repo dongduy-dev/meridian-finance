@@ -1,6 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { queryClient } from '@/app/providers/query-client'
 
 import { AppProviders } from '@/app/providers/AppProviders'
 import { createTestAuthManager } from '@/test/auth'
@@ -12,6 +14,8 @@ function renderRoute(path: string) {
   render(<AppProviders router={router} authManager={createTestAuthManager()} />)
   return router
 }
+
+afterEach(() => { queryClient.clear(); vi.unstubAllGlobals() })
 
 describe('application routing and shell', () => {
   it('bootstraps the Customer shell with the planned navigation vocabulary', async () => {
@@ -43,6 +47,7 @@ describe('application routing and shell', () => {
 
   it('keeps mobile navigation links composed, active, and dismissible', async () => {
     const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn(async (input) => new Response(JSON.stringify(String(input).endsWith('/customers/me') ? { customerId: '22222222-2222-4222-8222-222222222222', customerNumber: 'CUS-001', status: 'ACTIVE', verificationStatus: 'UNVERIFIED', profileCompletionStatus: 'INCOMPLETE', primaryActiveBankAccountPresent: false, profile: null } : []), { headers: { 'Content-Type': 'application/json' } })))
     const router = renderRoute('/')
     const trigger = await screen.findByRole('button', { name: 'Open menu' })
 

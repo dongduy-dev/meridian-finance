@@ -18,6 +18,11 @@ public class AssistedOriginationEvidenceAuthorizationAdapter implements LoanAssi
     }
 
     @Override
+    public UUID authorizeIdentityVerification(UUID caseId, boolean requireOpen) {
+        return useCase.authorizeIdentityVerification(caseId, requireOpen);
+    }
+
+    @Override
     public AuthorizedIntake authorizeRead(UUID caseId) {
         var authorized = useCase.authorizeEvidenceRead(caseId);
         return new AuthorizedIntake(authorized.caseId(), authorized.productCode());

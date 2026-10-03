@@ -495,6 +495,8 @@ class CollateralLoanOriginationPostgreSqlIntegrationTest {
                         + "'Collateral Test Customer', ?)",
                 createdUserId, "cl-" + suffix + "@meridian.test", "cl-" + suffix + "@meridian.test",
                 createdCustomerId);
+        com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbcTemplate, createdCustomerId);
+
     }
 
     private int count(String sql, Object... arguments) {

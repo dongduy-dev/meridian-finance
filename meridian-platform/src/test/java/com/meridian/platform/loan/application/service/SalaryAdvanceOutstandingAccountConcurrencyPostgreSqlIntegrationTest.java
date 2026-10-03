@@ -564,6 +564,7 @@ class SalaryAdvanceOutstandingAccountConcurrencyPostgreSqlIntegrationTest {
                 PARTNER_EMPLOYEE_ID, IMPORT_BATCH_ID, "verified-" + unique,
                 ManualDisbursementActivationPostgreSqlTestSupport.NOW,
                 ManualDisbursementActivationPostgreSqlTestSupport.NOW);
+        com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbc, fixture.customerId());
         reset(limitRepository);
         return new Activated(fixture, activation.loanAccountId(), userId);
     }

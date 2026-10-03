@@ -105,6 +105,17 @@ class StartUnsecuredConsumerLoanApplicationServiceTest {
     }
 
     @Test
+    void requiresSuccessfulCustomerVerificationBeforeNewOrigination() {
+        for (String status : java.util.List.of("UNVERIFIED", "REJECTED", "VERIFIED")) {
+            when(readiness.findOriginationReadinessForUpdate(CUSTOMER_ID)).thenReturn(Optional.of(
+                    new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, status, null)));
+            assertEquals("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED", assertThrows(BusinessRuleViolationException.class,
+                    () -> service.startUnsecuredConsumerLoanApplication(request())).getErrorCode());
+        }
+        verify(applications, never()).save(any());
+    }
+
+    @Test
     void createsDocumentsPendingUclWithPendingManualReviewAndAuditHistory() {
         arrangeReadyCustomerAndProduct();
         when(applications.nextApplicationNumberSequence()).thenReturn(42L);
@@ -128,6 +139,7 @@ class StartUnsecuredConsumerLoanApplicationServiceTest {
         ArgumentCaptor<LoanApplication> applicationCaptor = ArgumentCaptor.forClass(LoanApplication.class);
         verify(applications).save(applicationCaptor.capture());
         assertEquals(CUSTOMER_ID, applicationCaptor.getValue().customerId());
+        assertEquals(UUID.fromString("abababab-abab-4bab-8bab-abababababab"), applicationCaptor.getValue().identityVerificationId());
         assertEquals(OriginationChannel.CUSTOMER_DIGITAL, applicationCaptor.getValue().originationChannel());
         assertEquals(LoanApplicationStatus.DOCUMENTS_PENDING, applicationCaptor.getValue().status());
         verify(applications).acquireCustomerProductLock(CUSTOMER_ID, ProductCode.UNSECURED_CONSUMER_LOAN);
@@ -149,22 +161,22 @@ class StartUnsecuredConsumerLoanApplicationServiceTest {
 
     @Test
     void rejectsMissingInactiveOrIncompleteCustomerBeforeLoanEffects() {
-        when(readiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.empty());
+        when(readiness.findOriginationReadinessForUpdate(CUSTOMER_ID)).thenReturn(Optional.empty());
         assertEquals("CUSTOMER_NOT_FOUND", assertThrows(
                 EntityNotFoundException.class, () -> service.startUnsecuredConsumerLoanApplication(request())
         ).getErrorCode());
 
-        when(readiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(snapshot(false, true, true)));
+        when(readiness.findOriginationReadinessForUpdate(CUSTOMER_ID)).thenReturn(Optional.of(snapshot(false, true, true)));
         assertEquals("CUSTOMER_NOT_ACTIVE", assertThrows(
                 BusinessStateConflictException.class, () -> service.startUnsecuredConsumerLoanApplication(request())
         ).getErrorCode());
 
-        when(readiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(snapshot(true, false, true)));
+        when(readiness.findOriginationReadinessForUpdate(CUSTOMER_ID)).thenReturn(Optional.of(snapshot(true, false, true)));
         assertEquals("PROFILE_INCOMPLETE", assertThrows(
                 BusinessRuleViolationException.class, () -> service.startUnsecuredConsumerLoanApplication(request())
         ).getErrorCode());
 
-        when(readiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(snapshot(true, true, false)));
+        when(readiness.findOriginationReadinessForUpdate(CUSTOMER_ID)).thenReturn(Optional.of(snapshot(true, true, false)));
         assertEquals("PRIMARY_BANK_ACCOUNT_REQUIRED", assertThrows(
                 BusinessRuleViolationException.class, () -> service.startUnsecuredConsumerLoanApplication(request())
         ).getErrorCode());
@@ -173,7 +185,7 @@ class StartUnsecuredConsumerLoanApplicationServiceTest {
 
     @Test
     void rejectsMissingInactiveAndBlockingProductStates() {
-        when(readiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(snapshot(true, true, true)));
+        when(readiness.findOriginationReadinessForUpdate(CUSTOMER_ID)).thenReturn(Optional.of(snapshot(true, true, true)));
         when(products.findByProductCode(ProductCode.UNSECURED_CONSUMER_LOAN)).thenReturn(Optional.empty());
         assertEquals("PRODUCT_NOT_FOUND", assertThrows(
                 EntityNotFoundException.class, () -> service.startUnsecuredConsumerLoanApplication(request())
@@ -201,7 +213,7 @@ class StartUnsecuredConsumerLoanApplicationServiceTest {
 
     @Test
     void usesLoadedLoanProductLimitsForUclAmountValidation() {
-        when(readiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(snapshot(true, true, true)));
+        when(readiness.findOriginationReadinessForUpdate(CUSTOMER_ID)).thenReturn(Optional.of(snapshot(true, true, true)));
         LoanProduct configured = new LoanProduct(
                 PRODUCT.id(), PRODUCT.productCode(), PRODUCT.productType(), PRODUCT.name(), PRODUCT.description(),
                 true, new BigDecimal("750000"), new BigDecimal("1250000")
@@ -242,12 +254,12 @@ class StartUnsecuredConsumerLoanApplicationServiceTest {
     }
 
     private void arrangeReadyCustomerAndProduct() {
-        when(readiness.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(snapshot(true, true, true)));
+        when(readiness.findOriginationReadinessForUpdate(CUSTOMER_ID)).thenReturn(Optional.of(snapshot(true, true, true)));
         when(products.findByProductCode(ProductCode.UNSECURED_CONSUMER_LOAN)).thenReturn(Optional.of(PRODUCT));
     }
 
     private CustomerReadinessSnapshot snapshot(boolean active, boolean profileComplete, boolean hasBankAccount) {
-        return new CustomerReadinessSnapshot(CUSTOMER_ID, active, profileComplete, hasBankAccount, "UNVERIFIED");
+        return new CustomerReadinessSnapshot(CUSTOMER_ID, active, profileComplete, hasBankAccount, "VERIFIED", UUID.fromString("abababab-abab-4bab-8bab-abababababab"));
     }
 
     private UnsecuredConsumerLoanApplicationRequest request() {

@@ -1,7 +1,7 @@
 {
     "info":  {
                  "name":  "Meridian Platform API - v1 Scenario Collection",
-                 "description":  "JWT/RBAC Postman companion for the Meridian HTTP API v1 contract.\n\nRecommended run order:\n1. Optionally run Customer Registration and Email Verification. Registration generates a fresh fictional email. Copy the raw token manually from local Mailpit into emailVerificationToken before running confirmation; no token is stored in the collection.\n2. Run the Auth folder to capture role-specific Bearer tokens.\n3. Run Paper Origination CP2 and CP3 to exercise Staff-assisted UCL and Collateral intake, atomic conversion, completed-case reconciliation, and initial checklist upload; choose fictional local PDFs for paperIntakeEvidenceFile and assistedApplicationEvidenceFile.\n4. Run Public and Partner Admin requests.\n5. Run Customer Profile and Bank Accounts, then Customer Employee Verification, then Salary Advance Application.\n6. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n7. For UCL, prepare and accept the required evidence, enable uclOfferScenarioEnabled, then run the UCL verification-through-offer requests in order. Separate prepared fixture variables enable FAILED, REQUIRES_MORE_INFORMATION, correction/re-verification, cancellation, and outstanding-debt examples.\n8. For Collateral Loan, originate the application, use the returned ownership checklist item with the common upload/review/completion requests, enable collateralVerificationScenarioEnabled, then run the lifecycle sequence through approval, exact offer and contract assertions, Customer acknowledgment, readiness, destination reveal, activation, replay, final schedule, partial repayment, history, exact settlement, and closure. Separate prepared fixture variables exercise the other Approver and offer-terminal outcomes.\n\nThe Salary Advance, UCL, and Collateral happy paths are duplicate-sensitive because the authenticated demo customer can have only one active application per product. Run them on a fresh local database, or reset test data before repeating a full happy-path flow.",
+                 "description":  "JWT/RBAC Postman companion for the Meridian HTTP API v1 contract.\n\nRecommended run order:\n1. Optionally run Customer Registration and Email Verification. Registration generates a fresh fictional email. Copy the raw token manually from local Mailpit into emailVerificationToken before running confirmation; no token is stored in the collection.\n2. Run the Auth folder to capture role-specific Bearer tokens.\n3. Run Customer Identity Verification after profile setup and before any new digital Salary Advance, UCL, or Collateral submission. For paper Customers, pause before conversion to bind and manually review the current CUSTOMER_IDENTITY intake version; an existing verified Customer reuses verification. Run Paper Origination CP2 and CP3 to exercise Staff-assisted UCL and Collateral intake, atomic conversion, completed-case reconciliation, and initial checklist upload; choose fictional local PDFs for paperIntakeEvidenceFile and assistedApplicationEvidenceFile.\n4. Run Public and Partner Admin requests.\n5. Run Customer Profile and Bank Accounts, then Customer Identity Verification (03A), then Customer Employee Verification, then Salary Advance Application. Current verified Customer identity is required before all new Salary Advance, UCL, and Collateral origination; Salary Advance also requires separate Partner Employee verification.\n6. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n7. For UCL, prepare and accept the required evidence, enable uclOfferScenarioEnabled, then run the UCL verification-through-offer requests in order. Separate prepared fixture variables enable FAILED, REQUIRES_MORE_INFORMATION, correction/re-verification, cancellation, and outstanding-debt examples.\n8. For Collateral Loan, originate the application, use the returned ownership checklist item with the common upload/review/completion requests, enable collateralVerificationScenarioEnabled, then run the lifecycle sequence through approval, exact offer and contract assertions, Customer acknowledgment, readiness, destination reveal, activation, replay, final schedule, partial repayment, history, exact settlement, and closure. Separate prepared fixture variables exercise the other Approver and offer-terminal outcomes.\n\nThe Salary Advance, UCL, and Collateral happy paths are duplicate-sensitive because the authenticated demo customer can have only one active application per product. Run them on a fresh local database, or reset test data before repeating a full happy-path flow.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "auth":  {
@@ -15,6 +15,48 @@
                             ]
              },
     "variable":  [
+{
+        "key": "customerIdentityVerificationId",
+        "value": "",
+        "type": "string",
+        "description": "Safe attempt ID captured from identity evidence submission."
+    },
+    {
+        "key": "customerIdentityVersionId",
+        "value": "",
+        "type": "string",
+        "description": "Exact immutable identity evidence version."
+    },
+    {
+        "key": "customerIdentityUploadRequestId",
+        "value": "",
+        "type": "string",
+        "description": "Safe UUID regenerated only for an explicit new upload."
+    },
+    {
+        "key": "customerIdentityDecisionRequestId",
+        "value": "",
+        "type": "string",
+        "description": "Safe UUID retained for exact decision replay; no presented identity value is stored."
+    },
+    {
+        "key": "customerIdentityEvidenceFile",
+        "value": "",
+        "type": "string",
+        "description": "Choose one fictional local PDF/JPEG/PNG for the manual identity scenario."
+    },
+    {
+        "key": "customerIdentityCaseId",
+        "value": "",
+        "type": "string",
+        "description": "Set to the exact assisted case; ownership is resolved by the server."
+    },
+    {
+        "key": "customerIdentityIntakeVersionId",
+        "value": "",
+        "type": "string",
+        "description": "Set to the current CUSTOMER_IDENTITY intake version on that exact case."
+    },
                      {
                          "key":  "baseUrl",
                          "value":  "http://localhost:8080",
@@ -927,6 +969,716 @@
                       {"key":"assistedCancellationRequestId","value":"10000000-0000-4000-8000-000000000007","type":"string"}
                  ],
     "item":  [
+{
+    "name": "03A Customer Identity Verification - Customer-level manual review",
+    "description": "Run after profile setup and before NEW Salary Advance, UCL, or Collateral origination. Each new application binds the exact current successful Customer identity verification; Salary Advance additionally retains Partner Employee, limit, and exposure controls. Manual fictional evidence only; no eKYC or document-authenticity claim. Digital upload and assisted exact-version binding are alternative sources. Rejection/replacement, wrong/stale versions and role denial use explicit prepared pending attempts. A structured 422 IDENTITY_REFERENCE_MISMATCH leaves the attempt pending and permits correction and manual retry. After any uncertain POST, GET authoritative history/detail before another command. Never save a real presented Identity Reference in variables.",
+    "item": [
+        {
+            "name": "Read own verification history",
+            "request": {
+                "method": "GET",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{customerAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/customers/me/identity-verifications",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "customers",
+                        "me",
+                        "identity-verifications"
+                    ]
+                },
+                "description": ""
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 200', () => pm.response.to.have.status(200));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Submit own Customer-level identity evidence",
+            "request": {
+                "method": "POST",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{customerAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/customers/me/identity-verifications",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "customers",
+                        "me",
+                        "identity-verifications"
+                    ]
+                },
+                "description": "Run after completing the digital Customer profile; no bank account or loan is required. Choose a fictional identity file manually. For replacement enable expectedCurrentVersionId with the latest digital version. Upload alone never verifies identity.",
+                "body": {
+                    "mode": "formdata",
+                    "formdata": [
+                        {
+                            "key": "file",
+                            "type": "file",
+                            "src": "{{customerIdentityEvidenceFile}}"
+                        },
+                        {
+                            "key": "uploadRequestId",
+                            "type": "text",
+                            "value": "{{customerIdentityUploadRequestId}}"
+                        },
+                        {
+                            "key": "expectedCurrentVersionId",
+                            "type": "text",
+                            "value": "{{customerIdentityVersionId}}",
+                            "disabled": true
+                        }
+                    ]
+                }
+            },
+            "event": [
+                {
+                    "listen": "prerequest",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.collectionVariables.set('customerIdentityUploadRequestId', pm.variables.replaceIn('{{$guid}}'));"
+                        ]
+                    }
+                },
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 201', () => pm.response.to.have.status(201));",
+                            "const v = pm.response.json();",
+                            "pm.collectionVariables.set('customerIdentityVerificationId', v.verificationId);",
+                            "pm.collectionVariables.set('customerIdentityVersionId', v.evidence.versionId);",
+                            "pm.test('Upload is pending, not verified', () => pm.expect(v.status).to.eql('PENDING_REVIEW'));",
+                            "pm.test('Safe identity projection', () => ['customerId','identityReference','fingerprint','ciphertext','storageKey','sha256Hex','email','phoneNumber'].forEach(k => pm.expect(v).not.to.have.property(k)));",
+                            "pm.collectionVariables.set('customerIdentityDecisionRequestId', pm.variables.replaceIn('{{$guid}}'));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Read pending verification queue",
+            "request": {
+                "method": "GET",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{loanOfficerAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/staff/customer-identity-verifications",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "staff",
+                        "customer-identity-verifications"
+                    ]
+                },
+                "description": ""
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 200', () => pm.response.to.have.status(200));",
+                            "pm.test('Queue is minimized', () => pm.response.json().forEach(v => { pm.expect(v.evidence).to.eql(null); ['customerId','identityReference','email','phoneNumber'].forEach(k => pm.expect(v).not.to.have.property(k)); }));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Read exact verification detail",
+            "request": {
+                "method": "GET",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{loanOfficerAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/staff/customer-identity-verifications/{{customerIdentityVerificationId}}",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "staff",
+                        "customer-identity-verifications",
+                        "{{customerIdentityVerificationId}}"
+                    ]
+                },
+                "description": ""
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 200', () => pm.response.to.have.status(200));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Read exact identity evidence",
+            "request": {
+                "method": "GET",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{loanOfficerAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/staff/customer-identity-verifications/{{customerIdentityVerificationId}}/content",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "staff",
+                        "customer-identity-verifications",
+                        "{{customerIdentityVerificationId}}",
+                        "content"
+                    ]
+                },
+                "description": ""
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 200', () => pm.response.to.have.status(200));",
+                            "pm.test('Private attachment content', () => { pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store'); pm.expect(pm.response.headers.get('Content-Disposition')).to.include('attachment'); pm.expect(pm.response.headers.get('X-Content-Type-Options')).to.eql('nosniff'); });"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Mismatch does not complete verification",
+            "request": {
+                "method": "POST",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{loanOfficerAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/staff/customer-identity-verifications/{{customerIdentityVerificationId}}/verify",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "staff",
+                        "customer-identity-verifications",
+                        "{{customerIdentityVerificationId}}",
+                        "verify"
+                    ]
+                },
+                "description": "",
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"requestId\": \"{{customerIdentityDecisionRequestId}}\",\n  \"documentVersionId\": \"{{customerIdentityVersionId}}\",\n  \"presentedIdentityReference\": \"WRONG-FICTIONAL-REFERENCE\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 422', () => pm.response.to.have.status(422));",
+                            "pm.test('Mismatch contract', () => pm.expect(pm.response.json().errorCode).to.eql('IDENTITY_REFERENCE_MISMATCH'));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Verify with transient presented reference",
+            "request": {
+                "method": "POST",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{loanOfficerAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/staff/customer-identity-verifications/{{customerIdentityVerificationId}}/verify",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "staff",
+                        "customer-identity-verifications",
+                        "{{customerIdentityVerificationId}}",
+                        "verify"
+                    ]
+                },
+                "description": "Manually type the reference visible on the fictional exact document into this body. Do not create a raw-reference collection/environment variable, persist response data, or use real identity data. The backend compares protected fingerprints and stores no presented value.",
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"requestId\": \"{{customerIdentityDecisionRequestId}}\",\n  \"documentVersionId\": \"{{customerIdentityVersionId}}\",\n  \"presentedIdentityReference\": \"REPLACE_WITH_FICTIONAL_DOCUMENT_REFERENCE\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 200', () => pm.response.to.have.status(200));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Exact verified decision replay",
+            "request": {
+                "method": "POST",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{loanOfficerAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/staff/customer-identity-verifications/{{customerIdentityVerificationId}}/verify",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "staff",
+                        "customer-identity-verifications",
+                        "{{customerIdentityVerificationId}}",
+                        "verify"
+                    ]
+                },
+                "description": "Use the same safe request ID, actor, version and transient logical confirmation as the successful VERIFY. Do not regenerate the ID.",
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"requestId\": \"{{customerIdentityDecisionRequestId}}\",\n  \"documentVersionId\": \"{{customerIdentityVersionId}}\",\n  \"presentedIdentityReference\": \"REPLACE_WITH_FICTIONAL_DOCUMENT_REFERENCE\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 200', () => pm.response.to.have.status(200));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Reject pending evidence with controlled reason",
+            "request": {
+                "method": "POST",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{loanOfficerAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/staff/customer-identity-verifications/{{customerIdentityVerificationId}}/reject",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "staff",
+                        "customer-identity-verifications",
+                        "{{customerIdentityVerificationId}}",
+                        "reject"
+                    ]
+                },
+                "description": "Alternative scenario: use another pending attempt. A terminal verified attempt must reject this conflicting decision with 409.",
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"requestId\": \"{{$guid}}\",\n  \"documentVersionId\": \"{{customerIdentityVersionId}}\",\n  \"rejectionReason\": \"UNREADABLE_EVIDENCE\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 200', () => pm.response.to.have.status(200));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Bind existing assisted identity version without copying bytes",
+            "request": {
+                "method": "POST",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{loanOfficerAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/staff/assisted-originations/{{customerIdentityCaseId}}/identity-verifications",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "staff",
+                        "assisted-originations",
+                        "{{customerIdentityCaseId}}",
+                        "identity-verifications"
+                    ]
+                },
+                "description": "For either UCL or Collateral, set the exact case and its current CUSTOMER_IDENTITY version; then review via detail/content/VERIFY before conversion. An already verified Customer needs no new identity file.",
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"documentVersionId\": \"{{customerIdentityIntakeVersionId}}\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 201', () => pm.response.to.have.status(201));",
+                            "const v = pm.response.json();",
+                            "pm.collectionVariables.set('customerIdentityVerificationId', v.verificationId);",
+                            "pm.collectionVariables.set('customerIdentityVersionId', v.evidence.versionId);",
+                            "pm.test('Upload is pending, not verified', () => pm.expect(v.status).to.eql('PENDING_REVIEW'));",
+                            "pm.test('Safe identity projection', () => ['customerId','identityReference','fingerprint','ciphertext','storageKey','sha256Hex','email','phoneNumber'].forEach(k => pm.expect(v).not.to.have.property(k)));",
+                            "pm.collectionVariables.set('customerIdentityDecisionRequestId', pm.variables.replaceIn('{{$guid}}'));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Approver is denied identity queue",
+            "request": {
+                "method": "GET",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{approverAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/staff/customer-identity-verifications",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "staff",
+                        "customer-identity-verifications"
+                    ]
+                },
+                "description": ""
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 403', () => pm.response.to.have.status(403));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Accounting is denied identity queue",
+            "request": {
+                "method": "GET",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{accountingOfficerAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/staff/customer-identity-verifications",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "staff",
+                        "customer-identity-verifications"
+                    ]
+                },
+                "description": ""
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 403', () => pm.response.to.have.status(403));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Back Office is denied identity queue",
+            "request": {
+                "method": "GET",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{backOfficeAdminAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/staff/customer-identity-verifications",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "staff",
+                        "customer-identity-verifications"
+                    ]
+                },
+                "description": ""
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 403', () => pm.response.to.have.status(403));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Customer is denied Staff identity queue",
+            "request": {
+                "method": "GET",
+                "auth": {
+                    "type": "bearer",
+                    "bearer": [
+                        {
+                            "key": "token",
+                            "value": "{{customerAccessToken}}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "header": [],
+                "url": {
+                    "raw": "{{baseUrl}}/api/v1/staff/customer-identity-verifications",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "staff",
+                        "customer-identity-verifications"
+                    ]
+                },
+                "description": ""
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('Expected HTTP 403', () => pm.response.to.have.status(403));"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+},
         {
             "name": "00 Final Phase 3 Document and Correction Provenance Reads",
             "description": "Prepare existing fictional Loan Application/checklist and signed-action fixture variables, then run these read-only scenarios after recording/replacement. See MER-API-001 Sections 5.6 and 5.7 for purpose-specific authorization. They do not create or mutate test applications.",

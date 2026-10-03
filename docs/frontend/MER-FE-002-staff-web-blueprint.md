@@ -154,7 +154,7 @@ The same backend value must use the same label within Internal Web unless a clea
 
 | Actor | Current operational responsibility | Representative executable permissions |
 |---|---|---|
-| Loan Officer | Staff-assisted intake and initial checklist upload, Staff-mediated Customer correction completion/resubmission, evidenced Customer offer-response and Staff-assisted UCL cancellation recording, UCL and Collateral verification, LoanApplication review, recommendation, document review, and authorized correction initiation | `loan:originate:staff`, `document:upload:assisted`, `document:upload:assisted-correction`, `document:upload:assisted-action`, `loan:offer:respond:staff`, `loan:cancel:staff`, `loan:read`, `loan:review`, `approval:recommend`, `document:review`, `loan:correction:staff`; waiver additionally requires `document:waive` |
+| Loan Officer | Staff-assisted intake and initial checklist upload, Staff-mediated Customer correction completion/resubmission, evidenced Customer offer-response and Staff-assisted UCL cancellation recording, UCL and Collateral verification, LoanApplication review, recommendation, document review, and authorized correction initiation | `customer:identity:verify`, `loan:originate:staff`, `document:upload:assisted`, `document:upload:assisted-correction`, `document:upload:assisted-action`, `loan:offer:respond:staff`, `loan:cancel:staff`, `loan:read`, `loan:review`, `approval:recommend`, `document:review`, `loan:correction:staff`; waiver additionally requires `document:waive` |
 | Approver | Independent decision and payment-backed Administrative Full-Balance Settlement | `loan:read`, `approval:decide`, `document:read`, `audit:read`, `loan:settlement:approve`; settlement also requires the Approver role |
 | Accounting Officer | Contract preparation/readiness, evidenced Customer contract-acknowledgment recording, destination reveal, manual disbursement, repayment, and administrative closure | `loan:read`, `loan:contract:prepare`, `loan:contract:read`, `loan:contract:acknowledge:staff`, `document:upload:assisted-action`, `loan:disbursement:prepare`, `loan:disburse`, `repayment:update`, `loan:account:close`; acknowledgment and closure also require the Accounting Officer role |
 | Back-Office Admin | Back-Office Administration outside this blueprint; currently also holds the narrow Staff document-upload permission | `loan:product:manage`, `partner:read`, `partner:manage`, `identity:user:manage`, `admin:config`, `audit:read`, `document:upload:staff` |
@@ -253,6 +253,18 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 The conversion has no client-generated business request identity. After a network or 5xx result, Staff Web performs only the case GET. `COMPLETED` with a linked application proves the outcome. `OPEN` does not prove failure and requires an explicit operator confirmation before any new POST; the client never automatically repeats the conversion.
 
 The linked document workspace exposes initial upload only when the application channel is `STAFF_ASSISTED`, the status is `DOCUMENTS_PENDING`, and the actor has `document:upload:assisted`. UCL uses its ordinary income, bank-statement, and employment checklist; Collateral uses `COLLATERAL_OWNERSHIP_EVIDENCE`. The browser retains an unresolved upload request UUID and the displayed predecessor baseline, but no filename, bytes, or digest derived from file contents in persistent storage. An exact replay requires the operator to reselect the same file and the semantic baseline to remain unchanged; a changed file or current version requires a new operation. Success always refetches the authoritative checklist. Final required upload continues to trigger the established checklist-completion transition and pending-verification behavior.
+
+---
+
+### 7.5 Customer Identity Verification
+
+The `/staff/customer-identity-verifications` queue and `/:verificationId` detail routes, navigation, queries, content viewer, and Verify/Reject commands require exact `customer:identity:verify`. The permission is seeded only to Loan Officer. Approver, Accounting, Back-Office, generic `loan:read`, generic `document:review`, and `customer:read` do not grant this workspace.
+
+The paged queue shows verification reference, Customer number, submitted full name, evidence source, submission time, and state. Detail shows exact safe evidence metadata and the protected immutable-file viewer. It introduces no generic Customer directory, raw stored Identity Reference, phone, email, address, bank information, storage metadata, or verification internals.
+
+VERIFY requires the reviewer to attest the document/name and re-enter its presented Identity Reference. This input remains local transient form state, goes directly to the protected command body, and clears before and after success/error, refresh, resource change, logout, and actor/session change. It never enters React Query mutation/query data, URL state, browser persistence, operation envelopes, logs, or analytics. REJECT uses the controlled reason vocabulary. A structured deterministic 4xx rejection displays safe local guidance and refreshes detail without entering uncertain-result state. `422 IDENTITY_REFERENCE_MISMATCH` shows a clear mismatch alert, leaves the attempt pending, clears the typed reference, and permits immediate manual retry after the automatic GET. Invalid-input errors permit correction; stale or already-completed errors reconcile the current evidence/outcome before presenting its available controls. Network failures, 5xx, timeout responses, and unrecognized response shapes retain uncertain-result protection until an authoritative GET refresh. No POST is automatically replayed.
+
+Assisted intake displays selected-Customer verification readiness. An unverified Customer with current `CUSTOMER_IDENTITY` evidence can enter the dedicated review flow by binding that exact intake version; the backend resolves ownership from the case. An already verified Customer reuses verification without another identity file for the next loan. Successful decisions refresh identity queues/detail and Staff origination Customer context. The exact endpoint contract is [MER-API-001 Section 3.20](../api/MER-API-001-endpoints-and-postman-scenarios.md#320-customer-identity-verification).
 
 ---
 
@@ -668,7 +680,7 @@ Where a required read contract does not exist, the command checkpoint remains bl
 
 Staff Web must not expose or log raw:
 
-- salary, identity references, employee codes, or protected verification evidence;
+- salary, stored identity references, employee codes, or protected verification evidence; the presented reference entered for manual identity confirmation is transient under Section 7.5;
 - bank-account numbers except in the explicit destination-reveal surface;
 - document binary content, raw OCR text, normalized OCR layout, or provider response content; allowlisted OCR suggestions use the zero-retention assisted-intake review projection, and explicitly applied reviewed values remain only in route-local existing form inputs until an owning command is invoked;
 - correction contents or internal reviewer notes outside the authorized workspace;

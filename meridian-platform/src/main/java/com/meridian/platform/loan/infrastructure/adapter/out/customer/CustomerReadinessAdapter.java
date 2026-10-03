@@ -18,6 +18,13 @@ public class CustomerReadinessAdapter implements CustomerReadinessPort {
     }
 
     @Override
+    public Optional<CustomerReadinessSnapshot> findOriginationReadinessForUpdate(UUID customerId) {
+        return queryCustomerReadinessUseCase.findOriginationReadinessForUpdate(customerId)
+                .map(s -> new CustomerReadinessSnapshot(s.customerId(), s.active(), s.profileComplete(),
+                        s.hasPrimaryActiveBankAccount(), s.verificationStatus(), s.identityVerificationId()));
+    }
+
+    @Override
     public Optional<CustomerReadinessSnapshot> findReadinessByCustomerId(UUID customerId) {
         return queryCustomerReadinessUseCase.findReadinessByCustomerId(customerId)
                 .map(snapshot -> new CustomerReadinessSnapshot(
@@ -25,7 +32,7 @@ public class CustomerReadinessAdapter implements CustomerReadinessPort {
                         snapshot.active(),
                         snapshot.profileComplete(),
                         snapshot.hasPrimaryActiveBankAccount(),
-                        snapshot.verificationStatus()
+                        snapshot.verificationStatus(), snapshot.identityVerificationId()
                 ));
     }
 }

@@ -4,6 +4,10 @@ import java.util.Arrays;
 
 public enum BusinessAuditPayloadKey {
     CUSTOMER_ID("customerId", ValueType.UUID),
+    IDENTITY_VERIFICATION_ID("identityVerificationId", ValueType.UUID),
+    IDENTITY_EVIDENCE_SOURCE("identityEvidenceSource", ValueType.CODE),
+    IDENTITY_VERIFICATION_STATUS("identityVerificationStatus", ValueType.CODE),
+    IDENTITY_REJECTION_REASON("identityRejectionReason", ValueType.CODE),
     PROFILE_COMPLETION_STATUS("profileCompletionStatus", ValueType.CODE),
     CUSTOMER_BANK_ACCOUNT_ID("customerBankAccountId", ValueType.UUID),
     PREVIOUS_PRIMARY_BANK_ACCOUNT_ID("previousPrimaryBankAccountId", ValueType.UUID),

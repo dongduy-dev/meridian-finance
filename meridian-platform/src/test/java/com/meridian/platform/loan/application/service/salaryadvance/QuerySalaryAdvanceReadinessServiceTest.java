@@ -28,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -47,6 +48,7 @@ class QuerySalaryAdvanceReadinessServiceTest {
 
     private static final UUID CUSTOMER_ID = UUID.fromString("99999999-9999-9999-9999-999999999999");
     private static final UUID LINK_ID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
+    private static final UUID IDENTITY_VERIFICATION_ID = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
     private static final LocalDateTime REFRESHED_AT = LocalDateTime.of(2026, 8, 10, 8, 0);
 
     @Mock CustomerReadinessPort customers;
@@ -72,7 +74,7 @@ class QuerySalaryAdvanceReadinessServiceTest {
         );
         lenient().when(currentUserProvider.currentUser()).thenReturn(customer(Set.of("loan:submit")));
         lenient().when(customers.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
-                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED")
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED", IDENTITY_VERIFICATION_ID)
         ));
         lenient().when(products.findByProductCode(ProductCode.SALARY_ADVANCE)).thenReturn(Optional.of(product()));
         lenient().when(partners.inspectCurrentEmployeeLink(CUSTOMER_ID)).thenReturn(
@@ -83,6 +85,21 @@ class QuerySalaryAdvanceReadinessServiceTest {
         )).thenReturn(false);
         lenient().when(outstanding.inspect(CUSTOMER_ID, ProductCode.SALARY_ADVANCE))
                 .thenReturn(OutstandingLoanAccountQuery.GuardResult.CLEAR);
+    }
+
+    @Test
+    void unevidencedCustomerIdentityBlocksSeparatelyFromPartnerEligibility() {
+        for (var customer : List.of(
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "UNVERIFIED", null),
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "REJECTED", IDENTITY_VERIFICATION_ID),
+                new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED", null))) {
+            when(customers.findReadinessByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(customer));
+            SalaryAdvanceReadinessDto result = service.queryReadiness();
+            assertFalse(result.applicationAllowed());
+            assertEquals(List.of("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED"), result.blockerCodes());
+            assertEquals("ELIGIBLE", result.partnerEligibilityStatus());
+            verify(limits, never()).save(any());
+        }
     }
 
     @Test

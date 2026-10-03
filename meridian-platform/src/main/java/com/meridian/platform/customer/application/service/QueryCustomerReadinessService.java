@@ -17,9 +17,12 @@ import java.util.UUID;
 public class QueryCustomerReadinessService implements QueryCustomerReadinessUseCase {
 
     private final CustomerRepository customerRepository;
+    private final com.meridian.platform.customer.application.port.out.CustomerIdentityVerificationRepository verifications;
 
-    public QueryCustomerReadinessService(CustomerRepository customerRepository) {
+    public QueryCustomerReadinessService(CustomerRepository customerRepository,
+            com.meridian.platform.customer.application.port.out.CustomerIdentityVerificationRepository verifications) {
         this.customerRepository = customerRepository;
+        this.verifications = verifications;
     }
 
     @Override
@@ -30,13 +33,25 @@ public class QueryCustomerReadinessService implements QueryCustomerReadinessUseC
                 .map(this::toReadinessSnapshot);
     }
 
+    @Override
+    @Transactional
+    public Optional<CustomerReadinessSnapshot> findOriginationReadinessForUpdate(UUID customerId) {
+        return customerRepository.findByIdForUpdate(customerId).map(this::toReadinessSnapshot);
+    }
+
     private CustomerReadinessSnapshot toReadinessSnapshot(Customer customer) {
         return new CustomerReadinessSnapshot(
                 customer.id(),
                 customer.isActive(),
                 customer.profileCompletionStatus() == ProfileCompletionStatus.COMPLETE,
                 customer.bankAccounts().stream().anyMatch(CustomerBankAccount::isPrimaryActive),
-                customer.verificationStatus().name()
+                customer.verificationStatus().name(),
+                customer.verificationStatus() == com.meridian.platform.customer.domain.model.VerificationStatus.VERIFIED
+                        ? verifications.findByCustomer(customer.id()).stream().findFirst()
+                            .filter(v -> v.status() == com.meridian.platform.customer.domain.model.CustomerIdentityVerification.Status.VERIFIED
+                                    && customer.profile() != null && v.identityFullName().equals(customer.profile().fullName()))
+                            .map(com.meridian.platform.customer.domain.model.CustomerIdentityVerification::id).orElse(null)
+                        : null
         );
     }
 }

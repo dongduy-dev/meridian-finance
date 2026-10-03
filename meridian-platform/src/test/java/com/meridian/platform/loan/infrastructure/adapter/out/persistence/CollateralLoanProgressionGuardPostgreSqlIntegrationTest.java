@@ -528,6 +528,8 @@ class CollateralLoanProgressionGuardPostgreSqlIntegrationTest {
                         + "VALUES (?, ?, ?, 'test-password-hash', 'CUSTOMER', 'ACTIVE', "
                         + "'Collateral Guard Customer', ?)",
                 userId, "guard-" + suffix + "@meridian.test", "guard-" + suffix + "@meridian.test", customerId);
+        com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbcTemplate, customerId);
+
     }
 
     private int count(String sql, Object... arguments) {

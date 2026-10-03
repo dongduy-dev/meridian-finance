@@ -7,6 +7,11 @@ public record CustomerReadinessSnapshot(
         boolean active,
         boolean profileComplete,
         boolean hasPrimaryActiveBankAccount,
-        String verificationStatus
+        String verificationStatus,
+        UUID identityVerificationId
 ) {
+    public CustomerReadinessSnapshot(UUID customerId, boolean active, boolean profileComplete,
+            boolean hasPrimaryActiveBankAccount, String verificationStatus) {
+        this(customerId, active, profileComplete, hasPrimaryActiveBankAccount, verificationStatus, null);
+    }
 }
