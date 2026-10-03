@@ -52,6 +52,7 @@ export const staffLoanApplicationCaseSchema = staffLoanApplicationItemSchema.ext
     customerNumber: z.string().trim().min(1),
     fullName: z.string().trim().min(1).nullable(),
     phoneNumber: z.string().trim().min(1).nullable(),
+    maskedIdentityReference: z.string().regex(/^\*{4}[^\p{Cc}]{1,4}$/u).nullable(),
   }).nullable(),
   collateralContext: z.object({
     collateralType: rawEnumValueSchema,
@@ -81,3 +82,11 @@ export const staffLoanApplicationCaseSchema = staffLoanApplicationItemSchema.ext
 export type StaffLoanApplicationItem = z.infer<typeof staffLoanApplicationItemSchema>
 export type StaffLoanApplicationPage = z.infer<typeof staffLoanApplicationPageSchema>
 export type StaffLoanApplicationCase = z.infer<typeof staffLoanApplicationCaseSchema>
+
+export const customerIdentityReferenceRevealSchema = z.object({
+  loanApplicationId: uuidSchema,
+  identityReference: z.string().min(1).max(100).refine(
+    (value) => value.trim().length > 0 && !/\p{Cc}/u.test(value),
+    'Invalid protected reveal response',
+  ),
+}).strict()

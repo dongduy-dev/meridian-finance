@@ -121,7 +121,11 @@ export class AuthSessionManager {
     }
   }
 
-  async protectedRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  async protectedRequest<T>(
+    path: string,
+    options: ApiRequestOptions = {},
+    policy: { replayAfterSessionRefresh?: boolean } = {},
+  ): Promise<T> {
     if (!getAccessToken()) {
       try {
         await this.refresh()
@@ -141,6 +145,7 @@ export class AuthSessionManager {
       if (!(error instanceof ApiError) || error.status !== 401 || !SESSION_ERROR_CODES.has(error.errorCode)) throw error
       try {
         await this.refresh()
+        if (policy.replayAfterSessionRefresh === false) return Promise.reject(error)
         return await execute()
       } catch (retryError) {
         if (retryError instanceof ApiError && retryError.status === 401) this.clearPrivateState('SESSION_EXPIRED')

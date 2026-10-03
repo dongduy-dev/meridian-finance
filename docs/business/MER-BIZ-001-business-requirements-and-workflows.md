@@ -128,9 +128,11 @@ Customer operational identity and contact access follows the lending task:
 
 | Staff role | Operational Customer context |
 |---|---|
-| Loan Officer | Customer name, Customer number, and current phone in the authorized application case |
+| Loan Officer | Customer name, Customer number, and current phone in the authorized application case; masked Identity Reference and explicit protected reveal with dedicated authority |
 | Approver | Customer name and Customer number in the independent decision case and in LoanAccount servicing with Administrative Full-Balance Settlement authority; no phone or Identity Reference |
 | Accounting Officer | Customer name, Customer number, and current phone in contract and disbursement cases and in LoanAccount servicing with repayment or administrative-closure authority; no Identity Reference |
+
+An authorized Loan Officer may view the masked Customer Identity Reference and explicitly reveal the full stored reference when needed for the exact application case. Reveal requires dedicated authority and records a successful-access audit containing only safe Customer and application identifiers. Approver, Accounting Officer, Back-Office Admin, and Customer receive no reveal capability. Identity-verification status does not authorize or prohibit this access. The identity-verification review remains a separate evidence-confirmation workflow: its reviewer re-enters the document reference, and it does not expose the stored value.
 
 Customer owns the mutable name and phone. Operational context must come from the Customer associated with the exact LoanApplication and, for servicing, its exact LoanAccount. The phone is current contact information, not immutable contract, application, or servicing evidence. Missing or inconsistent required Customer context must block the purpose-specific read rather than present partial or inferred identity.
 
