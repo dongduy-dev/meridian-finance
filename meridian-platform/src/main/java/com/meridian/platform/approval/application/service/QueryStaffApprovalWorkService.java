@@ -120,6 +120,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
                 loanCase.loanApplicationId(), loanCase.applicationNumber(), loanCase.productCode(),
                 loanCase.productType(), loanCase.requestedAmount(), loanCase.requestedTermMonths(),
                 loanCase.applicationStatus(), loanCase.submittedAt(),
+                loanCase.originationChannel(),
                 new StaffDecisionCaseDto.CustomerDto(customer.customerNumber(), customer.fullName()),
                 evidence(loanCase, actorSummaries),
                 recommendation(recommendation, actorSummaries), makerCheckerEligible, available,

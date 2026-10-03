@@ -9,6 +9,7 @@ import com.meridian.platform.loan.application.port.out.RepaymentScheduleReposito
 import com.meridian.platform.loan.domain.model.LoanAccount;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.domain.model.LoanContract;
 import com.meridian.platform.loan.domain.model.ManualDisbursement;
 import com.meridian.platform.loan.domain.model.ProductCode;
@@ -23,6 +24,8 @@ import com.meridian.platform.shared.domain.exception.BusinessStateConflictExcept
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -130,13 +133,17 @@ class QueryStaffDisbursementWorkServiceTest {
         assertSystemConflict(() -> service.queryWork(null, 0, 25));
     }
 
-    @Test
-    void pendingCaseReturnsReadyContractWithoutActivation() {
+    @ParameterizedTest
+    @EnumSource(OriginationChannel.class)
+    void pendingCaseReturnsExactApplicationChannelAndReadyContractWithoutActivation(OriginationChannel channel) {
         stubApplicationAndContract(LoanApplicationStatus.DISBURSEMENT_PENDING, LoanContractTestData.ready());
+        when(applications.findById(APPLICATION_ID))
+                .thenReturn(Optional.of(application(LoanApplicationStatus.DISBURSEMENT_PENDING, channel)));
 
         var result = service.queryCase(APPLICATION_ID);
 
         assertEquals("READY_TO_DISBURSE", result.workStage());
+        assertEquals(channel.name(), result.originationChannel());
         assertEquals("READY_FOR_DISBURSEMENT", result.currentContract().status());
         assertEquals(1, result.currentContract().contractVersion());
         assertNull(result.activation());
@@ -168,6 +175,7 @@ class QueryStaffDisbursementWorkServiceTest {
 
         assertEquals("DISBURSED", result.applicationStatus());
         assertEquals("DISBURSED", result.workStage());
+        assertEquals("CUSTOMER_DIGITAL", result.originationChannel());
         assertEquals(evidence.account().id(), result.activation().loanAccountId());
         assertEquals("ACTIVE", result.activation().loanAccountStatus());
         assertEquals(LocalDate.of(2026, 8, 20), result.activation().firstRepaymentDate());
@@ -310,6 +318,10 @@ class QueryStaffDisbursementWorkServiceTest {
     }
 
     private static LoanApplication application(LoanApplicationStatus status) {
+        return application(status, OriginationChannel.CUSTOMER_DIGITAL);
+    }
+
+    private static LoanApplication application(LoanApplicationStatus status, OriginationChannel channel) {
         return new LoanApplication(
                 APPLICATION_ID,
                 CUSTOMER_ID,
@@ -317,6 +329,7 @@ class QueryStaffDisbursementWorkServiceTest {
                 "UCL-20260910-000001",
                 ProductCode.UNSECURED_CONSUMER_LOAN,
                 ProductType.UNSECURED,
+                channel,
                 status,
                 new BigDecimal("1000.00"),
                 1,

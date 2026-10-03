@@ -63,6 +63,7 @@ class StaffDisbursementWorkControllerTest {
                 ))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.applicationStatus").value("DISBURSED"))
+                .andExpect(jsonPath("$.originationChannel").value("STAFF_ASSISTED"))
                 .andExpect(jsonPath("$.workStage").value("DISBURSED"))
                 .andExpect(jsonPath("$.activation.loanAccountId").value(ACCOUNT_ID.toString()))
                 .andExpect(jsonPath("$.activation.scheduleType").value("FINAL"))
@@ -119,6 +120,7 @@ class StaffDisbursementWorkControllerTest {
                     1,
                     "DISBURSED",
                     LocalDateTime.of(2026, 9, 10, 8, 0),
+                    "STAFF_ASSISTED",
                     contract(),
                     activation(),
                     "DISBURSED",

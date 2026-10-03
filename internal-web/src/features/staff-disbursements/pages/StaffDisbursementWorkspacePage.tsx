@@ -418,7 +418,7 @@ export function StaffDisbursementWorkspacePage() {
       loanApplicationId: data.loanApplicationId, applicationNumber: data.applicationNumber,
       applicationStatus: data.applicationStatus, productCode: data.productCode,
       requestedAmount: data.requestedAmount, requestedTermMonths: data.requestedTermMonths,
-      submittedAt: data.submittedAt,
+      submittedAt: data.submittedAt, originationChannel: data.originationChannel,
     } }}
     updatedAt={query.dataUpdatedAt} refreshing={query.isFetching} stale={query.isStale}
     onRefresh={() => void refreshOnly()}

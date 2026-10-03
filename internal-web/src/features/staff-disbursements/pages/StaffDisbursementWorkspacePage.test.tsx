@@ -115,8 +115,11 @@ describe('Staff disbursement workspace', () => {
     expect(screen.getAllByText('Mina Accounting').length).toBeGreaterThan(0)
   })
 
-  it('renders shared application identity and specialized masked disbursement evidence without revealing on load', async () => {
-    vi.mocked(api.apiRequest).mockResolvedValue(pendingCase())
+  it.each([
+    { channel: 'CUSTOMER_DIGITAL', label: 'Customer digital' },
+    { channel: 'STAFF_ASSISTED', label: 'Staff assisted' },
+  ])('renders $channel in the shared header and masked disbursement evidence without revealing on load', async ({ channel, label }) => {
+    vi.mocked(api.apiRequest).mockResolvedValue(pendingCase({ originationChannel: channel }))
     renderPage()
 
     const applicationHeading = await screen.findByRole('heading', { name: 'UCL-20260910-000001', level: 1 })
@@ -132,7 +135,7 @@ describe('Staff disbursement workspace', () => {
     expect(header.getByText('Requested amount').nextElementSibling?.textContent).toBe(formatVnd(facts.requestedAmount))
     expect(header.getByText('Requested term').nextElementSibling).toHaveTextContent('2 months')
     expect(header.getByText('Submitted').nextElementSibling).toHaveTextContent(formatTimestamp(facts.submittedAt))
-    expect(header.queryByText('Origination channel')).not.toBeInTheDocument()
+    expect(header.getByText('Origination channel').nextElementSibling).toHaveTextContent(label)
     expect(header.queryByText('Contract')).not.toBeInTheDocument()
     const disbursementHeading = screen.getByRole('heading', { name: 'Disbursement and activation', level: 2 })
     const workspace = within(disbursementHeading.parentElement!.parentElement!)

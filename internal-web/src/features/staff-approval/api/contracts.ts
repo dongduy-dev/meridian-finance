@@ -37,6 +37,7 @@ export const staffDecisionCaseSchema = z.object({
   requestedTermMonths: z.number().int().positive(),
   applicationStatus: rawValue,
   submittedAt: apiTimestampSchema,
+  originationChannel: rawValue,
   customer: z.object({
     customerNumber: z.string().trim().min(1),
     fullName: z.string().trim().min(1),

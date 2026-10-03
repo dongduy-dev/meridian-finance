@@ -21,6 +21,8 @@ import com.meridian.platform.shared.domain.exception.BusinessStateConflictExcept
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -139,15 +141,16 @@ class QueryStaffApprovalWorkServiceTest {
         assertEquals("RECOMMEND_APPROVAL", result.recommendation().action());
     }
 
-    @Test
-    void decisionReadExposesPurposeLimitedActorProvenanceAndReturnsHistory() {
+    @ParameterizedTest
+    @ValueSource(strings = {"CUSTOMER_DIGITAL", "STAFF_ASSISTED"})
+    void decisionReadExposesExactChannelPurposeLimitedActorProvenanceAndHistory(String channel) {
         ReviewRecommendation recommendation = recommendation();
         ApprovalDecision decision = ApprovalDecision.recorded(
                 UUID.randomUUID(), APPLICATION_ID, RECOMMENDATION_ID, APPROVER_ID,
                 ApprovalDecisionAction.APPROVE, null, null, "restricted", NOW
         );
         when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:decide")));
-        when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("CUSTOMER_ACCEPTANCE_PENDING")));
+        when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(caseSnapshot("CUSTOMER_ACCEPTANCE_PENDING", channel)));
         when(recommendations.findLatestByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.of(recommendation));
         when(decisions.findByLoanApplicationIdOrderByDecidedAtDesc(APPLICATION_ID)).thenReturn(List.of(decision));
         when(decisions.findByReviewRecommendationId(RECOMMENDATION_ID)).thenReturn(Optional.of(decision));
@@ -160,6 +163,7 @@ class QueryStaffApprovalWorkServiceTest {
 
         assertEquals("CUS-001", result.customer().customerNumber());
         assertEquals("Ari Customer", result.customer().fullName());
+        assertEquals(channel, result.originationChannel());
         verify(customers).findByCustomerId(CUSTOMER_ID);
         assertTrue(result.makerCheckerEligible());
         assertFalse(result.decisionAvailable());
@@ -340,9 +344,13 @@ class QueryStaffApprovalWorkServiceTest {
     }
 
     private static ApprovalLoanCasePort.CaseSnapshot caseSnapshot(String status) {
+        return caseSnapshot(status, "CUSTOMER_DIGITAL");
+    }
+
+    private static ApprovalLoanCasePort.CaseSnapshot caseSnapshot(String status, String channel) {
         return new ApprovalLoanCasePort.CaseSnapshot(
                 APPLICATION_ID, CUSTOMER_ID, "UCL-1", "UNSECURED_CONSUMER_LOAN", "PERSONAL",
-                BigDecimal.TEN, 6, status, NOW.minusHours(2),
+                BigDecimal.TEN, 6, status, NOW.minusHours(2), channel,
                 new ApprovalLoanCasePort.DocumentReadinessSnapshot(true, true),
                 new ApprovalLoanCasePort.ProductReadinessSnapshot("VERIFIED", true),
                 new ApprovalLoanCasePort.ReviewCycleSnapshot(

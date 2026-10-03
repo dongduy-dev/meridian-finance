@@ -967,6 +967,8 @@ Customer contact appears only for an actor with both `loan:read` and `customer:r
 
 Application-owned Staff routes must retain one consistent application identity and section-navigation hierarchy. For the same actor with Staff application-case read authority, Overview, History, Verification, Review, Documents, and Corrections retain the same essential case context: business application number, current status, product name, requested amount, requested term, submitted time, origination channel, and subordinate Application ID copy control. Summary facts appear in amount, term, submitted time, and origination-channel order; Product type is not part of the persistent header. Feature routes own their queries, permissions, commands, and specialized body layouts, but must not present the same LoanApplication as unrelated workspaces.
 
+Independent Decision, Contract, and Disbursement use the same shared Application Case header with the safe application facts supplied by their own authorized case projections, including origination channel. The shared header presents these facts without requiring supplemental `loan:read` or changing feature-specific Customer visibility.
+
 The business application number is the primary visible identity when the authorized projection provides it. Technical IDs remain subordinate and appear only for evidence matching, support, or another operational task. Section navigation is capability-aware and must not query or expose unauthorized feature data. Feature pages may supplement missing safe header facts through the existing Staff application-case read only when the actor has its exact authority. Reduced headers reflect authorized fact availability, not route-specific presentation choices. Supplemental pending or failed reads must not prevent authorized feature evidence or actions from remaining available; failed enrichment falls back to the feature-owned facts, and stale context is identified. Visual consistency does not authorize broader reads, merging purpose-limited backend projections, or inference of missing facts.
 
 ### 22.2 Workspace Sections
@@ -1093,6 +1095,8 @@ Supported actions remain distinct:
 - `RETURN_TO_LOAN_OFFICER_REVIEW`;
 - `REQUEST_CUSTOMER_OR_STAFF_CORRECTION`.
 
+The decision page passes the decision projection's requested amount, requested term, submitted time, and origination channel to the shared header defined in Section 22.1. It does not infer the channel or render a separate local application header.
+
 The decision page presents a Customer card with name and Customer number from the decision projection, under exact `approval:decide` access. It does not fetch a separate Customer profile or show phone, Identity Reference, Customer UUID, or Customer login identity. MER-BIZ-001 Section 4.3 defines the role visibility boundary; MER-API-001 Section 5.0 defines the response contract.
 
 The decision page places the shared Product Assessment panel before the exact latest recommendation and linked Review / Decision history, followed by independent decision controls. It must show the exact latest recommendation, its purpose-limited recommending Staff actor, the assigned Loan Officer, product verification state, review cycle, documents/readiness, recorded decision actors, and any action-specific correction plan. System actors are labeled System; unavailable legacy Staff actors are labeled unavailable without guessing. It must not rely on the transient recommendation response from another browser session.
@@ -1189,6 +1193,8 @@ The browser does not reimplement document, Customer, reservation, product-verifi
 ### 25.3 Disbursement
 
 Disbursement is manual confirmation of an external transfer, not transfer initiation.
+
+The disbursement case projection supplies requested amount, requested term, submitted time, and origination channel to the shared header defined in Section 22.1, retaining its subordinate Application ID and copy control. The specialized Disbursement and activation section remains below that header.
 
 The dedicated page contains:
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { staffDecisionCaseSchema } from './contracts'
 
 describe('Staff approval response contracts', () => {
-  it('accepts seeded Identity Staff actors without loosening generated recommendation IDs', () => {
+  it.each(['CUSTOMER_DIGITAL', 'STAFF_ASSISTED'])('accepts exact %s channel and seeded actors without loosening recommendation IDs', (channel) => {
     const actor = {
       userId: '00000000-0000-0000-0000-000000000303',
       displayName: 'Approver Demo', email: 'approver@meridian.local',
@@ -18,6 +18,7 @@ describe('Staff approval response contracts', () => {
       productCode: 'UNSECURED_CONSUMER_LOAN', productType: 'UNSECURED',
       requestedAmount: 1, requestedTermMonths: 1, applicationStatus: 'APPROVED',
       submittedAt: '2026-09-06T08:00:00',
+      originationChannel: channel,
       customer: { customerNumber: 'CUS-000001', fullName: 'Ari Customer' },
       evidence: { uploadComplete: true, processingReady: true, productVerificationResult: 'VERIFIED',
         readyForDecision: true, currentReviewCycle: null },
@@ -33,6 +34,9 @@ describe('Staff approval response contracts', () => {
     }
 
     expect(staffDecisionCaseSchema.parse(response).latestDecision?.recordedBy?.userId).toBe(actor.userId)
+    expect(staffDecisionCaseSchema.parse(response).originationChannel).toBe(channel)
+    expect(staffDecisionCaseSchema.safeParse({ ...response, originationChannel: undefined }).success).toBe(false)
+    expect(staffDecisionCaseSchema.safeParse({ ...response, originationChannel: ' ' }).success).toBe(false)
     expect(staffDecisionCaseSchema.parse({ ...response, customer: {
       ...response.customer, phoneNumber: '0901234567', customerId: actor.userId,
       identityReference: 'SYNTHETIC-IDENTITY', email: 'customer@meridian.local',
@@ -51,6 +55,7 @@ describe('Staff approval response contracts', () => {
       loanApplicationId: '11111111-1111-4111-8111-111111111111', applicationNumber: 'UCL-1',
       productCode: 'FUTURE_PRODUCT', productType: 'FUTURE_TYPE', requestedAmount: 1, requestedTermMonths: 1,
       applicationStatus: 'FUTURE_STATE', submittedAt: '2026-09-06T08:00:00',
+      originationChannel: 'FUTURE_CHANNEL',
       customer: { customerNumber: 'CUS-000001', fullName: 'Ari Customer' },
       evidence: { uploadComplete: true, processingReady: true, productVerificationResult: 'FUTURE_RESULT',
         readyForDecision: false, currentReviewCycle: null },

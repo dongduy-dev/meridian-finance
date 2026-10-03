@@ -126,6 +126,7 @@ public class QueryStaffDisbursementWorkService implements QueryStaffDisbursement
                 application.requestedTermMonths(),
                 application.status().name(),
                 application.submittedAt(),
+                application.originationChannel().name(),
                 contractMapper.toDto(contract),
                 completed == null ? null : completed.activation(),
                 stage.name(),

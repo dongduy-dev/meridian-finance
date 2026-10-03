@@ -87,6 +87,7 @@ public class ApprovalLoanCaseAdapter implements ApprovalLoanCasePort {
                 application.requestedTermMonths(),
                 application.status().name(),
                 application.submittedAt(),
+                application.originationChannel().name(),
                 new DocumentReadinessSnapshot(
                         documentReadiness.uploadComplete(),
                         documentReadiness.processingReady()

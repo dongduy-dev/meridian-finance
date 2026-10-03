@@ -14,6 +14,7 @@ public record StaffDecisionCaseDto(
         int requestedTermMonths,
         String applicationStatus,
         LocalDateTime submittedAt,
+        String originationChannel,
         CustomerDto customer,
         StaffRecommendationCaseDto.EvidenceDto evidence,
         StaffRecommendationCaseDto.RecommendationDto recommendation,

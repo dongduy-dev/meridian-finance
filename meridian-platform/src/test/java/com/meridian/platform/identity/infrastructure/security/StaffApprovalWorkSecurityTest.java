@@ -3,6 +3,8 @@ package com.meridian.platform.identity.infrastructure.security;
 import com.meridian.platform.approval.application.port.in.QueryStaffApprovalWorkUseCase;
 import com.meridian.platform.approval.infrastructure.adapter.in.web.StaffApprovalWorkController;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -48,18 +50,21 @@ class StaffApprovalWorkSecurityTest {
                 .andExpect(status().isOk());
     }
 
-    @Test
-    void decisionAuthorityAloneReturnsOnlyCustomerNumberAndName() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"CUSTOMER_DIGITAL", "STAFF_ASSISTED"})
+    void decisionAuthorityReturnsApplicationChannelAndOnlyCustomerNumberAndName(String channel) throws Exception {
         org.mockito.Mockito.when(useCase.queryDecisionCase(APPLICATION_ID)).thenReturn(
                 new com.meridian.platform.approval.application.dto.StaffDecisionCaseDto(
                         APPLICATION_ID, "UCL-1", "UNSECURED_CONSUMER_LOAN", "UNSECURED",
                         java.math.BigDecimal.TEN, 6, "APPROVAL_PENDING", java.time.LocalDateTime.of(2026, 9, 6, 8, 0),
+                        channel,
                         new com.meridian.platform.approval.application.dto.StaffDecisionCaseDto.CustomerDto("CUS-001", "Ari Customer"),
                         null, null, true, true, null, List.of(), List.of(), List.of()));
         mockMvc.perform(get("/api/v1/staff/loan-applications/{id}/decision", APPLICATION_ID)
                         .with(authority("approval:decide")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.customer.customerNumber").value("CUS-001"))
+                .andExpect(jsonPath("$.originationChannel").value(channel))
                 .andExpect(jsonPath("$.customer.fullName").value("Ari Customer"))
                 .andExpect(jsonPath("$.customer.phoneNumber").doesNotExist())
                 .andExpect(jsonPath("$.customer.identityReference").doesNotExist())

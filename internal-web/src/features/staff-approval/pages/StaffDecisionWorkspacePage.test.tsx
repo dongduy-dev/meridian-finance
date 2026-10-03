@@ -51,6 +51,7 @@ function decisionCase(decided = false, eligible = true) {
     loanApplicationId: applicationId, applicationNumber: 'UCL-1', productCode: 'UNSECURED_CONSUMER_LOAN',
     productType: 'PERSONAL', requestedAmount: 10_000_000, requestedTermMonths: 6,
     applicationStatus: decided ? 'CUSTOMER_ACCEPTANCE_PENDING' : 'APPROVAL_PENDING', submittedAt: '2026-09-06T08:00:00',
+    originationChannel: 'CUSTOMER_DIGITAL',
     customer: { customerNumber: 'CUS-000001', fullName: 'Ari Customer' },
     evidence: { uploadComplete: true, processingReady: true, productVerificationResult: 'VERIFIED', readyForDecision: true,
       currentReviewCycle: { reviewCycleId: cycleId, cycleNumber: 1,
@@ -105,9 +106,12 @@ function renderPage(queryClient = createQueryClient()) {
 }
 
 describe('Staff decision workspace', () => {
-  it('shows only Customer business identity to an approval-only actor', async () => {
+  it.each([
+    { channel: 'CUSTOMER_DIGITAL', label: 'Customer digital' },
+    { channel: 'STAFF_ASSISTED', label: 'Staff assisted' },
+  ])('shows $channel in the shared header and only Customer business identity to an approval-only actor', async ({ channel, label }) => {
     const customerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    const value = { ...decisionCase(), customer: {
+    const value = { ...decisionCase(), originationChannel: channel, customer: {
       ...decisionCase().customer, customerId, phoneNumber: '0901234567',
       identityReference: 'SYNTHETIC-IDENTITY', email: 'customer@meridian.local',
     } }
@@ -123,6 +127,11 @@ describe('Staff decision workspace', () => {
     expect(screen.getByText('Application ID')).toBeVisible()
     expect(screen.getByText(applicationId)).toBeVisible()
     expect(screen.getByRole('button', { name: 'Copy application ID' })).toBeVisible()
+    const header = within(screen.getByRole('heading', { name: 'UCL-1', level: 1 }).closest('header')!)
+    expect(header.getByText('Requested amount')).toBeVisible()
+    expect(header.getByText('Requested term')).toBeVisible()
+    expect(header.getByText('Submitted')).toBeVisible()
+    expect(header.getByText('Origination channel').nextElementSibling).toHaveTextContent(label)
     for (const forbidden of ['0901234567', 'SYNTHETIC-IDENTITY', customerId, 'customer@meridian.local', 'Identity Reference', 'Current phone']) {
       expect(screen.queryByText(forbidden)).not.toBeInTheDocument()
     }

@@ -22,6 +22,7 @@ public interface ApprovalLoanCasePort {
             int requestedTermMonths,
             String applicationStatus,
             LocalDateTime submittedAt,
+            String originationChannel,
             DocumentReadinessSnapshot documentReadiness,
             ProductReadinessSnapshot productReadiness,
             ReviewCycleSnapshot currentReviewCycle,
