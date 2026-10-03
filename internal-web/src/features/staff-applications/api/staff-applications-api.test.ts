@@ -3,6 +3,7 @@ import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import {
   getStaffLoanApplicationCase,
   getStaffLoanApplications,
+  revealCustomerIdentityReference,
 } from './staff-applications-api'
 
 const item = {
@@ -17,6 +18,19 @@ const item = {
 }
 
 describe('Staff application API', () => {
+  it('uses a direct non-replayed POST and validates the minimal protected reveal shape', async () => {
+    const protectedRequest = vi.fn().mockResolvedValue({ loanApplicationId: item.loanApplicationId, identityReference: 'FICTIONAL-ID-8901' })
+    const manager = { protectedRequest } as unknown as AuthSessionManager
+    await expect(revealCustomerIdentityReference(manager, item.loanApplicationId)).resolves.toMatchObject({ identityReference: 'FICTIONAL-ID-8901' })
+    expect(protectedRequest).toHaveBeenCalledWith(`/staff/loan-applications/${item.loanApplicationId}/customer-identity-reference/reveal`, { method: 'POST' }, { replayAfterSessionRefresh: false })
+    for (const identityReference of ['', 'CONTROL\n8901', 'A'.repeat(101)]) {
+      protectedRequest.mockResolvedValue({ loanApplicationId: item.loanApplicationId, identityReference })
+      await expect(revealCustomerIdentityReference(manager, item.loanApplicationId)).rejects.toThrow()
+    }
+    protectedRequest.mockResolvedValue({ loanApplicationId: item.loanApplicationId, identityReference: 'FICTIONAL-ID-8901', ciphertext: 'must not appear' })
+    await expect(revealCustomerIdentityReference(manager, item.loanApplicationId)).rejects.toThrow()
+  })
+
   it('uses protected transport and sends only supported index parameters', async () => {
     const protectedRequest = vi.fn().mockResolvedValue({
       page: 2,

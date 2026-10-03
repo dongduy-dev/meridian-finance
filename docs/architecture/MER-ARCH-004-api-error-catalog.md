@@ -77,6 +77,15 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 422 | `IDENTITY_REFERENCE_MISMATCH` | Presented reference differs from protected Customer evidence | Re-check the exact document; the attempt remains pending |
 | 422 | `CUSTOMER_IDENTITY_VERIFICATION_REQUIRED` | New Salary Advance, UCL, or Collateral origination lacks current successful Customer verification | Complete Customer identity verification before submitting |
 
+### 3.2 Customer Identity Reference Reveal
+
+| HTTP | Error code | Message | Caller action |
+|---|---|---|---|
+| 403 | `CUSTOMER_IDENTITY_REFERENCE_ACCESS_DENIED` | Customer Identity Reference access is denied. | Use a Staff actor without a Customer association, Loan Officer role, and exact `loan:read`, `customer:read`, and `customer:identity:reveal`; verification authority is insufficient. Missing endpoint permissions use the established security denial. |
+| 409 | `CUSTOMER_IDENTITY_REFERENCE_UNAVAILABLE` | The stored Customer Identity Reference is unavailable. | Clear the temporary value; reconcile the Customer profile through its authorized workflow or escalate for protected-evidence repair. Do not infer cryptographic details or retry automatically. |
+
+Application lookup retains `404 LOAN_APPLICATION_NOT_FOUND`; refresh the exact case rather than choosing a Customer ID. Invalid path UUIDs use the established `400` validation contract. Unknown network/server/schema results require successful case revalidation before another explicit reveal. Audit persistence failure cannot produce a successful reveal response.
+
 ## 4. Loan Product and Application
 
 | HTTP Status | Error Code | Message | Resolution |

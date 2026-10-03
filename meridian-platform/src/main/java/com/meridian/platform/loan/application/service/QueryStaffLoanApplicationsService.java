@@ -115,7 +115,9 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
             CustomerLoanCaseContactSnapshot contact = customerContacts.findByCustomerId(application.customerId())
                     .orElseThrow(QueryStaffLoanApplicationsService::contactUnavailable);
             customerContext = new StaffLoanApplicationCaseDto.CustomerContextDto(
-                    contact.customerNumber(), contact.fullName(), contact.phoneNumber()
+                    contact.customerNumber(), contact.fullName(), contact.phoneNumber(),
+                    actor.roles().contains("LOAN_OFFICER") && actor.hasPermission("customer:identity:reveal")
+                            ? contact.maskedIdentityReference() : null
             );
         }
         CollateralAssessmentSnapshotDto collateralContext = collateralContext(application);

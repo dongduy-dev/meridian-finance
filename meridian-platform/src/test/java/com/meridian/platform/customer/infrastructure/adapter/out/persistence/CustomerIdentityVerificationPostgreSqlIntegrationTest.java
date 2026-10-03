@@ -217,11 +217,11 @@ class CustomerIdentityVerificationPostgreSqlIntegrationTest {
             UUID legacy = UUID.randomUUID();
             jdbc.update("insert into " + schema + ".customers (id,customer_number,status,verification_status,profile_completion_status) values (?,?,'ACTIVE','VERIFIED','INCOMPLETE')", legacy, "LEGACY-FICTIONAL");
             assertEquals(1, org.flywaydb.core.Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema)
-                    .locations("classpath:db/migration").load().migrate().migrationsExecuted);
+                    .locations("classpath:db/migration").target("69").load().migrate().migrationsExecuted);
             assertEquals("UNVERIFIED", jdbc.queryForObject("select verification_status from " + schema + ".customers where id=?", String.class, legacy));
             assertEquals(0, jdbc.queryForObject("select count(*) from " + schema + ".customer_identity_verifications", Integer.class));
             assertEquals(0, org.flywaydb.core.Flyway.configure().dataSource(dataSource).schemas(schema).defaultSchema(schema)
-                    .locations("classpath:db/migration").load().migrate().migrationsExecuted);
+                    .locations("classpath:db/migration").target("69").load().migrate().migrationsExecuted);
         } finally { jdbc.execute("drop schema if exists " + schema + " cascade"); }
     }
     @Test void refusedVerifiedUploadRollsBackVersionAndDeletesCommittedObject() {

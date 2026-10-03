@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { CircleUserRound, History, RefreshCw } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import { uuidSchema } from '../api/contracts'
 import { staffApplicationCaseQuery } from '../api/queries'
 import { QueryErrorPanel } from '../components/QueryErrorPanel'
 import { CollateralFactsCard } from '../components/CollateralFactsCard'
+import { CustomerIdentityReferencePanel } from '../components/CustomerIdentityReferencePanel'
 import { ApplicationWorkspaceShell, applicationWorkspaceCaseFacts } from '@/components/operations/ApplicationWorkspaceShell'
 import {
   applicationStatusLabel,
@@ -40,6 +41,16 @@ export function ApplicationCasePage() {
   const canRead = state.status === 'authenticated' && hasPermission(state.actor, 'loan:read')
   const query = useQuery(staffApplicationCaseQuery(manager, loanApplicationId, canRead && validId))
   const data = query.data
+  const [refreshGeneration, setRefreshGeneration] = useState(0)
+  const refreshCase = async () => {
+    setRefreshGeneration((value) => value + 1)
+    return query.refetch()
+  }
+  const canReveal = state.status === 'authenticated'
+    // AuthSessionManager accepts only Staff actors without a Customer association.
+    && hasRole(state.actor, 'LOAN_OFFICER') && canRead
+    && hasPermission(state.actor, 'customer:read')
+    && hasPermission(state.actor, 'customer:identity:reveal')
 
   const caseLoaded = Boolean(data)
   useEffect(() => {
@@ -77,7 +88,7 @@ export function ApplicationCasePage() {
     return (
       <section className="mx-auto max-w-6xl space-y-5">
         <h1 data-route-heading tabIndex={-1} className="text-2xl font-semibold">Application case</h1>
-        <QueryErrorPanel error={query.error} resource="case" onRetry={() => void query.refetch()} />
+        <QueryErrorPanel error={query.error} resource="case" onRetry={() => void refreshCase()} />
         <Button asChild variant="outline"><Link to="/staff/applications">Back to applications</Link></Button>
       </section>
     )
@@ -93,7 +104,7 @@ export function ApplicationCasePage() {
       context={{ source: 'case', facts: applicationWorkspaceCaseFacts(data) }}
       activeSection={hash === '#history' ? 'history' : 'overview'}
       updatedAt={query.dataUpdatedAt} refreshing={query.isFetching} stale={query.isStale}
-      onRefresh={() => void query.refetch()}
+      onRefresh={() => void refreshCase()}
       navigationExtra={
         data.originationChannel === 'STAFF_ASSISTED'
           && data.status === 'CUSTOMER_ACCEPTANCE_PENDING'
@@ -137,12 +148,21 @@ export function ApplicationCasePage() {
       </section>
 
       {data.customerContext ? <Card>
-        <CardHeader><CardTitle>Customer contact details</CardTitle><p className="text-sm text-muted-foreground">Current contact details are shown here. Application evidence remains unchanged.</p></CardHeader>
+        <CardHeader><CardTitle>Customer details</CardTitle><p className="text-sm text-muted-foreground">Current Customer details are shown here. Application evidence remains unchanged.</p></CardHeader>
         <CardContent><dl className="grid gap-4 sm:grid-cols-3">
           <div><dt className="text-sm text-muted-foreground">Customer number</dt><dd className="mt-1 font-semibold">{data.customerContext.customerNumber}</dd></div>
           <div><dt className="text-sm text-muted-foreground">Name</dt><dd className="mt-1 font-semibold">{data.customerContext.fullName ?? 'Not recorded'}</dd></div>
           <div><dt className="text-sm text-muted-foreground">Phone</dt><dd className="mt-1 font-semibold">{data.customerContext.phoneNumber ?? 'Not recorded'}</dd></div>
-        </dl></CardContent>
+        </dl>
+          {canReveal && data.customerContext.maskedIdentityReference ? <CustomerIdentityReferencePanel
+            key={JSON.stringify([loanApplicationId, state.epoch,
+              state.status === 'authenticated' ? state.actor : null,
+              data.customerContext, query.dataUpdatedAt, refreshGeneration])}
+            loanApplicationId={loanApplicationId} mask={data.customerContext.maskedIdentityReference}
+            blocked={query.isFetching || query.isError || data.loanApplicationId !== loanApplicationId}
+            reconcile={refreshCase}
+          /> : null}
+        </CardContent>
       </Card> : null}
       {data.productCode === 'COLLATERAL_LOAN' && data.collateralContext ? <CollateralFactsCard collateral={data.collateralContext} /> : null}
 

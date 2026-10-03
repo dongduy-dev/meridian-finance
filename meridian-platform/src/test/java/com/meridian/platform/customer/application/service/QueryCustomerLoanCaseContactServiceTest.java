@@ -28,13 +28,16 @@ class QueryCustomerLoanCaseContactServiceTest {
         when(customer.profile()).thenReturn(profile);
         when(profile.fullName()).thenReturn("Nguyen Van A");
         when(profile.phoneNumber()).thenReturn("0901234567");
+        when(profile.identityReference()).thenReturn(new com.meridian.platform.customer.domain.model.ProtectedSensitiveValue("ciphertext", "fingerprint", "8901"));
         var service = new QueryCustomerLoanCaseContactService(repository);
 
         var contact = service.findByCustomerId(CUSTOMER_ID).orElseThrow();
         assertEquals("CUST-001", contact.customerNumber());
         assertEquals("Nguyen Van A", contact.fullName());
         assertEquals("0901234567", contact.phoneNumber());
-        assertEquals(3, contact.getClass().getRecordComponents().length);
+        assertEquals(4, contact.getClass().getRecordComponents().length);
+        assertEquals("****8901", contact.maskedIdentityReference());
+        assertTrue(java.util.Arrays.stream(contact.getClass().getRecordComponents()).noneMatch(c -> java.util.Set.of("ciphertext", "fingerprint", "identityReference", "lastFour").contains(c.getName())));
 
         when(customer.profile()).thenReturn(null);
         var withoutProfile = service.findByCustomerId(CUSTOMER_ID).orElseThrow();

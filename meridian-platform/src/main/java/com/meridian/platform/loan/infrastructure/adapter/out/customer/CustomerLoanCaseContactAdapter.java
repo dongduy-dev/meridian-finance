@@ -21,7 +21,8 @@ public class CustomerLoanCaseContactAdapter implements CustomerLoanCaseContactPo
     public Optional<CustomerLoanCaseContactSnapshot> findByCustomerId(UUID customerId) {
         return customerContacts.findByCustomerId(customerId)
                 .map(contact -> new CustomerLoanCaseContactSnapshot(
-                        contact.customerNumber(), contact.fullName(), contact.phoneNumber()
+                        contact.customerNumber(), contact.fullName(), contact.phoneNumber(),
+                        contact.maskedIdentityReference()
                 ));
     }
 }

@@ -2,6 +2,7 @@ import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import {
   staffLoanApplicationCaseSchema,
   staffLoanApplicationPageSchema,
+  customerIdentityReferenceRevealSchema,
   type StaffLoanApplicationCase,
   type StaffLoanApplicationPage,
 } from './contracts'
@@ -11,6 +12,18 @@ export type StaffApplicationFilters = {
   status?: string
   page: number
   size: number
+}
+
+export async function revealCustomerIdentityReference(
+  manager: AuthSessionManager,
+  loanApplicationId: string,
+) {
+  const payload = await manager.protectedRequest<unknown>(
+    `/staff/loan-applications/${loanApplicationId}/customer-identity-reference/reveal`,
+    { method: 'POST' },
+    { replayAfterSessionRefresh: false },
+  )
+  return customerIdentityReferenceRevealSchema.parse(payload)
 }
 
 export async function getStaffLoanApplications(

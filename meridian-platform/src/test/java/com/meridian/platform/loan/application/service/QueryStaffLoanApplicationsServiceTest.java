@@ -194,7 +194,7 @@ class QueryStaffLoanApplicationsServiceTest {
                 new CustomerReadinessSnapshot(CUSTOMER_ID, true, true, true, "VERIFIED")
         ));
         when(customerContacts.findByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
-                new CustomerLoanCaseContactSnapshot("CUST-001", "Nguyen Van A", "0901234567")
+                new CustomerLoanCaseContactSnapshot("CUST-001", "Nguyen Van A", "0901234567", "****8901")
         ));
         when(transitions.findByLoanApplicationIdOrderBySequenceNumberAsc(APPLICATION_ID))
                 .thenReturn(List.of());
@@ -204,8 +204,15 @@ class QueryStaffLoanApplicationsServiceTest {
         assertEquals("CUST-001", result.customerContext().customerNumber());
         assertEquals("Nguyen Van A", result.customerContext().fullName());
         assertEquals("0901234567", result.customerContext().phoneNumber());
-        assertEquals(3, result.customerContext().getClass().getRecordComponents().length);
-        verify(customerContacts).findByCustomerId(CUSTOMER_ID);
+        assertEquals(4, result.customerContext().getClass().getRecordComponents().length);
+        assertNull(result.customerContext().maskedIdentityReference());
+        when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:read", "customer:read", "customer:identity:reveal")));
+        assertEquals("****8901", service.queryCase(APPLICATION_ID).customerContext().maskedIdentityReference());
+        for (String role : List.of("APPROVER", "ACCOUNTING_OFFICER", "BACK_OFFICE_ADMIN", "CUSTOM_ROLE")) {
+            when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(UUID.randomUUID(), "fictional@meridian.test", "STAFF", null, Set.of(role), Set.of("loan:read", "customer:read", "customer:identity:reveal")));
+            assertNull(service.queryCase(APPLICATION_ID).customerContext().maskedIdentityReference());
+        }
+        verify(customerContacts, org.mockito.Mockito.atLeastOnce()).findByCustomerId(CUSTOMER_ID);
     }
 
     @Test
