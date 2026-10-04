@@ -203,6 +203,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/loan-applications/collateral-loan` | Customer with `loan:submit` | Submit a Collateral Loan application with one structured asset and required ownership-evidence collection. |
 | GET | `/api/v1/loan-applications` | Customer with `loan:read:own` | List the authenticated Customer's applications with authoritative lifecycle/action summaries. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}` | Customer `loan:read:own` or Staff `loan:read` | Return a safe durable LoanApplication status projection. |
+| GET | `/api/v1/loan-applications/{loanApplicationId}/collateral` | Customer with `loan:read:own` | Return only the immutable submitted facts for the Customer's own Collateral Loan application; Section 4.2.1.1. |
 | GET | `/api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20` | Staff with `loan:read` | Discover applications across products through a safe, deterministic page. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}` | Staff with `loan:read`; Customer contact additionally requires `customer:read` | Return the purpose-limited Staff case header, Customer readiness, optional current Customer contact and authorized Loan Officer identity mask, Loan-owned Collateral context, and ordered lifecycle evidence. |
 | POST | `/api/v1/staff/loan-applications/{loanApplicationId}/customer-identity-reference/reveal` | Staff Loan Officer with `loan:read`, `customer:read`, and `customer:identity:reveal` | Explicit audited temporary Identity Reference access; Section 4.2.2.1. |
@@ -920,9 +921,33 @@ GET /api/v1/loan-applications/{loanApplicationId}
 
 An authenticated Customer with `loan:read:own` may read only their own application. Missing and foreign-owned IDs both return `404 LOAN_APPLICATION_NOT_FOUND`. Authorized Staff require `loan:read`; `loan:submit`, `repayment:update`, `approval:decide`, and document permissions do not imply this read.
 
-The response contains only `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `requestedAmount`, `requestedTermMonths`, `status`, and `submittedAt`. It excludes Customer, employee-link, limit, verification, review-cycle, actor, audit/history, payment, and banking evidence. This is a durable status projection for reconnect/resume flows, not a next-action engine, command recommendation, history API, or Staff work queue.
+The response contains only `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `originationChannel`, `requestedAmount`, `requestedTermMonths`, `status`, and `submittedAt`. It excludes structured Collateral facts, Customer, employee-link, limit, verification, review-cycle, actor, audit/history, payment, and banking evidence. This is a durable status projection for reconnect/resume flows, not a next-action engine, command recommendation, history API, or Staff work queue.
 
 The Customer-owned correction-abandonment command in Section 5.4 is the only v1 command that produces `CANCELLED`. The route does not accept cancellation from another state or a Staff or administrative cancellation.
+
+#### 4.2.1.1 Customer-own submitted Collateral facts
+
+```text
+GET /api/v1/loan-applications/{loanApplicationId}/collateral
+```
+
+Only an authenticated Customer with Customer context and exact `loan:read:own` may read the submitted Collateral facts of their own application. The request accepts only the application path identity; it has no `customerId` input. Staff `loan:read` does not authorize this Customer-only contract. Missing and foreign-owned applications, and calls for another product, return `404 LOAN_APPLICATION_NOT_FOUND`.
+
+The response contains exactly:
+
+```json
+{
+  "collateralType": "MOTORBIKE",
+  "description": "Submitted motorbike",
+  "estimatedValue": 35000000,
+  "ownershipStatus": "Customer owned",
+  "conditionNote": "Normal used condition"
+}
+```
+
+These are immutable submitted Loan-owned facts. `estimatedValue` is the submitted advisory estimate and conveys no valuation, LTV, eligibility, or approval conclusion. The response excludes persistence and Customer IDs, verification cycles/results, restricted assessment notes, Staff actors, internal evidence, document/checklist/storage/audit data, and database timestamps. Document continues to own ownership evidence through the existing checklist contract in Section 5.5.
+
+Both `CUSTOMER_DIGITAL` and `STAFF_ASSISTED` applications are readable by their owning Customer after digital access is available. Reading does not change the channel or grant Customer-direct actions. The query performs no workflow mutation, workflow locking, or audit write. A Collateral application with zero or multiple Collateral rows, or a row belonging to another application, returns `409 SYSTEM_STATE_CONFLICT`. This dedicated contract does not widen the shared minimal status read or Staff projections.
 
 #### 4.2.2 Staff application discovery and case read
 

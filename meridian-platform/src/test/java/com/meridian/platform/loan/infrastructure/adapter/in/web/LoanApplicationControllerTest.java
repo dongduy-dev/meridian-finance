@@ -19,6 +19,33 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class LoanApplicationControllerTest {
 
     @Test
+    void collateralApplicationStatusRetainsExactlyTheGenericMinimalFields() throws Exception {
+        UUID id = UUID.randomUUID();
+        QueryLoanApplicationUseCase query = ignored -> new LoanApplicationStatusDto(
+                id, "CL-20261005-000001", "COLLATERAL_LOAN", "SECURED", "STAFF_ASSISTED",
+                BigDecimal.valueOf(25_000_000), 12, "SUBMITTED", LocalDateTime.of(2026, 10, 5, 8, 0));
+        MockMvcBuilders.standaloneSetup(new LoanApplicationController(query)).build()
+                .perform(get("/api/v1/loan-applications/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(9))
+                .andExpect(jsonPath("$.loanApplicationId").value(id.toString()))
+                .andExpect(jsonPath("$.applicationNumber").value("CL-20261005-000001"))
+                .andExpect(jsonPath("$.productCode").value("COLLATERAL_LOAN"))
+                .andExpect(jsonPath("$.productType").value("SECURED"))
+                .andExpect(jsonPath("$.originationChannel").value("STAFF_ASSISTED"))
+                .andExpect(jsonPath("$.requestedAmount").value(25_000_000))
+                .andExpect(jsonPath("$.requestedTermMonths").value(12))
+                .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.submittedAt").exists())
+                .andExpect(jsonPath("$.collateral").doesNotExist())
+                .andExpect(jsonPath("$.collateralContext").doesNotExist())
+                .andExpect(jsonPath("$.collateralId").doesNotExist())
+                .andExpect(jsonPath("$.ownershipStatus").doesNotExist())
+                .andExpect(jsonPath("$.verification").doesNotExist())
+                .andExpect(jsonPath("$.documents").doesNotExist());
+    }
+
+    @Test
     void returnsMinimalLifecycleStatusProjection() throws Exception {
         UUID applicationId = UUID.fromString("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
         QueryLoanApplicationUseCase useCase = ignored -> new LoanApplicationStatusDto(

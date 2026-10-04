@@ -195,7 +195,7 @@ describe('FE-CP7 document workspace', () => {
     expect(screen.queryByRole('navigation', { name: 'Customer navigation' })).not.toBeInTheDocument()
     expect(screen.queryByText(/Step 1 of 1/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Return to Dashboard' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: 'Application' })).toHaveAttribute('href', `/applications/${applicationId}`)
     expect(await screen.findByText('Documents provided: Not complete', {}, { timeout: 3_000 })).toBeVisible()
     expect(screen.getByText('Review status: Not complete')).toBeVisible()
     expect(screen.getAllByText('Ready for next step')).toHaveLength(checklist.items.length)

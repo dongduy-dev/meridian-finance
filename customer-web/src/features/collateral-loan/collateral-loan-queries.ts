@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
 
 import { applicationKeys } from '@/features/applications/application-queries'
@@ -12,6 +12,19 @@ const productChangingErrors = new Set([
   'PRODUCT_NOT_FOUND', 'PRODUCT_INACTIVE', 'PRODUCT_POLICY_INVALID',
   'INVALID_PRODUCT_AMOUNT', 'INVALID_PRODUCT_TERM',
 ])
+
+export const collateralLoanKeys = {
+  detail: (loanApplicationId: string) => [...applicationKeys.detail(loanApplicationId), 'collateral'] as const,
+}
+
+export function useOwnCollateralQuery(loanApplicationId: string) {
+  const { manager } = useAuth()
+  const api = useMemo(() => createCollateralLoanApi(manager), [manager])
+  return useQuery({
+    queryKey: collateralLoanKeys.detail(loanApplicationId),
+    queryFn: () => api.getOwnCollateral(loanApplicationId),
+  })
+}
 
 export function useSubmitCollateralLoanMutation() {
   const { manager } = useAuth()

@@ -4,6 +4,36 @@ import type { ApiClient, ProtectedRequestCoordinator } from '@/lib/api'
 
 import { createCollateralLoanApi } from './collateral-loan-api'
 
+const submittedFacts = {
+  collateralType: 'FUTURE_COLLATERAL_TYPE', description: 'Submitted asset', estimatedValue: 35_000_000,
+  ownershipStatus: 'Customer owned', conditionNote: 'Normal used condition',
+}
+
+it('reads exactly the Customer-safe schema through the protected own-application boundary with future types', async () => {
+  const request = vi.fn().mockResolvedValue({ ...submittedFacts, assessmentNote: 'internal', collateralId: 'internal' })
+  const coordinator: ProtectedRequestCoordinator = { requestProtected: vi.fn((operation) => operation('customer-token')) }
+  const api = createCollateralLoanApi(coordinator, { request } as ApiClient)
+  expect(await api.getOwnCollateral(application.loanApplicationId)).toEqual(submittedFacts)
+  const [path, options] = request.mock.calls[0]!
+  expect(path).toBe(`/loan-applications/${application.loanApplicationId}/collateral`)
+  expect(options.headers.get('Authorization')).toBe('Bearer customer-token')
+  expect(options).not.toHaveProperty('json')
+  expect(coordinator.requestProtected).toHaveBeenCalledTimes(1)
+})
+
+it('rejects invalid read identity before requesting data', async () => {
+  const request = vi.fn()
+  const coordinator: ProtectedRequestCoordinator = { requestProtected: vi.fn((operation) => operation('customer-token')) }
+  await expect(createCollateralLoanApi(coordinator, { request } as ApiClient).getOwnCollateral('invalid')).rejects.toThrow()
+  expect(request).not.toHaveBeenCalled()
+})
+
+it.each([{ ...submittedFacts, collateralType: '' }, { ...submittedFacts, estimatedValue: '35000000' }])('rejects malformed Collateral read data', async (body) => {
+  const request = vi.fn().mockResolvedValue(body)
+  const coordinator: ProtectedRequestCoordinator = { requestProtected: vi.fn((operation) => operation('customer-token')) }
+  await expect(createCollateralLoanApi(coordinator, { request } as ApiClient).getOwnCollateral(application.loanApplicationId)).rejects.toThrow()
+})
+
 const application = {
   loanApplicationId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', applicationNumber: 'CL-20260831-000001',
   productCode: 'COLLATERAL_LOAN', productType: 'SECURED', status: 'FUTURE_STATUS',

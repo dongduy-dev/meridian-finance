@@ -1,4 +1,4 @@
-import { CheckCircle2, FileCheck2, FileText, UploadCloud } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, FileCheck2, FileText, UploadCloud } from 'lucide-react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 
 import { EmptyState } from '@/components/common/EmptyState'
@@ -49,7 +49,7 @@ export function ApplicationDocumentsPage() {
       eyebrow="Application documents"
       title="Documents"
       description={isDigital ? "Upload the documents we need and track their review status." : "Track required documents and their review status."}
-      backAction={<Button variant="secondary" asChild><Link to="/">Return to Dashboard</Link></Button>}
+      backAction={<Button variant="secondary" asChild><Link to={`/applications/${loanApplicationId}`}><ArrowLeft aria-hidden="true" />Application</Link></Button>}
     >
       <div className="space-y-8">
       {applicationQuery.isPending ? <Skeleton className="h-24" role="status" aria-label="Loading application details" /> : null}

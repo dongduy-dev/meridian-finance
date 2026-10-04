@@ -7,7 +7,7 @@ import { QueryErrorFeedback } from '@/components/common/QueryErrorFeedback'
 import { DetailLayout } from '@/components/layout/DetailLayout'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StaffAssistedApplicationNotice } from '@/features/applications/components/StaffAssistedApplicationNotice'
 import { ApiError } from '@/lib/api'
@@ -18,6 +18,7 @@ import {
 import { applicationStatusPresentation } from '@/features/applications/application-presentation'
 import { ApplicationSummary } from '@/features/applications/components/ApplicationSummary'
 import { RequiredActionCard } from '@/features/applications/components/RequiredActionCard'
+import { CustomerCollateralDetails } from '@/features/collateral-loan/components/CustomerCollateralDetails'
 
 interface WorkflowNotice {
   kind: 'resubmitted' | 'cancelled' | 'offer-declined'
@@ -100,6 +101,13 @@ export function ApplicationDetailPage() {
           <QueryErrorFeedback error={detailQuery.error} title="Application details could not be loaded" onRetry={() => void detailQuery.refetch()} />
         ) : null}
         {detailQuery.data ? <ApplicationSummary application={detailQuery.data} /> : null}
+        {detailQuery.data?.productCode === 'COLLATERAL_LOAN' ? <CustomerCollateralDetails loanApplicationId={detailQuery.data.loanApplicationId} /> : null}
+        {detailQuery.data && ['UNSECURED_CONSUMER_LOAN', 'COLLATERAL_LOAN'].includes(detailQuery.data.productCode) ? (
+          <Card>
+            <CardHeader><CardTitle>Application records</CardTitle><CardDescription>Review the documents associated with this application and their current status.</CardDescription></CardHeader>
+            <CardContent><Button variant="secondary" asChild><Link to={`/applications/${detailQuery.data.loanApplicationId}/documents`}>View documents</Link></Button></CardContent>
+          </Card>
+        ) : null}
       </div>
     </DetailLayout>
   )
