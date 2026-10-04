@@ -32,7 +32,8 @@ public class QueryCustomerLoanCaseContactService implements QueryCustomerLoanCas
         return new CustomerLoanCaseContact(
                 customer.customerNumber(),
                 profile == null ? null : profile.fullName(),
-                profile == null ? null : profile.phoneNumber()
+                profile == null ? null : profile.phoneNumber(),
+                profile == null ? null : "****" + profile.identityReference().lastFour()
         );
     }
 }

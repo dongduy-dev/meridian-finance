@@ -737,7 +737,26 @@ Salary Advance validates its exact unreleased reservation. UCL and Collateral Lo
 
 ---
 
-## 10. Destination Reveal and Manual Disbursement
+## 10. Protected Identity and Destination Reveal, and Manual Disbursement
+
+### Application-Scoped Customer Identity Reference Reveal
+
+```text
+StaffCustomerIdentityReferenceController
+  -> RevealStaffCustomerIdentityReferenceUseCase / Loan application service
+  -> LoanApplicationRepository -> exact LoanApplication.customerId
+  -> CustomerIdentityReferenceRevealPort -> boundary adapter
+  -> RevealCustomerIdentityReferenceUseCase / Customer application service
+  -> CustomerRepository + CustomerSensitiveValueProtector.revealToBytes
+  -> synchronous transactional business audit
+  -> transient result / redacted DTO / private no-store response
+```
+
+Controller permissions and application-layer actor checks establish the dedicated Loan Officer purpose. Loan resolves the subject from the authoritative application and never accesses Customer persistence or protected envelopes. Customer validates a complete identity-bearing profile, strictly decodes and validates the decrypted value against its stored last-four facts, and clears the decrypted byte array in `finally`. The returned String is transient and cannot be reliably zeroed; it must never be persisted, logged, or cached.
+
+Loan and Customer application services share the reveal transaction. Customer publishes the safe successful-access audit synchronously; persistence failure prevents a successful response. This read-purpose command changes no lending state, verification state, or lifecycle history and imposes no review-assignment or identity-verification-status guard. Ordinary case projection never invokes decryption. Exact authorization, payload, headers, and errors belong to MER-API-001 Section 4.2.2.1.
+
+### Disbursement-Destination Reveal and Confirmation
 
 Loan owns the Staff disbursement queue and case projection:
 

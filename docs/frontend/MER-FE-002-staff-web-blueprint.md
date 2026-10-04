@@ -154,7 +154,7 @@ The same backend value must use the same label within Internal Web unless a clea
 
 | Actor | Current operational responsibility | Representative executable permissions |
 |---|---|---|
-| Loan Officer | Staff-assisted intake and initial checklist upload, Staff-mediated Customer correction completion/resubmission, evidenced Customer offer-response and Staff-assisted UCL cancellation recording, UCL and Collateral verification, LoanApplication review, recommendation, document review, and authorized correction initiation | `customer:identity:verify`, `loan:originate:staff`, `document:upload:assisted`, `document:upload:assisted-correction`, `document:upload:assisted-action`, `loan:offer:respond:staff`, `loan:cancel:staff`, `loan:read`, `loan:review`, `approval:recommend`, `document:review`, `loan:correction:staff`; waiver additionally requires `document:waive` |
+| Loan Officer | Staff-assisted intake and initial checklist upload, Staff-mediated Customer correction completion/resubmission, evidenced Customer offer-response and Staff-assisted UCL cancellation recording, UCL and Collateral verification, LoanApplication review, recommendation, document review, and authorized correction initiation | `customer:read`, `customer:identity:verify`, `customer:identity:reveal`, `loan:originate:staff`, `document:upload:assisted`, `document:upload:assisted-correction`, `document:upload:assisted-action`, `loan:offer:respond:staff`, `loan:cancel:staff`, `loan:read`, `loan:review`, `approval:recommend`, `document:review`, `loan:correction:staff`; waiver additionally requires `document:waive` |
 | Approver | Independent decision and payment-backed Administrative Full-Balance Settlement | `loan:read`, `approval:decide`, `document:read`, `audit:read`, `loan:settlement:approve`; settlement also requires the Approver role |
 | Accounting Officer | Contract preparation/readiness, evidenced Customer contract-acknowledgment recording, destination reveal, manual disbursement, repayment, and administrative closure | `loan:read`, `loan:contract:prepare`, `loan:contract:read`, `loan:contract:acknowledge:staff`, `document:upload:assisted-action`, `loan:disbursement:prepare`, `loan:disburse`, `repayment:update`, `loan:account:close`; acknowledgment and closure also require the Accounting Officer role |
 | Back-Office Admin | Back-Office Administration outside this blueprint; currently also holds the narrow Staff document-upload permission | `loan:product:manage`, `partner:read`, `partner:manage`, `identity:user:manage`, `admin:config`, `audit:read`, `document:upload:staff` |
@@ -201,7 +201,8 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 | Staff Customer intake read | `GET /api/v1/staff/customers/{customerId}` | Staff `customer:read` | Purpose-limited profile/readiness projection without protected identity material |
 | Intake evidence metadata | `GET /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence` | Staff `document:upload:intake` plus valid Loan intake authority | Controlled logical evidence and immutable version metadata; no storage keys or content |
 | Staff application discovery | `GET /api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20` | Staff `loan:read` | Cross-product safe facts, exact filters, deterministic page envelope |
-| Staff case foundation | `GET /api/v1/staff/loan-applications/{loanApplicationId}` | Staff `loan:read`; Customer contact also requires `customer:read` | Safe header, Customer readiness, nullable current Customer contact, Loan-owned Collateral facts, assigned Loan Officer summary, and ordered lifecycle transitions |
+| Staff case foundation | `GET /api/v1/staff/loan-applications/{loanApplicationId}` | Staff `loan:read`; Customer contact also requires `customer:read` | Safe header, Customer readiness, nullable current Customer contact and Loan Officer identity mask under Section 16.3.1, Loan-owned Collateral facts, assigned Loan Officer summary, and ordered lifecycle transitions |
+| Customer Identity Reference reveal | `POST /api/v1/staff/loan-applications/{loanApplicationId}/customer-identity-reference/reveal` | Staff Loan Officer with `loan:read`, `customer:read`, and `customer:identity:reveal` | Explicit audited temporary access; Section 16.3.1 |
 | Assisted offer-response case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/offer-response` | Staff `loan:offer:respond:staff` plus Loan Officer role | Eligible Staff-assisted UCL or Collateral safe header, exact current offer, expiry/action state, and current signed-evidence metadata |
 | Staff document evidence | `GET /api/v1/staff/loan-applications/{loanApplicationId}/documents` | `document:review` | Checklist/readiness, exact current version, immutable version history, and safe review history |
 | Staff correction case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/corrections` | `loan:correction:staff` | Origination channel, latest request, mixed task composition, proof, purpose-limited assisted Customer instructions/actions, completion readiness, and current-actor maker-checker evidence |
@@ -297,7 +298,7 @@ The Staff case contract composes purpose-limited context-owned facts without exp
 
 - safe LoanApplication identity, number, product, requested terms, durable status, and submission time;
 - purpose-limited Customer readiness;
-- current Customer contact only when the actor also has `customer:read`;
+- current Customer number, name, and phone only when the actor also has `customer:read`; nullable `maskedIdentityReference` additionally requires Loan Officer role and `customer:identity:reveal`;
 - Loan-owned Collateral facts for a Collateral Loan;
 - safe ordered LoanApplication lifecycle transitions.
 
@@ -680,7 +681,7 @@ Where a required read contract does not exist, the command checkpoint remains bl
 
 Staff Web must not expose or log raw:
 
-- salary, stored identity references, employee codes, or protected verification evidence; the presented reference entered for manual identity confirmation is transient under Section 7.5;
+- salary, employee codes, or protected verification evidence; stored Identity Reference is accessible only through Section 16.3.1, and the presented reference entered for manual identity confirmation is transient under Section 7.5;
 - bank-account numbers except in the explicit destination-reveal surface;
 - document binary content, raw OCR text, normalized OCR layout, or provider response content; allowlisted OCR suggestions use the zero-retention assisted-intake review projection, and explicitly applied reviewed values remain only in route-local existing form inputs until an owning command is invoked;
 - correction contents or internal reviewer notes outside the authorized workspace;
@@ -712,6 +713,16 @@ The reveal panel is a protected local-memory surface:
 - never include the full value in confirmation summaries, toast messages, print styles, screenshots generated by the app, or telemetry.
 
 The disbursement form submits only the external transfer evidence requested by the backend. It does not echo the full destination into the command body.
+
+### 16.3.1 Customer Identity Reference Reveal
+
+Application Case presents **Customer details** with current number, name, and phone, followed by the stored mask and an explicit **Reveal Identity Reference** action. The mask and action require an authenticated Staff session without a Customer association, Loan Officer role, `loan:read`, `customer:read`, and `customer:identity:reveal`. Session acceptance establishes the Staff/no-Customer boundary; backend authorization remains authoritative. Other roles and `customer:identity:verify` alone grant no identity mask or reveal. The mask comes from stored last-four facts without decryption.
+
+`POST /api/v1/staff/loan-applications/{loanApplicationId}/customer-identity-reference/reveal` accepts no Customer identifier or raw reference. The direct `manager.protectedRequest` command schema-validates the response and opts out of automatic replay after session refresh. It never uses a TanStack Query query or mutation cache. The panel holds the full value only in route-local component state and labels it **Sensitive identity — temporary view**. It provides Hide, with no copy, hover reveal, automatic reveal, confirmation echo, toast value, print inclusion, URL state, browser persistence, or telemetry.
+
+Hide, case unmount/navigation, session epoch/logout, actor or authority change, Customer context change, and manual case refresh clear the value and invalidate any in-flight generation. Concurrent requests are blocked. A hidden tab clears the value after 60 seconds; returning sooner cancels the timer. A stale response cannot restore a cleared value.
+
+Controlled `403` clears the value and shows authority feedback; `404` reconciles the Application Case; `409 CUSTOMER_IDENTITY_REFERENCE_UNAVAILABLE` shows safe stored-reference guidance. Network, timeout, 5xx, malformed, or unrecognized results require a successful case refresh before another explicit reveal. No failure automatically repeats POST, and no unresolved-operation envelope is persisted. The identity-verification workspace in Section 7.5 has no reveal action and continues to require document-based re-entry. See MER-API-001 Section 4.2.2.1 for the exact HTTP contract.
 
 ### 16.4 Restricted Notes and External References
 

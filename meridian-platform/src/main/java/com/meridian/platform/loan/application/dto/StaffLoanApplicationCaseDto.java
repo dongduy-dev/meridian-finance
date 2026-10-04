@@ -60,7 +60,9 @@ public record StaffLoanApplicationCaseDto(
                 null, null, formalReviewRecorded, assignedLoanOfficer, lifecycleHistory);
     }
 
-    public record CustomerContextDto(String customerNumber, String fullName, String phoneNumber) {
+    public record CustomerContextDto(
+            String customerNumber, String fullName, String phoneNumber, String maskedIdentityReference
+    ) {
     }
 
     public record StaffActorDto(UUID userId, String displayName, String email) {

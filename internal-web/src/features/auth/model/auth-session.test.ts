@@ -179,6 +179,21 @@ describe('staff session manager', () => {
     expect(new Headers(fetchMock.mock.calls[1]?.[1].headers).get('Authorization')).toBe('Bearer rotated-token')
   })
 
+  it('refreshes an expired session without replaying an explicit sensitive POST', async () => {
+    vi.mocked(authApi.login).mockResolvedValue(staff())
+    await manager.login('staff@meridian.local', 'fictional')
+    vi.mocked(authApi.refresh).mockResolvedValue(staff({ accessToken: 'rotated-token' }))
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      timestamp: 'now', status: 401, errorCode: 'TOKEN_EXPIRED', message: 'expired', path: '/reveal',
+    }), { status: 401 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(manager.protectedRequest('/reveal', { method: 'POST' }, { replayAfterSessionRefresh: false }))
+      .rejects.toMatchObject({ errorCode: 'TOKEN_EXPIRED' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(authApi.refresh).toHaveBeenCalledTimes(1)
+    expect(manager.getSnapshot().status).toBe('authenticated')
+  })
+
   it('preserves multipart and Blob response modes through authenticated replay', async () => {
     vi.mocked(authApi.login).mockResolvedValue(staff())
     vi.mocked(authApi.refresh).mockResolvedValue(staff({ accessToken: 'rotated-token' }))

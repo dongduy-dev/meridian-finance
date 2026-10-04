@@ -280,11 +280,11 @@ describe('Staff application pages', () => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff(['loan:read', 'customer:read']))
     vi.mocked(api.apiRequest).mockResolvedValue({
       ...caseFixture,
-      customerContext: { customerNumber: 'CUST-001', fullName: 'Nguyen Van A', phoneNumber: '0901234567' },
+      customerContext: { customerNumber: 'CUST-001', fullName: 'Nguyen Van A', phoneNumber: '0901234567', maskedIdentityReference: null },
     })
     renderRoute(`/staff/applications/${applicationId}`)
 
-    expect(await screen.findByText('Customer contact details')).toBeVisible()
+    expect(await screen.findByText('Customer details')).toBeVisible()
     expect(screen.getByText('CUST-001')).toBeVisible()
     expect(screen.getByText('Nguyen Van A')).toBeVisible()
     expect(screen.getByText('0901234567')).toBeVisible()
@@ -296,7 +296,7 @@ describe('Staff application pages', () => {
     renderRoute(`/staff/applications/${applicationId}`)
 
     expect(await screen.findByRole('heading', { name: 'UCL-20260902-000001', level: 1 })).toBeVisible()
-    expect(screen.queryByText('Customer contact details')).not.toBeInTheDocument()
+    expect(screen.queryByText('Customer details')).not.toBeInTheDocument()
   })
 
   it('shows collateral facts on a Collateral Loan case', async () => {

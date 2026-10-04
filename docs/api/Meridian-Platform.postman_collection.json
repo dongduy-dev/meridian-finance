@@ -15,6 +15,18 @@
                             ]
              },
     "variable":  [
+        {
+          "key": "identityReferenceRevealScenarioEnabled",
+          "value": "false"
+        },
+        {
+          "key": "identityReferenceRevealLoanApplicationId",
+          "value": ""
+        },
+        {
+          "key": "identityRevealUnrelatedStaffAccessToken",
+          "value": ""
+        },
 {
         "key": "customerIdentityVerificationId",
         "value": "",
@@ -969,6 +981,929 @@
                       {"key":"assistedCancellationRequestId","value":"10000000-0000-4000-8000-000000000007","type":"string"}
                  ],
     "item":  [
+        {
+          "name": "06A Protected Customer Identity Reference Reveal - Prepared Fictional Case",
+          "description": "Enable identityReferenceRevealScenarioEnabled and set identityReferenceRevealLoanApplicationId to an existing application for the fictional demo Customer with complete stored IDREF-MER-001. Authenticate each role, inspect only the mask on ordinary GET, explicitly reveal once, then prove denials. Supply a prepared unrelated Staff token for the generic Staff check. Returned plaintext is never saved into variables or logged. No automatic POST replay. KYC has no reveal action.",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.variables.get(\"identityReferenceRevealScenarioEnabled\") !== \"true\" || !pm.variables.get(\"identityReferenceRevealLoanApplicationId\")) pm.execution.skipRequest();"
+                ]
+              }
+            }
+          ],
+          "item": [
+            {
+              "name": "Reveal scenario - Login as Loan Officer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "login"
+                  ]
+                },
+                "auth": {
+                  "type": "noauth"
+                },
+                "description": "Captures loanOfficerAccessToken for review and recommendation endpoints.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{loanOfficerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Loan Officer token is returned\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.tokenType).to.eql(\"Bearer\");",
+                      "    pm.expect(json.accessToken).to.be.a(\"string\").and.not.empty;",
+                      "    pm.collectionVariables.set(\"loanOfficerAccessToken\", json.accessToken);",
+                      "    pm.collectionVariables.set(\"currentUserId\", json.userId || \"\");",
+                      "    pm.collectionVariables.set(\"currentCustomerId\", json.customerId || \"\");",
+                      "    ",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Reveal scenario - Login as Approver",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "login"
+                  ]
+                },
+                "auth": {
+                  "type": "noauth"
+                },
+                "description": "Captures approverAccessToken for approval-decision and settlement requests.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{approverEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Approver token is returned\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.tokenType).to.eql(\"Bearer\");",
+                      "    pm.expect(json.accessToken).to.be.a(\"string\").and.not.empty;",
+                      "    pm.collectionVariables.set(\"approverAccessToken\", json.accessToken);",
+                      "    pm.collectionVariables.set(\"currentUserId\", json.userId || \"\");",
+                      "    pm.collectionVariables.set(\"currentCustomerId\", json.customerId || \"\");",
+                      "    ",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Reveal scenario - Login as Accounting Officer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "login"
+                  ]
+                },
+                "auth": {
+                  "type": "noauth"
+                },
+                "description": "Captures accountingAccessToken for contract, disbursement, repayment, and closure requests.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{accountingOfficerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Accounting Officer token is returned\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.tokenType).to.eql(\"Bearer\");",
+                      "    pm.expect(json.accessToken).to.be.a(\"string\").and.not.empty;",
+                      "    pm.collectionVariables.set(\"accountingAccessToken\", json.accessToken);",
+                      "    pm.collectionVariables.set(\"currentUserId\", json.userId || \"\");",
+                      "    pm.collectionVariables.set(\"currentCustomerId\", json.customerId || \"\");",
+                      "    ",
+                      "});"
+                    ]
+                  }
+                },
+                {
+                  "name": "13 Unsecured Consumer Loan Servicing",
+                  "description": "Uses the existing product-generic servicing endpoints. Configure the three UCL application variables with prepared fixtures, then run this folder in order. Overdue evaluation is an internal scheduled operation, so the overdue read uses a fixture already evaluated to OVERDUE.",
+                  "item": [
+                    {
+                      "name": "Record UCL repayment",
+                      "request": {
+                        "method": "POST",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json",
+                            "type": "text"
+                          }
+                        ],
+                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclServicingLoanApplicationId}}/repayments",
+                        "auth": {
+                          "type": "bearer",
+                          "bearer": [
+                            {
+                              "key": "token",
+                              "value": "{{accountingAccessToken}}",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "description": "Records a partial or early UCL repayment without repricing or a product-exposure release.",
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"requestId\": \"{{uclRepaymentRequestId}}\",\n  \"externalPaymentReference\": \"{{uclRepaymentExternalReference}}\",\n  \"amount\": {{uclRepaymentAmount}},\n  \"paymentValueDate\": \"{{uclRepaymentValueDate}}\"\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        }
+                      },
+                      "response": [],
+                      "event": [
+                        {
+                          "listen": "prerequest",
+                          "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                              "const fresh = () => pm.variables.replaceIn(\"{{$guid}}\");",
+                              "const runId = fresh().replace(/-/g, \"\").toUpperCase();",
+                              "pm.collectionVariables.set(\"uclRepaymentRequestId\", fresh());",
+                              "pm.collectionVariables.set(\"uclRepaymentExternalReference\", `MER-UCL-PAY-${runId}`);"
+                            ]
+                          }
+                        },
+                        {
+                          "listen": "test",
+                          "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                              "const json = pm.response.json();",
+                              "pm.test(\"UCL distinguishes allocation from exposure release\", () => { pm.expect(json.principalAllocated).to.be.a(\"number\"); pm.expect(json.principalReleased).to.eql(0); });",
+                              "pm.test(\"Result contains servicing evidence\", () => { pm.expect(json.allocations).to.be.an(\"array\").that.is.not.empty; pm.expect(json.affectedInstallments).to.be.an(\"array\").that.is.not.empty; });"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "Read UCL repayment history",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclServicingLoanApplicationId}}/repayments?page=0&size=20",
+                        "auth": {
+                          "type": "bearer",
+                          "bearer": [
+                            {
+                              "key": "token",
+                              "value": "{{customerAccessToken}}",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "description": "Reads immutable UCL repayment and allocation evidence without evaluating overdue state."
+                      },
+                      "response": [],
+                      "event": [
+                        {
+                          "listen": "test",
+                          "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                              "const json = pm.response.json();",
+                              "pm.test(\"History contains UCL repayment\", () => pm.expect(json.items).to.be.an(\"array\").that.is.not.empty);",
+                              "pm.test(\"UCL history reports zero product exposure release\", () => json.items.forEach(item => pm.expect(item.principalReleased).to.eql(0)));"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "Read evaluated UCL overdue state",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclOverdueLoanApplicationId}}/loan-account",
+                        "auth": {
+                          "type": "bearer",
+                          "bearer": [
+                            {
+                              "key": "token",
+                              "value": "{{customerAccessToken}}",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "description": "Reads a UCL LoanAccount after date-driven overdue evaluation; the read itself is non-mutating."
+                      },
+                      "response": [],
+                      "event": [
+                        {
+                          "listen": "test",
+                          "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                              "pm.test(\"Account is overdue\", () => pm.expect(pm.response.json().status).to.eql(\"OVERDUE\"));"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "Initialize UCL settlement amount",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/loan-account",
+                        "auth": {
+                          "type": "bearer",
+                          "bearer": [
+                            {
+                              "key": "token",
+                              "value": "{{accountingAccessToken}}",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "description": "Reads locked-input truth for the separate UCL settlement and closure scenario."
+                      },
+                      "response": [],
+                      "event": [
+                        {
+                          "listen": "prerequest",
+                          "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                              "const fresh = () => pm.variables.replaceIn(\"{{$guid}}\");",
+                              "const runId = fresh().replace(/-/g, \"\").toUpperCase();",
+                              "pm.collectionVariables.set(\"uclSettlementRequestId\", fresh());",
+                              "pm.collectionVariables.set(\"uclClosureRequestId\", fresh());",
+                              "pm.collectionVariables.set(\"uclSettlementExternalReference\", `MER-UCL-SET-${runId}`);"
+                            ]
+                          }
+                        },
+                        {
+                          "listen": "test",
+                          "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                              "const json = pm.response.json();",
+                              "pm.test(\"UCL account is serviceable\", () => pm.expect([\"ACTIVE\",\"OVERDUE\"]).to.include(json.status));",
+                              "pm.collectionVariables.set(\"uclSettlementExpectedAmount\", json.servicing.totalOutstanding);"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "Apply UCL Administrative Full-Balance Settlement",
+                      "request": {
+                        "method": "POST",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json",
+                            "type": "text"
+                          }
+                        ],
+                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/settlements",
+                        "auth": {
+                          "type": "bearer",
+                          "bearer": [
+                            {
+                              "key": "token",
+                              "value": "{{approverAccessToken}}",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "description": "Records exact complete UCL outstanding as payment-backed settlement with zero product-exposure release.",
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"requestId\": \"{{uclSettlementRequestId}}\",\n  \"expectedSettlementAmount\": {{uclSettlementExpectedAmount}},\n  \"paymentValueDate\": \"{{uclSettlementPaymentValueDate}}\",\n  \"externalPaymentReference\": \"{{uclSettlementExternalReference}}\"\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        }
+                      },
+                      "response": [],
+                      "event": [
+                        {
+                          "listen": "test",
+                          "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                              "const json = pm.response.json();",
+                              "pm.test(\"UCL settlement is exact and final\", () => { pm.expect(json.resultingLoanAccountStatus).to.eql(\"SETTLED\"); pm.expect(json.accountBalance.totalOutstanding).to.eql(0); pm.expect(json.principalAllocated).to.be.above(0); pm.expect(json.principalReleased).to.eql(0); });"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "name": "Close settled UCL LoanAccount",
+                      "request": {
+                        "method": "POST",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json",
+                            "type": "text"
+                          }
+                        ],
+                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/loan-account/closure",
+                        "auth": {
+                          "type": "bearer",
+                          "bearer": [
+                            {
+                              "key": "token",
+                              "value": "{{accountingAccessToken}}",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "description": "Performs the separate administrative UCL SETTLED-to-CLOSED transition.",
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"requestId\": \"{{uclClosureRequestId}}\"\n}",
+                          "options": {
+                            "raw": {
+                              "language": "json"
+                            }
+                          }
+                        }
+                      },
+                      "response": [],
+                      "event": [
+                        {
+                          "listen": "test",
+                          "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                              "const json = pm.response.json();",
+                              "pm.test(\"UCL account is closed\", () => { pm.expect(json.resultingStatus).to.eql(\"CLOSED\"); pm.expect(json.idempotentReplay).to.eql(false); });"
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "Reveal scenario - Login as Back-Office Admin",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "login"
+                  ]
+                },
+                "auth": {
+                  "type": "noauth"
+                },
+                "description": "Captures backOfficeAccessToken for partner read endpoints.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{backOfficeAdminEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Back-office admin token is returned\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.tokenType).to.eql(\"Bearer\");",
+                      "    pm.expect(json.accessToken).to.be.a(\"string\").and.not.empty;",
+                      "    pm.collectionVariables.set(\"backOfficeAccessToken\", json.accessToken);",
+                      "    pm.collectionVariables.set(\"currentUserId\", json.userId || \"\");",
+                      "    pm.collectionVariables.set(\"currentCustomerId\", json.customerId || \"\");",
+                      "    ",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Reveal scenario - Login as Customer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "login"
+                  ]
+                },
+                "auth": {
+                  "type": "noauth"
+                },
+                "description": "Captures customerAccessToken and sets accessToken by default.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "pm.test(\"Customer token is returned\", function () {",
+                      "    const json = pm.response.json();",
+                      "    pm.expect(json.tokenType).to.eql(\"Bearer\");",
+                      "    pm.expect(json.accessToken).to.be.a(\"string\").and.not.empty;",
+                      "    pm.collectionVariables.set(\"customerAccessToken\", json.accessToken);",
+                      "    pm.collectionVariables.set(\"currentUserId\", json.userId || \"\");",
+                      "    pm.collectionVariables.set(\"currentCustomerId\", json.customerId || \"\");",
+                      "    pm.collectionVariables.set(\"accessToken\", json.accessToken);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Loan Officer - ordinary case returns only the stored mask",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/staff/loan-applications/{{identityReferenceRevealLoanApplicationId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "staff",
+                    "loan-applications",
+                    "{{identityReferenceRevealLoanApplicationId}}"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{loanOfficerAccessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Safe case read succeeds\", () => pm.response.to.have.status(200));",
+                      "pm.test(\"Only the fictional mask is present\", () => { const c = pm.response.json().customerContext; pm.expect(c.maskedIdentityReference).to.eql(\"****-001\"); pm.expect(Object.keys(c).sort()).to.eql([\"customerNumber\", \"fullName\", \"maskedIdentityReference\", \"phoneNumber\"]); });",
+                      "pm.test(\"Ordinary case excludes raw reference and protection internals\", () => { pm.expect(pm.response.text().includes(\"IDREF-MER-001\")).to.eql(false); [\"identityReference\", \"ciphertext\", \"fingerprint\", \"lastFour\"].forEach(k => pm.expect(pm.response.json().customerContext).not.to.have.property(k)); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Loan Officer - explicitly reveal the fictional stored reference",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/staff/loan-applications/{{identityReferenceRevealLoanApplicationId}}/customer-identity-reference/reveal",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "staff",
+                    "loan-applications",
+                    "{{identityReferenceRevealLoanApplicationId}}",
+                    "customer-identity-reference",
+                    "reveal"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{loanOfficerAccessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Explicit reveal succeeds\", () => pm.response.to.have.status(200));",
+                      "pm.test(\"Minimal exact application response\", () => { const result = pm.response.json(); pm.expect(Object.keys(result).sort()).to.eql([\"identityReference\", \"loanApplicationId\"]); pm.expect(result.loanApplicationId).to.eql(pm.variables.get(\"identityReferenceRevealLoanApplicationId\")); pm.expect(result.identityReference === \"IDREF-MER-001\").to.eql(true); });",
+                      "pm.test(\"Private non-cacheable response\", () => { pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store, private\"); pm.expect(pm.response.headers.get(\"Pragma\")).to.eql(\"no-cache\"); pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\"); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Approver - reveal denied",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/staff/loan-applications/{{identityReferenceRevealLoanApplicationId}}/customer-identity-reference/reveal",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "staff",
+                    "loan-applications",
+                    "{{identityReferenceRevealLoanApplicationId}}",
+                    "customer-identity-reference",
+                    "reveal"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{approverAccessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Reveal forbidden\", () => pm.response.to.have.status(403));",
+                      "pm.test(\"Denial excludes protected data\", () => { pm.expect(pm.response.json()).not.to.have.property(\"identityReference\"); pm.expect(pm.response.text().includes(\"IDREF-MER-001\")).to.eql(false); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Accounting - reveal denied",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/staff/loan-applications/{{identityReferenceRevealLoanApplicationId}}/customer-identity-reference/reveal",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "staff",
+                    "loan-applications",
+                    "{{identityReferenceRevealLoanApplicationId}}",
+                    "customer-identity-reference",
+                    "reveal"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{accountingAccessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Reveal forbidden\", () => pm.response.to.have.status(403));",
+                      "pm.test(\"Denial excludes protected data\", () => { pm.expect(pm.response.json()).not.to.have.property(\"identityReference\"); pm.expect(pm.response.text().includes(\"IDREF-MER-001\")).to.eql(false); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Back Office - reveal denied",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/staff/loan-applications/{{identityReferenceRevealLoanApplicationId}}/customer-identity-reference/reveal",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "staff",
+                    "loan-applications",
+                    "{{identityReferenceRevealLoanApplicationId}}",
+                    "customer-identity-reference",
+                    "reveal"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{backOfficeAccessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Reveal forbidden\", () => pm.response.to.have.status(403));",
+                      "pm.test(\"Denial excludes protected data\", () => { pm.expect(pm.response.json()).not.to.have.property(\"identityReference\"); pm.expect(pm.response.text().includes(\"IDREF-MER-001\")).to.eql(false); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Customer with unrelated own authority - reveal denied",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/staff/loan-applications/{{identityReferenceRevealLoanApplicationId}}/customer-identity-reference/reveal",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "staff",
+                    "loan-applications",
+                    "{{identityReferenceRevealLoanApplicationId}}",
+                    "customer-identity-reference",
+                    "reveal"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{customerAccessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Reveal forbidden\", () => pm.response.to.have.status(403));",
+                      "pm.test(\"Denial excludes protected data\", () => { pm.expect(pm.response.json()).not.to.have.property(\"identityReference\"); pm.expect(pm.response.text().includes(\"IDREF-MER-001\")).to.eql(false); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Generic Staff without reveal authority - reveal denied",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/staff/loan-applications/{{identityReferenceRevealLoanApplicationId}}/customer-identity-reference/reveal",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "staff",
+                    "loan-applications",
+                    "{{identityReferenceRevealLoanApplicationId}}",
+                    "customer-identity-reference",
+                    "reveal"
+                  ]
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{identityRevealUnrelatedStaffAccessToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "description": "Supply a prepared generic Staff token with loan:read/customer:read but no dedicated Loan Officer reveal authority."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (!pm.variables.get(\"identityRevealUnrelatedStaffAccessToken\")) pm.execution.skipRequest();"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Reveal forbidden\", () => pm.response.to.have.status(403));",
+                      "pm.test(\"Denial excludes protected data\", () => { pm.expect(pm.response.json()).not.to.have.property(\"identityReference\"); pm.expect(pm.response.text().includes(\"IDREF-MER-001\")).to.eql(false); });"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
 {
     "name": "03A Customer Identity Verification - Customer-level manual review",
     "description": "Run after profile setup and before NEW Salary Advance, UCL, or Collateral origination. Each new application binds the exact current successful Customer identity verification; Salary Advance additionally retains Partner Employee, limit, and exposure controls. Manual fictional evidence only; no eKYC or document-authenticity claim. Digital upload and assisted exact-version binding are alternative sources. Rejection/replacement, wrong/stale versions and role denial use explicit prepared pending attempts. A structured 422 IDENTITY_REFERENCE_MISMATCH leaves the attempt pending and permits correction and manual retry. After any uncertain POST, GET authoritative history/detail before another command. Never save a real presented Identity Reference in variables.",
