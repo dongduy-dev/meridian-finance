@@ -60,7 +60,8 @@ public class QueryApprovedOfferService implements QueryApprovedOfferUseCase {
                         "Approved offer was not found for the loan application."
                 ));
 
-        return approvedOfferMapper.toDto(approvedOffer, LocalDateTime.now(clock));
+        return approvedOfferMapper.toCustomerDto(approvedOffer, LocalDateTime.now(clock),
+                loanApplication.originationChannel());
     }
 
     private void assertOwnApplication(LoanApplication loanApplication, UUID customerId) {

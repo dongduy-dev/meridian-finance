@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
+import { StaffAssistedApplicationNotice } from '@/features/applications/components/StaffAssistedApplicationNotice'
 import { useOwnApplicationQuery } from '@/features/applications/application-queries'
 import { ContractSummary } from '@/features/contracts/components/ContractSummary'
 import { contractErrorMessage } from '@/features/contracts/contract-presentation'
@@ -33,6 +34,8 @@ type ContractNotice = 'acknowledged' | 'new-version'
 export function ApplicationContractPage() {
   const { loanApplicationId } = useParams()
   const applicationQuery = useOwnApplicationQuery(loanApplicationId)
+  const isDigital = applicationQuery.data?.originationChannel === 'CUSTOMER_DIGITAL'
+  const isStaffAssisted = applicationQuery.data?.originationChannel === 'STAFF_ASSISTED'
   const contractQuery = useCurrentContractQuery(loanApplicationId)
   const acknowledgment = useAcknowledgeCurrentContractMutation()
   const { begin: beginAcknowledgment, reset: resetAcknowledgment } = useOperationIdentity()
@@ -73,7 +76,7 @@ export function ApplicationContractPage() {
 
   const acknowledge = async () => {
     const contract = contractQuery.data
-    if (!loanApplicationId || !contract || acknowledgment.isPending || contract.availableCustomerAction !== 'ACKNOWLEDGE') return
+    if (!isDigital || !loanApplicationId || !contract || acknowledgment.isPending || contract.availableCustomerAction !== 'ACKNOWLEDGE') return
     setAcknowledgmentError(undefined)
     setNotice(undefined)
     const expectedVersion = contract.contractVersion
@@ -105,8 +108,8 @@ export function ApplicationContractPage() {
     && contractQuery.error.errorCode === 'CURRENT_CONTRACT_MISSING'
   const waiting = contractMissing && applicationQuery.data?.status === 'CONTRACT_PENDING'
   const contract = contractQuery.data
-  const unknownAction = Boolean(contract?.availableCustomerAction && contract.availableCustomerAction !== 'ACKNOWLEDGE')
-  const canAcknowledge = contract?.availableCustomerAction === 'ACKNOWLEDGE'
+  const unknownAction = isDigital && Boolean(contract?.availableCustomerAction && contract.availableCustomerAction !== 'ACKNOWLEDGE')
+  const canAcknowledge = isDigital && contract?.availableCustomerAction === 'ACKNOWLEDGE'
 
   return (
     <DetailLayout
@@ -121,11 +124,14 @@ export function ApplicationContractPage() {
             </div>
           ) : null}
           {unknownAction ? <Alert variant="warning"><FileWarning aria-hidden="true" /><AlertTitle>Action unavailable</AlertTitle><AlertDescription>This action is not available right now. Refresh the page or try again later.</AlertDescription></Alert> : null}
-          {!canAcknowledge && !unknownAction ? <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No action needed</AlertTitle><AlertDescription>There is nothing you need to do with this contract right now.</AlertDescription></Alert> : null}
+          {isDigital && !canAcknowledge && !unknownAction ? <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No action needed</AlertTitle><AlertDescription>There is nothing you need to do with this contract right now.</AlertDescription></Alert> : null}
         </div>
       ) : undefined}
     >
       <div className="space-y-6">
+        {applicationQuery.isPending ? <Skeleton className="h-24" role="status" aria-label="Loading application details" /> : null}
+        {applicationQuery.isError ? <QueryErrorFeedback error={applicationQuery.error} title="Application details could not be loaded" onRetry={() => void applicationQuery.refetch()} /> : null}
+        {isStaffAssisted ? <StaffAssistedApplicationNotice>Review the current contract here; Meridian Staff will coordinate acknowledgment with you.</StaffAssistedApplicationNotice> : null}
         {waiting ? (
           <EmptyState icon={FileClock} title="Your contract is not ready yet" description="Your offer has been accepted. Check again later for your contract." action={<Button onClick={() => void contractQuery.refetch()}><RefreshCw aria-hidden="true" />Check again</Button>} />
         ) : null}
@@ -133,11 +139,11 @@ export function ApplicationContractPage() {
         {!waiting && contractQuery.isError && !contract ? <QueryErrorFeedback error={contractQuery.error} title="Current contract could not be loaded" onRetry={() => void contractQuery.refetch()} /> : null}
         {notice === 'acknowledged' ? <Alert variant="success" aria-live="polite"><CheckCircle2 aria-hidden="true" /><AlertTitle>Contract review confirmed</AlertTitle><AlertDescription>Your confirmation applies to the contract version shown here.</AlertDescription></Alert> : null}
         {notice === 'new-version' ? <Alert variant="warning" aria-live="polite"><FileWarning aria-hidden="true" /><AlertTitle>Review the current contract version</AlertTitle><AlertDescription>The contract changed. Review this version before confirming again.</AlertDescription></Alert> : null}
-        <Alert variant="information"><Info aria-hidden="true" /><AlertTitle>About this confirmation</AlertTitle><AlertDescription>By continuing, you confirm that you reviewed this contract version. This acknowledgment is not an electronic or digital signature and does not create a signed PDF or legal agreement.</AlertDescription></Alert>
+        {isDigital ? <Alert variant="information"><Info aria-hidden="true" /><AlertTitle>About this confirmation</AlertTitle><AlertDescription>By continuing, you confirm that you reviewed this contract version. This acknowledgment is not an electronic or digital signature and does not create a signed PDF or legal agreement.</AlertDescription></Alert> : null}
         {contract ? <ContractSummary contract={contract} /> : null}
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={isDigital && dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Confirm review of contract version {contract?.contractVersion}?</DialogTitle><DialogDescription>This confirmation applies only to the version shown. Continue after reviewing its terms and masked destination.</DialogDescription></DialogHeader>
           {acknowledgmentError ? <ContractMutationError error={acknowledgmentError} /> : null}

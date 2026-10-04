@@ -5,6 +5,7 @@ import com.meridian.platform.loan.application.dto.LoanContractBankAccountDto;
 import com.meridian.platform.loan.application.dto.LoanContractDto;
 import com.meridian.platform.loan.application.dto.LoanContractRepaymentItemDto;
 import com.meridian.platform.loan.application.port.in.QueryContractReadinessUseCase;
+import com.meridian.platform.loan.application.port.in.QueryCurrentLoanContractUseCase;
 import com.meridian.platform.loan.domain.model.ApprovedOfferFinancialTerms;
 import com.meridian.platform.loan.domain.model.LoanContract;
 import com.meridian.platform.loan.domain.model.LoanContractStatus;
@@ -15,6 +16,14 @@ import org.springframework.stereotype.Component;
 public class LoanContractMapper {
 
     public LoanContractDto toDto(LoanContract contract) {
+        return toDto(contract, true);
+    }
+
+    public LoanContractDto toReadDto(QueryCurrentLoanContractUseCase.ReadResult result) {
+        return toDto(result.contract(), result.customerDirectActionsAllowed());
+    }
+
+    private LoanContractDto toDto(LoanContract contract, boolean directActionsAllowed) {
         ApprovedOfferFinancialTerms terms = contract.financialTerms();
         ProtectedDisbursementBankAccount account = contract.disbursementBankAccount();
         return new LoanContractDto(
@@ -51,7 +60,7 @@ public class LoanContractMapper {
                 contract.preparedAt(),
                 contract.acknowledgedAt(),
                 contract.confirmedAt(),
-                contract.status() == LoanContractStatus.PREPARED ? "ACKNOWLEDGE" : null
+                directActionsAllowed && contract.status() == LoanContractStatus.PREPARED ? "ACKNOWLEDGE" : null
         );
     }
 

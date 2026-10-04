@@ -72,7 +72,9 @@ public class LoanContractController {
     @GetMapping("/current")
     @PreAuthorize("hasAnyAuthority('loan:read:own', 'loan:contract:read')")
     public LoanContractDto current(@PathVariable UUID loanApplicationId) {
-        return mapper.toDto(requireCurrent(loanApplicationId));
+        return mapper.toReadDto(queryCurrentContract.findCurrentForRead(loanApplicationId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "CURRENT_CONTRACT_MISSING", "Current loan contract was not found.")));
     }
 
     @PostMapping("/current/acknowledgment")

@@ -168,6 +168,16 @@ class LoanContractControllerTest {
                 .andExpect(jsonPath("$.errorCode").value("OFFER_NOT_ACCEPTED"))
                 .andExpect(jsonPath("$.message").value("Approved offer has not been accepted."));
     }
+    @Test
+    void customerReadSuppressesAcknowledgmentWithoutHidingSafeContract() throws Exception {
+        useCases.directActionsAllowed = false;
+        mockMvc.perform(get("/api/v1/loan-applications/{id}/contracts/current", LoanContractTestData.APPLICATION_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PREPARED"))
+                .andExpect(jsonPath("$.disbursementBankAccount.maskedAccountNumber").value("****7890"))
+                .andExpect(jsonPath("$.availableCustomerAction").isEmpty());
+    }
+
     private static final class StubContractUseCases implements
             PrepareLoanContractUseCase,
             QueryCurrentLoanContractUseCase,
@@ -179,6 +189,7 @@ class LoanContractControllerTest {
         private Integer expectedReadinessVersion;
         private AcknowledgeLoanContractUseCase.Command acknowledgment;
         private int currentQueryCount;
+        private boolean directActionsAllowed = true;
         private RuntimeException preparationFailure;
 
         @Override
@@ -194,6 +205,12 @@ class LoanContractControllerTest {
         public Optional<LoanContract> findCurrent(UUID loanApplicationId) {
             currentQueryCount++;
             return Optional.of(LoanContractTestData.prepared());
+        }
+
+        @Override
+        public Optional<QueryCurrentLoanContractUseCase.ReadResult> findCurrentForRead(UUID loanApplicationId) {
+            return findCurrent(loanApplicationId).map(contract ->
+                    new QueryCurrentLoanContractUseCase.ReadResult(contract, directActionsAllowed));
         }
 
         @Override

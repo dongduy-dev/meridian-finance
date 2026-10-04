@@ -323,6 +323,12 @@ Customer business `verificationStatus` is not Identity email verification. Custo
 
 After an existing Customer activates digital access, Customer-owned application reads use the unchanged authenticated `customerId`. Historical `STAFF_ASSISTED` applications may appear in the ordinary application list, but their channel remains `STAFF_ASSISTED` and Customer Web must not infer a digital-only required action for them.
 
+`requiredAction` describes Customer-digital work only; `STAFF_ASSISTED` applications return `NONE`. The Dashboard empty attention state must describe online tasks without implying that no Staff-coordinated Customer participation is needed.
+
+Application Detail and the direct Offer, Contract, Documents, and Corrections routes must use the own application detail's authoritative `originationChannel` before rendering Customer-direct controls. For `STAFF_ASSISTED`, safe authorized application, offer, contract, and checklist information remains readable, while offer response, contract acknowledgment, document upload/replacement, correction completion/resubmission, and Customer cancellation controls are absent even if another response advertises an action. The Corrections route must not query Customer correction tasks or its action-purpose checklist until `CUSTOMER_DIGITAL` is established. Loading or failed application context must not expose direct controls.
+
+Staff-assisted copy explains that Meridian Staff will coordinate required information, evidence, acknowledgment, or decisions with the Customer. It must not claim that the Customer has nothing to do or infer a specific Staff step from application status alone. Customer-digital instructions and eligible actions retain their normal behavior. The backend remains authoritative for authorization; see MER-API-001 for the purpose-specific read and mutation contracts.
+
 `SameSite=Strict` cookie rules still apply after CORS grants an origin. Localhost ports are same-site, and deployment must keep Customer Web and the API in a compatible same-site arrangement unless a separately reviewed backend cookie policy changes. CORS alone cannot make the refresh cookie available to a cross-site deployment.
 
 ### 8.2 Frontend Auth State

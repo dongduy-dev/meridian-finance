@@ -18,7 +18,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { applicationKeys } from '@/features/applications/application-queries'
+import { StaffAssistedApplicationNotice } from '@/features/applications/components/StaffAssistedApplicationNotice'
+import { applicationKeys, useOwnApplicationQuery } from '@/features/applications/application-queries'
 import { OfferSummary } from '@/features/offers/components/OfferSummary'
 import { offerErrorMessage, supportedOfferAction, type SupportedOfferAction } from '@/features/offers/offer-presentation'
 import {
@@ -33,6 +34,9 @@ export function ApplicationOfferPage() {
   const { loanApplicationId } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const applicationQuery = useOwnApplicationQuery(loanApplicationId)
+  const isDigital = applicationQuery.data?.originationChannel === 'CUSTOMER_DIGITAL'
+  const isStaffAssisted = applicationQuery.data?.originationChannel === 'STAFF_ASSISTED'
   const offerQuery = useApprovedOfferQuery(loanApplicationId)
   const acceptance = useAcceptApprovedOfferMutation()
   const decline = useDeclineApprovedOfferMutation()
@@ -75,7 +79,7 @@ export function ApplicationOfferPage() {
   }
 
   const respond = async (action: SupportedOfferAction) => {
-    if (!loanApplicationId || acceptance.isPending || decline.isPending) return
+    if (!isDigital || !loanApplicationId || acceptance.isPending || decline.isPending) return
     setActionError(undefined)
     try {
       if (action === 'ACCEPT') await acceptance.accept(loanApplicationId)
@@ -96,8 +100,8 @@ export function ApplicationOfferPage() {
 
   const offer = offerQuery.data
   const pending = acceptance.isPending || decline.isPending
-  const supportedActions = offer?.availableActions.filter(supportedOfferAction) ?? []
-  const hasUnknownAction = Boolean(offer?.availableActions.some((action) => !supportedOfferAction(action)))
+  const supportedActions = isDigital ? offer?.availableActions.filter(supportedOfferAction) ?? [] : []
+  const hasUnknownAction = isDigital && Boolean(offer?.availableActions.some((action) => !supportedOfferAction(action)))
   const actionsBlocked = Boolean(uncertainAction) || recovering
 
   return (
@@ -118,16 +122,19 @@ export function ApplicationOfferPage() {
               {supportedActions.includes('DECLINE') ? <Button className="w-full" variant="destructive" disabled={pending} onClick={() => { setActionError(undefined); setDeclineOpen(true) }}><ThumbsDown aria-hidden="true" />Decline offer</Button> : null}
             </div>
           ) : null}
-          {!actionsBlocked && supportedActions.length === 0 ? (
+          {isDigital && !actionsBlocked && supportedActions.length === 0 ? (
             <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No response required</AlertTitle><AlertDescription>There is nothing you need to do with this offer right now.</AlertDescription></Alert>
           ) : null}
         </div>
       ) : undefined}
     >
       <div className="space-y-6">
+        {applicationQuery.isPending ? <Skeleton className="h-24" role="status" aria-label="Loading application details" /> : null}
+        {applicationQuery.isError ? <QueryErrorFeedback error={applicationQuery.error} title="Application details could not be loaded" onRetry={() => void applicationQuery.refetch()} /> : null}
+        {isStaffAssisted ? <StaffAssistedApplicationNotice>Review the offer here; Meridian Staff will coordinate your response with you.</StaffAssistedApplicationNotice> : null}
         {offerQuery.isPending ? <div role="status" aria-label="Loading approved offer" className="space-y-4"><Skeleton className="h-72" /><Skeleton className="h-52" /></div> : null}
         {offerQuery.isError && !offer ? <QueryErrorFeedback error={offerQuery.error} title="Approved offer could not be loaded" onRetry={() => void offerQuery.refetch()} /> : null}
-        {uncertainAction ? (
+        {isDigital && uncertainAction ? (
           <Alert variant="warning" aria-live="polite">
             <AlertCircle aria-hidden="true" />
             <AlertTitle>Offer response needs confirmation</AlertTitle>
@@ -144,7 +151,7 @@ export function ApplicationOfferPage() {
         {offer ? <OfferSummary offer={offer} /> : null}
       </div>
 
-      <Dialog open={declineOpen} onOpenChange={setDeclineOpen}>
+      <Dialog open={isDigital && declineOpen} onOpenChange={setDeclineOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Decline this offer?</DialogTitle><DialogDescription>Declining this offer ends this application. You will not be able to accept this offer afterward.</DialogDescription></DialogHeader>
           {actionError ? <OfferMutationError error={actionError} /> : null}

@@ -18,12 +18,12 @@ function useCorrectionApi() {
   return useMemo(() => createCorrectionApi(manager), [manager])
 }
 
-export function useCorrectionTasksQuery(loanApplicationId: string | undefined) {
+export function useCorrectionTasksQuery(loanApplicationId: string | undefined, enabled = true) {
   const api = useCorrectionApi()
   return useQuery({
     queryKey: correctionKeys.tasks(loanApplicationId ?? ''),
     queryFn: () => api.getOwnTasks(loanApplicationId!),
-    enabled: Boolean(loanApplicationId),
+    enabled: enabled && Boolean(loanApplicationId),
   })
 }
 

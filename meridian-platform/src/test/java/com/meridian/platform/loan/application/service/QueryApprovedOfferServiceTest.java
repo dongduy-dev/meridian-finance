@@ -10,6 +10,7 @@ import com.meridian.platform.loan.domain.model.InterestCalculationMethod;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.loan.domain.model.RepaymentMethod;
 import com.meridian.platform.loan.domain.model.salaryadvance.SalaryAdvanceOfferPolicy;
@@ -49,6 +50,20 @@ class QueryApprovedOfferServiceTest {
         assertEquals("PENDING", result.status());
         assertEquals(List.of("ACCEPT", "DECLINE"), result.availableActions());
         assertEquals(ApprovedOfferStatus.PENDING, approvedOfferRepository.offer.status());
+    }
+
+    @Test
+    void staffAssistedOfferRemainsReadableWithoutCustomerDirectActions() {
+        FakeLoanApplicationRepository applications = new FakeLoanApplicationRepository(CUSTOMER_ID, OriginationChannel.STAFF_ASSISTED);
+        FakeApprovedOfferRepository offers = new FakeApprovedOfferRepository(pendingOffer(NOW.plusDays(1)));
+
+        ApprovedOfferDto result = service(applications, offers, CUSTOMER_ID).getApprovedOffer(LOAN_APPLICATION_ID);
+
+        assertEquals("PENDING", result.status());
+        assertEquals(money(3_000_000), result.approvedPrincipal());
+        assertTrue(result.availableActions().isEmpty());
+        assertTrue(offers.savedOffers.isEmpty());
+        assertEquals(List.of("ACCEPT", "DECLINE"), new ApprovedOfferMapper().toDto(offers.offer, NOW).availableActions());
     }
 
     @Test
@@ -170,13 +185,18 @@ class QueryApprovedOfferServiceTest {
         private final List<LoanApplication> savedApplications = new java.util.ArrayList<>();
 
         private FakeLoanApplicationRepository(UUID customerId) {
+            this(customerId, OriginationChannel.CUSTOMER_DIGITAL);
+        }
+
+        private FakeLoanApplicationRepository(UUID customerId, OriginationChannel channel) {
             this.application = new LoanApplication(
                     LOAN_APPLICATION_ID,
                     customerId,
                     UUID.fromString("12121212-1212-1212-1212-121212121212"),
                     "SA-20260706-000001",
-                    ProductCode.SALARY_ADVANCE,
-                    ProductType.SALARY_BASED,
+                    ProductCode.UNSECURED_CONSUMER_LOAN,
+                    ProductType.UNSECURED,
+                    channel,
                     LoanApplicationStatus.CUSTOMER_ACCEPTANCE_PENDING,
                     money(3_000_000),
                     1,

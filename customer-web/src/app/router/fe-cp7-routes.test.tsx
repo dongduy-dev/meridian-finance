@@ -34,6 +34,7 @@ function response(body: unknown, status = 200) {
 
 function baseFetch(input: RequestInfo | URL, init?: RequestInit) {
   const url = String(input)
+  if (url.endsWith(`/loan-applications/${applicationId}`)) return Promise.resolve(response({ ...application, originationChannel: 'CUSTOMER_DIGITAL' }))
   if (url.endsWith('/customers/me')) return Promise.resolve(response({ customerId: '22222222-2222-4222-8222-222222222222', customerNumber: 'CUS-001', status: 'ACTIVE', verificationStatus: 'VERIFIED', profileCompletionStatus: 'COMPLETE', primaryActiveBankAccountPresent: true, profile: null }))
   if (url.endsWith('/loan-products/UNSECURED_CONSUMER_LOAN')) return Promise.resolve(response(uclProduct))
   if (url.endsWith('/loan-products/COLLATERAL_LOAN')) return Promise.resolve(response(collateralProduct))
@@ -307,5 +308,30 @@ describe('FE-CP7 document workspace', () => {
     expect(replacementBody?.get('expectedCurrentVersionId')).toBe(currentVersionId)
     expect(reads).toBeGreaterThanOrEqual(2)
     expect(screen.getByText(/Selected: replacement.pdf/)).toBeVisible()
+  })
+})
+
+
+describe('Staff-assisted direct Documents route', () => {
+  it('keeps checklist and safe file metadata readable without upload controls or direct instructions', async () => {
+    const version = { documentVersionId: currentVersionId, checklistItemId: itemId, versionNumber: 1, originalFilename: 'statement.pdf', mimeType: 'application/pdf', byteSize: 4096, uploadedAt: '2026-08-31T08:30:00' }
+    const assistedChecklist = { ...emptyChecklist, uploadComplete: false, processingReady: false, items: [
+      { checklistItemId: itemId, documentType: 'INCOME_PROOF', requirementStatus: 'REQUIRED', customerStatus: 'NOT_UPLOADED', uploadComplete: false, processingReady: false, currentVersion: null },
+      { checklistItemId: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', documentType: 'BANK_STATEMENT', requirementStatus: 'REQUIRED', customerStatus: 'REPLACEMENT_REQUESTED', uploadComplete: true, processingReady: false, currentVersion: version },
+    ] }
+    const { fetchMock } = renderRoute(`/applications/${applicationId}/documents`, async (input, init) => {
+      const url = String(input)
+      if (url.endsWith(`/loan-applications/${applicationId}`)) return response({ ...application, originationChannel: 'STAFF_ASSISTED' })
+      if (url.endsWith(`/loan-applications/${applicationId}/documents`)) return response(assistedChecklist)
+      return baseFetch(input, init)
+    })
+    expect(await screen.findByText(/Documents for this application are handled with Meridian Staff/)).toBeVisible()
+    expect(await screen.findByText('statement.pdf')).toBeVisible()
+    expect(screen.getByText('This document is still required. Meridian Staff will coordinate the upload with you.')).toBeVisible()
+    expect(screen.getByText('A replacement is required. Meridian Staff will coordinate it with you.')).toBeVisible()
+    expect(document.querySelector('input[type="file"]')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Upload document|Replace document/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('Please upload a replacement for this document.')).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
   })
 })

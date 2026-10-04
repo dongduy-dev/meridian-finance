@@ -9,6 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { StaffAssistedApplicationNotice } from '@/features/applications/components/StaffAssistedApplicationNotice'
 import { ApiError } from '@/lib/api'
 import {
   useOwnApplicationQuery,
@@ -71,13 +72,14 @@ export function ApplicationDetailPage() {
           {indexQuery.isError ? (
             <QueryErrorFeedback error={indexQuery.error} title="Next step could not be loaded" onRetry={() => void indexQuery.refetch()} />
           ) : null}
-          {indexedApplication ? <RequiredActionCard application={indexedApplication} /> : null}
+          {detailQuery.data?.originationChannel === 'STAFF_ASSISTED' ? <StaffAssistedApplicationNotice /> : null}
+          {detailQuery.data?.originationChannel === 'CUSTOMER_DIGITAL' && indexedApplication ? <RequiredActionCard application={indexedApplication} /> : null}
           {indexQuery.data && !indexedApplication ? (
             <Card>
               <CardHeader><CardTitle>Next step unavailable</CardTitle><CardDescription>We can't show the next step for this application right now. Try again later.</CardDescription></CardHeader>
             </Card>
           ) : null}
-          {indexedApplication?.requiredAction === 'NONE' ? (
+          {detailQuery.data?.originationChannel === 'CUSTOMER_DIGITAL' && indexedApplication?.requiredAction === 'NONE' ? (
             <Card>
               <CardHeader><CardTitle>No action needed</CardTitle><CardDescription>There is nothing you need to do for this application right now.</CardDescription></CardHeader>
             </Card>

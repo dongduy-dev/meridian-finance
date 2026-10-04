@@ -170,6 +170,12 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
     @Override
     @Transactional(readOnly = true)
     public Optional<LoanContract> findCurrent(UUID loanApplicationId) {
+        return findCurrentForRead(loanApplicationId).map(QueryCurrentLoanContractUseCase.ReadResult::contract);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<QueryCurrentLoanContractUseCase.ReadResult> findCurrentForRead(UUID loanApplicationId) {
         Objects.requireNonNull(loanApplicationId);
         AuthenticatedUser actor = currentUserProvider.currentUser();
         LoanApplication application = applications.findById(loanApplicationId).orElseThrow(
@@ -192,7 +198,10 @@ public class LoanContractReadinessService implements PrepareLoanContractUseCase,
                 && application.status() != LoanApplicationStatus.DISBURSEMENT_PENDING) {
             throw conflict("INVALID_APPLICATION_STATE", "Loan application is not in a contract-readable state.");
         }
-        return contracts.findCurrentByApplicationId(loanApplicationId);
+        boolean directActionsAllowed = actor.optionalCustomerId().isEmpty()
+                || application.originationChannel() == OriginationChannel.CUSTOMER_DIGITAL;
+        return contracts.findCurrentByApplicationId(loanApplicationId)
+                .map(contract -> new QueryCurrentLoanContractUseCase.ReadResult(contract, directActionsAllowed));
     }
 
     @Override
