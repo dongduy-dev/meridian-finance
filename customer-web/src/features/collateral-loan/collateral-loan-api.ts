@@ -27,6 +27,14 @@ const inputSchema = z.object({
   collateral: collateralDetailsSchema,
 })
 
+export const customerCollateralSchema = z.object({
+  collateralType: nonEmptyString,
+  description: nonEmptyString,
+  estimatedValue: z.number().finite().positive(),
+  ownershipStatus: nonEmptyString,
+  conditionNote: nonEmptyString,
+})
+
 const evidenceRequirementSchema = z.object({
   checklistItemId: javaUuid,
   documentType: nonEmptyString,
@@ -49,6 +57,7 @@ export const collateralLoanApplicationSchema = z.object({
 })
 
 export type CollateralType = typeof collateralTypes[number]
+export type CustomerCollateral = z.infer<typeof customerCollateralSchema>
 export type CollateralLoanApplication = z.infer<typeof collateralLoanApplicationSchema>
 export type CollateralLoanApplicationInput = z.infer<typeof inputSchema>
 
@@ -58,6 +67,12 @@ export function createCollateralLoanApi(
 ) {
   const protectedClient = createProtectedApiClient(coordinator, client)
   return {
+    async getOwnCollateral(loanApplicationId: string) {
+      const id = javaUuid.parse(loanApplicationId)
+      return customerCollateralSchema.parse(
+        await protectedClient.request(`/loan-applications/${id}/collateral`),
+      )
+    },
     async submitApplication(input: CollateralLoanApplicationInput) {
       const body = inputSchema.parse(input)
       return collateralLoanApplicationSchema.parse(

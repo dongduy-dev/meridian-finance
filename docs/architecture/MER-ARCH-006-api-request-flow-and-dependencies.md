@@ -357,7 +357,13 @@ The query is read-only and non-locking. Partner returns at most one explicit cur
 
 ### LoanApplication Status Query
 
-`GET /api/v1/loan-applications/{loanApplicationId}` returns a minimal durable status projection. Customers require `loan:read:own`, must own the application, and receive the same not-found result for missing and foreign-owned IDs. Staff require `loan:read`. The service returns application identity, product, requested terms, status, and submission time without exposing Customer, Partner, limit, verification, actor, audit/history, or financial-servicing evidence. It does not infer next actions or mutate workflow state.
+`GET /api/v1/loan-applications/{loanApplicationId}` returns a minimal durable status projection. Customers require `loan:read:own`, must own the application, and receive the same not-found result for missing and foreign-owned IDs. Staff require `loan:read`. The service returns application identity, product, requested terms, origination channel, status, and submission time without exposing structured Collateral facts, Customer, Partner, limit, verification, actor, audit/history, or financial-servicing evidence. It does not infer next actions or mutate workflow state.
+
+### Customer-own Collateral Facts Query
+
+`GET /api/v1/loan-applications/{loanApplicationId}/collateral` enters Loan through `CustomerCollateralController`, `QueryOwnCollateralUseCase`, and `QueryOwnCollateralService`. The read-only application transaction requires a Customer-shaped actor with Customer context and exact `loan:read:own`, proves application ownership through `LoanApplicationRepository`, and reads the single submitted fact through `CollateralRepository`. An inconsistent row count or application relationship fails closed. The service maps only submitted immutable facts into `CustomerCollateralDto`; the HTTP fields and errors are defined in [MER-API-001 Section 4.2.1.1](../api/MER-API-001-endpoints-and-postman-scenarios.md#4211-customer-own-submitted-collateral-facts).
+
+Loan owns structured Collateral facts. Document owns ownership evidence and checklist/version/review state, which the Customer reads through the separate Document input contract. This flow accesses neither another context's persistence nor Staff verification/assessment projections. It acquires no workflow lock and writes no state, history, or audit. Either origination channel permits this own-data read without granting a digital action or changing historical channel identity. The shared LoanApplication status query remains minimal.
 
 ### Staff Discovery and Case Queries
 

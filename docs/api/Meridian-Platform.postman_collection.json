@@ -6917,6 +6917,71 @@
                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 201\", () => pm.response.to.have.status(201));","const json = pm.response.json();","pm.test(\"Collateral origination evidence is returned\", () => { pm.expect(json.productCode).to.eql(\"COLLATERAL_LOAN\"); pm.expect(json.productType).to.eql(\"SECURED\"); pm.expect(json.status).to.eql(\"DOCUMENTS_PENDING\"); pm.expect(json.collateralType).to.eql(\"MOTORBIKE\"); pm.expect(json.productVerificationResult).to.eql(\"PENDING_MANUAL_REVIEW\"); pm.expect(json.evidenceRequirements).to.have.length(1); pm.expect(json.evidenceRequirements[0].documentType).to.eql(\"COLLATERAL_OWNERSHIP_EVIDENCE\"); pm.expect(json.evidenceRequirements[0].requirementStatus).to.eql(\"REQUIRED\"); });","pm.test(\"Response excludes Customer and internal evidence\", () => { [\"customerId\",\"collateralId\",\"verificationId\",\"auditId\"].forEach(key => pm.expect(json).not.to.have.property(key)); });","pm.collectionVariables.set(\"collateralLoanApplicationId\", json.loanApplicationId);","pm.collectionVariables.set(\"collateralOwnershipChecklistItemId\", json.evidenceRequirements[0].checklistItemId);","pm.collectionVariables.set(\"checklistItemId\", json.evidenceRequirements[0].checklistItemId);"]}}]
                                   },
                                   {
+                                      "name": "GET own submitted Collateral facts",
+                                      "request": {
+                                          "method": "GET",
+                                          "header": [],
+                                          "url": "{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}/collateral",
+                                          "auth": {
+                                              "type": "bearer",
+                                              "bearer": [
+                                                  {
+                                                      "key": "token",
+                                                      "value": "{{customerAccessToken}}",
+                                                      "type": "string"
+                                                  }
+                                              ]
+                                          },
+                                          "description": "Read only the five immutable submitted Loan-owned facts. Customer context and loan:read:own are required; neither channel grants direct actions from this read. No customerId input, Staff assessment, or Document evidence is returned."
+                                      },
+                                      "response": [],
+                                      "event": [
+                                          {
+                                              "listen": "test",
+                                              "script": {
+                                                  "type": "text/javascript",
+                                                  "exec": [
+                                                      "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                                      "pm.test(\"Only five submitted facts are returned\", () => pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"collateralType\", \"conditionNote\", \"description\", \"estimatedValue\", \"ownershipStatus\"]));",
+                                                      "pm.test(\"Estimate remains a submitted number\", () => pm.expect(pm.response.json().estimatedValue).to.be.a(\"number\"));"
+                                                  ]
+                                              }
+                                          }
+                                      ]
+                                  },
+                                  {
+                                      "name": "GET Collateral application minimal status regression",
+                                      "request": {
+                                          "method": "GET",
+                                          "header": [],
+                                          "url": "{{baseUrl}}/api/v1/loan-applications/{{collateralLoanApplicationId}}",
+                                          "auth": {
+                                              "type": "bearer",
+                                              "bearer": [
+                                                  {
+                                                      "key": "token",
+                                                      "value": "{{customerAccessToken}}",
+                                                      "type": "string"
+                                                  }
+                                              ]
+                                          },
+                                          "description": "The shared status projection remains generic. Structured Collateral facts are available only through the dedicated Customer read."
+                                      },
+                                      "response": [],
+                                      "event": [
+                                          {
+                                              "listen": "test",
+                                              "script": {
+                                                  "type": "text/javascript",
+                                                  "exec": [
+                                                      "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                                      "pm.test(\"Shared status contains exactly nine generic fields\", () => pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"applicationNumber\", \"loanApplicationId\", \"originationChannel\", \"productCode\", \"productType\", \"requestedAmount\", \"requestedTermMonths\", \"status\", \"submittedAt\"]));"
+                                                  ]
+                                              }
+                                          }
+                                      ]
+                                  },
+                                  {
                                       "name":  "POST Collateral Loan application - duplicate blocking check",
                                       "request":  {"method":"POST","header":[{"key":"Content-Type","value":"application/json","type":"text"}],"url":"{{baseUrl}}/api/v1/loan-applications/collateral-loan","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},"description":"Run after the happy path to verify the Customer/product blocking invariant. Collateral origination does not add an outstanding Collateral LoanAccount guard.","body":{"mode":"raw","raw":"{\n  \"requestedAmount\": 25000000,\n  \"requestedTermMonths\": 12,\n  \"collateral\": {\n    \"type\": \"CAR\",\n    \"description\": \"Second submitted asset\",\n    \"estimatedValue\": 50000000,\n    \"ownershipStatus\": \"Customer-provided ownership statement\",\n    \"conditionNote\": \"Normal used condition\"\n  }\n}","options":{"raw":{"language":"json"}}}},
                                       "response":  [],
