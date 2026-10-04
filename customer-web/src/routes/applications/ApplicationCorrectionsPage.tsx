@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
+import { StaffAssistedApplicationNotice } from '@/features/applications/components/StaffAssistedApplicationNotice'
 import {
   useCancelOwnApplicationMutation,
   useOwnApplicationQuery,
@@ -41,8 +42,10 @@ export function ApplicationCorrectionsPage() {
   const queryClient = useQueryClient()
   const detailQuery = useOwnApplicationQuery(loanApplicationId)
   const indexQuery = useOwnApplicationsQuery()
-  const tasksQuery = useCorrectionTasksQuery(loanApplicationId)
-  const checklistQuery = useDocumentChecklistQuery(loanApplicationId)
+  const isDigital = detailQuery.data?.originationChannel === 'CUSTOMER_DIGITAL'
+  const isStaffAssisted = detailQuery.data?.originationChannel === 'STAFF_ASSISTED'
+  const tasksQuery = useCorrectionTasksQuery(loanApplicationId, isDigital)
+  const checklistQuery = useDocumentChecklistQuery(loanApplicationId, isDigital)
   const resubmission = useResubmitCorrectionMutation()
   const cancellation = useCancelOwnApplicationMutation()
   const resubmissionOperation = useOperationIdentity()
@@ -56,9 +59,9 @@ export function ApplicationCorrectionsPage() {
   const allTasksCompleted = Boolean(
     tasksQuery.data?.length && tasksQuery.data.every((task) => task.status === 'COMPLETED'),
   )
-  const canResubmit = allTasksCompleted
+  const canResubmit = isDigital && allTasksCompleted
     && indexedApplication?.requiredAction === 'COMPLETE_CORRECTIONS'
-  const canCancel = detailQuery.data?.status === 'RETURNED_FOR_REVISION'
+  const canCancel = isDigital && detailQuery.data?.status === 'RETURNED_FOR_REVISION'
     && ['SALARY_ADVANCE', 'UNSECURED_CONSUMER_LOAN'].includes(detailQuery.data.productCode)
 
   const refreshAuthoritative = async () => {
@@ -114,6 +117,16 @@ export function ApplicationCorrectionsPage() {
   }
 
   const notFound = detailQuery.error instanceof ApiError && detailQuery.error.status === 404
+
+  if (!isDigital && !notFound) {
+    return (
+      <FocusedFlowLayout eyebrow="Requested changes" title="Requested updates" description={detailQuery.data ? `Application ${detailQuery.data.applicationNumber}` : 'Review your application status.'} backAction={<Button variant="secondary" asChild><Link to={loanApplicationId ? `/applications/${loanApplicationId}` : '/applications'}><ArrowLeft aria-hidden="true" />Application</Link></Button>}>
+        {detailQuery.isPending ? <Skeleton className="h-32" role="status" aria-label="Loading application details" /> : null}
+        {detailQuery.isError ? <QueryErrorFeedback error={detailQuery.error} title="Application details could not be loaded" onRetry={() => void detailQuery.refetch()} /> : null}
+        {isStaffAssisted ? <StaffAssistedApplicationNotice>Requested updates for this application are coordinated through Meridian Staff. Contact your Loan Officer or branch if you need help with the next step.</StaffAssistedApplicationNotice> : null}
+      </FocusedFlowLayout>
+    )
+  }
 
   return (
     <FocusedFlowLayout

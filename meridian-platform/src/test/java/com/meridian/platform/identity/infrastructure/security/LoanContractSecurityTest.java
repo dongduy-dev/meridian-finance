@@ -54,6 +54,8 @@ class LoanContractSecurityTest {
     void setUp() {
         when(queryCurrentLoanContractUseCase.findCurrent(any()))
                 .thenReturn(Optional.of(LoanContractTestData.prepared()));
+        when(queryCurrentLoanContractUseCase.findCurrentForRead(any()))
+                .thenReturn(Optional.of(new QueryCurrentLoanContractUseCase.ReadResult(LoanContractTestData.prepared(), true)));
         when(prepareLoanContractUseCase.prepare(any())).thenReturn(LoanContractTestData.prepared());
         when(acknowledgeLoanContractUseCase.acknowledge(any())).thenReturn(LoanContractTestData.acknowledged());
         when(confirmContractReadinessUseCase.confirm(any())).thenReturn(LoanContractTestData.ready());

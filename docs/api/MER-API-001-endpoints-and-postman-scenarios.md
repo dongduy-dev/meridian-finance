@@ -1616,6 +1616,8 @@ Response actions require no body.
 
 Safe offer data includes approved principal and term, pricing method, flat monthly rate, interest, fee, total repayment, repayment method, generated/expiry times, effective status, available actions, and provisional repayment items. Provisional items do not contain final calendar due dates.
 
+A Customer-owned `STAFF_ASSISTED` offer remains readable through `GET`, with `availableActions = []` even while pending. A pending unexpired `CUSTOMER_DIGITAL` offer retains `["ACCEPT", "DECLINE"]`. This Customer read does not change the separate Staff-assisted offer-response projection or recording contract.
+
 `GET` is read-only. A missing application or offer returns its stable not-found code; a foreign-owned application returns `403 ACCESS_DENIED`. Acceptance moves an eligible Salary Advance, UCL, or Collateral Loan application to `CONTRACT_PENDING`. Decline or first discovery of pending expiry applies the terminal outcome exactly once. Salary Advance reservation release runs only for Salary Advance; UCL and Collateral Loan create no Salary Advance limit, movement, reservation, conversion, or release effect. An identical Customer response is replay-safe, while a contradictory terminal action returns a conflict.
 
 For Collateral Loan, the safe response preserves the submitted requested principal and term and reports `FLAT_ORIGINAL_PRINCIPAL`, `flatMonthlyInterestRate = 0.015000`, zero fee, `MONTHLY_INSTALLMENT`, and the reconciled provisional items. It contains no final repayment dates. Acceptance moves the application to `CONTRACT_PENDING`, where the common operational-contract flow in Section 6.2 begins.
@@ -1651,6 +1653,8 @@ Important errors: `APPROVED_OFFER_NOT_FOUND`, `OFFER_NOT_ACCEPTED`, `UCL_VERIFIC
 ### 6.3 Read and acknowledge contract
 
 The current-contract response may expose identifiers, reference/version/status, accepted terms, repayment items, safe bank name/code, account-holder name, masked account number, timestamps, and available action. It never exposes the full destination or cryptographic evidence.
+
+For a Customer-owned `STAFF_ASSISTED` application in a contract-readable state, `GET /api/v1/loan-applications/{loanApplicationId}/contracts/current` preserves the safe contract information and returns `availableCustomerAction = null`, including for `PREPARED`. A Customer reading a `CUSTOMER_DIGITAL` prepared contract retains `ACKNOWLEDGE`. Authorized Staff reads preserve the prepared-contract action hint; Staff-mediated acknowledgment uses its separate evidenced contract.
 
 Acknowledgment:
 

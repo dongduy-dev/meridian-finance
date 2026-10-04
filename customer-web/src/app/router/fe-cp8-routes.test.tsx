@@ -461,3 +461,44 @@ describe('FE-CP8 route protection', () => {
     expect(router.state.location.pathname).toBe('/login')
   })
 })
+
+
+describe('Staff-assisted application tracking and corrections', () => {
+  it.each(['NONE', 'REVIEW_APPROVED_OFFER'])('uses Staff guidance on detail even with indexed requiredAction %s', async (requiredAction) => {
+    renderRoute(`/applications/${applicationId}`, state({ detail: { ...detail, originationChannel: 'STAFF_ASSISTED' }, applications: [{ ...summary, originationChannel: 'STAFF_ASSISTED', requiredAction }] }))
+    expect(await screen.findByText('Staff-assisted application')).toBeVisible()
+    expect(screen.getByText(/Meridian Staff will coordinate it with you/)).toBeVisible()
+    expect(screen.queryByText('There is nothing you need to do for this application right now.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Review offer|Review requested changes|Upload documents|Review contract/ })).not.toBeInTheDocument()
+  })
+
+  it('preserves the digital no-action detail state', async () => {
+    renderRoute(`/applications/${applicationId}`, state({ applications: [{ ...summary, requiredAction: 'NONE' }] }))
+    expect(await screen.findByText('There is nothing you need to do for this application right now.')).toBeVisible()
+    expect(screen.queryByText('Staff-assisted application')).not.toBeInTheDocument()
+  })
+
+  it('waits for channel then shows guidance without querying Customer tasks or documents', async () => {
+    let resolveDetail!: (response: Response) => void
+    const pending = new Promise<Response>((resolve) => { resolveDetail = resolve })
+    const fixture = state({ detail: { ...detail, originationChannel: 'STAFF_ASSISTED' } })
+    // Cached contradictory digital data must not make the Staff-assisted page actionable.
+    queryClient.setQueryData(['corrections', 'tasks', applicationId], [supportingTask])
+    queryClient.setQueryData(['documents', 'checklist', applicationId], checklist)
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => String(input).endsWith(`/loan-applications/${applicationId}`) ? pending : fixtureFetch(fixture)(input, init))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<AppProviders router={createTestRouter([`/applications/${applicationId}/corrections`])} authManager={createTestAuthManager()} />)
+    expect(await screen.findByLabelText('Loading application details')).toBeVisible()
+    expect(fetchMock.mock.calls.some(([input]) => /corrections\/tasks|\/documents$/.test(String(input)))).toBe(false)
+    resolveDetail(json(fixture.detail))
+    expect(await screen.findByText(/Requested updates for this application are coordinated through Meridian Staff/)).toBeVisible()
+    expect(screen.getByText(/Contact your Loan Officer or branch/)).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Mark as complete|Submit updates|Cancel application|Upload document|Replace document/ })).not.toBeInTheDocument()
+    expect(document.querySelector('input[type="file"]')).toBeNull()
+    expect(fetchMock.mock.calls.some(([input]) => /corrections\/tasks|\/documents$/.test(String(input)))).toBe(false)
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
+    expect(fixture.completionBodies).toEqual([])
+    expect(fixture.resubmissionBodies).toEqual([])
+    expect(fixture.cancellationBodies).toEqual([])
+  })
+})

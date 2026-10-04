@@ -4,6 +4,7 @@ import com.meridian.platform.loan.application.dto.ApprovedOfferDto;
 import com.meridian.platform.loan.application.dto.ProvisionalRepaymentItemDto;
 import com.meridian.platform.loan.domain.model.ApprovedOffer;
 import com.meridian.platform.loan.domain.model.ApprovedOfferStatus;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -13,6 +14,15 @@ import java.util.List;
 public class ApprovedOfferMapper {
 
     public ApprovedOfferDto toDto(ApprovedOffer approvedOffer, LocalDateTime now) {
+        return toDto(approvedOffer, now, true);
+    }
+
+    public ApprovedOfferDto toCustomerDto(ApprovedOffer approvedOffer, LocalDateTime now,
+            OriginationChannel originationChannel) {
+        return toDto(approvedOffer, now, originationChannel == OriginationChannel.CUSTOMER_DIGITAL);
+    }
+
+    private ApprovedOfferDto toDto(ApprovedOffer approvedOffer, LocalDateTime now, boolean directActionsAllowed) {
         ApprovedOfferStatus effectiveStatus = approvedOffer.effectiveStatusAt(now);
         return new ApprovedOfferDto(
                 approvedOffer.id(),
@@ -31,7 +41,7 @@ public class ApprovedOfferMapper {
                 approvedOffer.acceptedAt(),
                 approvedOffer.declinedAt(),
                 approvedOffer.expiredAt(),
-                availableActions(effectiveStatus),
+                directActionsAllowed ? availableActions(effectiveStatus) : List.of(),
                 approvedOffer.repaymentItems()
                         .stream()
                         .map(item -> new ProvisionalRepaymentItemDto(

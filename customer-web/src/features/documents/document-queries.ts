@@ -18,12 +18,12 @@ function useDocumentApi() {
   return useMemo(() => createDocumentApi(manager), [manager])
 }
 
-export function useDocumentChecklistQuery(loanApplicationId: string | undefined) {
+export function useDocumentChecklistQuery(loanApplicationId: string | undefined, enabled = true) {
   const api = useDocumentApi()
   return useQuery({
     queryKey: documentKeys.checklist(loanApplicationId ?? ''),
     queryFn: () => api.getChecklist(loanApplicationId!),
-    enabled: Boolean(loanApplicationId),
+    enabled: enabled && Boolean(loanApplicationId),
   })
 }
 

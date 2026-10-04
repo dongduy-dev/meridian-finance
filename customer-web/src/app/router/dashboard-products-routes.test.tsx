@@ -518,3 +518,17 @@ describe('FE-CP5 route protection', () => {
     expect(router.state.location.state).toEqual({ from: path })
   })
 })
+
+
+describe('Staff-assisted Dashboard attention', () => {
+  it('scopes the empty attention state to online tasks while keeping Staff-assisted tracking visible', async () => {
+    const assisted = { ...applications[0], originationChannel: 'STAFF_ASSISTED', status: 'CUSTOMER_ACCEPTANCE_PENDING', requiredAction: 'NONE' }
+    renderRoute('/', (input, init) => String(input).endsWith('/loan-applications') ? Promise.resolve(response([assisted])) : successfulFetch(input, init))
+    expect(await screen.findByText("You're up to date online")).toBeVisible()
+    expect(screen.getByText('There are no digital application tasks waiting for you here. Staff-assisted steps are coordinated with Meridian Staff.')).toBeVisible()
+    const attention = screen.getByRole('heading', { name: 'What needs your attention' }).closest('section') as HTMLElement
+    expect(within(attention).queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.getByText(assisted.applicationNumber!)).toBeVisible()
+    expect(screen.queryByText('There are no application tasks waiting for you.')).not.toBeInTheDocument()
+  })
+})

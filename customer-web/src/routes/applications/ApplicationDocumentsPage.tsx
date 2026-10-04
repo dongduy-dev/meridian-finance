@@ -9,6 +9,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { StaffAssistedApplicationNotice } from '@/features/applications/components/StaffAssistedApplicationNotice'
+import { useOwnApplicationQuery } from '@/features/applications/application-queries'
 import { applicationStatusPresentation } from '@/features/applications/application-presentation'
 import { DocumentStatus } from '@/features/documents/components/DocumentStatus'
 import { DocumentUpload } from '@/features/documents/components/DocumentUpload'
@@ -36,6 +38,9 @@ function submissionNotice(value: unknown): SubmissionNotice | undefined {
 export function ApplicationDocumentsPage() {
   const { loanApplicationId } = useParams()
   const location = useLocation()
+  const applicationQuery = useOwnApplicationQuery(loanApplicationId)
+  const isDigital = applicationQuery.data?.originationChannel === 'CUSTOMER_DIGITAL'
+  const isStaffAssisted = applicationQuery.data?.originationChannel === 'STAFF_ASSISTED'
   const checklistQuery = useDocumentChecklistQuery(loanApplicationId)
   const notice = submissionNotice(location.state)
 
@@ -43,11 +48,14 @@ export function ApplicationDocumentsPage() {
     <FocusedFlowLayout
       eyebrow="Application documents"
       title="Documents"
-      description="Upload the documents we need and track their review status."
+      description={isDigital ? "Upload the documents we need and track their review status." : "Track required documents and their review status."}
       backAction={<Button variant="secondary" asChild><Link to="/">Return to Dashboard</Link></Button>}
     >
       <div className="space-y-8">
-      {notice ? (
+      {applicationQuery.isPending ? <Skeleton className="h-24" role="status" aria-label="Loading application details" /> : null}
+      {applicationQuery.isError ? <QueryErrorFeedback error={applicationQuery.error} title="Application details could not be loaded" onRetry={() => void applicationQuery.refetch()} /> : null}
+      {isStaffAssisted ? <StaffAssistedApplicationNotice>Documents for this application are handled with Meridian Staff. If an upload or replacement is required, Meridian Staff will coordinate it with you.</StaffAssistedApplicationNotice> : null}
+      {isDigital && notice ? (
         <Alert variant="success">
           <CheckCircle2 aria-hidden="true" />
           <AlertTitle>Application submitted</AlertTitle>
@@ -63,7 +71,7 @@ export function ApplicationDocumentsPage() {
       {checklistQuery.isError ? (
         <QueryErrorFeedback error={checklistQuery.error} title="Documents could not be loaded" onRetry={() => void checklistQuery.refetch()} />
       ) : null}
-      {checklistQuery.data ? (
+      {checklistQuery.data && applicationQuery.data ? (
         <>
           <section aria-labelledby="checklist-readiness-heading" className="space-y-4">
             <div><h2 id="checklist-readiness-heading" className="text-xl font-semibold">Document progress</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Document completion does not mean that your loan is approved.</p></div>
@@ -73,11 +81,11 @@ export function ApplicationDocumentsPage() {
             </dl>
           </section>
           <section aria-labelledby="document-items-heading" className="space-y-4">
-            <div><h2 id="document-items-heading" className="text-xl font-semibold">Documents we need</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Review the status of each document and take action where needed.</p></div>
+            <div><h2 id="document-items-heading" className="text-xl font-semibold">Documents we need</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">{isDigital ? "Review the status of each document and take action where needed." : "Review the status of each required document."}</p></div>
             {checklistQuery.data.items.length ? (
               <div className="space-y-5">
                 {checklistQuery.data.items.map((item) => {
-                  const action = documentUploadAction(item.customerStatus)
+                  const action = isDigital ? documentUploadAction(item.customerStatus) : undefined
                   return (
                     <Card key={item.checklistItemId} className="min-w-0">
                       <CardHeader className="gap-3">
@@ -87,7 +95,7 @@ export function ApplicationDocumentsPage() {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-5">
-                        <DocumentStatus status={item.customerStatus} />
+                        <DocumentStatus status={item.customerStatus} staffAssisted={isStaffAssisted} />
                         <dl className="grid gap-3 text-sm sm:grid-cols-2">
                           <ReadinessLine label="Document provided" value={item.uploadComplete ? 'Complete' : 'Still needed'} />
                           <ReadinessLine label="Ready for next step" value={item.processingReady ? 'Yes' : 'No'} />

@@ -317,6 +317,35 @@ class LoanContractReadinessServiceTest {
         assertSame(current, service.findCurrent(f.application.id()).orElseThrow());
     }
 
+    @Test void customerReadUsesChannelWhileStaffReadKeepsPreparedAction() {
+        UclFixture f = uclFixture();
+        LoanApplication assisted = new LoanApplication(
+                f.application.id(), f.application.customerId(), f.application.loanProductId(),
+                f.application.applicationNumber(), f.application.productCode(), f.application.productType(),
+                OriginationChannel.STAFF_ASSISTED, f.application.status(), f.application.requestedAmount(),
+                f.application.requestedTermMonths(), f.application.submittedAt());
+        LoanContract current = uclContract(f, LoanContractStatus.PREPARED);
+        when(applications.findById(assisted.id())).thenReturn(Optional.of(assisted));
+        when(contracts.findCurrentByApplicationId(assisted.id())).thenReturn(Optional.of(current));
+        when(users.currentUser()).thenReturn(new AuthenticatedUser(
+                UUID.randomUUID(), "owner@meridian.test", "CUSTOMER", assisted.customerId(),
+                Set.of("CUSTOMER"), Set.of("loan:read:own")));
+        var mapper = new com.meridian.platform.loan.application.mapper.LoanContractMapper();
+
+        var customerRead = service.findCurrentForRead(assisted.id()).orElseThrow();
+        assertSame(current, customerRead.contract());
+        assertNull(mapper.toReadDto(customerRead).availableCustomerAction());
+        assertEquals("PREPARED", mapper.toReadDto(customerRead).status());
+
+        when(applications.findById(assisted.id())).thenReturn(Optional.of(f.application));
+        assertEquals("ACKNOWLEDGE", mapper.toReadDto(service.findCurrentForRead(assisted.id()).orElseThrow()).availableCustomerAction());
+
+        when(applications.findById(assisted.id())).thenReturn(Optional.of(assisted));
+        when(users.currentUser()).thenReturn(staff());
+        assertEquals("ACKNOWLEDGE", mapper.toReadDto(service.findCurrentForRead(assisted.id()).orElseThrow()).availableCustomerAction());
+        verify(contracts, never()).save(any());
+    }
+
     @Test void readinessReportsInactiveCapturedAccountAndReleasedReservation() {
         Fixture f = fixture(); LoanContract acknowledged = contract(f, 1, LoanContractStatus.ACKNOWLEDGED);
         when(users.currentUser()).thenReturn(staff());

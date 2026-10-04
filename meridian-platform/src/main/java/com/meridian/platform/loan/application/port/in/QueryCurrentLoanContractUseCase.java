@@ -6,4 +6,9 @@ import java.util.UUID;
 
 public interface QueryCurrentLoanContractUseCase {
     Optional<LoanContract> findCurrent(UUID loanApplicationId);
+
+    Optional<ReadResult> findCurrentForRead(UUID loanApplicationId);
+
+    record ReadResult(LoanContract contract, boolean customerDirectActionsAllowed) {}
+
 }

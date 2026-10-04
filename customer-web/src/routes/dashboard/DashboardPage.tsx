@@ -105,8 +105,8 @@ export function DashboardPage() {
         {requiredActions?.length === 0 ? (
           <EmptyState
             icon={CheckCircle2}
-            title="You're up to date"
-            description="There are no application tasks waiting for you."
+            title="You're up to date online"
+            description="There are no digital application tasks waiting for you here. Staff-assisted steps are coordinated with Meridian Staff."
             className="min-h-52"
           />
         ) : null}

@@ -409,3 +409,45 @@ describe('FE-CP9 route protection', () => {
     expect(router.state.location.pathname).toBe('/login')
   })
 })
+
+
+describe('Staff-assisted direct offer and contract routes', () => {
+  it('keeps offer terms readable while ignoring contradictory direct action hints', async () => {
+    const fixture = state({ detail: { ...detail, originationChannel: 'STAFF_ASSISTED' } })
+    renderRoute(`/applications/${applicationId}/offer`, fixture)
+    expect(await screen.findByText('Review the offer here; Meridian Staff will coordinate your response with you.')).toBeVisible()
+    expect(await screen.findByText('Approved principal')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Accept offer' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Decline offer' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.queryByText('No response required')).not.toBeInTheDocument()
+    expect(fixture.acceptPosts + fixture.declinePosts).toBe(0)
+  })
+
+  it('keeps prepared contract and masked destination readable without acknowledgment', async () => {
+    const fixture = state({ detail: { ...detail, originationChannel: 'STAFF_ASSISTED', status: 'CONTRACT_PENDING' } })
+    renderRoute(`/applications/${applicationId}/contract`, fixture)
+    expect(await screen.findByText('Review the current contract here; Meridian Staff will coordinate acknowledgment with you.')).toBeVisible()
+    expect(await screen.findByText(preparedContract.contractReference)).toBeVisible()
+    expect(screen.getByText('****6789')).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Confirm review/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.queryByText('There is nothing you need to do with this contract right now.')).not.toBeInTheDocument()
+    expect(fixture.acknowledgmentBodies).toEqual([])
+  })
+
+  it.each(['offer', 'contract'])('fails closed on the direct %s route while application context loads or fails', async (page) => {
+    let resolveApplication!: (response: Response) => void
+    const pending = new Promise<Response>((resolve) => { resolveApplication = resolve })
+    const fixture = state()
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => String(input).endsWith(`/loan-applications/${applicationId}`) ? pending : fixtureFetch(fixture)(input, init)))
+    render(<AppProviders router={createTestRouter([`/applications/${applicationId}/${page}`])} authManager={createTestAuthManager()} />)
+    expect(await screen.findByLabelText('Loading application details')).toBeVisible()
+    expect(await screen.findByText(page === 'offer' ? 'Approved principal' : 'Accepted principal')).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Accept offer|Decline offer|Confirm review/ })).not.toBeInTheDocument()
+    resolveApplication(error('application', 'QUERY_UNAVAILABLE', 400))
+    expect(await screen.findByText('Application details could not be loaded')).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Accept offer|Decline offer|Confirm review/ })).not.toBeInTheDocument()
+    expect(fixture.acceptPosts + fixture.declinePosts + fixture.acknowledgmentBodies.length).toBe(0)
+  })
+})
