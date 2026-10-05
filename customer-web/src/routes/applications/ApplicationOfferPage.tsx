@@ -26,6 +26,7 @@ import {
   useAcceptApprovedOfferMutation,
   useApprovedOfferQuery,
   useDeclineApprovedOfferMutation,
+  offerKeys,
 } from '@/features/offers/offer-queries'
 import { ApiError, NetworkError } from '@/lib/api'
 import { formatTimestamp } from '@/lib/format/presentation'
@@ -44,6 +45,9 @@ export function ApplicationOfferPage() {
   const [uncertainAction, setUncertainAction] = useState<SupportedOfferAction>()
   const [recovering, setRecovering] = useState(false)
   const [declineOpen, setDeclineOpen] = useState(false)
+  const prerequisitesValidated = Boolean(loanApplicationId) && isDigital
+    && applicationQuery.isSuccess && applicationQuery.fetchStatus === 'idle'
+    && offerQuery.isSuccess && offerQuery.fetchStatus === 'idle'
 
   const navigateForProvenAction = (action: SupportedOfferAction) => {
     if (!loanApplicationId) return
@@ -65,7 +69,7 @@ export function ApplicationOfferPage() {
     ])
     const refreshed = await offerQuery.refetch()
     setRecovering(false)
-    if (!refreshed.isSuccess) return false
+    if (!refreshed.isSuccess || refreshed.fetchStatus !== 'idle') return false
     if (action === 'ACCEPT' && refreshed.data.status === 'ACCEPTED') {
       navigateForProvenAction(action)
       return true
@@ -79,7 +83,12 @@ export function ApplicationOfferPage() {
   }
 
   const respond = async (action: SupportedOfferAction) => {
-    if (!isDigital || !loanApplicationId || acceptance.isPending || decline.isPending) return
+    const applicationState = queryClient.getQueryState(applicationKeys.detail(loanApplicationId ?? ''))
+    const offerState = queryClient.getQueryState(offerKeys.detail(loanApplicationId ?? ''))
+    if (!prerequisitesValidated || !loanApplicationId || !offerQuery.data?.availableActions.includes(action)
+      || applicationState?.status !== 'success' || applicationState.fetchStatus !== 'idle' || applicationState.data !== applicationQuery.data
+      || offerState?.status !== 'success' || offerState.fetchStatus !== 'idle' || offerState.data !== offerQuery.data
+      || recovering || uncertainAction || acceptance.isPending || decline.isPending) return
     setActionError(undefined)
     try {
       if (action === 'ACCEPT') await acceptance.accept(loanApplicationId)
@@ -102,7 +111,7 @@ export function ApplicationOfferPage() {
   const pending = acceptance.isPending || decline.isPending
   const supportedActions = isDigital ? offer?.availableActions.filter(supportedOfferAction) ?? [] : []
   const hasUnknownAction = isDigital && Boolean(offer?.availableActions.some((action) => !supportedOfferAction(action)))
-  const actionsBlocked = Boolean(uncertainAction) || recovering
+  const actionsBlocked = !prerequisitesValidated || Boolean(uncertainAction) || recovering
 
   return (
     <DetailLayout
@@ -133,7 +142,7 @@ export function ApplicationOfferPage() {
         {applicationQuery.isError ? <QueryErrorFeedback error={applicationQuery.error} title="Application details could not be loaded" onRetry={() => void applicationQuery.refetch()} /> : null}
         {isStaffAssisted ? <StaffAssistedApplicationNotice>Review the offer here; Meridian Staff will coordinate your response with you.</StaffAssistedApplicationNotice> : null}
         {offerQuery.isPending ? <div role="status" aria-label="Loading approved offer" className="space-y-4"><Skeleton className="h-72" /><Skeleton className="h-52" /></div> : null}
-        {offerQuery.isError && !offer ? <QueryErrorFeedback error={offerQuery.error} title="Approved offer could not be loaded" onRetry={() => void offerQuery.refetch()} /> : null}
+        {offerQuery.isError ? <QueryErrorFeedback error={offerQuery.error} title="Approved offer could not be loaded" onRetry={() => void offerQuery.refetch()} /> : null}
         {isDigital && uncertainAction ? (
           <Alert variant="warning" aria-live="polite">
             <AlertCircle aria-hidden="true" />
@@ -141,7 +150,7 @@ export function ApplicationOfferPage() {
             <AlertDescription className="space-y-3">
               <p>We're checking whether your {uncertainAction === 'ACCEPT' ? 'acceptance' : 'decline'} was completed. Other offer actions are unavailable until this check finishes.</p>
               <div className="flex flex-wrap gap-3">
-                <Button size="sm" disabled={pending || recovering} onClick={() => void respond(uncertainAction)}>{pending ? 'Retrying…' : `Retry ${uncertainAction === 'ACCEPT' ? 'accept' : 'decline'}`}</Button>
+                <Button size="sm" disabled={actionsBlocked || pending} onClick={() => void respond(uncertainAction)}>{pending ? 'Retrying…' : `Retry ${uncertainAction === 'ACCEPT' ? 'accept' : 'decline'}`}</Button>
                 <Button size="sm" variant="secondary" disabled={recovering} onClick={() => void refreshAuthoritative(uncertainAction)}><RefreshCw aria-hidden="true" />{recovering ? 'Checking…' : 'Check current status'}</Button>
               </div>
             </AlertDescription>
@@ -151,13 +160,13 @@ export function ApplicationOfferPage() {
         {offer ? <OfferSummary offer={offer} /> : null}
       </div>
 
-      <Dialog open={isDigital && declineOpen} onOpenChange={setDeclineOpen}>
+      <Dialog open={!actionsBlocked && supportedActions.includes('DECLINE') && declineOpen} onOpenChange={setDeclineOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Decline this offer?</DialogTitle><DialogDescription>Declining this offer ends this application. You will not be able to accept this offer afterward.</DialogDescription></DialogHeader>
           {actionError ? <OfferMutationError error={actionError} /> : null}
           <DialogFooter>
             <DialogClose asChild><Button variant="secondary" disabled={pending}>Keep offer</Button></DialogClose>
-            <Button variant="destructive" disabled={pending} onClick={() => void respond('DECLINE')}>{decline.isPending ? 'Declining…' : 'Decline offer'}</Button>
+            <Button variant="destructive" disabled={actionsBlocked || pending} onClick={() => void respond('DECLINE')}>{decline.isPending ? 'Declining…' : 'Decline offer'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

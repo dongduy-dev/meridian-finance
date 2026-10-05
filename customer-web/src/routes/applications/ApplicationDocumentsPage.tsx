@@ -1,4 +1,5 @@
 import { ArrowLeft, CheckCircle2, FileCheck2, FileText, UploadCloud } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useParams } from 'react-router-dom'
 
 import { EmptyState } from '@/components/common/EmptyState'
@@ -10,11 +11,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StaffAssistedApplicationNotice } from '@/features/applications/components/StaffAssistedApplicationNotice'
-import { useOwnApplicationQuery } from '@/features/applications/application-queries'
+import { applicationKeys, useOwnApplicationQuery } from '@/features/applications/application-queries'
 import { applicationStatusPresentation } from '@/features/applications/application-presentation'
 import { DocumentStatus } from '@/features/documents/components/DocumentStatus'
 import { DocumentUpload } from '@/features/documents/components/DocumentUpload'
-import { useDocumentChecklistQuery } from '@/features/documents/document-queries'
+import { documentKeys, useDocumentChecklistQuery } from '@/features/documents/document-queries'
 import { documentUploadAction, formatFileSize } from '@/features/documents/document-presentation'
 import {
   documentTypeLabel, evidenceRequirementPresentation,
@@ -39,9 +40,20 @@ export function ApplicationDocumentsPage() {
   const { loanApplicationId } = useParams()
   const location = useLocation()
   const applicationQuery = useOwnApplicationQuery(loanApplicationId)
+  const queryClient = useQueryClient()
   const isDigital = applicationQuery.data?.originationChannel === 'CUSTOMER_DIGITAL'
   const isStaffAssisted = applicationQuery.data?.originationChannel === 'STAFF_ASSISTED'
   const checklistQuery = useDocumentChecklistQuery(loanApplicationId)
+  const actionsAllowed = Boolean(loanApplicationId) && isDigital
+    && applicationQuery.isSuccess && applicationQuery.fetchStatus === 'idle'
+    && checklistQuery.isSuccess && checklistQuery.fetchStatus === 'idle'
+  const canUpload = () => actionsAllowed && [
+    { key: applicationKeys.detail(loanApplicationId!), data: applicationQuery.data },
+    { key: documentKeys.checklist(loanApplicationId!), data: checklistQuery.data },
+  ].every(({ key, data }) => {
+    const current = queryClient.getQueryState(key)
+    return current?.status === 'success' && current.fetchStatus === 'idle' && current.data === data
+  })
   const notice = submissionNotice(location.state)
 
   return (
@@ -110,7 +122,7 @@ export function ApplicationDocumentsPage() {
                             </dl>
                           </div>
                         ) : null}
-                        {action ? <DocumentUpload loanApplicationId={checklistQuery.data.loanApplicationId} item={item} action={action} onVersionConflict={() => checklistQuery.refetch()} /> : null}
+                        {action ? <DocumentUpload loanApplicationId={checklistQuery.data.loanApplicationId} item={item} action={action} actionsAllowed={actionsAllowed} canAct={canUpload} onVersionConflict={() => checklistQuery.refetch()} /> : null}
                       </CardContent>
                     </Card>
                   )

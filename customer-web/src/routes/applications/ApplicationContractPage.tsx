@@ -1,4 +1,5 @@
 import { AlertCircle, ArrowLeft, CheckCircle2, FileClock, FileWarning, Info, RefreshCw } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -19,12 +20,13 @@ import {
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StaffAssistedApplicationNotice } from '@/features/applications/components/StaffAssistedApplicationNotice'
-import { useOwnApplicationQuery } from '@/features/applications/application-queries'
+import { applicationKeys, useOwnApplicationQuery } from '@/features/applications/application-queries'
 import { ContractSummary } from '@/features/contracts/components/ContractSummary'
 import { contractErrorMessage } from '@/features/contracts/contract-presentation'
 import {
   useAcknowledgeCurrentContractMutation,
   useCurrentContractQuery,
+  contractKeys,
 } from '@/features/contracts/contract-queries'
 import { ApiError, NetworkError } from '@/lib/api'
 import { useOperationIdentity } from '@/lib/ids/use-operation-identity'
@@ -34,6 +36,7 @@ type ContractNotice = 'acknowledged' | 'new-version'
 export function ApplicationContractPage() {
   const { loanApplicationId } = useParams()
   const applicationQuery = useOwnApplicationQuery(loanApplicationId)
+  const queryClient = useQueryClient()
   const isDigital = applicationQuery.data?.originationChannel === 'CUSTOMER_DIGITAL'
   const isStaffAssisted = applicationQuery.data?.originationChannel === 'STAFF_ASSISTED'
   const contractQuery = useCurrentContractQuery(loanApplicationId)
@@ -43,6 +46,11 @@ export function ApplicationContractPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [acknowledgmentError, setAcknowledgmentError] = useState<unknown>()
   const [notice, setNotice] = useState<ContractNotice>()
+  const prerequisitesValidated = Boolean(loanApplicationId) && isDigital
+    && applicationQuery.isSuccess && applicationQuery.fetchStatus === 'idle'
+    && contractQuery.isSuccess && contractQuery.fetchStatus === 'idle'
+  const canAcknowledge = prerequisitesValidated && !acknowledgment.isPending
+    && contractQuery.data?.availableCustomerAction === 'ACKNOWLEDGE'
 
   const currentVersion = contractQuery.data?.contractVersion
   useEffect(() => {
@@ -57,7 +65,7 @@ export function ApplicationContractPage() {
 
   const reconcileCurrent = async (expectedVersion: number, stale = false) => {
     const refreshed = await contractQuery.refetch()
-    if (!refreshed.isSuccess) return false
+    if (!refreshed.isSuccess || refreshed.fetchStatus !== 'idle') return false
     if (refreshed.data.contractVersion !== expectedVersion) {
       resetAcknowledgment()
       setNotice('new-version')
@@ -76,7 +84,11 @@ export function ApplicationContractPage() {
 
   const acknowledge = async () => {
     const contract = contractQuery.data
-    if (!isDigital || !loanApplicationId || !contract || acknowledgment.isPending || contract.availableCustomerAction !== 'ACKNOWLEDGE') return
+    const applicationState = queryClient.getQueryState(applicationKeys.detail(loanApplicationId ?? ''))
+    const contractState = queryClient.getQueryState(contractKeys.current(loanApplicationId ?? ''))
+    if (!canAcknowledge || !loanApplicationId || !contract
+      || applicationState?.status !== 'success' || applicationState.fetchStatus !== 'idle' || applicationState.data !== applicationQuery.data
+      || contractState?.status !== 'success' || contractState.fetchStatus !== 'idle' || contractState.data !== contract) return
     setAcknowledgmentError(undefined)
     setNotice(undefined)
     const expectedVersion = contract.contractVersion
@@ -109,7 +121,6 @@ export function ApplicationContractPage() {
   const waiting = contractMissing && applicationQuery.data?.status === 'CONTRACT_PENDING'
   const contract = contractQuery.data
   const unknownAction = isDigital && Boolean(contract?.availableCustomerAction && contract.availableCustomerAction !== 'ACKNOWLEDGE')
-  const canAcknowledge = isDigital && contract?.availableCustomerAction === 'ACKNOWLEDGE'
 
   return (
     <DetailLayout
@@ -124,7 +135,7 @@ export function ApplicationContractPage() {
             </div>
           ) : null}
           {unknownAction ? <Alert variant="warning"><FileWarning aria-hidden="true" /><AlertTitle>Action unavailable</AlertTitle><AlertDescription>This action is not available right now. Refresh the page or try again later.</AlertDescription></Alert> : null}
-          {isDigital && !canAcknowledge && !unknownAction ? <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No action needed</AlertTitle><AlertDescription>There is nothing you need to do with this contract right now.</AlertDescription></Alert> : null}
+          {prerequisitesValidated && !acknowledgment.isPending && !canAcknowledge && !unknownAction ? <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No action needed</AlertTitle><AlertDescription>There is nothing you need to do with this contract right now.</AlertDescription></Alert> : null}
         </div>
       ) : undefined}
     >
@@ -136,20 +147,20 @@ export function ApplicationContractPage() {
           <EmptyState icon={FileClock} title="Your contract is not ready yet" description="Your offer has been accepted. Check again later for your contract." action={<Button onClick={() => void contractQuery.refetch()}><RefreshCw aria-hidden="true" />Check again</Button>} />
         ) : null}
         {!waiting && (contractQuery.isPending || (contractMissing && applicationQuery.isPending)) ? <div role="status" aria-label="Loading current contract" className="space-y-4"><Skeleton className="h-72" /><Skeleton className="h-52" /></div> : null}
-        {!waiting && contractQuery.isError && !contract ? <QueryErrorFeedback error={contractQuery.error} title="Current contract could not be loaded" onRetry={() => void contractQuery.refetch()} /> : null}
+        {!waiting && contractQuery.isError ? <QueryErrorFeedback error={contractQuery.error} title="Current contract could not be loaded" onRetry={() => void contractQuery.refetch()} /> : null}
         {notice === 'acknowledged' ? <Alert variant="success" aria-live="polite"><CheckCircle2 aria-hidden="true" /><AlertTitle>Contract review confirmed</AlertTitle><AlertDescription>Your confirmation applies to the contract version shown here.</AlertDescription></Alert> : null}
         {notice === 'new-version' ? <Alert variant="warning" aria-live="polite"><FileWarning aria-hidden="true" /><AlertTitle>Review the current contract version</AlertTitle><AlertDescription>The contract changed. Review this version before confirming again.</AlertDescription></Alert> : null}
         {isDigital ? <Alert variant="information"><Info aria-hidden="true" /><AlertTitle>About this confirmation</AlertTitle><AlertDescription>By continuing, you confirm that you reviewed this contract version. This acknowledgment is not an electronic or digital signature and does not create a signed PDF or legal agreement.</AlertDescription></Alert> : null}
         {contract ? <ContractSummary contract={contract} /> : null}
       </div>
 
-      <Dialog open={isDigital && dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={prerequisitesValidated && contract?.availableCustomerAction === 'ACKNOWLEDGE' && dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Confirm review of contract version {contract?.contractVersion}?</DialogTitle><DialogDescription>This confirmation applies only to the version shown. Continue after reviewing its terms and masked destination.</DialogDescription></DialogHeader>
           {acknowledgmentError ? <ContractMutationError error={acknowledgmentError} /> : null}
           <DialogFooter>
             <DialogClose asChild><Button variant="secondary" disabled={acknowledgment.isPending}>Review again</Button></DialogClose>
-            <Button disabled={acknowledgment.isPending} onClick={() => void acknowledge()}>{acknowledgment.isPending ? 'Confirming…' : `Confirm version ${contract?.contractVersion}`}</Button>
+            <Button disabled={!canAcknowledge} onClick={() => void acknowledge()}>{acknowledgment.isPending ? 'Confirming…' : `Confirm version ${contract?.contractVersion}`}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

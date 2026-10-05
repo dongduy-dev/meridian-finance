@@ -33,11 +33,15 @@ export function DocumentUpload({
   loanApplicationId,
   item,
   action,
+  actionsAllowed,
+  canAct,
   onVersionConflict,
 }: {
   loanApplicationId: string
   item: CustomerDocumentChecklistItem
   action: 'upload' | 'replace'
+  actionsAllowed: boolean
+  canAct: () => boolean
   onVersionConflict: () => Promise<unknown>
 }) {
   const mutation = useUploadDocumentMutation()
@@ -63,6 +67,7 @@ export function DocumentUpload({
   }, [baseline])
 
   const chooseFile = (selected: File | undefined) => {
+    if (!actionsAllowed || !canAct() || mutation.isPending) return
     setFile(selected)
     setServerError(undefined)
     setSucceeded(false)
@@ -79,7 +84,7 @@ export function DocumentUpload({
   }
 
   const submit = async () => {
-    if (!file || localError || mutation.isPending) return
+    if (!actionsAllowed || !canAct() || !file || localError || mutation.isPending) return
     setServerError(undefined)
     try {
       await mutation.upload({
@@ -99,6 +104,8 @@ export function DocumentUpload({
       }
     }
   }
+
+  if (!actionsAllowed) return null
 
   if (action === 'replace' && !baseline) {
     return (
