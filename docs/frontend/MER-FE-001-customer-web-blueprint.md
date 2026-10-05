@@ -109,6 +109,16 @@ This blueprint does not define:
 - Customer Web must not expose Staff-only notes, evidence, actions, identifiers, or endpoints.
 - Customer Web presents backend facts in Customer language. Visible copy must not expose implementation terms such as backend, projection, persistence, authoritative state, or internal domain entity names unless the term has genuine Customer meaning.
 
+#### 4.1.1 Authoritative Prerequisite Reads and Fail-Closed Action Gating
+
+Customer Web may make a consequential action available only when every authoritative read that gates that action has succeeded and is settled. A prerequisite is settled when its query is successful and neither fetching nor paused. An unrelated read does not gate the action.
+
+Safe previously loaded data may remain visible while a required prerequisite is fetching, paused, failed, or otherwise unresolved. Cached read-only data must not authorize the command in that state. The command handler must re-check live prerequisite query state and confirm that it still corresponds to the evidence used to present the action before sending the mutation. A control rendered immediately before revalidation must not bypass this guard. Successful prerequisite reads restore only actions supported by the newly returned authoritative state.
+
+Query-cache freshness determines when revalidation occurs. A cached result that the query layer considers fresh may remain usable for presentation and action gating under the client freshness policy until revalidation begins. This rule does not require a fresh GET immediately before every command.
+
+Cache freshness is not backend business authority and cannot eliminate state-change races. Frontend gating does not replace backend validation. Backend authorization, ownership, current workflow state, expected versions/evidence identities, concurrency rules, and other business invariants remain the final authority for every mutation.
+
 ### 4.2 Status Presentation
 
 Backend enum values are mapped through one feature-owned label map. For example, `RETURNED_FOR_REVISION` may render as “Action required,” but the raw value remains available to application logic and diagnostics. Status presentation must include text or an icon in addition to color.
