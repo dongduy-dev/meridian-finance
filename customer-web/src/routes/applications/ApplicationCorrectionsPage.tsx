@@ -62,23 +62,37 @@ export function ApplicationCorrectionsPage() {
   const allTasksCompleted = Boolean(
     tasksQuery.data?.length && tasksQuery.data.every((task) => task.status === 'COMPLETED'),
   )
-  const actionsAllowed = validatedDigitalContext
-    && indexQuery.isSuccess && indexQuery.fetchStatus === 'idle'
+  const taskActionsAllowed = validatedDigitalContext
     && tasksQuery.isSuccess && tasksQuery.fetchStatus === 'idle'
     && checklistQuery.isSuccess && checklistQuery.fetchStatus === 'idle'
-  const canAct = () => actionsAllowed && [
+  const canTaskAct = () => taskActionsAllowed && [
     { key: applicationKeys.detail(loanApplicationId!), data: detailQuery.data },
-    { key: applicationKeys.index(), data: indexQuery.data },
     { key: correctionKeys.tasks(loanApplicationId!), data: tasksQuery.data },
     { key: documentKeys.checklist(loanApplicationId!), data: checklistQuery.data },
   ].every(({ key, data }) => {
     const current = queryClient.getQueryState(key)
     return current?.status === 'success' && current.fetchStatus === 'idle' && current.data === data
   })
-  const canResubmit = actionsAllowed && allTasksCompleted
+  const resubmissionAllowed = validatedDigitalContext
+    && indexQuery.isSuccess && indexQuery.fetchStatus === 'idle'
+    && tasksQuery.isSuccess && tasksQuery.fetchStatus === 'idle'
+  const canResubmit = resubmissionAllowed && allTasksCompleted
     && indexedApplication?.requiredAction === 'COMPLETE_CORRECTIONS'
-  const canCancel = actionsAllowed && detailQuery.data?.status === 'RETURNED_FOR_REVISION'
+  const canResubmitNow = () => canResubmit && [
+    { key: applicationKeys.detail(loanApplicationId!), data: detailQuery.data },
+    { key: applicationKeys.index(), data: indexQuery.data },
+    { key: correctionKeys.tasks(loanApplicationId!), data: tasksQuery.data },
+  ].every(({ key, data }) => {
+    const current = queryClient.getQueryState(key)
+    return current?.status === 'success' && current.fetchStatus === 'idle' && current.data === data
+  })
+  const canCancel = validatedDigitalContext && detailQuery.data?.status === 'RETURNED_FOR_REVISION'
     && ['SALARY_ADVANCE', 'UNSECURED_CONSUMER_LOAN'].includes(detailQuery.data.productCode)
+  const canCancelNow = () => {
+    const current = queryClient.getQueryState(applicationKeys.detail(loanApplicationId ?? ''))
+    return canCancel && current?.status === 'success' && current.fetchStatus === 'idle'
+      && current.data === detailQuery.data
+  }
 
   const refreshAuthoritative = async () => {
     const detail = await detailQuery.refetch()
@@ -91,7 +105,7 @@ export function ApplicationCorrectionsPage() {
   }
 
   const resubmit = async () => {
-    if (!loanApplicationId || resubmission.isPending || !canResubmit || !canAct()) return
+    if (!loanApplicationId || resubmission.isPending || !canResubmitNow()) return
     setResubmissionError(undefined)
     try {
       const result = await resubmission.resubmit({
@@ -112,7 +126,7 @@ export function ApplicationCorrectionsPage() {
   }
 
   const cancel = async () => {
-    if (!loanApplicationId || cancellation.isPending || !canCancel || !canAct()) return
+    if (!loanApplicationId || cancellation.isPending || !canCancelNow()) return
     setCancellationError(undefined)
     try {
       const result = await cancellation.cancel({
@@ -184,8 +198,8 @@ export function ApplicationCorrectionsPage() {
                 loanApplicationId={loanApplicationId!}
                 task={task}
                 checklistItem={checklistQuery.data?.items.find((item) => item.checklistItemId === task.checklistItemId)}
-                actionsAllowed={actionsAllowed}
-                canAct={canAct}
+                actionsAllowed={taskActionsAllowed}
+                canAct={canTaskAct}
                 checklistReady={checklistQuery.isSuccess && checklistQuery.fetchStatus === 'idle'}
                 onRefreshAuthoritative={refreshAuthoritative}
               />
@@ -197,7 +211,7 @@ export function ApplicationCorrectionsPage() {
           <EmptyState icon={FileCheck2} title="No requested changes" description="There are no changes for you to complete right now." />
         ) : null}
 
-        {actionsAllowed && allTasksCompleted && indexedApplication?.requiredAction !== 'COMPLETE_CORRECTIONS' ? (
+        {resubmissionAllowed && allTasksCompleted && indexedApplication?.requiredAction !== 'COMPLETE_CORRECTIONS' ? (
           <Alert variant="success"><CheckCircle2 aria-hidden="true" /><AlertTitle>All requested changes are complete</AlertTitle><AlertDescription>There is nothing else you need to do right now.</AlertDescription></Alert>
         ) : null}
 

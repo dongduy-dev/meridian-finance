@@ -50,10 +50,15 @@ function fixture(path: string, completed = false, documentStatus = 'REPLACEMENT_
     checklist: { ...checklist, items: [{ ...checklist.items[0], customerStatus: documentStatus }] } }
   const reads: Record<Read, number> = { detail: 0, index: 0, offer: 0, contract: 0, tasks: 0, checklist: 0 }
   let posts = 0
+  let postsAllowed = false
   let deferred: { read: Read; promise: Promise<Response> } | undefined
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
-    if (init?.method === 'POST') { posts++; throw new Error('Unexpected business POST') }
+    if (init?.method === 'POST') {
+      posts++
+      if (!postsAllowed) throw new Error('Unexpected business POST')
+      return json({ timestamp: now, status: 422, errorCode: 'VALIDATION_FAILED', message: 'Controlled command rejection.', path: url }, 422)
+    }
     const read = url.endsWith(`/loan-applications/${id}/documents`) ? 'checklist'
       : url.endsWith('/approved-offer') ? 'offer' : url.endsWith('/contracts/current') ? 'contract'
         : url.endsWith('/corrections/tasks') ? 'tasks' : url.endsWith(`/loan-applications/${id}`) ? 'detail'
@@ -66,7 +71,7 @@ function fixture(path: string, completed = false, documentStatus = 'REPLACEMENT_
   })
   vi.stubGlobal('fetch', fetchMock)
   render(<AppProviders router={createTestRouter([`/applications/${id}/${path}`])} authManager={createTestAuthManager()} />)
-  return { failed, data, reads, posts: () => posts, defer: (read: Read, promise: Promise<Response>) => { deferred = { read, promise } },
+  return { failed, data, reads, posts: () => posts, allowPosts: () => { postsAllowed = true }, defer: (read: Read, promise: Promise<Response>) => { deferred = { read, promise } },
     release: () => { deferred = undefined }, refresh: async (read: Read) => {
       await act(async () => { await queryClient.refetchQueries({ queryKey: keys[read], exact: true }) })
       // Query observers notify asynchronously after the fetch promise settles.
@@ -191,7 +196,7 @@ it.each(['detail', 'contract'] as const)('Contract blocks an open acknowledgment
   expect(screen.queryByRole('button', { name: /Confirm review|Confirm version/ })).not.toBeInTheDocument()
 })
 
-it.each(['detail', 'index', 'tasks', 'checklist'] as const)('Corrections blocks completion, replacement and cancellation after failed %s', async read => {
+it.each(['detail', 'tasks', 'checklist'] as const)('Corrections blocks completion and replacement after failed prerequisite %s', async read => {
   const f = fixture('corrections'); const user = userEvent.setup()
   const complete = await screen.findByRole('button', { name: 'Mark as complete' })
   await user.upload(screen.getByLabelText('Choose replacement file'), new File(['fictional'], 'new.pdf', { type: 'application/pdf' }))
@@ -199,7 +204,9 @@ it.each(['detail', 'index', 'tasks', 'checklist'] as const)('Corrections blocks 
   expect(screen.getByRole('button', { name: 'Cancel application' })).toBeEnabled()
   f.failed.add(read); await f.refresh(read)
   expect(screen.getByText(task.customerInstruction)).toBeVisible()
-  expect(screen.queryByRole('button', { name: /Mark as complete|Replace document|Submit updates|Cancel application/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Mark as complete|Replace document|Submit updates/ })).not.toBeInTheDocument()
+  if (read === 'detail') expect(screen.queryByRole('button', { name: 'Cancel application' })).not.toBeInTheDocument()
+  else expect(screen.getByRole('button', { name: 'Cancel application' })).toBeEnabled()
   expect(screen.queryByLabelText('Choose replacement file')).not.toBeInTheDocument()
   fireEvent.click(complete); fireEvent.click(upload); expect(f.posts()).toBe(0)
   if (read === 'detail') {
@@ -214,16 +221,114 @@ it.each(['detail', 'index', 'tasks', 'checklist'] as const)('Corrections blocks 
   expect(screen.getByLabelText('Choose replacement file')).toBeVisible()
   expect(screen.getByRole('button', { name: 'Cancel application' })).toBeEnabled()
 })
-it.each(['detail', 'index', 'tasks', 'checklist'] as const)('Corrections blocks resubmission after failed %s and rechecks current requiredAction', async read => {
+it.each(['detail', 'index', 'tasks'] as const)('Corrections blocks resubmission after failed prerequisite %s and rechecks current requiredAction', async read => {
   const f = fixture('corrections', true)
   const submit = await screen.findByRole('button', { name: 'Submit updates' })
   f.failed.add(read); await f.refresh(read)
   expect(screen.getByText(task.customerInstruction)).toBeVisible()
-  expect(screen.queryByRole('button', { name: /Submit updates|Cancel application/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Submit updates' })).not.toBeInTheDocument()
+  if (read === 'detail') expect(screen.queryByRole('button', { name: 'Cancel application' })).not.toBeInTheDocument()
+  else expect(screen.getByRole('button', { name: 'Cancel application' })).toBeEnabled()
   expect(screen.queryByText('All requested changes are complete')).not.toBeInTheDocument()
   fireEvent.click(submit); expect(f.posts()).toBe(0)
   f.failed.delete(read); await f.refresh(read)
   expect(await screen.findByRole('button', { name: 'Submit updates' })).toBeEnabled()
   f.data.index[0]!.requiredAction = 'NONE'; await f.refresh('index')
   expect(screen.queryByRole('button', { name: 'Submit updates' })).not.toBeInTheDocument()
+})
+
+it.each(['complete', 'upload'] as const)('keeps correction %s available and executable after an unrelated index failure', async command => {
+  const f = fixture('corrections'); const user = userEvent.setup()
+  await screen.findByRole('button', { name: 'Mark as complete' })
+  f.failed.add('index'); await f.refresh('index')
+  expect(screen.getByText(task.customerInstruction)).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Mark as complete' })).toBeEnabled()
+  expect(screen.getByLabelText('Choose replacement file')).toBeVisible()
+  await user.upload(screen.getByLabelText('Choose replacement file'), new File(['fictional'], 'new.pdf', { type: 'application/pdf' }))
+  expect(screen.getByRole('button', { name: 'Replace document' })).toBeEnabled()
+  f.allowPosts()
+  await user.click(screen.getByRole('button', { name: command === 'complete' ? 'Mark as complete' : 'Replace document' }))
+  await waitFor(() => expect(f.posts()).toBe(1))
+})
+
+it('keeps correction task/document actions available during unrelated index revalidation', async () => {
+  const f = fixture('corrections'); const user = userEvent.setup()
+  const complete = await screen.findByRole('button', { name: 'Mark as complete' })
+  let resolve!: (response: Response) => void
+  f.defer('index', new Promise(done => { resolve = done }))
+  let refresh!: Promise<void>
+  await act(async () => { refresh = queryClient.refetchQueries({ queryKey: keys.index }) })
+  expect(complete).toBeEnabled()
+  await user.upload(screen.getByLabelText('Choose replacement file'), new File(['fictional'], 'new.pdf', { type: 'application/pdf' }))
+  expect(screen.getByRole('button', { name: 'Replace document' })).toBeEnabled()
+  f.allowPosts(); await user.click(complete)
+  expect(f.posts()).toBe(1)
+  f.release(); await act(async () => { resolve(json(f.data.index)); await refresh })
+})
+
+it('keeps resubmission available and executable after checklist failure, then honors current index action', async () => {
+  const f = fixture('corrections', true); const user = userEvent.setup()
+  await screen.findByRole('button', { name: 'Submit updates' })
+  f.failed.add('checklist'); await f.refresh('checklist')
+  expect(screen.getByRole('button', { name: 'Submit updates' })).toBeEnabled()
+  f.allowPosts(); await user.click(screen.getByRole('button', { name: 'Submit updates' }))
+  await waitFor(() => expect(f.posts()).toBe(1))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Submit updates' })).toBeEnabled())
+  f.data.index[0]!.requiredAction = 'NONE'; await f.refresh('index')
+  expect(screen.queryByRole('button', { name: 'Submit updates' })).not.toBeInTheDocument()
+})
+
+it.each(['index', 'tasks', 'checklist'] as const)('keeps cancellation and its open dialog executable after unrelated %s failure', async read => {
+  const f = fixture('corrections'); const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: 'Cancel application' }))
+  f.failed.add(read); await f.refresh(read)
+  const dialog = screen.getByRole('dialog', { name: 'Cancel this application?' })
+  const cancel = within(dialog).getByRole('button', { name: 'Cancel application' })
+  expect(cancel).toBeEnabled()
+  f.allowPosts(); await user.click(cancel)
+  await waitFor(() => expect(f.posts()).toBe(1))
+})
+
+it('blocks an already-open cancellation dialog after failed detail refresh', async () => {
+  const f = fixture('corrections'); const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: 'Cancel application' }))
+  const cancel = within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel application' })
+  f.failed.add('detail'); await f.refresh('detail')
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Cancel application' })).not.toBeInTheDocument()
+  fireEvent.click(cancel); expect(f.posts()).toBe(0)
+})
+
+it.each([
+  ['status', 'SUBMITTED'], ['productCode', 'COLLATERAL_LOAN'], ['originationChannel', 'STAFF_ASSISTED'],
+] as const)('removes cancellation when current detail changes %s to %s', async (field, value) => {
+  const f = fixture('corrections'); const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: 'Cancel application' }))
+  f.data.detail[field] = value; await f.refresh('detail')
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Cancel application' })).not.toBeInTheDocument()
+  expect(f.posts()).toBe(0)
+})
+
+it.each([
+  ['complete', 'tasks'], ['complete', 'checklist'], ['upload', 'tasks'], ['upload', 'checklist'],
+  ['resubmit', 'index'], ['resubmit', 'tasks'],
+] as const)('guards correction %s against live %s revalidation before React rerenders', async (command, read) => {
+  const f = fixture('corrections', command === 'resubmit'); const user = userEvent.setup()
+  let button: HTMLElement
+  if (command === 'upload') {
+    await user.upload(await screen.findByLabelText('Choose replacement file'), new File(['fictional'], 'new.pdf', { type: 'application/pdf' }))
+    button = screen.getByRole('button', { name: 'Replace document' })
+  } else button = await screen.findByRole('button', { name: command === 'complete' ? 'Mark as complete' : 'Submit updates' })
+  expect(button).toBeEnabled()
+  let resolve!: (response: Response) => void
+  f.defer(read, new Promise(done => { resolve = done }))
+  let refresh!: Promise<void>
+  await act(async () => {
+    refresh = queryClient.refetchQueries({ queryKey: keys[read] })
+    fireEvent.click(button)
+    expect(f.posts()).toBe(0)
+  })
+  f.release(); await act(async () => { resolve(json(f.data[read])); await refresh })
+  expect(f.posts()).toBe(0)
 })
