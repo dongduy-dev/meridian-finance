@@ -290,7 +290,7 @@ describe('FE-CP9 offer flow', () => {
     expect(screen.queryByRole('button', { name: 'Accept offer' })).not.toBeInTheDocument()
   })
 
-  it('blocks the contradictory action after uncertainty and offers only same-action retry until recovery', async () => {
+  it('blocks every response after uncertainty and failed reconciliation until an authoritative GET recovers', async () => {
     const user = userEvent.setup()
     const fixture = state({ acceptMode: 'uncertain-unavailable' })
     const { router } = renderRoute(`/applications/${applicationId}/offer`, fixture)
@@ -299,8 +299,13 @@ describe('FE-CP9 offer flow', () => {
     expect(screen.getByRole('button', { name: 'Retry accept' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Decline offer' })).not.toBeInTheDocument()
     const retry = screen.getByRole('button', { name: 'Retry accept' })
-    await waitFor(() => expect(retry).toBeEnabled())
+    await waitFor(() => expect(retry).toBeDisabled())
     await user.click(retry)
+    expect(fixture.acceptPosts).toBe(1)
+    const check = await screen.findByRole('button', { name: 'Check current status' }, { timeout: 3_000 })
+    fixture.offerRefreshUnavailable = false
+    await user.click(check)
+    await user.click(await screen.findByRole('button', { name: 'Accept offer' }))
     await waitFor(() => expect(router.state.location.pathname).toBe(`/applications/${applicationId}/contract`))
     expect(fixture.acceptPosts).toBe(2)
   })

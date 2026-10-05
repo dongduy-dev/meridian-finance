@@ -24,6 +24,7 @@ import {
   useCancelOwnApplicationMutation,
   useOwnApplicationQuery,
   useOwnApplicationsQuery,
+  applicationKeys,
 } from '@/features/applications/application-queries'
 import { CorrectionTaskCard } from '@/features/corrections/components/CorrectionTaskCard'
 import { correctionErrorMessage } from '@/features/corrections/correction-presentation'
@@ -32,7 +33,7 @@ import {
   useCorrectionTasksQuery,
   useResubmitCorrectionMutation,
 } from '@/features/corrections/correction-queries'
-import { useDocumentChecklistQuery } from '@/features/documents/document-queries'
+import { documentKeys, useDocumentChecklistQuery } from '@/features/documents/document-queries'
 import { ApiError } from '@/lib/api'
 import { useOperationIdentity } from '@/lib/ids/use-operation-identity'
 
@@ -44,8 +45,10 @@ export function ApplicationCorrectionsPage() {
   const indexQuery = useOwnApplicationsQuery()
   const isDigital = detailQuery.data?.originationChannel === 'CUSTOMER_DIGITAL'
   const isStaffAssisted = detailQuery.data?.originationChannel === 'STAFF_ASSISTED'
-  const tasksQuery = useCorrectionTasksQuery(loanApplicationId, isDigital)
-  const checklistQuery = useDocumentChecklistQuery(loanApplicationId, isDigital)
+  const validatedDigitalContext = Boolean(loanApplicationId) && isDigital
+    && detailQuery.isSuccess && detailQuery.fetchStatus === 'idle'
+  const tasksQuery = useCorrectionTasksQuery(loanApplicationId, validatedDigitalContext)
+  const checklistQuery = useDocumentChecklistQuery(loanApplicationId, validatedDigitalContext)
   const resubmission = useResubmitCorrectionMutation()
   const cancellation = useCancelOwnApplicationMutation()
   const resubmissionOperation = useOperationIdentity()
@@ -59,14 +62,42 @@ export function ApplicationCorrectionsPage() {
   const allTasksCompleted = Boolean(
     tasksQuery.data?.length && tasksQuery.data.every((task) => task.status === 'COMPLETED'),
   )
-  const canResubmit = isDigital && allTasksCompleted
+  const taskActionsAllowed = validatedDigitalContext
+    && tasksQuery.isSuccess && tasksQuery.fetchStatus === 'idle'
+    && checklistQuery.isSuccess && checklistQuery.fetchStatus === 'idle'
+  const canTaskAct = () => taskActionsAllowed && [
+    { key: applicationKeys.detail(loanApplicationId!), data: detailQuery.data },
+    { key: correctionKeys.tasks(loanApplicationId!), data: tasksQuery.data },
+    { key: documentKeys.checklist(loanApplicationId!), data: checklistQuery.data },
+  ].every(({ key, data }) => {
+    const current = queryClient.getQueryState(key)
+    return current?.status === 'success' && current.fetchStatus === 'idle' && current.data === data
+  })
+  const resubmissionAllowed = validatedDigitalContext
+    && indexQuery.isSuccess && indexQuery.fetchStatus === 'idle'
+    && tasksQuery.isSuccess && tasksQuery.fetchStatus === 'idle'
+  const canResubmit = resubmissionAllowed && allTasksCompleted
     && indexedApplication?.requiredAction === 'COMPLETE_CORRECTIONS'
-  const canCancel = isDigital && detailQuery.data?.status === 'RETURNED_FOR_REVISION'
+  const canResubmitNow = () => canResubmit && [
+    { key: applicationKeys.detail(loanApplicationId!), data: detailQuery.data },
+    { key: applicationKeys.index(), data: indexQuery.data },
+    { key: correctionKeys.tasks(loanApplicationId!), data: tasksQuery.data },
+  ].every(({ key, data }) => {
+    const current = queryClient.getQueryState(key)
+    return current?.status === 'success' && current.fetchStatus === 'idle' && current.data === data
+  })
+  const canCancel = validatedDigitalContext && detailQuery.data?.status === 'RETURNED_FOR_REVISION'
     && ['SALARY_ADVANCE', 'UNSECURED_CONSUMER_LOAN'].includes(detailQuery.data.productCode)
+  const canCancelNow = () => {
+    const current = queryClient.getQueryState(applicationKeys.detail(loanApplicationId ?? ''))
+    return canCancel && current?.status === 'success' && current.fetchStatus === 'idle'
+      && current.data === detailQuery.data
+  }
 
   const refreshAuthoritative = async () => {
+    const detail = await detailQuery.refetch()
+    if (!detail.isSuccess || detail.fetchStatus !== 'idle' || detail.data.originationChannel !== 'CUSTOMER_DIGITAL') return
     await Promise.all([
-      detailQuery.refetch(),
       indexQuery.refetch(),
       tasksQuery.refetch(),
       checklistQuery.refetch(),
@@ -74,7 +105,7 @@ export function ApplicationCorrectionsPage() {
   }
 
   const resubmit = async () => {
-    if (!loanApplicationId || resubmission.isPending || !canResubmit) return
+    if (!loanApplicationId || resubmission.isPending || !canResubmitNow()) return
     setResubmissionError(undefined)
     try {
       const result = await resubmission.resubmit({
@@ -95,7 +126,7 @@ export function ApplicationCorrectionsPage() {
   }
 
   const cancel = async () => {
-    if (!loanApplicationId || cancellation.isPending || !canCancel) return
+    if (!loanApplicationId || cancellation.isPending || !canCancelNow()) return
     setCancellationError(undefined)
     try {
       const result = await cancellation.cancel({
@@ -151,8 +182,8 @@ export function ApplicationCorrectionsPage() {
         ) : null}
         {!notFound && detailQuery.isError ? <QueryErrorFeedback error={detailQuery.error} title="Application details could not be loaded" onRetry={() => void detailQuery.refetch()} /> : null}
         {!notFound && indexQuery.isError ? <QueryErrorFeedback error={indexQuery.error} title="Next step could not be loaded" onRetry={() => void indexQuery.refetch()} /> : null}
-        {!notFound && tasksQuery.isError ? <QueryErrorFeedback error={tasksQuery.error} title="Requested changes could not be loaded" onRetry={() => void tasksQuery.refetch()} /> : null}
-        {!notFound && checklistQuery.isError ? <QueryErrorFeedback error={checklistQuery.error} title="Required documents could not be loaded" onRetry={() => void checklistQuery.refetch()} /> : null}
+        {!notFound && tasksQuery.isError ? <QueryErrorFeedback error={tasksQuery.error} title="Requested changes could not be loaded" onRetry={() => void refreshAuthoritative()} /> : null}
+        {!notFound && checklistQuery.isError ? <QueryErrorFeedback error={checklistQuery.error} title="Required documents could not be loaded" onRetry={() => void refreshAuthoritative()} /> : null}
 
         {resubmissionError ? (
           <MutationFailure title="Updates were not submitted" error={resubmissionError} fallback="Your updates could not be submitted. Check your connection and try the same action again if appropriate." />
@@ -167,7 +198,9 @@ export function ApplicationCorrectionsPage() {
                 loanApplicationId={loanApplicationId!}
                 task={task}
                 checklistItem={checklistQuery.data?.items.find((item) => item.checklistItemId === task.checklistItemId)}
-                checklistReady={Boolean(checklistQuery.data)}
+                actionsAllowed={taskActionsAllowed}
+                canAct={canTaskAct}
+                checklistReady={checklistQuery.isSuccess && checklistQuery.fetchStatus === 'idle'}
                 onRefreshAuthoritative={refreshAuthoritative}
               />
             ))}
@@ -178,7 +211,7 @@ export function ApplicationCorrectionsPage() {
           <EmptyState icon={FileCheck2} title="No requested changes" description="There are no changes for you to complete right now." />
         ) : null}
 
-        {allTasksCompleted && indexedApplication?.requiredAction !== 'COMPLETE_CORRECTIONS' ? (
+        {resubmissionAllowed && allTasksCompleted && indexedApplication?.requiredAction !== 'COMPLETE_CORRECTIONS' ? (
           <Alert variant="success"><CheckCircle2 aria-hidden="true" /><AlertTitle>All requested changes are complete</AlertTitle><AlertDescription>There is nothing else you need to do right now.</AlertDescription></Alert>
         ) : null}
 

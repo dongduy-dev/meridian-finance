@@ -28,12 +28,16 @@ export function CorrectionTaskCard({
   task,
   checklistItem,
   checklistReady,
+  actionsAllowed,
+  canAct,
   onRefreshAuthoritative,
 }: {
   loanApplicationId: string
   task: CustomerCorrectionTask
   checklistItem?: CustomerDocumentChecklistItem
   checklistReady: boolean
+  actionsAllowed: boolean
+  canAct: () => boolean
   onRefreshAuthoritative: () => Promise<unknown>
 }) {
   const scope = correctionScopePresentation(task.scope)
@@ -45,7 +49,7 @@ export function CorrectionTaskCard({
   const [completedResult, setCompletedResult] = useState(false)
 
   const completeTask = async () => {
-    if (completion.isPending) return
+    if (!actionsAllowed || !canAct() || !open || !scope.customerCompletable || !checklistReady || !checklistItem || completion.isPending) return
     setError(undefined)
     setCompletedResult(false)
     try {
@@ -113,7 +117,7 @@ export function CorrectionTaskCard({
         {open && scope.documentAction && checklistItem ? (
           <div className="space-y-4">
             <DocumentStatus status={checklistItem.customerStatus} />
-            <DocumentUpload loanApplicationId={loanApplicationId} item={checklistItem} action={scope.documentAction} onVersionConflict={onRefreshAuthoritative} />
+            <DocumentUpload loanApplicationId={loanApplicationId} item={checklistItem} action={scope.documentAction} actionsAllowed={actionsAllowed && checklistReady} canAct={canAct} onVersionConflict={onRefreshAuthoritative} />
           </div>
         ) : null}
         {error ? (
@@ -129,7 +133,7 @@ export function CorrectionTaskCard({
         {completedResult ? (
           <Alert variant="success" aria-live="polite"><CheckCircle2 aria-hidden="true" /><AlertTitle>Requested change completed</AlertTitle><AlertDescription>This change is complete and the application status was refreshed.</AlertDescription></Alert>
         ) : null}
-        {open && scope.customerCompletable && checklistItem ? (
+        {actionsAllowed && open && scope.customerCompletable && checklistReady && checklistItem ? (
           <div className="space-y-2 border-t border-border pt-5">
             <p className="text-sm leading-6 text-muted-foreground">Uploading a document does not complete this change. Mark it complete after the required document is available.</p>
             <Button type="button" disabled={completion.isPending} onClick={() => void completeTask()}>

@@ -22,6 +22,6 @@ export async function decideIdentity(manager: AuthSessionManager, id: string, ve
   return verificationSchema.parse(await manager.protectedRequest(`${base}/${encodeURIComponent(id)}/${verify ? 'verify' : 'reject'}`, {
     method: 'POST', body: { requestId: crypto.randomUUID(), documentVersionId: versionId,
       ...(verify ? { presentedIdentityReference: reference } : { rejectionReason: reason }) },
-  }))
+  }, { replayAfterSessionRefresh: false }))
 }
 export function identityContent(manager: AuthSessionManager, id: string) { return manager.protectedRequest<ApiBinaryResponse>(`${base}/${encodeURIComponent(id)}/content`, { responseType: 'blob', cache: 'no-store' }) }
