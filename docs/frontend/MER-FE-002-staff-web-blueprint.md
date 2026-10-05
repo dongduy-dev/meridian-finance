@@ -138,6 +138,8 @@ Three narrow upload capabilities remain distinct. `document:upload:assisted` aut
 - The client must not expose Customer-only endpoints through a Staff route merely because a Staff user knows a resource identifier.
 - Restricted notes, external references, full bank-account numbers, document content, and internal operation identities must remain outside URLs, analytics, logs, breadcrumbs, and general-purpose caches.
 
+Staff Web follows the authoritative-prerequisite and fail-closed action-gating rule in [MER-FE-001 Section 4.1.1](MER-FE-001-customer-web-blueprint.md#411-authoritative-prerequisite-reads-and-fail-closed-action-gating). Feature-specific Staff workspaces may require stricter freshness or reconciliation rules; their fresh coherent servicing reads, uncertain-result recovery, and expected-version/evidence guards remain mandatory.
+
 ### 5.2 Status Presentation
 
 Backend enum values map through feature-owned label and semantic-treatment maps. Raw values remain available to application logic and safe diagnostics. Text or an icon accompanies color.
