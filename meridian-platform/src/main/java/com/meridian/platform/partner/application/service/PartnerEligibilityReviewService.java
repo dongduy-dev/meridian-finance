@@ -135,17 +135,17 @@ public class PartnerEligibilityReviewService
         }
 
         validateDecisionShape(request);
-        LocalDateTime decidedAt = LocalDateTime.now(clock);
+        LocalDateTime decidedAt = LocalDateTime.now(clock).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         PartnerCompany company = companies.findByIdForUpdate(review.partnerCompanyId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "PARTNER_COMPANY_NOT_FOUND", "Partner company was not found."
                 ));
-        validateCurrentReview(review, company);
+        validateCurrentReview(review, company, decidedAt);
 
         PartnerEligibilityReview resolved;
         if (request.outcome() == PartnerEligibilityReviewDecision.APPROVE) {
             CustomerIdentityEvidenceSnapshot identity = requireUsableIdentity(review.customerId());
-            PartnerEmployee employee = requireApprovalCandidate(review, request.partnerEmployeeId(), identity);
+            PartnerEmployee employee = requireApprovalCandidate(review, request.partnerEmployeeId(), identity, decidedAt);
             CustomerPartnerEmployeeLink current = links
                     .findCurrentVerifiedByCustomerIdForUpdate(review.customerId())
                     .orElse(null);
@@ -168,18 +168,22 @@ public class PartnerEligibilityReviewService
         }
 
         PartnerEligibilityReview saved = reviews.save(resolved);
+        if (request.outcome() == PartnerEligibilityReviewDecision.APPROVE) {
+            reviews.findPendingByCustomerIdAndEffectiveMonth(review.customerId(), review.effectiveMonth())
+                    .forEach(competing -> reviews.save(competing.supersede(decidedAt)));
+        }
         publishAudit(saved, actor, decidedAt);
         return toDetail(saved);
     }
 
-    private void validateCurrentReview(PartnerEligibilityReview review, PartnerCompany company) {
+    private void validateCurrentReview(PartnerEligibilityReview review, PartnerCompany company, LocalDateTime decidedAt) {
         if (company.status() != PartnerCompanyStatus.ACTIVE) {
             throw new BusinessRuleViolationException(
                     "PARTNER_COMPANY_INACTIVE",
                     "Partner company is inactive for Salary Advance eligibility."
             );
         }
-        String currentMonth = YearMonth.now(clock).toString();
+        String currentMonth = YearMonth.from(decidedAt).toString();
         if (!review.effectiveMonth().equals(currentMonth)) {
             throw staleReview();
         }
@@ -198,11 +202,12 @@ public class PartnerEligibilityReviewService
     private PartnerEmployee requireApprovalCandidate(
             PartnerEligibilityReview review,
             UUID partnerEmployeeId,
-            CustomerIdentityEvidenceSnapshot identity
+            CustomerIdentityEvidenceSnapshot identity,
+            LocalDateTime decidedAt
     ) {
         PartnerEmployeeImportBatch authoritative = importBatches
                 .findLatestCompletedByPartnerCompanyIdAndEffectiveMonth(
-                        review.partnerCompanyId(), YearMonth.now(clock).toString()
+                        review.partnerCompanyId(), YearMonth.from(decidedAt).toString()
                 )
                 .orElseThrow(PartnerEligibilityReviewService::staleReview);
         PartnerEmployee employee = employees.findById(partnerEmployeeId)

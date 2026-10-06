@@ -196,6 +196,68 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     })
   })
 
+  it('removes a local pending result when authoritative supersession restores employment readiness', async () => {
+    const user = userEvent.setup()
+    let established = false
+    let backendStates: OwnEmployeeVerification[] = []
+    renderRoute('/products/salary-advance', async (input, init) => {
+      const url = String(input)
+      if (url.endsWith('/loan-products/salary-advance/readiness')) {
+        return response(established ? readyReadiness : {
+          ...readyReadiness, applicationAllowed: false, partnerEligibilityStatus: 'NOT_VERIFIED',
+          employeeVerificationStatus: 'NOT_VERIFIED', blockerCodes: ['EMPLOYEE_NOT_VERIFIED'],
+        })
+      }
+      if (url.endsWith('/partner-companies/employee-verifications')) return response(backendStates)
+      if (url.endsWith(`/partner-companies/${partnerCompanyId}/employee-verifications`) && init?.method === 'POST') {
+        backendStates = [{ partnerCompanyId, outcome: 'PENDING_MANUAL_REVIEW', manualReviewRequired: true }]
+        return response({ customerId: customer.customerId, partnerCompanyId, partnerEmployeeId: null,
+          customerPartnerEmployeeLinkId: null, outcome: 'NOT_FOUND', linkStatus: null, manualReviewRequired: true })
+      }
+      return defaultFetch(input, init)
+    })
+    await user.selectOptions(await screen.findByRole('combobox', { name: /Employer/ }), partnerCompanyId)
+    await user.type(screen.getByRole('textbox', { name: /Employee code/ }), 'OLD-ATTEMPT')
+    await user.click(screen.getByRole('button', { name: 'Verify employment' }))
+    expect(await screen.findByText("We're reviewing your employment details")).toBeVisible()
+    expect(screen.queryByRole('link', { name: 'Apply for Salary Advance' })).not.toBeInTheDocument()
+    established = true
+    backendStates = []
+    await queryClient.refetchQueries({ queryKey: salaryAdvanceKeys.ownEmployeeVerifications() })
+    expect(await screen.findByRole('link', { name: 'Apply for Salary Advance' })).toBeVisible()
+    expect(screen.queryByText("We're reviewing your employment details")).not.toBeInTheDocument()
+    expect(manualReviewRefetchInterval(backendStates)).toBe(false)
+  })
+
+  it('fresh exact verification clears obsolete alternative company reviews and uses normal readiness', async () => {
+    const user = userEvent.setup()
+    let established = false
+    let backendStates: OwnEmployeeVerification[] = [
+      { partnerCompanyId, outcome: 'PENDING_MANUAL_REVIEW', manualReviewRequired: true },
+      { partnerCompanyId: otherPartnerCompanyId, outcome: 'PENDING_MANUAL_REVIEW', manualReviewRequired: true },
+    ]
+    renderRoute('/products/salary-advance', async (input, init) => {
+      const url = String(input)
+      if (url.endsWith('/loan-products/salary-advance/readiness')) return response(established ? readyReadiness : {
+        ...readyReadiness, applicationAllowed: false, partnerEligibilityStatus: 'NOT_VERIFIED',
+        employeeVerificationStatus: 'NOT_VERIFIED', blockerCodes: ['EMPLOYEE_NOT_VERIFIED'],
+      })
+      if (url.endsWith('/partner-companies/employee-verifications')) return response(backendStates)
+      if (url.endsWith(`/partner-companies/${partnerCompanyId}/employee-verifications`) && init?.method === 'POST') {
+        established = true
+        backendStates = []
+      }
+      return defaultFetch(input, init)
+    })
+    await waitFor(() => expect(screen.getAllByText("We're reviewing your employment details")).toHaveLength(2))
+    await user.selectOptions(await screen.findByRole('combobox', { name: /Employer/ }), partnerCompanyId)
+    await user.type(screen.getByRole('textbox', { name: /Employee code/ }), 'CURRENT-EMPLOYEE')
+    await user.click(screen.getByRole('button', { name: 'Verify employment' }))
+    expect(await screen.findByRole('link', { name: 'Apply for Salary Advance' })).toBeVisible()
+    await waitFor(() => expect(screen.queryByText("We're reviewing your employment details")).not.toBeInTheDocument())
+    expect(queryClient.getQueryData(salaryAdvanceKeys.ownEmployeeVerifications())).toEqual([])
+  })
+
   it('lets a ready Customer open the existing verification form to update employment', async () => {
     const user = userEvent.setup()
     let readinessReads = 0
@@ -230,9 +292,13 @@ describe('FE-CP6 Salary Advance product readiness', () => {
 
   it('blocks Apply when an employment update enters manual review', async () => {
     const user = userEvent.setup()
+    let employmentSubmitted = false
     let readinessReads = 0
     renderRoute('/products/salary-advance', async (input, init) => {
       const url = String(input)
+      if (url.endsWith('/partner-companies/employee-verifications')) return response(employmentSubmitted
+        ? [{ partnerCompanyId, outcome: 'PENDING_MANUAL_REVIEW', manualReviewRequired: true }]
+        : [])
       if (url.endsWith('/loan-products/salary-advance/readiness')) {
         readinessReads += 1
         return response(readinessReads === 1 ? readyReadiness : {
@@ -247,6 +313,7 @@ describe('FE-CP6 Salary Advance product readiness', () => {
       }
       if (url.endsWith(`/partner-companies/${partnerCompanyId}/employee-verifications`)
         && init?.method === 'POST') {
+        employmentSubmitted = true
         return response({
           customerId: customer.customerId,
           partnerCompanyId,
@@ -389,8 +456,12 @@ describe('FE-CP6 Salary Advance product readiness', () => {
 
   it('presents stale evidence as re-verification and never turns manual review into Apply authority', async () => {
     const user = userEvent.setup()
+    let employmentSubmitted = false
     renderRoute('/products/salary-advance', async (input, init) => {
       const url = String(input)
+      if (url.endsWith('/partner-companies/employee-verifications')) return response(employmentSubmitted
+        ? [{ partnerCompanyId, outcome: 'PENDING_MANUAL_REVIEW', manualReviewRequired: true }]
+        : [])
       if (url.endsWith('/loan-products/salary-advance/readiness')) {
         return response({
           ...readyReadiness,
@@ -402,6 +473,7 @@ describe('FE-CP6 Salary Advance product readiness', () => {
         })
       }
       if (url.endsWith(`/partner-companies/${partnerCompanyId}/employee-verifications`)) {
+        employmentSubmitted = true
         return response({
           customerId: customer.customerId,
           partnerCompanyId,

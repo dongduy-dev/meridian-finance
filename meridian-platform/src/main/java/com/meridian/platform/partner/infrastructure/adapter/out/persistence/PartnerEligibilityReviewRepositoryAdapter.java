@@ -63,6 +63,15 @@ public class PartnerEligibilityReviewRepositoryAdapter implements PartnerEligibi
     }
 
     @Override
+    public List<PartnerEligibilityReview> findPendingByCustomerIdAndEffectiveMonth(
+            UUID customerId, String effectiveMonth
+    ) {
+        return repository.findByCustomerIdAndEffectiveMonthAndStatusOrderByIdAsc(
+                customerId, effectiveMonth, PartnerEligibilityReviewStatus.PENDING
+        ).stream().map(PartnerEligibilityReviewJpaEntity::toDomain).toList();
+    }
+
+    @Override
     public boolean existsPendingByCustomerIdAndEffectiveMonth(UUID customerId, String effectiveMonth) {
         return repository.existsByCustomerIdAndEffectiveMonthAndStatus(
                 customerId, effectiveMonth, PartnerEligibilityReviewStatus.PENDING

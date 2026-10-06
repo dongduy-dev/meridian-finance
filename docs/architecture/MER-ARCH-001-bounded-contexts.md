@@ -119,7 +119,7 @@ Audit records may contain only PII-safe identifiers, statuses, reason codes, and
 
 Partner owns the reusable Customer-to-Partner Employee relationship because it answers whether a Customer is verified as an employee of a Partner Company. Its consumer-owned identity port receives active, profile-complete, identity-verified facts from Customer; raw matching evidence is supplied only when those prerequisites hold. Partner reads no Customer persistence. Eligibility requires the current verified identity to equal the link's recorded verified identity; a mismatch returns `NOT_VERIFIED` without changing historical matching evidence.
 
-Partner also owns unresolved employment matches and their authorized manual-review outcomes. The review record remains separate from the reusable link and from LoanApplication verification. An approved review may create or refresh the link; it does not create Loan state or lending exposure.
+Partner also owns unresolved employment matches and their authorized manual-review outcomes. The review record remains separate from the reusable link and from LoanApplication verification. An approved review may create or refresh the link; it does not create Loan state or lending exposure. Partner owns complete effective-month snapshot replacement, non-authoritative failed-import outcomes, and supersession of alternative current-month reviews when Customer verification or manual approval establishes current employment. Historical review source references remain unchanged; recovery uses fresh Customer verification against the authoritative snapshot.
 
 Loan may reference that relationship by identifier and consume eligibility facts through application-level contracts. Loan must not own or duplicate Partner Employee source records.
 

@@ -40,6 +40,11 @@ public interface PartnerEligibilityReviewRepository {
             String effectiveMonth
     );
 
+    /** Called after the Customer-wide employment lock, before superseding alternative attempts. */
+    List<PartnerEligibilityReview> findPendingByCustomerIdAndEffectiveMonth(
+            UUID customerId, String effectiveMonth
+    );
+
     boolean existsPendingByCustomerIdAndEffectiveMonth(UUID customerId, String effectiveMonth);
 
     Page findPage(PartnerEligibilityReviewStatus status, int page, int size);

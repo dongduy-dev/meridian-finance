@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 
 import { useAuth } from '@/features/auth/auth-context'
 import { applicationKeys } from '@/features/applications/application-queries'
@@ -100,16 +100,20 @@ export function useOwnEmployeeVerificationsQuery() {
     refetchOnReconnect: true,
     refetchInterval: (current) => manualReviewRefetchInterval(current.state.data),
   })
-  const terminalOutcomes = query.data
-    ?.filter((verification) => !verification.manualReviewRequired)
-    .map((verification) => `${verification.partnerCompanyId}:${verification.outcome}`)
+  const reviewStateSignature = query.data
+    ?.map((verification) => `${verification.partnerCompanyId}:${verification.outcome}:${verification.manualReviewRequired}`)
     .join('|')
 
+  const previousReviewState = useRef<string | undefined>(undefined)
+  const hasTerminalReview = query.data?.some((verification) => !verification.manualReviewRequired) ?? false
   useEffect(() => {
-    if (terminalOutcomes) {
+    const previous = previousReviewState.current
+    previousReviewState.current = reviewStateSignature
+    if (reviewStateSignature !== undefined
+      && (hasTerminalReview || (previous !== undefined && previous !== reviewStateSignature))) {
       void queryClient.invalidateQueries({ queryKey: salaryAdvanceKeys.readiness() })
     }
-  }, [queryClient, terminalOutcomes])
+  }, [queryClient, reviewStateSignature, hasTerminalReview])
 
   return query
 }

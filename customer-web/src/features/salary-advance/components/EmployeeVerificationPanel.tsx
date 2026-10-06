@@ -93,11 +93,8 @@ export function EmployeeVerificationPanel({
   const [result, setResult] = useState<EmployeeVerification>()
   const reviewStatuses = useOwnEmployeeVerificationsQuery()
   const authoritativeResults = reviewStatuses.data ?? []
-  const authoritativeResultForLocalCompany = result
-    ? authoritativeResults.some((status) => status.partnerCompanyId === result.partnerCompanyId)
-    : false
   const displayedResults: (EmployeeVerification | OwnEmployeeVerification)[] = result
-    && (!result.manualReviewRequired || !authoritativeResultForLocalCompany)
+    && (!result.manualReviewRequired || reviewStatuses.isPending || reviewStatuses.isError)
     ? [
         result,
         ...authoritativeResults.filter(

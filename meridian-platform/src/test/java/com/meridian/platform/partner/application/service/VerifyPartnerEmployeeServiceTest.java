@@ -743,6 +743,14 @@ class VerifyPartnerEmployeeServiceTest {
         }
 
         @Override
+        public List<PartnerEligibilityReview> findPendingByCustomerIdAndEffectiveMonth(
+                UUID customerId, String effectiveMonth
+        ) {
+            return findCurrentLatestByCustomerIdAndEffectiveMonth(customerId, effectiveMonth).stream()
+                    .filter(PartnerEligibilityReview::isPending).toList();
+        }
+
+        @Override
         public boolean existsPendingByCustomerIdAndEffectiveMonth(UUID customerId, String effectiveMonth) {
             return Optional.ofNullable(review)
                     .filter(PartnerEligibilityReview::isPending)

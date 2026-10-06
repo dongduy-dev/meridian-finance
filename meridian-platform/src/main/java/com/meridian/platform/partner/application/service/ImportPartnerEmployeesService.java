@@ -130,7 +130,9 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
                 batchId,
                 partnerCompanyId,
                 effectiveMonth,
-                PartnerEmployeeImportBatchStatus.COMPLETED,
+                validation.rejections().isEmpty()
+                        ? PartnerEmployeeImportBatchStatus.COMPLETED
+                        : PartnerEmployeeImportBatchStatus.FAILED,
                 validEmployees.size(),
                 validation.rejections().size(),
                 request.requestId(),
@@ -138,8 +140,10 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
                 validation.rejections()
         );
         PartnerEmployeeImportBatch saved = batches.save(batch);
-        employees.saveAll(validEmployees);
-        reconcileVerifiedLinks(saved, operationTime);
+        if (saved.status() == PartnerEmployeeImportBatchStatus.COMPLETED) {
+            employees.saveAll(validEmployees);
+            reconcileVerifiedLinks(saved, operationTime);
+        }
         publishAudit(saved, operationTime);
         return toResult(saved);
     }
@@ -358,7 +362,9 @@ public class ImportPartnerEmployeesService implements ImportPartnerEmployeesUseC
         auditPublisher.publish(BusinessAuditEvent.single(
                 BusinessOperationContext.user(batch.requestId(), actor.userId(), occurredAt),
                 new BusinessAuditEntry(
-                        BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_COMPLETED,
+                        batch.status() == PartnerEmployeeImportBatchStatus.COMPLETED
+                                ? BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_COMPLETED
+                                : BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_FAILED,
                         BusinessAuditEntityType.PARTNER_EMPLOYEE_IMPORT_BATCH,
                         batch.id(),
                         payload

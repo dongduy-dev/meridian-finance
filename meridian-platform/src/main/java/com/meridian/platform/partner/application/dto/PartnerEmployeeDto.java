@@ -8,7 +8,7 @@ public record PartnerEmployeeDto(
         UUID partnerCompanyId,
         UUID importBatchId,
         String employeeCode,
-        String identityReference,
+        String maskedIdentityReference,
         BigDecimal salaryAmount,
         BigDecimal salaryAdvanceLimit,
         String employmentStatus,

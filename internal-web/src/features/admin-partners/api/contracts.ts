@@ -17,7 +17,7 @@ export const partnerEmployeeSchema = z.object({
   partnerCompanyId: meridianUuidSchema,
   importBatchId: meridianUuidSchema,
   employeeCode: z.string(),
-  identityReference: z.string(),
+  maskedIdentityReference: z.string().regex(/^\*{4}.{0,4}$/),
   salaryAmount: money,
   salaryAdvanceLimit: money,
   employmentStatus: rawValue,

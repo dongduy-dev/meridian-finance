@@ -95,25 +95,24 @@ class ImportPartnerEmployeesServiceTest {
     }
 
     @Test
-    void completesMixedBatchAndPersistsOnlyValidRows() {
+    void failsMixedSnapshotWithoutPersistingAnyEmployeesOrReconcilingLinks() {
         var result = service.importEmployees(companyId, request(List.of(
                 row("EMP-1", "ID-1", "ACTIVE", true),
                 row("EMP-2", "ID-2", "FUTURE", true),
                 row("EMP-3", "ID-3", "ACTIVE", true)
         )));
 
-        assertEquals("COMPLETED", result.status());
+        assertEquals("FAILED", result.status());
         assertEquals(2, result.validRowCount());
         assertEquals(1, result.invalidRowCount());
         assertEquals("INVALID_EMPLOYMENT_STATUS", result.rejections().getFirst().errorCode());
-        @SuppressWarnings({"unchecked", "rawtypes"})
-        ArgumentCaptor<List<com.meridian.platform.partner.domain.model.PartnerEmployee>> savedEmployees =
-                ArgumentCaptor.forClass((Class) List.class);
-        verify(employees).saveAll(savedEmployees.capture());
-        assertEquals(List.of("EMP-1", "EMP-3"), savedEmployees.getValue().stream().map(e -> e.employeeCode()).toList());
+        verify(employees, never()).saveAll(any());
+        verify(links, never()).findVerifiedLinkIdsByPartnerCompanyId(any());
+        verify(links, never()).save(any());
+        verify(reviews, never()).save(any());
         var audit = ArgumentCaptor.forClass(BusinessAuditEvent.class);
         verify(audits).publish(audit.capture());
-        assertEquals(BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_COMPLETED, audit.getValue().entries().getFirst().action());
+        assertEquals(BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_FAILED, audit.getValue().entries().getFirst().action());
         assertEquals(requestId, audit.getValue().operationContext().operationId());
         String safeAudit = audit.getValue().entries().getFirst().payload().values().toString();
         org.junit.jupiter.api.Assertions.assertFalse(safeAudit.contains("EMP-1"));
@@ -307,6 +306,21 @@ class ImportPartnerEmployeesServiceTest {
         verify(batches, times(1)).save(any());
         verify(employees, times(1)).saveAll(any());
         verify(links, times(1)).save(any());
+        verify(audits, times(1)).publish(any());
+    }
+
+    @Test
+    void failedSnapshotReplayReturnsTheSameFailureAndConflictingCorrectionNeedsNewRequestId() {
+        var invalid = request(List.of(row("EMP-1", "ID-1", "UNSUPPORTED", true)));
+        var failed = service.importEmployees(companyId, invalid);
+        assertEquals("FAILED", failed.status());
+        assertEquals(failed, service.importEmployees(companyId, invalid));
+        assertEquals("IDEMPOTENCY_KEY_REUSED", assertThrows(BusinessStateConflictException.class,
+                () -> service.importEmployees(companyId,
+                        request(List.of(row("EMP-1", "ID-1", "ACTIVE", true))))).getErrorCode());
+        verify(batches, times(1)).save(any());
+        verify(employees, never()).saveAll(any());
+        verify(links, never()).save(any());
         verify(audits, times(1)).publish(any());
     }
 
