@@ -1,3 +1,5 @@
+import { IdentityReferenceCorrection } from '@/features/account/components/IdentityReferenceCorrection'
+import { useAuth } from '@/features/auth/auth-context'
 import { ShieldCheck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm, type FieldErrors } from 'react-hook-form'
@@ -49,6 +51,7 @@ function ProfileLoading() {
 }
 
 export function ProfilePage() {
+  const { state: authState } = useAuth()
   const customerQuery = useOwnCustomerQuery()
   const updateProfile = useUpdateProfileMutation()
   const [serverError, setServerError] = useState<unknown>()
@@ -138,6 +141,10 @@ export function ProfilePage() {
       {customer ? (
         <>
           <AccountReadinessCard customer={customer} />
+          {customerQuery.isSuccess && customerQuery.fetchStatus === 'idle' && customer.status === 'ACTIVE'
+            && profileComplete && ['UNVERIFIED', 'REJECTED'].includes(customer.verificationStatus)
+            && authState.status === 'authenticated' && authState.actor.permissions.includes('customer:profile:write:own')
+            ? <IdentityReferenceCorrection key={authState.actor.userId} /> : null}
           <Card>
             <CardHeader>
               <CardTitle>{profileComplete ? 'Maintain your profile' : 'Complete your profile'}</CardTitle>
@@ -191,7 +198,7 @@ export function ProfilePage() {
                       Identity reference: On file
                     </div>
                     <p className="mt-2 text-sm leading-5 text-muted-foreground">
-                      Your identity reference is securely stored and is not displayed after profile completion. It cannot be changed from your profile.
+                      Your identity reference is securely stored and is not displayed after profile completion. Use the deliberate correction action before identity verification if this reference is incorrect.
                     </p>
                   </div>
                 ) : (

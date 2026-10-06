@@ -67,6 +67,7 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
     private static final BigDecimal REQUESTED_AMOUNT = money(3_000_000);
     private static final BigDecimal DIFFERENT_REQUESTED_AMOUNT = money(2_000_000);
 
+    @Autowired private com.meridian.platform.customer.application.port.out.CustomerSensitiveValueProtector identityProtector;
     @Autowired
     private StartSalaryAdvanceApplicationUseCase submissionUseCase;
 
@@ -458,8 +459,8 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
                         """,
                 UUID.randomUUID(),
                 customerId,
-                "cipher-" + unique,
-                "fingerprint-" + unique
+                identityProtector.protectIdentityReference(("TEST-IDENTITY-" + customerId).toUpperCase(java.util.Locale.ROOT)).ciphertext(),
+                identityProtector.protectIdentityReference(("TEST-IDENTITY-" + customerId).toUpperCase(java.util.Locale.ROOT)).fingerprint()
         );
         jdbcTemplate.update(
                 """
@@ -519,7 +520,7 @@ class SalaryAdvanceSubmissionConcurrencyPostgreSqlIntegrationTest {
                 partnerCompanyId,
                 partnerEmployeeId,
                 sourceImportBatchId,
-                "test-identity-" + linkId,
+                ("TEST-IDENTITY-" + customerId).toUpperCase(java.util.Locale.ROOT),
                 employeeCode
         );
     }

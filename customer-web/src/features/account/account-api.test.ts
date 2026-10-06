@@ -46,6 +46,17 @@ function setup(responses: unknown[]) {
 }
 
 describe('Customer account API', () => {
+  it('disables session replay for correction and keeps its result limited to safe Customer state', async () => {
+    const { api, coordinator, request } = setup([customer])
+    const result = await api.correctOwnIdentityReference('FICTIONAL-CORRECTION')
+    expect(coordinator.requestProtected).toHaveBeenCalledWith(expect.any(Function), { replayAfterSessionRefresh: false })
+    expect(request).toHaveBeenCalledWith('/customers/me/identity-reference', expect.objectContaining({
+      method: 'PUT', json: { identityReference: 'FICTIONAL-CORRECTION' },
+    }))
+    expect(result).toEqual(customer)
+    expect(JSON.stringify(result)).not.toContain('FICTIONAL-CORRECTION')
+  })
+
   it('accepts a seeded Customer entity ID while retaining strict runtime bank-account IDs', async () => {
     const seededCustomerId = '99999999-9999-9999-9999-999999999999'
     const seeded = setup([{ ...customer, customerId: seededCustomerId }])

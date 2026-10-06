@@ -1,5 +1,5 @@
 import { queryClient } from '@/app/providers/query-client'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -80,14 +80,25 @@ function errorResponse(errorCode: string, message: string, status = 409) {
   )
 }
 
+function createAuthApiMockForProfile() {
+  const api = createAuthApiMock()
+  vi.mocked(api.refresh).mockResolvedValue({
+    tokenType: 'Bearer', accessToken: 'customer-access-token', expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    userId: '11111111-1111-4111-8111-111111111111', email: 'customer@example.com', userType: 'CUSTOMER',
+    customerId: incompleteCustomer.customerId, roles: ['CUSTOMER'], permissions: ['customer:read:own', 'customer:profile:write:own'],
+  })
+  return api
+}
+
 function renderRoute(path: string, fetchImplementation: typeof fetch) {
   vi.stubGlobal('fetch', fetchImplementation)
   const router = createTestRouter([path])
-  render(<AppProviders router={router} authManager={createTestAuthManager()} />)
+  render(<AppProviders router={router} authManager={createTestAuthManager(createAuthApiMockForProfile())} />)
   return router
 }
 
 afterEach(() => {
+  cleanup()
   queryClient.clear()
   vi.unstubAllGlobals()
 })
@@ -144,6 +155,35 @@ describe('Customer account routes and profile', () => {
     expect(screen.getByText('Your required profile details are on file.')).toBeVisible()
     expect(JSON.stringify(queryClient.getMutationCache().getAll().map((mutation) => mutation.state)))
       .not.toContain('IDREF-SENSITIVE-001')
+  })
+
+  it.each(['UNVERIFIED', 'REJECTED'])('deliberately corrects a %s profile without caching the reference', async (verificationStatus) => {
+    const user = userEvent.setup()
+    let profile = { ...completeCustomer, verificationStatus }
+    let updateBody: unknown
+    renderRoute('/account/profile', async (input, init) => {
+      if (String(input).endsWith('/customers/me/identity-reference')) {
+        updateBody = JSON.parse(String(init?.body))
+        profile = { ...profile, verificationStatus: 'UNVERIFIED' }
+        return response(profile)
+      }
+      return response(profile)
+    })
+    await user.click(await screen.findByRole('button', { name: 'Correct identity reference' }))
+    await user.type(screen.getByLabelText('Replacement identity reference'), 'FICTIONAL-CORRECTED-REFERENCE')
+    await user.click(screen.getByRole('button', { name: 'Confirm correction' }))
+    expect(await screen.findByText('Identity reference corrected. Identity verification is still required.')).toBeVisible()
+    expect(updateBody).toEqual({ identityReference: 'FICTIONAL-CORRECTED-REFERENCE' })
+    expect(screen.queryByLabelText('Replacement identity reference')).not.toBeInTheDocument()
+    expect(JSON.stringify(queryClient.getQueryCache().getAll().map(q => q.state))).not.toContain('FICTIONAL-CORRECTED-REFERENCE')
+    expect(JSON.stringify(queryClient.getMutationCache().getAll().map(m => m.state))).not.toContain('FICTIONAL-CORRECTED-REFERENCE')
+    expect(JSON.stringify([localStorage, sessionStorage])).not.toContain('FICTIONAL-CORRECTED-REFERENCE')
+  })
+
+  it('keeps a verified profile locked', async () => {
+    renderRoute('/account/profile', async () => response({ ...completeCustomer, verificationStatus: 'VERIFIED' }))
+    await screen.findByText('Identity reference: On file')
+    expect(screen.queryByRole('button', { name: 'Correct identity reference' })).not.toBeInTheDocument()
   })
 
   it('renders completed identity as On file and omits it from ordinary profile updates', async () => {

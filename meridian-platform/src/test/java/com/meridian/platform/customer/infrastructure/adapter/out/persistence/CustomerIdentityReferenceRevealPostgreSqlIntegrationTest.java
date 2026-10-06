@@ -104,7 +104,7 @@ class CustomerIdentityReferenceRevealPostgreSqlIntegrationTest {
             assertEquals(0, migrate(schema, "70"));
             migrate(snapshotSchema, "69");
             String snapshot = Files.readString(Path.of("../docs/database/MER-DB-CURRENT-SCHEMA.sql"));
-            String delta = snapshot.substring(snapshot.indexOf("-- V70 protected Customer Identity Reference reveal"));
+            String delta = snapshot.substring(snapshot.indexOf("-- V70 protected Customer Identity Reference reveal"), snapshot.indexOf("-- V71 controlled Customer Identity Reference correction audit"));
             try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
                 try { statement.execute("set search_path to " + snapshotSchema); statement.execute(delta); }
                 finally { statement.execute("set search_path to " + SCHEMA); }

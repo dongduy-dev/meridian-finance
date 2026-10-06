@@ -219,7 +219,7 @@ describe('FE-CP6 Salary Advance product readiness', () => {
 
     await user.click(updateButton)
     expect(await screen.findByRole('heading', { name: 'Update your employment' })).toBeVisible()
-    await user.selectOptions(screen.getByRole('combobox', { name: /Employer/ }), partnerCompanyId)
+    await user.selectOptions(await screen.findByRole('combobox', { name: /Employer/ }), partnerCompanyId)
     await user.type(screen.getByRole('textbox', { name: /Employee code/ }), 'NEW-EMP-001')
     await user.click(screen.getByRole('button', { name: 'Verify employment update' }))
 
@@ -261,7 +261,7 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     })
 
     await user.click(await screen.findByRole('button', { name: 'Update employment' }))
-    await user.selectOptions(screen.getByRole('combobox', { name: /Employer/ }), partnerCompanyId)
+    await user.selectOptions(await screen.findByRole('combobox', { name: /Employer/ }), partnerCompanyId)
     await user.type(screen.getByRole('textbox', { name: /Employee code/ }), 'UNRESOLVED-EMP')
     await user.click(screen.getByRole('button', { name: 'Verify employment update' }))
 
@@ -319,6 +319,24 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     expect(screen.getByRole('link', { name: 'Manage bank accounts' })).toHaveAttribute('href', '/account/bank-accounts')
     const readinessSection = screen.getByRole('heading', { name: 'Before you apply' }).closest('section') as HTMLElement
     expect(within(readinessSection).getAllByRole('link')).toHaveLength(2)
+  })
+
+  it.each(['UNVERIFIED', 'REJECTED'])('blocks employment commands for %s identity and provides the verification route', async (verificationStatus) => {
+    const { fetchMock } = renderRoute('/products/salary-advance', (input, init) => {
+      const url = String(input)
+      if (url.endsWith('/customers/me')) return Promise.resolve(response({ ...customer, verificationStatus }))
+      if (url.endsWith('/loan-products/salary-advance/readiness')) return Promise.resolve(response({
+        ...readyReadiness, applicationAllowed: false, customerPartnerEmployeeLinkId: null,
+        employeeVerificationStatus: 'NOT_VERIFIED', partnerEligibilityStatus: 'NOT_VERIFIED',
+        blockerCodes: ['CUSTOMER_IDENTITY_VERIFICATION_REQUIRED', 'EMPLOYEE_NOT_VERIFIED'],
+      }))
+      return defaultFetch(input, init)
+    })
+    expect(await screen.findByText('Employment verification unavailable')).toBeVisible()
+    expect(screen.getAllByRole('link', { name: 'Open identity verification' }).every(link => link.getAttribute('href') === '/account/identity-verification')).toBe(true)
+    expect(screen.queryByRole('combobox', { name: /Employer/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Verify employment' })).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.filter(([input, init]) => String(input).endsWith('/employee-verifications') && init?.method === 'POST')).toHaveLength(0)
   })
 
   it('performs first-time verification through the Customer-safe selector and refetches readiness before Apply', async () => {

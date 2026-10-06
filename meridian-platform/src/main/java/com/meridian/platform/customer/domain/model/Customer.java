@@ -53,7 +53,7 @@ public record Customer(
             throw new IllegalArgumentException("profile customerId does not match customer");
         }
         if (profile != null
-                && profile.isComplete()
+                && (profile.isComplete() || verificationStatus == VerificationStatus.VERIFIED)
                 && !profile.identityReference().fingerprint().equals(newProfile.identityReference().fingerprint())) {
             throw new BusinessStateConflictException("IDENTITY_REFERENCE_IMMUTABLE", "Identity reference cannot be changed after profile completion");
         }
@@ -77,6 +77,24 @@ public record Customer(
 
     public Customer withVerificationStatus(VerificationStatus status, LocalDateTime now) {
         return new Customer(id, customerNumber, this.status, status, profileCompletionStatus, profile, bankAccounts, createdAt, now);
+    }
+
+    public void requireIdentityReferenceCorrectionAllowed() {
+        if (!isActive()) throw new BusinessStateConflictException("CUSTOMER_NOT_ACTIVE", "Customer must be active for this operation.");
+        if (!hasCompleteProfile()) throw new com.meridian.platform.shared.domain.exception.BusinessRuleViolationException(
+                "PROFILE_INCOMPLETE", "Complete the Customer profile before correcting its Identity Reference.");
+        if (verificationStatus == VerificationStatus.VERIFIED) throw new BusinessStateConflictException(
+                "IDENTITY_REFERENCE_IMMUTABLE", "Identity reference cannot be corrected while Customer identity is verified.");
+    }
+
+    public Customer correctIdentityReference(ProtectedSensitiveValue replacement, LocalDateTime now) {
+        requireIdentityReferenceCorrectionAllowed();
+        java.util.Objects.requireNonNull(replacement);
+        var corrected = new CustomerProfile(profile.id(), id, profile.fullName(), replacement, profile.phoneNumber(),
+                profile.residentialAddress(), profile.employmentStatus(), profile.employerName(), profile.termsConsentAccepted(),
+                profile.dataProcessingConsentAccepted(), profile.createdAt(), now);
+        return new Customer(id, customerNumber, status, VerificationStatus.UNVERIFIED, profileCompletionStatus,
+                corrected, bankAccounts, createdAt, now);
     }
 
     public Customer addBankAccount(CustomerBankAccount account, LocalDateTime now) {

@@ -7,9 +7,10 @@ import type { Customer } from '@/features/account/account-api'
 
 export function AccountReadinessPrompt({ customer }: { customer: Customer }) {
   const profileNeedsAttention = customer.profileCompletionStatus !== 'COMPLETE'
+  const identityNeedsAttention = customer.verificationStatus !== 'VERIFIED'
   const bankAccountNeedsAttention = !customer.primaryActiveBankAccountPresent
 
-  if (!profileNeedsAttention && !bankAccountNeedsAttention) return null
+  if (!profileNeedsAttention && !identityNeedsAttention && !bankAccountNeedsAttention) return null
 
   return (
     <Alert variant="warning">
@@ -17,7 +18,7 @@ export function AccountReadinessPrompt({ customer }: { customer: Customer }) {
       <AlertTitle>Finish setting up your account</AlertTitle>
       <AlertDescription className="space-y-3">
         <p>
-          Complete your profile and primary bank account before applying. Finishing setup does not confirm loan eligibility.
+          Complete your profile, identity verification, and primary bank account before applying. Finishing setup does not confirm loan eligibility.
         </p>
         <div className="flex flex-wrap gap-2">
           {profileNeedsAttention ? (
@@ -25,6 +26,7 @@ export function AccountReadinessPrompt({ customer }: { customer: Customer }) {
               <Link to="/account/profile">Complete profile</Link>
             </Button>
           ) : null}
+          {identityNeedsAttention ? <Button variant="secondary" size="sm" asChild><Link to="/account/identity-verification">Open identity verification</Link></Button> : null}
           {bankAccountNeedsAttention ? (
             <Button variant="secondary" size="sm" asChild>
               <Link to="/account/bank-accounts">Manage bank accounts</Link>

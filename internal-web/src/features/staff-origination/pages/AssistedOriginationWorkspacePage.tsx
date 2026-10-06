@@ -1,3 +1,4 @@
+import { IntakeIdentityReferenceCorrection } from '../components/IntakeIdentityReferenceCorrection'
 import { IntakeIdentityReadiness } from '@/features/customer-identity/IntakeIdentityReadiness'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -88,7 +89,8 @@ function ProfileFields({ customer }: { customer?: StaffCustomer }) {
   const profile = customer?.profile
   return <div className="grid gap-3 sm:grid-cols-2">
     <label className="grid gap-1 text-sm font-medium">Full name<Input name="fullName" required defaultValue={profile?.fullName} /></label>
-    <label className="grid gap-1 text-sm font-medium">Identity reference<Input name="identityReference" required={!customer} /></label>
+    {customer?.profileCompletionStatus === 'COMPLETE' ? <p className="text-sm">Identity reference: On file</p>
+      : <label className="grid gap-1 text-sm font-medium">Identity reference<Input name="identityReference" autoComplete="off" required={!customer} /></label>}
     <label className="grid gap-1 text-sm font-medium">Phone<Input name="phoneNumber" required defaultValue={profile?.phoneNumber} /></label>
     <label className="grid gap-1 text-sm font-medium">Employment status<Input name="employmentStatus" required defaultValue={profile?.employmentStatus} /></label>
     <label className="grid gap-1 text-sm font-medium sm:col-span-2">Residential address<Input name="residentialAddress" required defaultValue={profile?.residentialAddress} /></label>
@@ -658,6 +660,10 @@ export function AssistedOriginationWorkspacePage() {
     {customer.isError ? <div className="rounded-lg border border-danger/30 p-4"><p role="alert">The selected Customer could not be loaded.</p><Button className="mt-3" variant="outline" onClick={() => void customer.refetch()}>Retry Customer</Button></div> : null}
     {customer.data ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Selected Customer · {customer.data.customerNumber}</h2><form ref={profileForm} onSubmit={(event) => void submitProfile(event)} className="space-y-4"><ProfileFields customer={customer.data} /><Button disabled={!open || locked(actions['customer-profile'])}>Save profile</Button></form><ActionNotice action={actions['customer-profile']} /></article> : null}
 
+    {canCustomer && open && intake.fetchStatus === 'idle' && customer.isSuccess && customer.fetchStatus === 'idle'
+      && customer.data.status === 'ACTIVE' && customer.data.profileCompletionStatus === 'COMPLETE'
+      && ['UNVERIFIED', 'REJECTED'].includes(customer.data.verificationStatus)
+      ? <IntakeIdentityReferenceCorrection key={`${actor?.userId}:${assistedOriginationCaseId}:${customerId}`} customerId={customerId} caseId={assistedOriginationCaseId} /> : null}
     {customer.data ? <article className="space-y-4 rounded-lg border bg-card p-5"><h2 className="text-lg font-semibold">Bank accounts</h2>{banks.isPending ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading bank accounts…</p> : null}{banks.isError ? <div><p role="alert">Bank accounts could not be loaded.</p><Button className="mt-2" variant="outline" onClick={() => void banks.refetch()}>Retry bank accounts</Button></div> : null}{banks.data?.length === 0 ? <p className="text-sm text-muted-foreground">No bank accounts have been recorded.</p> : null}{banks.data?.map((bank) => <div key={bank.customerBankAccountId} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"><span>{bank.bankNameSnapshot} · {bank.maskedAccountNumber} · {bankStatusLabel(bank.status)}{bank.primaryAccount ? ' · Primary' : ''}</span><div className="flex gap-2">{bank.status === 'ACTIVE' && !bank.primaryAccount ? <Button size="sm" variant="outline" disabled={!open || locked(actions['bank-mutation'])} onClick={() => void mutateBank(bank.customerBankAccountId, 'make-primary')}>Make primary</Button> : null}<Button size="sm" variant="outline" disabled={!open || bank.status !== 'ACTIVE' || locked(actions['bank-mutation'])} onClick={() => void mutateBank(bank.customerBankAccountId, 'deactivate')}>Deactivate</Button></div></div>)}<form ref={bankForm} onSubmit={(event) => void submitBank(event)} className="grid gap-3 sm:grid-cols-2"><Input name="bankCode" required aria-label="Bank code" placeholder="Bank code" /><Input name="bankNameSnapshot" required aria-label="Bank name" placeholder="Bank name" /><Input name="accountHolderName" required aria-label="Account holder" placeholder="Account holder" /><Input name="accountNumber" required aria-label="Account number" placeholder="Account number" autoComplete="off" /><Button disabled={!open || locked(actions['bank-mutation'])}>Add bank account</Button></form><ActionNotice action={actions['bank-mutation']} /></article> : null}
 
     {customerId ? <IntakeIdentityReadiness caseId={assistedOriginationCaseId} status={customer.data?.verificationStatus}

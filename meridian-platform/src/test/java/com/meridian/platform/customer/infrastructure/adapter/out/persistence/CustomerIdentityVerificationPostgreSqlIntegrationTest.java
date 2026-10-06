@@ -39,6 +39,7 @@ class CustomerIdentityVerificationPostgreSqlIntegrationTest {
     @Autowired javax.sql.DataSource dataSource;
     @Autowired com.meridian.platform.document.application.port.out.DocumentStoragePort storage;
     @Autowired com.meridian.platform.document.application.port.out.DocumentRepository documentReferences;
+    @Autowired com.meridian.platform.customer.application.service.CorrectCustomerIdentityReferenceService corrections;
     @Autowired CustomerIdentityVerificationService service;
     @Autowired UpdateOwnCustomerProfileService profiles;
     @Autowired QueryCustomerReadinessUseCase readiness;
@@ -68,6 +69,104 @@ class CustomerIdentityVerificationPostgreSqlIntegrationTest {
     private void staff() { auth("STAFF", null, OFFICER, REVIEW); }
     private CustomerIdentityVerificationDto upload() { customer(); return service.submitOwn(UUID.randomUUID(), null, pdf("identity evidence"), "application/pdf", "identity.pdf"); }
     private CustomerIdentityDecisionRequest verifyRequest(CustomerIdentityVerificationDto v) { return new CustomerIdentityDecisionRequest(UUID.randomUUID(), v.evidence().versionId(), reference, null); }
+    @Test void correctReferenceAndRetrySamePendingEvidenceWithoutRewritingHistory() throws Exception {
+        var v = upload(); String replacement = "CORRECTED-" + customerId;
+        var request = new CustomerIdentityDecisionRequest(UUID.randomUUID(), v.evidence().versionId(), replacement, null);
+        staff();
+        assertEquals("IDENTITY_REFERENCE_MISMATCH", assertThrows(BusinessRuleViolationException.class, () -> service.decide(v.verificationId(), true, request)).getErrorCode());
+        String before = jdbc.queryForObject("select row_to_json(v)::text from customer_identity_verifications v where id=?", String.class, v.verificationId());
+        customer(); var result = corrections.correctOwn(new CorrectIdentityReferenceRequest(replacement));
+        assertEquals("COMPLETE", result.profileCompletionStatus()); assertEquals("UNVERIFIED", result.verificationStatus());
+        assertFalse(result.toString().contains(replacement));
+        assertEquals(before, jdbc.queryForObject("select row_to_json(v)::text from customer_identity_verifications v where id=?", String.class, v.verificationId()));
+        assertEquals(v.evidence().versionId(), service.ownHistory().getFirst().evidence().versionId());
+        staff(); assertEquals("VERIFIED", service.decide(v.verificationId(), true, request).status());
+        customer(); assertEquals("IDENTITY_REFERENCE_IMMUTABLE", assertThrows(BusinessStateConflictException.class, () -> corrections.correctOwn(new CorrectIdentityReferenceRequest("OTHER"))).getErrorCode());
+        assertEquals(1, jdbc.queryForObject("select count(*) from audit_events where action='CUSTOMER_IDENTITY_REFERENCE_CORRECTED' and entity_id=?", Integer.class, customerId));
+        assertEquals(0, jdbc.queryForObject("select count(*) from audit_events where payload::text like ?", Integer.class, "%" + replacement + "%"));
+    }
+    @Test void correctionPreservesTerminalVerificationAndHistoricalLoanProvenance() {
+        var v = upload(); staff(); service.decide(v.verificationId(), true, verifyRequest(v));
+        UUID loan = insertLoan(ProductCode.UNSECURED_CONSUMER_LOAN, customerId, v.verificationId());
+        String terminal = jdbc.queryForObject("select row_to_json(v)::text from customer_identity_verifications v where id=?", String.class, v.verificationId());
+        customer(); profiles.updateOwnProfile(profile("Changed Fictional Name", null, "0900000000"));
+        corrections.correctOwn(new CorrectIdentityReferenceRequest("CORRECTED-" + customerId));
+        assertEquals(terminal, jdbc.queryForObject("select row_to_json(v)::text from customer_identity_verifications v where id=?", String.class, v.verificationId()));
+        assertEquals(v.verificationId(), jdbc.queryForObject("select identity_verification_id from loan_applications where id=?", UUID.class, loan));
+        assertNull(readiness.findReadinessByCustomerId(customerId).orElseThrow().identityVerificationId());
+    }
+    @Test void verifiedIdentityCannotBeChangedByMakingTheProfileIncompleteFirst() {
+        var v = upload(); staff(); service.decide(v.verificationId(), true, verifyRequest(v));
+        customer();
+        profiles.updateOwnProfile(new UpdateCustomerProfileRequest("Ari Fictional", null, "0900000000",
+                "Fictional address", "EMPLOYED", "Fictional employer", false, true));
+        assertEquals("INCOMPLETE", jdbc.queryForObject("select profile_completion_status from customers where id=?", String.class, customerId));
+        String fingerprint = jdbc.queryForObject("select identity_reference_fingerprint from customer_profiles where customer_id=?", String.class, customerId);
+        var changed = profile("Ari Fictional", "DIFFERENT-" + customerId, "0900000000");
+        assertEquals("IDENTITY_REFERENCE_IMMUTABLE", assertThrows(BusinessStateConflictException.class,
+                () -> profiles.updateOwnProfile(changed)).getErrorCode());
+        auth("STAFF", null, OFFICER, Set.of("customer:intake:manage"));
+        assertEquals("IDENTITY_REFERENCE_IMMUTABLE", assertThrows(BusinessStateConflictException.class,
+                () -> staffProfiles.updateProfile(customerId, changed)).getErrorCode());
+        assertEquals(fingerprint, jdbc.queryForObject("select identity_reference_fingerprint from customer_profiles where customer_id=?", String.class, customerId));
+        assertEquals("VERIFIED", jdbc.queryForObject("select verification_status from customers where id=?", String.class, customerId));
+        assertEquals("VERIFIED", jdbc.queryForObject("select status from customer_identity_verifications where id=?", String.class, v.verificationId()));
+    }
+    @Test void staffCorrectionUsesIntakeAuthorityAndKeepsPendingDocument() {
+        var v = upload(); auth("STAFF", null, OFFICER, Set.of("customer:intake:manage"));
+        corrections.correctForIntake(customerId, new CorrectIdentityReferenceRequest("STAFF-CORRECTED-" + customerId));
+        staff(); assertEquals("PENDING_REVIEW", service.detail(v.verificationId()).status());
+        assertEquals(v.evidence().versionId(), service.detail(v.verificationId()).evidence().versionId());
+    }
+    @Test void competingDuplicateCorrectionsCommitOnlyOneCustomerAndAudit() throws Exception {
+        UUID second = UUID.randomUUID();
+        jdbc.update("insert into customers (id,customer_number,status,verification_status,profile_completion_status) values (?,?,'ACTIVE','UNVERIFIED','INCOMPLETE')", second, "CUS-" + second);
+        auth("CUSTOMER", second, CUSTOMER_USER, OWN); profiles.updateOwnProfile(profile("Second Fictional", "SECOND-" + second, "0900000000"));
+        String shared = "SHARED-" + UUID.randomUUID(); var latch = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var tasks = new ArrayList<Future<Boolean>>();
+            for (UUID owner : List.of(customerId, second)) tasks.add(executor.submit(() -> {
+                auth("CUSTOMER", owner, CUSTOMER_USER, OWN); latch.await();
+                try { corrections.correctOwn(new CorrectIdentityReferenceRequest(shared)); return true; }
+                catch (BusinessStateConflictException expected) { assertEquals("IDENTITY_REFERENCE_ALREADY_IN_USE", expected.getErrorCode()); return false; }
+                finally { SecurityContextHolder.clearContext(); }
+            }));
+            latch.countDown(); int successes=0; for(var task:tasks) if(task.get(30,TimeUnit.SECONDS)) successes++;
+            assertEquals(1,successes);
+        }
+        assertEquals(1, jdbc.queryForObject("select count(*) from audit_events where action='CUSTOMER_IDENTITY_REFERENCE_CORRECTED' and entity_id in (?,?)", Integer.class, customerId, second));
+    }
+    @Test void concurrentCorrectionAndVerificationCannotVerifyTheWrongCurrentIdentity() throws Exception {
+        var v = upload(); String replacement = "NEW-" + customerId; var latch = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var review = executor.submit(() -> { staff(); latch.await(); try { service.decide(v.verificationId(), true, verifyRequest(v)); return true; }
+                catch (BusinessRuleViolationException expected) { assertEquals("IDENTITY_REFERENCE_MISMATCH", expected.getErrorCode()); return false; }
+                finally { SecurityContextHolder.clearContext(); } });
+            var correction = executor.submit(() -> { customer(); latch.await(); try { corrections.correctOwn(new CorrectIdentityReferenceRequest(replacement)); return true; }
+                catch (BusinessStateConflictException expected) { assertEquals("IDENTITY_REFERENCE_IMMUTABLE", expected.getErrorCode()); return false; }
+                finally { SecurityContextHolder.clearContext(); } });
+            latch.countDown(); boolean reviewed=review.get(30,TimeUnit.SECONDS), corrected=correction.get(30,TimeUnit.SECONDS);
+            assertNotEquals(reviewed,corrected);
+            assertEquals(reviewed ? "VERIFIED" : "UNVERIFIED", readiness.findReadinessByCustomerId(customerId).orElseThrow().verificationStatus());
+        }
+    }
+    @Test void v71CleanAndUpgradePreserveAuditActionsAndDoNotChangePermissions() throws Exception {
+        String clean="correction_clean_"+UUID.randomUUID().toString().replace("-", "");
+        String upgrade="correction_upgrade_"+UUID.randomUUID().toString().replace("-", "");
+        try {
+            var migrated=org.flywaydb.core.Flyway.configure().dataSource(dataSource).schemas(clean).defaultSchema(clean).locations("classpath:db/migration").load();
+            migrated.migrate(); assertEquals("71", migrated.info().current().getVersion().toString()); migrated.validate();
+            var previous=org.flywaydb.core.Flyway.configure().dataSource(dataSource).schemas(upgrade).defaultSchema(upgrade).locations("classpath:db/migration").target("70").load(); previous.migrate();
+            int permissions=jdbc.queryForObject("select count(*) from "+upgrade+".role_permissions", Integer.class);
+            var current=org.flywaydb.core.Flyway.configure().dataSource(dataSource).schemas(upgrade).defaultSchema(upgrade).locations("classpath:db/migration").load();
+            assertEquals(1,current.migrate().migrationsExecuted); assertEquals(0,current.migrate().migrationsExecuted); current.validate();
+            assertEquals(permissions,jdbc.queryForObject("select count(*) from "+upgrade+".role_permissions", Integer.class));
+            for(String schema:List.of(clean,upgrade)) {
+                String constraint=jdbc.queryForObject("select pg_get_constraintdef(c.oid) from pg_constraint c join pg_namespace n on n.oid=c.connamespace where n.nspname=? and c.conname='chk_audit_events_action'", String.class,schema);
+                for(var action:com.meridian.platform.shared.domain.audit.BusinessAuditAction.values()) assertTrue(constraint.contains("'"+action.name()+"'"),action.name());
+            }
+        } finally { jdbc.execute("drop schema if exists "+clean+" cascade"); jdbc.execute("drop schema if exists "+upgrade+" cascade"); }
+    }
     @Test void profileAndUploadRemainUnverifiedAndBankIsNotRequired() {
         assertEquals("UNVERIFIED", readiness.findReadinessByCustomerId(customerId).orElseThrow().verificationStatus());
         var v = upload(); assertEquals("PENDING_REVIEW", v.status());

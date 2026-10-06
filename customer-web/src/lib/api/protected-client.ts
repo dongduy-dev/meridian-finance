@@ -1,11 +1,12 @@
 import { apiClient, type ApiClient, type ApiRequestOptions } from './client'
 
 export interface ProtectedRequestCoordinator {
-  requestProtected<T>(operation: (accessToken: string) => Promise<T>): Promise<T>
+  requestProtected<T>(operation: (accessToken: string) => Promise<T>, policy?: { replayAfterSessionRefresh?: boolean }): Promise<T>
 }
 export function createProtectedApiClient(
   coordinator: ProtectedRequestCoordinator,
   client: ApiClient = apiClient,
+  policy?: { replayAfterSessionRefresh?: boolean },
 ): ApiClient {
   return {
     request<TResponse>(path: string, options: ApiRequestOptions = {}) {
@@ -13,7 +14,7 @@ export function createProtectedApiClient(
         const headers = new Headers(options.headers)
         headers.set('Authorization', `Bearer ${accessToken}`)
         return client.request<TResponse>(path, { ...options, headers })
-      })
+      }, policy)
     },
   }
 }

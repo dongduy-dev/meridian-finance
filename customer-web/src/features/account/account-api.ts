@@ -67,6 +67,7 @@ export interface AddCustomerBankAccountInput {
 export interface AccountApi {
   getOwnCustomer(): Promise<Customer>
   updateOwnProfile(input: UpdateCustomerProfileInput): Promise<Customer>
+  correctOwnIdentityReference(identityReference: string): Promise<Customer>
   getOwnBankAccounts(): Promise<CustomerBankAccount[]>
   addBankAccount(input: AddCustomerBankAccountInput): Promise<CustomerBankAccount>
   makePrimary(customerBankAccountId: string): Promise<CustomerBankAccount>
@@ -90,6 +91,12 @@ export function createAccountApi(
           json: input,
         }),
       )
+    },
+    async correctOwnIdentityReference(identityReference) {
+      const correctionClient = createProtectedApiClient(coordinator, client, { replayAfterSessionRefresh: false })
+      return customerSchema.parse(await correctionClient.request('/customers/me/identity-reference', {
+        method: 'PUT', json: { identityReference },
+      }))
     },
     async getOwnBankAccounts() {
       return customerBankAccountListSchema.parse(

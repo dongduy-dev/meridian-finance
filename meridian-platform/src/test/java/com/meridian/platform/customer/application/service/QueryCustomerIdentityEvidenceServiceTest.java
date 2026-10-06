@@ -70,6 +70,19 @@ class QueryCustomerIdentityEvidenceServiceTest {
         assertTrue(service.findIdentityEvidenceByCustomerId(CUSTOMER_ID).isEmpty());
     }
 
+    @Test
+    void unverifiedAndRejectedIdentityAreNeverRevealedForEmployment() {
+        for (var status : List.of(VerificationStatus.UNVERIFIED, VerificationStatus.REJECTED)) {
+            var protector = new FakeSensitiveValueProtector();
+            var c = customer(CustomerStatus.ACTIVE, ProfileCompletionStatus.COMPLETE, completeProfile()).withVerificationStatus(status, NOW);
+            var service = new QueryCustomerIdentityEvidenceService(new FakeCustomerRepository(c), protector);
+            var snapshot = service.findIdentityEvidenceByCustomerId(CUSTOMER_ID).orElseThrow();
+            assertFalse(snapshot.identityVerified());
+            assertNull(snapshot.identityReference());
+            assertEquals(0, protector.revealCalls);
+        }
+    }
+
     private static Customer customer(
             CustomerStatus status,
             ProfileCompletionStatus profileCompletionStatus,
@@ -79,7 +92,7 @@ class QueryCustomerIdentityEvidenceServiceTest {
                 CUSTOMER_ID,
                 "CUS-000000001",
                 status,
-                VerificationStatus.UNVERIFIED,
+                VerificationStatus.VERIFIED,
                 profileCompletionStatus,
                 profile,
                 List.<CustomerBankAccount>of(),

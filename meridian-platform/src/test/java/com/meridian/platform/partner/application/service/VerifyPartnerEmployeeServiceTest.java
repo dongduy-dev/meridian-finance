@@ -89,6 +89,14 @@ class VerifyPartnerEmployeeServiceTest {
     }
 
     @Test
+    void rejectsUnverifiedIdentityBeforeAnyEmploymentEvidenceIsConsumed() {
+        customerIdentityEvidencePort.snapshot = Optional.of(new CustomerIdentityEvidenceSnapshot(customerId, true, true, false, null));
+        assertEquals("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED", assertThrows(BusinessRuleViolationException.class,
+                () -> service.verifyPartnerEmployee(partnerCompanyId, new PartnerEmployeeVerificationRequest("MER-EMP-001"))).getErrorCode());
+        assertNull(linkRepository.savedLink);
+    }
+
+    @Test
     void createsVerifiedLinkForMatchedActiveEmployee() {
         partnerEmployeeRepository.employees.add(activeEmployee());
 
@@ -442,7 +450,7 @@ class VerifyPartnerEmployeeServiceTest {
     }
 
     private CustomerIdentityEvidenceSnapshot identityEvidence(boolean active, boolean profileComplete, String identityReference) {
-        return new CustomerIdentityEvidenceSnapshot(customerId, active, profileComplete, identityReference);
+        return new CustomerIdentityEvidenceSnapshot(customerId, active, profileComplete, true, identityReference);
     }
 
     private PartnerEmployee inactiveEmployee() {

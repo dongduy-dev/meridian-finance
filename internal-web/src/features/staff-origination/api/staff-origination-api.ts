@@ -56,6 +56,10 @@ export async function createCustomer(manager: AuthSessionManager, input: Custome
 export async function updateCustomer(manager: AuthSessionManager, id: string, input: CustomerProfileInput): Promise<StaffCustomer> {
   return staffCustomerSchema.parse(await manager.protectedRequest(`/staff/customers/${id}/profile`, { method: 'PUT', body: input }))
 }
+export async function correctIdentityReference(manager: AuthSessionManager, id: string, identityReference: string): Promise<StaffCustomer> {
+  return staffCustomerSchema.parse(await manager.protectedRequest(`/staff/customers/${id}/identity-reference`,
+    { method: 'PUT', body: { identityReference } }, { replayAfterSessionRefresh: false }))
+}
 export async function listBankAccounts(manager: AuthSessionManager, id: string): Promise<BankAccount[]> {
   return bankAccountSchema.array().parse(await manager.protectedRequest(`/staff/customers/${id}/bank-accounts`))
 }

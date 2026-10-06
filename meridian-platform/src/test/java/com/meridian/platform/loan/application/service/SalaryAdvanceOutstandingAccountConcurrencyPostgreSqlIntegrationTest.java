@@ -76,6 +76,7 @@ class SalaryAdvanceOutstandingAccountConcurrencyPostgreSqlIntegrationTest {
     private static final UUID IMPORT_BATCH_ID =
             UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1");
 
+    @Autowired private com.meridian.platform.customer.application.port.out.CustomerSensitiveValueProtector identityProtector;
     @Autowired ConfirmManualDisbursementUseCase disbursements;
     @Autowired CloseLoanAccountUseCase closures;
     @Autowired EvaluateLoanAccountOverdueUseCase overdueEvaluator;
@@ -184,7 +185,7 @@ class SalaryAdvanceOutstandingAccountConcurrencyPostgreSqlIntegrationTest {
                         + "?,'MER-EMP-002',?,?)",
                 otherLinkId, activated.fixture().customerId(), PARTNER_COMPANY_ID,
                 UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb02"), IMPORT_BATCH_ID,
-                "verified-other-" + otherLinkId,
+                ("VERIFIED-" + activated.fixture().customerId()).toUpperCase(java.util.Locale.ROOT),
                 ManualDisbursementActivationPostgreSqlTestSupport.NOW,
                 ManualDisbursementActivationPostgreSqlTestSupport.NOW);
         currentUser.customer(activated.userId(), activated.fixture().customerId());
@@ -553,15 +554,15 @@ class SalaryAdvanceOutstandingAccountConcurrencyPostgreSqlIntegrationTest {
                         + "terms_consent_accepted,data_processing_consent_accepted) "
                         + "values (?,?,'Outstanding Test Customer',?,?,'1234','0900000000',"
                         + "'Test Address','EMPLOYED','Test Employer',true,true)",
-                UUID.randomUUID(), fixture.customerId(), "cipher-" + unique,
-                "identity-fingerprint-" + unique);
+                UUID.randomUUID(), fixture.customerId(), identityProtector.protectIdentityReference(("VERIFIED-" + fixture.customerId()).toUpperCase(java.util.Locale.ROOT)).ciphertext(),
+                identityProtector.protectIdentityReference(("VERIFIED-" + fixture.customerId()).toUpperCase(java.util.Locale.ROOT)).fingerprint());
         jdbc.update("insert into customer_partner_employee_links "
                         + "(id,customer_id,partner_company_id,partner_employee_id,source_import_batch_id,"
                         + "verification_outcome,link_status,verified_identity_ref,verified_employee_code,"
                         + "last_verified_at,last_refreshed_at) "
                         + "values (?,?,?,?,?,'MATCHED_ACTIVE','VERIFIED',?,'MER-EMP-001',?,?)",
                 fixture.linkId(), fixture.customerId(), PARTNER_COMPANY_ID,
-                PARTNER_EMPLOYEE_ID, IMPORT_BATCH_ID, "verified-" + unique,
+                PARTNER_EMPLOYEE_ID, IMPORT_BATCH_ID, ("VERIFIED-" + fixture.customerId()).toUpperCase(java.util.Locale.ROOT),
                 ManualDisbursementActivationPostgreSqlTestSupport.NOW,
                 ManualDisbursementActivationPostgreSqlTestSupport.NOW);
         com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbc, fixture.customerId());

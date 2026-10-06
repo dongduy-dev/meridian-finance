@@ -272,7 +272,7 @@ class CustomerEmploymentPostgreSqlIntegrationTest {
         createCustomer(customerId);
         when(identityEvidence.findIdentityEvidenceByCustomerId(customerId)).thenReturn(
                 java.util.Optional.of(new CustomerIdentityEvidenceSnapshot(
-                        customerId, true, true, IDENTITY_REFERENCE
+                        customerId, true, true, true, IDENTITY_REFERENCE
                 ))
         );
         Evidence companyA = createCompanyEvidence("A");

@@ -56,6 +56,11 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
             + UUID.randomUUID().toString().replace("-", "");
     private static final BigDecimal REQUESTED_AMOUNT = money("3000000.00");
 
+    @Autowired com.meridian.platform.customer.application.service.UpdateOwnCustomerProfileService profiles;
+    @Autowired com.meridian.platform.customer.application.service.CorrectCustomerIdentityReferenceService corrections;
+    @Autowired com.meridian.platform.customer.application.service.CustomerIdentityVerificationService identityVerifications;
+    @Autowired com.meridian.platform.partner.application.service.ImportPartnerEmployeesService imports;
+
     @Autowired
     private QuerySalaryAdvanceReadinessUseCase readinessQueries;
 
@@ -100,6 +105,36 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
     }
 
     @Test
+    void correctedAndReverifiedIdentityCannotUseOldEmploymentEvenAfterImportRefresh() {
+        profiles.updateOwnProfile(new com.meridian.platform.customer.application.dto.UpdateCustomerProfileRequest(
+                "Corrected Readiness Customer", null, "0900000000", "Test Address", "EMPLOYED", "Readiness Employer", true, true));
+        String corrected="CORRECTED-"+fixture.customerId();
+        corrections.correctOwn(new com.meridian.platform.customer.application.dto.CorrectIdentityReferenceRequest(corrected));
+        var unverified=readinessQueries.queryReadiness();
+        assertTrue(unverified.blockerCodes().contains("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED"));
+        assertEquals("NOT_VERIFIED",unverified.employeeVerificationStatus());
+        UUID baseline=jdbc.queryForObject("select current_version_id from customer_identity_documents where customer_id=?",UUID.class,fixture.customerId());
+        var verification=identityVerifications.submitOwn(UUID.randomUUID(),baseline,
+                new java.io.ByteArrayInputStream("%PDF-1.4\nfictional\n%%EOF".getBytes(java.nio.charset.StandardCharsets.UTF_8)),"application/pdf","identity.pdf");
+        currentUser.loanOfficer();
+        identityVerifications.decide(verification.verificationId(),true,new com.meridian.platform.customer.application.dto.CustomerIdentityDecisionRequest(
+                UUID.randomUUID(),verification.evidence().versionId(),corrected,null));
+        imports.importEmployees(fixture.partnerCompanyId(),new com.meridian.platform.partner.application.dto.ImportPartnerEmployeesRequest(
+                UUID.randomUUID(),"2026-06",java.util.List.of(new com.meridian.platform.partner.application.dto.PartnerEmployeeImportRowRequest(
+                "READINESS-EMP",("READINESS-ID-"+fixture.customerId()).toUpperCase(java.util.Locale.ROOT),money("20000000"),money("6000000"),"ACTIVE",true))));
+        currentUser.customer(fixture.customerUserId(),fixture.customerId());
+        var blocked=readinessQueries.queryReadiness();
+        assertFalse(blocked.applicationAllowed()); assertEquals("NOT_VERIFIED",blocked.partnerEligibilityStatus());
+        assertEquals("NOT_VERIFIED",blocked.employeeVerificationStatus()); assertTrue(blocked.blockerCodes().contains("EMPLOYEE_NOT_VERIFIED"));
+        assertFalse(blocked.blockerCodes().contains("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED"));
+        assertEquals("EMPLOYEE_NOT_VERIFIED",assertThrows(BusinessRuleViolationException.class,()->submissions.startSalaryAdvanceApplication(
+                new SalaryAdvanceApplicationRequest(fixture.linkId(),REQUESTED_AMOUNT,1))).getErrorCode());
+        assertEquals(("READINESS-ID-"+fixture.customerId()).toUpperCase(java.util.Locale.ROOT),jdbc.queryForObject("select verified_identity_ref from customer_partner_employee_links where id=?",String.class,fixture.linkId()));
+        assertEquals(0,count("select count(*) from loan_applications where customer_id=?",fixture.customerId()));
+        assertEquals(0,count("select count(*) from salary_advance_limits where customer_id=?",fixture.customerId()));
+    }
+
+    @Test
     void readinessReturnsAuthoritativeValuesWithoutCreatingWorkflowState() {
         int applicationCount = count("select count(*) from loan_applications");
         int limitCount = count("select count(*) from salary_advance_limits");
@@ -136,11 +171,11 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                 "insert into partner_employees "
                         + "(id, partner_company_id, import_batch_id, employee_code, identity_reference, "
                         + "salary_amount, salary_advance_limit, employment_status, active) "
-                        + "values (?, ?, ?, 'READINESS-EMP', 'READINESS-ID', 20000000.00, "
+                        + "values (?, ?, ?, 'READINESS-EMP', ?, 20000000.00, "
                         + "6000000.00, 'ACTIVE', true)",
                 replacementEmployeeId,
                 fixture.partnerCompanyId(),
-                replacementBatchId
+                replacementBatchId, ("READINESS-ID-" + fixture.customerId()).toUpperCase(java.util.Locale.ROOT)
         );
 
         SalaryAdvanceReadinessDto stale = readinessQueries.queryReadiness();
@@ -276,11 +311,11 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                 "insert into partner_employees "
                         + "(id, partner_company_id, import_batch_id, employee_code, identity_reference, "
                         + "salary_amount, salary_advance_limit, employment_status, active) "
-                        + "values (?, ?, ?, 'READINESS-EMP', 'READINESS-ID', 20000000.00, "
+                        + "values (?, ?, ?, 'READINESS-EMP', ?, 20000000.00, "
                         + "6000000.00, 'ACTIVE', true)",
                 partnerEmployeeId,
                 partnerCompanyId,
-                importBatchId
+                importBatchId, ("READINESS-ID-" + customerId).toUpperCase(java.util.Locale.ROOT)
         );
         jdbc.update(
                 "insert into customers "
@@ -299,8 +334,8 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                         + "'Test Address', 'EMPLOYED', 'Readiness Employer', true, true)",
                 UUID.randomUUID(),
                 customerId,
-                "cipher-" + unique,
-                "fingerprint-" + unique
+                sensitiveValueProtector.protectIdentityReference(("READINESS-ID-" + customerId).toUpperCase(java.util.Locale.ROOT)).ciphertext(),
+                sensitiveValueProtector.protectIdentityReference(("READINESS-ID-" + customerId).toUpperCase(java.util.Locale.ROOT)).fingerprint()
         );
         ProtectedSensitiveValue bankAccount =
                 sensitiveValueProtector.protectBankAccountNumber("TEST", "0000123456785678");
@@ -340,6 +375,8 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                 partnerEmployeeId,
                 importBatchId
         );
+        jdbc.update("update partner_employees set identity_reference=? where id=?", ("READINESS-ID-" + customerId).toUpperCase(java.util.Locale.ROOT), partnerEmployeeId);
+        jdbc.update("update customer_partner_employee_links set verified_identity_ref=? where id=?", ("READINESS-ID-" + customerId).toUpperCase(java.util.Locale.ROOT), linkId);
         com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbc, customerId);
         return new Fixture(
                 customerId,
@@ -396,7 +433,7 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                     "CUSTOMER",
                     customerId,
                     Set.of("CUSTOMER"),
-                    Set.of("loan:submit", "loan:read:own")
+                    Set.of("loan:submit", "loan:read:own", "customer:profile:write:own", "customer:identity:write:own")
             ));
         }
 
@@ -407,7 +444,7 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                     "STAFF",
                     null,
                     Set.of("LOAN_OFFICER"),
-                    Set.of("loan:review", "loan:read")
+                    Set.of("loan:review", "loan:read", "customer:identity:verify", "partner:manage")
             ));
         }
 

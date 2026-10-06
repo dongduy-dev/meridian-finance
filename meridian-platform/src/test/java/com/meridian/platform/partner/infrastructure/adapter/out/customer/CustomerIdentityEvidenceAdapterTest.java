@@ -21,7 +21,7 @@ class CustomerIdentityEvidenceAdapterTest {
                 Optional.of(new com.meridian.platform.customer.application.port.in.CustomerIdentityEvidenceSnapshot(
                         CUSTOMER_ID,
                         true,
-                        true,
+                        true, true,
                         "IDREF-MER-001"
                 ))
         );

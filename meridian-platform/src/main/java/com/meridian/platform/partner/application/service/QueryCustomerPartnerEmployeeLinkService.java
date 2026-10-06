@@ -4,6 +4,7 @@ import com.meridian.platform.partner.application.dto.CustomerPartnerEmployeeElig
 import com.meridian.platform.partner.application.dto.CustomerPartnerEmployeeLinkSnapshotDto;
 import com.meridian.platform.partner.application.port.in.QueryCustomerPartnerEmployeeLinkUseCase;
 import com.meridian.platform.partner.application.port.out.CustomerPartnerEmployeeLinkRepository;
+import com.meridian.platform.partner.application.port.out.CustomerIdentityEvidencePort;
 import com.meridian.platform.partner.application.port.out.PartnerCompanyRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEligibilityReviewRepository;
 import com.meridian.platform.partner.application.port.out.PartnerEmployeeImportBatchRepository;
@@ -32,6 +33,7 @@ public class QueryCustomerPartnerEmployeeLinkService implements QueryCustomerPar
     private final PartnerEmployeeImportBatchRepository importBatchRepository;
     private final PartnerEligibilityReviewRepository reviewRepository;
     private final Clock clock;
+    private final CustomerIdentityEvidencePort identityEvidence;
 
     public QueryCustomerPartnerEmployeeLinkService(
             CustomerPartnerEmployeeLinkRepository customerPartnerEmployeeLinkRepository,
@@ -39,7 +41,8 @@ public class QueryCustomerPartnerEmployeeLinkService implements QueryCustomerPar
             PartnerCompanyRepository partnerCompanyRepository,
             PartnerEmployeeImportBatchRepository importBatchRepository,
             PartnerEligibilityReviewRepository reviewRepository,
-            Clock clock
+            Clock clock,
+            CustomerIdentityEvidencePort identityEvidence
     ) {
         this.customerPartnerEmployeeLinkRepository = customerPartnerEmployeeLinkRepository;
         this.partnerEmployeeRepository = partnerEmployeeRepository;
@@ -47,6 +50,7 @@ public class QueryCustomerPartnerEmployeeLinkService implements QueryCustomerPar
         this.importBatchRepository = importBatchRepository;
         this.reviewRepository = reviewRepository;
         this.clock = clock;
+        this.identityEvidence = identityEvidence;
     }
 
     @Override
@@ -85,6 +89,12 @@ public class QueryCustomerPartnerEmployeeLinkService implements QueryCustomerPar
         if (!link.isVerified()) {
             return ineligible(CustomerPartnerEmployeeEligibilityDto.Status.NOT_VERIFIED);
         }
+
+        boolean matchesCurrentIdentity = identityEvidence.findIdentityEvidenceByCustomerId(link.customerId())
+                .filter(value -> value.active() && value.profileComplete() && value.identityVerified())
+                .filter(value -> value.identityReference() != null && !value.identityReference().isBlank())
+                .filter(value -> Objects.equals(value.identityReference(), link.verifiedIdentityRef())).isPresent();
+        if (!matchesCurrentIdentity) return ineligible(CustomerPartnerEmployeeEligibilityDto.Status.NOT_VERIFIED);
 
         Optional<PartnerCompany> companyResult = partnerCompanyRepository.findById(link.partnerCompanyId());
         if (companyResult.isEmpty()

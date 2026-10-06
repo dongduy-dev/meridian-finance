@@ -146,6 +146,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | PUT | `/api/v1/admin/loan-products/{productCode}/activation` | `loan:product:manage` | Replace the product activation state for future discovery and submission. |
 | GET | `/api/v1/customers/me` | `customer:profile:read:own` | Return the authenticated Customer’s safe profile-readiness view. |
 | PUT | `/api/v1/customers/me/profile` | `customer:profile:write:own` | Create or update the authenticated Customer profile. |
+| PUT | `/api/v1/customers/me/identity-reference` | Customer with `customer:profile:write:own` | Controlled pre-verification Identity Reference correction; Section 3.12.1. |
 | GET | `/api/v1/customers/me/bank-accounts` | `customer:bank-account:read:own` | List masked owned bank accounts. |
 | POST | `/api/v1/customers/me/bank-accounts` | `customer:bank-account:write:own` | Add a bank account; the first active account becomes primary. |
 | POST | `/api/v1/customers/me/bank-accounts/{customerBankAccountId}/make-primary` | `customer:bank-account:write:own` | Make an active owned account primary. |
@@ -171,6 +172,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/staff/customers/{customerId}/digital-access` | Staff with `customer:intake:manage` | Verify the Customer's presented identity and attach a Customer Web login to that Customer. |
 | POST | `/api/v1/staff/customers` | Staff with `customer:intake:manage` | Atomically create a Customer and required identity-bearing profile. |
 | PUT | `/api/v1/staff/customers/{customerId}/profile` | Staff with `customer:intake:manage` | Maintain the selected Customer profile. |
+| PUT | `/api/v1/staff/customers/{customerId}/identity-reference` | Staff with `customer:intake:manage` | Controlled pre-verification Identity Reference correction; Section 3.12.1. |
 | GET | `/api/v1/staff/customers/{customerId}/bank-accounts` | Staff with `customer:intake:manage` | List the selected Customer's masked bank accounts. |
 | POST | `/api/v1/staff/customers/{customerId}/bank-accounts` | Staff with `customer:intake:manage` | Add a protected bank account. |
 | POST | `/api/v1/staff/customers/{customerId}/bank-accounts/{customerBankAccountId}/make-primary` | Staff with `customer:intake:manage` | Make an active selected-Customer account primary. |
@@ -581,6 +583,21 @@ The commands do not use a request UUID and clients must not retry automatically 
 
 The safe Customer response contains `customerId`, `customerNumber`, Customer `status`, `verificationStatus`, `profileCompletionStatus`, `primaryActiveBankAccountPresent`, and the profile fields shown above except `identityReference`. Duplicate normalized identity evidence owned by another Customer returns `409 IDENTITY_REFERENCE_ALREADY_IN_USE` without echoing the submitted value.
 
+### 3.12.1 Controlled Identity Reference correction
+
+| Method | Endpoint | Actor and exact authority |
+|---|---|---|
+| PUT | `/api/v1/customers/me/identity-reference` | Customer with `customer:profile:write:own`; ownership comes from authentication |
+| PUT | `/api/v1/staff/customers/{customerId}/identity-reference` | Staff with existing `customer:intake:manage`; selected-Customer maintenance during assisted origination |
+
+The JSON body contains only `{ "identityReference": "FICTIONAL-CORRECTED-REFERENCE" }`, a nonblank value of at most 100 characters. A supplied ownership field cannot select another Customer on the own route. Staff acts as Staff and does not impersonate the Customer. These commands introduce no permission grants or generic Customer administration.
+
+The Customer must be `ACTIVE`, with a `COMPLETE` identity-bearing profile and a summary of `UNVERIFIED` or `REJECTED`. The command locks Customer, replaces only the protected reference after the existing normalized duplicate check, and returns the safe Customer shape from Section 3.12 with `200` and `Cache-Control: no-store, private`. A changed reference sets the summary to `UNVERIFIED`; an identical normalized reference is a no-op. No raw reference, ciphertext, fingerprint, or old/new sensitive value appears in the response or correction audit. `CUSTOMER_IDENTITY_REFERENCE_CORRECTED` records safe Customer/status/actor evidence transactionally.
+
+Failures include `400` request validation, `403` missing route authority or `CUSTOMER_IDENTITY_REFERENCE_ACCESS_DENIED` for an invalid actor, `404 CUSTOMER_NOT_FOUND`, `409 CUSTOMER_NOT_ACTIVE`, `422 PROFILE_INCOMPLETE`, `409 IDENTITY_REFERENCE_IMMUTABLE` while identity is verified, and `409 IDENTITY_REFERENCE_ALREADY_IN_USE`. Ordinary profile updates still reject a changed reference after completion or while the Customer summary is `VERIFIED`, including a profile temporarily made incomplete. Correction preserves pending attempts, exact documents, terminal decisions, Partner history, and LoanApplication provenance; it never verifies identity automatically. See Section 3.20 for retry of pending verification.
+
+There is no command request UUID. Clients must clear sensitive input after dispatch, retain no reference in query/mutation or browser persistence, and perform no automatic command replay, including after session refresh. After an uncertain result, refresh the safe Customer state before deliberately entering another correction.
+
 ### 3.13 Customer bank accounts
 
 ```json
@@ -647,6 +664,8 @@ When the new batch is the authoritative latest `COMPLETED` batch for the current
 
 The body does not accept `customerId` or `identityReference`.
 
+The Customer must be active, profile-complete, and identity-verified before matching. `UNVERIFIED` and `REJECTED` identity fail with `422 CUSTOMER_IDENTITY_VERIFICATION_REQUIRED`; Partner receives no usable raw identity for those states. Manual review approval applies the same prerequisite.
+
 Safe response fields: `customerId`, `partnerCompanyId`, `partnerEmployeeId`, `customerPartnerEmployeeLinkId`, `outcome`, `linkStatus`, and `manualReviewRequired`.
 
 Responses exclude salary, limit values, employee code, identity evidence, and raw matching evidence.
@@ -654,6 +673,8 @@ Responses exclude salary, limit values, employee code, identity evidence, and ra
 When verification requires authorized review, Partner persists or reuses one pending review for the Customer and Partner Company. `MATCHED_INACTIVE` remains a hard stop and does not create a review. A later automatic terminal match (`MATCHED_ACTIVE` or `MATCHED_INACTIVE`) supersedes an unresolved review before it can authorize conflicting evidence.
 
 The same POST handles a Customer-declared employment update. Exact active proof for the current employer and unchanged evidence refreshes the current relationship. Different evidence for that employer creates or reuses a review without overwriting the relationship. Exact active proof for another employer atomically changes the old current link to historical `DISABLED` state and creates a fresh `VERIFIED` link for the new employer. Missing, ambiguous, or absent current-month evidence leaves the prior relationship unchanged and returns the established manual-review response. `MATCHED_INACTIVE` leaves it unchanged without creating a review.
+
+A current verified Customer identity differing from the reusable link's verified identity makes Partner eligibility `NOT_VERIFIED` and Salary Advance readiness report `EMPLOYEE_NOT_VERIFIED`; direct Salary Advance submission also rejects that evidence. Import refresh does not replace the recorded verified identity or repair the mismatch.
 
 A current-month pending review for any Partner Company makes Salary Advance readiness return `EMPLOYEE_NOT_VERIFIED`, even when a prior `VERIFIED` relationship remains stored. Prior-month and terminal reviews do not block through this rule. Approval completes the same-employer update or different-employer switch; rejection does not mutate the prior relationship. Neither path transfers Salary Advance limit or Loan evidence between links.
 
@@ -873,7 +894,7 @@ Digital submission is multipart with `file`, UUID `uploadRequestId`, and nullabl
 
 Assisted binding accepts only `{ "documentVersionId": "<UUID>" }`. The server resolves the case-selected Customer and validates the exact current `CUSTOMER_IDENTITY` version. A new attempt requires an open case. An already verified Customer reuses existing readiness for later assisted loans without a new identity file. Replacing a pending attempt preserves it as `SUPERSEDED`; replacing rejected evidence creates a new pending attempt. Upload never means verified.
 
-VERIFY accepts `{ "requestId": "<UUID>", "documentVersionId": "<UUID>", "presentedIdentityReference": "<reference shown on exact evidence>" }`. The transient reference is at most 100 characters, submitted only in the body, compared against Customer's protected fingerprint, and excluded from persistence, responses, logs, and audit. Mismatch returns `422 IDENTITY_REFERENCE_MISMATCH` without completing the attempt. REJECT accepts request/version IDs and exactly one `rejectionReason`: `IDENTITY_REFERENCE_MISMATCH`, `NAME_MISMATCH`, `UNREADABLE_EVIDENCE`, or `UNACCEPTABLE_EVIDENCE`; it accepts no presented reference or free text. Both commands require pending/current evidence, active complete matching Customer context, and dedicated Staff authority. Exact request/outcome/reason/reviewer replay returns the recorded result; conflicting terminal or stale commands return `409`.
+VERIFY accepts `{ "requestId": "<UUID>", "documentVersionId": "<UUID>", "presentedIdentityReference": "<reference shown on exact evidence>" }`. The transient reference is at most 100 characters, submitted only in the body, compared against Customer's protected fingerprint, and excluded from persistence, responses, logs, and audit. Mismatch returns `422 IDENTITY_REFERENCE_MISMATCH` without completing the attempt. After controlled profile correction under Section 3.12.1, Staff may retry that same pending attempt and exact version; current-document, full-name, actor, stale-evidence, competing-decision, and replay guards still apply. REJECT accepts request/version IDs and exactly one `rejectionReason`: `IDENTITY_REFERENCE_MISMATCH`, `NAME_MISMATCH`, `UNREADABLE_EVIDENCE`, or `UNACCEPTABLE_EVIDENCE`; it accepts no presented reference or free text. Both commands require pending/current evidence, active complete matching Customer context, and dedicated Staff authority. Exact request/outcome/reason/reviewer replay returns the recorded result; conflicting terminal or stale commands return `409`.
 
 Safe history/detail fields are `verificationId`, `sequence`, `customerNumber`, submitted `fullName`, `source`, `method`, `status`, controlled nullable `rejectionReason`, `submittedAt`, `completedAt`, and `evidence`. Evidence contains only `versionId`, `versionNumber`, `filename`, `mimeType`, `byteSize`, and `uploadedAt`. Queue rows set `evidence` to null. No Customer UUID, raw Identity Reference, email, phone, address, bank information, storage key, hash, ciphertext, fingerprint, reviewer notes, or login identity is returned. Content reads return the exact immutable file with attachment disposition, `Cache-Control: private, no-store`, and `X-Content-Type-Options: nosniff` after authorization.
 

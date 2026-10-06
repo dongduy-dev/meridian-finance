@@ -117,6 +117,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
     private static final byte[] PDF = "%PDF-1.7\n% Meridian test evidence\n"
             .getBytes(StandardCharsets.US_ASCII);
 
+    @Autowired private com.meridian.platform.customer.application.port.out.CustomerSensitiveValueProtector identityProtector;
     @Autowired private StartSalaryAdvanceApplicationUseCase submissionUseCase;
     @Autowired private StartLoanApplicationReviewUseCase reviewStartUseCase;
     @Autowired private SubmitReviewRecommendationUseCase recommendationUseCase;
@@ -1216,7 +1217,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                     terms_consent_accepted, data_processing_consent_accepted
                 ) VALUES (?, ?, 'Correction Test Customer', ?, ?, '1234', '0900000000',
                           'Test Address', 'EMPLOYED', 'Test Employer', TRUE, TRUE)
-                """, UUID.randomUUID(), customerId, "cipher-" + unique, "fingerprint-" + unique);
+                """, UUID.randomUUID(), customerId, identityProtector.protectIdentityReference(("TEST-IDENTITY-" + customerId).toUpperCase(java.util.Locale.ROOT)).ciphertext(), identityProtector.protectIdentityReference(("TEST-IDENTITY-" + customerId).toUpperCase(java.util.Locale.ROOT)).fingerprint());
         jdbcTemplate.update("""
                 INSERT INTO customer_bank_accounts (
                     id, customer_id, bank_code, bank_name_snapshot, account_holder_name,
@@ -1239,7 +1240,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                 ) VALUES (?, ?, ?, ?, ?, 'MATCHED_ACTIVE', 'VERIFIED', ?, 'MER-EMP-001',
                           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """, linkId, customerId, PARTNER_COMPANY_ID, PARTNER_EMPLOYEE_ID, IMPORT_BATCH_ID,
-                "test-identity-" + linkId);
+                ("TEST-IDENTITY-" + customerId).toUpperCase(java.util.Locale.ROOT));
         com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbcTemplate, customerId);
         return new Fixture(customerId, customerUserId, linkId);
     }

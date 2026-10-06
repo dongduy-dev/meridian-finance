@@ -94,8 +94,9 @@ const ocrReview = (
 
 function renderRoute(path: string) {
   const router = createTestRouter([path])
-  const view = render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
-  return { router, ...view }
+  const client = createQueryClient()
+  const view = render(<QueryClientProvider client={client}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
+  return { router, client, ...view }
 }
 
 function requestPath(call: unknown[]): string { return String(call[0]) }
@@ -106,6 +107,36 @@ describe('assisted origination pages', () => {
     sessionStorage.clear()
     localStorage.clear()
     vi.mocked(authApi.refresh).mockResolvedValue(staff())
+  })
+
+  it('corrects the selected Customer without retaining sensitive input', async () => {
+    const user = userEvent.setup()
+    vi.mocked(api.apiRequest).mockImplementation(async path => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}` || path.endsWith('/identity-reference')) return customer
+      return []
+    })
+    const { client } = renderRoute(`/staff/origination/${caseId}`)
+    await user.click(await screen.findByRole('button', { name: 'Correct identity reference' }))
+    await user.type(screen.getByLabelText('Replacement identity reference'), 'FICTIONAL-STAFF-CORRECTION')
+    await user.click(screen.getByRole('button', { name: 'Confirm correction' }))
+    expect(await screen.findByText('Identity reference corrected. Manual identity verification is still required.')).toBeVisible()
+    expect(api.apiRequest).toHaveBeenCalledWith(`/staff/customers/${customerId}/identity-reference`, expect.objectContaining({ method: 'PUT', body: { identityReference: 'FICTIONAL-STAFF-CORRECTION' } }))
+    expect(screen.queryByLabelText('Replacement identity reference')).not.toBeInTheDocument()
+    expect(JSON.stringify([localStorage, sessionStorage])).not.toContain('FICTIONAL-STAFF-CORRECTION')
+    expect(JSON.stringify(client.getQueryCache().getAll().map(q => q.state))).not.toContain('FICTIONAL-STAFF-CORRECTION')
+    expect(JSON.stringify(client.getMutationCache().getAll().map(m => m.state))).not.toContain('FICTIONAL-STAFF-CORRECTION')
+  })
+
+  it.each(['VERIFIED', 'INACTIVE'])('hides correction for unavailable Customer state %s', async state => {
+    vi.mocked(api.apiRequest).mockImplementation(async path => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return { ...customer, ...(state === 'VERIFIED' ? { verificationStatus: state } : { status: 'SUSPENDED' }) }
+      return []
+    })
+    renderRoute(`/staff/origination/${caseId}`)
+    await screen.findByRole('heading', { name: /Selected Customer/ })
+    expect(screen.queryByRole('button', { name: 'Correct identity reference' })).not.toBeInTheDocument()
   })
 
   it('loads the OPEN intake list and presents both supported products without inventing application submission', async () => {
@@ -520,7 +551,8 @@ describe('assisted origination pages', () => {
     await user.click(apply)
 
     expect(screen.getAllByLabelText('Full name').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('Reviewed Customer')
-    expect(screen.getAllByLabelText('Identity reference').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('')
+    expect(screen.getAllByLabelText('Identity reference').every(field => (field as HTMLInputElement).readOnly)).toBe(true)
+    expect(screen.getByText('Identity reference: On file')).toBeVisible()
     expect(screen.getByLabelText('Phone')).toHaveValue('0911222333')
     expect(screen.getByLabelText('Signed application consent recorded')).toBeChecked()
     expect(screen.getByLabelText('Data processing consent recorded')).toBeChecked()
