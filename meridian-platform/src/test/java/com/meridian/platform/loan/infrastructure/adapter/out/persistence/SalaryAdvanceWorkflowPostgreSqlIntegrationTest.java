@@ -833,8 +833,8 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
                         """,
                 UUID.randomUUID(),
                 customerId,
-                "cipher-" + unique,
-                "fingerprint-" + unique
+                sensitiveValueProtector.protectIdentityReference(("TEST-IDENTITY-" + customerId).toUpperCase(java.util.Locale.ROOT)).ciphertext(),
+                sensitiveValueProtector.protectIdentityReference(("TEST-IDENTITY-" + customerId).toUpperCase(java.util.Locale.ROOT)).fingerprint()
         );
         ProtectedSensitiveValue bankAccount =
                 sensitiveValueProtector.protectBankAccountNumber("TEST", "0000123456785678");
@@ -877,7 +877,7 @@ class SalaryAdvanceWorkflowPostgreSqlIntegrationTest {
                 PARTNER_COMPANY_ID,
                 PARTNER_EMPLOYEE_ID,
                 IMPORT_BATCH_ID,
-                "test-identity-" + linkId
+                ("TEST-IDENTITY-" + customerId).toUpperCase(java.util.Locale.ROOT)
         );
         com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbcTemplate, customerId);
         return new Fixture(customerId, customerUserId, linkId);

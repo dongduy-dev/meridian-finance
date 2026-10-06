@@ -40,7 +40,8 @@ public class QueryCustomerIdentityEvidenceService implements QueryCustomerIdenti
                 customer.id(),
                 customer.isActive(),
                 profileComplete,
-                profileComplete ? sensitiveValueProtector.reveal(customer.profile().identityReference()) : null
+                customer.verificationStatus() == com.meridian.platform.customer.domain.model.VerificationStatus.VERIFIED,
+                profileComplete && customer.isActive() && customer.verificationStatus() == com.meridian.platform.customer.domain.model.VerificationStatus.VERIFIED ? sensitiveValueProtector.reveal(customer.profile().identityReference()) : null
         );
     }
 }

@@ -18,7 +18,7 @@ class CustomerDigitalAccessV67MigrationSourceTest {
         assertTrue(migration.contains("DROP INDEX uq_users_customer_id_present"));
         assertTrue(migration.contains("'IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED'"));
         assertFalse(migration.contains("DROP INDEX idx_users_customer_id"));
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V70"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V71"));
         assertTrue(snapshot.replace("\r\n", "\n").contains(migration.replace("\r\n", "\n")));
     }
 }

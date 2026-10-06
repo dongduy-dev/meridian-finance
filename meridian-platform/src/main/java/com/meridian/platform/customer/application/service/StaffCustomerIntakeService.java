@@ -159,7 +159,7 @@ public class StaffCustomerIntakeService implements StaffCustomerIntakeUseCase {
         CustomerProfile profile = new CustomerProfile(
                 previous == null ? null : previous.id(),
                 customer.id(),
-                request.fullName(),
+                resolveFullName(previous, request.fullName()),
                 resolveIdentity(previous, request.identityReference(), customer.id()),
                 request.phoneNumber(), request.residentialAddress(), request.employmentStatus(),
                 request.employerName(), request.termsConsentAccepted(), request.dataProcessingConsentAccepted(),
@@ -174,14 +174,6 @@ public class StaffCustomerIntakeService implements StaffCustomerIntakeUseCase {
                 && saved.profileCompletionStatus() == ProfileCompletionStatus.COMPLETE) {
             entries.add(profileAudit(BusinessAuditAction.CUSTOMER_PROFILE_COMPLETED, saved));
         }
-        if (customer.verificationStatus() == com.meridian.platform.customer.domain.model.VerificationStatus.VERIFIED
-                && saved.verificationStatus() != com.meridian.platform.customer.domain.model.VerificationStatus.VERIFIED) {
-            auditPublisher.publish(BusinessAuditEvent.single(
-                    BusinessOperationContext.user(UUID.randomUUID(), actor.userId(), now),
-                    new BusinessAuditEntry(BusinessAuditAction.CUSTOMER_IDENTITY_VERIFICATION_INVALIDATED, BusinessAuditEntityType.CUSTOMER,
-                            saved.id(), BusinessAuditPayload.builder().put(BusinessAuditPayloadKey.CUSTOMER_ID, saved.id()).build())));
-        }
-
         auditPublisher.publish(new BusinessAuditEvent(
                 BusinessOperationContext.user(UUID.randomUUID(), actor.userId(), now), entries));
         return mapper.toCustomerDto(saved);
@@ -270,6 +262,13 @@ public class StaffCustomerIntakeService implements StaffCustomerIntakeUseCase {
                     "Customer must be active for this operation.");
         }
         return customer;
+    }
+
+    private String resolveFullName(CustomerProfile previous, String requestedFullName) {
+        if (requestedFullName != null) return requestedFullName;
+        if (previous != null) return previous.fullName();
+        throw new BusinessRuleViolationException("PROFILE_INCOMPLETE",
+                "Customer profile requires full name before it can be completed.");
     }
 
     private ProtectedSensitiveValue resolveIdentity(CustomerProfile previous, String raw, UUID customerId) {

@@ -36,6 +36,39 @@ class CustomerProfileControllerTest {
     }
 
     @Test
+    void verifiedNameChangeReturnsSemanticConflictWithoutEchoingName() throws Exception {
+        mockMvc = MockMvcBuilders.standaloneSetup(new CustomerProfileController(new StubQueryUseCase(), request -> {
+                    throw new BusinessStateConflictException("VERIFIED_IDENTITY_CHANGE_NOT_ALLOWED",
+                            "Full name cannot be changed through profile maintenance after identity verification.");
+                })).setControllerAdvice(new GlobalExceptionHandler()).build();
+        mockMvc.perform(put("/api/v1/customers/me/profile").contentType(MediaType.APPLICATION_JSON)
+                        .content(profileJson("\"Changed Fictional Name\"")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("VERIFIED_IDENTITY_CHANGE_NOT_ALLOWED"))
+                .andExpect(jsonPath("$.message", not(containsString("Changed Fictional Name"))));
+    }
+
+    @Test
+    void omittedSavedNamePassesValidationButBlankSuppliedNameDoesNot() throws Exception {
+        mockMvc.perform(put("/api/v1/customers/me/profile").contentType(MediaType.APPLICATION_JSON)
+                        .content(profileJson("null")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("IDENTITY_REFERENCE_ALREADY_IN_USE"));
+        for (String blankName : new String[] {"\"\"", "\"   \""}) {
+            mockMvc.perform(put("/api/v1/customers/me/profile").contentType(MediaType.APPLICATION_JSON)
+                            .content(profileJson(blankName)))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    private String profileJson(String fullName) {
+        return """
+                {"fullName": %s, "phoneNumber": "0900000000", "residentialAddress": "Fictional address",
+                 "employmentStatus": "EMPLOYED", "termsConsentAccepted": true, "dataProcessingConsentAccepted": true}
+                """.formatted(fullName);
+    }
+
+    @Test
     void duplicateIdentityReferenceReturnsConflictWithoutSensitiveValue() throws Exception {
         mockMvc.perform(put("/api/v1/customers/me/profile")
                         .contentType(MediaType.APPLICATION_JSON)

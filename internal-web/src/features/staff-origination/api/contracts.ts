@@ -89,6 +89,8 @@ export type CustomerProfileInput = {
   dataProcessingConsentAccepted: boolean
 }
 
+export type UpdateCustomerProfileInput = Omit<CustomerProfileInput, 'fullName'> & { fullName?: string }
+
 export type CollateralLoanInput = {
   requestedAmount: number
   requestedTermMonths: number

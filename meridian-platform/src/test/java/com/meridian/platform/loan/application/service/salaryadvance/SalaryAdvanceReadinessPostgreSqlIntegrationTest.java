@@ -56,6 +56,9 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
             + UUID.randomUUID().toString().replace("-", "");
     private static final BigDecimal REQUESTED_AMOUNT = money("3000000.00");
 
+    @Autowired com.meridian.platform.customer.application.service.UpdateOwnCustomerProfileService profiles;
+    @Autowired com.meridian.platform.customer.application.service.CorrectCustomerIdentityReferenceService corrections;
+
     @Autowired
     private QuerySalaryAdvanceReadinessUseCase readinessQueries;
 
@@ -100,6 +103,28 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
     }
 
     @Test
+    void verifiedNameChangeCannotEnableCorrectionOrInvalidateEmployment() {
+        var before = readinessQueries.queryReadiness();
+        String linkBefore = jdbc.queryForObject("select row_to_json(l)::text from customer_partner_employee_links l where id=?", String.class, fixture.linkId());
+        String historyBefore = jdbc.queryForObject("select json_agg(v order by sequence_number)::text from customer_identity_verifications v where customer_id=?", String.class, fixture.customerId());
+        assertTrue(before.applicationAllowed());
+        assertEquals("VERIFIED_IDENTITY_CHANGE_NOT_ALLOWED", assertThrows(
+                com.meridian.platform.shared.domain.exception.BusinessStateConflictException.class,
+                () -> profiles.updateOwnProfile(new com.meridian.platform.customer.application.dto.UpdateCustomerProfileRequest(
+                        "Changed Readiness Customer", null, "0900000000", "Test Address", "EMPLOYED", "Readiness Employer", true, true))).getErrorCode());
+        assertEquals("IDENTITY_REFERENCE_IMMUTABLE", assertThrows(
+                com.meridian.platform.shared.domain.exception.BusinessStateConflictException.class,
+                () -> corrections.correctOwn(new com.meridian.platform.customer.application.dto.CorrectIdentityReferenceRequest("CORRECTED-" + fixture.customerId()))).getErrorCode());
+        assertEquals(before, readinessQueries.queryReadiness());
+        assertEquals("ELIGIBLE", readinessQueries.queryReadiness().partnerEligibilityStatus());
+        assertEquals(linkBefore, jdbc.queryForObject("select row_to_json(l)::text from customer_partner_employee_links l where id=?", String.class, fixture.linkId()));
+        assertEquals(historyBefore, jdbc.queryForObject("select json_agg(v order by sequence_number)::text from customer_identity_verifications v where customer_id=?", String.class, fixture.customerId()));
+        assertEquals(0, count("select count(*) from audit_events where action='CUSTOMER_IDENTITY_VERIFICATION_INVALIDATED' and entity_id=?", fixture.customerId()));
+        assertEquals(0, count("select count(*) from loan_applications where customer_id=?", fixture.customerId()));
+        assertEquals(0, count("select count(*) from salary_advance_limits where customer_id=?", fixture.customerId()));
+    }
+
+    @Test
     void readinessReturnsAuthoritativeValuesWithoutCreatingWorkflowState() {
         int applicationCount = count("select count(*) from loan_applications");
         int limitCount = count("select count(*) from salary_advance_limits");
@@ -136,11 +161,11 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                 "insert into partner_employees "
                         + "(id, partner_company_id, import_batch_id, employee_code, identity_reference, "
                         + "salary_amount, salary_advance_limit, employment_status, active) "
-                        + "values (?, ?, ?, 'READINESS-EMP', 'READINESS-ID', 20000000.00, "
+                        + "values (?, ?, ?, 'READINESS-EMP', ?, 20000000.00, "
                         + "6000000.00, 'ACTIVE', true)",
                 replacementEmployeeId,
                 fixture.partnerCompanyId(),
-                replacementBatchId
+                replacementBatchId, ("READINESS-ID-" + fixture.customerId()).toUpperCase(java.util.Locale.ROOT)
         );
 
         SalaryAdvanceReadinessDto stale = readinessQueries.queryReadiness();
@@ -276,11 +301,11 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                 "insert into partner_employees "
                         + "(id, partner_company_id, import_batch_id, employee_code, identity_reference, "
                         + "salary_amount, salary_advance_limit, employment_status, active) "
-                        + "values (?, ?, ?, 'READINESS-EMP', 'READINESS-ID', 20000000.00, "
+                        + "values (?, ?, ?, 'READINESS-EMP', ?, 20000000.00, "
                         + "6000000.00, 'ACTIVE', true)",
                 partnerEmployeeId,
                 partnerCompanyId,
-                importBatchId
+                importBatchId, ("READINESS-ID-" + customerId).toUpperCase(java.util.Locale.ROOT)
         );
         jdbc.update(
                 "insert into customers "
@@ -299,8 +324,8 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                         + "'Test Address', 'EMPLOYED', 'Readiness Employer', true, true)",
                 UUID.randomUUID(),
                 customerId,
-                "cipher-" + unique,
-                "fingerprint-" + unique
+                sensitiveValueProtector.protectIdentityReference(("READINESS-ID-" + customerId).toUpperCase(java.util.Locale.ROOT)).ciphertext(),
+                sensitiveValueProtector.protectIdentityReference(("READINESS-ID-" + customerId).toUpperCase(java.util.Locale.ROOT)).fingerprint()
         );
         ProtectedSensitiveValue bankAccount =
                 sensitiveValueProtector.protectBankAccountNumber("TEST", "0000123456785678");
@@ -340,6 +365,8 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                 partnerEmployeeId,
                 importBatchId
         );
+        jdbc.update("update partner_employees set identity_reference=? where id=?", ("READINESS-ID-" + customerId).toUpperCase(java.util.Locale.ROOT), partnerEmployeeId);
+        jdbc.update("update customer_partner_employee_links set verified_identity_ref=? where id=?", ("READINESS-ID-" + customerId).toUpperCase(java.util.Locale.ROOT), linkId);
         com.meridian.platform.testsupport.CustomerIdentityVerificationFixture.verified(jdbc, customerId);
         return new Fixture(
                 customerId,
@@ -396,7 +423,7 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                     "CUSTOMER",
                     customerId,
                     Set.of("CUSTOMER"),
-                    Set.of("loan:submit", "loan:read:own")
+                    Set.of("loan:submit", "loan:read:own", "customer:profile:write:own", "customer:identity:write:own")
             ));
         }
 
@@ -407,7 +434,7 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                     "STAFF",
                     null,
                     Set.of("LOAN_OFFICER"),
-                    Set.of("loan:review", "loan:read")
+                    Set.of("loan:review", "loan:read", "customer:identity:verify", "partner:manage")
             ));
         }
 

@@ -203,6 +203,18 @@ describe('Customer login and protected request recovery', () => {
     expect(secondOperation).toHaveBeenLastCalledWith('rotated-access-token')
   })
 
+  it('refreshes without replaying a sensitive command', async () => {
+    const api = apiMock()
+    const manager = new AuthSessionManager(api, vi.fn())
+    await manager.login({ email: 'customer@example.com', password: 'not-retained' })
+    const rejection = apiError(401, 'TOKEN_EXPIRED')
+    const operation = vi.fn().mockRejectedValue(rejection)
+    await expect(manager.requestProtected(operation, { replayAfterSessionRefresh: false })).rejects.toBe(rejection)
+    expect(api.refresh).toHaveBeenCalledOnce()
+    expect(operation).toHaveBeenCalledOnce()
+    expect(manager.getSnapshot().status).toBe('authenticated')
+  })
+
   it('stops after a second 401 and clears local private state', async () => {
     const api = apiMock()
     const clearQueries = vi.fn()

@@ -52,7 +52,8 @@ Reserved codes are listed separately. They do not become part of an executable A
 |---|---|---|---|
 | 404 | `CUSTOMER_NOT_FOUND` | Customer not found | Verify the requested Customer ID |
 | 409 | `CUSTOMER_NOT_ACTIVE` | Customer not active | Restore the Customer to `ACTIVE` before using customer-owned lending flows |
-| 409 | `IDENTITY_REFERENCE_IMMUTABLE` | Identity reference immutable | Do not change the identity reference after the profile first becomes complete |
+| 409 | `IDENTITY_REFERENCE_IMMUTABLE` | Identity reference immutable | Ordinary profile updates cannot change a completed reference; use controlled correction only while identity is not verified |
+| 409 | `VERIFIED_IDENTITY_CHANGE_NOT_ALLOWED` | Full name cannot be changed through profile maintenance after identity verification. | Retain the verified full name in Customer and Staff maintenance; verified identity amendment requires a separate deferred Staff workflow |
 | 409 | `IDENTITY_REFERENCE_ALREADY_IN_USE` | Identity reference already in use | Use an identity reference that does not belong to another Customer |
 | 422 | `CUSTOMER_DIGITAL_ACCESS_OWNERSHIP_NOT_VERIFIED` | Customer identity could not be verified for digital access. | Recheck the Customer's presented identity reference; do not enable access until it matches the selected Customer |
 | 422 | `PROFILE_INCOMPLETE` | Customer profile incomplete | Complete the required identity, contact, residential, employment, and consent fields |
@@ -74,14 +75,14 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 409 | `IDENTITY_VERIFICATION_ALREADY_COMPLETED` | A conflicting terminal decision exists | Read the recorded outcome; only exact logical replay succeeds |
 | 409 | `IDENTITY_VERIFICATION_NOT_ALLOWED` | Customer identity is already verified | Reuse the valid Customer verification |
 | 422 | `INVALID_IDENTITY_VERIFICATION_REQUEST` | Missing confirmation, invalid rejection shape, or invalid queue pagination | Supply the controlled operation fields |
-| 422 | `IDENTITY_REFERENCE_MISMATCH` | Presented reference differs from protected Customer evidence | Re-check the exact document; the attempt remains pending |
-| 422 | `CUSTOMER_IDENTITY_VERIFICATION_REQUIRED` | New Salary Advance, UCL, or Collateral origination lacks current successful Customer verification | Complete Customer identity verification before submitting |
+| 422 | `IDENTITY_REFERENCE_MISMATCH` | Presented reference differs from protected Customer evidence | Re-check the exact document; the attempt remains pending. A wrong profile reference may be corrected through the authorized pre-verification command before retrying |
+| 422 | `CUSTOMER_IDENTITY_VERIFICATION_REQUIRED` | New origination or Partner employment verification/approval lacks current verified Customer identity | Complete Customer identity verification before submitting or verifying employment |
 
 ### 3.2 Customer Identity Reference Reveal
 
 | HTTP | Error code | Message | Caller action |
 |---|---|---|---|
-| 403 | `CUSTOMER_IDENTITY_REFERENCE_ACCESS_DENIED` | Customer Identity Reference access is denied. | Use a Staff actor without a Customer association, Loan Officer role, and exact `loan:read`, `customer:read`, and `customer:identity:reveal`; verification authority is insufficient. Missing endpoint permissions use the established security denial. |
+| 403 | `CUSTOMER_IDENTITY_REFERENCE_ACCESS_DENIED` | Customer Identity Reference access is denied. | For operational reveal, use a Staff actor without a Customer association, Loan Officer role, and exact `loan:read`, `customer:read`, and `customer:identity:reveal`; verification authority is insufficient. Controlled correction instead requires the exact Customer own-profile or Staff intake actor/authority from MER-API-001 Section 3.12.1. Missing endpoint permissions use the established security denial. |
 | 409 | `CUSTOMER_IDENTITY_REFERENCE_UNAVAILABLE` | The stored Customer Identity Reference is unavailable. | Clear the temporary value; reconcile the Customer profile through its authorized workflow or escalate for protected-evidence repair. Do not infer cryptographic details or retry automatically. |
 
 Application lookup retains `404 LOAN_APPLICATION_NOT_FOUND`; refresh the exact case rather than choosing a Customer ID. Invalid path UUIDs use the established `400` validation contract. Unknown network/server/schema results require successful case revalidation before another explicit reveal. Audit persistence failure cannot produce a successful reveal response.

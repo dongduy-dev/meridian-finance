@@ -95,7 +95,7 @@ class PartnerEligibilityReviewPostgreSqlIntegrationTest {
                 Set.of(), Set.of("partner:manage")
         ));
         when(identityEvidence.findIdentityEvidenceByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
-                new CustomerIdentityEvidenceSnapshot(CUSTOMER_ID, true, true, "IDENTITY-001")
+                new CustomerIdentityEvidenceSnapshot(CUSTOMER_ID, true, true, true, "IDENTITY-001")
         ));
         String month = YearMonth.now(ZoneOffset.UTC).toString();
         jdbcTemplate.update("""

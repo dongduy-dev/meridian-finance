@@ -149,7 +149,8 @@ export class AuthSessionManager {
     }
   }
 
-  async requestProtected<T>(operation: (accessToken: string) => Promise<T>) {
+  async requestProtected<T>(operation: (accessToken: string) => Promise<T>, policy: { replayAfterSessionRefresh?: boolean } = {}) {
+    let sessionRejection: unknown
     let accessToken = getUsableAccessToken()
     if (!accessToken) {
       try {
@@ -172,6 +173,7 @@ export class AuthSessionManager {
       if (!isSessionRejection(error)) {
         throw error
       }
+      sessionRejection = error
     }
 
     try {
@@ -184,6 +186,8 @@ export class AuthSessionManager {
       this.clearLocalSession()
       throw error
     }
+
+    if (policy.replayAfterSessionRefresh === false) throw sessionRejection
 
     try {
       return await operation(accessToken)

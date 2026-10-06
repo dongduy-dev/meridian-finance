@@ -132,6 +132,20 @@ class PartnerEligibilityReviewServiceTest {
     }
 
     @Test
+    void approvalCannotUseUnverifiedCustomerIdentity() {
+        when(identityEvidence.findIdentityEvidenceByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+                new CustomerIdentityEvidenceSnapshot(CUSTOMER_ID, true, true, false, null)));
+        var error = assertThrows(BusinessRuleViolationException.class, () -> service.decide(REVIEW_ID,
+                new PartnerEligibilityReviewDecisionRequest(PartnerEligibilityReviewDecision.APPROVE,
+                        EMPLOYEE_ID, PartnerEligibilityReviewReason.CURRENT_EMPLOYEE_CONFIRMED)));
+        assertEquals("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED", error.getErrorCode());
+        verify(links, never()).save(any());
+        verify(links, never()).saveAndFlush(any());
+        verify(reviews, never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(auditPublisher);
+    }
+
+    @Test
     void rejectionIsTerminalWithoutCreatingVerifiedLink() {
         var result = service.decide(REVIEW_ID, new PartnerEligibilityReviewDecisionRequest(
                 PartnerEligibilityReviewDecision.REJECT,
@@ -367,7 +381,7 @@ class PartnerEligibilityReviewServiceTest {
     }
 
     private static CustomerIdentityEvidenceSnapshot identity() {
-        return new CustomerIdentityEvidenceSnapshot(CUSTOMER_ID, true, true, "IDENTITY-SECRET");
+        return new CustomerIdentityEvidenceSnapshot(CUSTOMER_ID, true, true, true, "IDENTITY-SECRET");
     }
 
     private static AuthenticatedUser actor() {

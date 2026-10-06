@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,6 +12,7 @@ import { ApiError, NetworkError } from '@/lib/api'
 import { createQueryClient } from '@/lib/query/query-client'
 import { findUnresolvedOperation } from '@/lib/operation/unresolved-operation'
 import { evidenceRecoveryResource } from '../model/recovery'
+import { originationKeys } from '../api/queries'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
   const actual = await vi.importActual<typeof import('@/features/auth/api/auth-api')>('@/features/auth/api/auth-api')
@@ -94,8 +95,9 @@ const ocrReview = (
 
 function renderRoute(path: string) {
   const router = createTestRouter([path])
-  const view = render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
-  return { router, ...view }
+  const client = createQueryClient()
+  const view = render(<QueryClientProvider client={client}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
+  return { router, client, ...view }
 }
 
 function requestPath(call: unknown[]): string { return String(call[0]) }
@@ -106,6 +108,86 @@ describe('assisted origination pages', () => {
     sessionStorage.clear()
     localStorage.clear()
     vi.mocked(authApi.refresh).mockResolvedValue(staff())
+  })
+
+  it('corrects the selected Customer without retaining sensitive input', async () => {
+    const user = userEvent.setup()
+    vi.mocked(api.apiRequest).mockImplementation(async path => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}` || path.endsWith('/identity-reference')) return customer
+      return []
+    })
+    const { client } = renderRoute(`/staff/origination/${caseId}`)
+    await user.click(await screen.findByRole('button', { name: 'Correct identity reference' }))
+    await user.type(screen.getByLabelText('Replacement identity reference'), 'FICTIONAL-STAFF-CORRECTION')
+    await user.click(screen.getByRole('button', { name: 'Confirm correction' }))
+    expect(await screen.findByText('Identity reference corrected. Manual identity verification is still required.')).toBeVisible()
+    expect(api.apiRequest).toHaveBeenCalledWith(`/staff/customers/${customerId}/identity-reference`, expect.objectContaining({ method: 'PUT', body: { identityReference: 'FICTIONAL-STAFF-CORRECTION' } }))
+    expect(screen.queryByLabelText('Replacement identity reference')).not.toBeInTheDocument()
+    expect(JSON.stringify([localStorage, sessionStorage])).not.toContain('FICTIONAL-STAFF-CORRECTION')
+    expect(JSON.stringify(client.getQueryCache().getAll().map(q => q.state))).not.toContain('FICTIONAL-STAFF-CORRECTION')
+    expect(JSON.stringify(client.getMutationCache().getAll().map(m => m.state))).not.toContain('FICTIONAL-STAFF-CORRECTION')
+  })
+
+  it.each(['VERIFIED', 'INACTIVE'])('hides correction for unavailable Customer state %s', async state => {
+    vi.mocked(api.apiRequest).mockImplementation(async path => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return { ...customer, ...(state === 'VERIFIED' ? { verificationStatus: state } : { status: 'SUSPENDED' }) }
+      return []
+    })
+    renderRoute(`/staff/origination/${caseId}`)
+    await screen.findByRole('heading', { name: /Selected Customer/ })
+    expect(screen.queryByRole('button', { name: 'Correct identity reference' })).not.toBeInTheDocument()
+  })
+
+  it('keeps verified identity readonly and saves only mutable Customer facts', async () => {
+    const user = userEvent.setup()
+    const verified = { ...customer, verificationStatus: 'VERIFIED' }
+    let savedBody: Record<string, unknown> | undefined
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return verified
+      if (path === `/staff/customers/${customerId}/profile` && options?.method === 'PUT') {
+        savedBody = options.body as Record<string, unknown>
+        return { ...verified, profile: { ...verified.profile, ...savedBody } }
+      }
+      return []
+    })
+    renderRoute(`/staff/origination/${caseId}`)
+    await screen.findByRole('heading', { name: /Selected Customer/ })
+    const fullName = screen.getByLabelText('Full name')
+    expect(fullName).toHaveAttribute('readonly')
+    await user.type(fullName, 'Changed name')
+    expect(fullName).toHaveValue('Paper Customer')
+    expect(screen.getByText('Identity reference: On file')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Correct identity reference' })).not.toBeInTheDocument()
+    for (const [label, value] of [['Phone', '0911111111'], ['Residential address', 'Changed address'],
+      ['Employment status', 'SELF_EMPLOYED'], ['Employer', 'Changed employer']] as const) {
+      const field = screen.getByLabelText(label)
+      expect(field).not.toHaveAttribute('readonly')
+      await user.clear(field)
+      await user.type(field, value)
+    }
+    await user.click(screen.getByRole('button', { name: 'Save profile' }))
+    await waitFor(() => expect(savedBody).toEqual({ phoneNumber: '0911111111', residentialAddress: 'Changed address',
+      employmentStatus: 'SELF_EMPLOYED', employerName: 'Changed employer',
+      termsConsentAccepted: true, dataProcessingConsentAccepted: true }))
+  })
+
+  it.each(['UNVERIFIED', 'REJECTED'])('keeps the %s selected Customer name editable', async verificationStatus => {
+    const user = userEvent.setup()
+    vi.mocked(api.apiRequest).mockImplementation(async path => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return { ...customer, verificationStatus }
+      return []
+    })
+    renderRoute(`/staff/origination/${caseId}`)
+    const fullName = await screen.findByLabelText('Full name')
+    expect(fullName).not.toHaveAttribute('readonly')
+    await user.clear(fullName)
+    await user.type(fullName, 'Corrected Name')
+    expect(fullName).toHaveValue('Corrected Name')
+    expect(screen.getByRole('button', { name: 'Correct identity reference' })).toBeVisible()
   })
 
   it('loads the OPEN intake list and presents both supported products without inventing application submission', async () => {
@@ -520,7 +602,8 @@ describe('assisted origination pages', () => {
     await user.click(apply)
 
     expect(screen.getAllByLabelText('Full name').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('Reviewed Customer')
-    expect(screen.getAllByLabelText('Identity reference').find((field) => !(field as HTMLInputElement).readOnly)).toHaveValue('')
+    expect(screen.getAllByLabelText('Identity reference').every(field => (field as HTMLInputElement).readOnly)).toBe(true)
+    expect(screen.getByText('Identity reference: On file')).toBeVisible()
     expect(screen.getByLabelText('Phone')).toHaveValue('0911222333')
     expect(screen.getByLabelText('Signed application consent recorded')).toBeChecked()
     expect(screen.getByLabelText('Data processing consent recorded')).toBeChecked()
@@ -533,6 +616,60 @@ describe('assisted origination pages', () => {
     expect(vi.mocked(api.apiRequest).mock.calls.some((call) => (call[1] as { method?: string } | undefined)?.method === 'POST')).toBe(false)
     expect(sessionStorage.getItem('meridian.staff.unresolved-operations.v1') ?? '').not.toContain(sensitiveAccount)
     expect(JSON.stringify(localStorage)).not.toContain(sensitiveAccount)
+  })
+
+  it('does not apply a reviewed OCR name over verified Customer identity', async () => {
+    const ocrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`
+    vi.mocked(api.apiRequest).mockImplementation(async path => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return { ...customer, verificationStatus: 'VERIFIED' }
+      if (path === `/staff/customers/${customerId}/bank-accounts`) return []
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return evidence
+      if (path === ocrBase) return ocrJob(versionId)
+      if (path === `${ocrBase}/review`) return ocrReview('UCL_PAPER_APPLICATION', {
+        fullName: 'Reviewed Different Name', identityReference: '999999999999', phoneNumber: '0911222333',
+      })
+      throw new Error(`Unexpected request ${path}`)
+    })
+    const user = userEvent.setup()
+    renderRoute(`/staff/origination/${caseId}`)
+    await user.click(await screen.findByRole('button', { name: 'Apply reviewed values' }))
+    const selectedCustomer = screen.getByRole('heading', { name: /Selected Customer/ }).closest('article') as HTMLElement
+    expect(within(selectedCustomer).getByLabelText('Full name')).toHaveAttribute('readonly')
+    expect(within(selectedCustomer).getByLabelText('Full name')).toHaveValue('Paper Customer')
+    expect(within(selectedCustomer).getByLabelText('Phone')).toHaveValue('0911222333')
+    expect(screen.getByText('Identity reference: On file')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Correct identity reference' })).not.toBeInTheDocument()
+  })
+
+  it('preserves a name verified after OCR application when its old source is replaced', async () => {
+    const ocrBase = `/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/ocr`
+    vi.mocked(api.apiRequest).mockImplementation(async path => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return customer
+      if (path === `/staff/assisted-originations/${caseId}/evidence`) return evidence
+      if (path === ocrBase) return ocrJob(versionId)
+      if (path === `${ocrBase}/review`) return ocrReview('UCL_PAPER_APPLICATION', { fullName: 'Reviewed Name' })
+      if (path.includes('/ocr')) throw new ApiError(404, 'OCR_JOB_NOT_FOUND', 'Missing', path, '2026-09-20T08:00:00Z')
+      return []
+    })
+    const user = userEvent.setup()
+    const { client } = renderRoute(`/staff/origination/${caseId}`)
+    await user.click(await screen.findByRole('button', { name: 'Apply reviewed values' }))
+    const selectedCustomer = screen.getByRole('heading', { name: /Selected Customer/ }).closest('article') as HTMLElement
+    expect(within(selectedCustomer).getByLabelText('Full name')).toHaveValue('Reviewed Name')
+    await act(async () => {
+      client.setQueryData(originationKeys.customer(customerId), {
+        ...customer, verificationStatus: 'VERIFIED', profile: { ...customer.profile, fullName: 'Reviewed Name' },
+      })
+    })
+    await waitFor(() => expect(within(selectedCustomer).getByLabelText('Full name')).toHaveAttribute('readonly'))
+    await act(async () => {
+      client.setQueryData(originationKeys.evidence(caseId), [{ ...evidence[0], currentVersionId: uploadedVersion.intakeDocumentVersionId }])
+    })
+    await waitFor(() => expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) =>
+      path.includes(uploadedVersion.intakeDocumentVersionId))).toBe(true))
+    expect(within(selectedCustomer).getByLabelText('Full name')).toHaveValue('Reviewed Name')
   })
 
   it('applies reviewed identity to Create Customer while leaving both consent choices unchecked', async () => {

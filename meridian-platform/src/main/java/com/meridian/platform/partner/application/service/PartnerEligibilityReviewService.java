@@ -235,13 +235,15 @@ public class PartnerEligibilityReviewService
                     "Customer must be active before employee verification."
             );
         }
-        if (!identity.profileComplete()
-                || identity.identityReference() == null
-                || identity.identityReference().isBlank()) {
+        if (!identity.profileComplete()) {
             throw new BusinessRuleViolationException(
                     "PROFILE_INCOMPLETE",
                     "Customer profile must be complete before employee verification."
             );
+        }
+        if (!identity.identityVerified() || identity.identityReference() == null || identity.identityReference().isBlank()) {
+            throw new BusinessRuleViolationException("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED",
+                    "Customer identity verification is required before employee verification.");
         }
         return identity;
     }
@@ -306,6 +308,7 @@ public class PartnerEligibilityReviewService
                 .findIdentityEvidenceByCustomerId(review.customerId())
                 .filter(CustomerIdentityEvidenceSnapshot::active)
                 .filter(CustomerIdentityEvidenceSnapshot::profileComplete)
+                .filter(CustomerIdentityEvidenceSnapshot::identityVerified)
                 .filter(value -> value.identityReference() != null && !value.identityReference().isBlank());
         if (identity.isEmpty()) {
             return Availability.unavailable("CUSTOMER_IDENTITY_EVIDENCE_UNAVAILABLE");

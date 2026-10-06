@@ -18,6 +18,6 @@ class ReservedV68MigrationSourceTest {
 
         assertEquals("-- Intentionally reserved migration version.\n"
                 + "-- V68 introduces no Meridian business-schema or data change.\n\nSELECT 1;\n", migration);
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V70"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V71"));
     }
 }

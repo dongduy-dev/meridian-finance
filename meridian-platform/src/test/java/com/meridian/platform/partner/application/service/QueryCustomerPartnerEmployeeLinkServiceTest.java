@@ -47,6 +47,7 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
     private FakeCompanyRepository companies;
     private FakeImportBatchRepository batches;
     private PartnerEligibilityReviewRepository reviews;
+    private com.meridian.platform.partner.application.port.out.CustomerIdentityEvidencePort identity;
 
     @BeforeEach
     void setUp() {
@@ -55,6 +56,9 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
         companies = new FakeCompanyRepository(PartnerCompanyStatus.ACTIVE);
         batches = new FakeImportBatchRepository(completedBatch(BATCH_ID, "2026-08"));
         reviews = mock(PartnerEligibilityReviewRepository.class);
+        identity = mock(com.meridian.platform.partner.application.port.out.CustomerIdentityEvidencePort.class);
+        when(identity.findIdentityEvidenceByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(
+                new com.meridian.platform.partner.application.port.out.CustomerIdentityEvidenceSnapshot(CUSTOMER_ID, true, true, true, "IDREF-MER-001")));
     }
 
     @Test
@@ -161,6 +165,20 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
         assertEquals(CustomerPartnerEmployeeEligibilityDto.Status.ELIGIBLE, result.status());
     }
 
+    @Test
+    void changedOrUnverifiedIdentityMakesHistoricalEmploymentUnusableWithoutRewritingLink() {
+        var historical = links.current;
+        for (var snapshot : List.of(
+                new com.meridian.platform.partner.application.port.out.CustomerIdentityEvidenceSnapshot(CUSTOMER_ID, true, true, true, "CORRECTED-IDENTITY"),
+                new com.meridian.platform.partner.application.port.out.CustomerIdentityEvidenceSnapshot(CUSTOMER_ID, true, true, false, null))) {
+            when(identity.findIdentityEvidenceByCustomerId(CUSTOMER_ID)).thenReturn(Optional.of(snapshot));
+            var service = serviceAt("2026-08-10T00:00:00Z");
+            assertEquals(CustomerPartnerEmployeeEligibilityDto.Status.NOT_VERIFIED, service.inspectEligibility(CUSTOMER_ID, LINK_ID).status());
+            assertEquals(CustomerPartnerEmployeeEligibilityDto.Status.NOT_VERIFIED, service.inspectCurrentEligibility(CUSTOMER_ID).status());
+            assertEquals(historical, links.current);
+        }
+    }
+
     private QueryCustomerPartnerEmployeeLinkService serviceAt(String instant) {
         return new QueryCustomerPartnerEmployeeLinkService(
                 links,
@@ -168,7 +186,7 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
                 companies,
                 batches,
                 reviews,
-                Clock.fixed(Instant.parse(instant), ZoneOffset.UTC)
+                Clock.fixed(Instant.parse(instant), ZoneOffset.UTC), identity
         );
     }
 

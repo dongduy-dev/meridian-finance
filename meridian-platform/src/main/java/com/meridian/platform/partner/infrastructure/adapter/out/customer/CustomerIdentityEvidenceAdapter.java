@@ -24,6 +24,7 @@ public class CustomerIdentityEvidenceAdapter implements CustomerIdentityEvidence
                         snapshot.customerId(),
                         snapshot.active(),
                         snapshot.profileComplete(),
+                        snapshot.identityVerified(),
                         snapshot.identityReference()
                 ));
     }

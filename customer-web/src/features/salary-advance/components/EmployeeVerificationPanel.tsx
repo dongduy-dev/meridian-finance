@@ -1,4 +1,8 @@
 import { Building2, CircleHelp } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
+import type { Customer } from '@/features/account/account-api'
+import { useOwnCustomerQuery, accountKeys } from '@/features/account/account-queries'
 import { useState } from 'react'
 import { useForm, type FieldErrors } from 'react-hook-form'
 
@@ -79,6 +83,11 @@ export function EmployeeVerificationPanel({
   reverify?: boolean
   employmentUpdate?: boolean
 }) {
+  const customerQuery = useOwnCustomerQuery()
+  const queryClient = useQueryClient()
+  const identityReady = customerQuery.isSuccess && customerQuery.fetchStatus === 'idle'
+    && customerQuery.data.status === 'ACTIVE' && customerQuery.data.profileCompletionStatus === 'COMPLETE'
+    && customerQuery.data.verificationStatus === 'VERIFIED'
   const optionsQuery = usePartnerVerificationOptionsQuery()
   const verification = useVerifyEmployeeMutation()
   const [result, setResult] = useState<EmployeeVerification>()
@@ -116,6 +125,10 @@ export function EmployeeVerificationPanel({
   }
 
   const onSubmit = handleSubmit(async (values) => {
+    const state = queryClient.getQueryState<Customer>(accountKeys.customer())
+    if (!identityReady || state?.status !== 'success' || state.fetchStatus !== 'idle' || state.isInvalidated
+      || state.data?.status !== 'ACTIVE' || state.data.profileCompletionStatus !== 'COMPLETE'
+      || state.data.verificationStatus !== 'VERIFIED') return
     setServerError(undefined)
     setResult(undefined)
     try {
@@ -179,7 +192,11 @@ export function EmployeeVerificationPanel({
             <AlertDescription>No employers are currently available for verification.</AlertDescription>
           </Alert>
         ) : null}
-        {optionsQuery.data?.length ? (
+        {!identityReady ? <Alert><AlertTitle>Employment verification unavailable</AlertTitle><AlertDescription>
+          <p>Complete identity verification first. Refresh your profile if its current state could not be confirmed.</p>
+          <Button variant="secondary" asChild><Link to="/account/identity-verification">Open identity verification</Link></Button>
+        </AlertDescription></Alert> : null}
+        {identityReady && optionsQuery.data?.length ? (
           <form noValidate className="space-y-5" onSubmit={onSubmit}>
             {serverError ? <VerificationError error={serverError} /> : null}
             <AccountFormField

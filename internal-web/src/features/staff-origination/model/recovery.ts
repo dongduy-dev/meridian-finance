@@ -1,4 +1,4 @@
-import type { BankAccount, CustomerProfileInput, StaffCustomer } from '../api/contracts'
+import type { BankAccount, UpdateCustomerProfileInput, StaffCustomer } from '../api/contracts'
 import type { UnresolvedOperation } from '@/lib/operation/unresolved-operation'
 
 export type EvidenceBaseline = string | null
@@ -31,11 +31,11 @@ export function evidenceSemanticPayload(
   }
 }
 
-export function profileMatches(customer: StaffCustomer, input: CustomerProfileInput): boolean {
+export function profileMatches(customer: StaffCustomer, input: UpdateCustomerProfileInput): boolean {
   if (input.identityReference) return false
   const profile = customer.profile
   return Boolean(profile
-    && profile.fullName === input.fullName
+    && (input.fullName === undefined || profile.fullName === input.fullName)
     && profile.phoneNumber === input.phoneNumber
     && profile.residentialAddress === input.residentialAddress
     && profile.employmentStatus === input.employmentStatus

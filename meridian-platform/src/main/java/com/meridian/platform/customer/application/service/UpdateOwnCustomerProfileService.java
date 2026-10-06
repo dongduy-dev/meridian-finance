@@ -84,7 +84,7 @@ public class UpdateOwnCustomerProfileService implements UpdateOwnCustomerProfile
         CustomerProfile newProfile = new CustomerProfile(
                 previousProfile == null ? null : previousProfile.id(),
                 customerId,
-                request.fullName(),
+                resolveFullName(previousProfile, request.fullName()),
                 resolveIdentityReference(previousProfile, request.identityReference(), customerId),
                 request.phoneNumber(),
                 request.residentialAddress(),
@@ -99,20 +99,19 @@ public class UpdateOwnCustomerProfileService implements UpdateOwnCustomerProfile
         Customer updatedCustomer = customer.updateProfile(newProfile, now);
         Customer savedCustomer = customerRepository.save(updatedCustomer);
 
-        if (customer.verificationStatus() == com.meridian.platform.customer.domain.model.VerificationStatus.VERIFIED
-                && savedCustomer.verificationStatus() != com.meridian.platform.customer.domain.model.VerificationStatus.VERIFIED) {
-            businessAuditPublisher.publish(BusinessAuditEvent.single(
-                    BusinessOperationContext.user(UUID.randomUUID(), currentUser.userId(), now),
-                    new BusinessAuditEntry(BusinessAuditAction.CUSTOMER_IDENTITY_VERIFICATION_INVALIDATED, BusinessAuditEntityType.CUSTOMER,
-                            savedCustomer.id(), BusinessAuditPayload.builder().put(BusinessAuditPayloadKey.CUSTOMER_ID, savedCustomer.id()).build())));
-        }
-
         businessAuditPublisher.publish(new BusinessAuditEvent(
                 BusinessOperationContext.user(UUID.randomUUID(), currentUser.userId(), now),
                 auditEntries(savedCustomer, previousProfile == null, previousCompletionStatus)
         ));
 
         return customerMapper.toCustomerDto(savedCustomer);
+    }
+
+    private String resolveFullName(CustomerProfile previousProfile, String requestedFullName) {
+        if (requestedFullName != null) return requestedFullName;
+        if (previousProfile != null) return previousProfile.fullName();
+        throw new BusinessRuleViolationException("PROFILE_INCOMPLETE",
+                "Customer profile requires full name before it can be completed.");
     }
 
     private ProtectedSensitiveValue resolveIdentityReference(

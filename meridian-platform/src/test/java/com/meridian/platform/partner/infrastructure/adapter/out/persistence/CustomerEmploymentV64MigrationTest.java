@@ -100,7 +100,7 @@ class CustomerEmploymentV64MigrationTest {
         assertTrue(migration.contains("ORDER BY last_refreshed_at DESC, id ASC"));
         assertTrue(migration.contains("ON customer_partner_employee_links (customer_id)"));
         assertTrue(migration.contains("idx_partner_eligibility_reviews_pending_customer_month"));
-        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V70"));
+        assertTrue(snapshot.contains("Snapshot source: migrations V1 through V71"));
         assertTrue(snapshot.contains("ON customer_partner_employee_links (customer_id)"));
         assertTrue(snapshot.contains("idx_partner_eligibility_reviews_pending_customer_month"));
     }

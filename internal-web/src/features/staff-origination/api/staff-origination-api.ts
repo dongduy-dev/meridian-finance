@@ -4,7 +4,7 @@ import {
   intakeOcrReviewSchema, intakeVersionSchema, staffCustomerSchema,
   type AssistedOrigination, type BankAccount, type CustomerProfileInput,
   type CollateralLoanInput, type IntakeEvidence, type IntakeEvidenceVersion, type IntakeOcrJob,
-  type IntakeOcrReview, type StaffCustomer,
+  type IntakeOcrReview, type StaffCustomer, type UpdateCustomerProfileInput,
 } from './contracts'
 
 export async function listOpenIntakes(manager: AuthSessionManager): Promise<AssistedOrigination[]> {
@@ -53,8 +53,12 @@ export async function getCustomer(manager: AuthSessionManager, id: string): Prom
 export async function createCustomer(manager: AuthSessionManager, input: CustomerProfileInput & { identityReference: string }): Promise<StaffCustomer> {
   return staffCustomerSchema.parse(await manager.protectedRequest('/staff/customers', { method: 'POST', body: input }))
 }
-export async function updateCustomer(manager: AuthSessionManager, id: string, input: CustomerProfileInput): Promise<StaffCustomer> {
+export async function updateCustomer(manager: AuthSessionManager, id: string, input: UpdateCustomerProfileInput): Promise<StaffCustomer> {
   return staffCustomerSchema.parse(await manager.protectedRequest(`/staff/customers/${id}/profile`, { method: 'PUT', body: input }))
+}
+export async function correctIdentityReference(manager: AuthSessionManager, id: string, identityReference: string): Promise<StaffCustomer> {
+  return staffCustomerSchema.parse(await manager.protectedRequest(`/staff/customers/${id}/identity-reference`,
+    { method: 'PUT', body: { identityReference } }, { replayAfterSessionRefresh: false }))
 }
 export async function listBankAccounts(manager: AuthSessionManager, id: string): Promise<BankAccount[]> {
   return bankAccountSchema.array().parse(await manager.protectedRequest(`/staff/customers/${id}/bank-accounts`))

@@ -1,3 +1,5 @@
+import { IdentityReferenceCorrection } from '@/features/account/components/IdentityReferenceCorrection'
+import { useAuth } from '@/features/auth/auth-context'
 import { ShieldCheck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm, type FieldErrors } from 'react-hook-form'
@@ -49,6 +51,7 @@ function ProfileLoading() {
 }
 
 export function ProfilePage() {
+  const { state: authState } = useAuth()
   const customerQuery = useOwnCustomerQuery()
   const updateProfile = useUpdateProfileMutation()
   const [serverError, setServerError] = useState<unknown>()
@@ -63,6 +66,7 @@ export function ProfilePage() {
 
   const customer = customerQuery.data
   const profileComplete = customer?.profileCompletionStatus === 'COMPLETE'
+  const identityVerified = customer?.verificationStatus === 'VERIFIED'
 
   useEffect(() => {
     if (!customer) return
@@ -98,14 +102,14 @@ export function ProfilePage() {
     setSaved(false)
     try {
       await updateProfile.submit({
-        fullName: values.fullName.trim(),
+        ...(!identityVerified ? { fullName: values.fullName.trim() } : {}),
         phoneNumber: values.phoneNumber.trim(),
         residentialAddress: values.residentialAddress.trim(),
         employmentStatus: values.employmentStatus.trim(),
         employerName: values.employerName.trim() || null,
         termsConsentAccepted: values.termsConsentAccepted,
         dataProcessingConsentAccepted: values.dataProcessingConsentAccepted,
-        ...(!profileComplete ? { identityReference: values.identityReference.trim() } : {}),
+        ...(!profileComplete && !identityVerified ? { identityReference: values.identityReference.trim() } : {}),
       })
       setSaved(true)
     } catch (error) {
@@ -138,6 +142,10 @@ export function ProfilePage() {
       {customer ? (
         <>
           <AccountReadinessCard customer={customer} />
+          {customerQuery.isSuccess && customerQuery.fetchStatus === 'idle' && customer.status === 'ACTIVE'
+            && profileComplete && ['UNVERIFIED', 'REJECTED'].includes(customer.verificationStatus)
+            && authState.status === 'authenticated' && authState.actor.permissions.includes('customer:profile:write:own')
+            ? <IdentityReferenceCorrection key={authState.actor.userId} /> : null}
           <Card>
             <CardHeader>
               <CardTitle>{profileComplete ? 'Maintain your profile' : 'Complete your profile'}</CardTitle>
@@ -164,13 +172,13 @@ export function ProfilePage() {
 
                 <div className="grid gap-5 md:grid-cols-2">
                   <AccountFormField htmlFor="fullName" label="Full name" required error={errors.fullName?.message}>
-                    <Input
+                    {identityVerified ? <Input id="fullName" value={customer.profile?.fullName ?? ''} readOnly /> : <Input
                       id="fullName"
                       autoComplete="name"
                       aria-invalid={Boolean(errors.fullName)}
                       aria-describedby={fieldDescriptionIds('fullName', false, Boolean(errors.fullName))}
                       {...register('fullName', { validate: validateWith(profileFieldSchemas.fullName) })}
-                    />
+                    />}
                   </AccountFormField>
                   <AccountFormField htmlFor="phoneNumber" label="Phone number" required error={errors.phoneNumber?.message}>
                     <Input
@@ -184,14 +192,14 @@ export function ProfilePage() {
                   </AccountFormField>
                 </div>
 
-                {profileComplete ? (
+                {profileComplete || identityVerified ? (
                   <div className="rounded-md border border-border bg-background p-4">
                     <div className="flex items-center gap-2 font-semibold">
                       <ShieldCheck aria-hidden="true" className="size-5 text-success" />
                       Identity reference: On file
                     </div>
                     <p className="mt-2 text-sm leading-5 text-muted-foreground">
-                      Your identity reference is securely stored and is not displayed after profile completion. It cannot be changed from your profile.
+                      Your identity reference is securely stored and is not displayed after profile completion. Use the deliberate correction action before identity verification if this reference is incorrect.
                     </p>
                   </div>
                 ) : (

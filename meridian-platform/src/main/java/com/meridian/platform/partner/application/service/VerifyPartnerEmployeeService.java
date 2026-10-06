@@ -141,6 +141,10 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
                     "Customer profile must be complete before employee verification."
             );
         }
+        if (!identityEvidence.identityVerified() || identityEvidence.identityReference() == null || identityEvidence.identityReference().isBlank()) {
+            throw new BusinessRuleViolationException("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED",
+                    "Customer identity verification is required before employee verification.");
+        }
         return identityEvidence;
     }
 

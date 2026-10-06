@@ -6,6 +6,7 @@ public record CustomerIdentityEvidenceSnapshot(
         UUID customerId,
         boolean active,
         boolean profileComplete,
+        boolean identityVerified,
         String identityReference
 ) {
 

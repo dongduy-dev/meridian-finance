@@ -1,5 +1,7 @@
 package com.meridian.platform.partner.infrastructure.adapter.out.persistence;
 
+import com.meridian.platform.customer.application.port.out.CustomerSensitiveValueProtector;
+import com.meridian.platform.customer.domain.model.ProtectedSensitiveValue;
 import com.meridian.platform.partner.application.dto.ImportPartnerEmployeesRequest;
 import com.meridian.platform.partner.application.dto.PartnerEmployeeImportResultDto;
 import com.meridian.platform.partner.application.dto.PartnerEmployeeImportRowRequest;
@@ -23,6 +25,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CyclicBarrier;
@@ -57,6 +60,9 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private CustomerSensitiveValueProtector sensitiveValueProtector;
 
     @Autowired
     private Clock clock;
@@ -108,10 +114,10 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
     @Test
     void authoritativeCurrentMonthImportRefreshesExistingLinkAndRestoresEligibility() {
         UUID companyId = createCompany("ACTIVE");
-        UUID customerId = createCustomer();
         UUID linkId = UUID.randomUUID();
         String employeeCode = "REFRESH-" + linkId.toString().substring(0, 8);
-        String identityReference = "IDENTITY-" + linkId;
+        String identityReference = ("IDENTITY-" + linkId).toUpperCase(Locale.ROOT);
+        UUID customerId = createVerifiedCustomer(identityReference);
         when(currentUserProvider.currentUser()).thenReturn(actor());
 
         PartnerEmployeeImportResultDto oldBatch = imports.importEmployees(
@@ -198,10 +204,10 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
     @Test
     void authoritativeCurrentMonthImportWithoutSafeMatchLeavesLinkStale() {
         UUID companyId = createCompany("ACTIVE");
-        UUID customerId = createCustomer();
         UUID linkId = UUID.randomUUID();
         String oldEmployeeCode = "STALE-" + linkId.toString().substring(0, 8);
-        String identityReference = "IDENTITY-" + linkId;
+        String identityReference = ("IDENTITY-" + linkId).toUpperCase(Locale.ROOT);
+        UUID customerId = createVerifiedCustomer(identityReference);
         when(currentUserProvider.currentUser()).thenReturn(actor());
 
         PartnerEmployeeImportResultDto oldBatch = imports.importEmployees(
@@ -234,10 +240,10 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
     @Test
     void auditFailureRollsBackBatchEmployeesAndLinkRefresh() {
         UUID companyId = createCompany("ACTIVE");
-        UUID customerId = createCustomer();
         UUID linkId = UUID.randomUUID();
         String employeeCode = "ROLLBACK-" + linkId.toString().substring(0, 8);
-        String identityReference = "IDENTITY-" + linkId;
+        String identityReference = ("IDENTITY-" + linkId).toUpperCase(Locale.ROOT);
+        UUID customerId = createVerifiedCustomer(identityReference);
         UUID requestId = UUID.randomUUID();
         when(currentUserProvider.currentUser()).thenReturn(actor());
         PartnerEmployeeImportResultDto oldBatch = imports.importEmployees(
@@ -304,15 +310,30 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
         );
     }
 
-    private UUID createCustomer() {
+    private UUID createVerifiedCustomer(String identityReference) {
         UUID customerId = UUID.randomUUID();
         String unique = customerId.toString().replace("-", "");
+        ProtectedSensitiveValue protectedIdentity = sensitiveValueProtector.protectIdentityReference(identityReference);
         jdbcTemplate.update(
                 "INSERT INTO customers "
                         + "(id, customer_number, status, verification_status, profile_completion_status) "
                         + "VALUES (?, ?, 'ACTIVE', 'VERIFIED', 'COMPLETE')",
                 customerId,
                 "CUS-IMPORT-" + unique.substring(0, 12)
+        );
+        jdbcTemplate.update(
+                "INSERT INTO customer_profiles "
+                        + "(id, customer_id, full_name, identity_reference_ciphertext, "
+                        + "identity_reference_fingerprint, identity_reference_last_four, phone_number, "
+                        + "residential_address, employment_status, employer_name, terms_consent_accepted, "
+                        + "data_processing_consent_accepted) "
+                        + "VALUES (?, ?, 'Import Customer', ?, ?, ?, '0900000000', "
+                        + "'Test Address', 'EMPLOYED', 'Test Employer', true, true)",
+                UUID.randomUUID(),
+                customerId,
+                protectedIdentity.ciphertext(),
+                protectedIdentity.fingerprint(),
+                protectedIdentity.lastFour()
         );
         return customerId;
     }

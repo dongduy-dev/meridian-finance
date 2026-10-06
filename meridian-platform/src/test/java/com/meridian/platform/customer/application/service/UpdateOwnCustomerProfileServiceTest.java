@@ -167,6 +167,44 @@ class UpdateOwnCustomerProfileServiceTest {
     }
 
     @Test
+    void verifiedNameChangeIsRejectedBeforeSaveOrAudit() {
+        Customer verified = incompleteCustomer().updateProfile(completeProfile("IDREF-MER-001"), NOW)
+                .withVerificationStatus(VerificationStatus.VERIFIED, NOW);
+        customerRepository.customer = Optional.of(verified);
+        assertEquals("VERIFIED_IDENTITY_CHANGE_NOT_ALLOWED", assertThrows(BusinessStateConflictException.class,
+                () -> service.updateOwnProfile(new UpdateCustomerProfileRequest("Changed Customer", null,
+                        "0911111111", "New address", "SELF_EMPLOYED", "New employer", true, true))).getErrorCode());
+        assertEquals(verified, customerRepository.customer.orElseThrow());
+        assertTrue(customerRepository.savedCustomer == null);
+        assertTrue(auditPublisher.events.isEmpty());
+    }
+
+    @Test
+    void verifiedMutableFactsCanChangeWithSavedNameOmitted() {
+        customerRepository.customer = Optional.of(incompleteCustomer().updateProfile(completeProfile("IDREF-MER-001"), NOW)
+                .withVerificationStatus(VerificationStatus.VERIFIED, NOW));
+        CustomerDto result = service.updateOwnProfile(new UpdateCustomerProfileRequest(null, null,
+                "0911111111", "New address", "SELF_EMPLOYED", "New employer", true, true));
+        assertEquals("Customer Demo", result.profile().fullName());
+        assertEquals("VERIFIED", result.verificationStatus());
+        assertEquals("0911111111", result.profile().phoneNumber());
+        assertEquals("New address", result.profile().residentialAddress());
+        assertEquals("SELF_EMPLOYED", result.profile().employmentStatus());
+        assertEquals("New employer", result.profile().employerName());
+        assertEquals(List.of(BusinessAuditAction.CUSTOMER_PROFILE_UPDATED),
+                auditPublisher.lastEvent.entries().stream().map(entry -> entry.action()).toList());
+    }
+
+    @Test
+    void initialProfileStillRequiresFullName() {
+        assertEquals("PROFILE_INCOMPLETE", assertThrows(BusinessRuleViolationException.class,
+                () -> service.updateOwnProfile(new UpdateCustomerProfileRequest(null, "IDREF-MER-001",
+                        "0911111111", "New address", "EMPLOYED", null, true, true))).getErrorCode());
+        assertTrue(customerRepository.savedCustomer == null);
+        assertTrue(auditPublisher.events.isEmpty());
+    }
+
+    @Test
     void rejectsInitialCompletionWithoutIdentityReference() {
         BusinessRuleViolationException exception = assertThrows(
                 BusinessRuleViolationException.class,

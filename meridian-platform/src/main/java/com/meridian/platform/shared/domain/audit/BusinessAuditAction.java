@@ -1,6 +1,7 @@
 package com.meridian.platform.shared.domain.audit;
 
 public enum BusinessAuditAction {
+    CUSTOMER_IDENTITY_REFERENCE_CORRECTED,
     CUSTOMER_IDENTITY_REFERENCE_REVEALED,
     CUSTOMER_IDENTITY_EVIDENCE_SUBMITTED,
     CUSTOMER_IDENTITY_VERIFIED,

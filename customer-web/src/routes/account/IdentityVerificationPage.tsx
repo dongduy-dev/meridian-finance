@@ -65,6 +65,11 @@ function OwnIdentityWorkspace() {
   return <div className="space-y-6">
     <PageHeader eyebrow="Your account" title="Identity verification" description="Submit one identity document for manual Staff review. Verification is required before applying for a Meridian loan." />
     <AccountNavigation />
+    {customer.isSuccess && customer.fetchStatus === 'idle' && customer.data.status === 'ACTIVE'
+      && state.status === 'authenticated' && state.actor.permissions.includes('customer:profile:write:own')
+      && customer.data.profileCompletionStatus === 'COMPLETE'
+      && ['UNVERIFIED', 'REJECTED'].includes(customer.data.verificationStatus)
+      ? <Button asChild variant="secondary"><Link to="/account/profile">Correct identity reference</Link></Button> : null}
     {history.isPending || customer.isPending ? <p role="status">Loading identity verification…</p> : null}
     {history.isError || customer.isError ? <><AccountErrorFeedback error={history.error ?? customer.error} title="Identity verification could not be loaded" /><Button onClick={() => void refresh()}>Try again</Button></> : null}
     {message ? <p role="status">{message}</p> : null}

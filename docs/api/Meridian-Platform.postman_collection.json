@@ -15,6 +15,8 @@
                             ]
              },
     "variable":  [
+        { "key": "identityReferenceCorrectionScenarioEnabled", "value": "false" },
+        { "key": "identityReferenceCorrectionCustomerId", "value": "" },
         {
           "key": "identityReferenceRevealScenarioEnabled",
           "value": "false"
@@ -5833,6 +5835,126 @@
                                                 ]
                                   }
                               ]
+                 },
+                 {
+                   "name": "03b Controlled pre-verification identity correction (opt-in)",
+                   "item": [
+                     {
+                       "name": "Customer own controlled identity correction (opt-in)",
+                       "event": [
+                         {
+                           "listen": "prerequest",
+                           "script": {
+                             "type": "text/javascript",
+                             "exec": [
+                               "if (pm.collectionVariables.get(\"identityReferenceCorrectionScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"
+                             ]
+                           }
+                         }
+                       ],
+                       "request": {
+                         "method": "PUT",
+                         "header": [
+                           {
+                             "key": "Content-Type",
+                             "value": "application/json"
+                           }
+                         ],
+                         "auth": {
+                           "type": "bearer",
+                           "bearer": [
+                             {
+                               "key": "token",
+                               "value": "{{customerAccessToken}}",
+                               "type": "string"
+                             }
+                           ]
+                         },
+                         "url": {
+                           "raw": "{{baseUrl}}/api/v1/customers/me/identity-reference",
+                           "host": [
+                             "{{baseUrl}}"
+                           ],
+                           "path": [
+                             "api",
+                             "v1",
+                             "customers",
+                             "me",
+                             "identity-reference"
+                           ]
+                         },
+                         "description": "Run deliberately against an ACTIVE COMPLETE non-verified fictional Customer. Staff uses the selected Customer of an existing assisted-intake workflow. Success returns safe Customer state and does not verify identity. Preserve the pending attempt and retry its exact current document through the existing verification requests. VERIFIED identity returns 409. Do not automatically replay after an uncertain result; refresh Customer state first. See MER-API-001 section 3.12.1.",
+                         "body": {
+                           "mode": "raw",
+                           "raw": "{\n  \"identityReference\": \"FICTIONAL-CORRECTED-REFERENCE\"\n}",
+                           "options": {
+                             "raw": {
+                               "language": "json"
+                             }
+                           }
+                         }
+                       },
+                       "response": []
+                     },
+                     {
+                       "name": "Staff assisted-intake controlled identity correction (opt-in)",
+                       "event": [
+                         {
+                           "listen": "prerequest",
+                           "script": {
+                             "type": "text/javascript",
+                             "exec": [
+                               "if (pm.collectionVariables.get(\"identityReferenceCorrectionScenarioEnabled\") !== \"true\") { pm.execution.skipRequest(); }"
+                             ]
+                           }
+                         }
+                       ],
+                       "request": {
+                         "method": "PUT",
+                         "header": [
+                           {
+                             "key": "Content-Type",
+                             "value": "application/json"
+                           }
+                         ],
+                         "auth": {
+                           "type": "bearer",
+                           "bearer": [
+                             {
+                               "key": "token",
+                               "value": "{{loanOfficerAccessToken}}",
+                               "type": "string"
+                             }
+                           ]
+                         },
+                         "url": {
+                           "raw": "{{baseUrl}}/api/v1/staff/customers/{{identityReferenceCorrectionCustomerId}}/identity-reference",
+                           "host": [
+                             "{{baseUrl}}"
+                           ],
+                           "path": [
+                             "api",
+                             "v1",
+                             "staff",
+                             "customers",
+                             "{{identityReferenceCorrectionCustomerId}}",
+                             "identity-reference"
+                           ]
+                         },
+                         "description": "Run deliberately against an ACTIVE COMPLETE non-verified fictional Customer. Staff uses the selected Customer of an existing assisted-intake workflow. Success returns safe Customer state and does not verify identity. Preserve the pending attempt and retry its exact current document through the existing verification requests. VERIFIED identity returns 409. Do not automatically replay after an uncertain result; refresh Customer state first. See MER-API-001 section 3.12.1.",
+                         "body": {
+                           "mode": "raw",
+                           "raw": "{\n  \"identityReference\": \"FICTIONAL-CORRECTED-REFERENCE\"\n}",
+                           "options": {
+                             "raw": {
+                               "language": "json"
+                             }
+                           }
+                         }
+                       },
+                       "response": []
+                     }
+                   ]
                  },
                  {
                      "name":  "03 Customer Profile and Bank Accounts - customer:profile/customer:bank-account",
