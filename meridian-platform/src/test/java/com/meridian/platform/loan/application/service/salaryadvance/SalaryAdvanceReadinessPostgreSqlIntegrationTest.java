@@ -58,8 +58,6 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
 
     @Autowired com.meridian.platform.customer.application.service.UpdateOwnCustomerProfileService profiles;
     @Autowired com.meridian.platform.customer.application.service.CorrectCustomerIdentityReferenceService corrections;
-    @Autowired com.meridian.platform.customer.application.service.CustomerIdentityVerificationService identityVerifications;
-    @Autowired com.meridian.platform.partner.application.service.ImportPartnerEmployeesService imports;
 
     @Autowired
     private QuerySalaryAdvanceReadinessUseCase readinessQueries;
@@ -105,33 +103,25 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
     }
 
     @Test
-    void correctedAndReverifiedIdentityCannotUseOldEmploymentEvenAfterImportRefresh() {
-        profiles.updateOwnProfile(new com.meridian.platform.customer.application.dto.UpdateCustomerProfileRequest(
-                "Corrected Readiness Customer", null, "0900000000", "Test Address", "EMPLOYED", "Readiness Employer", true, true));
-        String corrected="CORRECTED-"+fixture.customerId();
-        corrections.correctOwn(new com.meridian.platform.customer.application.dto.CorrectIdentityReferenceRequest(corrected));
-        var unverified=readinessQueries.queryReadiness();
-        assertTrue(unverified.blockerCodes().contains("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED"));
-        assertEquals("NOT_VERIFIED",unverified.employeeVerificationStatus());
-        UUID baseline=jdbc.queryForObject("select current_version_id from customer_identity_documents where customer_id=?",UUID.class,fixture.customerId());
-        var verification=identityVerifications.submitOwn(UUID.randomUUID(),baseline,
-                new java.io.ByteArrayInputStream("%PDF-1.4\nfictional\n%%EOF".getBytes(java.nio.charset.StandardCharsets.UTF_8)),"application/pdf","identity.pdf");
-        currentUser.loanOfficer();
-        identityVerifications.decide(verification.verificationId(),true,new com.meridian.platform.customer.application.dto.CustomerIdentityDecisionRequest(
-                UUID.randomUUID(),verification.evidence().versionId(),corrected,null));
-        imports.importEmployees(fixture.partnerCompanyId(),new com.meridian.platform.partner.application.dto.ImportPartnerEmployeesRequest(
-                UUID.randomUUID(),"2026-06",java.util.List.of(new com.meridian.platform.partner.application.dto.PartnerEmployeeImportRowRequest(
-                "READINESS-EMP",("READINESS-ID-"+fixture.customerId()).toUpperCase(java.util.Locale.ROOT),money("20000000"),money("6000000"),"ACTIVE",true))));
-        currentUser.customer(fixture.customerUserId(),fixture.customerId());
-        var blocked=readinessQueries.queryReadiness();
-        assertFalse(blocked.applicationAllowed()); assertEquals("NOT_VERIFIED",blocked.partnerEligibilityStatus());
-        assertEquals("NOT_VERIFIED",blocked.employeeVerificationStatus()); assertTrue(blocked.blockerCodes().contains("EMPLOYEE_NOT_VERIFIED"));
-        assertFalse(blocked.blockerCodes().contains("CUSTOMER_IDENTITY_VERIFICATION_REQUIRED"));
-        assertEquals("EMPLOYEE_NOT_VERIFIED",assertThrows(BusinessRuleViolationException.class,()->submissions.startSalaryAdvanceApplication(
-                new SalaryAdvanceApplicationRequest(fixture.linkId(),REQUESTED_AMOUNT,1))).getErrorCode());
-        assertEquals(("READINESS-ID-"+fixture.customerId()).toUpperCase(java.util.Locale.ROOT),jdbc.queryForObject("select verified_identity_ref from customer_partner_employee_links where id=?",String.class,fixture.linkId()));
-        assertEquals(0,count("select count(*) from loan_applications where customer_id=?",fixture.customerId()));
-        assertEquals(0,count("select count(*) from salary_advance_limits where customer_id=?",fixture.customerId()));
+    void verifiedNameChangeCannotEnableCorrectionOrInvalidateEmployment() {
+        var before = readinessQueries.queryReadiness();
+        String linkBefore = jdbc.queryForObject("select row_to_json(l)::text from customer_partner_employee_links l where id=?", String.class, fixture.linkId());
+        String historyBefore = jdbc.queryForObject("select json_agg(v order by sequence_number)::text from customer_identity_verifications v where customer_id=?", String.class, fixture.customerId());
+        assertTrue(before.applicationAllowed());
+        assertEquals("VERIFIED_IDENTITY_CHANGE_NOT_ALLOWED", assertThrows(
+                com.meridian.platform.shared.domain.exception.BusinessStateConflictException.class,
+                () -> profiles.updateOwnProfile(new com.meridian.platform.customer.application.dto.UpdateCustomerProfileRequest(
+                        "Changed Readiness Customer", null, "0900000000", "Test Address", "EMPLOYED", "Readiness Employer", true, true))).getErrorCode());
+        assertEquals("IDENTITY_REFERENCE_IMMUTABLE", assertThrows(
+                com.meridian.platform.shared.domain.exception.BusinessStateConflictException.class,
+                () -> corrections.correctOwn(new com.meridian.platform.customer.application.dto.CorrectIdentityReferenceRequest("CORRECTED-" + fixture.customerId()))).getErrorCode());
+        assertEquals(before, readinessQueries.queryReadiness());
+        assertEquals("ELIGIBLE", readinessQueries.queryReadiness().partnerEligibilityStatus());
+        assertEquals(linkBefore, jdbc.queryForObject("select row_to_json(l)::text from customer_partner_employee_links l where id=?", String.class, fixture.linkId()));
+        assertEquals(historyBefore, jdbc.queryForObject("select json_agg(v order by sequence_number)::text from customer_identity_verifications v where customer_id=?", String.class, fixture.customerId()));
+        assertEquals(0, count("select count(*) from audit_events where action='CUSTOMER_IDENTITY_VERIFICATION_INVALIDATED' and entity_id=?", fixture.customerId()));
+        assertEquals(0, count("select count(*) from loan_applications where customer_id=?", fixture.customerId()));
+        assertEquals(0, count("select count(*) from salary_advance_limits where customer_id=?", fixture.customerId()));
     }
 
     @Test

@@ -181,9 +181,59 @@ describe('Customer account routes and profile', () => {
   })
 
   it('keeps a verified profile locked', async () => {
-    renderRoute('/account/profile', async () => response({ ...completeCustomer, verificationStatus: 'VERIFIED' }))
+    const user = userEvent.setup()
+    let updateBody: Record<string, unknown> | undefined
+    const verified = { ...completeCustomer, verificationStatus: 'VERIFIED' }
+    renderRoute('/account/profile', async (input, init) => {
+      if (String(input).endsWith('/customers/me/profile') && init?.method === 'PUT') {
+        updateBody = JSON.parse(String(init.body)) as Record<string, unknown>
+        return response({ ...verified, profile: { ...verified.profile, ...updateBody } })
+      }
+      return response(verified)
+    })
     await screen.findByText('Identity reference: On file')
+    const fullName = screen.getByLabelText(/Full name/)
+    expect(fullName).toHaveAttribute('readonly')
+    expect(fullName).toHaveValue('Customer Demo')
     expect(screen.queryByRole('button', { name: 'Correct identity reference' })).not.toBeInTheDocument()
+    for (const [label, value] of [
+      [/Phone number/, '0911111111'], [/Residential address/, 'Changed address'],
+      [/Employment status/, 'SELF_EMPLOYED'], [/Employer name/, 'Changed employer'],
+    ] as const) {
+      const field = screen.getByLabelText(label)
+      expect(field).not.toHaveAttribute('readonly')
+      await user.clear(field)
+      await user.type(field, value)
+    }
+    await user.click(screen.getByRole('button', { name: 'Save profile' }))
+    expect(await screen.findByText('Profile saved')).toBeVisible()
+    expect(updateBody).toEqual({ phoneNumber: '0911111111', residentialAddress: 'Changed address',
+      employmentStatus: 'SELF_EMPLOYED', employerName: 'Changed employer',
+      termsConsentAccepted: true, dataProcessingConsentAccepted: true })
+    expect(screen.getByLabelText(/Full name/)).toHaveValue('Customer Demo')
+    expect(screen.queryByRole('button', { name: 'Correct identity reference' })).not.toBeInTheDocument()
+  })
+
+  it.each(['UNVERIFIED', 'REJECTED'])('keeps the %s full name editable through normal maintenance', async verificationStatus => {
+    const user = userEvent.setup()
+    let updateBody: Record<string, unknown> | undefined
+    const profile = { ...completeCustomer, verificationStatus }
+    renderRoute('/account/profile', async (input, init) => {
+      if (String(input).endsWith('/customers/me/profile') && init?.method === 'PUT') {
+        updateBody = JSON.parse(String(init.body)) as Record<string, unknown>
+        return response({ ...profile, profile: { ...profile.profile, fullName: 'Corrected Name' } })
+      }
+      return response(profile)
+    })
+    const fullName = await screen.findByLabelText(/Full name/)
+    expect(fullName).not.toHaveAttribute('readonly')
+    await user.clear(fullName)
+    await user.type(fullName, 'Corrected Name')
+    await user.click(screen.getByRole('button', { name: 'Save profile' }))
+    expect(await screen.findByText('Profile saved')).toBeVisible()
+    expect(updateBody).toMatchObject({ fullName: 'Corrected Name' })
+    expect(updateBody).not.toHaveProperty('identityReference')
+    expect(screen.getByRole('button', { name: 'Correct identity reference' })).toBeVisible()
   })
 
   it('renders completed identity as On file and omits it from ordinary profile updates', async () => {

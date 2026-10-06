@@ -53,6 +53,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 404 | `CUSTOMER_NOT_FOUND` | Customer not found | Verify the requested Customer ID |
 | 409 | `CUSTOMER_NOT_ACTIVE` | Customer not active | Restore the Customer to `ACTIVE` before using customer-owned lending flows |
 | 409 | `IDENTITY_REFERENCE_IMMUTABLE` | Identity reference immutable | Ordinary profile updates cannot change a completed reference; use controlled correction only while identity is not verified |
+| 409 | `VERIFIED_IDENTITY_CHANGE_NOT_ALLOWED` | Full name cannot be changed through profile maintenance after identity verification. | Retain the verified full name in Customer and Staff maintenance; verified identity amendment requires a separate deferred Staff workflow |
 | 409 | `IDENTITY_REFERENCE_ALREADY_IN_USE` | Identity reference already in use | Use an identity reference that does not belong to another Customer |
 | 422 | `CUSTOMER_DIGITAL_ACCESS_OWNERSHIP_NOT_VERIFIED` | Customer identity could not be verified for digital access. | Recheck the Customer's presented identity reference; do not enable access until it matches the selected Customer |
 | 422 | `PROFILE_INCOMPLETE` | Customer profile incomplete | Complete the required identity, contact, residential, employment, and consent fields |

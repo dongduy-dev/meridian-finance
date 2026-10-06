@@ -12,6 +12,10 @@ import com.meridian.platform.customer.domain.model.Customer;
 import com.meridian.platform.customer.domain.model.CustomerBankAccount;
 import com.meridian.platform.customer.domain.model.CustomerBankAccountStatus;
 import com.meridian.platform.customer.domain.model.ProtectedSensitiveValue;
+import com.meridian.platform.customer.domain.model.CustomerProfile;
+import com.meridian.platform.customer.domain.model.CustomerStatus;
+import com.meridian.platform.customer.domain.model.ProfileCompletionStatus;
+import com.meridian.platform.customer.domain.model.VerificationStatus;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
@@ -147,6 +151,55 @@ class StaffCustomerIntakeServiceTest {
                 "EMPLOYED", "Meridian Partner", true, true);
 
         assertThrows(BusinessStateConflictException.class, () -> service.updateProfile(created.id(), update));
+    }
+
+    @Test
+    void verifiedNameChangeIsRejectedBeforeSaveOrAudit() {
+        Customer verified = profileCustomer(VerificationStatus.VERIFIED);
+        when(customers.findByIdForUpdate(verified.id())).thenReturn(Optional.of(verified));
+        assertEquals("VERIFIED_IDENTITY_CHANGE_NOT_ALLOWED", assertThrows(BusinessStateConflictException.class,
+                () -> service.updateProfile(verified.id(), new UpdateCustomerProfileRequest("Changed Customer", null,
+                        "0911111111", "New address", "SELF_EMPLOYED", "New employer", true, true))).getErrorCode());
+        assertEquals(VerificationStatus.VERIFIED, verified.verificationStatus());
+        verify(customers, never()).save(any());
+        verify(audits, never()).publish(any());
+    }
+
+    @Test
+    void verifiedMutableFactsCanChangeWithSavedNameOmitted() {
+        Customer verified = profileCustomer(VerificationStatus.VERIFIED);
+        when(customers.findByIdForUpdate(verified.id())).thenReturn(Optional.of(verified));
+        var result = service.updateProfile(verified.id(), new UpdateCustomerProfileRequest(null, null,
+                "0911111111", "New address", "SELF_EMPLOYED", "New employer", true, true));
+        assertEquals("Paper Customer", result.profile().fullName());
+        assertEquals("VERIFIED", result.verificationStatus());
+        assertEquals("0911111111", result.profile().phoneNumber());
+        assertEquals("New address", result.profile().residentialAddress());
+        assertEquals("SELF_EMPLOYED", result.profile().employmentStatus());
+        assertEquals("New employer", result.profile().employerName());
+        ArgumentCaptor<BusinessAuditEvent> event = ArgumentCaptor.forClass(BusinessAuditEvent.class);
+        verify(audits).publish(event.capture());
+        assertEquals(List.of(BusinessAuditAction.CUSTOMER_PROFILE_UPDATED),
+                event.getValue().entries().stream().map(entry -> entry.action()).toList());
+    }
+
+    @Test
+    void unverifiedFullNameRemainsEditable() {
+        Customer unverified = profileCustomer(VerificationStatus.UNVERIFIED);
+        when(customers.findByIdForUpdate(unverified.id())).thenReturn(Optional.of(unverified));
+        var result = service.updateProfile(unverified.id(), new UpdateCustomerProfileRequest("Corrected Customer", null,
+                "0900000000", "1 Meridian Street", "EMPLOYED", "Meridian Partner", true, true));
+        assertEquals("Corrected Customer", result.profile().fullName());
+        assertEquals("UNVERIFIED", result.verificationStatus());
+    }
+
+    private Customer profileCustomer(VerificationStatus status) {
+        UUID id = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.of(2026, 9, 17, 8, 0);
+        return new Customer(id, "CUS-000000042", CustomerStatus.ACTIVE, status, ProfileCompletionStatus.COMPLETE,
+                new CustomerProfile(UUID.randomUUID(), id, "Paper Customer",
+                        new ProtectedSensitiveValue("ciphertext", "fingerprint", "8901"), "0900000000",
+                        "1 Meridian Street", "EMPLOYED", "Meridian Partner", true, true, now, now), List.of(), now, now);
     }
 
     @Test

@@ -87,9 +87,12 @@ const profileFromForm = (form: HTMLFormElement): CustomerProfileInput & { identi
 
 function ProfileFields({ customer }: { customer?: StaffCustomer }) {
   const profile = customer?.profile
+  const identityVerified = customer?.verificationStatus === 'VERIFIED'
   return <div className="grid gap-3 sm:grid-cols-2">
-    <label className="grid gap-1 text-sm font-medium">Full name<Input name="fullName" required defaultValue={profile?.fullName} /></label>
-    {customer?.profileCompletionStatus === 'COMPLETE' ? <p className="text-sm">Identity reference: On file</p>
+    <label className="grid gap-1 text-sm font-medium">Full name{identityVerified
+      ? <Input name="fullName" value={profile?.fullName ?? ''} readOnly />
+      : <Input name="fullName" required defaultValue={profile?.fullName} />}</label>
+    {customer?.profileCompletionStatus === 'COMPLETE' || identityVerified ? <p className="text-sm">Identity reference: On file</p>
       : <label className="grid gap-1 text-sm font-medium">Identity reference<Input name="identityReference" autoComplete="off" required={!customer} /></label>}
     <label className="grid gap-1 text-sm font-medium">Phone<Input name="phoneNumber" required defaultValue={profile?.phoneNumber} /></label>
     <label className="grid gap-1 text-sm font-medium">Employment status<Input name="employmentStatus" required defaultValue={profile?.employmentStatus} /></label>
@@ -153,7 +156,8 @@ export function AssistedOriginationWorkspacePage() {
     for (const [key, applied] of appliedOcrControls.current) {
       if (applied.evidenceType === evidenceType && applied.versionId !== currentVersionId) {
         const control = formControl(ocrTargetForm(applied.target), applied.name)
-        if (control?.value === applied.appliedValue) control.value = applied.previousValue
+        if (control?.value === applied.appliedValue
+          && !(control instanceof HTMLInputElement && control.readOnly)) control.value = applied.previousValue
         appliedOcrControls.current.delete(key)
         removed = true
       }
@@ -221,7 +225,7 @@ export function AssistedOriginationWorkspacePage() {
     const apply = (target: OcrFormTarget, name: string, value: string | undefined) => {
       if (value === undefined) return
       const control = formControl(ocrTargetForm(target), name)
-      if (!control) return
+      if (!control || (control instanceof HTMLInputElement && control.readOnly)) return
       const key = `${target}:${name}`
       const previous = appliedOcrControls.current.get(key)
       const previousValue = previous && control.value === previous.appliedValue
@@ -369,7 +373,9 @@ export function AssistedOriginationWorkspacePage() {
 
   const submitProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const input = profileFromForm(event.currentTarget)
+    const { fullName, identityReference, ...mutableFacts } = profileFromForm(event.currentTarget)
+    const input = customer.data?.verificationStatus === 'VERIFIED'
+      ? mutableFacts : { ...mutableFacts, fullName, identityReference }
     const key = 'customer-profile'
     setAction(key, { status: 'IN_FLIGHT' })
     try {

@@ -47,7 +47,7 @@ export type Customer = z.infer<typeof customerSchema>
 export type CustomerBankAccount = z.infer<typeof customerBankAccountSchema>
 
 export interface UpdateCustomerProfileInput {
-  fullName: string
+  fullName?: string
   identityReference?: string
   phoneNumber: string
   residentialAddress: string

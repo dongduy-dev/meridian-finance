@@ -52,6 +52,13 @@ public record Customer(
         if (!id.equals(newProfile.customerId())) {
             throw new IllegalArgumentException("profile customerId does not match customer");
         }
+        if (verificationStatus == VerificationStatus.VERIFIED
+                && (profile == null || !profile.fullName().equals(newProfile.fullName()))) {
+            throw new BusinessStateConflictException(
+                    "VERIFIED_IDENTITY_CHANGE_NOT_ALLOWED",
+                    "Full name cannot be changed through profile maintenance after identity verification."
+            );
+        }
         if (profile != null
                 && (profile.isComplete() || verificationStatus == VerificationStatus.VERIFIED)
                 && !profile.identityReference().fingerprint().equals(newProfile.identityReference().fingerprint())) {
@@ -66,8 +73,7 @@ public record Customer(
                 id,
                 customerNumber,
                 status,
-                verificationStatus == VerificationStatus.VERIFIED && profile != null
-                        && !profile.fullName().equals(newProfile.fullName()) ? VerificationStatus.UNVERIFIED : verificationStatus,
+                verificationStatus,
                 completionStatus,
                 timestampedProfile,
                 bankAccounts,

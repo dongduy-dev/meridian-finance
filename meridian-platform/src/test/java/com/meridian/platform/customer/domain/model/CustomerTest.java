@@ -41,6 +41,45 @@ class CustomerTest {
     }
 
     @Test
+    void verifiedFullNameCannotChangeButTrimmedSameNameAndMutableFactsRemainAllowed() {
+        Customer customer = incompleteCustomer().updateProfile(completeProfile("fingerprint-1"), NOW)
+                .withVerificationStatus(VerificationStatus.VERIFIED, NOW);
+        CustomerProfile old = customer.profile();
+        CustomerProfile changed = new CustomerProfile(old.id(), CUSTOMER_ID, "Changed Borrower",
+                old.identityReference(), "0911111111", "New Address", "SELF_EMPLOYED", "New Employer",
+                true, true, old.createdAt(), NOW);
+        assertEquals("VERIFIED_IDENTITY_CHANGE_NOT_ALLOWED", assertThrows(BusinessStateConflictException.class,
+                () -> customer.updateProfile(changed, NOW.plusMinutes(1))).getErrorCode());
+        assertEquals("Jane Borrower", customer.profile().fullName());
+        assertEquals(VerificationStatus.VERIFIED, customer.verificationStatus());
+
+        Customer updated = customer.updateProfile(new CustomerProfile(old.id(), CUSTOMER_ID, " Jane Borrower ",
+                old.identityReference(), "0911111111", "New Address", "SELF_EMPLOYED", "New Employer",
+                true, true, old.createdAt(), NOW), NOW.plusMinutes(1));
+        assertEquals(VerificationStatus.VERIFIED, updated.verificationStatus());
+        assertEquals("Jane Borrower", updated.profile().fullName());
+        assertEquals("0911111111", updated.profile().phoneNumber());
+        assertEquals("New Address", updated.profile().residentialAddress());
+        assertEquals("SELF_EMPLOYED", updated.profile().employmentStatus());
+        assertEquals("New Employer", updated.profile().employerName());
+    }
+
+    @Test
+    void nonVerifiedFullNameMayChangeWithoutChangingIdentityReference() {
+        for (VerificationStatus status : List.of(VerificationStatus.UNVERIFIED, VerificationStatus.REJECTED)) {
+            Customer customer = incompleteCustomer().updateProfile(completeProfile("fingerprint-1"), NOW)
+                    .withVerificationStatus(status, NOW);
+            CustomerProfile old = customer.profile();
+            Customer updated = customer.updateProfile(new CustomerProfile(old.id(), CUSTOMER_ID, "Corrected Borrower",
+                    old.identityReference(), old.phoneNumber(), old.residentialAddress(), old.employmentStatus(),
+                    old.employerName(), true, true, old.createdAt(), NOW), NOW.plusMinutes(1));
+            assertEquals("Corrected Borrower", updated.profile().fullName());
+            assertEquals(status, updated.verificationStatus());
+            assertEquals(old.identityReference(), updated.profile().identityReference());
+        }
+    }
+
+    @Test
     void firstActiveBankAccountBecomesPrimaryAndDuplicateActiveFingerprintIsRejected() {
         Customer customer = incompleteCustomer();
         CustomerBankAccount bankAccount = activeBankAccount(UUID.randomUUID(), "account-fingerprint-1", false);
