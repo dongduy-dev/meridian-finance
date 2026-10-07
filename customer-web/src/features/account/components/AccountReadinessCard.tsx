@@ -74,7 +74,7 @@ function ReadinessItem({
 
 export function AccountReadinessCard({ customer, presentation = 'card' }: {
   customer: Customer
-  presentation?: 'card' | 'section'
+  presentation?: 'card' | 'section' | 'workspace'
 }) {
   const identity = useOwnIdentityHistory()
   const pending = identity.data?.[0]?.status === 'PENDING_REVIEW'
@@ -82,15 +82,15 @@ export function AccountReadinessCard({ customer, presentation = 'card' }: {
   const profileComplete = customer.profileCompletionStatus === 'COMPLETE'
   const Heading = presentation === 'section' ? 'h3' : 'h2'
   return (
-    <Card className={presentation === 'section' ? 'border-0 border-t bg-transparent' : undefined}>
-      <CardHeader className={presentation === 'section' ? 'px-0 pt-6 sm:px-0' : undefined}>
+    <Card className={presentation !== 'card' ? 'border-0 border-t bg-transparent' : undefined}>
+      <CardHeader className={presentation !== 'card' ? 'px-0 pt-6 sm:px-0' : undefined}>
         <Heading className="type-section">Account setup</Heading>
         <CardDescription>
           Complete your profile, verify your identity, and choose a primary bank account. Salary Advance also requires employment verification. These steps do not guarantee loan approval.
         </CardDescription>
       </CardHeader>
-      <CardContent className={cn('space-y-6', presentation === 'section' && 'px-0 pb-0 sm:px-0 sm:pb-0')}>
-        <div className={cn('grid divide-y divide-border border-y border-border', presentation === 'section' && 'lg:grid-cols-3 lg:divide-x lg:divide-y-0 lg:[&>div]:px-6 lg:[&>div:first-child]:pl-0 lg:[&>div:last-child]:pr-0')}>
+      <CardContent className={cn('space-y-6', presentation !== 'card' && 'px-0 pb-0 sm:px-0 sm:pb-0')}>
+        <div className={cn('grid divide-y divide-border border-y border-border', presentation !== 'card' && 'lg:grid-cols-3 lg:divide-x lg:divide-y-0 lg:[&>div]:px-6 lg:[&>div:first-child]:pl-0 lg:[&>div:last-child]:pr-0')}>
           <ReadinessItem
             complete={profileComplete}
             icon={UserRound}

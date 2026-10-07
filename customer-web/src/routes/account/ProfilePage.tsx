@@ -7,7 +7,6 @@ import { useForm, type FieldErrors } from 'react-hook-form'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
@@ -123,7 +122,7 @@ export function ProfilePage() {
     .filter((message): message is string => typeof message === 'string')
 
   return (
-    <div className="space-y-8">
+    <div className="min-w-0 space-y-[var(--section-transactional)]">
       <PageHeader
         eyebrow="Your account"
         title="Profile"
@@ -141,36 +140,37 @@ export function ProfilePage() {
 
       {customer ? (
         <>
-          <AccountReadinessCard customer={customer} />
+          <AccountReadinessCard customer={customer} presentation="workspace" />
           {customerQuery.isSuccess && customerQuery.fetchStatus === 'idle' && customer.status === 'ACTIVE'
             && profileComplete && ['UNVERIFIED', 'REJECTED'].includes(customer.verificationStatus)
             && authState.status === 'authenticated' && authState.actor.permissions.includes('customer:profile:write:own')
             ? <IdentityReferenceCorrection key={authState.actor.userId} /> : null}
-          <Card>
-            <CardHeader>
-              <CardTitle>{profileComplete ? 'Update your profile' : 'Complete your profile'}</CardTitle>
-              <CardDescription>
+          <section aria-labelledby="profile-form-heading" className="min-w-0 max-w-[var(--width-flow)] space-y-8 bg-card p-4 sm:p-6 [overflow-wrap:anywhere]">
+            <div className="space-y-2">
+              <h2 id="profile-form-heading" className="type-section">{profileComplete ? 'Update your profile' : 'Complete your profile'}</h2>
+              <p className="text-sm leading-5 text-muted-foreground">
                 Required fields are marked with an asterisk. Review your details before saving.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-6" noValidate onSubmit={onSubmit}>
-                {validationMessages.length > 1 ? (
-                  <Alert variant="destructive">
-                    <ShieldCheck aria-hidden="true" />
-                    <AlertTitle>Check the highlighted fields</AlertTitle>
-                    <AlertDescription>{validationMessages.join(' ')}</AlertDescription>
-                  </Alert>
-                ) : null}
-                {serverError ? <AccountErrorFeedback error={serverError} title="Profile save was not confirmed" /> : null}
-                {saved ? (
-                  <AccountSuccessFeedback
-                    title="Profile saved"
-                    description="Your personal details have been updated."
-                  />
-                ) : null}
+              </p>
+            </div>
+            <form className="space-y-8" noValidate onSubmit={onSubmit}>
+              {validationMessages.length > 1 ? (
+                <Alert variant="destructive">
+                  <ShieldCheck aria-hidden="true" />
+                  <AlertTitle>Check the highlighted fields</AlertTitle>
+                  <AlertDescription>{validationMessages.join(' ')}</AlertDescription>
+                </Alert>
+              ) : null}
+              {serverError ? <AccountErrorFeedback error={serverError} title="Profile save was not confirmed" /> : null}
+              {saved ? (
+                <AccountSuccessFeedback
+                  title="Profile saved"
+                  description="Your personal details have been updated."
+                />
+              ) : null}
 
-                <div className="grid gap-5 md:grid-cols-2">
+              <fieldset className="min-w-0 space-y-6 border-t border-border pt-6">
+                <legend className="pr-3 text-base font-semibold">Personal details</legend>
+                <div className="grid gap-6 md:grid-cols-2">
                   <AccountFormField htmlFor="fullName" label="Full name" required error={errors.fullName?.message}>
                     {identityVerified ? <Input id="fullName" value={customer.profile?.fullName ?? ''} readOnly /> : <Input
                       id="fullName"
@@ -193,9 +193,9 @@ export function ProfilePage() {
                 </div>
 
                 {profileComplete || identityVerified ? (
-                  <div className="rounded-md border border-border bg-background p-4">
-                    <div className="flex items-center gap-2 font-semibold">
-                      <ShieldCheck aria-hidden="true" className="size-5 text-success" />
+                  <div className="border-y border-border py-6">
+                    <div className="flex items-start gap-2 font-semibold">
+                      <ShieldCheck aria-hidden="true" className="size-5 shrink-0" />
                       Identity reference: On file
                     </div>
                     <p className="mt-2 text-sm leading-5 text-muted-foreground">
@@ -231,8 +231,11 @@ export function ProfilePage() {
                     {...register('residentialAddress', { validate: validateWith(profileFieldSchemas.residentialAddress) })}
                   />
                 </AccountFormField>
+              </fieldset>
 
-                <div className="grid gap-5 md:grid-cols-2">
+              <fieldset className="min-w-0 space-y-6 border-t border-border pt-6">
+                <legend className="pr-3 text-base font-semibold">Employment details</legend>
+                <div className="grid gap-6 md:grid-cols-2">
                   <AccountFormField htmlFor="employmentStatus" label="Employment status" required error={errors.employmentStatus?.message}>
                     <Input
                       id="employmentStatus"
@@ -251,39 +254,40 @@ export function ProfilePage() {
                     />
                   </AccountFormField>
                 </div>
+              </fieldset>
 
-                <div className="space-y-3">
-                  <ConsentField id="termsConsentAccepted" label="I accept the Meridian terms." error={errors.termsConsentAccepted?.message}>
-                    <input
-                      id="termsConsentAccepted"
-                      type="checkbox"
-                      className="mt-1 size-5 shrink-0 accent-primary"
-                      aria-invalid={Boolean(errors.termsConsentAccepted)}
-                      aria-describedby={errors.termsConsentAccepted ? 'termsConsentAccepted-error' : undefined}
-                      {...register('termsConsentAccepted', { validate: (value) => value || 'Accept the Meridian terms to continue.' })}
-                    />
-                  </ConsentField>
-                  <ConsentField id="dataProcessingConsentAccepted" label="I consent to the processing of my data for this account." error={errors.dataProcessingConsentAccepted?.message}>
-                    <input
-                      id="dataProcessingConsentAccepted"
-                      type="checkbox"
-                      className="mt-1 size-5 shrink-0 accent-primary"
-                      aria-invalid={Boolean(errors.dataProcessingConsentAccepted)}
-                      aria-describedby={errors.dataProcessingConsentAccepted ? 'dataProcessingConsentAccepted-error' : undefined}
-                      {...register('dataProcessingConsentAccepted', { validate: (value) => value || 'Accept data processing to continue.' })}
-                    />
-                  </ConsentField>
-                </div>
+              <fieldset className="min-w-0 space-y-4 border-t border-border pt-6">
+                <legend className="pr-3 text-base font-semibold">Consent</legend>
+                <ConsentField id="termsConsentAccepted" label="I accept the Meridian terms." error={errors.termsConsentAccepted?.message}>
+                  <input
+                    id="termsConsentAccepted"
+                    type="checkbox"
+                    className="mt-1 size-5 shrink-0 accent-primary"
+                    aria-invalid={Boolean(errors.termsConsentAccepted)}
+                    aria-describedby={errors.termsConsentAccepted ? 'termsConsentAccepted-error' : undefined}
+                    {...register('termsConsentAccepted', { validate: (value) => value || 'Accept the Meridian terms to continue.' })}
+                  />
+                </ConsentField>
+                <ConsentField id="dataProcessingConsentAccepted" label="I consent to the processing of my data for this account." error={errors.dataProcessingConsentAccepted?.message}>
+                  <input
+                    id="dataProcessingConsentAccepted"
+                    type="checkbox"
+                    className="mt-1 size-5 shrink-0 accent-primary"
+                    aria-invalid={Boolean(errors.dataProcessingConsentAccepted)}
+                    aria-describedby={errors.dataProcessingConsentAccepted ? 'dataProcessingConsentAccepted-error' : undefined}
+                    {...register('dataProcessingConsentAccepted', { validate: (value) => value || 'Accept data processing to continue.' })}
+                  />
+                </ConsentField>
+              </fieldset>
 
-                <div className="flex justify-end">
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? <Spinner /> : null}
-                    {isSubmitting ? 'Saving profile…' : 'Save profile'}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+              <div className="flex border-t border-border pt-6 sm:justify-end">
+                <Button className="w-full sm:w-auto" size="lg" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? <Spinner /> : null}
+                  {isSubmitting ? 'Saving profile…' : 'Save profile'}
+                </Button>
+              </div>
+            </form>
+          </section>
         </>
       ) : null}
     </div>

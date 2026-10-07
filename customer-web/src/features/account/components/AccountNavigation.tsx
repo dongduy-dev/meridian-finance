@@ -11,20 +11,20 @@ const destinations = [
 
 export function AccountNavigation() {
   return (
-    <nav aria-label="Account navigation" className="flex flex-wrap gap-2 border-b border-border pb-4">
+    <nav aria-label="Account navigation" className="flex min-w-0 flex-wrap gap-x-6 gap-y-2 border-b border-border">
       {destinations.map(({ label, href, icon: Icon }) => (
         <NavLink
           key={href}
           to={href}
           className={({ isActive }) =>
             cn(
-              'inline-flex min-h-11 items-center gap-2 rounded-md px-4 text-sm font-semibold text-muted-foreground hover:bg-selected hover:text-foreground',
-              isActive && 'bg-selected text-foreground',
+              'inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 border-b-2 border-transparent py-3 text-sm leading-5 font-medium text-muted-foreground hover:border-input hover:text-foreground',
+              isActive && 'border-primary font-semibold text-foreground',
             )
           }
         >
-          <Icon aria-hidden="true" className="size-4" />
-          {label}
+          <Icon aria-hidden="true" className="size-5 shrink-0" />
+          <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
         </NavLink>
       ))}
     </nav>
