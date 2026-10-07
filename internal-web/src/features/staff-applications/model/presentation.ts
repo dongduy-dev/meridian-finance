@@ -1,3 +1,4 @@
+import { knownLabel } from '@/lib/format/presentation'
 export const productOptions = [
   ['SALARY_ADVANCE', 'Salary Advance'],
   ['UNSECURED_CONSUMER_LOAN', 'Unsecured Consumer Loan'],
@@ -34,7 +35,7 @@ const applicationStatusLabels: Record<string, string> = {
   UNDER_REVIEW: 'Under review',
   RETURNED_FOR_REVISION: 'Returned for revision',
   RETURNED_TO_REVIEW: 'Returned to review',
-  APPROVAL_PENDING: 'Approval pending',
+  APPROVAL_PENDING: 'Awaiting credit decision',
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   CUSTOMER_ACCEPTANCE_PENDING: 'Customer acceptance pending',
@@ -74,11 +75,11 @@ const transitionActionLabels: Record<string, string> = {
 }
 
 export function applicationStatusLabel(value: string): string {
-  return applicationStatusLabels[value] ?? 'Status unavailable'
+  return knownLabel(applicationStatusLabels, value, 'Status unavailable')
 }
 
 export function transitionActionLabel(value: string): string {
-  return transitionActionLabels[value] ?? 'Application activity unavailable'
+  return knownLabel(transitionActionLabels, value, 'Application activity unavailable')
 }
 
 export function productLabel(value: string): string {
@@ -99,13 +100,13 @@ const knownValueLabels: Record<string, string> = {
   UNDER_REVIEW: 'Under review',
   RETURNED_FOR_REVISION: 'Returned for revision',
   RETURNED_TO_REVIEW: 'Returned to review',
-  APPROVAL_PENDING: 'Approval pending', APPROVED: 'Approved',
+  APPROVAL_PENDING: 'Awaiting credit decision', APPROVED: 'Approved',
   REJECTED: 'Rejected', CUSTOMER_ACCEPTANCE_PENDING: 'Customer acceptance pending',
   CUSTOMER_DECLINED: 'Customer declined', CONTRACT_PENDING: 'Contract pending',
   DISBURSEMENT_PENDING: 'Disbursement pending', DISBURSED: 'Disbursed',
   EXPIRED: 'Expired',
-  CUSTOMER_DIGITAL: 'Customer digital',
-  STAFF_ASSISTED: 'Staff assisted',
+  CUSTOMER_DIGITAL: 'Customer digital origination',
+  STAFF_ASSISTED: 'Staff-assisted origination',
   MOTORBIKE: 'Motorbike', CAR: 'Car', ELECTRONICS: 'Electronics',
   PROPERTY_DOCUMENT: 'Property document', OTHER: 'Other',
   MATCHED_ACTIVE: 'Active employee matched',
@@ -157,7 +158,7 @@ const knownValueLabels: Record<string, string> = {
 }
 
 export function humanizeKnownValue(value: string): string {
-  return knownValueLabels[value] ?? 'Information unavailable'
+  return knownLabel(knownValueLabels, value, 'Information unavailable')
 }
 
 export function isSupportedProduct(value: string | null): boolean {

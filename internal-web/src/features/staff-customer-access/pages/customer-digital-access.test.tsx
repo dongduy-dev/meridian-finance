@@ -42,14 +42,14 @@ function renderPage() {
 
 async function selectCustomer() {
   const user = userEvent.setup()
-  await screen.findByRole('heading', { name: 'Customer digital access' })
+  await screen.findByRole('heading', { name: 'Customer Web access' })
   await user.type(screen.getByLabelText('Exact value'), 'CUS-000000123')
   await user.click(screen.getByRole('button', { name: 'Search Customer' }))
   await user.click(await screen.findByRole('button', { name: 'Select Customer' }))
   return user
 }
 
-describe('Customer digital access Staff workflow', () => {
+describe('Customer Web access Staff workflow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
@@ -75,15 +75,15 @@ describe('Customer digital access Staff workflow', () => {
     })
     renderPage()
     const user = userEvent.setup()
-    expect(await screen.findByRole('heading', { name: 'Customer digital access' })).toBeVisible()
-    expect(screen.queryByRole('button', { name: 'Enable digital access' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Customer Web access' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Enable Customer Web access' })).not.toBeInTheDocument()
     await user.selectOptions(screen.getByLabelText('Exact search'), 'identity')
     await user.type(screen.getByLabelText('Exact value'), 'ID-EXACT')
     await user.click(screen.getByRole('button', { name: 'Search Customer' }))
     expect(await screen.findByText('Status: Active')).toBeVisible()
     expect(vi.mocked(api.apiRequest).mock.calls.find(([path]) => String(path).endsWith('/search'))?.[1])
       .toMatchObject({ method: 'POST', body: { identityReference: 'ID-EXACT' } })
-    expect(screen.queryByRole('button', { name: 'Enable digital access' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Enable Customer Web access' })).not.toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Select Customer' }))
     expect(await screen.findByText('Not enabled')).toBeVisible()
     expect(screen.getByText(/one secure activation link to verify their email and set a password/)).toBeVisible()
@@ -91,11 +91,11 @@ describe('Customer digital access Staff workflow', () => {
     expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument()
     await user.type(screen.getByLabelText('Email'), 'CUSTOMER@EXAMPLE.COM')
     await user.type(screen.getByLabelText('Identity reference'), 'ID-EXACT')
-    await user.click(screen.getByRole('button', { name: 'Enable digital access' }))
+    await user.click(screen.getByRole('button', { name: 'Enable Customer Web access' }))
     expect(await screen.findByText('Enabled')).toBeVisible()
     expect(await screen.findByText(/complete the secure activation link sent to their email/)).toBeVisible()
     expect(screen.queryByText(/Forgot password/)).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Enable digital access' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Enable Customer Web access' })).not.toBeInTheDocument()
     expect(vi.mocked(api.apiRequest).mock.calls.find(([path, options]) =>
       String(path).endsWith('/digital-access') && (options as RequestInit | undefined)?.method === 'POST')?.[1])
       .toMatchObject({ body: { email: 'customer@example.com', identityReference: 'ID-EXACT' } })
@@ -118,7 +118,7 @@ describe('Customer digital access Staff workflow', () => {
     expect(await screen.findByText('Not enabled')).toBeVisible()
     await user.type(screen.getByLabelText('Email'), 'customer@example.com')
     await user.type(screen.getByLabelText('Identity reference'), 'ID-EXACT')
-    await user.click(screen.getByRole('button', { name: 'Enable digital access' }))
+    await user.click(screen.getByRole('button', { name: 'Enable Customer Web access' }))
     expect(await screen.findByText('Enabled')).toBeVisible()
     expect(await screen.findByText(/complete the secure activation link sent to their email/)).toBeVisible()
     expect(screen.queryByText(/Forgot password/)).not.toBeInTheDocument()
@@ -140,7 +140,7 @@ describe('Customer digital access Staff workflow', () => {
     await screen.findByText('Not enabled')
     await user.type(screen.getByLabelText('Email'), 'customer@example.com')
     await user.type(screen.getByLabelText('Identity reference'), 'wrong')
-    await user.click(screen.getByRole('button', { name: 'Enable digital access' }))
+    await user.click(screen.getByRole('button', { name: 'Enable Customer Web access' }))
     await waitFor(() => expect(screen.getByText(message)).toBeVisible())
   })
 })

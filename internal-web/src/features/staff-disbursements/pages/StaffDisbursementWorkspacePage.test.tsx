@@ -116,8 +116,8 @@ describe('Staff disbursement workspace', () => {
   })
 
   it.each([
-    { channel: 'CUSTOMER_DIGITAL', label: 'Customer digital' },
-    { channel: 'STAFF_ASSISTED', label: 'Staff assisted' },
+    { channel: 'CUSTOMER_DIGITAL', label: 'Customer digital origination' },
+    { channel: 'STAFF_ASSISTED', label: 'Staff-assisted origination' },
   ])('renders $channel in the shared header and masked disbursement evidence without revealing on load', async ({ channel, label }) => {
     vi.mocked(api.apiRequest).mockResolvedValue(pendingCase({ originationChannel: channel }))
     renderPage()
@@ -167,7 +167,7 @@ describe('Staff disbursement workspace', () => {
     vi.mocked(api.apiRequest).mockResolvedValue(pendingCase())
     renderPage()
     await screen.findByRole('heading', { name: 'Disbursement and activation' })
-    expect(screen.getByRole('link', { name: '← Disbursement queue' })).toHaveAttribute('href', '/staff/work/disbursements')
+    expect(screen.getByRole('link', { name: '← Back to disbursement queue' })).toHaveAttribute('href', '/staff/work/disbursements')
     const navigation = screen.queryByRole('navigation', { name: 'Application sections' })
     if (sections.length) {
       expect(within(navigation!).getAllByRole('link').map((link) => link.textContent)).toEqual(sections)
@@ -228,7 +228,7 @@ describe('Staff disbursement workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Reveal destination' }))
     expect(await screen.findByText(fullAccountNumber)).toBeVisible()
     await act(() => router.navigate('/staff/work/disbursements'))
-    expect(await screen.findByRole('heading', { name: 'Ready-disbursement queue' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Disbursement queue' })).toBeVisible()
     await act(() => router.navigate(-1))
     expect(await screen.findByRole('heading', { name: 'UCL-20260910-000001' })).toBeVisible()
     expect(screen.queryByText(fullAccountNumber)).not.toBeInTheDocument()
@@ -447,7 +447,7 @@ describe('Staff disbursement workspace', () => {
     const dialog = screen.getByRole('dialog')
     expect(dialog.textContent).not.toContain(secretReference)
     expect(dialog.textContent).not.toContain(fullAccountNumber)
-    await user.click(screen.getByRole('button', { name: 'Confirm record' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm disbursement' }))
 
     expect(await screen.findByText(/latest case information does not confirm this exact disbursement/i)).toBeVisible()
     expect(document.body).not.toHaveTextContent(/\b(?:POST|GET|UUID|SHA-256)\b|payload digest|request identity/i)
@@ -489,7 +489,7 @@ describe('Staff disbursement workspace', () => {
     const user = userEvent.setup()
     await enterEvidence(user)
     await user.click(screen.getByRole('button', { name: 'Review disbursement confirmation' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm record' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm disbursement' }))
 
     expect(await screen.findByText(/latest case information does not confirm this exact disbursement/i)).toBeVisible()
     expect(screen.getByText(/Support reference: server-correlation/i)).toBeVisible()
@@ -512,7 +512,7 @@ describe('Staff disbursement workspace', () => {
     let user = userEvent.setup()
     await enterEvidence(user)
     await user.click(screen.getByRole('button', { name: 'Review disbursement confirmation' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm record' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm disbursement' }))
     expect(await screen.findByRole('heading', { name: 'Previous confirmation result unknown' })).toBeVisible()
     first.unmount()
 
@@ -550,7 +550,7 @@ describe('Staff disbursement workspace', () => {
     const user = userEvent.setup()
     await enterEvidence(user)
     await user.click(screen.getByRole('button', { name: 'Review disbursement confirmation' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm record' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm disbursement' }))
 
     expect(await screen.findByText(
       /Disbursement confirmed; the latest case information is unavailable/i,

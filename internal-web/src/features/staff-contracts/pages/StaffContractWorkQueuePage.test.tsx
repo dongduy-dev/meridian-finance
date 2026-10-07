@@ -71,7 +71,7 @@ describe('Staff contract work queue', () => {
     renderPage()
 
     expect(await screen.findByText('Readiness blocked')).toBeVisible()
-    expect(screen.getByText('Documents are not processing-ready.')).toBeVisible()
+    expect(screen.getByText('Required document checks are incomplete.')).toBeVisible()
   })
 
   it('renders unknown stage, status, and blocker values neutrally', async () => {

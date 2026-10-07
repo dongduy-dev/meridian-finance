@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatTimestamp } from '@/lib/format/presentation'
+import { knownLabel, formatTimestamp } from '@/lib/format/presentation'
 import type { AssistedActionEvidence } from '../api/contracts'
 import { SignedEvidenceViewer } from './SignedEvidenceViewer'
 
@@ -22,7 +22,7 @@ function EvidenceItem({ loanApplicationId, item }: { loanApplicationId: string; 
   const selected = item.versionHistory.find((version) => version.documentVersionId === selectedId) ?? item.currentVersion
   if (!selected) return null
   return <section className="space-y-3 rounded-md border p-4">
-    <h3 className="font-semibold">{labels[item.evidenceType] ?? 'Evidence type unavailable'}</h3>
+    <h3 className="font-semibold">{knownLabel(labels, item.evidenceType, 'Evidence type unavailable')}</h3>
     {item.declaredOfferDecision ? <p className="text-sm">Customer decision: {item.declaredOfferDecision === 'ACCEPT' ? 'Accepted' : item.declaredOfferDecision === 'DECLINE' ? 'Declined' : 'Decision unavailable'}</p> : null}
     {item.contractVersion ? <p className="text-sm">Contract version {item.contractVersion}</p> : null}
     <label className="grid gap-2 text-sm">Signed evidence version<select className="min-h-11 max-w-full rounded-md border bg-background px-3" value={selected.documentVersionId} onChange={(event) => setSelectedId(event.target.value)}>

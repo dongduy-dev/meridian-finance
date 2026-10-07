@@ -140,7 +140,7 @@ describe('Independent feature authority and optional application context', () =>
     expect(within(header).getByText('Application ID')).toBeVisible()
     expect(within(header).getByText(caseFacts.loanApplicationId)).toBeVisible()
     expect(within(header).getByRole('button', { name: 'Copy application ID' })).toBeVisible()
-    expect(screen.getByRole('link', { name: label, current: 'page' })).toBeVisible()
+    expect(within(screen.getByRole('navigation', { name: 'Application sections' })).getByRole('link', { name: label, current: 'page' })).toBeVisible()
     const expectedReads = route === '/review'
       ? [casePath + route, casePath + '/review-history', casePath + '/verification'] : [casePath + route]
     await waitFor(() => expect(vi.mocked(api.apiRequest).mock.calls.map(([path]) => path).sort())

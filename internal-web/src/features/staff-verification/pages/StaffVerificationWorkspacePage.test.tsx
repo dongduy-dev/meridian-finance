@@ -127,7 +127,7 @@ describe('Staff verification workspace', () => {
     const user = userEvent.setup()
     await user.type(await screen.findByLabelText('Assessment note'), 'Evidence is complete.')
     await user.click(screen.getByRole('button', { name: 'Review verification completion' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+    await user.click(screen.getByRole('button', { name: 'Record verification outcome' }))
 
     expect(await screen.findByText(/verification outcome was confirmed after Meridian refreshed the review/i)).toBeVisible()
     expect(screen.getByText('Evidence is complete.')).toBeVisible()
@@ -157,7 +157,7 @@ describe('Staff verification workspace', () => {
     const user = userEvent.setup()
     await user.type(await screen.findByLabelText('Assessment note'), 'Evidence is complete.')
     await user.click(screen.getByRole('button', { name: 'Review verification completion' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+    await user.click(screen.getByRole('button', { name: 'Record verification outcome' }))
 
     expect(await screen.findByText(
       /could not confirm the result or load the latest verification information/i,
@@ -191,7 +191,7 @@ describe('Staff verification workspace', () => {
     const note = await screen.findByLabelText('Assessment note')
     await user.type(note, 'Retain this assessment.')
     await user.click(screen.getByRole('button', { name: 'Review verification completion' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+    await user.click(screen.getByRole('button', { name: 'Record verification outcome' }))
 
     expect(await screen.findByRole('heading', { name: 'Verification cycle changed' })).toBeVisible()
     expect(note).toHaveValue('Retain this assessment.')

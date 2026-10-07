@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -168,7 +168,7 @@ describe('Staff correction operation recovery', () => {
 
     const identity = await screen.findByRole('heading', { name: 'UCL-20260904-000001', level: 1 })
     await waitFor(() => expect(identity).toHaveFocus())
-    expect(screen.getByRole('link', { name: 'Corrections', current: 'page' })).toHaveAttribute('aria-current', 'page')
+    expect(within(screen.getByRole('navigation', { name: 'Application sections' })).getByRole('link', { name: 'Corrections', current: 'page' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByText('Unsecured Consumer Loan')).toBeVisible()
     await user.upload(
       screen.getByLabelText('Upload proof'),
@@ -234,7 +234,7 @@ describe('Staff correction operation recovery', () => {
       path.endsWith('/resubmit') && (options as RequestInit)?.method === 'POST')
     expect(posts).toHaveLength(1)
     expect((posts[0]![1] as { body: { resubmissionRequestId: string } }).body.resubmissionRequestId).toMatch(/^[0-9a-f-]{36}$/)
-    expect(screen.getByRole('link', { name: 'Corrections', current: 'page' })).toBeVisible()
+    expect(within(screen.getByRole('navigation', { name: 'Application sections' })).getByRole('link', { name: 'Corrections', current: 'page' })).toBeVisible()
   })
 
   it('labels an assisted Customer task and reuses its completion identity on the purpose-specific route', async () => {

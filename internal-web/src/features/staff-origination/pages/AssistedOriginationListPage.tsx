@@ -44,7 +44,7 @@ export function AssistedOriginationListPage() {
     </div>
     {cases.isPending ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading open intake…</p> : null}
     {cases.isError ? <div className="rounded-lg border border-danger/30 p-4"><p role="alert">Open intake could not be loaded.</p><Button className="mt-3" variant="outline" onClick={() => void cases.refetch()}>Retry</Button></div> : null}
-    {cases.data?.length === 0 ? <p className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">No assisted origination cases are open.</p> : null}
+    {!cases.isError && cases.data?.length === 0 ? <p className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">No assisted origination cases are open.</p> : null}
     {cases.data?.length ? <div className="grid gap-3">{cases.data.map((item) => <article key={item.assistedOriginationCaseId} className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold">{item.productCode === 'UNSECURED_CONSUMER_LOAN' ? 'Unsecured Consumer Loan' : 'Collateral Loan'}</h2><p className="text-sm text-muted-foreground">{item.customerId ? 'Customer selected' : 'Customer not selected'} · Updated {new Date(item.updatedAt).toLocaleString()}</p></div><Button asChild variant="outline"><Link to={`/staff/origination/${item.assistedOriginationCaseId}`}>Open intake</Link></Button></article>)}</div> : null}
   </section>
 }

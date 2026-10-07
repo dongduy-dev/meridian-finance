@@ -15,8 +15,8 @@ export type StaffRouteDefinition = {
 
 export const STAFF_HOME_ROUTE = {
   path: '/staff',
-  label: 'Internal operations',
-  documentTitle: 'Internal operations',
+  label: 'Staff Operations',
+  documentTitle: 'Staff Operations',
   requiredPermissions: STAFF_OPERATIONAL_PERMISSIONS,
 } as const satisfies StaffRouteDefinition
 
@@ -45,8 +45,8 @@ export const STAFF_IDENTITY_DETAIL_ROUTE = {
 
 export const STAFF_CUSTOMER_ACCESS_ROUTE = {
   path: '/staff/customer-access',
-  label: 'Customer digital access',
-  documentTitle: 'Customer digital access',
+  label: 'Customer Web access',
+  documentTitle: 'Customer Web access',
   requiredPermissions: ['customer:intake:manage'],
 } as const satisfies StaffRouteDefinition
 
@@ -116,15 +116,15 @@ export const STAFF_REVIEW_CASE_ROUTE = {
 
 export const STAFF_APPROVAL_QUEUE_ROUTE = {
   path: '/staff/work/approvals',
-  label: 'Approval decisions',
-  documentTitle: 'Approval decisions',
+  label: 'Credit decisions',
+  documentTitle: 'Credit decision queue',
   requiredPermissions: ['approval:decide'],
 } as const satisfies StaffRouteDefinition
 
 export const STAFF_DECISION_CASE_ROUTE = {
   path: '/staff/applications/:loanApplicationId/decision',
-  label: 'Independent decision',
-  documentTitle: 'Independent decision',
+  label: 'Credit decision',
+  documentTitle: 'Credit decision',
   requiredPermissions: ['approval:decide'],
 } as const satisfies StaffRouteDefinition
 
@@ -145,7 +145,7 @@ export const STAFF_CONTRACT_CASE_ROUTE = {
 export const STAFF_DISBURSEMENT_QUEUE_ROUTE = {
   path: '/staff/work/disbursements',
   label: 'Disbursements',
-  documentTitle: 'Ready-disbursement queue',
+  documentTitle: 'Disbursement queue',
   requiredPermissions: ['loan:disburse'],
 } as const satisfies StaffRouteDefinition
 

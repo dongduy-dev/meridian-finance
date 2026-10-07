@@ -1,3 +1,4 @@
+import { knownLabel } from '@/lib/format/presentation'
 import type { StaffContractCase } from '../api/contracts'
 
 export const knownContractStatuses = new Set([
@@ -40,19 +41,19 @@ const blockerLabels: Record<string, string> = {
   ACCEPTED_OFFER_MISSING: 'The accepted offer is unavailable.',
   ACCEPTED_OFFER_NOT_ACCEPTED: 'The approved offer has not been accepted.',
   CURRENT_CONTRACT_MISSING: 'No current contract has been prepared.',
-  CONTRACT_VERSION_STALE: 'The displayed contract version is stale.',
+  CONTRACT_VERSION_STALE: 'The displayed contract version is out of date.',
   ACKNOWLEDGMENT_MISSING: 'Customer acknowledgment of this exact version is required.',
   CUSTOMER_INACTIVE: 'The Customer is not active.',
   CAPTURED_ACCOUNT_MISSING: 'The captured destination no longer exists.',
   CAPTURED_ACCOUNT_INACTIVE: 'The captured destination is inactive.',
-  DOCUMENTS_NOT_PROCESSING_READY: 'Documents are not processing-ready.',
+  DOCUMENTS_NOT_PROCESSING_READY: 'Required document checks are incomplete.',
   ACTIVE_CORRECTION_REQUEST: 'An active correction request blocks readiness.',
   UCL_VERIFICATION_INVALID: 'UCL verification is not valid.',
   COLLATERAL_VERIFICATION_INVALID: 'Collateral verification is not valid.',
   SALARY_ADVANCE_RESERVATION_INVALID: 'Salary Advance reservation evidence is invalid.',
   SALARY_ADVANCE_RESERVATION_RELEASED: 'The Salary Advance reservation was released.',
   READINESS_ALREADY_CONFIRMED: 'Readiness was already confirmed.',
-  CONFLICTING_COMPLETED_TRANSITION: 'Completed transition evidence is inconsistent.',
+  CONFLICTING_COMPLETED_TRANSITION: 'The recorded readiness outcome is inconsistent. Refresh and review the contract before taking action.',
 }
 
 const stageLabels: Record<string, string> = {
@@ -67,19 +68,19 @@ const statusLabels: Record<string, string> = {
   PREPARED: 'Prepared',
   ACKNOWLEDGED: 'Acknowledged',
   READY_FOR_DISBURSEMENT: 'Ready for disbursement',
-  SUPERSEDED: 'Superseded',
+  SUPERSEDED: 'Replaced by a newer version',
 }
 
 export function blockerLabel(value: string) {
-  return blockerLabels[value] ?? 'Unknown readiness blocker. Refresh the latest contract information.'
+  return knownLabel(blockerLabels, value, 'Unknown readiness blocker. Refresh the latest contract information.')
 }
 
 export function contractStageLabel(value: string) {
-  return stageLabels[value] ?? 'Work stage unavailable'
+  return knownLabel(stageLabels, value, 'Work stage unavailable')
 }
 
 export function contractStatusLabel(value: string) {
-  return statusLabels[value] ?? 'Status unavailable'
+  return knownLabel(statusLabels, value, 'Status unavailable')
 }
 
 export function hasCoherentContractLifecycle(

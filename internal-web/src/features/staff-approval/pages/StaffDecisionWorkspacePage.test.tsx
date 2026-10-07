@@ -107,8 +107,8 @@ function renderPage(queryClient = createQueryClient()) {
 
 describe('Staff decision workspace', () => {
   it.each([
-    { channel: 'CUSTOMER_DIGITAL', label: 'Customer digital' },
-    { channel: 'STAFF_ASSISTED', label: 'Staff assisted' },
+    { channel: 'CUSTOMER_DIGITAL', label: 'Customer digital origination' },
+    { channel: 'STAFF_ASSISTED', label: 'Staff-assisted origination' },
   ])('shows $channel in the shared header and only Customer business identity to an approval-only actor', async ({ channel, label }) => {
     const customerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     const value = { ...decisionCase(), originationChannel: channel, customer: {
@@ -250,7 +250,7 @@ describe('Staff decision workspace', () => {
         } else {
           expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
         }
-        expect(screen.getByText(applicationStatus === 'APPROVAL_PENDING' ? 'Approval pending' : 'Returned to review')).toBeVisible()
+        expect(screen.getByText(applicationStatus === 'APPROVAL_PENDING' ? 'Awaiting credit decision' : 'Returned to review')).toBeVisible()
       }
       renderPage()
       await assertHistory()
@@ -269,7 +269,7 @@ describe('Staff decision workspace', () => {
     const user = userEvent.setup()
     await screen.findByRole('heading', { level: 1, name: 'UCL-1' })
     expect(screen.getByText('APPLICATION CASE')).toBeVisible()
-    expect(screen.getByRole('heading', { level: 2, name: 'Independent decision' })).toBeVisible()
+    expect(screen.getByRole('heading', { level: 2, name: 'Credit decision' })).toBeVisible()
     expect(screen.getByText('Cycle 1')).toBeVisible()
     expect(screen.queryByText(cycleId)).not.toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Application sections' })).toBeVisible()
@@ -317,7 +317,7 @@ describe('Staff decision workspace', () => {
     const user = userEvent.setup()
     if (selectedAction !== 'APPROVE') {
       await user.click(await screen.findByLabelText(
-        selectedAction === 'REJECT' ? 'Reject'
+        selectedAction === 'REJECT' ? 'Reject application'
           : selectedAction === 'RETURN_TO_LOAN_OFFICER_REVIEW' ? 'Return to Loan Officer review'
             : 'Request Customer and Staff correction',
       ))
@@ -333,7 +333,7 @@ describe('Staff decision workspace', () => {
       await user.type(screen.getByLabelText('Staff instruction'), 'Review the replacement.')
     }
     await user.click(await screen.findByRole('button', { name: 'Review decision' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+    await user.click(screen.getByRole('button', { name: selectedAction === 'APPROVE' ? 'Approve application' : selectedAction === 'REJECT' ? 'Reject application' : selectedAction === 'RETURN_TO_LOAN_OFFICER_REVIEW' ? 'Return to Loan Officer review' : 'Request Customer and Staff correction' }))
 
     await screen.findByRole('heading', { name: 'Decision evidence changed' })
     await waitFor(() => expect(screen.getByRole('heading', { name: /Decision result for UCL-1/i })).toHaveFocus())
@@ -375,7 +375,7 @@ describe('Staff decision workspace', () => {
     const user = userEvent.setup()
     await user.type(await screen.findByLabelText('Internal credit note'), 'preserve this decision draft')
     await user.click(screen.getByRole('button', { name: 'Review decision' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+    await user.click(screen.getByRole('button', { name: 'Approve application' }))
 
     expect(await screen.findByRole('heading', { name: 'Decision evidence changed' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
@@ -405,7 +405,7 @@ describe('Staff decision workspace', () => {
     renderPage(queryClient)
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review decision' }, { timeout: 5_000 }))
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+    await user.click(screen.getByRole('button', { name: 'Approve application' }))
 
     expect(await screen.findByText(/decision result is not confirmed/i, undefined, { timeout: 3_000 })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
@@ -441,7 +441,7 @@ describe('Staff decision workspace', () => {
     await user.click(await screen.findByLabelText('Return to Loan Officer review'))
     await user.type(screen.getByLabelText('Decision reason'), 'Review the case again.')
     await user.click(screen.getByRole('button', { name: 'Review decision' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+    await user.click(screen.getByRole('button', { name: 'Return to Loan Officer review' }))
 
     expect(await screen.findByText(/decision result is not confirmed/i, undefined, { timeout: 3_000 })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review decision' })).not.toBeInTheDocument()
@@ -473,7 +473,7 @@ describe('Staff decision workspace', () => {
     renderPage()
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review decision' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+    await user.click(screen.getByRole('button', { name: 'Approve application' }))
 
     expect(await screen.findByText(
       /Decision recorded; updated details could not be loaded/i,
@@ -512,7 +512,7 @@ describe('Staff decision workspace', () => {
 
     const recommendation = await screen.findByRole('heading', { name: 'Loan Officer recommendation' })
     const readiness = screen.getByRole('heading', { name: 'Decision readiness' })
-    const decision = screen.getByRole('heading', { name: 'Record independent decision' })
+    const decision = screen.getByRole('heading', { name: 'Record credit decision' })
     expect(recommendation.compareDocumentPosition(readiness) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
     expect(readiness.compareDocumentPosition(decision) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
   })

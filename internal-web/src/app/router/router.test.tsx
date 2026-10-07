@@ -46,7 +46,7 @@ describe('internal router access contract', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it.each([
-    { path: '/staff', response: staff(), heading: 'Internal operations' },
+    { path: '/staff', response: staff(), heading: 'Staff Operations' },
     { path: '/admin', response: admin(), heading: 'Back-Office Administration' },
   ])('anchors the $path brand and navigation in the desktop sidebar', async ({ path, response, heading }) => {
     vi.mocked(authApi.refresh).mockResolvedValue(response)
@@ -57,7 +57,7 @@ describe('internal router access contract', () => {
     expect(sidebar).toHaveClass('lg:sticky', 'lg:h-screen')
     expect(within(sidebar).getByRole('img', { name: 'Meridian' }))
       .toHaveAttribute('src', wordmarkLogo)
-    const workspaceHeader = screen.getByText('Internal workspace').closest('header')
+    const workspaceHeader = screen.getByRole('banner')
     expect(sidebar).not.toContainElement(workspaceHeader)
     expect(within(workspaceHeader!).getByRole('img', { name: 'Meridian' }))
       .toHaveAttribute('src', markLogo)
@@ -94,7 +94,7 @@ describe('internal router access contract', () => {
   it('redirects authenticated Staff away from login to the permitted Staff destination', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff())
     const router = renderRoute('/login')
-    expect(await screen.findByRole('heading', { name: 'Internal operations' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Staff Operations' })).toBeVisible()
     expect(router.state.location.pathname).toBe('/staff')
   })
 
@@ -108,18 +108,18 @@ describe('internal router access contract', () => {
   it('preserves /staff as the root default for a Staff-operational actor', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff())
     const router = renderRoute('/')
-    expect(await screen.findByRole('heading', { name: 'Internal operations' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Staff Operations' })).toBeVisible()
     expect(router.state.location.pathname).toBe('/staff')
   })
 
   it('renders the Staff foundation and metadata-derived navigation for an exact supported capability', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff(['document:review']))
     renderRoute('/staff')
-    expect(await screen.findByRole('heading', { name: 'Internal operations' })).toBeVisible()
-    expect(screen.getByRole('link', { name: 'Internal operations' })).toHaveAttribute('href', '/staff')
+    expect(await screen.findByRole('heading', { name: 'Staff Operations' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Staff Operations' })).toHaveAttribute('href', '/staff')
     expect(screen.getByText('Welcome back')).toBeVisible()
-    expect(screen.getByText('Manage lending applications from origination and review through approval, disbursement, and servicing.')).toBeVisible()
-    expect(screen.getByText('Continue with applications, document review, approvals, contracts, disbursements, and account servicing.')).toBeVisible()
+    expect(screen.getByText('Manage lending applications from origination and credit review through disbursement and account servicing.')).toBeVisible()
+    expect(screen.getByText('Review the evidence, confirm the next lending step, and record each outcome within your role.')).toBeVisible()
     expect(screen.queryByText(/available to (you|your account|your Staff account)|use the navigation/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/loan:read|invented dashboard counts|explicit capabilities/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Back-Office Administration' })).not.toBeInTheDocument()
@@ -134,8 +134,8 @@ describe('internal router access contract', () => {
     expect(screen.getByRole('navigation', { name: 'Administration navigation' })).toBeVisible()
     expect(screen.queryByRole('navigation', { name: 'Staff navigation' })).not.toBeInTheDocument()
     expect(screen.getByText('Welcome back')).toBeVisible()
-    expect(screen.getByText("Manage lending products, Partner operations, Staff access, and day-to-day administration for Meridian's lending operations.")).toBeVisible()
-    expect(screen.getByText('Continue with product administration, Partner operations, or Staff access management.')).toBeVisible()
+    expect(screen.getByText("Maintain Partner records and employee eligibility, manage lending products, and administer Staff access.")).toBeVisible()
+    expect(screen.getByText('Keep Partner information, product availability, and Staff role assignments up to date.')).toBeVisible()
     expect(screen.queryByText(/available to (you|your account)|use the navigation/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/preload|exact Back-Office capability|route guard/i)).not.toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
@@ -277,9 +277,9 @@ describe('internal router access contract', () => {
   it.each([
     ['/staff/work/documents', ['document:review'], 'Document review'],
     ['/staff/work/corrections', ['loan:correction:staff'], 'Staff corrections'],
-    ['/staff/work/approvals', ['approval:decide'], 'Independent decision queue'],
+    ['/staff/work/approvals', ['approval:decide'], 'Credit decision queue'],
     ['/staff/work/contracts', ['loan:contract:read'], 'Contract and readiness queue'],
-    ['/staff/work/disbursements', ['loan:disburse'], 'Ready-disbursement queue'],
+    ['/staff/work/disbursements', ['loan:disburse'], 'Disbursement queue'],
     ['/staff/work/servicing', ['loan:read'], 'Loan account servicing queue'],
   ] as const)('allows %s only through its exact capability', async (path, permissions, heading) => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff([...permissions]))
@@ -305,7 +305,7 @@ describe('internal router access contract', () => {
     vi.mocked(authApi.refresh).mockResolvedValue(staff(['approval:decide']))
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 500 })))
     renderRoute('/staff/applications/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/decision')
-    expect(await screen.findByRole('heading', { name: 'Loading independent decision' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Loading credit decision' })).toBeVisible()
   })
 
   it('protects the contract workspace with exact loan:contract:read', async () => {

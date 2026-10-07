@@ -313,10 +313,10 @@ describe('Partner administration pages', () => {
     await user.type(screen.getByLabelText('Salary Advance limit'), '4000000')
     await user.click(screen.getByRole('button', { name: 'Import employees' }))
 
-    expect(await screen.findByText('Snapshot was not replaced')).toBeVisible()
+    expect(await screen.findByText('Employee roster was not replaced')).toBeVisible()
     expect(screen.getByText(/No employee rows were imported/)).toBeVisible()
-    expect(screen.queryByText('Employee snapshot import completed.')).not.toBeInTheDocument()
-    expect(screen.getByText(/Row 2: Salary amount must be nonnegative/)).toBeVisible()
+    expect(screen.queryByText('Employee import completed.')).not.toBeInTheDocument()
+    expect(screen.getByText(/Row 2: Salary must be a nonnegative amount/)).toBeVisible()
     await waitFor(() => {
       expect(employeeReads).toBeGreaterThan(1)
       expect(historyReads).toBeGreaterThan(1)
@@ -375,14 +375,14 @@ describe('Partner administration pages', () => {
 
     expect(await screen.findByText('Selected file: partner-employees.csv')).toBeVisible()
     expect(screen.getByText('Total data rows').nextElementSibling).toHaveTextContent('1')
-    expect(screen.getByText('Client-valid rows').nextElementSibling).toHaveTextContent('1')
-    expect(screen.getByText('Client-problem rows').nextElementSibling).toHaveTextContent('0')
+    expect(screen.getByText('Rows ready for import').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('Rows requiring correction').nextElementSibling).toHaveTextContent('0')
     expect(screen.getByRole('table', { name: 'Partner Employee CSV preview' })).toHaveTextContent('EMP-NEW')
     expect(storedBrowserText()).not.toContain('EMP-NEW')
     expect(storedBrowserText()).not.toContain('ID-NEW')
 
     await user.click(screen.getByRole('button', { name: 'Import CSV rows' }))
-    await screen.findByText('Employee snapshot import completed.')
+    await screen.findByText('Employee import completed.')
     expect(submitted).toEqual({
       requestId: expect.any(String),
       effectiveMonth: '2026-09',
@@ -407,7 +407,7 @@ describe('Partner administration pages', () => {
     ))
 
     expect(await screen.findByText('Data row 1 — Salary amount must be a nonnegative number.')).toBeVisible()
-    expect(screen.getByText('Client-problem rows').nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('Rows requiring correction').nextElementSibling).toHaveTextContent('1')
     expect(screen.getByRole('table', { name: 'Partner Employee CSV preview' })).toHaveTextContent('Problem')
     expect(screen.getByRole('button', { name: 'Import CSV rows' })).toBeDisabled()
     expect(vi.mocked(api.apiRequest).mock.calls.every(([, options]) => (options as RequestInit | undefined)?.method !== 'POST')).toBe(true)
@@ -449,7 +449,7 @@ describe('Partner administration pages', () => {
     expect(screen.queryByRole('button', { name: 'Discard and start a new import' })).not.toBeInTheDocument()
     expect(screen.getByText(/leaving or reloading does not mean the import failed/i)).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Retry this import' }))
-    expect(await screen.findByText('Employee snapshot import completed.')).toBeVisible()
+    expect(await screen.findByText('Employee import completed.')).toBeVisible()
     await waitFor(() => expect(submitted).toHaveLength(2))
     expect(submitted[1]).toEqual(submitted[0])
     expect(submitted[0]).toMatchObject({ requestId: '44444444-4444-4444-8444-444444444444', effectiveMonth: '2026-09' })
@@ -513,7 +513,7 @@ describe('Partner administration pages', () => {
     expect(await screen.findByText('Showing the first 25 of 30 rows. The full parsed batch will be submitted.')).toBeVisible()
     expect(screen.getByRole('table', { name: 'Partner Employee CSV preview' }).querySelectorAll('tbody tr')).toHaveLength(25)
     await user.click(screen.getByRole('button', { name: 'Import CSV rows' }))
-    await screen.findByText('Employee snapshot import completed.')
+    await screen.findByText('Employee import completed.')
     expect(submittedRows).toHaveLength(30)
     expect(submittedRows[0]).toMatchObject({ employeeCode: 'EMP-001' })
     expect(submittedRows[29]).toMatchObject({ employeeCode: 'EMP-030' })

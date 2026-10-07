@@ -1,6 +1,7 @@
 import { LogOut, Menu, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, matchPath, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { navigationContextPath } from '@/app/router/navigation-context'
 import { ADMIN_HOME_ROUTE, permittedAdminRoutes } from '@/app/router/admin-route-metadata'
 import { permittedStaffRoutes } from '@/app/router/staff-route-metadata'
 import { MeridianLogo } from '@/components/common/MeridianLogo'
@@ -28,16 +29,23 @@ function FeatureNavigation({
   routes: readonly NavigationRoute[]
   onNavigate?: () => void
 }) {
+  const { pathname } = useLocation()
   if (routes.length === 0) return null
+  const context = navigationContextPath(pathname)
+  const selectedPath = routes.find((route) => matchPath({ path: route.path, end: true }, context))?.path
+    ?? routes.filter((route) => route.path !== '/staff' && route.path !== '/admin')
+      .find((route) => matchPath({ path: `${route.path}/*`, end: true }, context))?.path
+    ?? routes.filter((route) => route.path !== '/staff' && route.path !== '/admin')
+      .find((route) => matchPath({ path: `${route.path}/*`, end: true }, pathname))?.path
   return (
     <nav aria-label={label} className="px-3">
       {routes.map((route) => (
-        <NavLink key={route.path} to={route.path} end onClick={onNavigate} className={({ isActive }) => cn(
+        <Link key={route.path} to={route.path} aria-current={selectedPath === route.path ? 'page' : undefined} onClick={onNavigate} className={cn(
           'flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium text-primary-foreground/75 hover:bg-white/10 hover:text-white',
-          isActive && 'bg-white/12 text-white',
+          selectedPath === route.path && 'bg-white/12 text-white',
         )}>
           <ShieldCheck aria-hidden="true" className="size-5" /> {route.label}
-        </NavLink>
+        </Link>
       ))}
     </nav>
   )
@@ -54,7 +62,7 @@ function InternalAreaNavigation({ actor, onNavigate }: { actor: StaffActor; onNa
     <nav aria-label="Internal areas" className="px-3 pb-3">
       <p className="px-3 pb-1 text-xs font-semibold tracking-wide text-primary-foreground/50 uppercase">Areas</p>
       {areas.map((area) => (
-        <NavLink key={area.path} to={area.path} end onClick={onNavigate} className={({ isActive }) => cn(
+        <NavLink key={area.path} to={area.path} onClick={onNavigate} className={({ isActive }) => cn(
           'flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-primary-foreground/75 hover:bg-white/10 hover:text-white',
           isActive && 'bg-white/12 text-white',
         )}>
@@ -117,7 +125,7 @@ export function InternalShell({ area }: { area: InternalArea }) {
             </Sheet> : null}
             <MeridianLogo variant="mark" className="size-8 shrink-0" />
           </div>
-          <p className="hidden text-sm font-medium lg:block">Internal workspace</p>
+          <p className="hidden text-sm font-medium lg:block">{area === 'staff' ? 'Staff Operations' : 'Back-Office Administration'}</p>
           <p className="min-w-0 max-w-48 truncate text-sm text-muted-foreground lg:max-w-xs">{state.actor.email}</p>
         </header>
         <main id="main-content" className="min-w-0 overflow-x-hidden p-4 sm:p-6 lg:p-8"><Outlet /></main>

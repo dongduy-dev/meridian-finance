@@ -1,3 +1,5 @@
+import { ocrFailureLabel, ocrStateLabel } from '../model/ocr-presentation'
+import { operatorErrorMessage } from '@/lib/api/operator-error-message'
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -17,7 +19,7 @@ const commonFields = [
   ['employmentStatus', 'Employment status'], ['employerName', 'Employer name'],
   ['bankCode', 'Bank code'], ['bankNameSnapshot', 'Bank name'],
   ['accountHolderName', 'Account holder name'], ['accountNumber', 'Account number'],
-  ['requestedAmount', 'Requested amount'], ['requestedTermMonths', 'Requested term months'],
+  ['requestedAmount', 'Requested amount'], ['requestedTermMonths', 'Requested term (months)'],
 ] as const
 const collateralFields = [
   ['collateral.type', 'Collateral type'], ['collateral.description', 'Collateral description'],
@@ -93,7 +95,7 @@ export function IntakeOcrReviewPanel({
       setMessage('OCR review completed.')
     } catch (caught) {
       if (!(caught instanceof NetworkError)) {
-        setMessage(caught instanceof ApiError ? caught.message : 'OCR review could not be completed.')
+        setMessage(operatorErrorMessage(caught, 'The OCR review was not confirmed. Refresh and review the extracted fields before trying again.'))
         return
       }
       try {
@@ -114,8 +116,8 @@ export function IntakeOcrReviewPanel({
   if (status.isPending) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Checking OCR status…</p>
   if (noJob) return <div className="space-y-2"><Button type="button" variant="outline" disabled={!intakeOpen || start.isPending} onClick={() => start.mutate()}>{start.isPending ? 'Starting extraction…' : 'Extract fields'}</Button>{start.isError ? <p role="alert" className="text-sm">Field extraction could not be started. Manual intake remains available.</p> : null}</div>
   if (status.isError) return <div><p role="alert" className="text-sm">OCR status is unavailable.</p><Button type="button" size="sm" variant="outline" onClick={() => void status.refetch()}>Retry OCR status</Button></div>
-  if (active) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Field extraction {status.data?.state.toLowerCase()}…</p>
-  if (status.data?.state === 'FAILED') return <div className="space-y-2"><p role="alert" className="text-sm">OCR failed: {status.data.failureCategory ?? 'controlled processing failure'}.</p><p className="text-sm text-muted-foreground">Continue the manual intake workflow; OCR is optional.</p></div>
+  if (active) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> {ocrStateLabel(status.data!.state)}…</p>
+  if (status.data?.state === 'FAILED') return <div className="space-y-2"><p role="alert" className="text-sm">{ocrFailureLabel(status.data.failureCategory)}</p><p className="text-sm text-muted-foreground">Continue the manual intake workflow; OCR is optional.</p></div>
   if (!completed) return null
   if (review.isPending) return <p className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading OCR suggestions…</p>
   if (review.isError || !review.data) return <div><p role="alert" className="text-sm">OCR suggestions could not be loaded.</p><Button type="button" size="sm" variant="outline" onClick={() => void review.refetch()}>Retry suggestions</Button></div>

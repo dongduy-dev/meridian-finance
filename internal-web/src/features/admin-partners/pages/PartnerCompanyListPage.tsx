@@ -1,3 +1,4 @@
+import { knownLabel } from '@/lib/format/presentation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -18,7 +19,7 @@ import { partnerAdminKeys, partnerCompaniesQuery } from '../api/queries'
 import { PartnerQueryErrorPanel } from '../components/PartnerQueryErrorPanel'
 
 const statusLabels: Record<string, string> = { ACTIVE: 'Active', INACTIVE: 'Inactive', SUSPENDED: 'Suspended' }
-const statusLabel = (value: string) => statusLabels[value] ?? 'Status unavailable'
+const statusLabel = (value: string) => knownLabel(statusLabels, value, 'Status unavailable')
 
 export function PartnerCompanyListPage() {
   const { manager, state } = useAuth()
@@ -65,7 +66,7 @@ export function PartnerCompanyListPage() {
     <Card><CardHeader><CardTitle>Configured companies</CardTitle></CardHeader><CardContent>
       {companies.isPending ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading Partner Companies…</div> : null}
       {companies.isError ? <PartnerQueryErrorPanel error={companies.error} onRetry={() => void companies.refetch()} /> : null}
-      {companies.data?.length === 0 ? <p className="text-sm text-muted-foreground">No Partner Companies are configured.</p> : null}
+      {!companies.isError && companies.data?.length === 0 ? <p className="text-sm text-muted-foreground">No Partner Companies are configured.</p> : null}
       {companies.data?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[42rem] text-left text-sm"><caption className="sr-only">Partner Companies</caption><thead><tr className="border-b"><th className="p-3">Code</th><th className="p-3">Name</th><th className="p-3">Status</th><th className="p-3">Policy limit</th><th className="p-3">Workspace</th></tr></thead><tbody>{companies.data.map((company) => <tr className="border-b" key={company.id}><td className="p-3 font-mono">{company.companyCode}</td><td className="p-3 font-medium">{company.name}</td><td className="p-3">{statusLabel(company.status)}</td><td className="p-3">{formatVnd(company.salaryAdvancePolicyLimit)}</td><td className="p-3"><Button asChild variant="outline"><Link to={`/admin/partners/${company.id}`}>Open</Link></Button></td></tr>)}</tbody></table></div> : null}
     </CardContent></Card>
   </section>

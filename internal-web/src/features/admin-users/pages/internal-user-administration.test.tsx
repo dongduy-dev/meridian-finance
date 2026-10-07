@@ -155,7 +155,7 @@ describe('Internal User administration page', () => {
     const user = userEvent.setup()
     await screen.findByRole('heading', { name: 'Loan Officer Demo' })
     await user.selectOptions(screen.getByLabelText('Target status'), 'SUSPENDED')
-    const trigger = screen.getByRole('button', { name: 'Apply status' })
+    const trigger = screen.getByRole('button', { name: 'Update access status' })
     await user.click(trigger)
     let dialog = screen.getByRole('dialog', { name: 'Confirm User access change' })
     expect(dialog).toHaveTextContent('Loan Officer Demo (loan.officer@meridian.local)')
@@ -168,7 +168,7 @@ describe('Internal User administration page', () => {
 
     await user.click(trigger)
     dialog = screen.getByRole('dialog', { name: 'Confirm User access change' })
-    await user.click(within(dialog).getByRole('button', { name: 'Apply Suspended status' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Update access status' }))
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0)
     const statusCommand = vi.mocked(api.apiRequest).mock.calls.find(([path, options]) =>
       String(path).endsWith('/status') && (options as RequestInit | undefined)?.method === 'PUT')
@@ -189,8 +189,8 @@ describe('Internal User administration page', () => {
     const user = userEvent.setup()
     await screen.findByRole('heading', { name: 'Loan Officer Demo' })
     await user.selectOptions(screen.getByLabelText('Target status'), 'DISABLED')
-    await user.click(screen.getByRole('button', { name: 'Apply status' }))
-    await user.click(within(screen.getByRole('dialog', { name: 'Confirm User access change' })).getByRole('button', { name: 'Apply Disabled status' }))
+    await user.click(screen.getByRole('button', { name: 'Update access status' }))
+    await user.click(within(screen.getByRole('dialog', { name: 'Confirm User access change' })).getByRole('button', { name: 'Update access status' }))
     expect(await screen.findByRole('heading', { name: 'Status was not confirmed' })).toBeVisible()
     expect(screen.getByText(/could not confirm the User status change.*latest information was refreshed/i)).toBeVisible()
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0)
@@ -238,7 +238,7 @@ describe('Internal User administration page', () => {
     const user = userEvent.setup()
     await screen.findByRole('heading', { name: 'Loan Officer Demo' })
     await user.selectOptions(screen.getByLabelText('Target status'), 'ACTIVE')
-    await user.click(screen.getByRole('button', { name: 'Apply status' }))
+    await user.click(screen.getByRole('button', { name: 'Update access status' }))
 
     expect(screen.queryByRole('dialog', { name: 'Confirm User access change' })).not.toBeInTheDocument()
     await waitFor(() => expect(vi.mocked(api.apiRequest).mock.calls.some(([path, options]) =>
@@ -302,8 +302,8 @@ describe('Internal User administration page', () => {
     const user = userEvent.setup()
     await screen.findByRole('heading', { name: 'Loan Officer Demo' })
     await user.selectOptions(screen.getByLabelText('Target status'), 'DISABLED')
-    await user.click(screen.getByRole('button', { name: 'Apply status' }))
-    await user.click(within(screen.getByRole('dialog', { name: 'Confirm User access change' })).getByRole('button', { name: 'Apply Disabled status' }))
+    await user.click(screen.getByRole('button', { name: 'Update access status' }))
+    await user.click(within(screen.getByRole('dialog', { name: 'Confirm User access change' })).getByRole('button', { name: 'Update access status' }))
     expect(await screen.findByRole('heading', { name: 'Staff sign in' })).toBeVisible()
   })
 })

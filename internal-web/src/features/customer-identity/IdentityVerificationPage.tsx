@@ -1,3 +1,4 @@
+import { knownLabel } from '@/lib/format/presentation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
@@ -59,7 +60,7 @@ function IdentityWorkspace({ verificationId }: { verificationId?: string }) {
         setUncertain(false)
         setDecisionError(decisionErrors[error.errorCode] ?? { title: 'Identity review could not be completed', description: 'Check your review authority and the refreshed verification details before trying again.' })
       } else {
-        setUncertain(true); setMessage('The decision was not confirmed. Refresh its authoritative state before acting again.')
+        setUncertain(true); setMessage('The decision was not confirmed. Refresh the verification outcome before acting again.')
       }
     }
     finally { setReference(''); await detail.refetch(); setBusy(false) }
@@ -67,13 +68,13 @@ function IdentityWorkspace({ verificationId }: { verificationId?: string }) {
   const query = verificationId ? detail : queue
   return <section className="mx-auto max-w-5xl space-y-5">
     <h1 data-route-heading tabIndex={-1} className="text-2xl font-semibold">Customer identity verification</h1>
-    <p className="text-muted-foreground">Review exact identity evidence and attest the Customer identity. The stored Identity Reference is never revealed.</p>
+    <p className="text-muted-foreground">Review the submitted identity document and verify the Customer identity. Enter the Identity Reference shown on the document; the stored reference remains protected.</p>
     {query.isPending ? <p role="status">Loading verification…</p> : null}
     {query.isError ? <p role="alert">Verification could not be loaded.</p> : null}
     {message ? <p role="status">{message}</p> : null}
     {decisionError ? <Alert variant="destructive"><AlertTitle>{decisionError.title}</AlertTitle><AlertDescription>{decisionError.description}</AlertDescription></Alert> : null}
     <Button variant="outline" disabled={busy} onClick={() => { setReference(''); void query.refetch().then(result => { if (result.isSuccess && result.fetchStatus === 'idle') setUncertain(false) }) }}>Refresh</Button>
-    {!verificationId && queue.data ? <>
+    {!verificationId && queue.data && !queue.isError ? <>
       {queue.data.length === 0 ? <p>No pending identity verifications.</p> : queue.data.map(row => <article key={row.verificationId} className="rounded-lg border bg-card p-4">
         <h2 className="break-words font-semibold">{row.customerNumber} · {row.fullName}</h2><p className="text-sm">{row.source === 'CUSTOMER_DIGITAL' ? 'Customer digital evidence' : row.source === 'STAFF_ASSISTED_INTAKE' ? 'Staff intake evidence' : 'Source unavailable'} · {row.submittedAt} · {row.status === 'PENDING_REVIEW' ? 'Pending review' : 'Status unavailable'}</p>
         <Button variant="link" asChild><Link to={`/staff/customer-identity-verifications/${row.verificationId}`}>Open verification</Link></Button>
@@ -81,16 +82,16 @@ function IdentityWorkspace({ verificationId }: { verificationId?: string }) {
       <div className="flex gap-3"><Button variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</Button><Button variant="outline" disabled={queue.data.length < 25} onClick={() => setPage(page + 1)}>Next</Button></div>
     </> : null}
     {verificationId && v ? <article className="space-y-4 rounded-lg border bg-card p-5">
-      <Button variant="link" asChild><Link to="/staff/customer-identity-verifications">Pending queue</Link></Button>
+      <Button variant="link" asChild><Link to="/staff/customer-identity-verifications">Back to identity verification</Link></Button>
       <h2 className="break-words text-xl font-semibold">{v.customerNumber} · {v.fullName}</h2>
-      <p>{({ PENDING_REVIEW: 'Pending review', VERIFIED: 'Verified', REJECTED: 'Rejected', SUPERSEDED: 'Superseded' } as Record<string, string>)[v.status] ?? 'Status unavailable'} · Manual Staff document review</p>
-      {v.rejectionReason ? <p>{rejectionReasons[v.rejectionReason] ?? 'Reason unavailable'}</p> : null}
+      <p>{knownLabel({ PENDING_REVIEW: 'Pending review', VERIFIED: 'Verified', REJECTED: 'Rejected', SUPERSEDED: 'Replaced by newer evidence' }, v.status, 'Status unavailable')} · Manual Staff document review</p>
+      {v.rejectionReason ? <p>{knownLabel(rejectionReasons, v.rejectionReason, 'Reason unavailable')}</p> : null}
       {v.evidence ? <><p className="break-words">{v.evidence.filename} · Version {v.evidence.versionNumber} · {v.evidence.mimeType} · {v.evidence.byteSize} bytes</p>
         <DocumentContentViewer manager={manager} identityVerificationId={v.verificationId} filename={v.evidence.filename} buttonLabel="View identity evidence" />
       </> : null}
       {supportedDecision ? <div className="space-y-4">
         <label className="grid gap-2 font-medium">Identity Reference shown on document<Input autoComplete="off" maxLength={100} value={reference} onChange={event => setReference(event.target.value)} disabled={!canDecide} /></label>
-        <p className="text-sm text-muted-foreground">Verify attests that the document supports this Customer identity. Confirm the name and type the reference presented on the exact evidence.</p>
+        <p className="text-sm text-muted-foreground">Confirm that this document supports the Customer identity. Check the name and enter the Identity Reference shown on this document version.</p>
         <Button disabled={!canDecide || !reference.trim()} onClick={() => void decide(true)}>Verify identity</Button>
         <label className="grid gap-2 font-medium">Rejection reason<select value={reason} onChange={event => setReason(event.target.value)} disabled={!canDecide} className="min-h-11 rounded-md border bg-background p-2">{Object.entries(rejectionReasons).map(([code, label]) => <option key={code} value={code}>{label}</option>)}</select></label>
         <Button variant="destructive" disabled={!canDecide} onClick={() => void decide(false)}>Reject evidence</Button>

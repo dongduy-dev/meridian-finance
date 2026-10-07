@@ -28,6 +28,6 @@ export function expectCanonicalApplicationHeader() {
   expect(Array.from(header.querySelectorAll('dt')).map((item) => item.textContent))
     .toEqual(['Requested amount', 'Requested term', 'Submitted', 'Origination channel'])
   expect(Array.from(header.querySelectorAll('dd')).map((item) => item.textContent))
-    .toEqual([formatVnd(applicationWorkspaceCase.requestedAmount), '18 months', formatTimestamp(applicationWorkspaceCase.submittedAt), 'Customer digital'])
+    .toEqual([formatVnd(applicationWorkspaceCase.requestedAmount), '18 months', formatTimestamp(applicationWorkspaceCase.submittedAt), 'Customer digital origination'])
   return header
 }

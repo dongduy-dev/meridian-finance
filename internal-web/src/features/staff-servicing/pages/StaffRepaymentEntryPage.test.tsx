@@ -147,7 +147,7 @@ describe('Staff repayment entry', () => {
     const user = userEvent.setup()
     await enterEvidence(user, ' payment-sensitive-reference-987 ')
     await user.click(screen.getByRole('button', { name: 'Review repayment' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
+    await user.click(screen.getByRole('button', { name: 'Record repayment' }))
 
     expect(await screen.findByText(/The account balance and history cannot confirm this payment/i)).toBeVisible()
     expect(document.body).not.toHaveTextContent(/\b(?:POST|GET|UUID|SHA-256)\b|payload digest|request identity/i)
@@ -184,7 +184,7 @@ describe('Staff repayment entry', () => {
     const user = userEvent.setup()
     await enterEvidence(user, ' payment-sensitive-reference-987 ')
     await user.click(screen.getByRole('button', { name: 'Review repayment' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
+    await user.click(screen.getByRole('button', { name: 'Record repayment' }))
     await screen.findByRole('button', { name: 'Retry this payment' })
     await user.click(screen.getByRole('button', { name: 'Retry this payment' }))
 
@@ -222,7 +222,7 @@ describe('Staff repayment entry', () => {
     const user = userEvent.setup()
     await enterEvidence(user)
     await user.click(screen.getByRole('button', { name: 'Review repayment' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
+    await user.click(screen.getByRole('button', { name: 'Record repayment' }))
 
     expect(await screen.findByText(/The account balance and history cannot confirm this payment/i)).toBeVisible()
     expect(await screen.findByText(/Ordinary repayment is unavailable for this account status/i)).toBeVisible()
@@ -251,7 +251,7 @@ describe('Staff repayment entry', () => {
     const user = userEvent.setup()
     await enterEvidence(user)
     await user.click(screen.getByRole('button', { name: 'Review repayment' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
+    await user.click(screen.getByRole('button', { name: 'Record repayment' }))
     await screen.findByRole('button', { name: 'Retry this payment' })
     first.unmount()
 
@@ -280,7 +280,7 @@ describe('Staff repayment entry', () => {
     const user = userEvent.setup()
     await enterEvidence(user)
     await user.click(screen.getByRole('button', { name: 'Review repayment' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm repayment' }))
+    await user.click(screen.getByRole('button', { name: 'Record repayment' }))
 
     expect(await screen.findByText(
       /Repayment confirmed; the latest account information is unavailable/i,

@@ -133,7 +133,7 @@ export function ApplicationSearchPage() {
           {query.isError ? (
             <Alert variant="warning"><Search aria-hidden="true" /><AlertTitle>Refresh incomplete</AlertTitle><AlertDescription>Previous results are shown. Refresh to check for updates.</AlertDescription></Alert>
           ) : null}
-          {data.items.length === 0 ? (
+          {!query.isError && data.items.length === 0 ? (
             <div className="rounded-lg border bg-card p-8 text-center shadow-soft">
               <Search aria-hidden="true" className="mx-auto size-8 text-muted-foreground" />
               <h2 className="mt-3 text-lg font-semibold">{filtered ? 'No applications match these filters' : 'No applications are available'}</h2>

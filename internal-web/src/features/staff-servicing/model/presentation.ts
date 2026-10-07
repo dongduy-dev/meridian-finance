@@ -1,3 +1,4 @@
+import { knownLabel } from '@/lib/format/presentation'
 import type { LoanAccount } from '../api/contracts'
 
 export const serviceableAccountStatuses = new Set(['ACTIVE', 'OVERDUE'])
@@ -11,7 +12,13 @@ const statusLabels: Record<string, string> = {
 }
 
 export function accountStatusLabel(value: string): string {
-  return statusLabels[value] ?? 'Status unavailable'
+  return knownLabel(statusLabels, value, 'Status unavailable')
+}
+
+const allocationLabels = new Map([['FEE', 'Fee'], ['INTEREST', 'Interest'], ['PRINCIPAL', 'Principal']])
+
+export function allocationComponentLabel(value: string): string {
+  return allocationLabels.get(value) ?? 'Allocation component unavailable'
 }
 
 export function hasCoherentLoanAccount(value: LoanAccount): boolean {

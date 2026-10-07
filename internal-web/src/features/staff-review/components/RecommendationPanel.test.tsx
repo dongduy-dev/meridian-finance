@@ -81,7 +81,7 @@ describe('RecommendationPanel', () => {
         await user.type(screen.getByLabelText('Recommendation reason'), 'Policy reason.')
       }
       await user.click(await screen.findByRole('button', { name: 'Review recommendation' }))
-      await user.click(screen.getByRole('button', { name: 'Confirm' }))
+      await user.click(screen.getByRole('button', { name: selectedAction === 'RECOMMEND_APPROVAL' ? 'Recommend approval' : 'Recommend rejection' }))
 
       await screen.findByText(/recommendation was confirmed for the displayed review cycle/i)
       await waitFor(() => expect(screen.getByRole('heading', { name: `Recommendation result for UCL-1` })).toHaveFocus())
@@ -156,7 +156,7 @@ describe('RecommendationPanel', () => {
     render(<QueryClientProvider client={queryClient}><AuthProvider><RecommendationPanel loanApplicationId={applicationId} /></AuthProvider></QueryClientProvider>)
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review recommendation' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+    await user.click(screen.getByRole('button', { name: 'Recommend approval' }))
 
     expect(await screen.findByText(/recommendation was confirmed for the displayed review cycle/i)).toBeVisible()
     const posts = vi.mocked(api.apiRequest).mock.calls.filter(([path, options]) =>
@@ -182,7 +182,7 @@ describe('RecommendationPanel', () => {
     render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RecommendationPanel loanApplicationId={applicationId} /></AuthProvider></QueryClientProvider>)
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Review recommendation' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+    await user.click(screen.getByRole('button', { name: 'Recommend approval' }))
 
     expect(await screen.findByText(/recommendation result is not confirmed/i, {}, { timeout: 3_000 })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review recommendation' })).not.toBeInTheDocument()
@@ -215,7 +215,7 @@ describe('RecommendationPanel', () => {
     const notes = await screen.findByLabelText('Internal credit note')
     await user.type(notes, 'preserve this draft')
     await user.click(screen.getByRole('button', { name: 'Review recommendation' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+    await user.click(screen.getByRole('button', { name: 'Recommend approval' }))
 
     expect(await screen.findByRole('heading', { name: 'Review evidence changed' })).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Review recommendation' })).not.toBeInTheDocument()

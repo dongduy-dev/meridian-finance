@@ -82,7 +82,7 @@ describe('Partner eligibility review page', () => {
     expect(await screen.findByText('Requested employee code: EMP-001')).toBeVisible()
     expect(await screen.findByRole('heading', { name: 'Current identity-matched candidates' })).toBeVisible()
     expect(screen.getByText('EMP-001', { selector: 'td' })).toBeVisible()
-    expect(screen.queryByRole('button', { name: 'Review approval' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Review employment confirmation' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Review rejection' })).not.toBeInTheDocument()
     expect(JSON.stringify([...vi.mocked(api.apiRequest).mock.calls])).not.toContain('IDENTITY-SECRET')
   })
@@ -127,14 +127,14 @@ describe('Partner eligibility review page', () => {
 
     const firstCandidate = await screen.findByRole('radio', { name: 'Select EMP-001' })
     expect(firstCandidate).not.toBeChecked()
-    expect(screen.getByRole('button', { name: 'Review approval' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Review employment confirmation' })).toBeDisabled()
     await user.click(firstCandidate)
-    expect(screen.getByRole('button', { name: 'Review approval' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Review employment confirmation' })).toBeEnabled()
 
     await user.click(screen.getByRole('button', { name: /Beta Ltd/ }))
     const secondCandidate = await screen.findByRole('radio', { name: 'Select EMP-002' })
     expect(secondCandidate).not.toBeChecked()
-    expect(screen.getByRole('button', { name: 'Review approval' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Review employment confirmation' })).toBeDisabled()
   })
 
   it('disables manager decisions when the backend marks the review stale', async () => {
@@ -145,8 +145,8 @@ describe('Partner eligibility review page', () => {
     })
     renderPage()
 
-    expect(await screen.findByText(/Ask the Customer to verify employment again against the current snapshot/)).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Review approval' })).toBeDisabled()
+    expect(await screen.findByText(/Ask the Customer to verify employment again using the current roster/)).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Review employment confirmation' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Review rejection' })).toBeDisabled()
   })
 
@@ -163,10 +163,10 @@ describe('Partner eligibility review page', () => {
     renderPage()
     const user = userEvent.setup()
     await user.click(await screen.findByRole('radio', { name: 'Select EMP-001' }))
-    const trigger = screen.getByRole('button', { name: 'Review approval' })
+    const trigger = screen.getByRole('button', { name: 'Review employment confirmation' })
     await user.click(trigger)
 
-    const approvalDialog = screen.getByRole('dialog', { name: 'Confirm employment approval' })
+    const approvalDialog = screen.getByRole('dialog', { name: 'Confirm employment verification' })
     expect(approvalDialog).toBeVisible()
     expect(within(approvalDialog).getByText('Acme Ltd (ACME)')).toBeVisible()
     expect(within(approvalDialog).getByText('EMP-001', { selector: 'dd' })).toBeVisible()
@@ -179,7 +179,7 @@ describe('Partner eligibility review page', () => {
     expect(vi.mocked(api.apiRequest).mock.calls.some(([, options]) => (options as RequestInit | undefined)?.method === 'POST')).toBe(false)
 
     await user.click(trigger)
-    await user.click(screen.getByRole('button', { name: 'Confirm approval' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm employment' }))
 
     await screen.findByText('Your decision was confirmed.')
     expect(detailReads).toBeGreaterThan(1)
@@ -257,8 +257,8 @@ describe('Partner eligibility review page', () => {
     renderPage()
     const user = userEvent.setup()
     await user.click(await screen.findByRole('radio', { name: 'Select EMP-001' }))
-    await user.click(screen.getByRole('button', { name: 'Review approval' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm approval' }))
+    await user.click(screen.getByRole('button', { name: 'Review employment confirmation' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm employment' }))
 
     expect(await screen.findByText('Your decision was confirmed after Meridian refreshed the review.')).toBeVisible()
     expect(posts).toBe(1)
@@ -283,12 +283,12 @@ describe('Partner eligibility review page', () => {
     renderPage()
     const user = userEvent.setup()
     await user.click(await screen.findByRole('radio', { name: 'Select EMP-001' }))
-    await user.click(screen.getByRole('button', { name: 'Review approval' }))
-    await user.click(screen.getByRole('button', { name: 'Confirm approval' }))
+    await user.click(screen.getByRole('button', { name: 'Review employment confirmation' }))
+    await user.click(screen.getByRole('button', { name: 'Confirm employment' }))
 
     expect(await screen.findByText(/decision was not confirmed.*review is still pending/i)).toBeVisible()
     expect(await screen.findByRole('radio', { name: 'Select EMP-002' })).not.toBeChecked()
-    expect(screen.getByRole('button', { name: 'Review approval' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Review employment confirmation' })).toBeDisabled()
     expect(posts).toBe(1)
   })
 
@@ -345,7 +345,7 @@ describe('Partner eligibility review page', () => {
 
     expect(await screen.findByText('Verification result unavailable')).toBeVisible()
     expect(screen.queryByText('Future Trigger')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Review approval' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Review employment confirmation' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Review rejection' })).not.toBeInTheDocument()
   })
 })

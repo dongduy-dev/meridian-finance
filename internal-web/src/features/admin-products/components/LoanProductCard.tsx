@@ -1,3 +1,4 @@
+import { operatorErrorMessage } from '@/lib/api/operator-error-message'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -7,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import { ApiError, NetworkError } from '@/lib/api'
-import { formatVnd } from '@/lib/format/presentation'
+import { knownLabel, formatVnd } from '@/lib/format/presentation'
 import { changeProductActivation as submitProductActivation, updateProductLimits } from '../api/admin-products-api'
 import {
   updateProductLimitsInputSchema,
@@ -30,7 +31,7 @@ const knownProductTypes: Readonly<Record<string, string>> = {
 type LimitFields = { minAmount: number; maxAmount: number }
 
 function commandMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.message
+  if (error instanceof ApiError) return operatorErrorMessage(error, 'The product change was not confirmed. Refresh and review the latest product information before trying again.')
   if (error instanceof NetworkError) return 'Meridian could not confirm the product change. Refresh the latest product information before retrying the same change.'
   return 'The product change was not confirmed. Refresh the latest product information before trying again.'
 }
@@ -97,7 +98,7 @@ export function LoanProductCard({ product, manager }: {
   }
 
   const name = knownProductCodes.has(product.productCode) ? product.name : 'Unknown product'
-  const type = knownProductTypes[product.productType] ?? 'Unknown type'
+  const type = knownLabel(knownProductTypes, product.productType, 'Product type unavailable')
   const minError = form.formState.errors.minAmount?.message
   const maxError = form.formState.errors.maxAmount?.message
 
@@ -115,7 +116,7 @@ export function LoanProductCard({ product, manager }: {
     </CardHeader>
     <CardContent className="space-y-6">
       <dl className="grid gap-3 text-sm sm:grid-cols-2">
-        <div><dt className="font-medium text-muted-foreground">Product type</dt><dd>{type} <span className="font-mono text-xs">({product.productType})</span></dd></div>
+        <div><dt className="font-medium text-muted-foreground">Product type</dt><dd>{type}</dd></div>
         <div><dt className="font-medium text-muted-foreground">Configured range</dt><dd>{formatVnd(product.minAmount)} – {formatVnd(product.maxAmount)}</dd></div>
       </dl>
       {product.description ? <p className="text-sm leading-6 text-muted-foreground">{product.description}</p> : null}
