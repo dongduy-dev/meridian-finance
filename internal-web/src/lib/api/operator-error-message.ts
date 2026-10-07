@@ -26,15 +26,20 @@ const explanations = new Map<string, string>([
   ['PARTNER_EMPLOYEE_ROWS_REQUIRED', 'Include the complete employee roster for the selected month.'],
 ])
 
+const safeForbiddenExplanations = new Set([
+  'MAKER_CHECKER_VIOLATION',
+  'STAFF_CORRECTION_MAKER_CHECKER_VIOLATION',
+  'LOAN_REVIEW_ASSIGNED_TO_ANOTHER_OFFICER',
+])
+
 export function operatorErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError) || error.status >= 500 || error.status === 408) return fallback
   if (error.status === 401) return 'Your session has ended. Sign in again before continuing.'
   if (error.status === 404) return 'This record is not available in your current workspace.'
-  // These controlled separation-of-duty codes describe the caller's restriction
+  // These controlled duty and review-assignment codes describe the caller's restriction
   // without disclosing another actor or the existence of a concealed resource.
   if (error.status === 403) {
-    if (error.errorCode === 'MAKER_CHECKER_VIOLATION'
-      || error.errorCode === 'STAFF_CORRECTION_MAKER_CHECKER_VIOLATION') return explanations.get(error.errorCode)!
+    if (safeForbiddenExplanations.has(error.errorCode)) return explanations.get(error.errorCode)!
     return 'You do not have access to complete this action. Review your Staff access with an administrator.'
   }
   return explanations.get(error.errorCode) ?? fallback

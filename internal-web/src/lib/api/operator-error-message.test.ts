@@ -25,13 +25,23 @@ describe('operator error presentation', () => {
       expect(operatorErrorMessage(error, fallback)).toBe(fallback)
     })
 
-  it('conceals missing records and generic forbidden reasons', () => {
+  it('conceals missing records', () => {
     expect(operatorErrorMessage(apiError(404, 'CUSTOMER_EXISTS_ELSEWHERE'), fallback)).toBe('This record is not available in your current workspace.')
-    expect(operatorErrorMessage(apiError(403, 'PRIVATE_PERMISSION'), fallback)).toMatch(/do not have access/)
   })
 
-  it('distinguishes credit and correction separation of duties without naming another actor', () => {
-    expect(operatorErrorMessage(apiError(403, 'MAKER_CHECKER_VIOLATION'), fallback)).toMatch(/different authorized Approver/)
-    expect(operatorErrorMessage(apiError(403, 'STAFF_CORRECTION_MAKER_CHECKER_VIOLATION'), fallback)).toMatch(/Another authorized Staff member/)
+  it.each([
+    ['LOAN_REVIEW_ASSIGNED_TO_ANOTHER_OFFICER', 'Only the assigned Loan Officer can continue this review or record its recommendation.'],
+    ['MAKER_CHECKER_VIOLATION', 'A different authorized Approver must complete the credit decision.'],
+    ['STAFF_CORRECTION_MAKER_CHECKER_VIOLATION', 'Another authorized Staff member must complete the Staff tasks in this correction request.'],
+  ])('explains the approved 403 restriction %s without private API prose', (code, message) => {
+    expect(operatorErrorMessage(apiError(403, code), fallback)).toBe(message)
   })
+
+  it.each(['PRIVATE_PERMISSION', 'STALE_DOCUMENT_VERSION', 'EMAIL_ALREADY_REGISTERED'])(
+    'keeps an unapproved 403 code %s generic even when another status has a known explanation', (code) => {
+      expect(operatorErrorMessage(apiError(403, code), fallback)).toBe(
+        'You do not have access to complete this action. Review your Staff access with an administrator.',
+      )
+    },
+  )
 })
