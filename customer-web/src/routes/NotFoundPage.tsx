@@ -9,8 +9,8 @@ export function NotFoundPage() {
   return (
     <main className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-2xl">
-        <MeridianLogo variant="primary" className="mx-auto mb-6 w-36" />
-        <h1 id="page-heading" tabIndex={-1} className="sr-only">
+        <MeridianLogo variant="primary" className="mb-8 w-36" />
+        <h1 id="page-heading" tabIndex={-1} className="type-transactional mb-6">
           Page not found
         </h1>
         <EmptyState

@@ -5,24 +5,24 @@ import type { ButtonHTMLAttributes } from 'react'
 import { cn } from '@/lib/cn'
 
 const buttonVariants = cva(
-  'inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+  'inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-base leading-6 font-semibold whitespace-normal break-words transition-colors disabled:pointer-events-none disabled:border-border disabled:bg-muted disabled:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:size-5 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
         default:
-          'bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover active:bg-primary-active',
+          'bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active',
         secondary:
-          'border border-border bg-card text-card-foreground hover:border-primary/30 hover:bg-selected',
+          'border border-input bg-transparent text-card-foreground hover:bg-selected',
         ghost: 'text-foreground hover:bg-selected',
         destructive:
-          'bg-danger text-white shadow-sm hover:bg-danger/90 active:bg-danger/80',
-        link: 'min-h-0 rounded-none px-0 text-primary underline-offset-4 hover:underline',
+          'bg-danger text-primary-foreground hover:bg-danger/90 active:bg-danger',
+        link: 'min-h-0 rounded-none px-0 text-primary underline underline-offset-4',
       },
       size: {
-        default: 'h-11 px-4',
-        sm: 'h-11 min-h-11 rounded-sm px-3 text-xs',
-        lg: 'h-12 px-6 text-base',
-        icon: 'size-11 p-0',
+        default: 'min-h-11 px-4 py-2',
+        sm: 'min-h-11 px-4 py-2',
+        lg: 'min-h-12 px-4 py-3',
+        icon: 'min-h-11 min-w-11 p-2',
       },
     },
     defaultVariants: {

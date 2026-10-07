@@ -103,12 +103,12 @@ function ActivateAccessContent({ locationKey }: { locationKey: string }) {
 
   return <AuthCard eyebrow="Account activation" title={stage === 'ready' ? 'Set your password' : 'Activate your access'}
     description="Verify your email and set your first password to access your existing Meridian account online."
-    footer={<p className="text-center text-sm text-muted-foreground"><Link className="font-semibold text-primary hover:underline" to="/login">Continue to log in</Link></p>}>
-    <div className="space-y-5">
+    footer={<p className="text-sm leading-5 text-muted-foreground"><Link className="font-semibold text-primary underline underline-offset-4" to="/login">Continue to log in</Link></p>}>
+    <div className="space-y-6">
       {stage === 'verifying' ? <div role="status" aria-live="polite" className="flex items-center gap-3"><Spinner />Verifying your email…</div> : null}
       {stage === 'ready' ? <>
         <SuccessFeedback title="Email verified" description="Set your first password to finish activating online access." />
-        <form className="space-y-5" noValidate onSubmit={onSubmit}>
+        <form className="space-y-6" noValidate onSubmit={onSubmit}>
           <ValidationSummary messages={validationMessages} />
           <FormField htmlFor="password" label="New password" description="Use 12 to 72 characters." error={errors.password?.message}>
             <Input id="password" type="password" autoComplete="new-password" aria-invalid={Boolean(errors.password)}
@@ -120,7 +120,7 @@ function ActivateAccessContent({ locationKey }: { locationKey: string }) {
               aria-describedby={fieldDescriptionIds('confirmPassword', false, Boolean(errors.confirmPassword))}
               {...register('confirmPassword', { validate: (value) => value === getValues('password') || 'Passwords must match.' })} />
           </FormField>
-          <Button type="submit" className="w-full" disabled={isSubmitting}>{isSubmitting ? <Spinner /> : null}{isSubmitting ? 'Setting password…' : 'Set password'}</Button>
+          <Button size="lg" type="submit" className="w-full" disabled={isSubmitting}>{isSubmitting ? <Spinner /> : null}{isSubmitting ? 'Setting password…' : 'Set password'}</Button>
         </form>
       </> : null}
       {stage === 'missing' ? <ErrorFeedback title="Activation information missing" description="This activation link is incomplete. Open the complete link from your invitation." /> : null}
@@ -129,7 +129,7 @@ function ActivateAccessContent({ locationKey }: { locationKey: string }) {
       {verificationRecovery ? <>
         <p className="text-sm text-muted-foreground">If needed, request another verification email and follow its link. Once your email is confirmed, use Forgot password to obtain a fresh password link. Do not register another account.</p>
         <Button asChild variant="secondary" className="w-full"><Link to="/verify-email/pending">Request verification email</Link></Button>
-        <Link className="block text-sm font-semibold text-primary hover:underline" to="/forgot-password">Already verified? Recover password setup</Link>
+        <Link className="block text-sm font-semibold text-primary underline underline-offset-4" to="/forgot-password">Already verified? Recover password setup</Link>
       </> : null}
       {stage === 'setup-invalid' ? <ErrorFeedback title="Password setup link unavailable" description="Your email is verified, but this password setup link is invalid or has expired." /> : null}
       {stage === 'setup-unknown' ? <p className="text-sm text-muted-foreground">We could not confirm whether your password was set. Try signing in with the password you chose, or request a fresh password link. This page will not resend your password.</p> : null}

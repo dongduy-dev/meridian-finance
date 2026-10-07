@@ -18,7 +18,7 @@ export function ErrorFeedback({
       <AlertDescription>
         <p>{description}</p>
         {requestId ? (
-          <p className="mt-2 break-all text-xs">Support reference: {requestId}</p>
+          <p className="mt-2 break-all text-sm">Support reference: {requestId}</p>
         ) : null}
       </AlertDescription>
     </Alert>
@@ -52,7 +52,7 @@ export function RateLimitFeedback({
             ? `You can try again in ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'}.`
             : 'The service is receiving too many requests. Try again shortly.'}
         </p>
-        {requestId ? <p className="mt-2 break-all text-xs">Support reference: {requestId}</p> : null}
+        {requestId ? <p className="mt-2 break-all text-sm">Support reference: {requestId}</p> : null}
       </AlertDescription>
     </Alert>
   )

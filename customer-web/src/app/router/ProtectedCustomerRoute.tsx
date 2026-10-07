@@ -25,16 +25,16 @@ function SessionCheckFailure() {
   return (
     <main className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
       <Card className="w-full max-w-lg">
-        <CardHeader className="items-center text-center">
-          <MeridianLogo variant="primary" className="mx-auto mb-5 w-36" />
-          <h1 id="page-heading" tabIndex={-1} className="text-2xl font-semibold outline-none">
+        <CardHeader className="space-y-2">
+          <MeridianLogo variant="primary" className="mb-6 w-36" />
+          <h1 id="page-heading" tabIndex={-1} className="type-transactional">
             We could not check your session
           </h1>
           <p className="max-w-md text-sm leading-6 text-muted-foreground">
             Meridian has not signed you out. Check your connection and try the secure session check again.
           </p>
         </CardHeader>
-        <CardContent className="space-y-5">
+        <CardContent className="space-y-6">
           {error?.rateLimited ? (
             <RateLimitFeedback remainingSeconds={rateLimit.remainingSeconds} requestId={rateLimit.requestId} />
           ) : (
@@ -45,7 +45,7 @@ function SessionCheckFailure() {
             />
           )}
           <Button
-            className="w-full"
+            size="lg" className="w-full"
             disabled={rateLimit.isActive}
             onClick={() => void manager.retryBootstrap()}
           >
@@ -72,7 +72,7 @@ export function ProtectedCustomerRoute() {
         <div className="flex flex-col items-center gap-4 text-center" role="status" aria-live="polite">
           <MeridianLogo variant="primary" className="w-40" />
           <Spinner className="size-7 text-accent" />
-          <p className="text-sm text-primary-foreground/75">Checking your secure session…</p>
+          <p className="text-sm text-primary-foreground">Checking your secure session…</p>
         </div>
       </main>
     )

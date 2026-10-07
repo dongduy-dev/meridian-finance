@@ -4,28 +4,20 @@ import { MeridianLogo } from '@/components/common/MeridianLogo'
 
 export function AuthLayout() {
   return (
-    <main className="grid min-h-svh bg-background lg:grid-cols-[minmax(22rem,0.9fr)_minmax(32rem,1.1fr)]">
-      <section className="relative hidden overflow-hidden bg-primary p-10 text-primary-foreground lg:flex lg:flex-col lg:justify-between xl:p-14">
-        <div className="absolute top-0 right-0 h-56 w-56 rounded-full bg-accent/10 blur-3xl" aria-hidden="true" />
-        <MeridianLogo variant="expanded" className="relative w-56 xl:w-64" />
-        <div className="relative max-w-md space-y-4 pb-5">
-          <div className="h-1 w-14 rounded-full bg-accent" aria-hidden="true" />
-          <p className="text-3xl leading-tight font-semibold tracking-[-0.025em]">
-            Confidence at every financial step.
-          </p>
-          <p className="text-sm leading-6 text-primary-foreground/72">
+    <main className="min-h-svh bg-background lg:grid lg:grid-cols-[45%_55%]">
+      <section className="auth-brand on-navy flex min-w-0 flex-col justify-between gap-16">
+        <MeridianLogo variant="wordmark" className="w-36 lg:hidden" />
+        <MeridianLogo variant="expanded" className="hidden w-56 lg:block" />
+        <div className="hidden max-w-[60ch] space-y-6 lg:block">
+          <div className="h-0.5 w-12 bg-accent" aria-hidden="true" />
+          <p className="type-editorial">Confidence at every financial step.</p>
+          <p className="type-intro">
             From application to repayment, Meridian brings clarity, control, and thoughtful guidance to every stage.
           </p>
         </div>
       </section>
-
-      <section className="flex min-h-svh items-center justify-center px-4 py-10 sm:px-8 lg:px-12">
-        <div className="w-full max-w-md">
-          <div className="mb-8 flex justify-center lg:hidden">
-            <MeridianLogo variant="primary" className="w-36" />
-          </div>
-          <Outlet />
-        </div>
+      <section className="auth-form-area flex min-w-0 items-center">
+        <div className="auth-form"><Outlet /></div>
       </section>
     </main>
   )

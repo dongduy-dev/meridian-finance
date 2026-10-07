@@ -494,7 +494,7 @@ describe('FE-CP5 product catalogue and details', () => {
   it('focuses the page heading after product navigation', async () => {
     const user = userEvent.setup()
     const router = renderRoute('/products')
-    const salaryCard = (await screen.findByRole('heading', { name: 'Salary Advance' })).closest('[class*="rounded-lg"]') as HTMLElement
+    const salaryCard = (await screen.findByRole('heading', { name: 'Salary Advance' })).closest('[data-slot="card"]') as HTMLElement
     await user.click(within(salaryCard).getByRole('link', { name: 'View product details' }))
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/products/salary-advance'))

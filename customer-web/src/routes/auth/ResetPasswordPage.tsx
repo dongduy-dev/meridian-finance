@@ -72,13 +72,13 @@ function ResetPasswordContent({ locationKey }: { locationKey: string }) {
       title="Choose a new password"
       description="Set a new password for your Meridian account."
       footer={
-        <p className="text-center text-sm text-muted-foreground">
-          <Link className="font-semibold text-primary underline-offset-4 hover:underline" to="/login">Back to log in</Link>
+        <p className="text-sm leading-5 text-muted-foreground">
+          <Link className="font-semibold text-primary underline underline-offset-4" to="/login">Back to log in</Link>
         </p>
       }
     >
       {!token || invalidToken ? (
-        <div className="space-y-5">
+        <div className="space-y-6">
           <ErrorFeedback
             title={!token ? 'Reset link incomplete' : 'Reset link unavailable'}
             description={!token ? 'This password-reset link is incomplete.' : 'This password-reset link is invalid or has expired.'}
@@ -88,7 +88,7 @@ function ResetPasswordContent({ locationKey }: { locationKey: string }) {
           </Button>
         </div>
       ) : (
-        <form className="space-y-5" noValidate onSubmit={onSubmit}>
+        <form className="space-y-6" noValidate onSubmit={onSubmit}>
           <ValidationSummary messages={validationMessages} />
           {serverError ? <ErrorFeedback {...serverError} /> : null}
           <FormField
@@ -118,7 +118,7 @@ function ResetPasswordContent({ locationKey }: { locationKey: string }) {
               })}
             />
           </FormField>
-          <Button className="w-full" type="submit" disabled={isSubmitting}>
+          <Button size="lg" className="w-full" type="submit" disabled={isSubmitting}>
             {isSubmitting ? <Spinner /> : null}
             {isSubmitting ? 'Updating password…' : 'Update password'}
           </Button>

@@ -34,47 +34,47 @@ export function FocusedFlowLayout({
   }, [title])
 
   return (
-    <div className={`min-h-svh bg-background${showsActions ? ' pb-24 sm:pb-28' : ''}`}>
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex min-h-20 max-w-3xl items-center justify-between px-4 sm:px-6">
-          <Link to="/" aria-label="Return to Meridian Home">
-            <MeridianLogo variant="primary" className="w-28" />
+    <div className="focused-flow flex min-h-svh flex-col bg-background">
+      <header className="on-navy">
+        <div className="page-container flow-container flex min-h-16 flex-wrap items-center justify-between gap-4 py-3">
+          <Link to="/" className="flex min-h-11 min-w-11 items-center" aria-label="Return to Meridian Home">
+            <MeridianLogo variant="mark" className="w-8" />
           </Link>
           {showsProgress ? (
-            <p className="text-sm font-medium text-muted-foreground">
+            <p className="text-sm leading-5 font-medium">
               Step {currentStep} of {totalSteps}
             </p>
           ) : null}
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+      <main className="page-container flow-container flex-1 py-8 md:py-12">
         {showsProgress ? (
           <div className="mb-8" aria-label={`Step ${currentStep} of ${totalSteps}`}>
-            <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-              <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
+            <div className="h-1 overflow-hidden bg-muted" aria-hidden="true">
+              <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
             </div>
           </div>
         ) : null}
-        <header className="mb-8 space-y-3">
-          <p className="text-xs font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+        <header className="mb-8 space-y-2 [overflow-wrap:anywhere]">
+          <p className="type-eyebrow text-muted-foreground">
             {eyebrow}
           </p>
           <h1
             id="page-heading"
             tabIndex={-1}
-            className="text-3xl leading-tight font-semibold tracking-[-0.025em] outline-none"
+            className="type-transactional"
           >
             {title}
           </h1>
-          <p className="max-w-2xl leading-6 text-muted-foreground">{description}</p>
+          <p className="max-w-[70ch] leading-6 text-muted-foreground">{description}</p>
         </header>
         {children}
       </main>
 
       {showsActions ? (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/96 backdrop-blur-sm">
-          <div className="mx-auto flex min-h-20 max-w-3xl items-center justify-between gap-3 px-4 sm:px-6">
+        <div className="focused-actions">
+          <div className="page-container flow-container focused-actions-inner">
             {backAction}
             {continueAction}
           </div>

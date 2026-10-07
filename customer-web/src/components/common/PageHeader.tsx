@@ -8,6 +8,7 @@ export interface PageHeaderProps {
   eyebrow?: string
   actions?: ReactNode
   className?: string
+  headingRole?: 'editorial' | 'browse' | 'transactional'
 }
 
 export function PageHeader({
@@ -16,27 +17,28 @@ export function PageHeader({
   eyebrow,
   actions,
   className,
+  headingRole = 'transactional',
 }: PageHeaderProps) {
   return (
-    <header className={cn('flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between', className)}>
-      <div className="max-w-3xl space-y-2">
+    <header className={cn('flex min-w-0 flex-col gap-6 sm:flex-row sm:items-end sm:justify-between', className)}>
+      <div className="min-w-0 space-y-2 [overflow-wrap:anywhere]">
         {eyebrow ? (
-          <p className="text-xs font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+          <p className="type-eyebrow text-muted-foreground">
             {eyebrow}
           </p>
         ) : null}
         <h1
           id="page-heading"
           tabIndex={-1}
-          className="text-[clamp(1.75rem,4vw,2.25rem)] leading-tight font-semibold tracking-[-0.025em] text-foreground outline-none"
+          className={cn('text-foreground', { 'type-editorial': headingRole === 'editorial', 'type-browse': headingRole === 'browse', 'type-transactional': headingRole === 'transactional' })}
         >
           {title}
         </h1>
         {description ? (
-          <p className="max-w-2xl text-base leading-6 text-muted-foreground">{description}</p>
+          <p className="max-w-[70ch] text-base leading-6 text-muted-foreground">{description}</p>
         ) : null}
       </div>
-      {actions ? <div className="flex shrink-0 flex-wrap gap-3">{actions}</div> : null}
+      {actions ? <div className="flex min-w-0 flex-wrap gap-3">{actions}</div> : null}
     </header>
   )
 }

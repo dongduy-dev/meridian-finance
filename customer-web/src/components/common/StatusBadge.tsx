@@ -22,13 +22,13 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        'inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs leading-5 font-semibold whitespace-normal',
+        'inline-flex max-w-full min-w-0 items-center gap-2 rounded-sm px-3 py-1 text-sm leading-5 font-medium whitespace-normal',
         toneClasses[presentation.tone],
         className,
       )}
     >
-      <Icon aria-hidden="true" className="size-3.5 shrink-0" />
-      <span className="min-w-0 break-words">{presentation.label}</span>
+      <Icon aria-hidden="true" className="size-4 shrink-0" />
+      <span className="min-w-0 [overflow-wrap:anywhere]">{presentation.label}</span>
     </span>
   )
 }

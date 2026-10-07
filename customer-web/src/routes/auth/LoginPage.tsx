@@ -111,15 +111,15 @@ export function LoginPage() {
       title="Welcome back"
       description="Log in to continue securely to Meridian."
       footer={
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-sm leading-5 text-muted-foreground">
           New to Meridian?{' '}
-          <Link className="font-semibold text-primary underline-offset-4 hover:underline" to="/register">
+          <Link className="font-semibold text-primary underline underline-offset-4" to="/register">
             Create an account
           </Link>
         </p>
       }
     >
-      <form className="space-y-5" noValidate onSubmit={onSubmit}>
+      <form className="space-y-6" noValidate onSubmit={onSubmit}>
         {locationState.notice === 'PASSWORD_SETUP_SUCCESS' ? (
           <SuccessFeedback title="Password set" description="Log in with your new password to continue." />
         ) : null}
@@ -158,12 +158,12 @@ export function LoginPage() {
         </FormField>
 
         <div className="flex items-center justify-end">
-          <Link className="text-sm font-semibold text-primary underline-offset-4 hover:underline" to="/forgot-password">
+          <Link className="text-sm font-semibold text-primary underline underline-offset-4" to="/forgot-password">
             Forgot password?
           </Link>
         </div>
 
-        <Button className="w-full" type="submit" disabled={isSubmitting || rateLimit.isActive}>
+        <Button size="lg" className="w-full" type="submit" disabled={isSubmitting || rateLimit.isActive}>
           {isSubmitting ? <Spinner /> : null}
           {isSubmitting ? 'Logging in…' : rateLimit.isActive ? 'Try again shortly' : 'Log in'}
         </Button>
