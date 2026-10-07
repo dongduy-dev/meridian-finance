@@ -17,6 +17,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class DocumentContentControllerTest {
 
     @Test
+    void customerEndpointRejectsStaffEvenWhenBothOwnAndReviewAuthoritiesArePresent() throws Exception {
+        var workflow = org.mockito.Mockito.mock(com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort.class);
+        var checklists = org.mockito.Mockito.mock(com.meridian.platform.document.application.port.out.DocumentChecklistRepository.class);
+        var documents = org.mockito.Mockito.mock(com.meridian.platform.document.application.port.out.DocumentRepository.class);
+        var storage = org.mockito.Mockito.mock(com.meridian.platform.document.application.port.out.DocumentStoragePort.class);
+        var users = org.mockito.Mockito.mock(com.meridian.platform.shared.application.security.CurrentUserProvider.class);
+        org.mockito.Mockito.when(users.currentUser()).thenReturn(new com.meridian.platform.shared.application.security.AuthenticatedUser(
+                UUID.randomUUID(), "staff@meridian.local", "STAFF", null, java.util.Set.of(),
+                java.util.Set.of("document:review", "document:read:own")));
+        var service = new com.meridian.platform.document.application.service.ReadDocumentContentService(workflow, checklists, documents, storage, users);
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new DocumentContentController(service))
+                .setControllerAdvice(new com.meridian.platform.shared.infrastructure.web.GlobalExceptionHandler()).build();
+
+        mvc.perform(get("/api/v1/loan-applications/{applicationId}/documents/{itemId}/versions/{versionId}/content",
+                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()))
+                .andExpect(status().isForbidden());
+        org.mockito.Mockito.verifyNoInteractions(workflow, checklists, documents, storage);
+    }
+
+    @Test
     void returnsAttachmentUsingDetectedMimeAndPrivateNoStoreHeaders() throws Exception {
         ReadDocumentContentUseCase useCase = org.mockito.Mockito.mock(ReadDocumentContentUseCase.class);
         org.mockito.Mockito.when(useCase.read(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> new DocumentContentDto(

@@ -6,7 +6,9 @@ import com.meridian.platform.document.application.dto.UploadIntakeEvidenceComman
 import com.meridian.platform.document.application.port.in.ManageIntakeEvidenceUseCase;
 import com.meridian.platform.document.domain.model.IntakeEvidenceType;
 import com.meridian.platform.shared.domain.exception.ServiceUnavailableException;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,6 +36,15 @@ public class StaffIntakeEvidenceController {
     @GetMapping
     public List<IntakeEvidenceDto> find(@PathVariable UUID caseId) {
         return useCase.findEvidence(caseId);
+    }
+
+    @GetMapping("/{evidenceType}/versions/{versionId}/content")
+    public ResponseEntity<InputStreamResource> readContent(
+            @PathVariable UUID caseId,
+            @PathVariable IntakeEvidenceType evidenceType,
+            @PathVariable UUID versionId
+    ) {
+        return DocumentContentController.response(useCase.readContent(caseId, evidenceType, versionId));
     }
 
     @PostMapping(value = "/{evidenceType}/versions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

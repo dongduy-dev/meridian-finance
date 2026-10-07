@@ -5,9 +5,13 @@ import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import type { SessionState } from '@/features/auth/model/auth-session'
 import type { ApiBinaryResponse } from '@/lib/api'
 import * as documents from '../api/staff-documents-api'
+import * as intake from '@/features/staff-origination/api/staff-origination-api'
+import * as identity from '@/features/customer-identity/api'
 import { DocumentContentViewer } from './DocumentContentViewer'
 
 vi.mock('../api/staff-documents-api', () => ({ getAssistedActionEvidenceContent: vi.fn(), getDocumentContent: vi.fn() }))
+vi.mock('@/features/staff-origination/api/staff-origination-api', () => ({ getIntakeEvidenceContent: vi.fn() }))
+vi.mock('@/features/customer-identity/api', () => ({ identityContent: vi.fn() }))
 const app = '11111111-1111-4111-8111-111111111111'
 const version = '22222222-2222-4222-8222-222222222222'
 const historical = '33333333-3333-4333-8333-333333333333'
@@ -24,10 +28,89 @@ beforeEach(() => {
   manager = { getSnapshot: () => state, subscribe: (listener: () => void) => { notify = listener; return () => {} } } as AuthSessionManager
   vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: createUrl, revokeObjectURL: revokeUrl }))
   vi.mocked(documents.getAssistedActionEvidenceContent).mockResolvedValue(response)
+  vi.mocked(intake.getIntakeEvidenceContent).mockResolvedValue(response)
+  vi.mocked(identity.identityContent).mockResolvedValue(response)
 })
 afterEach(() => vi.unstubAllGlobals())
 
 describe('private exact-version viewer', () => {
+  it('downloads the already authorized bytes with the UTF-8 response filename and revokes on unmount', async () => {
+    vi.mocked(documents.getAssistedActionEvidenceContent).mockResolvedValue({ ...response,
+      contentDisposition: "attachment; filename*=UTF-8''signed%20%C4%91%C6%A1n.pdf" })
+    const view = render(<DocumentContentViewer manager={manager} loanApplicationId={app} evidenceType="CUSTOMER_OFFER_RESPONSE" documentVersionId={historical} filename="Signed Customer action evidence" />)
+    expect(screen.queryByRole('link', { name: 'Download document' })).not.toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'View document' }))
+    const download = screen.getByRole('link', { name: 'Download document' })
+    expect(download).toHaveAttribute('href', 'blob:private-evidence')
+    expect(download).toHaveAttribute('download', 'signed đơn.pdf')
+    download.addEventListener('click', event => event.preventDefault())
+    await userEvent.setup().click(download)
+    expect(createUrl).toHaveBeenCalledOnce()
+    expect(createUrl).toHaveBeenCalledWith(response.blob)
+    expect(documents.getAssistedActionEvidenceContent).toHaveBeenCalledOnce()
+    expect(localStorage.length).toBe(0)
+    expect(sessionStorage.length).toBe(0)
+    view.unmount()
+    expect(revokeUrl).toHaveBeenCalledWith('blob:private-evidence')
+  })
+
+  it.each(['attachment; filename="../unsafe.pdf"', "attachment; filename*=UTF-8''%00unsafe.pdf", "attachment; filename*=UTF-8''%XX"])(
+    'uses the known safe version filename when disposition is unsafe: %s', async contentDisposition => {
+      vi.mocked(documents.getAssistedActionEvidenceContent).mockResolvedValue({ ...response, contentDisposition })
+      render(<DocumentContentViewer manager={manager} loanApplicationId={app} evidenceType="CUSTOMER_OFFER_RESPONSE" documentVersionId={version} filename="known.pdf" />)
+      await userEvent.setup().click(screen.getByRole('button', { name: 'View document' }))
+      expect(screen.getByRole('link', { name: 'Download document' })).toHaveAttribute('download', 'known.pdf')
+    },
+  )
+
+  it('keeps identity content on its purpose-specific path with explicit download', async () => {
+    state = { ...state, status: 'authenticated', actor: { userId: 'staff-one', email: 'staff@meridian.local', roles: ['LOAN_OFFICER'], permissions: ['customer:identity:verify'] } }
+    render(<DocumentContentViewer manager={manager} identityVerificationId={version} filename="identity.png" />)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'View document' }))
+    expect(identity.identityContent).toHaveBeenCalledWith(manager, version)
+    expect(screen.getByRole('link', { name: 'Download document' })).toHaveAttribute('download', 'identity.png')
+    expect(documents.getDocumentContent).not.toHaveBeenCalled()
+  })
+
+  it('reads exact intake evidence and clears content immediately when intake authority is lost', async () => {
+    state = { ...state, status: 'authenticated', actor: { userId: 'staff-one', email: 'staff@meridian.local', roles: ['LOAN_OFFICER'], permissions: ['loan:originate:staff', 'document:upload:intake'] } }
+    render(<DocumentContentViewer manager={manager} intakeCaseId={app} intakeEvidenceType="UCL_PAPER_APPLICATION" documentVersionId={historical} filename="paper.pdf" />)
+    expect(intake.getIntakeEvidenceContent).not.toHaveBeenCalled()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'View document' }))
+    expect(intake.getIntakeEvidenceContent).toHaveBeenCalledWith(manager, app, 'UCL_PAPER_APPLICATION', historical)
+    act(() => { state = { status: 'authenticated', epoch: 2, actor: { userId: 'staff-one', email: 'staff@meridian.local', roles: ['LOAN_OFFICER'], permissions: ['loan:originate:staff'] } }; notify() })
+    expect(revokeUrl).toHaveBeenCalledWith('blob:private-evidence')
+    expect(screen.queryByRole('link', { name: 'Download document' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('does not request intake bytes without exact authority', () => {
+    render(<DocumentContentViewer manager={manager} intakeCaseId={app} intakeEvidenceType="CUSTOMER_IDENTITY" documentVersionId={version} filename="identity.pdf" />)
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(intake.getIntakeEvidenceContent).not.toHaveBeenCalled()
+  })
+
+  it('shows a safe content error and never silently reads a different version', async () => {
+    vi.mocked(documents.getAssistedActionEvidenceContent).mockRejectedValue(new Error('private storage details'))
+    render(<DocumentContentViewer manager={manager} loanApplicationId={app} evidenceType="CUSTOMER_OFFER_RESPONSE" documentVersionId={historical} filename="signed.pdf" />)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'View document' }))
+    expect(screen.getByText('Document content could not be loaded. Refresh the evidence and try again.')).toBeVisible()
+    expect(screen.queryByText('private storage details')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(createUrl).not.toHaveBeenCalled()
+  })
+
+  it('closing a pending read prevents its late response from recreating content', async () => {
+    let resolve!: (value: ApiBinaryResponse) => void
+    vi.mocked(documents.getAssistedActionEvidenceContent).mockReturnValue(new Promise(done => { resolve = done }))
+    render(<DocumentContentViewer manager={manager} loanApplicationId={app} evidenceType="CUSTOMER_OFFER_RESPONSE" documentVersionId={historical} filename="signed.pdf" />)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'View document' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Close viewer' }))
+    await act(async () => resolve(response))
+    expect(createUrl).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'View document' })).toBeVisible()
+  })
+
   it('does not fetch checklist content before explicit view, displays a safe image, and revokes its URL on close', async () => {
     vi.mocked(documents.getDocumentContent).mockResolvedValue({ blob: new Blob(['image'], { type: 'image/png' }), contentType: 'image/png' })
     render(<DocumentContentViewer manager={manager} loanApplicationId={app} checklistItemId="item" documentVersionId={version} filename="proof.png" />)

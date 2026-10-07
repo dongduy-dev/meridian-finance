@@ -1,9 +1,30 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
 import { assistedOriginationSchema, intakeEvidenceSchema, staffCustomerSchema } from './contracts'
-import { uploadEvidence } from './staff-origination-api'
+import { getIntakeEvidenceContent, listEvidence, uploadEvidence } from './staff-origination-api'
 
 describe('Staff-assisted origination contracts', () => {
+  it('reads exact intake bytes on demand through a private binary request', async () => {
+    const response = { blob: new Blob(['private']), contentType: 'application/pdf' }
+    const protectedRequest = vi.fn().mockResolvedValue(response)
+    const manager = { protectedRequest } as unknown as AuthSessionManager
+    expect(await getIntakeEvidenceContent(manager, 'case', 'UCL_PAPER_APPLICATION', 'version')).toBe(response)
+    expect(protectedRequest).toHaveBeenCalledWith('/staff/assisted-originations/case/evidence/UCL_PAPER_APPLICATION/versions/version/content', { responseType: 'blob', cache: 'no-store' })
+  })
+
+  it('rejects foreign-case metadata and inconsistent or storage-bearing version metadata', async () => {
+    const caseId = '11111111-1111-4111-8111-111111111111'
+    const versionId = '33333333-3333-4333-8333-333333333333'
+    const item = { intakeDocumentId: '22222222-2222-4222-8222-222222222222', assistedOriginationCaseId: caseId,
+      evidenceType: 'UCL_PAPER_APPLICATION', currentVersionId: versionId,
+      versions: [{ intakeDocumentVersionId: versionId, versionNumber: 1, originalFilename: 'paper.pdf', detectedMimeType: 'application/pdf', byteSize: 10, uploadedAt: '2026-10-07T10:00:00' }] }
+    expect(intakeEvidenceSchema.safeParse({ ...item, currentVersionId: '44444444-4444-4444-8444-444444444444' }).success).toBe(false)
+    expect(intakeEvidenceSchema.safeParse({ ...item, versions: [...item.versions, ...item.versions] }).success).toBe(false)
+    expect(intakeEvidenceSchema.safeParse({ ...item, versions: [{ ...item.versions[0], storageKey: 'private-key' }] }).success).toBe(false)
+    const protectedRequest = vi.fn().mockResolvedValue([{ ...item, assistedOriginationCaseId: '55555555-5555-4555-8555-555555555555' }])
+    await expect(listEvidence({ protectedRequest } as unknown as AuthSessionManager, caseId)).rejects.toThrow('Intake evidence metadata is inconsistent.')
+  })
+
   it('accepts the controlled intake and evidence vocabulary', () => {
     expect(assistedOriginationSchema.parse({
       assistedOriginationCaseId: '11111111-1111-4111-8111-111111111111',

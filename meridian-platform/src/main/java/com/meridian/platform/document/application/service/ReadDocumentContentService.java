@@ -51,6 +51,10 @@ public class ReadDocumentContentService implements ReadDocumentContentUseCase {
             UUID documentVersionId
     ) {
         AuthenticatedUser user = currentUserProvider.currentUser();
+        if (!"CUSTOMER".equals(user.userType()) || user.optionalCustomerId().isEmpty()
+                || !user.hasPermission("document:read:own")) {
+            throw new AuthorizationException("DOCUMENT_ACCESS_DENIED", "Customer cannot read this document.");
+        }
         var workflow = workflowPort.find(loanApplicationId);
         authorize(user, workflow.customerId());
         return readVersion(loanApplicationId, checklistItemId, documentVersionId);
@@ -100,17 +104,9 @@ public class ReadDocumentContentService implements ReadDocumentContentUseCase {
     }
 
     private void authorize(AuthenticatedUser user, UUID ownerCustomerId) {
-        if (user.optionalCustomerId().isPresent()) {
-            if (!user.hasPermission("document:read:own")
-                    || !ownerCustomerId.equals(user.requireCustomerId())) {
-                throw new AuthorizationException(
-                        "DOCUMENT_ACCESS_DENIED", "Customer cannot read this document.");
-            }
-            return;
-        }
-        if (!user.hasPermission("document:review")) {
+        if (!ownerCustomerId.equals(user.requireCustomerId())) {
             throw new AuthorizationException(
-                    "DOCUMENT_ACCESS_DENIED", "Document review permission is required.");
+                    "DOCUMENT_ACCESS_DENIED", "Customer cannot read this document.");
         }
     }
 }

@@ -2,7 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestRouter } from '@/app/router/router'
 import type { AuthResponse } from '@/features/auth/api/auth-api'
 import * as authApi from '@/features/auth/api/auth-api'
@@ -103,11 +103,85 @@ function renderRoute(path: string) {
 function requestPath(call: unknown[]): string { return String(call[0]) }
 
 describe('assisted origination pages', () => {
+  afterEach(() => vi.unstubAllGlobals())
   beforeEach(() => {
     vi.clearAllMocks()
     sessionStorage.clear()
     localStorage.clear()
     vi.mocked(authApi.refresh).mockResolvedValue(staff())
+  })
+
+  it('opens current and historical paper evidence while OCR and replacement stay bound to current', async () => {
+    const historicalId = '88888888-8888-4888-8888-888888888888'
+    const versions = [{ ...evidence[0], versions: [
+      { ...evidence[0]!.versions[0]!, intakeDocumentVersionId: historicalId, originalFilename: 'historical.pdf' },
+      { ...evidence[0]!.versions[0]!, versionNumber: 2 },
+    ] }]
+    const createUrl = vi.fn(() => 'blob:paper')
+    const revokeUrl = vi.fn()
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: createUrl, revokeObjectURL: revokeUrl }))
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return customer
+      if (path.endsWith('/content')) return { blob: new Blob(['paper bytes']), contentType: 'application/pdf' }
+      if (path.endsWith('/evidence')) return versions
+      if (options?.method === 'POST' && path.endsWith('/versions')) return uploadedVersion
+      return []
+    })
+    const { client } = renderRoute(`/staff/origination/${caseId}`)
+    const user = userEvent.setup()
+    const select = await screen.findByRole('combobox', { name: 'Signed paper application version' })
+    expect(select).toHaveValue(versionId)
+    expect(screen.getByRole('option', { name: 'Version 1 · Historical' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Version 2 · Current' })).toBeInTheDocument()
+    expect(vi.mocked(api.apiRequest).mock.calls.filter(call => requestPath(call).endsWith('/content'))).toHaveLength(0)
+    await user.click(screen.getByRole('button', { name: 'View document' }))
+    expect(api.apiRequest).toHaveBeenCalledWith(`/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${versionId}/content`, expect.objectContaining({ responseType: 'blob', cache: 'no-store' }))
+    await user.selectOptions(select, historicalId)
+    expect(revokeUrl).toHaveBeenCalledWith('blob:paper')
+    expect(screen.getByText(/Historical evidence is read-only/)).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'View document' }))
+    expect(api.apiRequest).toHaveBeenCalledWith(`/staff/assisted-originations/${caseId}/evidence/UCL_PAPER_APPLICATION/versions/${historicalId}/content`, expect.objectContaining({ responseType: 'blob' }))
+    expect(vi.mocked(api.apiRequest).mock.calls.some(call => requestPath(call).includes(`${historicalId}/ocr`))).toBe(false)
+    await user.upload(screen.getByLabelText('Signed paper application file'), new File(['%PDF-new'], 'new.pdf', { type: 'application/pdf' }))
+    fireEvent.submit(screen.getByLabelText('Signed paper application file').closest('form')!)
+    await waitFor(() => expect(vi.mocked(api.apiRequest).mock.calls.some(call => requestPath(call).endsWith('/versions') && (call[1]?.body as FormData)?.get('expectedCurrentVersionId') === versionId)).toBe(true))
+    expect(JSON.stringify(client.getQueryCache().getAll().map(query => query.state.data))).not.toContain('paper bytes')
+    expect(localStorage.length).toBe(0)
+    expect(JSON.stringify(sessionStorage)).not.toContain('historical.pdf')
+  })
+
+  it('removes an open viewer when evidence metadata refetch fails', async () => {
+    let failMetadata = false
+    const revokeUrl = vi.fn()
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:paper'), revokeObjectURL: revokeUrl }))
+    vi.mocked(api.apiRequest).mockImplementation(async path => {
+      if (path === `/staff/assisted-originations/${caseId}`) return intake()
+      if (path === `/staff/customers/${customerId}`) return customer
+      if (path.endsWith('/content')) return { blob: new Blob(['paper']), contentType: 'application/pdf' }
+      if (path.endsWith('/evidence')) {
+        if (failMetadata) throw new NetworkError()
+        return evidence
+      }
+      return []
+    })
+    const { client } = renderRoute(`/staff/origination/${caseId}`)
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'View document' }))
+    expect(screen.getByRole('link', { name: 'Download document' })).toBeVisible()
+    failMetadata = true
+    await act(async () => { await client.invalidateQueries({ queryKey: originationKeys.evidence(caseId) }) })
+    expect(await screen.findByText('Evidence metadata could not be loaded.')).toBeVisible()
+    expect(screen.queryByRole('link', { name: 'Download document' })).not.toBeInTheDocument()
+    expect(revokeUrl).toHaveBeenCalledWith('blob:paper')
+  })
+
+  it.each([['loan:originate:staff'], ['loan:read']])('does not request intake metadata or bytes without exact authority: %s', async permission => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff([permission]))
+    vi.mocked(api.apiRequest).mockImplementation(async path => path === `/staff/assisted-originations/${caseId}` ? intake() : [])
+    renderRoute(`/staff/origination/${caseId}`)
+    expect(await screen.findByRole('heading', { name: permission === 'loan:read' ? 'No operational access' : 'UCL intake', level: 1 })).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'View document' })).not.toBeInTheDocument()
+    expect(vi.mocked(api.apiRequest).mock.calls.some(call => requestPath(call).includes('/evidence'))).toBe(false)
   })
 
   it('corrects the selected Customer without retaining sensitive input', async () => {
@@ -870,7 +944,7 @@ describe('assisted origination pages', () => {
     fireEvent.submit(fileInput.closest('form')!)
 
     await waitFor(() => expect(replaced).toBe(true))
-    expect(await screen.findByText(new RegExp(uploadedVersion.intakeDocumentVersionId))).toBeVisible()
+    expect(await screen.findByRole('combobox', { name: 'Signed paper application version' })).toHaveValue(uploadedVersion.intakeDocumentVersionId)
     expect(editableName).toHaveValue('Staff Corrected Customer')
   })
 
@@ -915,7 +989,7 @@ describe('assisted origination pages', () => {
     fireEvent.submit(fileInput.closest('form')!)
 
     await waitFor(() => expect(replaced).toBe(true))
-    expect(await screen.findByText(new RegExp(uploadedVersion.intakeDocumentVersionId))).toBeVisible()
+    expect(await screen.findByRole('combobox', { name: 'Signed paper application version' })).toHaveValue(uploadedVersion.intakeDocumentVersionId)
     expect(editableName).toHaveValue('Reviewed Customer')
     expect(editableName).not.toHaveValue('Paper Customer')
     expect(profilePuts).toBe(1)
@@ -950,7 +1024,7 @@ describe('assisted origination pages', () => {
     fireEvent.submit(fileInput.closest('form')!)
 
     await waitFor(() => expect(replaced).toBe(true))
-    expect(await screen.findByText(new RegExp(uploadedVersion.intakeDocumentVersionId))).toBeVisible()
+    expect(await screen.findByRole('combobox', { name: 'Signed paper application version' })).toHaveValue(uploadedVersion.intakeDocumentVersionId)
     expect(await screen.findByText(/values from a replaced evidence version were removed/i)).toBeVisible()
     expect(amount).toHaveValue(null)
   })

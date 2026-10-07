@@ -422,6 +422,8 @@ Loan owns the temporary Staff-assisted intake lifecycle that exists before a UCL
 
 Document owns paper intake evidence independently of application checklists. A Staff upload to pre-application intake uses a Document-owned input port. Document asks Loan through a purpose-limited boundary whether the intake is valid for the requested operation, then stores the immutable document version under Document ownership. Initial intake upload must not reuse correction-task authorization because no application correction exists yet.
 
+Exact intake content reads use the same purpose-limited Document-to-Loan case authorization boundary. Document validates the case, product/evidence type, logical document, and immutable version association before opening Document-owned storage. Historical evidence remains readable without becoming a current mutation or OCR target, including after intake completion or abandonment. Retrieval does not mutate Loan or Document state or copy intake bytes into an application checklist. [MER-API-001 Section 3.19](../api/MER-API-001-endpoints-and-postman-scenarios.md#319-staff-assisted-customer-and-pre-application-intake) owns the exact audience, content response, and failure contracts.
+
 ```mermaid
 flowchart LR
     Web["Staff Web"]
