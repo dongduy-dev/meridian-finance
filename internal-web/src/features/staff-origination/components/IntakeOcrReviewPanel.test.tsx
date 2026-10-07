@@ -62,7 +62,7 @@ describe('IntakeOcrReviewPanel', () => {
     renderPanel(request)
 
     await user.click(await screen.findByRole('button', { name: 'Extract fields' }))
-    expect(await screen.findByText(/field extraction pending/i)).toBeVisible()
+    expect(await screen.findByText(/field extraction queued/i)).toBeVisible()
     expect(request.mock.calls.filter((call) => call[1]?.method === 'POST')).toHaveLength(1)
     await waitFor(() => expect(statusReads).toBeGreaterThan(1), { timeout: 2_500 })
   })
@@ -73,7 +73,7 @@ describe('IntakeOcrReviewPanel', () => {
     }))
     renderPanel(request)
 
-    expect(await screen.findByText(/OCR failed: PROVIDER_UNAVAILABLE/i)).toBeVisible()
+    expect(await screen.findByText(/The field extraction service is unavailable/i)).toBeVisible()
     expect(screen.getByText(/Continue the manual intake workflow/i)).toBeVisible()
   })
 

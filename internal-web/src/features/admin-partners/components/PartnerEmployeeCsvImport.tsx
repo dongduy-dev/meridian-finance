@@ -1,3 +1,4 @@
+import { employeeStatusLabel } from '../model/presentation'
 import { useState } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -61,7 +62,7 @@ export function PartnerEmployeeCsvImport({ disabled, onImport }: PartnerEmployee
         />
       </label>
       <p className="text-sm text-muted-foreground">Required columns, in any order: {partnerEmployeeCsvHeaders.join(', ')}.</p>
-      <p className="text-sm text-muted-foreground">Submit the complete roster for the selected month. This replaces the previous snapshot. Correct any errors in the CSV, then choose the file again.</p>
+      <p className="text-sm text-muted-foreground">Submit the complete roster for the selected month. A valid import replaces that month’s previous roster. Correct any errors in the CSV, then choose the file again.</p>
     </div>
 
     {fileError ? <Alert variant="destructive"><AlertTitle>CSV was not accepted</AlertTitle><AlertDescription>{fileError}</AlertDescription></Alert> : null}
@@ -71,8 +72,8 @@ export function PartnerEmployeeCsvImport({ disabled, onImport }: PartnerEmployee
         <p className="font-medium">Selected file: {selection.filename}</p>
         <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-3">
           <div><dt className="text-muted-foreground">Total data rows</dt><dd className="text-lg font-semibold">{selection.result.dataRowCount}</dd></div>
-          <div><dt className="text-muted-foreground">Client-valid rows</dt><dd className="text-lg font-semibold">{selection.result.validRowCount}</dd></div>
-          <div><dt className="text-muted-foreground">Client-problem rows</dt><dd className="text-lg font-semibold">{selection.result.problemRowCount}</dd></div>
+          <div><dt className="text-muted-foreground">Rows ready for import</dt><dd className="text-lg font-semibold">{selection.result.validRowCount}</dd></div>
+          <div><dt className="text-muted-foreground">Rows requiring correction</dt><dd className="text-lg font-semibold">{selection.result.problemRowCount}</dd></div>
         </dl>
       </div>
 
@@ -80,7 +81,7 @@ export function PartnerEmployeeCsvImport({ disabled, onImport }: PartnerEmployee
 
       {previewRows.length > 0 ? <div className="space-y-2">
         <div><h3 className="font-semibold">CSV preview</h3>{selection.result.dataRowCount > previewLimit ? <p className="text-sm text-muted-foreground">Showing the first {previewLimit} of {selection.result.dataRowCount} rows. The full parsed batch will be submitted.</p> : <p className="text-sm text-muted-foreground">Showing all {selection.result.dataRowCount} parsed rows.</p>}</div>
-        <div className="overflow-x-auto"><table className="w-full min-w-[70rem] text-left text-sm"><caption className="sr-only">Partner Employee CSV preview</caption><thead><tr className="border-b"><th className="p-2">Data row</th><th className="p-2">Employee code</th><th className="p-2">Identity reference</th><th className="p-2">Salary</th><th className="p-2">Advance limit</th><th className="p-2">Employment</th><th className="p-2">Active</th><th className="p-2">Client check</th></tr></thead><tbody>{previewRows.map((row) => <tr className="border-b" key={row.dataRow}><td className="p-2">{row.dataRow}</td><td className="p-2">{row.employeeCode}</td><td className="p-2">{row.identityReference}</td><td className="p-2">{row.salaryAmount}</td><td className="p-2">{row.salaryAdvanceLimit}</td><td className="p-2">{row.employmentStatus}</td><td className="p-2">{row.active}</td><td className="p-2">{row.valid ? 'Ready' : 'Problem'}</td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="w-full min-w-[70rem] text-left text-sm"><caption className="sr-only">Partner Employee CSV preview</caption><thead><tr className="border-b"><th className="p-2">Data row</th><th className="p-2">Employee code</th><th className="p-2">Identity reference</th><th className="p-2">Salary</th><th className="p-2">Advance limit</th><th className="p-2">Employment</th><th className="p-2">Active</th><th className="p-2">File check</th></tr></thead><tbody>{previewRows.map((row) => <tr className="border-b" key={row.dataRow}><td className="p-2">{row.dataRow}</td><td className="p-2">{row.employeeCode}</td><td className="p-2">{row.identityReference}</td><td className="p-2">{row.salaryAmount}</td><td className="p-2">{row.salaryAdvanceLimit}</td><td className="p-2">{employeeStatusLabel(row.employmentStatus)}</td><td className="p-2">{row.active}</td><td className="p-2">{row.valid ? 'Ready' : 'Problem'}</td></tr>)}</tbody></table></div>
       </div> : null}
 
       <Button type="button" disabled={disabled || !isSubmittable} onClick={() => void onImport(selection.result.rows)}>Import CSV rows</Button>

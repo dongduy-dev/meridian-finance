@@ -36,7 +36,7 @@ export function InternalUserAdministrationPage() {
     {creating && roles.data ? <CreateInternalUserForm manager={manager} roles={roles.data} onClose={() => setCreating(false)} /> : null}
     {pending ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading Internal Users…</div> : null}
     {error && (!users.data || !roles.data) ? <UserAdministrationQueryErrorPanel error={error} onRetry={refresh} /> : null}
-    {users.data?.length === 0 && roles.data ? <p className="rounded-md border p-5 text-sm text-muted-foreground">No internal Staff Users are available.</p> : null}
+    {!users.isError && users.data?.length === 0 && roles.data ? <p className="rounded-md border p-5 text-sm text-muted-foreground">No internal Staff Users are available.</p> : null}
     {users.data?.length && roles.data ? <div className="grid gap-5">{users.data.map((user) =>
       <InternalUserCard key={user.userId} user={user} roles={roles.data} manager={manager} />
     )}</div> : null}

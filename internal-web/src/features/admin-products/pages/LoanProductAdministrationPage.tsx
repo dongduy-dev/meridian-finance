@@ -25,7 +25,7 @@ export function LoanProductAdministrationPage() {
     </div>
     {products.isPending ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading Loan Products…</div> : null}
     {products.isError && !products.data ? <ProductQueryErrorPanel error={products.error} onRetry={() => void products.refetch()} /> : null}
-    {products.data?.length === 0 ? <p className="rounded-md border p-5 text-sm text-muted-foreground">No Loan Products are configured. Product creation is not available in this workspace.</p> : null}
+    {!products.isError && products.data?.length === 0 ? <p className="rounded-md border p-5 text-sm text-muted-foreground">No Loan Products are configured. Product creation is not available in this workspace.</p> : null}
     {products.data?.length ? <div className="grid gap-5">{products.data.map((product) =>
       <LoanProductCard key={product.productCode} product={product} manager={manager} />
     )}</div> : null}

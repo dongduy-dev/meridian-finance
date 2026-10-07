@@ -1,3 +1,4 @@
+import { operatorErrorMessage } from '@/lib/api/operator-error-message'
 import { useState, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Alert } from '@/components/ui/alert'
@@ -36,7 +37,7 @@ export function CreateInternalUserForm({ manager, roles, onClose }: {
       } else if (failure instanceof ApiError && failure.errorCode === 'INTERNAL_ROLE_NOT_FOUND') {
         setError('A selected role is no longer assignable. Refresh the role list before retrying.')
       } else if (failure instanceof ApiError) {
-        setError(failure.message)
+        setError(operatorErrorMessage(failure, 'Creation could not be confirmed. Refresh the Internal User list before trying again.'))
       } else if (failure instanceof NetworkError) {
         setError('Creation could not be confirmed. Refresh the Internal User list before trying again.')
         await queryClient.invalidateQueries({ queryKey: adminUserKeys.list() }).catch(() => undefined)

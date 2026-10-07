@@ -28,7 +28,9 @@ const staff: AuthResponse = {
 
 function renderPage() {
   const router = createTestRouter(['/staff/work/servicing'])
-  render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
+  const client = createQueryClient()
+  render(<QueryClientProvider client={client}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
+  return client
 }
 
 describe('Staff servicing work queue', () => {
@@ -47,7 +49,7 @@ describe('Staff servicing work queue', () => {
     expect(screen.getByText(/Active and overdue loan accounts available for servicing review and ordinary repayment work/i)).toBeVisible()
     expect(document.body.textContent).not.toMatch(/server-owned|backend-owned|backend scheduler/i)
     await user.selectOptions(screen.getByLabelText('Product'), 'UNSECURED_CONSUMER_LOAN')
-    await user.selectOptions(screen.getByLabelText('Serviceable status'), 'OVERDUE')
+    await user.selectOptions(screen.getByLabelText('Account status'), 'OVERDUE')
     await user.click(screen.getByRole('button', { name: 'Next' }))
 
     expect(vi.mocked(api.apiRequest).mock.calls.some(([path]) => {
@@ -68,5 +70,24 @@ describe('Staff servicing work queue', () => {
       .toHaveAttribute('href', '/staff/applications/11111111-1111-4111-8111-111111111111/loan-account')
     expect(screen.getAllByText('Overdue').length).toBeGreaterThan(0)
     expect(screen.queryByText(/Evaluate overdue/i)).not.toBeInTheDocument()
+  })
+
+  it('does not present a failed initial read as an empty business queue or expose API prose', async () => {
+    vi.mocked(api.apiRequest).mockRejectedValue(new api.ApiError(500, 'INTERNAL_FAILURE', 'private database detail', '/queue', 'now'))
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Try again' }, { timeout: 3_000 })).toBeVisible()
+    expect(screen.queryByText('No servicing work')).not.toBeInTheDocument()
+    expect(screen.queryByText(/private database detail/)).not.toBeInTheDocument()
+  })
+
+  it('does not claim an empty queue after the refresh of a previously empty page fails', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue({ ...queueFixture(), totalElements: 0, totalPages: 0, items: [] })
+    const client = renderPage()
+    expect(await screen.findByText('No servicing work')).toBeVisible()
+    vi.mocked(api.apiRequest).mockRejectedValue(new api.ApiError(500, 'INTERNAL_FAILURE', 'private database detail', '/queue', 'now'))
+    await client.invalidateQueries()
+    expect(await screen.findByText('Latest queue refresh unavailable')).toBeVisible()
+    expect(screen.queryByText('No servicing work')).not.toBeInTheDocument()
+    expect(screen.queryByText(/private database detail/)).not.toBeInTheDocument()
   })
 })

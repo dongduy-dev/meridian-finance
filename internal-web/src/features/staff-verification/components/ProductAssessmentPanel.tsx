@@ -6,7 +6,7 @@ import { useAuth } from '@/features/auth/model/auth-context'
 import { uuidSchema } from '@/features/staff-applications/api/contracts'
 import { QueryErrorPanel } from '@/features/staff-applications/components/QueryErrorPanel'
 import { humanizeKnownValue } from '@/features/staff-applications/model/presentation'
-import { formatTimestamp, formatVnd } from '@/lib/format/presentation'
+import { knownLabel, formatTimestamp, formatVnd } from '@/lib/format/presentation'
 import type { StaffVerificationCase } from '../api/contracts'
 import { staffVerificationCaseQuery } from '../api/queries'
 
@@ -18,7 +18,7 @@ const resultLabels: Record<string, string> = {
 }
 
 export function verificationResultLabel(value: string): string {
-  return resultLabels[value] ?? 'Verification result unavailable'
+  return knownLabel(resultLabels, value, 'Verification result unavailable')
 }
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
@@ -64,7 +64,7 @@ export function ProductAssessmentEvidence({ data }: { data: StaffVerificationCas
           <span className="text-sm font-semibold">{verificationResultLabel(cycle.productVerificationResult)}</span>
         </div>
         <p className="text-sm text-muted-foreground">{cycle.sourceCorrectionRequestId ? 'Re-verification after correction' : 'Initial assessment'}
-          {cycle.verificationId === data.productVerification.currentCycle.verificationId ? ' · Current authoritative cycle' : ' · Earlier cycle'}</p>
+          {cycle.verificationId === data.productVerification.currentCycle.verificationId ? ' · Current assessment cycle' : ' · Earlier cycle'}</p>
         <dl className="grid gap-4 sm:grid-cols-2">
           <Fact label="Created">{formatTimestamp(cycle.createdAt)}</Fact>
           <Fact label="Reviewed">{cycle.reviewedAt ? formatTimestamp(cycle.reviewedAt) : 'Not completed'}</Fact>

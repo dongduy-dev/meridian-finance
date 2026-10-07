@@ -1,3 +1,4 @@
+import { knownLabel } from '@/lib/format/presentation'
 import { useQuery } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { ZodError } from 'zod'
@@ -11,7 +12,7 @@ import { ApiError, NetworkError } from '@/lib/api'
 import { enableDigitalAccess, getDigitalAccess, searchCustomer } from '../api/customer-access-api'
 
 const customerStatusLabels: Record<string, string> = { ACTIVE: 'Active', SUSPENDED: 'Suspended', DISABLED: 'Disabled' }
-const customerStatusLabel = (value: string) => customerStatusLabels[value] ?? 'Status unavailable'
+const customerStatusLabel = (value: string) => knownLabel(customerStatusLabels, value, 'Status unavailable')
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -84,7 +85,7 @@ export function CustomerDigitalAccessPage() {
       setNeedsReconciliation(!result.isSuccess || !result.data?.enabled)
       setFeedback(result.isSuccess && result.data?.enabled
         ? 'Digital access is enabled. The Customer must complete the secure activation link sent to their email.'
-        : 'Activation completed, but the latest status could not be confirmed. Refresh status before taking further action.')
+        : 'Customer Web access was enabled, but the latest status could not be loaded. The Customer must complete the activation email. Refresh status before taking further action.')
     } catch (error) {
       if (unknownResult(error)) {
         setNeedsReconciliation(true)
@@ -93,7 +94,7 @@ export function CustomerDigitalAccessPage() {
         if (result.isSuccess && result.data?.enabled) setIdentityReference('')
         setFeedback(result.isSuccess && result.data?.enabled
           ? 'Digital access is enabled. The Customer must complete the secure activation link sent to their email.'
-          : 'The activation result is unknown. Check status again before any new request; this page did not resend activation.')
+          : 'Access enablement is not confirmed. Check status again before any new request; this page did not resend activation.')
       } else {
         setFeedback(errorMessage(error))
         if (error instanceof ApiError && error.errorCode === 'CUSTOMER_DIGITAL_ACCESS_ALREADY_ENABLED') {
@@ -109,7 +110,7 @@ export function CustomerDigitalAccessPage() {
 
   return <section className="mx-auto max-w-4xl space-y-6">
     <div><p className="text-sm font-semibold text-muted-foreground">CUSTOMER INTAKE</p>
-      <h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Customer digital access</h1>
+      <h1 data-route-heading tabIndex={-1} className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Customer Web access</h1>
       <p className="mt-2 max-w-3xl text-muted-foreground">Digital access links a Customer Web login to this existing Customer record. It does not create a new Customer or change existing Staff-assisted applications.</p>
     </div>
     <form onSubmit={(event) => void submitSearch(event)} className="space-y-4 rounded-lg border bg-card p-5">
@@ -145,7 +146,7 @@ export function CustomerDigitalAccessPage() {
         <label className="grid gap-1 text-sm font-medium">Identity reference
           <Input required autoComplete="off" value={identityReference} onChange={(event) => setIdentityReference(event.target.value)} />
         </label>
-        <Button disabled={!allowed || submitting || status.isFetching || needsReconciliation}>{submitting ? 'Enabling…' : 'Enable digital access'}</Button>
+        <Button disabled={!allowed || submitting || status.isFetching || needsReconciliation}>{submitting ? 'Enabling…' : 'Enable Customer Web access'}</Button>
       </form> : null}
       {feedback ? <Alert>{feedback}</Alert> : null}
       <Button type="button" variant="outline" disabled={status.isFetching} onClick={() => void status.refetch().then((result) => {

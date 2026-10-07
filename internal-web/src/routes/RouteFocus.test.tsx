@@ -14,18 +14,22 @@ describe('route focus', () => {
   it('focuses a route heading that mounts after the route frame', async () => {
     render(<MemoryRouter initialEntries={['/staff']}><RouteFocus /><DeferredHeading /></MemoryRouter>)
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Deferred workspace' })).toHaveFocus())
-    expect(document.title).toBe('Internal operations | Meridian')
+    expect(document.title).toBe('Staff Operations | Meridian')
   })
 
   it.each([
     ['/login', 'Staff sign in | Meridian'],
+    ['/set-password', 'Set your Staff password | Meridian'],
+    ['/staff/customer-identity-verifications', 'Customer identity verification | Meridian'],
+    ['/staff/customer-identity-verifications/11111111-1111-4111-8111-111111111111', 'Customer identity verification | Meridian'],
+    ['/staff/customer-access', 'Customer Web access | Meridian'],
     ['/admin', 'Back-Office Administration | Meridian'],
     ['/admin/partners', 'Partners | Meridian'],
     ['/admin/partners/22222222-2222-4222-8222-222222222222', 'Partner detail | Meridian'],
     ['/admin/partner-eligibility-reviews', 'Eligibility reviews | Meridian'],
     ['/admin/users', 'Internal User Administration | Meridian'],
     ['/admin/products', 'Loan Product Administration | Meridian'],
-    ['/staff', 'Internal operations | Meridian'],
+    ['/staff', 'Staff Operations | Meridian'],
     ['/staff/applications', 'Applications | Meridian'],
     ['/staff/origination', 'Assisted origination | Meridian'],
     ['/staff/origination/33333333-3333-4333-8333-333333333333', 'Assisted origination case | Meridian'],
@@ -33,9 +37,9 @@ describe('route focus', () => {
     ['/staff/applications/11111111-1111-4111-8111-111111111111/offer-response', 'Customer offer response | Meridian'],
     ['/staff/work/documents', 'Document review | Meridian'],
     ['/staff/work/corrections', 'Staff corrections | Meridian'],
-    ['/staff/work/approvals', 'Approval decisions | Meridian'],
+    ['/staff/work/approvals', 'Credit decision queue | Meridian'],
     ['/staff/work/contracts', 'Contract and readiness queue | Meridian'],
-    ['/staff/work/disbursements', 'Ready-disbursement queue | Meridian'],
+    ['/staff/work/disbursements', 'Disbursement queue | Meridian'],
     ['/staff/work/servicing', 'Loan account servicing queue | Meridian'],
     ['/staff/work/settlements', 'Settlement work queue | Meridian'],
     ['/staff/work/closures', 'Closure work queue | Meridian'],
@@ -43,7 +47,7 @@ describe('route focus', () => {
     ['/staff/applications/11111111-1111-4111-8111-111111111111/corrections', 'Application corrections | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/verification', 'Product assessment | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/review', 'Loan Officer review | Meridian'],
-    ['/staff/applications/11111111-1111-4111-8111-111111111111/decision', 'Independent decision | Meridian'],
+    ['/staff/applications/11111111-1111-4111-8111-111111111111/decision', 'Credit decision | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/contract', 'Contract and readiness | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/disbursement', 'Disbursement and activation | Meridian'],
     ['/staff/applications/11111111-1111-4111-8111-111111111111/loan-account', 'Loan account servicing | Meridian'],

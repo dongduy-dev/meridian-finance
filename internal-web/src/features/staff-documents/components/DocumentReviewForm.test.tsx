@@ -58,11 +58,14 @@ describe('Document review operation recovery', () => {
     renderForm(protectedRequest)
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Review final details' }))
+    await user.click(screen.getByRole('button', { name: 'Review document decision' }))
     const confirmation = await screen.findByRole('dialog')
     expect(within(confirmation).getByText('Version').nextElementSibling).toHaveTextContent(/^1$/)
     expect(within(confirmation).queryByText(versionId)).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Confirm review' }))
+    expect(within(confirmation).getByText('Bank statement')).toBeVisible()
+    expect(within(confirmation).getByText('Accept document')).toBeVisible()
+    expect(within(confirmation).queryByText(/BANK_STATEMENT|ACCEPT_DOCUMENT/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Record document review' }))
 
     await waitFor(() => expect(protectedRequest).toHaveBeenCalledTimes(1))
     expect(protectedRequest.mock.calls[0]?.[1]).toMatchObject({
@@ -77,7 +80,7 @@ describe('Document review operation recovery', () => {
     const user = userEvent.setup()
 
     await user.type(screen.getByLabelText(/Restricted Staff notes/), 'changed restricted note')
-    await user.click(screen.getByRole('button', { name: 'Review final details' }))
+    await user.click(screen.getByRole('button', { name: 'Review document decision' }))
 
     expect(await screen.findByText(/previous action result is still not confirmed/i)).toBeVisible()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

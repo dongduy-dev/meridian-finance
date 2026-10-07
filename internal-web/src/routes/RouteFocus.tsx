@@ -8,6 +8,7 @@ const executableRoutes = [...STAFF_EXECUTABLE_ROUTES, ...ADMIN_ROUTES]
 
 function routeTitle(pathname: string): string {
   if (pathname === '/login') return 'Staff sign in | Meridian'
+  if (pathname === '/set-password') return 'Set your Staff password | Meridian'
   const route = executableRoutes.find((candidate) => matchPath({ path: candidate.path, end: true }, pathname))
   if (route) return `${route.documentTitle} | Meridian`
   return 'Page not found | Meridian'

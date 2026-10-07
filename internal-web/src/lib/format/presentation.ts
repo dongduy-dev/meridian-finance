@@ -1,4 +1,8 @@
 const VND_LOCALE = 'vi-VN'
+
+export function knownLabel(labels: Readonly<Record<string, string>>, value: string, fallback: string): string {
+  return Object.hasOwn(labels, value) ? labels[value] ?? fallback : fallback
+}
 const INTERNAL_LOCALE = 'en-GB'
 const INTERNAL_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 const OFFSET_SUFFIX = /(?:Z|[+-]\d{2}:?\d{2})$/i

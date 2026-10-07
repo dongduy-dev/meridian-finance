@@ -56,7 +56,7 @@ describe('Loan Product administration page', () => {
     const cards = await screen.findAllByRole('heading', { level: 2 })
     expect(cards.map((heading) => heading.textContent)).toEqual(['Unknown product', 'Customer Salary Advance'])
     expect(screen.getByText('FUTURE_PRODUCT')).toBeVisible()
-    expect(screen.getByText(/Unknown type/)).toBeVisible()
+    expect(screen.getByText(/Product type unavailable/)).toBeVisible()
     expect(screen.getByText('Inactive')).toBeVisible()
     expect(screen.getByText('Active')).toBeVisible()
   })

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { formatDateOnly, formatTimestamp, formatVnd } from './presentation'
+import { formatDateOnly, formatTimestamp, formatVnd, knownLabel } from './presentation'
 
 describe('internal presentation formatting', () => {
+  it.each(['FUTURE_STATUS', '__proto__', 'constructor', 'toString'])('keeps unsupported API value %s neutral', (value) => {
+    expect(knownLabel({ ACTIVE: 'Active' }, value, 'Status unavailable')).toBe('Status unavailable')
+  })
+
   it('formats finite whole-VND values through the centralized VND policy', () => {
     expect(formatVnd(1_234_567)).toBe(new Intl.NumberFormat('vi-VN', {
       style: 'currency',

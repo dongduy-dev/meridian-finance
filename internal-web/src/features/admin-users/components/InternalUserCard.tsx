@@ -1,3 +1,4 @@
+import { operatorErrorMessage } from '@/lib/api/operator-error-message'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -21,7 +22,7 @@ const statusLabels: Record<InternalUserStatus, string> = {
 }
 
 function commandMessage(error: unknown, resource: string): string {
-  if (error instanceof ApiError) return error.message
+  if (error instanceof ApiError) return operatorErrorMessage(error, `The ${resource} change was not confirmed. Refresh and review the latest information before trying again.`)
   if (error instanceof NetworkError) return `Meridian could not confirm the ${resource} change. The latest information was refreshed; review it before retrying the same change.`
   return `The ${resource} change was not confirmed. Refresh the latest information before trying again.`
 }
@@ -94,7 +95,7 @@ export function InternalUserCard({ user, roles, manager }: {
       await sendInternalUserPasswordSetup(manager, user.userId)
       setSetupFeedback('A fresh password setup link was issued. If it does not arrive, review delivery before sending another.')
     } catch (error) {
-      setSetupFeedback(error instanceof ApiError ? error.message : 'Delivery could not be confirmed. Review the User before sending another link.')
+      setSetupFeedback(operatorErrorMessage(error, 'Delivery could not be confirmed. Review the Staff account before sending another link.'))
     } finally { setSetupPending(false) }
   }
 
@@ -124,10 +125,10 @@ export function InternalUserCard({ user, roles, manager }: {
       </section>
       <section className="space-y-3 rounded-md border p-4" aria-labelledby={`status-${user.userId}`}>
         <div>
-          <h3 id={`status-${user.userId}`} className="font-semibold">Administrative status</h3>
+          <h3 id={`status-${user.userId}`} className="font-semibold">Staff access status</h3>
           <p className="text-sm text-muted-foreground">Suspended and disabled Staff members lose access immediately and must sign in again after reactivation.</p>
         </div>
-        {!knownStatus ? <p className="text-sm text-warning">Current status is unavailable ({displayStatus(user.status)}). Review the intended status before making a change.</p> : null}
+        {!knownStatus ? <p className="text-sm text-warning">Current status is unavailable. Review the intended status before making a change.</p> : null}
         <label className="block space-y-1 text-sm font-medium">Target status
           <select
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -143,7 +144,7 @@ export function InternalUserCard({ user, roles, manager }: {
           disabled={statusPending || (knownStatus && statusTarget === user.status)}
           onClick={() => statusTarget === 'ACTIVE' ? void submitStatus(statusTarget) : setStatusConfirmation(statusTarget)}
         >
-          {statusPending ? 'Waiting for confirmation…' : 'Apply status'}
+          {statusPending ? 'Waiting for confirmation…' : 'Update access status'}
         </Button>
         {statusError ? <Alert variant="destructive"><AlertTitle>Status was not confirmed</AlertTitle><AlertDescription>{statusError}</AlertDescription></Alert> : null}
       </section>
@@ -174,6 +175,6 @@ export function InternalUserCard({ user, roles, manager }: {
         {roleError ? <Alert variant="destructive"><AlertTitle>Role assignment was not confirmed</AlertTitle><AlertDescription>{roleError}</AlertDescription></Alert> : null}
       </section>
     </CardContent>
-    {statusConfirmation ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby={`internal-user-status-${user.userId}-title`}><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><h2 id={`internal-user-status-${user.userId}-title`} className="text-xl font-semibold">Confirm User access change</h2><dl className="grid gap-3 text-sm"><div><dt className="text-muted-foreground">Internal User</dt><dd className="font-semibold">{user.displayName} ({user.email})</dd></div><div><dt className="text-muted-foreground">Status change</dt><dd className="font-semibold">{displayStatus(user.status)} → {statusLabels[statusConfirmation]}</dd></div></dl><p className="text-sm text-muted-foreground">The User will lose access and all active sessions will be revoked. Reactivation does not restore those sessions.</p><div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={() => { setStatusConfirmation(undefined); setTimeout(() => document.getElementById(`internal-user-status-${user.userId}-trigger`)?.focus(), 0) }}>Cancel</Button><Button autoFocus variant="destructive" disabled={statusPending} onClick={() => { const target = statusConfirmation; setStatusConfirmation(undefined); void submitStatus(target) }}>Apply {statusLabels[statusConfirmation]} status</Button></div></div></div> : null}
+    {statusConfirmation ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby={`internal-user-status-${user.userId}-title`}><div className="w-full max-w-lg space-y-4 rounded-lg bg-card p-6 shadow-xl"><h2 id={`internal-user-status-${user.userId}-title`} className="text-xl font-semibold">Confirm User access change</h2><dl className="grid gap-3 text-sm"><div><dt className="text-muted-foreground">Internal User</dt><dd className="font-semibold">{user.displayName} ({user.email})</dd></div><div><dt className="text-muted-foreground">Status change</dt><dd className="font-semibold">{displayStatus(user.status)} → {statusLabels[statusConfirmation]}</dd></div></dl><p className="text-sm text-muted-foreground">The User will lose access and all active sessions will be revoked. Reactivation does not restore those sessions.</p><div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={() => { setStatusConfirmation(undefined); setTimeout(() => document.getElementById(`internal-user-status-${user.userId}-trigger`)?.focus(), 0) }}>Cancel</Button><Button autoFocus variant="destructive" disabled={statusPending} onClick={() => { const target = statusConfirmation; setStatusConfirmation(undefined); void submitStatus(target) }}>Update access status</Button></div></div></div> : null}
   </Card>
 }

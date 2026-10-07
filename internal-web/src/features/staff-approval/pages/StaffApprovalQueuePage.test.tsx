@@ -49,8 +49,8 @@ describe('Staff approval queue', () => {
   it('shows loading then the authoritative empty state', async () => {
     vi.mocked(api.apiRequest).mockResolvedValue(page(0, true))
     renderPage()
-    expect(await screen.findByRole('heading', { name: 'Independent decision queue' })).toBeVisible()
-    expect(screen.getByText(/Applications awaiting an independent approval decision/i)).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Credit decision queue' })).toBeVisible()
+    expect(screen.getByText(/Applications awaiting an independent credit decision/i)).toBeVisible()
     expect(document.body.textContent).not.toMatch(/server-owned|backend-owned|authoritative queue/i)
     expect(await screen.findByRole('heading', { name: 'No approval work' })).toBeVisible()
   })

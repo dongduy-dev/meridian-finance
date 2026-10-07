@@ -81,6 +81,6 @@ describe('Staff ready-disbursement queue', () => {
 
     expect(await screen.findByText('Work stage unavailable')).toBeVisible()
     expect(screen.getByText(/latest work information is incomplete or unrecognized/i)).toBeVisible()
-    expect(screen.getByRole('link', { name: 'Inspect unavailable state' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'View case details' })).toBeVisible()
   })
 })
