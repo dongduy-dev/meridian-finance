@@ -55,7 +55,7 @@ export function IdentityReferenceCorrection() {
     </form>}
     {uncertain ? <Button variant="secondary" disabled={busy} onClick={() => void client.refetchQueries({ queryKey: accountKeys.customer() }).then(() => {
       const state = client.getQueryState<Customer>(accountKeys.customer())
-      if (state?.status === 'success' && state.fetchStatus === 'idle' && !state.isInvalidated) { setUncertain(false); setError(undefined) }
+      if (state?.status === 'success' && state.fetchStatus === 'idle' && !state.isInvalidated) { setUncertain(false); setError(undefined); setMessage(undefined) }
     })}>Refresh profile</Button> : null}
   </div>
 }

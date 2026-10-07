@@ -1,11 +1,12 @@
 import { queryClient } from '@/app/providers/query-client'
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AppProviders } from '@/app/providers/AppProviders'
 import { AuthSessionManager } from '@/features/auth/auth-session'
 import type { Customer, CustomerBankAccount } from '@/features/account/account-api'
+import { accountKeys } from '@/features/account/account-queries'
 import { ApiError } from '@/lib/api'
 import { createAuthApiMock, createTestAuthManager } from '@/test/auth'
 
@@ -97,6 +98,22 @@ function renderRoute(path: string, fetchImplementation: typeof fetch) {
   return router
 }
 
+function renderUncertainCorrection() {
+  const reads: ((result: Response) => void)[] = []
+  let commands = 0
+  renderRoute('/account/profile', async (input, init) => {
+    if (String(input).endsWith('/customers/me/identity-reference') && init?.method === 'PUT') {
+      commands++
+      return errorResponse('SERVICE_UNAVAILABLE', 'Correction outcome unavailable.', 503)
+    }
+    if (String(input).endsWith('/customers/me')) {
+      return new Promise<Response>(resolve => { reads.push(resolve) })
+    }
+    throw new Error(`Unexpected request: ${String(input)}`)
+  })
+  return { reads, commands: () => commands }
+}
+
 afterEach(() => {
   cleanup()
   queryClient.clear()
@@ -178,6 +195,117 @@ describe('Customer account routes and profile', () => {
     expect(JSON.stringify(queryClient.getQueryCache().getAll().map(q => q.state))).not.toContain('FICTIONAL-CORRECTED-REFERENCE')
     expect(JSON.stringify(queryClient.getMutationCache().getAll().map(m => m.state))).not.toContain('FICTIONAL-CORRECTED-REFERENCE')
     expect(JSON.stringify([localStorage, sessionStorage])).not.toContain('FICTIONAL-CORRECTED-REFERENCE')
+  })
+
+  it.each(['success', 'failure'])('preserves uncertain correction recovery across background %s and failed explicit refresh', async background => {
+    const user = userEvent.setup()
+    const f = renderUncertainCorrection()
+    await waitFor(() => expect(f.reads).toHaveLength(1))
+    await act(async () => { f.reads[0]!(response(completeCustomer)) })
+    await user.click(await screen.findByRole('button', { name: 'Correct identity reference' }))
+    const reference = screen.getByLabelText('Replacement identity reference')
+    const form = reference.closest('form')!
+    await user.type(reference, 'FICTIONAL-UNCERTAIN-REFERENCE')
+    await user.click(screen.getByRole('button', { name: 'Confirm correction' }))
+
+    await waitFor(() => expect(f.reads).toHaveLength(2))
+    expect(queryClient.getQueryState(accountKeys.customer())?.fetchStatus).toBe('fetching')
+    const warning = screen.getByText('Correction was not confirmed. Refresh your profile before entering another correction.')
+    expect(warning).toBeVisible()
+    expect(screen.getByLabelText('Replacement identity reference')).toBe(reference)
+    expect(reference).toBeDisabled()
+    expect(reference).toHaveValue('')
+    fireEvent.submit(form)
+    expect(f.commands()).toBe(1)
+
+    await act(async () => { f.reads[1]!(background === 'success'
+      ? response(completeCustomer) : errorResponse('FORBIDDEN', 'Profile read unavailable.', 403)) })
+    const refresh = screen.getByRole('button', { name: 'Refresh profile' })
+    await waitFor(() => expect(refresh).toBeEnabled())
+    expect(warning).toBeVisible()
+    expect(reference).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Confirm correction' })).toBeDisabled()
+    fireEvent.submit(form)
+    expect(f.commands()).toBe(1)
+
+    await user.click(refresh)
+    await waitFor(() => expect(f.reads).toHaveLength(3))
+    expect(warning).toBeVisible()
+    expect(reference).toBeDisabled()
+    await act(async () => { f.reads[2]!(errorResponse('FORBIDDEN', 'Profile read unavailable.', 403)) })
+    await screen.findByText('Profile could not be loaded')
+    expect(queryClient.getQueryState(accountKeys.customer())?.status).toBe('error')
+    expect(screen.getByLabelText('Replacement identity reference')).toBe(reference)
+    expect(warning).toBeVisible()
+    expect(screen.getByText('Identity reference correction was not confirmed')).toBeVisible()
+    expect(reference).toBeDisabled()
+    fireEvent.submit(form)
+    expect(f.commands()).toBe(1)
+
+    await user.click(screen.getByRole('button', { name: 'Refresh profile' }))
+    await waitFor(() => expect(f.reads).toHaveLength(4))
+    expect(warning).toBeVisible()
+    expect(reference).toBeDisabled()
+    await act(async () => { f.reads[3]!(response(completeCustomer)) })
+    await waitFor(() => expect(reference).toBeEnabled())
+    expect(queryClient.getQueryState(accountKeys.customer())).toMatchObject({ status: 'success', fetchStatus: 'idle', isInvalidated: false })
+    expect(screen.queryByRole('button', { name: 'Refresh profile' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Identity reference correction was not confirmed')).not.toBeInTheDocument()
+    expect(warning).not.toBeInTheDocument()
+    expect(f.commands()).toBe(1)
+    expect(JSON.stringify(queryClient.getQueryCache().getAll().map(q => q.state))).not.toContain('FICTIONAL-UNCERTAIN-REFERENCE')
+
+    await user.type(reference, 'FICTIONAL-DELIBERATE-NEW-CORRECTION')
+    await user.click(screen.getByRole('button', { name: 'Confirm correction' }))
+    await waitFor(() => expect(f.commands()).toBe(2))
+    await waitFor(() => expect(f.reads).toHaveLength(5))
+    await act(async () => { f.reads[4]!(response(completeCustomer)) })
+  })
+
+  it.each([
+    { status: 'INACTIVE' },
+    { profileCompletionStatus: 'INCOMPLETE' },
+    { verificationStatus: 'VERIFIED' },
+    { verificationStatus: 'PENDING' },
+  ])('removes correction after explicit reconciliation returns ineligible Customer facts: %j', async facts => {
+    const user = userEvent.setup()
+    const f = renderUncertainCorrection()
+    await waitFor(() => expect(f.reads).toHaveLength(1))
+    await act(async () => { f.reads[0]!(response(completeCustomer)) })
+    await user.click(await screen.findByRole('button', { name: 'Correct identity reference' }))
+    await user.type(screen.getByLabelText('Replacement identity reference'), 'FICTIONAL-UNCERTAIN-REFERENCE')
+    await user.click(screen.getByRole('button', { name: 'Confirm correction' }))
+    await waitFor(() => expect(f.reads).toHaveLength(2))
+    await act(async () => { f.reads[1]!(response(completeCustomer)) })
+    const refresh = screen.getByRole('button', { name: 'Refresh profile' })
+    await waitFor(() => expect(refresh).toBeEnabled())
+    await user.click(refresh)
+    await waitFor(() => expect(f.reads).toHaveLength(3))
+    await act(async () => { f.reads[2]!(response({ ...completeCustomer, ...facts })) })
+    await waitFor(() => expect(screen.queryByLabelText('Replacement identity reference')).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Correct identity reference' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Refresh profile' })).not.toBeInTheDocument()
+    expect(f.commands()).toBe(1)
+  })
+
+  it('guards correction dispatch against live Customer revalidation before React rerenders', async () => {
+    const user = userEvent.setup()
+    const f = renderUncertainCorrection()
+    await waitFor(() => expect(f.reads).toHaveLength(1))
+    await act(async () => { f.reads[0]!(response(completeCustomer)) })
+    await user.click(await screen.findByRole('button', { name: 'Correct identity reference' }))
+    const reference = screen.getByLabelText('Replacement identity reference')
+    await user.type(reference, 'FICTIONAL-GUARDED-REFERENCE')
+    let refresh!: Promise<void>
+    await act(async () => {
+      refresh = queryClient.invalidateQueries({ queryKey: accountKeys.customer() })
+      fireEvent.submit(reference.closest('form')!)
+      expect(f.commands()).toBe(0)
+    })
+    expect(screen.getByLabelText('Replacement identity reference')).toBe(reference)
+    await act(async () => { f.reads[1]!(response(completeCustomer)); await refresh })
+    expect(reference).toHaveValue('FICTIONAL-GUARDED-REFERENCE')
+    expect(f.commands()).toBe(0)
   })
 
   it('keeps a verified profile locked', async () => {

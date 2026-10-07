@@ -141,7 +141,7 @@ export function ProfilePage() {
       {customer ? (
         <>
           <AccountReadinessCard customer={customer} presentation="workspace" />
-          {customerQuery.isSuccess && customerQuery.fetchStatus === 'idle' && customer.status === 'ACTIVE'
+          {customer.status === 'ACTIVE'
             && profileComplete && ['UNVERIFIED', 'REJECTED'].includes(customer.verificationStatus)
             && authState.status === 'authenticated' && authState.actor.permissions.includes('customer:profile:write:own')
             ? <IdentityReferenceCorrection key={authState.actor.userId} /> : null}
