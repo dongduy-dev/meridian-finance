@@ -1,4 +1,5 @@
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
+import type { ApiBinaryResponse } from '@/lib/api'
 import {
   assistedOriginationSchema, bankAccountSchema, intakeEvidenceSchema, intakeOcrJobSchema,
   intakeOcrReviewSchema, intakeVersionSchema, staffCustomerSchema,
@@ -70,7 +71,18 @@ export async function bankAction(manager: AuthSessionManager, customerId: string
   return bankAccountSchema.parse(await manager.protectedRequest(`/staff/customers/${customerId}/bank-accounts/${bankId}/${action}`, { method: 'POST' }))
 }
 export async function listEvidence(manager: AuthSessionManager, id: string): Promise<IntakeEvidence[]> {
-  return intakeEvidenceSchema.array().parse(await manager.protectedRequest(`/staff/assisted-originations/${id}/evidence`))
+  const evidence = intakeEvidenceSchema.array().parse(await manager.protectedRequest(`/staff/assisted-originations/${id}/evidence`))
+  if (evidence.some(item => item.assistedOriginationCaseId !== id)
+    || new Set(evidence.map(item => item.evidenceType)).size !== evidence.length) {
+    throw new Error('Intake evidence metadata is inconsistent.')
+  }
+  return evidence
+}
+export function getIntakeEvidenceContent(manager: AuthSessionManager, caseId: string, evidenceType: string, versionId: string) {
+  return manager.protectedRequest<ApiBinaryResponse>(
+    `/staff/assisted-originations/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceType)}/versions/${encodeURIComponent(versionId)}/content`,
+    { responseType: 'blob', cache: 'no-store' },
+  )
 }
 export async function uploadEvidence(manager: AuthSessionManager, id: string, evidenceType: string, file: File, uploadRequestId: string, expected?: string): Promise<IntakeEvidenceVersion> {
   const data = new FormData(); data.set('file', file); data.set('uploadRequestId', uploadRequestId)

@@ -41,12 +41,20 @@ export const intakeVersionSchema = z.object({
   intakeDocumentVersionId: uuidSchema, versionNumber: z.number().int().positive(),
   originalFilename: z.string(), detectedMimeType: z.string(), byteSize: z.number().positive(),
   uploadedAt: timestampSchema,
-})
+}).strict()
 
 export const intakeEvidenceSchema = z.object({
   intakeDocumentId: uuidSchema, assistedOriginationCaseId: uuidSchema,
   evidenceType: z.enum(['CUSTOMER_IDENTITY', 'UCL_PAPER_APPLICATION', 'COLLATERAL_PAPER_APPLICATION']),
   currentVersionId: uuidSchema.nullable(), versions: z.array(intakeVersionSchema),
+}).strict().superRefine((evidence, context) => {
+  const ids = evidence.versions.map(version => version.intakeDocumentVersionId)
+  const numbers = evidence.versions.map(version => version.versionNumber)
+  if (new Set(ids).size !== ids.length || new Set(numbers).size !== numbers.length
+    || (evidence.currentVersionId !== null && !ids.includes(evidence.currentVersionId))
+    || (evidence.currentVersionId === null && ids.length > 0)) {
+    context.addIssue({ code: 'custom', message: 'Intake version metadata is inconsistent.' })
+  }
 })
 
 export const intakeOcrJobSchema = z.object({

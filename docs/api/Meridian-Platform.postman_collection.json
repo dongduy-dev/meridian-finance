@@ -3463,6 +3463,93 @@
                                       "response": []
                                   },
                                   {
+                                    "name": "Read current replacement intake document content",
+                                    "description": "Requires STAFF without Customer context, document:upload:intake, and Loan-authorized assisted case access. Retrieves only the named immutable version; no workflow or OCR mutation.",
+                                    "event": [
+                                      {
+                                        "listen": "test",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                            "pm.test(\"Content response is private and typed\", function () {",
+                                            "    pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\").and.include(\"private\");",
+                                            "    pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\");",
+                                            "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.eql(\"application/pdf\");",
+                                            "    pm.expect(pm.response.headers.get(\"Content-Disposition\")).to.include(\"attachment\");",
+                                            "    pm.expect(Number(pm.response.headers.get(\"Content-Length\"))).to.be.above(0);",
+                                            "});"
+                                          ]
+                                        }
+                                      }
+                                    ],
+                                    "request": {
+                                      "method": "GET",
+                                      "header": [],
+                                      "url": "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/evidence/UCL_PAPER_APPLICATION/versions/{{paperIntakeCurrentVersionId}}/content"
+                                    },
+                                    "response": []
+                                  },
+                                  {
+                                    "name": "Read exact historical intake document content",
+                                    "description": "Requires STAFF without Customer context, document:upload:intake, and Loan-authorized assisted case access. Retrieves only the named immutable version; no workflow or OCR mutation.",
+                                    "event": [
+                                      {
+                                        "listen": "test",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                            "pm.test(\"Content response is private and typed\", function () {",
+                                            "    pm.expect(pm.response.headers.get(\"Cache-Control\")).to.include(\"no-store\").and.include(\"private\");",
+                                            "    pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\");",
+                                            "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.eql(\"application/pdf\");",
+                                            "    pm.expect(pm.response.headers.get(\"Content-Disposition\")).to.include(\"attachment\");",
+                                            "    pm.expect(Number(pm.response.headers.get(\"Content-Length\"))).to.be.above(0);",
+                                            "});"
+                                          ]
+                                        }
+                                      }
+                                    ],
+                                    "request": {
+                                      "method": "GET",
+                                      "header": [],
+                                      "url": "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/evidence/UCL_PAPER_APPLICATION/versions/{{paperIntakeVersionId}}/content"
+                                    },
+                                    "response": []
+                                  },
+                                  {
+                                    "name": "Customer cannot read intake document bytes",
+                                    "description": "Customer document authority cannot retrieve pre-application intake bytes.",
+                                    "auth": {
+                                      "type": "bearer",
+                                      "bearer": [
+                                        {
+                                          "key": "token",
+                                          "value": "{{customerAccessToken}}",
+                                          "type": "string"
+                                        }
+                                      ]
+                                    },
+                                    "event": [
+                                      {
+                                        "listen": "test",
+                                        "script": {
+                                          "type": "text/javascript",
+                                          "exec": [
+                                            "pm.test(\"Status is 403\", function () { pm.response.to.have.status(403); });"
+                                          ]
+                                        }
+                                      }
+                                    ],
+                                    "request": {
+                                      "method": "GET",
+                                      "header": [],
+                                      "url": "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/evidence/UCL_PAPER_APPLICATION/versions/{{paperIntakeVersionId}}/content"
+                                    },
+                                    "response": []
+                                  },
+                                  {
                                       "name": "Reject new OCR creation for replaced intake version",
                                       "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": ["pm.test(\"Status is 409\", function () { pm.response.to.have.status(409); });", "pm.test(\"Error identifies stale OCR source\", function () { pm.expect(pm.response.json().errorCode).to.eql(\"OCR_REQUIRES_CURRENT_INTAKE_VERSION\"); });"]}}],
                                       "request": {"method": "POST", "header": [], "url": {"raw": "{{baseUrl}}/api/v1/staff/assisted-originations/{{assistedOriginationCaseId}}/evidence/UCL_PAPER_APPLICATION/versions/{{paperIntakeVersionId}}/ocr", "host": ["{{baseUrl}}"], "path": ["api", "v1", "staff", "assisted-originations", "{{assistedOriginationCaseId}}", "evidence", "UCL_PAPER_APPLICATION", "versions", "{{paperIntakeVersionId}}", "ocr"]}},

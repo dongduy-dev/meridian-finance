@@ -64,4 +64,41 @@ class ReadDocumentContentServiceTest {
         assertThrows(AuthorizationException.class, () -> service.read(app, UUID.randomUUID(), UUID.randomUUID()));
         verifyNoInteractions(checklists, documents, storage);
     }
+
+    @Test void staffAuthorityNeverTravelsThroughCustomerContentPath() {
+        for (UUID customerContext : Arrays.asList(null, UUID.randomUUID())) {
+            when(users.currentUser()).thenReturn(new AuthenticatedUser(UUID.randomUUID(), "staff@meridian.test", "STAFF",
+                    customerContext, Set.of(), Set.of("document:review", "document:read:own")));
+            assertThrows(AuthorizationException.class, () -> service.read(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()));
+        }
+        verifyNoInteractions(workflows, checklists, documents, storage);
+    }
+
+    @Test void customerReadsOnlyTheOwnedApplicationAndExactVersion() throws Exception {
+        UUID owner = UUID.randomUUID(), applicationId = UUID.randomUUID(), checklistId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID(), documentId = UUID.randomUUID(), versionId = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.of(2026, 10, 7, 10, 0);
+        when(users.currentUser()).thenReturn(new AuthenticatedUser(UUID.randomUUID(), "customer@meridian.test", "CUSTOMER",
+                owner, Set.of(), Set.of("document:read:own")));
+        when(workflows.find(applicationId)).thenReturn(new LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot(
+                applicationId, owner, LoanApplicationStatus.SUBMITTED));
+        var item = new DocumentChecklistItem(itemId, checklistId, DocumentType.BANK_STATEMENT,
+                DocumentRequirementStatus.REQUIRED, null, now, now);
+        when(checklists.findByLoanApplicationIdAndStage(applicationId, DocumentChecklistStage.SUBMISSION)).thenReturn(
+                Optional.of(new DocumentChecklist(checklistId, applicationId, DocumentChecklistStage.SUBMISSION, List.of(item), now)));
+        when(checklists.findItemById(itemId)).thenReturn(Optional.of(item));
+        when(documents.findDocumentByChecklistItemId(itemId)).thenReturn(Optional.of(
+                new StoredDocument(documentId, itemId, versionId, now, now)));
+        when(documents.findVersionById(versionId)).thenReturn(Optional.of(new DocumentVersion(versionId, documentId, 1,
+                UUID.randomUUID(), null, "own.pdf", "application/pdf", "application/pdf", 2, "a".repeat(64),
+                "private/own", DocumentUploaderActorType.CUSTOMER, UUID.randomUUID(), now)));
+        when(storage.open("private/own")).thenReturn(new ByteArrayInputStream(new byte[]{1, 2}));
+        try (var content = service.read(applicationId, itemId, versionId).content()) {
+            assertArrayEquals(new byte[]{1, 2}, content.readAllBytes());
+        }
+        when(users.currentUser()).thenReturn(new AuthenticatedUser(UUID.randomUUID(), "other@meridian.test", "CUSTOMER",
+                UUID.randomUUID(), Set.of(), Set.of("document:read:own")));
+        assertThrows(AuthorizationException.class, () -> service.read(applicationId, itemId, versionId));
+        verify(storage, times(1)).open(anyString());
+    }
 }

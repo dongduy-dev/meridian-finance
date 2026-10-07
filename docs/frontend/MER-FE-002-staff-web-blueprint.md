@@ -250,6 +250,10 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 
 ### 7.4 Staff-Assisted UCL and Collateral Conversion
 
+The paper intake workspace displays safe metadata and ordered immutable versions for Customer identity and the product's signed paper application. The evidence section requires exact intake authority and Loan-assisted case access as defined in [MER-API-001 Section 3.19](../api/MER-API-001-endpoints-and-postman-scenarios.md#319-staff-assisted-customer-and-pre-application-intake). Version number, Current/Historical label, filename, type, size, and upload time identify the selected evidence; raw UUIDs are not its primary description. An explicit View document action opens only the selected version through the protected intake content endpoint, including after the case ends.
+
+Historical selection is read-only and does not retarget OCR, change the current pointer or replacement baseline, establish identity verification or document acceptance, or alter Customer/application facts. OCR and replacement controls remain bound to the authoritative current version. Metadata failure removes the viewer and requires a successful refresh before evidence can be reopened. Intake files remain separate from application checklist and purpose-specific Customer identity-verification evidence access.
+
 `POST /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/unsecured-consumer-loan/submit` requires an open UCL case, a selected ready Customer, current `UCL_PAPER_APPLICATION` evidence, and valid backend-owned UCL terms and submission guards. Success returns the completed case with its `loanApplicationId`; the intake evidence remains separately owned and is not represented as an application checklist upload.
 
 `POST /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/collateral-loan/submit` requires an open Collateral case, a selected ready Customer, current `COLLATERAL_PAPER_APPLICATION` evidence, valid backend-owned amount and term, and exactly one structured Collateral fact containing type, description, estimated value, ownership status, and condition note. Success creates the ordinary ownership-evidence checklist and pending manual verification. Staff Web does not infer the structured fact from paper metadata and does not calculate valuation or loan-to-value outcomes.
@@ -695,12 +699,14 @@ Queue rows are triage surfaces, not evidence dumps.
 
 ### 16.2 Document Content
 
-- Fetch an immutable version only after an explicit operator action in a document-review workspace.
+- Fetch an immutable version only after an explicit operator action in an authorized evidence workspace.
 - Respect `Cache-Control: no-store, private` and `X-Content-Type-Options: nosniff`.
 - Use a memory-only object URL and revoke it when the viewer closes, the version changes, the route leaves, or the session ends.
 - Do not put content in TanStack Query, browser cache helpers, service workers, thumbnails persisted across sessions, or client logs.
 - Keep the version identity visible so the operator understands exactly what is being reviewed.
 - Do not imply document history from a current queue item. Historical-version discovery requires an API projection.
+
+The shared viewer offers Download document only after a successful authorized read. The action saves the exact loaded blob through the same memory-only object URL, using the safe response filename or known immutable-version metadata. It issues no second content read and generates no storage URL or token-bearing link. Only detected PDF/JPEG/PNG content may be displayed or downloaded. Closing a pending viewer cancels local retention, and late responses after close, unmount, resource change, logout, or actor/authority change must not recreate content. The download link disappears with the viewer and its object URL is revoked during the same cleanup. Network or unsupported-content failure displays explicit safe guidance without selecting another version or enabling a workflow command.
 
 ### 16.3 Disbursement-Destination Reveal
 

@@ -120,7 +120,7 @@ Every response includes `X-Request-ID` as transport correlation for the HTTP req
 
 `GET /v3/api-docs` returns the generated OpenAPI definition. `GET /swagger-ui.html` redirects to the Swagger UI entry under `/swagger-ui/`. The definition identifies the API as `Meridian Lending Platform API` version `v1` and declares stateless JWT access through the HTTP Bearer scheme named `bearerAuth`. The public operations listed in section 1.2 do not require that scheme.
 
-Meridian grants credentialed cross-origin browser access only to the explicit origins configured by `MERIDIAN_FRONTEND_ALLOWED_ORIGINS`; the local-development default is `http://localhost:5173`. The CORS policy allows credentials plus `GET`, `POST`, `PUT`, and preflight `OPTIONS` requests with `Accept`, `Authorization`, `Content-Type`, and `X-Request-ID`. Responses expose `X-Request-ID` so browser clients can read the transport correlation identifier. A disallowed origin receives no CORS grant, wildcard origins are rejected, and CORS does not change endpoint authentication or permission requirements.
+Meridian grants credentialed cross-origin browser access only to the explicit origins configured by `MERIDIAN_FRONTEND_ALLOWED_ORIGINS`; the local-development default is `http://localhost:5173`. The CORS policy allows credentials plus `GET`, `POST`, `PUT`, and preflight `OPTIONS` requests with `Accept`, `Authorization`, `Content-Type`, and `X-Request-ID`. Responses expose `X-Request-ID` for transport correlation, `Retry-After` for controlled retry guidance, and `Content-Disposition` for the safe filename on authorized content reads. A disallowed origin receives no CORS grant, wildcard origins are rejected, and CORS does not change endpoint authentication or permission requirements.
 
 ---
 
@@ -195,6 +195,7 @@ Meridian grants credentialed cross-origin browser access only to the explicit or
 | POST | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/unsecured-consumer-loan/submit` | Staff with `loan:originate:staff` | Atomically convert an eligible open UCL intake into one Staff-assisted UCL application. |
 | POST | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/collateral-loan/submit` | Staff with `loan:originate:staff` | Atomically convert an eligible open Collateral intake into one Staff-assisted Collateral Loan application. |
 | GET | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence` | Staff with `document:upload:intake` and `loan:originate:staff` | Return controlled intake-evidence version metadata without storage keys. |
+| GET | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence/{evidenceType}/versions/{versionId}/content` | Staff with `document:upload:intake` and `loan:originate:staff` | Stream the exact current or historical immutable intake-evidence version. |
 | POST | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence/{evidenceType}/versions` | Staff with `document:upload:intake` and `loan:originate:staff` | Upload or replace a controlled intake-evidence version for an open case. |
 | POST | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence/{evidenceType}/versions/{intakeDocumentVersionId}/ocr` | Staff with `document:upload:intake` and `loan:originate:staff` | Start asynchronous OCR for the exact current immutable intake-evidence version or return its existing job. |
 | GET | `/api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence/{evidenceType}/versions/{intakeDocumentVersionId}/ocr` | Staff with `document:upload:intake` and `loan:originate:staff` | Return safe OCR job status for an intake-evidence version. |
@@ -810,6 +811,18 @@ Upload is `multipart/form-data` with:
 - required `file` with `application/pdf`, `image/jpeg`, or `image/png`, maximum 10 MiB.
 
 The first upload omits `expectedCurrentVersionId`. Replacement supplies the current version returned by the metadata read. Exact `uploadRequestId` replay returns the existing version. Reuse for different content returns `409 IDEMPOTENCY_KEY_REUSED`; a changed current pointer returns `409 STALE_DOCUMENT_VERSION`. The response contains version ID, sequence, safe original filename, detected media type, byte size, and upload time. Evidence metadata contains logical intake-document ID, case ID, evidence type, current-version ID, and ordered immutable versions. It never exposes storage keys. Intake upload does not require or create an application checklist or correction task and is not authorized by `document:upload:staff`.
+
+Intake content retrieval uses:
+
+```text
+GET /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence/{evidenceType}/versions/{versionId}/content
+```
+
+The caller must be a Staff User without Customer context and hold exact `document:upload:intake`. Loan additionally authorizes the case through its assisted-origination boundary, which requires `loan:originate:staff`. Generic `loan:read`, application-document review, and Customer document authority do not grant intake bytes. Document validates the product/evidence type, resolves the logical document for that exact case and type, and verifies that the requested immutable version belongs to it before opening storage.
+
+Current and historical versions are readable for `OPEN`, `COMPLETED`, and `ABANDONED` cases. Reading does not change the current pointer, OCR target, identity-verification state, application facts, or workflow. Success streams only the selected PDF/JPEG/PNG bytes with that version's safe original filename, detected `Content-Type`, byte size in `Content-Length`, attachment `Content-Disposition`, `Cache-Control: no-store, private`, and `X-Content-Type-Options: nosniff`. Configured frontend origins may read `Content-Disposition` to preserve the filename during an explicit download. Storage keys and storage URLs are never returned.
+
+Missing case returns `404 ASSISTED_ORIGINATION_CASE_NOT_FOUND`; missing case/type document returns `404 INTAKE_EVIDENCE_NOT_FOUND`; unknown or unrelated version returns `404 INTAKE_EVIDENCE_VERSION_NOT_FOUND`. Product-incompatible evidence returns `422 INTAKE_EVIDENCE_PRODUCT_MISMATCH`. Missing endpoint authority returns the established security denial; invalid Staff context returns `403 INTAKE_EVIDENCE_ACCESS_DENIED`, and failed Loan authorization returns `403 ASSISTED_ORIGINATION_ACCESS_DENIED`. Unavailable stored bytes return `503 DOCUMENT_STORAGE_UNAVAILABLE` without storage details or fallback to another version. The read creates no business mutation or retrieval audit event.
 
 OCR is requested explicitly after upload:
 

@@ -308,14 +308,14 @@ class SecurityConfigTest {
     }
 
     @Test
-    void exposesRequestIdAndRetryAfterToConfiguredFrontendOrigin() throws Exception {
+    void exposesRequestIdRetryAfterAndContentFilenameToConfiguredFrontendOrigin() throws Exception {
         mockMvc.perform(get("/api/v1/health")
                         .header(HttpHeaders.ORIGIN, CONFIGURED_FRONTEND_ORIGIN))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, CONFIGURED_FRONTEND_ORIGIN))
                 .andExpect(header().string(
                         HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
-                        "X-Request-ID, Retry-After"
+                        "X-Request-ID, Retry-After, Content-Disposition"
                 ));
     }
 
@@ -480,7 +480,7 @@ class SecurityConfigTest {
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, CONFIGURED_FRONTEND_ORIGIN))
                 .andExpect(header().string(
                         HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,
-                        "X-Request-ID, Retry-After"
+                        "X-Request-ID, Retry-After, Content-Disposition"
                 ))
                 .andExpect(jsonPath("$.errorCode").value("RATE_LIMIT_EXCEEDED"))
                 .andExpect(jsonPath("$.message").value("Too many requests."));

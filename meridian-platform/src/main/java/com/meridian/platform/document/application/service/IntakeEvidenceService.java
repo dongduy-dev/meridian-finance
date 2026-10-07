@@ -1,6 +1,7 @@
 package com.meridian.platform.document.application.service;
 
 import com.meridian.platform.document.application.dto.IntakeEvidenceDto;
+import com.meridian.platform.document.application.dto.DocumentContentDto;
 import com.meridian.platform.document.application.dto.IntakeEvidenceVersionDto;
 import com.meridian.platform.document.application.dto.UploadIntakeEvidenceCommand;
 import com.meridian.platform.document.application.port.in.ManageIntakeEvidenceUseCase;
@@ -11,6 +12,7 @@ import com.meridian.platform.document.application.port.out.StagedDocument;
 import com.meridian.platform.document.application.port.out.StoredObject;
 import com.meridian.platform.document.domain.model.IntakeDocument;
 import com.meridian.platform.document.domain.model.IntakeDocumentVersion;
+import com.meridian.platform.document.domain.model.IntakeEvidenceType;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -23,6 +25,7 @@ import com.meridian.platform.shared.domain.audit.BusinessAuditPayload;
 import com.meridian.platform.shared.domain.audit.BusinessAuditPayloadKey;
 import com.meridian.platform.shared.domain.exception.AuthorizationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
+import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -68,6 +71,28 @@ public class IntakeEvidenceService implements ManageIntakeEvidenceUseCase {
         requireStaff();
         assistedOriginations.authorizeRead(caseId);
         return documents.findByCase(caseId).stream().map(this::toDto).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DocumentContentDto readContent(UUID caseId, IntakeEvidenceType evidenceType, UUID versionId) {
+        requireStaff();
+        Objects.requireNonNull(caseId);
+        Objects.requireNonNull(evidenceType);
+        Objects.requireNonNull(versionId);
+        var authorized = assistedOriginations.authorizeRead(caseId);
+        evidenceType.requireProduct(authorized.productCode());
+        IntakeDocument document = documents.findByCaseAndType(caseId, evidenceType)
+                .filter(value -> value.assistedOriginationCaseId().equals(caseId)
+                        && value.evidenceType() == evidenceType)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "INTAKE_EVIDENCE_NOT_FOUND", "Intake evidence was not found."));
+        IntakeDocumentVersion version = documents.findVersionById(versionId)
+                .filter(value -> value.intakeDocumentId().equals(document.id()))
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "INTAKE_EVIDENCE_VERSION_NOT_FOUND", "Intake evidence version was not found."));
+        return new DocumentContentDto(version.originalFilename(), version.detectedMimeType(),
+                version.byteSize(), storage.open(version.storageKey()));
     }
 
     @Override
