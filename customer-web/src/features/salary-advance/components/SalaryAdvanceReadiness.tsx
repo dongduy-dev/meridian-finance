@@ -86,7 +86,7 @@ export function ReadinessSummary({ readiness }: { readiness: SalaryAdvanceReadin
           </div>
           <StatusBadge presentation={readiness.applicationAllowed
             ? { label: 'Ready to apply', tone: 'success', icon: ShieldCheck }
-            : { label: 'Action or waiting required', tone: 'warning', icon: Info }} />
+            : { label: 'Not ready to apply', tone: 'warning', icon: Info }} />
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -159,7 +159,7 @@ export function SalaryAdvanceReadiness({
       {inconsistentApplyState ? (
         <Alert variant="destructive">
           <Info aria-hidden="true" />
-          <AlertTitle>Application cannot be started safely</AlertTitle>
+          <AlertTitle>Application unavailable</AlertTitle>
           <AlertDescription>We can't start the application with the current employment information. Refresh the page or contact support if this continues.</AlertDescription>
         </Alert>
       ) : null}

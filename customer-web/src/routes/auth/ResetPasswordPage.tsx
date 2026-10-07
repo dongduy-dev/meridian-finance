@@ -73,14 +73,14 @@ function ResetPasswordContent({ locationKey }: { locationKey: string }) {
       description="Set a new password for your Meridian account."
       footer={
         <p className="text-center text-sm text-muted-foreground">
-          <Link className="font-semibold text-primary underline-offset-4 hover:underline" to="/login">Back to Login</Link>
+          <Link className="font-semibold text-primary underline-offset-4 hover:underline" to="/login">Back to log in</Link>
         </p>
       }
     >
       {!token || invalidToken ? (
         <div className="space-y-5">
           <ErrorFeedback
-            title={!token ? 'Reset token missing' : 'Reset link unavailable'}
+            title={!token ? 'Reset link incomplete' : 'Reset link unavailable'}
             description={!token ? 'This password-reset link is incomplete.' : 'This password-reset link is invalid or has expired.'}
           />
           <Button asChild variant="secondary" className="w-full">

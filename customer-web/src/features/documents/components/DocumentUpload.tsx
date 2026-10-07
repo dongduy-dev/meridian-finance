@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { ApiError } from '@/lib/api'
+import { customerErrorMessage } from '@/lib/errors/customer-error-message'
 
 import type { CustomerDocumentChecklistItem } from '../document-api'
 import { useUploadDocumentMutation } from '../document-queries'
@@ -25,7 +26,7 @@ const uploadMessages: Record<string, string> = {
   STALE_DOCUMENT_VERSION: 'The document changed since this page loaded. Review the latest file before trying again.',
   IDEMPOTENCY_KEY_REUSED: 'This upload could not be safely repeated. Select the file again to start a new upload.',
   SYSTEM_STATE_CONFLICT: "We couldn't confirm the latest document status. Refresh and try again if needed.",
-  DOCUMENT_STORAGE_UNAVAILABLE: 'Document storage is temporarily unavailable. You can retry this same file.',
+  DOCUMENT_STORAGE_UNAVAILABLE: 'Document upload is temporarily unavailable. You can retry this same file.',
   VALIDATION_FAILED: 'Meridian could not validate this upload.',
 }
 
@@ -141,9 +142,9 @@ export function DocumentUpload({
       {serverError ? (
         <Alert variant="destructive" aria-live="polite">
           <AlertCircle aria-hidden="true" />
-          <AlertTitle>{action === 'replace' ? 'Replacement failed' : 'Upload failed'}</AlertTitle>
+          <AlertTitle>{action === 'replace' ? 'Replacement was not confirmed' : 'Upload was not confirmed'}</AlertTitle>
           <AlertDescription className="space-y-2">
-            <p>{knownMessage ?? (serverError instanceof ApiError ? serverError.message : 'The upload could not be completed. Check your connection and retry the same file if appropriate.')}</p>
+            <p>{knownMessage ?? customerErrorMessage(serverError, 'We could not confirm the upload. Check the document status before retrying the same file.')}</p>
             {serverError instanceof ApiError && serverError.requestId ? <p className="break-all text-xs">Support reference: {serverError.requestId}</p> : null}
           </AlertDescription>
         </Alert>

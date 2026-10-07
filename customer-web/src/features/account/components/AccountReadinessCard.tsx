@@ -30,6 +30,7 @@ function ReadinessItem({
   description,
   href,
   action,
+  statusLabel,
 }: {
   complete: boolean
   icon: typeof UserRound
@@ -37,6 +38,7 @@ function ReadinessItem({
   description: string
   href: string
   action: string
+  statusLabel?: string
 }) {
   const StateIcon = complete ? CheckCircle2 : CircleAlert
   return (
@@ -55,7 +57,7 @@ function ReadinessItem({
               )}
             >
               <StateIcon aria-hidden="true" className="size-3.5" />
-              {complete ? 'Complete' : 'Action needed'}
+              {complete ? 'Complete' : statusLabel ?? 'Action needed'}
             </span>
           </div>
           <p className="mt-1 text-sm leading-5 text-muted-foreground">{description}</p>
@@ -73,14 +75,14 @@ function ReadinessItem({
 export function AccountReadinessCard({ customer }: { customer: Customer }) {
   const identity = useOwnIdentityHistory()
   const pending = identity.data?.[0]?.status === 'PENDING_REVIEW'
-  const identityDescription = customer.verificationStatus === 'VERIFIED' ? 'Identity verified.' : pending ? 'Identity evidence submitted; review pending.' : customer.verificationStatus === 'REJECTED' ? 'Verification could not be completed. Review the reason and submit replacement evidence.' : identity.isError ? 'Identity review status could not be confirmed. Open identity verification.' : 'Submit identity evidence for Staff review before applying for a loan.'
+  const identityDescription = customer.verificationStatus === 'VERIFIED' ? 'Identity verified.' : identity.isPending ? 'Checking your identity review status…' : identity.isError ? 'Identity review status could not be confirmed. Open identity verification and try again.' : pending ? 'Your identity document is being reviewed. No further document is needed right now.' : customer.verificationStatus === 'REJECTED' ? 'Verification could not be completed. Review the reason and submit a replacement document.' : 'Complete your profile, then submit an identity document for review before applying for a loan.'
   const profileComplete = customer.profileCompletionStatus === 'COMPLETE'
   return (
     <Card>
       <CardHeader>
         <CardTitle>Account setup</CardTitle>
         <CardDescription>
-          Review your account setup. Identity verification is required before applying for Meridian lending products. Account setup does not indicate loan eligibility.
+          Complete your profile, verify your identity, and choose a primary bank account. Salary Advance also requires employment verification. These steps do not guarantee loan approval.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -95,14 +97,15 @@ export function AccountReadinessCard({ customer }: { customer: Customer }) {
           />
           <ReadinessItem complete={customer.verificationStatus === 'VERIFIED'} icon={UserRound}
             title="Identity verification" description={identityDescription}
+            statusLabel={identity.isPending ? 'Checking status' : identity.isError ? 'Status unavailable' : pending ? 'Under review' : undefined}
             href="/account/identity-verification" action="Open identity verification" />
           <ReadinessItem
             complete={customer.primaryActiveBankAccountPresent}
             icon={Landmark}
             title="Primary bank account"
-            description={customer.primaryActiveBankAccountPresent ? 'A primary active bank account is available.' : 'Add or select a primary active bank account.'}
+            description={customer.primaryActiveBankAccountPresent ? 'You have an active primary bank account.' : 'Add a bank account or make an active saved account your primary account.'}
             href="/account/bank-accounts"
-            action="Manage accounts"
+            action="Manage bank accounts"
           />
         </div>
         <div className="flex flex-wrap gap-x-6 gap-y-2 rounded-md bg-information-subtle px-4 py-3 text-sm text-information">

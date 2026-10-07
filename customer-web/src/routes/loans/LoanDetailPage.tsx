@@ -158,8 +158,8 @@ function LoanStatusRail({ account }: { account: LoanAccountData }) {
       <CardContent className="space-y-5">
         <StatusBadge presentation={loanAccountStatusPresentation(account.status)} />
         <dl className="space-y-4 text-sm">
-          <div><dt className="text-muted-foreground">Total paid</dt><dd className="mt-1"><MoneyDisplay value={account.servicing.totalPaid} /></dd></div>
-          <div><dt className="text-muted-foreground">Total outstanding</dt><dd className="mt-1"><MoneyDisplay value={account.servicing.totalOutstanding} /></dd></div>
+          <div><dt className="text-muted-foreground">Amount paid</dt><dd className="mt-1"><MoneyDisplay value={account.servicing.totalPaid} /></dd></div>
+          <div><dt className="text-muted-foreground">Amount remaining</dt><dd className="mt-1"><MoneyDisplay value={account.servicing.totalOutstanding} /></dd></div>
           <div><dt className="text-muted-foreground">Balance updated</dt><dd className="mt-1 font-medium">As of {formatDateOnly(account.servicing.servicingEvaluationDate)}</dd></div>
         </dl>
       </CardContent>
@@ -221,10 +221,10 @@ function RepaymentHistory({ query, page, onPageChange }: { query: RepaymentHisto
       {history?.items.length ? history.items.map((item) => (
         <RepaymentHistoryItem key={item.repaymentTransactionId} item={item} />
       )) : null}
-      {history?.totalElements === 0 ? (
+      {query.isSuccess && history?.totalElements === 0 ? (
         <EmptyState icon={ReceiptText} title="No payments recorded yet" description="Your payment history will appear here after a repayment is recorded." />
       ) : null}
-      {history ? (
+      {query.isSuccess && history ? (
         <nav aria-label="Repayment history pagination" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4">
           <Button variant="secondary" disabled={page <= 0} aria-label="Previous repayment history page" onClick={() => onPageChange(page - 1)}>Previous</Button>
           <p className="text-sm text-muted-foreground">Page <span className="font-medium text-foreground">{history.page + 1}</span> · {history.totalElements} repayments</p>

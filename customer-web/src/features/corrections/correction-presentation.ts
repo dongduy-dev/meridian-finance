@@ -2,6 +2,7 @@ import { CheckCircle2, CircleDashed, FileUp, RefreshCcw, ShieldAlert } from 'luc
 
 import { unavailableStatus, type StatusPresentation } from '@/components/common/status-presentation'
 import { ApiError } from '@/lib/api'
+import { customerErrorMessage } from '@/lib/errors/customer-error-message'
 
 export interface CorrectionScopePresentation {
   label: string
@@ -78,5 +79,5 @@ export function correctionTaskStatusPresentation(value: string) {
 
 export function correctionErrorMessage(error: unknown, fallback: string) {
   if (!(error instanceof ApiError)) return fallback
-  return correctionMessages[error.errorCode] ?? error.message
+  return correctionMessages[error.errorCode] ?? customerErrorMessage(error, fallback)
 }

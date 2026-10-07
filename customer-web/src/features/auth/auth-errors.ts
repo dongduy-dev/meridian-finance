@@ -10,7 +10,7 @@ export function isAuthApiError(error: unknown, status: number, errorCode: string
 export function unexpectedAuthError(error: unknown) {
   return {
     title: 'We could not complete that request',
-    description: 'Your information is still here. Please try again.',
+    description: 'We could not confirm the result. Check your connection and follow the recovery steps on this page.',
     requestId: error instanceof ApiError ? error.requestId : undefined,
   }
 }

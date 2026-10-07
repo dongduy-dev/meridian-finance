@@ -161,7 +161,7 @@ export function BankAccountsPage() {
         setSuccessMessage('Primary bank account updated.')
       } else {
         await deactivate.mutateAsync(confirmation.account.customerBankAccountId)
-        setSuccessMessage('Bank account deactivated. Your account setup has been refreshed.')
+        setSuccessMessage('Bank account deactivated. It remains visible in your saved accounts as inactive.')
       }
     } catch (error) {
       setServerError(error)
@@ -193,7 +193,7 @@ export function BankAccountsPage() {
       <PageHeader
         eyebrow="Your account"
         title="Bank accounts"
-        description="Manage the bank accounts saved with your Meridian account."
+        description="Manage your saved bank accounts and choose a primary account. Changes here do not change the account recorded on an existing contract."
       />
       <AccountNavigation />
 
@@ -201,7 +201,7 @@ export function BankAccountsPage() {
       {customerQuery.isError ? <AccountErrorFeedback error={customerQuery.error} title="Account status could not be loaded" /> : null}
       {customerQuery.data ? <AccountReadinessCard customer={customerQuery.data} /> : null}
 
-      {serverError ? <AccountErrorFeedback error={serverError} title="Bank account was not updated" /> : null}
+      {serverError ? <AccountErrorFeedback error={serverError} title="Bank account update was not confirmed" /> : null}
       {successMessage ? <AccountSuccessFeedback title="Bank accounts updated" description={successMessage} /> : null}
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
@@ -285,7 +285,7 @@ export function BankAccountsPage() {
             <DialogTitle>{confirmation?.type === 'primary' ? 'Make this the primary account?' : 'Deactivate this bank account?'}</DialogTitle>
             <DialogDescription>
               {confirmation?.type === 'primary'
-                ? `Meridian will make ${confirmation.account.bankNameSnapshot} ${confirmation.account.maskedAccountNumber} primary and remove the primary designation from the current account.`
+                ? `Meridian will use ${confirmation.account.bankNameSnapshot} ${confirmation.account.maskedAccountNumber} as your primary account. Your other saved accounts will stay in the list.`
                 : `Meridian will deactivate ${confirmation?.account.bankNameSnapshot ?? ''} ${confirmation?.account.maskedAccountNumber ?? ''}. It will remain visible as inactive.`}
             </DialogDescription>
           </DialogHeader>

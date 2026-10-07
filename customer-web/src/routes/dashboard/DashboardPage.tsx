@@ -58,7 +58,7 @@ export function DashboardPage() {
     <div className="space-y-10">
       <PageHeader
         eyebrow="Overview"
-        title="Dashboard"
+        title="Home"
         description="See what needs your attention, track applications, and review your loans."
       />
 
@@ -102,11 +102,11 @@ export function DashboardPage() {
             ))}
           </div>
         ) : null}
-        {requiredActions?.length === 0 ? (
+        {applicationQuery.isSuccess && requiredActions?.length === 0 ? (
           <EmptyState
             icon={CheckCircle2}
             title="You're up to date online"
-            description="There are no digital application tasks waiting for you here. Staff-assisted steps are coordinated with Meridian Staff."
+            description="There are no digital application tasks waiting for you here. Staff-assisted steps are coordinated with Meridian staff."
             className="min-h-52"
           />
         ) : null}
@@ -133,7 +133,7 @@ export function DashboardPage() {
             ))}
           </div>
         ) : null}
-        {activeApplications?.length === 0 ? (
+        {applicationQuery.isSuccess && activeApplications?.length === 0 ? (
           <EmptyState
             icon={FileSearch}
             title="No active applications"
@@ -165,7 +165,7 @@ export function DashboardPage() {
             ))}
           </div>
         ) : null}
-        {activeLoanAccounts?.length === 0 ? (
+        {loanQuery.isSuccess && activeLoanAccounts?.length === 0 ? (
           <EmptyState
             icon={Landmark}
             title="No active loans"
@@ -201,7 +201,7 @@ export function DashboardPage() {
             ))}
           </div>
         ) : null}
-        {productQuery.data?.length === 0 ? (
+        {productQuery.isSuccess && productQuery.data?.length === 0 ? (
           <EmptyState
             icon={Shapes}
             title="No products available"

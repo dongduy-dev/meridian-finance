@@ -284,7 +284,7 @@ The HTTP client parses the Meridian error envelope and exposes status, `errorCod
 | `503` | Retry option without exposing storage or infrastructure details |
 | Unknown failure | Generic fallback plus readable `X-Request-ID` for support |
 
-Error-code label maps live in `lib/errors` for cross-cutting codes or in the owning feature for domain-specific codes. Customer Web must not show raw exception text, stack traces, internal identifiers, or restricted evidence.
+Error-code label maps live in `lib/errors` for cross-cutting codes or in the owning feature for domain-specific codes. Customer Web must not show raw exception text, stack traces, internal identifiers, or restricted evidence. Known errors use verified feature mappings; unknown errors use safe Customer-facing fallback text rather than the API message. An uncertain command result must not claim the command failed or invite another submission before the Customer checks the latest record. Support correlation references may remain visible.
 
 ### 7.5 Money, Dates, and Enums
 
@@ -337,7 +337,7 @@ Customer business `verificationStatus` is not Identity email verification. Custo
 
 After an existing Customer activates digital access, Customer-owned application reads use the unchanged authenticated `customerId`. Historical `STAFF_ASSISTED` applications may appear in the ordinary application list, but their channel remains `STAFF_ASSISTED` and Customer Web must not infer a digital-only required action for them.
 
-`requiredAction` describes Customer-digital work only; `STAFF_ASSISTED` applications return `NONE`. The Dashboard empty attention state must describe online tasks without implying that no Staff-coordinated Customer participation is needed.
+`requiredAction` describes Customer-digital work only; `STAFF_ASSISTED` applications return `NONE`. The Home empty attention state must describe online tasks without implying that no Staff-coordinated Customer participation is needed.
 
 Application Detail and the direct Offer, Contract, Documents, and Corrections routes must use the own application detail's authoritative `originationChannel` before rendering Customer-direct controls. For `STAFF_ASSISTED`, safe authorized application, offer, contract, and checklist information remains readable, while offer response, contract acknowledgment, document upload/replacement, correction completion/resubmission, and Customer cancellation controls are absent even if another response advertises an action. The Corrections route must not query Customer correction tasks or its action-purpose checklist until `CUSTOMER_DIGITAL` is established. Loading or failed application context must not expose direct controls.
 
@@ -367,7 +367,7 @@ The Customer Web shell requires `userType = CUSTOMER` and a non-null `customerId
 4. `INVALID_REFRESH_TOKEN` enters `anonymous` without an error page.
 5. A transport or server failure presents a retryable session-check state; it must not be mislabeled as signed out.
 
-Login uses a credentialed request so the browser accepts the refresh cookie. On success, Customer Web stores the access token in memory, caches actor facts only in auth state, and navigates to the previously requested Customer route or Dashboard.
+Login uses a credentialed request so the browser accepts the refresh cookie. On success, Customer Web stores the access token in memory, caches actor facts only in auth state, and navigates to the previously requested Customer route or Home.
 
 ### 8.4 Protected Request Recovery
 
@@ -532,9 +532,9 @@ Generic controls begin with shadcn/ui where a matching primitive exists. `PageHe
 |---|---|---|
 | `MoneyDisplay` | Consistent VND formatting, emphasis, and tabular numerals | Every financial summary |
 | `StatusBadge` | Maps known backend status to semantic label, icon, and color | Every status surface |
-| `LoanProductCard` | Product name, description, amount range, and supported action | Product catalogue and Dashboard |
+| `LoanProductCard` | Product name, description, amount range, and supported action | Product catalogue and Home |
 | `ReadinessSummary` | Presents returned readiness facts and blocker-code actions | Salary Advance and Customer readiness surfaces |
-| `RequiredActionCard` | One persistent action with reason and destination | Dashboard and application detail |
+| `RequiredActionCard` | One persistent action with reason and destination | Home and application detail |
 | `ApplicationSummary` | Application number, product, requested terms, status, and submitted time | List and detail headers |
 | `ApplicationTimeline` | Maps returned application state to documented lifecycle milestones | Application detail after the read projection can support it |
 | `ApplicationStepper` | Shows form-wizard progress only | Multi-step application and correction forms |
@@ -543,7 +543,7 @@ Generic controls begin with shadcn/ui where a matching primitive exists. `PageHe
 | `DocumentStatus` | Current filename/version and backend review/readiness state | After a Customer document projection exists |
 | `OfferSummary` | Approved principal, term, interest, fee, total, expiry, and provisional items | Approved-offer page |
 | `ContractSummary` | Version, status, accepted terms, masked destination, and acknowledgment | Contract page |
-| `LoanAccountCard` | Account status and high-level paid/outstanding facts | Loan list and Dashboard |
+| `LoanAccountCard` | Account status and high-level paid/outstanding facts | Loan list and Home |
 | `RepaymentSummary` | Paid and outstanding component totals | Loan detail |
 | `InstallmentRow` | Due date, contractual components, servicing components, and status | Responsive schedule |
 
@@ -583,7 +583,7 @@ Public
 └── /reset-password
 
 Authenticated Customer
-├── /                         Dashboard
+├── /                         Home
 ├── /products                 Product catalogue
 │   ├── /products/salary-advance
 │   ├── /products/unsecured-consumer-loan
@@ -598,12 +598,17 @@ Authenticated Customer
 │   └── /loans/:loanApplicationId
 └── /account
     ├── /account/profile
+    ├── /account/identity-verification
     └── /account/bank-accounts
 ```
 
+The primary navigation labels are Home, Products, Applications, Loans, and Account. Home remains `/`; internal source names do not determine Customer-facing labels. `/account` redirects to `/account/profile`. Each supported product has an `/apply` route below its product path.
+
+Browser titles identify every public, account, application, nested application, and loan route. Repayment history uses its own title when selected within Loan Detail. Nested pages link back to the exact parent application or loan list.
+
 Product application forms use nested focused-flow routes or route state under the product route. Exact step URLs are chosen during feature implementation; they must remain browser-back-safe and must not expose sensitive form values.
 
-Documents are not a top-level navigation destination in the MVP. Evidence is meaningful in the context of an application or correction, and the v1 API exposes no Customer-wide document index. Required actions appear on Dashboard and Application Detail after the required projections exist.
+Documents are not a top-level navigation destination in the MVP. Evidence is meaningful in the context of an application or correction, and the v1 API exposes no Customer-wide document index. Required actions appear on Home and Application Detail after the required projections exist.
 
 ### 13.2 Verified Capability Baseline and Dependencies
 
@@ -612,13 +617,13 @@ Documents are not a top-level navigation destination in the MVP. Evidence is mea
 | Register, verify email, login, refresh, logout, request/confirm reset | Complete endpoint surface | Implement in the Auth checkpoint. |
 | Own profile and bank accounts | Own reads and mutations exist | Implement after Auth. Treat protected identity reference as “on file” after completion. |
 | Product catalogue | Public list/detail expose name, description, active state, and amount range | **API dependency:** allowed terms, pricing display, repayment method, evidence requirements, and eligibility notes must come from an enriched product contract before complete product detail/application UX. |
-| Dashboard readiness | Profile, bank-account list, catalogue, and Salary Advance readiness can be queried | **API dependency:** active-application, active-loan, and required-action aggregation. Do not reconstruct them from browser storage. |
+| Home readiness | Profile, bank-account list, catalogue, and Salary Advance readiness can be queried | **API dependency:** active-application, active-loan, and required-action aggregation. Do not reconstruct them from browser storage. |
 | Salary Advance readiness | Customer readiness returns limit facts, reusable link ID, and blockers | Usable for an already linked Customer. |
 | First-time Salary Advance employee verification | Verification command requires `partnerCompanyId` and employee code | **API dependency:** Customer-safe Partner selection/lookup. Staff Partner Company reads must not be reused. |
 | Salary Advance submission | Authenticated submit endpoint exists | **API dependency:** allowed terms must be returned by product policy; do not hardcode them as frontend authority. |
 | UCL submission | Authenticated amount/term submission creates three checklist items | Customer checklist query exposes the required checklist item IDs and current evidence state. |
 | Collateral submission | Authenticated submission returns ownership-evidence item ID | Initial upload can follow submission. Customer checklist/current-version query supports reconnect and resume. |
-| Application tracking | Customer application index with backend-owned lifecycle/required-action summaries and owned application-by-ID status read | Dashboard, list, and resume navigation use these reads. **API dependency:** richer history/timeline evidence for a faithful timeline. |
+| Application tracking | Customer application index with backend-owned lifecycle/required-action summaries and owned application-by-ID status read | Home, list, and resume navigation use these reads. **API dependency:** richer history/timeline evidence for a faithful timeline. |
 | Correction tasks | Owned task list, completion, resubmission, and narrow Salary Advance/UCL cancellation exist by application ID | Customer correction flow composes the application index and Document projection. Never show cancellation for Collateral or another state. |
 | Document upload/status | Customer checklist/current-version/readiness query, upload, and content reads exist | Use the Customer checklist query to discover item/version IDs and authoritative document status/readiness. |
 | Approved offer | Owned read, accept, and decline exist by application ID | Build after application navigation can discover pending offers. |
@@ -637,7 +642,7 @@ Each page below defines its intended composition. “Dependency” means the pag
 
 | Page | Purpose and primary goal | Backend capability | Composition and primary actions | Important states and success destination |
 |---|---|---|---|---|
-| Login | Enter Customer Web with an existing verified account | `POST /api/v1/auth/login` | `AuthLayout`, email/password fields, Login, Forgot password, Register | Invalid credentials remain generic; verification-required links to pending verification; rate limit uses countdown; success goes to intended route or Dashboard |
+| Login | Enter Customer Web with an existing verified account | `POST /api/v1/auth/login` | `AuthLayout`, email/password fields, Login, Forgot password, Register | Invalid credentials remain generic; verification-required links to pending verification; rate limit uses countdown; success goes to intended route or Home |
 | Register | Create an unverified Customer and Identity User | `POST /api/v1/auth/register` | `AuthLayout`, display name, email, password, password guidance, consent to account creation copy, Register | Duplicate email offers Login/recovery; success goes to Verification Pending; no app session is assumed |
 | Verification Pending | Explain the required email step and allow enumeration-safe resend | `POST /api/v1/auth/email-verification/request` | `AuthLayout`, persistent instructions, email field when not retained in memory, Resend, Login | Accepted response always uses neutral copy; rate-limited state is persistent; success remains on the page |
 | Verify Email | Consume a fragment token and confirm email | `POST /api/v1/auth/email-verification/confirm` | `AuthLayout`, automatic confirmation state, Retry request link | Missing, submitting, success, invalid/expired, unexpected error; success goes to Login |
@@ -647,12 +652,12 @@ Each page below defines its intended composition. “Dependency” means the pag
 
 Password confirmation is a client-only matching check. The backend remains authoritative for the new-password policy.
 
-### 14.2 Dashboard and Account Pages
+### 14.2 Home and Account Pages
 
 | Page | Purpose and primary goal | Backend capability | Composition and primary actions | Important states and success destination |
 |---|---|---|---|---|
-| Dashboard | Show account readiness and the next meaningful Customer work | Profile, bank accounts, products, Salary Advance readiness; portfolio projections are missing | `CustomerAppLayout`, `PageHeader`, readiness card, required actions, active application summary, active loan summary, product cards | Profile and product portions can load independently; application/loan/action areas depend on frontend-enabling projections; actions navigate to the owning page |
-| Profile | Complete or maintain the Customer profile | `GET /customers/me`, `PUT /customers/me/profile`, dedicated `PUT /customers/me/identity-reference` | Profile readiness header, verified full name read-only, mutable fields, consent checkboxes, Save | Initial completion requires full name and identity reference; after completion show protected identity as “On file”; omit both identity-bearing fields from verified ordinary updates; non-verified name remains editable and reference correction is a separate pre-verification action; success stays and refreshes Dashboard readiness |
+| Home | Show account readiness and the next meaningful Customer work | Profile, bank accounts, products, Salary Advance readiness; portfolio projections are missing | `CustomerAppLayout`, `PageHeader`, readiness card, required actions, active application summary, active loan summary, product cards | Profile and product portions can load independently; application/loan/action areas depend on frontend-enabling projections; actions navigate to the owning page |
+| Profile | Complete or maintain the Customer profile | `GET /customers/me`, `PUT /customers/me/profile`, dedicated `PUT /customers/me/identity-reference` | Profile readiness header, verified full name read-only, mutable fields, consent checkboxes, Save | Initial completion requires full name and identity reference; after completion show protected identity as “On file”; omit both identity-bearing fields from verified ordinary updates; non-verified name remains editable and reference correction is a separate pre-verification action; success stays and refreshes Home readiness |
 | Bank Accounts | Maintain masked Customer-owned destination sources | Bank-account list/add/make-primary/deactivate endpoints | Account list, primary badge, Add account form, make-primary and deactivate confirmations | Empty state explains application readiness; mutation conflicts refetch; success stays and refreshes profile/readiness queries |
 
 Bank-account UI never displays or stores a full account number after the add request completes. The response and all later views use the backend mask.
@@ -681,6 +686,8 @@ Application forms must not offer “Save draft” until a backend draft contract
 | Corrections | Complete owned tasks and resubmit or abandon an eligible application | Owned correction task, completion, resubmission, and cancellation endpoints | Instruction alert, task list, document actions, completion state, Resubmit, eligible Cancel confirmation | Task proof must come from backend; mixed/Staff work is read-only context if exposed; Cancel appears only for Salary Advance/UCL in `RETURNED_FOR_REVISION`; success returns to Application Detail |
 | Offer | Review immutable approved terms and accept or decline | Approved-offer read/respond endpoints | `DetailLayout`, expiry banner, `OfferSummary`, provisional items, Accept, Decline confirmation | Loading, pending, accepted, declined, expired, action conflict; accept goes to Contract waiting/detail, decline goes to Application Detail |
 | Contract | Review the current operational contract and acknowledge its exact version | Current-contract read and acknowledgment | `DetailLayout`, version/status, accepted terms, masked destination, repayment preview, acknowledgment confirmation | Superseded/stale version refetches; acknowledgment success stays with persistent confirmation; Customer does not confirm readiness or reveal destination |
+
+Staff-assisted application pages explain that records can be viewed online and that Meridian staff coordinates updates and responses. Account-level online access does not change the application channel or enable Customer mutation controls. Completed correction records describe completed work rather than instructing another upload.
 
 The operational contract page must state that acknowledgment is operational evidence, not an electronic signature or generated legal agreement.
 
@@ -797,7 +804,7 @@ Toasts may confirm a saved profile, added account, copied reference, or successf
 ## 17. Responsive Design
 
 - At `lg` and above, `CustomerAppLayout` uses a persistent sidebar. Below `lg`, it uses a compact top bar and a shadcn Sheet for navigation.
-- Primary navigation order is Dashboard, Products, Applications, Loans, Account. Missing API-dependent destinations remain out of production navigation until their authoritative queries exist.
+- Primary navigation order is Home, Products, Applications, Loans, Account. Missing API-dependent destinations remain out of production navigation until their authoritative queries exist.
 - Tables convert to labeled cards or stacked rows below `md`. Horizontal scrolling is reserved for information that cannot be understood when split, such as a wide financial allocation detail.
 - Detail pages stack the action/summary rail before secondary detail on small screens.
 - Forms use one column by default. Two-column fields are allowed only for short, closely related values on `md` and above.
@@ -905,7 +912,7 @@ Complete and test the smallest backend contracts required by the next Customer W
 - Customer-safe Partner selection for Salary Advance verification;
 - Customer application and LoanAccount indexes;
 - Customer document checklist/current-version/readiness projection;
-- richer Customer application action/status projection or another narrow aggregation sufficient for Dashboard and resume.
+- richer Customer application action/status projection or another narrow aggregation sufficient for Home and resume.
 
 This checkpoint extends existing backend ownership and `MER-FU-037`; it must not create frontend-owned policy or expose restricted evidence.
 

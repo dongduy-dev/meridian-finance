@@ -31,7 +31,7 @@ export function OfferSummary({ offer }: { offer: ApprovedOffer }) {
             <Fact label="Approved principal"><MoneyDisplay value={offer.approvedPrincipal} /></Fact>
             <Fact label="Approved term">{offer.approvedTermMonths} months</Fact>
             <Fact label="Interest method">{interestMethodLabel(offer.interestCalculationMethod)}</Fact>
-            <Fact label="Monthly flat rate">{formatPercentage(offer.flatMonthlyInterestRate)}</Fact>
+            <Fact label="Monthly flat interest rate">{formatPercentage(offer.flatMonthlyInterestRate)}</Fact>
             <Fact label="Total interest"><MoneyDisplay value={offer.totalInterest} /></Fact>
             <Fact label="Fee"><MoneyDisplay value={offer.feeAmount} /></Fact>
             <Fact label="Total repayment"><MoneyDisplay value={offer.totalRepaymentAmount} /></Fact>

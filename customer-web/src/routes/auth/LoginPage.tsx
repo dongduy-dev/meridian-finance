@@ -121,7 +121,7 @@ export function LoginPage() {
     >
       <form className="space-y-5" noValidate onSubmit={onSubmit}>
         {locationState.notice === 'PASSWORD_SETUP_SUCCESS' ? (
-          <SuccessFeedback title="Password set" description="Password set. Sign in to continue." />
+          <SuccessFeedback title="Password set" description="Log in with your new password to continue." />
         ) : null}
         {locationState.notice === 'PASSWORD_RESET_SUCCESS' ? (
           <SuccessFeedback

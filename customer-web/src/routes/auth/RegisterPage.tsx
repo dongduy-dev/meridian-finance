@@ -56,7 +56,7 @@ export function RegisterPage() {
       if (isAuthApiError(error, 409, 'EMAIL_ALREADY_REGISTERED')) {
         setServerError({
           title: 'An account already uses this email',
-          description: 'Log in or use password recovery to continue safely.',
+          description: 'Log in, or choose Forgot password to request a new password link.',
           requestId: error instanceof ApiError ? error.requestId : undefined,
         })
       } else if (

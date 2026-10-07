@@ -44,7 +44,7 @@ export function LoanProductCard({ product }: { product: LoanProduct }) {
           <div className="flex min-w-0 gap-3">
             <Percent aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0">
-              <dt className="font-medium">Monthly flat rate</dt>
+              <dt className="font-medium">Monthly flat interest rate</dt>
               <dd className="mt-0.5 break-words text-muted-foreground">
                 {formatPercentage(product.policy.pricing.flatMonthlyInterestRate)}
               </dd>

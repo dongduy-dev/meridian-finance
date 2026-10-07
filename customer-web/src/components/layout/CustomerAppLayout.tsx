@@ -35,7 +35,7 @@ interface NavigationItem {
 }
 
 const navigation: NavigationItem[] = [
-  { label: 'Dashboard', href: '/', icon: LayoutDashboard, end: true },
+  { label: 'Home', href: '/', icon: LayoutDashboard, end: true },
   { label: 'Products', href: '/products', icon: Shapes },
   { label: 'Applications', href: '/applications', icon: Files },
   { label: 'Loans', href: '/loans', icon: Landmark },

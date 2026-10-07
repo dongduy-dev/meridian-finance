@@ -1,9 +1,10 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { AppProviders } from '@/app/providers/AppProviders'
 import { queryClient } from '@/app/providers/query-client'
+import { applicationKeys } from '@/features/applications/application-queries'
 import { formatMoney } from '@/lib/format/presentation'
 import { createTestAuthManager } from '@/test/auth'
 
@@ -27,6 +28,16 @@ const checklist = {
     requirementStatus: 'REQUIRED', customerStatus: 'NOT_UPLOADED', uploadComplete: false,
     processingReady: false, currentVersion: null }],
 }
+
+it('does not repeat a cached no-action claim when application detail refresh fails', async () => {
+  let failed = false
+  fixture({ detailResponse: async () => failed ? json({ status: 403, errorCode: 'FORBIDDEN', message: 'Internal failure' }, 403) : json(detail) })
+  expect(await screen.findByText('No action needed')).toBeVisible()
+  failed = true
+  await act(async () => { await queryClient.refetchQueries({ queryKey: applicationKeys.detail(id) }) })
+  expect(await screen.findByText('Application details could not be loaded')).toBeVisible()
+  expect(screen.queryByText('No action needed')).not.toBeInTheDocument()
+})
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -76,7 +87,7 @@ it('UCL records link opens existing Documents and deterministic Application back
   expect(await screen.findByRole('heading', { name: 'Documents' })).toBeVisible()
   expect(router.state.location.pathname).toBe(`/applications/${id}/documents`)
   expect(await screen.findByText('Documents provided: Not complete')).toBeVisible()
-  const back = screen.getByRole('link', { name: 'Application' })
+  const back = screen.getByRole('link', { name: 'Back to application' })
   expect(back).toHaveAttribute('href', `/applications/${id}`)
   await user.click(back)
   expect(await screen.findByText('No action needed')).toBeVisible()
@@ -129,12 +140,12 @@ it('Staff-assisted Collateral reads facts and documents while suppressing advert
   const user = userEvent.setup()
   fixture({ productCode: 'COLLATERAL_LOAN', channel: 'STAFF_ASSISTED', requiredAction: 'UPLOAD_DOCUMENTS' })
   expect(await screen.findByText(collateral.description)).toBeVisible()
-  expect(screen.getByText('Staff-assisted application')).toBeVisible()
+  expect(screen.getByText('Application handled with Meridian staff')).toBeVisible()
   expect(screen.queryByText('No action needed')).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: 'Upload documents' })).not.toBeInTheDocument()
   await user.click(screen.getByRole('link', { name: 'View documents' }))
   expect(await screen.findByText('Documents provided: Not complete')).toBeVisible()
-  expect(screen.getByText(/Documents for this application are handled with Meridian Staff/)).toBeVisible()
+  expect(screen.getByText(/Documents for this application are handled with Meridian staff/)).toBeVisible()
   expect(screen.queryByLabelText(/Choose.*file/)).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Upload document' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Replace document' })).not.toBeInTheDocument()
@@ -143,7 +154,7 @@ it('Staff-assisted Collateral reads facts and documents while suppressing advert
 it.each(['NOT_UPLOADED', 'REPLACEMENT_REQUESTED'])('direct Staff-assisted Documents %s remains read-only with Application back link', async (documentStatus) => {
   fixture({ channel: 'STAFF_ASSISTED', path: `/applications/${id}/documents`, documentStatus })
   expect(await screen.findByText('Documents provided: Not complete')).toBeVisible()
-  expect(screen.getByRole('link', { name: 'Application' })).toHaveAttribute('href', `/applications/${id}`)
+  expect(screen.getByRole('link', { name: 'Back to application' })).toHaveAttribute('href', `/applications/${id}`)
   expect(screen.queryByLabelText(/Choose.*file/)).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /Upload document|Replace document/ })).not.toBeInTheDocument()
 })

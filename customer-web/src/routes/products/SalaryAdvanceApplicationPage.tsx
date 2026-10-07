@@ -36,6 +36,7 @@ import {
   useSubmitSalaryAdvanceMutation,
 } from '@/features/salary-advance/salary-advance-queries'
 import { ApiError } from '@/lib/api'
+import { customerErrorMessage } from '@/lib/errors/customer-error-message'
 
 interface SalaryAdvanceFormValues {
   requestedAmount: string
@@ -54,11 +55,11 @@ const submissionErrorMessages: Record<string, string> = {
   INVALID_PRODUCT_AMOUNT: 'The requested amount is no longer available.',
   INVALID_PRODUCT_TERM: 'The requested term is no longer available.',
   EMPLOYEE_NOT_VERIFIED: 'Current employment verification is required before submission.',
-  SALARY_ADVANCE_ELIGIBILITY_DATA_STALE: 'Your employment verification needs to be refreshed before submission.',
+  SALARY_ADVANCE_ELIGIBILITY_DATA_STALE: 'Verify your employment again before submitting your application.',
   SALARY_ADVANCE_LIMIT_UNAVAILABLE: 'Meridian can no longer confirm a usable Salary Advance limit.',
   INSUFFICIENT_AVAILABLE_LIMIT: 'The current available amount is no longer sufficient for this request.',
   BLOCKING_APPLICATION_EXISTS: 'You already have a Salary Advance application in progress. You can submit another after it is no longer active.',
-  OUTSTANDING_LOAN_ACCOUNT_EXISTS: 'A prior Salary Advance balance now blocks this submission.',
+  OUTSTANDING_LOAN_ACCOUNT_EXISTS: 'A previous Salary Advance must be fully repaid before you can submit another application.',
   SYSTEM_STATE_CONFLICT: "We couldn't confirm the latest Salary Advance information. Review the latest status and try again if appropriate.",
   VALIDATION_FAILED: 'Meridian could not validate the submitted request. Review the entered amount and term before trying again.',
 }
@@ -77,12 +78,10 @@ function SubmissionError({ error }: { error: unknown }) {
   return (
     <Alert variant="destructive" tabIndex={-1} data-submission-error>
       <ShieldAlert aria-hidden="true" />
-      <AlertTitle>Application was not submitted</AlertTitle>
+      <AlertTitle>Application submission was not confirmed</AlertTitle>
       <AlertDescription className="space-y-3">
-        <p>{knownMessage ?? (error instanceof ApiError
-          ? error.message
-          : 'The request could not be completed. Check your connection and try again.')}</p>
-        <p>Review the latest information and submit again only when you are ready.</p>
+        <p>{knownMessage ?? customerErrorMessage(error, 'We could not confirm the result. Check your connection.')}</p>
+        <p>Check your application list and the latest information before submitting again.</p>
         {error instanceof ApiError && error.requestId ? (
           <p className="break-all text-xs">Support reference: {error.requestId}</p>
         ) : null}
@@ -134,7 +133,7 @@ function SuccessState({ application }: { application: SalaryAdvanceApplication }
       currentStep={2}
       totalSteps={2}
       backAction={<span />}
-      continueAction={<Button asChild><Link to="/">Return to Dashboard<ArrowRight aria-hidden="true" /></Link></Button>}
+      continueAction={<Button asChild><Link to="/">Return to Home<ArrowRight aria-hidden="true" /></Link></Button>}
     >
       <Card>
         <CardHeader>
@@ -150,7 +149,7 @@ function SuccessState({ application }: { application: SalaryAdvanceApplication }
           <Alert variant="success" aria-live="polite">
             <CheckCircle2 aria-hidden="true" />
             <AlertTitle>Submission confirmed</AlertTitle>
-            <AlertDescription>You can now track this application from your dashboard.</AlertDescription>
+            <AlertDescription>You can now track this application from Home.</AlertDescription>
           </Alert>
           <dl className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-md border border-border bg-background p-4">
@@ -289,7 +288,7 @@ export function SalaryAdvanceApplicationPage() {
       <>
         <FocusedFlowLayout
           eyebrow="Salary Advance application"
-          title="Application was not submitted"
+          title="Application submission was not confirmed"
           description="Review the latest information below. Your entered amount and term are still available."
           currentStep={2}
           totalSteps={2}
@@ -300,7 +299,7 @@ export function SalaryAdvanceApplicationPage() {
             <SubmissionError error={serverError} />
             <Card>
               <CardHeader>
-                <CardTitle>Retained request</CardTitle>
+                <CardTitle>Your request details</CardTitle>
                 <CardDescription>These values have not been changed or resubmitted.</CardDescription>
               </CardHeader>
               <CardContent>
@@ -354,7 +353,7 @@ export function SalaryAdvanceApplicationPage() {
     if (!/^\d+$/.test(value)) return 'Enter a positive whole-VND amount using digits only.'
     const amount = BigInt(value)
     if (amount <= 0n) return 'Requested amount must be greater than zero.'
-    if (amount > BigInt(Number.MAX_SAFE_INTEGER)) return 'Requested amount is too large to submit safely.'
+    if (amount > BigInt(Number.MAX_SAFE_INTEGER)) return 'Requested amount is too large. Enter a smaller amount.'
     if (amount < BigInt(product.minAmount)) return 'Requested amount is below the current product minimum.'
     if (amount > BigInt(product.maxAmount)) return 'Requested amount is above the current product maximum.'
     if (amount > BigInt(readiness.availableAmount)) return 'Requested amount exceeds the currently available Salary Advance amount.'
@@ -449,7 +448,7 @@ export function SalaryAdvanceApplicationPage() {
                     htmlFor="requestedAmount"
                     label="Requested amount"
                     required
-                    description="Enter a positive whole-VND amount. Product minimum, product maximum, and current available amount are checked independently."
+                    description="Enter a whole amount in VND within the product range and your available Salary Advance limit."
                     error={errors.requestedAmount?.message}
                   >
                     <Controller

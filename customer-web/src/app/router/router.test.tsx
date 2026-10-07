@@ -22,11 +22,12 @@ describe('application routing and shell', () => {
     renderRoute('/')
 
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'Dashboard' }),
+      await screen.findByRole('heading', { level: 1, name: 'Home' }),
     ).toBeVisible()
-    for (const label of ['Dashboard', 'Products', 'Applications', 'Loans', 'Account']) {
+    for (const label of ['Home', 'Products', 'Applications', 'Loans', 'Account']) {
       expect(screen.getByRole('link', { name: label })).toBeVisible()
     }
+    await waitFor(() => expect(document.title).toBe('Home | Meridian'))
     expect(within(screen.getByRole('complementary')).queryByText(/FE-CP|checkpoint/i)).not.toBeInTheDocument()
     const navigationTrigger = screen.getByRole('button', { name: 'Open menu' })
     const shellBanner = navigationTrigger.closest('header') as HTMLElement
@@ -42,7 +43,7 @@ describe('application routing and shell', () => {
     renderRoute(path)
 
     expect(await screen.findByText('This page is not available')).toBeVisible()
-    expect(screen.getByRole('link', { name: 'Return to dashboard' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Return to Home' })).toBeVisible()
   })
 
   it('keeps mobile navigation links composed, active, and dismissible', async () => {
@@ -58,6 +59,7 @@ describe('application routing and shell', () => {
     const productsLink = within(dialog).getByRole('link', { name: 'Products' })
 
     expect(within(dialog).getByText('Choose where you want to go.')).toBeVisible()
+    expect(within(dialog).getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/')
     expect(within(dialog).queryByText(/FE-CP|checkpoint/i)).not.toBeInTheDocument()
     expect(productsLink).toHaveClass('flex')
     expect(productsLink.className).not.toContain('isActive')
@@ -80,6 +82,6 @@ describe('application routing and shell', () => {
     renderRoute('/not-a-meridian-route')
 
     expect(await screen.findByText('This page is not available')).toBeVisible()
-    expect(screen.getByRole('link', { name: 'Return to dashboard' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Return to Home' })).toBeVisible()
   })
 })

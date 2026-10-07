@@ -37,11 +37,11 @@ export function LoansPage() {
           ))}
         </div>
       ) : null}
-      {accountsQuery.data?.length === 0 ? (
+      {accountsQuery.isSuccess && accountsQuery.data?.length === 0 ? (
         <EmptyState
           icon={Landmark}
           title="No loans yet"
-          description="No active loans are available yet."
+          description="Your loans will appear here after your loan funds have been sent."
         />
       ) : null}
     </div>

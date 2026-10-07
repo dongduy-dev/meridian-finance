@@ -420,7 +420,7 @@ describe('Staff-assisted direct offer and contract routes', () => {
   it('keeps offer terms readable while ignoring contradictory direct action hints', async () => {
     const fixture = state({ detail: { ...detail, originationChannel: 'STAFF_ASSISTED' } })
     renderRoute(`/applications/${applicationId}/offer`, fixture)
-    expect(await screen.findByText('Review the offer here; Meridian Staff will coordinate your response with you.')).toBeVisible()
+    expect(await screen.findByText('Review the offer here; Meridian staff will coordinate your response with you.')).toBeVisible()
     expect(await screen.findByText('Approved principal')).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Accept offer' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Decline offer' })).not.toBeInTheDocument()
@@ -432,7 +432,7 @@ describe('Staff-assisted direct offer and contract routes', () => {
   it('keeps prepared contract and masked destination readable without acknowledgment', async () => {
     const fixture = state({ detail: { ...detail, originationChannel: 'STAFF_ASSISTED', status: 'CONTRACT_PENDING' } })
     renderRoute(`/applications/${applicationId}/contract`, fixture)
-    expect(await screen.findByText('Review the current contract here; Meridian Staff will coordinate acknowledgment with you.')).toBeVisible()
+    expect(await screen.findByText('Review the current contract here; Meridian staff will coordinate acknowledgment with you.')).toBeVisible()
     expect(await screen.findByText(preparedContract.contractReference)).toBeVisible()
     expect(screen.getByText('****6789')).toBeVisible()
     expect(screen.queryByRole('button', { name: /Confirm review/ })).not.toBeInTheDocument()

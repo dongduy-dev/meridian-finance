@@ -101,13 +101,13 @@ function ActivateAccessContent({ locationKey }: { locationKey: string }) {
     .filter((message): message is string => typeof message === 'string')
   const verificationRecovery = ['missing', 'verification-invalid', 'verification-error'].includes(stage)
 
-  return <AuthCard eyebrow="Customer Web activation" title={stage === 'ready' ? 'Set your password' : 'Activate your access'}
-    description="Verify your email and choose a password for your existing Meridian Customer record."
-    footer={<p className="text-center text-sm text-muted-foreground"><Link className="font-semibold text-primary hover:underline" to="/login">Continue to Login</Link></p>}>
+  return <AuthCard eyebrow="Account activation" title={stage === 'ready' ? 'Set your password' : 'Activate your access'}
+    description="Verify your email and set your first password to access your existing Meridian account online."
+    footer={<p className="text-center text-sm text-muted-foreground"><Link className="font-semibold text-primary hover:underline" to="/login">Continue to log in</Link></p>}>
     <div className="space-y-5">
       {stage === 'verifying' ? <div role="status" aria-live="polite" className="flex items-center gap-3"><Spinner />Verifying your email…</div> : null}
       {stage === 'ready' ? <>
-        <SuccessFeedback title="Email verified" description="Choose your password to finish activating Customer Web access." />
+        <SuccessFeedback title="Email verified" description="Set your first password to finish activating online access." />
         <form className="space-y-5" noValidate onSubmit={onSubmit}>
           <ValidationSummary messages={validationMessages} />
           <FormField htmlFor="password" label="New password" description="Use 12 to 72 characters." error={errors.password?.message}>
@@ -132,7 +132,7 @@ function ActivateAccessContent({ locationKey }: { locationKey: string }) {
         <Link className="block text-sm font-semibold text-primary hover:underline" to="/forgot-password">Already verified? Recover password setup</Link>
       </> : null}
       {stage === 'setup-invalid' ? <ErrorFeedback title="Password setup link unavailable" description="Your email is verified, but this password setup link is invalid or has expired." /> : null}
-      {stage === 'setup-unknown' ? <p className="text-sm text-muted-foreground">The password result could not be confirmed. Try signing in with the password you chose, or request a fresh password link. This page will not resend your password.</p> : null}
+      {stage === 'setup-unknown' ? <p className="text-sm text-muted-foreground">We could not confirm whether your password was set. Try signing in with the password you chose, or request a fresh password link. This page will not resend your password.</p> : null}
       {stage === 'setup-invalid' || stage === 'setup-unknown' ? <Button asChild variant="secondary" className="w-full"><Link to="/forgot-password">Recover password setup</Link></Button> : null}
     </div>
   </AuthCard>

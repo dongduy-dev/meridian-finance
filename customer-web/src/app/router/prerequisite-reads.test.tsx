@@ -80,6 +80,16 @@ function fixture(path: string, completed = false, documentStatus = 'REPLACEMENT_
 }
 afterEach(() => { cleanup(); queryClient.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
+it('does not repeat a cached no-documents claim after a checklist refresh fails', async () => {
+  const f = fixture('documents')
+  f.data.checklist.items.splice(0)
+  expect(await screen.findByText('No documents are currently required')).toBeVisible()
+  f.failed.add('checklist'); await f.refresh('checklist')
+  expect(screen.getByText('Documents could not be loaded')).toBeVisible()
+  expect(screen.queryByText('No documents are currently required')).not.toBeInTheDocument()
+  expect(screen.queryByText('All required documents have been provided or are no longer needed.')).not.toBeInTheDocument()
+})
+
 it.each(['upload', 'correction-upload', 'accept', 'decline', 'acknowledge', 'complete', 'cancel', 'resubmit'] as const)('guards the %s handler when refetch starts before the rendered control can update', async command => {
   const page = command === 'upload' ? 'documents' : ['accept', 'decline'].includes(command) ? 'offer'
     : command === 'acknowledge' ? 'contract' : 'corrections'

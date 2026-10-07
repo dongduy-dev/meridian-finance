@@ -15,6 +15,7 @@ import { useLoanProductQuery } from '@/features/loan-products/loan-product-queri
 import {
   documentTypeLabel,
   evidenceRequirementPresentation,
+  eligibilityNoteLabel,
   interestMethodLabel,
   productSlugToCode,
   repaymentMethodLabel,
@@ -43,7 +44,7 @@ function ProductPolicy({ product }: { product: LoanProduct }) {
               <PolicyFact label="Minimum amount"><MoneyDisplay value={product.minAmount} /></PolicyFact>
               <PolicyFact label="Maximum amount"><MoneyDisplay value={product.maxAmount} /></PolicyFact>
               <PolicyFact label="Allowed terms">{formatTerms(product.policy.allowedTermsMonths)}</PolicyFact>
-              <PolicyFact label="Monthly flat rate">{formatPercentage(product.policy.pricing.flatMonthlyInterestRate)}</PolicyFact>
+              <PolicyFact label="Monthly flat interest rate">{formatPercentage(product.policy.pricing.flatMonthlyInterestRate)}</PolicyFact>
               <PolicyFact label="Fee"><MoneyDisplay value={product.policy.pricing.feeAmount} /></PolicyFact>
               <PolicyFact label="Offer validity">{product.policy.offerValidityDays} {product.policy.offerValidityDays === 1 ? 'calendar day' : 'calendar days'}</PolicyFact>
               <PolicyFact label="Interest method">{interestMethodLabel(product.policy.interestCalculationMethod)}</PolicyFact>
@@ -87,7 +88,7 @@ function ProductPolicy({ product }: { product: LoanProduct }) {
               {product.policy.eligibilityNotes.map((note, index) => (
                 <li key={index} className="flex min-w-0 gap-3 text-sm leading-6">
                   <ClipboardList aria-hidden="true" className="mt-1 size-4 shrink-0 text-accent" />
-                  <span className="min-w-0 break-words">{note}</span>
+                  <span className="min-w-0 break-words">{eligibilityNoteLabel(note)}</span>
                 </li>
               ))}
             </ul>
@@ -185,7 +186,7 @@ function SalaryAdvanceProductContent() {
             onRetry={() => void readinessQuery.refetch()}
           />
         ) : null}
-        {readinessQuery.data ? (
+        {readinessQuery.isSuccess && readinessQuery.data ? (
           <SalaryAdvanceReadiness readiness={readinessQuery.data} showApplyAction />
         ) : null}
       </section>

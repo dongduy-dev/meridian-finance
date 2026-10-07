@@ -46,6 +46,7 @@ export function ApplicationDetailPage() {
   const notice = workflowNotice(location.state)
   const noticeStatus = notice?.status ? applicationStatusPresentation(notice.status).label : undefined
   const notFound = detailQuery.error instanceof ApiError && detailQuery.error.status === 404
+  const nextStepConfirmed = detailQuery.isSuccess && indexQuery.isSuccess
 
   if (notFound) {
     return (
@@ -74,13 +75,13 @@ export function ApplicationDetailPage() {
             <QueryErrorFeedback error={indexQuery.error} title="Next step could not be loaded" onRetry={() => void indexQuery.refetch()} />
           ) : null}
           {detailQuery.data?.originationChannel === 'STAFF_ASSISTED' ? <StaffAssistedApplicationNotice /> : null}
-          {detailQuery.data?.originationChannel === 'CUSTOMER_DIGITAL' && indexedApplication ? <RequiredActionCard application={indexedApplication} /> : null}
-          {indexQuery.data && !indexedApplication ? (
+          {nextStepConfirmed && detailQuery.data?.originationChannel === 'CUSTOMER_DIGITAL' && indexedApplication ? <RequiredActionCard application={indexedApplication} /> : null}
+          {nextStepConfirmed && indexQuery.data && !indexedApplication ? (
             <Card>
               <CardHeader><CardTitle>Next step unavailable</CardTitle><CardDescription>We can't show the next step for this application right now. Try again later.</CardDescription></CardHeader>
             </Card>
           ) : null}
-          {detailQuery.data?.originationChannel === 'CUSTOMER_DIGITAL' && indexedApplication?.requiredAction === 'NONE' ? (
+          {nextStepConfirmed && detailQuery.data?.originationChannel === 'CUSTOMER_DIGITAL' && indexedApplication?.requiredAction === 'NONE' ? (
             <Card>
               <CardHeader><CardTitle>No action needed</CardTitle><CardDescription>There is nothing you need to do for this application right now.</CardDescription></CardHeader>
             </Card>
@@ -114,5 +115,5 @@ export function ApplicationDetailPage() {
 }
 
 function BackToApplications() {
-  return <Button variant="secondary" asChild><Link to="/applications"><ArrowLeft aria-hidden="true" />Applications</Link></Button>
+  return <Button variant="secondary" asChild><Link to="/applications"><ArrowLeft aria-hidden="true" />Back to applications</Link></Button>
 }

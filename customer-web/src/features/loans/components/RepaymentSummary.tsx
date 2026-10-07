@@ -26,7 +26,7 @@ export function RepaymentSummary({ account }: { account: LoanAccount }) {
         <section aria-labelledby="originated-terms-heading" className="space-y-3">
           <h3 id="originated-terms-heading" className="font-semibold">Loan terms</h3>
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <MoneyFact label="Original principal" value={account.originatedPrincipal} />
+            <MoneyFact label="Amount borrowed (principal)" value={account.originatedPrincipal} />
             <MoneyFact label="Total interest" value={account.totalInterest} />
             <MoneyFact label="Total fee" value={account.totalFee} />
             <MoneyFact label="Total repayment" value={account.totalRepayment} />
@@ -39,8 +39,8 @@ export function RepaymentSummary({ account }: { account: LoanAccount }) {
         <section aria-labelledby="servicing-totals-heading" className="space-y-3 border-t border-border pt-5">
           <h3 id="servicing-totals-heading" className="font-semibold">Current balances</h3>
           <dl className="grid gap-3 sm:grid-cols-2">
-            <MoneyFact label="Total paid" value={servicing.totalPaid} />
-            <MoneyFact label="Total outstanding" value={servicing.totalOutstanding} />
+            <MoneyFact label="Amount paid" value={servicing.totalPaid} />
+            <MoneyFact label="Amount remaining" value={servicing.totalOutstanding} />
           </dl>
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <MoneyFact label="Principal paid" value={servicing.principalPaid} />
@@ -54,7 +54,7 @@ export function RepaymentSummary({ account }: { account: LoanAccount }) {
 
         <dl className="grid gap-3 border-t border-border pt-5 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-muted-foreground">Last payment value date</dt>
+            <dt className="text-muted-foreground">Last effective payment date</dt>
             <dd className="mt-1 font-medium">
               {servicing.lastPaymentValueDate ? formatDateOnly(servicing.lastPaymentValueDate) : 'No payment recorded'}
             </dd>

@@ -137,7 +137,7 @@ describe('Customer authentication routes', () => {
     window.history.replaceState(null, '', '/verify-email#token=opaque-email-token')
     renderAuthRoute('/verify-email#token=opaque-email-token', api, true)
 
-    expect(await screen.findByText('Your email is ready. You can now log in to Meridian.')).toBeVisible()
+    expect(await screen.findByText('Your email is confirmed. If you already have a password, you can log in. If you still need to set your first password, use Forgot password on the login page.')).toBeVisible()
     expect(api.confirmEmailVerification).toHaveBeenCalledOnce()
     expect(api.confirmEmailVerification).toHaveBeenCalledWith('opaque-email-token')
     expect(window.location.hash).toBe('')
@@ -236,7 +236,7 @@ describe('Customer authentication routes', () => {
     const api = createAuthApiMock()
     vi.mocked(api.logout).mockRejectedValue(new NetworkError())
     const { manager, router } = renderAuthRoute('/', api)
-    await screen.findByRole('heading', { name: 'Dashboard' })
+    await screen.findByRole('heading', { name: 'Home' })
 
     await user.click(screen.getByRole('button', { name: 'Log out' }))
 

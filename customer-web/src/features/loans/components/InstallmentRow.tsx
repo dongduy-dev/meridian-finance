@@ -48,7 +48,7 @@ export function InstallmentRow({ item }: { item: FinalRepaymentScheduleItem }) {
             <Amount label="Total outstanding" value={servicing.totalOutstanding} />
           </dl>
           <dl className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-            <div><dt>Last payment value date</dt><dd className="mt-1 font-medium text-foreground">{servicing.lastPaymentValueDate ? formatDateOnly(servicing.lastPaymentValueDate) : 'No payment recorded'}</dd></div>
+            <div><dt>Last effective payment date</dt><dd className="mt-1 font-medium text-foreground">{servicing.lastPaymentValueDate ? formatDateOnly(servicing.lastPaymentValueDate) : 'No payment recorded'}</dd></div>
             <div><dt>Last payment recorded</dt><dd className="mt-1 font-medium text-foreground">{servicing.lastPaymentRecordedAt ? formatTimestamp(servicing.lastPaymentRecordedAt) : 'No payment recorded'}</dd></div>
           </dl>
         </section>

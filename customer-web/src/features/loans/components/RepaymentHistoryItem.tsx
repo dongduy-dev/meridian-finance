@@ -25,7 +25,7 @@ export function RepaymentHistoryItem({ item }: { item: RepaymentHistoryItemData 
           <StatusBadge presentation={loanAccountStatusPresentation(item.resultingLoanAccountStatus)} />
         </div>
         <p className="text-sm text-muted-foreground">
-          Value date {formatDateOnly(item.paymentValueDate)} · Recorded {formatTimestamp(item.recordedAt)}
+          Effective payment date {formatDateOnly(item.paymentValueDate)} · Recorded {formatTimestamp(item.recordedAt)}
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -43,7 +43,7 @@ export function RepaymentHistoryItem({ item }: { item: RepaymentHistoryItemData 
         </section>
 
         <details className="rounded-md border border-border bg-background px-4 py-3">
-          <summary className="cursor-pointer font-semibold">Allocation detail</summary>
+          <summary className="cursor-pointer font-semibold">How this payment was applied</summary>
           {item.allocations.length ? (
             <ol className="mt-4 space-y-3">
               {item.allocations.map((allocation) => (
@@ -53,12 +53,12 @@ export function RepaymentHistoryItem({ item }: { item: RepaymentHistoryItemData 
                 </li>
               ))}
             </ol>
-          ) : <p className="mt-3 text-sm text-muted-foreground">No allocation details are available.</p>}
+          ) : <p className="mt-3 text-sm text-muted-foreground">The payment breakdown is unavailable.</p>}
         </details>
 
         {item.affectedInstallments.length ? (
           <details className="rounded-md border border-border bg-background px-4 py-3">
-            <summary className="cursor-pointer font-semibold">Installment outcomes</summary>
+            <summary className="cursor-pointer font-semibold">Installments after this payment</summary>
             <div className="mt-4 space-y-4">
               {item.affectedInstallments.map((outcome) => (
                 <section key={outcome.repaymentScheduleItemId} aria-label={`Installment ${outcome.installmentNumber} outcome`} className="space-y-2 border-t border-border pt-4 first:border-t-0 first:pt-0">

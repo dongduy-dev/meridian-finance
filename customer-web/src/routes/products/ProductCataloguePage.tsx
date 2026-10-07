@@ -40,7 +40,7 @@ export function ProductCataloguePage() {
       {productQuery.isError ? (
         <QueryErrorFeedback
           error={productQuery.error}
-          title="Loans could not be loaded"
+          title="Products could not be loaded"
           onRetry={() => void productQuery.refetch()}
         />
       ) : null}
@@ -51,11 +51,11 @@ export function ProductCataloguePage() {
           ))}
         </section>
       ) : null}
-      {productQuery.data?.length === 0 ? (
+      {productQuery.isSuccess && productQuery.data?.length === 0 ? (
         <EmptyState
           icon={Shapes}
-          title="No loans available"
-          description="No loans are available right now. Please check again later."
+          title="No products available"
+          description="No lending products are available right now. Please check again later."
         />
       ) : null}
     </div>

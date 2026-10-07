@@ -11,10 +11,10 @@ export function AuthLayout() {
         <div className="relative max-w-md space-y-4 pb-5">
           <div className="h-1 w-14 rounded-full bg-accent" aria-hidden="true" />
           <p className="text-3xl leading-tight font-semibold tracking-[-0.025em]">
-            Clear steps for important financial moments.
+            Confidence at every financial step.
           </p>
           <p className="text-sm leading-6 text-primary-foreground/72">
-            Manage your applications, offers, and loans with clear guidance at every step.
+            From application to repayment, Meridian brings clarity, control, and thoughtful guidance to every stage.
           </p>
         </div>
       </section>

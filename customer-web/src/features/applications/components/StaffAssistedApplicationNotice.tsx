@@ -6,8 +6,8 @@ export function StaffAssistedApplicationNotice({ children }: { children?: React.
   return (
     <Alert variant="information">
       <Info aria-hidden="true" />
-      <AlertTitle>Staff-assisted application</AlertTitle>
-      <AlertDescription>{children ?? 'You can track this application here. If information, evidence, or a decision is needed from you, Meridian Staff will coordinate it with you.'}</AlertDescription>
+      <AlertTitle>Application handled with Meridian staff</AlertTitle>
+      <AlertDescription>{children ?? 'You can view this application online. Contact your Loan Officer if you need to update it or arrange the next step. Meridian staff will coordinate any documents or responses needed from you.'}</AlertDescription>
     </Alert>
   )
 }

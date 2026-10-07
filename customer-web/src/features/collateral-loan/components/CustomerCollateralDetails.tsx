@@ -19,7 +19,7 @@ export function CustomerCollateralDetails({ loanApplicationId }: { loanApplicati
     <Card className="min-w-0">
       <CardHeader>
         <CardTitle>Collateral details</CardTitle>
-        <CardDescription>The immutable collateral facts submitted with this application. Estimated value is the submitted estimate.</CardDescription>
+        <CardDescription>These are the collateral details submitted with your application. The estimated value is the amount you provided, not a confirmed valuation.</CardDescription>
       </CardHeader>
       <CardContent>
         {query.isPending ? <Skeleton className="h-48" role="status" aria-label="Loading collateral details" /> : null}

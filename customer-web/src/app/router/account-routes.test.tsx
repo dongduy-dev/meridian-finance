@@ -281,7 +281,7 @@ describe('Customer account routes and profile', () => {
     await user.click(screen.getByLabelText('I consent to the processing of my data for this account.'))
     await user.click(screen.getByRole('button', { name: 'Save profile' }))
 
-    expect(await screen.findByText('Identity reference is already associated with another customer.')).toBeVisible()
+    expect(await screen.findByText('This identity reference cannot be saved. Check it against your identity document or contact Meridian support.')).toBeVisible()
     expect(screen.getByText(/Support reference: 55555555/)).toBeVisible()
     expect(screen.queryByText('Profile saved')).not.toBeInTheDocument()
   })
@@ -396,7 +396,7 @@ describe('Customer bank-account experience', () => {
     await user.click(within(secondCard).getByRole('button', { name: 'Make primary' }))
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Make primary' }))
 
-    expect(await screen.findByText('Inactive bank account cannot be made primary.')).toBeVisible()
+    expect(await screen.findByText('This bank account cannot be updated right now. Review your saved accounts and primary account before trying again.')).toBeVisible()
     await waitFor(() => expect(listReads).toBeGreaterThan(1))
     expect(screen.queryByText('Bank accounts updated')).not.toBeInTheDocument()
   })

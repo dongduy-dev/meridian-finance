@@ -38,7 +38,7 @@ const blockerPresentations: Record<string, BlockerPresentation> = {
   },
   CUSTOMER_IDENTITY_VERIFICATION_REQUIRED: {
     title: 'Complete identity verification',
-    description: 'Verified Customer identity is required before submitting a Salary Advance application. Employment verification remains a separate requirement.',
+    description: 'Verify your identity before applying. Employment verification is a separate step.',
     tone: 'warning',
     action: { label: 'Open identity verification', to: '/account/identity-verification' },
   },
@@ -54,7 +54,7 @@ const blockerPresentations: Record<string, BlockerPresentation> = {
   },
   SALARY_ADVANCE_ELIGIBILITY_DATA_STALE: {
     title: 'Refresh employment verification',
-    description: 'Your employment verification needs to be refreshed before submission.',
+    description: 'Verify your employment again before submitting your application.',
     tone: 'warning',
   },
   SALARY_ADVANCE_LIMIT_UNAVAILABLE: {
@@ -133,7 +133,7 @@ const verificationOutcomePresentations: Record<string, VerificationOutcomePresen
     label: 'Employment needs review',
     tone: 'warning',
     icon: Clock3,
-    description: 'The verification could not establish one eligible employment record.',
+    description: 'We could not confirm your employment. Meridian needs to review your details.',
   },
   PENDING_MANUAL_REVIEW: {
     label: "We're reviewing your employment details",

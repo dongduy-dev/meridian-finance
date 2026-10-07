@@ -151,10 +151,10 @@ export function ApplicationCorrectionsPage() {
 
   if (!isDigital && !notFound) {
     return (
-      <FocusedFlowLayout eyebrow="Requested changes" title="Requested updates" description={detailQuery.data ? `Application ${detailQuery.data.applicationNumber}` : 'Review your application status.'} backAction={<Button variant="secondary" asChild><Link to={loanApplicationId ? `/applications/${loanApplicationId}` : '/applications'}><ArrowLeft aria-hidden="true" />Application</Link></Button>}>
+      <FocusedFlowLayout eyebrow="Requested changes" title="Requested changes" description={detailQuery.data ? `Application ${detailQuery.data.applicationNumber}` : 'Review your application status.'} backAction={<Button variant="secondary" asChild><Link to={loanApplicationId ? `/applications/${loanApplicationId}` : '/applications'}><ArrowLeft aria-hidden="true" />Back to application</Link></Button>}>
         {detailQuery.isPending ? <Skeleton className="h-32" role="status" aria-label="Loading application details" /> : null}
         {detailQuery.isError ? <QueryErrorFeedback error={detailQuery.error} title="Application details could not be loaded" onRetry={() => void detailQuery.refetch()} /> : null}
-        {isStaffAssisted ? <StaffAssistedApplicationNotice>Requested updates for this application are coordinated through Meridian Staff. Contact your Loan Officer or branch if you need help with the next step.</StaffAssistedApplicationNotice> : null}
+        {isStaffAssisted ? <StaffAssistedApplicationNotice>Requested updates for this application are coordinated through Meridian staff. Contact your Loan Officer if you need help with the next step.</StaffAssistedApplicationNotice> : null}
       </FocusedFlowLayout>
     )
   }
@@ -166,7 +166,7 @@ export function ApplicationCorrectionsPage() {
       description={notFound
         ? 'These requested changes could not be found or are not available to you.'
         : `Review and complete the requested changes${detailQuery.data ? ` for application ${detailQuery.data.applicationNumber}` : ''}.`}
-      backAction={<Button variant="secondary" asChild><Link to={loanApplicationId ? `/applications/${loanApplicationId}` : '/applications'}><ArrowLeft aria-hidden="true" />Application</Link></Button>}
+      backAction={<Button variant="secondary" asChild><Link to={loanApplicationId ? `/applications/${loanApplicationId}` : '/applications'}><ArrowLeft aria-hidden="true" />Back to application</Link></Button>}
       continueAction={canResubmit ? (
         <Button disabled={resubmission.isPending} onClick={() => void resubmit()}>
           {resubmission.isPending ? 'Submitting…' : 'Submit updates'}
@@ -186,12 +186,12 @@ export function ApplicationCorrectionsPage() {
         {!notFound && checklistQuery.isError ? <QueryErrorFeedback error={checklistQuery.error} title="Required documents could not be loaded" onRetry={() => void refreshAuthoritative()} /> : null}
 
         {resubmissionError ? (
-          <MutationFailure title="Updates were not submitted" error={resubmissionError} fallback="Your updates could not be submitted. Check your connection and try the same action again if appropriate." />
+          <MutationFailure title="Updates submission was not confirmed" error={resubmissionError} fallback="We could not confirm the result. Check your application status before submitting your updates again." />
         ) : null}
 
         {tasksQuery.data?.length ? (
           <section aria-labelledby="customer-correction-tasks" className="space-y-5">
-            <div><h2 id="customer-correction-tasks" className="text-xl font-semibold">What you need to update</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Upload any requested documents, then mark each change as complete.</p></div>
+            <div><h2 id="customer-correction-tasks" className="text-xl font-semibold">What you need to update</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Review each requested change. Upload any required documents and mark each change as complete before submitting your updates.</p></div>
             {tasksQuery.data.map((task) => (
               <CorrectionTaskCard
                 key={task.correctionTaskId}
@@ -207,7 +207,7 @@ export function ApplicationCorrectionsPage() {
           </section>
         ) : null}
 
-        {tasksQuery.data?.length === 0 ? (
+        {tasksQuery.isSuccess && tasksQuery.data?.length === 0 ? (
           <EmptyState icon={FileCheck2} title="No requested changes" description="There are no changes for you to complete right now." />
         ) : null}
 
@@ -226,7 +226,7 @@ export function ApplicationCorrectionsPage() {
               <DialogTrigger asChild><Button variant="destructive"><Ban aria-hidden="true" />Cancel application</Button></DialogTrigger>
               <DialogContent>
                 <DialogHeader><DialogTitle>Cancel this application?</DialogTitle><DialogDescription>This application will be cancelled and you will not be able to submit these updates.</DialogDescription></DialogHeader>
-                {cancellationError ? <MutationFailure title="Application was not cancelled" error={cancellationError} fallback="The cancellation could not be completed. Check your connection and retry the same action if appropriate." /> : null}
+                {cancellationError ? <MutationFailure title="Cancellation was not confirmed" error={cancellationError} fallback="We could not confirm the result. Check your application status before trying to cancel again." /> : null}
                 <DialogFooter>
                   <DialogClose asChild><Button variant="secondary" disabled={cancellation.isPending}>Keep application</Button></DialogClose>
                   <Button variant="destructive" disabled={cancellation.isPending} onClick={() => void cancel()}>{cancellation.isPending ? 'Cancelling…' : 'Cancel application'}</Button>
