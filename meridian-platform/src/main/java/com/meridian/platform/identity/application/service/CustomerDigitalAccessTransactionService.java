@@ -7,8 +7,11 @@ import com.meridian.platform.identity.application.port.out.EmailVerificationToke
 import com.meridian.platform.identity.application.port.out.EmailVerificationTokenRepository;
 import com.meridian.platform.identity.application.port.out.GeneratedEmailVerificationToken;
 import com.meridian.platform.identity.application.port.out.PasswordHashingPort;
+import com.meridian.platform.identity.application.port.out.PasswordResetTokenCodecPort;
+import com.meridian.platform.identity.application.port.out.PasswordResetTokenRepository;
 import com.meridian.platform.identity.application.port.out.UserRepository;
 import com.meridian.platform.identity.domain.model.EmailVerificationToken;
+import com.meridian.platform.identity.domain.model.PasswordResetToken;
 import com.meridian.platform.identity.domain.model.User;
 import com.meridian.platform.identity.domain.model.UserStatus;
 import com.meridian.platform.identity.domain.model.UserType;
@@ -48,6 +51,8 @@ public class CustomerDigitalAccessTransactionService {
     private final PasswordHashingPort passwords;
     private final EmailVerificationTokenCodecPort tokenCodec;
     private final EmailVerificationTokenRepository tokens;
+    private final PasswordResetTokenCodecPort setupTokenCodec;
+    private final PasswordResetTokenRepository setupTokens;
     private final CurrentUserProvider currentUsers;
     private final BusinessAuditPublisher audit;
     private final Duration tokenLifetime;
@@ -56,6 +61,7 @@ public class CustomerDigitalAccessTransactionService {
     public CustomerDigitalAccessTransactionService(
             UserRepository users, CustomerDigitalAccessVerificationPort customers, PasswordHashingPort passwords,
             EmailVerificationTokenCodecPort tokenCodec, EmailVerificationTokenRepository tokens,
+            PasswordResetTokenCodecPort setupTokenCodec, PasswordResetTokenRepository setupTokens,
             CurrentUserProvider currentUsers, BusinessAuditPublisher audit,
             @Value("${meridian.identity.email-verification.lifetime:24h}") Duration tokenLifetime, Clock clock
     ) {
@@ -64,6 +70,8 @@ public class CustomerDigitalAccessTransactionService {
         this.passwords = Objects.requireNonNull(passwords);
         this.tokenCodec = Objects.requireNonNull(tokenCodec);
         this.tokens = Objects.requireNonNull(tokens);
+        this.setupTokenCodec = Objects.requireNonNull(setupTokenCodec);
+        this.setupTokens = Objects.requireNonNull(setupTokens);
         this.currentUsers = Objects.requireNonNull(currentUsers);
         this.audit = Objects.requireNonNull(audit);
         if (tokenLifetime == null || tokenLifetime.isZero() || tokenLifetime.isNegative()) {
@@ -103,13 +111,18 @@ public class CustomerDigitalAccessTransactionService {
         GeneratedEmailVerificationToken token = tokenCodec.generate();
         tokens.create(new EmailVerificationToken(UUID.randomUUID(), userId, token.tokenDigest(), now,
                 now.plus(tokenLifetime), null, null));
+        var setupToken = setupTokenCodec.generate();
+        // Both invitation secrets expire together; ordinary recovery retains its own shorter lifetime.
+        setupTokens.create(new PasswordResetToken(UUID.randomUUID(), userId, setupToken.tokenDigest(), now,
+                now.plus(tokenLifetime), null, null));
         audit.publish(BusinessAuditEvent.single(
                 BusinessOperationContext.user(UUID.randomUUID(), actor.userId(),
                         LocalDateTime.ofInstant(now, ZoneOffset.UTC)),
                 new BusinessAuditEntry(BusinessAuditAction.IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED,
                         BusinessAuditEntityType.IDENTITY_USER, userId,
                         BusinessAuditPayload.builder().put(BusinessAuditPayloadKey.CUSTOMER_ID, customerId).build())));
-        return new PendingCustomerDigitalAccessInvitation(toStatus(user), normalizedEmail, token.tokenValue());
+        return new PendingCustomerDigitalAccessInvitation(toStatus(user), normalizedEmail, token.tokenValue(),
+                setupToken.tokenValue());
     }
 
     private AuthenticatedUser requireStaff() {

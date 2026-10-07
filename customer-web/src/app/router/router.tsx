@@ -8,6 +8,7 @@ import { ForgotPasswordPage } from '@/routes/auth/ForgotPasswordPage'
 import { LoginPage } from '@/routes/auth/LoginPage'
 import { RegisterPage } from '@/routes/auth/RegisterPage'
 import { ResetPasswordPage } from '@/routes/auth/ResetPasswordPage'
+import { ActivateAccessPage } from '@/routes/auth/ActivateAccessPage'
 import { VerificationPendingPage } from '@/routes/auth/VerificationPendingPage'
 import { VerifyEmailPage } from '@/routes/auth/VerifyEmailPage'
 import { BankAccountsPage } from '@/routes/account/BankAccountsPage'
@@ -43,6 +44,7 @@ export const routes: RouteObject[] = [
           { path: 'login', element: <LoginPage /> },
           { path: 'register', element: <RegisterPage /> },
           { path: 'verify-email', element: <VerifyEmailPage /> },
+          { path: 'activate-access', element: <ActivateAccessPage /> },
           { path: 'verify-email/pending', element: <VerificationPendingPage /> },
           { path: 'forgot-password', element: <ForgotPasswordPage /> },
           { path: 'reset-password', element: <ResetPasswordPage /> },

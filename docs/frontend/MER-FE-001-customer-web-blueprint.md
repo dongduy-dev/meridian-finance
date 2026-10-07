@@ -326,7 +326,7 @@ An uncertain upload disables further submission until a successful history GET r
 | Refresh rotates the cookie; reuse revokes the active token family. | The client allows only one refresh request at a time. |
 | Current-session logout revokes the presented refresh family and the presented valid access token, then clears the cookie. | The client sends both credentials when available and clears local auth state regardless of the response. |
 | Registration issues no credentials and requires email verification. | Registration succeeds into a verification-pending page, not the app shell. |
-| Staff may enable a Customer Web login for an existing identity-bearing Customer. | The Customer follows the existing `/verify-email` invitation, then uses Forgot password and Reset password to choose a credential; Customer Web does not register another Customer or offer a Staff activation form. |
+| Staff may enable a Customer Web login for an existing identity-bearing Customer. | The Customer follows one `/activate-access` invitation, verifies email, then sets their first password on the same page through existing password confirmation; Customer Web does not register another Customer or offer a Staff activation form. |
 | Correct credentials for an unverified User return `EMAIL_VERIFICATION_REQUIRED`. | Login routes to the verification-pending experience. |
 | Unknown email, wrong password, and active temporary lock return the same `INVALID_CREDENTIALS`. | The UI must not claim that an account is locked or expose an attempt count. |
 | Password reset revokes every refresh family but does not enumerate and revoke existing access JWTs. | Reset success clears this tab's auth state and requires login; the UI must not promise immediate global access-token revocation. |
@@ -389,12 +389,18 @@ Password-reset confirmation is credentialed because success clears the refresh c
 
 ### 8.6 Email and Reset Token Handling
 
-- Read `token` only from `window.location.hash` on the dedicated confirmation route.
+- Read `token` only from `window.location.hash` on ordinary verification/reset routes; `/activate-access` captures independent `verificationToken` and `setupToken` fragment values.
 - Remove the fragment with `history.replaceState` immediately after capturing it in memory.
 - Never copy the token into search parameters, route state persisted to storage, logs, analytics, or error messages.
 - Confirmation pages provide distinct missing-token, submitting, success, invalid/expired, and unexpected-failure states.
 - Invalid verification directs the Customer to request another verification email.
 - Invalid reset directs the Customer to request another reset email.
+
+The activation page captures both secrets once, scrubs the fragment immediately, and retains them only in transient memory. Capture and email confirmation must be Strict Mode-safe. Secrets must not enter browser persistence, Query keys/cache, logs, telemetry, or rendered text; unmount and successful setup clear transient state. Reload after scrubbing cannot restore the secrets.
+
+Activation confirms email before rendering an executable password form. The form uses new-password autocomplete, the existing 12–72-character policy, a client-only confirmation match, and accessible field/error focus. Success clears local auth/private data and goes to Login with “Password set. Sign in to continue.” It does not log in automatically. Ordinary registration still chooses a password before verification; `/verify-email` retains its Login destination.
+
+Missing or invalid verification offers verification resend, followed by password recovery once email is confirmed. Unexpected verification results must not unlock password setup. Invalid or expired setup preserves verified email and offers Forgot password recovery. An uncertain password-confirmation result clears the form and disables further setup submission; the Customer may try Login with the chosen password or request a fresh recovery link. The page must not blindly replay a potentially consumed password confirmation.
 
 ---
 
@@ -571,6 +577,7 @@ Public
 ├── /login
 ├── /register
 ├── /verify-email
+├── /activate-access
 ├── /verify-email/pending
 ├── /forgot-password
 └── /reset-password
@@ -634,6 +641,7 @@ Each page below defines its intended composition. “Dependency” means the pag
 | Register | Create an unverified Customer and Identity User | `POST /api/v1/auth/register` | `AuthLayout`, display name, email, password, password guidance, consent to account creation copy, Register | Duplicate email offers Login/recovery; success goes to Verification Pending; no app session is assumed |
 | Verification Pending | Explain the required email step and allow enumeration-safe resend | `POST /api/v1/auth/email-verification/request` | `AuthLayout`, persistent instructions, email field when not retained in memory, Resend, Login | Accepted response always uses neutral copy; rate-limited state is persistent; success remains on the page |
 | Verify Email | Consume a fragment token and confirm email | `POST /api/v1/auth/email-verification/confirm` | `AuthLayout`, automatic confirmation state, Retry request link | Missing, submitting, success, invalid/expired, unexpected error; success goes to Login |
+| Activate Access | Verify email and set the first password for a Staff-enabled existing Customer | Existing email-verification and password-reset confirmation endpoints | `AuthLayout`, automatic verification, first-password form, Login/recovery | Missing, verifying, ready, setting, success, invalid verification, invalid setup, unexpected/unknown result; success clears local auth and goes to Login |
 | Forgot Password | Request enumeration-safe recovery | `POST /api/v1/auth/password-reset/request` | `AuthLayout`, email field, Send reset link, Login | Success and unknown/ineligible account share the same confirmation; rate limit uses countdown; success remains on confirmation state |
 | Reset Password | Replace password using a fragment token | `POST /api/v1/auth/password-reset/confirm` | `AuthLayout`, new password, confirmation field, Reset | Missing, submitting, success, invalid/expired, unexpected error; success clears local auth and goes to Login |
 
