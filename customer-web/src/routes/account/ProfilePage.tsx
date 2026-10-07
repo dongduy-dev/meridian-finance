@@ -148,7 +148,7 @@ export function ProfilePage() {
             ? <IdentityReferenceCorrection key={authState.actor.userId} /> : null}
           <Card>
             <CardHeader>
-              <CardTitle>{profileComplete ? 'Maintain your profile' : 'Complete your profile'}</CardTitle>
+              <CardTitle>{profileComplete ? 'Update your profile' : 'Complete your profile'}</CardTitle>
               <CardDescription>
                 Required fields are marked with an asterisk. Review your details before saving.
               </CardDescription>
@@ -162,11 +162,11 @@ export function ProfilePage() {
                     <AlertDescription>{validationMessages.join(' ')}</AlertDescription>
                   </Alert>
                 ) : null}
-                {serverError ? <AccountErrorFeedback error={serverError} title="Profile was not saved" /> : null}
+                {serverError ? <AccountErrorFeedback error={serverError} title="Profile save was not confirmed" /> : null}
                 {saved ? (
                   <AccountSuccessFeedback
                     title="Profile saved"
-                    description="Your account setup now reflects the saved profile."
+                    description="Your personal details have been updated."
                   />
                 ) : null}
 
@@ -199,7 +199,9 @@ export function ProfilePage() {
                       Identity reference: On file
                     </div>
                     <p className="mt-2 text-sm leading-5 text-muted-foreground">
-                      Your identity reference is securely stored and is not displayed after profile completion. Use the deliberate correction action before identity verification if this reference is incorrect.
+                      {identityVerified
+                        ? 'Your full name and identity reference are verified and cannot be changed here. You can still update your contact and employment details.'
+                        : 'Your identity reference is saved securely and is not displayed. If it is incorrect, use Correct identity reference when available before verification.'}
                     </p>
                   </div>
                 ) : (

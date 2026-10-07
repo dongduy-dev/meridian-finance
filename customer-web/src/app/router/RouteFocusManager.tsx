@@ -1,33 +1,16 @@
 import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 
-const routeTitles: Record<string, string> = {
-  '/': 'Dashboard',
-  '/products': 'Products',
-  '/products/salary-advance': 'Salary Advance',
-  '/products/salary-advance/apply': 'Apply for Salary Advance',
-  '/products/unsecured-consumer-loan': 'Unsecured Consumer Loan',
-  '/products/unsecured-consumer-loan/apply': 'Apply for Unsecured Consumer Loan',
-  '/products/collateral-loan': 'Collateral Loan',
-  '/products/collateral-loan/apply': 'Apply for Collateral Loan',
-  '/applications': 'Applications',
-  '/loans': 'Loans',
-  '/account': 'Account',
-  '/login': 'Login',
-  '/register': 'Create Account',
-  '/verify-email': 'Confirm Email',
-  '/activate-access': 'Activate Customer Web Access',
-  '/verify-email/pending': 'Email Confirmation Required',
-  '/forgot-password': 'Forgot Password',
-  '/reset-password': 'Reset Password',
-}
+import { customerRouteTitle } from './route-titles'
 
 export function RouteFocusManager() {
   const location = useLocation()
 
   useEffect(() => {
-    const isDocumentsRoute = /^\/applications\/[^/]+\/documents$/.test(location.pathname)
-    document.title = `${routeTitles[location.pathname] ?? (isDocumentsRoute ? 'Application Documents' : 'Page unavailable')} | Meridian`
+    document.title = `${customerRouteTitle(location.pathname, location.search)} | Meridian`
+  }, [location.pathname, location.search])
+
+  useEffect(() => {
     const focusHeading = () => {
       const heading = document.getElementById('page-heading')
       if (!heading) return false

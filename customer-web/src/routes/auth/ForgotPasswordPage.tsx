@@ -57,10 +57,10 @@ export function ForgotPasswordPage() {
     <AuthCard
       eyebrow="Account recovery"
       title="Reset your password"
-      description="Enter your email to request a secure password-reset link."
+      description="Enter your account email to request a password link. You can also use this to set your first password after confirming your email."
       footer={
         <p className="text-center text-sm text-muted-foreground">
-          <Link className="font-semibold text-primary underline-offset-4 hover:underline" to="/login">Back to Login</Link>
+          <Link className="font-semibold text-primary underline-offset-4 hover:underline" to="/login">Back to log in</Link>
         </p>
       }
     >

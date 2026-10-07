@@ -3,6 +3,7 @@ import { AlertCircle, RefreshCw } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { ApiError } from '@/lib/api'
+import { customerErrorMessage } from '@/lib/errors/customer-error-message'
 
 export function QueryErrorFeedback({
   error,
@@ -13,10 +14,7 @@ export function QueryErrorFeedback({
   title: string
   onRetry: () => void
 }) {
-  const description =
-    error instanceof ApiError
-      ? error.message
-      : 'The request could not be completed. Check your connection and try again.'
+  const description = customerErrorMessage(error, 'We could not load this information. Check your connection and try again.')
 
   return (
     <div className="space-y-3">

@@ -16,6 +16,7 @@ import {
   evidenceRequirementPresentation,
 } from '@/features/loan-products/loan-product-presentation'
 import { ApiError } from '@/lib/api'
+import { customerErrorMessage } from '@/lib/errors/customer-error-message'
 
 const submissionErrorMessages: Record<string, string> = {
   CUSTOMER_NOT_FOUND: 'Meridian could not confirm your account for this application.',
@@ -30,7 +31,7 @@ const submissionErrorMessages: Record<string, string> = {
   INVALID_PRODUCT_TERM: 'The requested term is no longer available.',
   INVALID_COLLATERAL_DETAILS: 'The collateral details are incomplete or are not supported.',
   BLOCKING_APPLICATION_EXISTS: 'You already have an application for this loan in progress. You can submit another after it is no longer active.',
-  OUTSTANDING_LOAN_ACCOUNT_EXISTS: 'A previous Unsecured Consumer Loan still has an outstanding balance.',
+  OUTSTANDING_LOAN_ACCOUNT_EXISTS: 'A previous loan for this product still has an outstanding balance. It must be fully repaid before you can apply again.',
   SYSTEM_STATE_CONFLICT: "We couldn't confirm the latest application information. Refresh and try again if appropriate.",
   VALIDATION_FAILED: 'Meridian could not validate the submitted request. Review the entered details before trying again.',
 }
@@ -47,12 +48,10 @@ export function OriginationSubmissionError({ error }: { error: unknown }) {
   return (
     <Alert variant="destructive" tabIndex={-1} data-submission-error>
       <ShieldAlert aria-hidden="true" />
-      <AlertTitle>Application was not submitted</AlertTitle>
+      <AlertTitle>Application submission was not confirmed</AlertTitle>
       <AlertDescription className="space-y-3">
-        <p>{message ?? (error instanceof ApiError
-          ? error.message
-          : 'The request could not be completed. Check your connection and try again.')}</p>
-        <p>Review the retained details and submit again only when you are ready.</p>
+        <p>{message ?? customerErrorMessage(error, 'We could not confirm the result. Check your connection.')}</p>
+        <p>Check your application list and the details entered here before submitting again.</p>
         {error instanceof ApiError && error.requestId ? (
           <p className="break-all text-xs">Support reference: {error.requestId}</p>
         ) : null}

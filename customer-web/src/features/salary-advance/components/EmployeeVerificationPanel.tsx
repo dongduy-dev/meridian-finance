@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { AccountFormField } from '@/features/account/components/AccountFormField'
 import { ApiError } from '@/lib/api'
+import { customerErrorMessage } from '@/lib/errors/customer-error-message'
 
 import type { EmployeeVerification, OwnEmployeeVerification } from '../salary-advance-api'
 import {
@@ -31,12 +32,19 @@ interface VerificationFormValues {
 }
 
 function VerificationError({ error }: { error: unknown }) {
+  const messages: Record<string, string> = {
+    PROFILE_INCOMPLETE: 'Complete your profile before verifying your employment.',
+    CUSTOMER_IDENTITY_VERIFICATION_REQUIRED: 'Verify your identity before verifying your employment.',
+    CUSTOMER_NOT_ACTIVE: 'Your account is not active. Contact Meridian support for help.',
+    PARTNER_COMPANY_NOT_FOUND: 'This employer is unavailable. Refresh the employer list and choose an available employer.',
+  }
+  const message = error instanceof ApiError && Object.hasOwn(messages, error.errorCode) ? messages[error.errorCode] : undefined
   return (
     <Alert variant="destructive" tabIndex={-1} data-verification-error>
       <Building2 aria-hidden="true" />
-      <AlertTitle>Employment verification was not completed</AlertTitle>
+      <AlertTitle>Employment verification was not confirmed</AlertTitle>
       <AlertDescription>
-        <p>{error instanceof ApiError ? error.message : 'The request could not be completed. Check your connection and try again.'}</p>
+        <p>{message ?? customerErrorMessage(error, 'We could not confirm your employment verification result. Check the latest status before trying again.')}</p>
         {error instanceof ApiError && error.requestId ? (
           <p className="mt-2 break-all text-xs">Support reference: {error.requestId}</p>
         ) : null}
@@ -182,7 +190,7 @@ export function EmployeeVerificationPanel({
             onRetry={() => void optionsQuery.refetch()}
           />
         ) : null}
-        {optionsQuery.data?.length === 0 ? (
+        {optionsQuery.isSuccess && optionsQuery.data?.length === 0 ? (
           <Alert>
             <Building2 aria-hidden="true" />
             <AlertTitle>No employers available</AlertTitle>

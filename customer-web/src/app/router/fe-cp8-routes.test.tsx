@@ -367,7 +367,7 @@ describe('FE-CP8 Customer corrections', () => {
     const fixture = state({ completionUncertainOnce: true, tasks: [supportingTask] })
     renderRoute(`/applications/${applicationId}/corrections`, fixture)
     await user.click(await screen.findByRole('button', { name: 'Mark as complete' }))
-    expect(await screen.findByText(/could not be completed/i)).toBeVisible()
+    expect(await screen.findByText(/Refresh your requested changes before trying again/i)).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Mark as complete' }))
     expect(await screen.findByText('This requested change is complete.')).toBeVisible()
     expect(fixture.completionBodies).toHaveLength(2)
@@ -381,7 +381,7 @@ describe('FE-CP8 Customer corrections', () => {
     const { router } = renderRoute(`/applications/${applicationId}/corrections`, fixture)
     const resubmit = await screen.findByRole('button', { name: 'Submit updates' })
     await user.click(resubmit)
-    expect(await screen.findByText(/could not be submitted/i)).toBeVisible()
+    expect(await screen.findByText(/Check your application status before submitting your updates again/i)).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Submit updates' }))
     await waitFor(() => expect(router.state.location.pathname).toBe(`/applications/${applicationId}`))
     expect(await screen.findByText('Updates submitted')).toBeVisible()
@@ -394,6 +394,8 @@ describe('FE-CP8 Customer corrections', () => {
     const completedTask = { ...supportingTask, status: 'COMPLETED', completedAt: '2026-08-31T10:00:00' }
     renderRoute(`/applications/${applicationId}/corrections`, state({ applications: [{ ...summary, requiredAction: 'NONE' }], tasks: [completedTask] }))
     expect(await screen.findByText('All requested changes are complete')).toBeVisible()
+    expect(screen.getByText('This requested change has been completed. No further upload is needed for this change.')).toBeVisible()
+    expect(screen.queryByText('Upload the requested supporting document, then mark this change as complete.')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Submit updates' })).not.toBeInTheDocument()
     expect(screen.queryByText(/Staff work is pending/i)).not.toBeInTheDocument()
   })
@@ -424,7 +426,7 @@ describe('FE-CP8 narrow cancellation', () => {
     await user.click(await screen.findByRole('button', { name: 'Cancel application' }))
     const dialog = await screen.findByRole('dialog', { name: 'Cancel this application?' })
     await user.click(within(dialog).getByRole('button', { name: 'Cancel application' }))
-    expect(await within(dialog).findByText(/could not be completed/i)).toBeVisible()
+    expect(await within(dialog).findByText(/Check your application status before trying to cancel again/i)).toBeVisible()
     await user.click(within(dialog).getByRole('button', { name: 'Cancel application' }))
     await waitFor(() => expect(router.state.location.pathname).toBe(`/applications/${applicationId}`))
     expect(await screen.findByText('Application cancelled')).toBeVisible()
@@ -466,8 +468,8 @@ describe('FE-CP8 route protection', () => {
 describe('Staff-assisted application tracking and corrections', () => {
   it.each(['NONE', 'REVIEW_APPROVED_OFFER'])('uses Staff guidance on detail even with indexed requiredAction %s', async (requiredAction) => {
     renderRoute(`/applications/${applicationId}`, state({ detail: { ...detail, originationChannel: 'STAFF_ASSISTED' }, applications: [{ ...summary, originationChannel: 'STAFF_ASSISTED', requiredAction }] }))
-    expect(await screen.findByText('Staff-assisted application')).toBeVisible()
-    expect(screen.getByText(/Meridian Staff will coordinate it with you/)).toBeVisible()
+    expect(await screen.findByText('Application handled with Meridian staff')).toBeVisible()
+    expect(screen.getByText(/Contact your Loan Officer if you need to update it/)).toBeVisible()
     expect(screen.queryByText('There is nothing you need to do for this application right now.')).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Review offer|Review requested changes|Upload documents|Review contract/ })).not.toBeInTheDocument()
   })
@@ -475,7 +477,7 @@ describe('Staff-assisted application tracking and corrections', () => {
   it('preserves the digital no-action detail state', async () => {
     renderRoute(`/applications/${applicationId}`, state({ applications: [{ ...summary, requiredAction: 'NONE' }] }))
     expect(await screen.findByText('There is nothing you need to do for this application right now.')).toBeVisible()
-    expect(screen.queryByText('Staff-assisted application')).not.toBeInTheDocument()
+    expect(screen.queryByText('Application handled with Meridian staff')).not.toBeInTheDocument()
   })
 
   it('waits for channel then shows guidance without querying Customer tasks or documents', async () => {
@@ -491,8 +493,8 @@ describe('Staff-assisted application tracking and corrections', () => {
     expect(await screen.findByLabelText('Loading application details')).toBeVisible()
     expect(fetchMock.mock.calls.some(([input]) => /corrections\/tasks|\/documents$/.test(String(input)))).toBe(false)
     resolveDetail(json(fixture.detail))
-    expect(await screen.findByText(/Requested updates for this application are coordinated through Meridian Staff/)).toBeVisible()
-    expect(screen.getByText(/Contact your Loan Officer or branch/)).toBeVisible()
+    expect(await screen.findByText(/Requested updates for this application are coordinated through Meridian staff/)).toBeVisible()
+    expect(screen.getByText(/Contact your Loan Officer if you need help with the next step/)).toBeVisible()
     expect(screen.queryByRole('button', { name: /Mark as complete|Submit updates|Cancel application|Upload document|Replace document/ })).not.toBeInTheDocument()
     expect(document.querySelector('input[type="file"]')).toBeNull()
     expect(fetchMock.mock.calls.some(([input]) => /corrections\/tasks|\/documents$/.test(String(input)))).toBe(false)

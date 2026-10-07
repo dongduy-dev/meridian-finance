@@ -1,5 +1,5 @@
 import { queryClient } from '@/app/providers/query-client'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -62,6 +62,34 @@ const options = [{
   companyCode: 'MER-LONG',
   name: 'A Partner Company with a deliberately long Customer-safe display name',
 }]
+
+it('shows an employer read failure without repeating a cached no-employers claim', async () => {
+  let failed = false
+  renderRoute('/products/salary-advance', async (input, init) => {
+    const url = String(input)
+    if (url.endsWith('/loan-products/salary-advance/readiness')) return response({ ...readyReadiness,
+      applicationAllowed: false, blockerCodes: ['EMPLOYEE_NOT_VERIFIED'] })
+    if (url.endsWith('/partner-companies/verification-options')) return failed ? errorResponse('FORBIDDEN', 403, url) : response([])
+    return defaultFetch(input, init)
+  })
+  expect(await screen.findByText('No employers available')).toBeVisible()
+  failed = true
+  await act(async () => { await queryClient.refetchQueries({ queryKey: salaryAdvanceKeys.partnerOptions() }) })
+  expect(await screen.findByText('Employers could not be loaded')).toBeVisible()
+  expect(screen.queryByText('No employers available')).not.toBeInTheDocument()
+})
+
+it('does not keep a cached ready-to-apply claim after readiness refresh fails', async () => {
+  let failed = false
+  renderRoute('/products/salary-advance', async (input, init) => failed && String(input).endsWith('/loan-products/salary-advance/readiness')
+    ? errorResponse('FORBIDDEN', 403, String(input)) : defaultFetch(input, init))
+  expect(await screen.findByText('Ready to apply')).toBeVisible()
+  failed = true
+  await act(async () => { await queryClient.refetchQueries({ queryKey: salaryAdvanceKeys.readiness() }) })
+  expect(await screen.findByText('Salary Advance application status could not be loaded')).toBeVisible()
+  expect(screen.queryByText('Ready to apply')).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Apply for Salary Advance' })).not.toBeInTheDocument()
+})
 
 const application = {
   loanApplicationId: '77777777-7777-4777-8777-777777777771',
@@ -365,7 +393,7 @@ describe('FE-CP6 Salary Advance product readiness', () => {
       return defaultFetch(input, init)
     })
 
-    expect(await screen.findByText('Application cannot be started safely')).toBeVisible()
+    expect(await screen.findByText('Application unavailable')).toBeVisible()
     expect(screen.queryByRole('link', { name: 'Apply for Salary Advance' })).not.toBeInTheDocument()
   })
 
@@ -488,14 +516,14 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     })
 
     expect(await screen.findByRole('heading', { name: 'Refresh employment verification' })).toBeVisible()
-    expect(screen.getByText('Your employment verification needs to be refreshed before submission.')).toBeVisible()
+    expect(screen.getByText('Verify your employment again before submitting your application.')).toBeVisible()
     expect(screen.queryByText(/employment information changed/i)).not.toBeInTheDocument()
     await user.selectOptions(await screen.findByRole('combobox', { name: /Employer/ }), partnerCompanyId)
     await user.type(screen.getByRole('textbox', { name: /Employee code/ }), 'PRIVATE-EMPLOYEE-002')
     await user.click(screen.getByRole('button', { name: 'Refresh verification' }))
 
     expect(await screen.findByText("We're reviewing your employment details")).toBeVisible()
-    expect(screen.getByText('Action or waiting required')).toBeVisible()
+    expect(screen.getByText('Not ready to apply')).toBeVisible()
     expect(screen.queryByRole('link', { name: 'Apply for Salary Advance' })).not.toBeInTheDocument()
   })
 
@@ -798,7 +826,7 @@ describe('FE-CP6 Salary Advance product readiness', () => {
   it.each([
     ['MATCHED_INACTIVE', 'Employment is not active', 'The verification did not establish active employment for Salary Advance eligibility.'],
     ['NOT_FOUND', 'Employment could not be verified', 'We could not verify employment using the selected employer and employee code.'],
-    ['MULTIPLE_MATCHES', 'Employment needs review', 'The verification could not establish one eligible employment record.'],
+    ['MULTIPLE_MATCHES', 'Employment needs review', 'We could not confirm your employment. Meridian needs to review your details.'],
     ['MANUAL_REVIEW_REJECTED', 'Employment could not be verified', 'We could not verify eligible employment for Salary Advance.'],
     ['FUTURE_OUTCOME', 'Verification result unavailable', "We can't show the verification result right now. Check your application availability before continuing."],
   ])('renders %s safely without internal matching evidence', async (outcome, label, description) => {
@@ -1000,7 +1028,7 @@ describe('FE-CP6 focused Salary Advance application', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: salaryAdvanceKeys.readiness() })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: applicationKeys.index() })
 
-    await user.click(screen.getByRole('link', { name: 'Return to Dashboard' }))
+    await user.click(screen.getByRole('link', { name: 'Return to Home' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/'))
     expect(await screen.findByText(application.applicationNumber)).toBeVisible()
   })
@@ -1033,7 +1061,7 @@ describe('FE-CP6 focused Salary Advance application', () => {
     await user.click(screen.getByRole('button', { name: 'Review request' }))
     await user.click(await screen.findByRole('button', { name: 'Submit application' }))
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Application was not submitted' })).toBeVisible()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Application submission was not confirmed' })).toBeVisible()
     expect(screen.getByText('The current available amount is no longer sufficient for this request.')).toBeVisible()
     expect(screen.getByText(moneyText(2_000_000))).toBeVisible()
     expect(screen.getByText('7 months')).toBeVisible()
@@ -1045,7 +1073,7 @@ describe('FE-CP6 focused Salary Advance application', () => {
   it.each([
     ['CUSTOMER_IDENTITY_VERIFICATION_REQUIRED', 'Complete identity verification before submitting this application.'],
     ['SYSTEM_STATE_CONFLICT', "We couldn't confirm the latest Salary Advance information. Review the latest status and try again if appropriate."],
-    ['SALARY_ADVANCE_ELIGIBILITY_DATA_STALE', 'Your employment verification needs to be refreshed before submission.'],
+    ['SALARY_ADVANCE_ELIGIBILITY_DATA_STALE', 'Verify your employment again before submitting your application.'],
     ['BLOCKING_APPLICATION_EXISTS', 'You already have a Salary Advance application in progress. You can submit another after it is no longer active.'],
   ])('describes %s without inventing changed information or a Customer-controlled resolution', async (errorCode, expectedMessage) => {
     const user = userEvent.setup()

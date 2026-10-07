@@ -52,7 +52,7 @@ it('scrubs both secrets immediately, verifies once, then sets the first password
   expect(screen.queryByRole('link', { name: /recover|forgot/i })).not.toBeInTheDocument()
   await fillPassword()
   await waitFor(() => expect(context.router.state.location.pathname).toBe('/login'))
-  expect(await screen.findByText('Password set. Sign in to continue.')).toBeVisible()
+  expect(await screen.findByText('Log in with your new password to continue.')).toBeVisible()
   expect(context.api.confirmPasswordReset).toHaveBeenCalledExactlyOnceWith('setup-secret', 'Customer-password-123')
   expect(context.api.requestPasswordReset).not.toHaveBeenCalled()
   expect(context.api.login).not.toHaveBeenCalled()

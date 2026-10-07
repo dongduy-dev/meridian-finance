@@ -340,9 +340,9 @@ describe('FE-CP10 repayment history', () => {
       within(label.parentElement as HTMLElement).getByText(/₫/).textContent?.replace(/\u00a0/g, ' ')
     ))
     expect(receivedAmounts).toEqual([moneyText(222_222), moneyText(111_111)])
-    await user.click(screen.getAllByText('Allocation detail')[0]!)
+    await user.click(screen.getAllByText('How this payment was applied')[0]!)
     expect(screen.getAllByText(/Component unavailable/)[0]).toBeVisible()
-    await user.click(screen.getAllByText('Installment outcomes')[0]!)
+    await user.click(screen.getAllByText('Installments after this payment')[0]!)
     expect(screen.getAllByText('Status unavailable')[0]).toBeVisible()
     const firstHistoryCard = receivedLabels[0]!.closest('.rounded-lg') as HTMLElement
     expect(within(firstHistoryCard).getByText(moneyText(7_777_777))).toBeVisible()

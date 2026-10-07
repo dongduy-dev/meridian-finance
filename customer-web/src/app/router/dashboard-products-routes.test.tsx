@@ -256,7 +256,7 @@ describe('FE-CP5 Dashboard', () => {
     const fetchMock = vi.fn(successfulFetch)
     renderRoute('/', fetchMock)
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeVisible()
     expect(await screen.findByText('Your required profile details are on file.')).toBeVisible()
 
     const requiredWork = screen.getByRole('heading', { name: 'What needs your attention' }).closest('section') as HTMLElement
@@ -417,7 +417,7 @@ describe('FE-CP5 product catalogue and details', () => {
       throw new Error(`Unexpected request: ${String(input)}`)
     })
 
-    expect(await screen.findByText('No loans available')).toBeVisible()
+    expect(await screen.findByText('No products available')).toBeVisible()
     expect(screen.queryByRole('heading', { name: 'Salary Advance' })).not.toBeInTheDocument()
   })
 
@@ -432,7 +432,7 @@ describe('FE-CP5 product catalogue and details', () => {
     })
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Explore loans' })).toBeVisible()
-    expect(await screen.findByText('Loans could not be loaded')).toBeVisible()
+    expect(await screen.findByText('Products could not be loaded')).toBeVisible()
     expect(screen.getByText(/Support reference: 55555555/)).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('heading', { name: 'Salary Advance' })).toBeVisible()
@@ -525,7 +525,7 @@ describe('Staff-assisted Dashboard attention', () => {
     const assisted = { ...applications[0], originationChannel: 'STAFF_ASSISTED', status: 'CUSTOMER_ACCEPTANCE_PENDING', requiredAction: 'NONE' }
     renderRoute('/', (input, init) => String(input).endsWith('/loan-applications') ? Promise.resolve(response([assisted])) : successfulFetch(input, init))
     expect(await screen.findByText("You're up to date online")).toBeVisible()
-    expect(screen.getByText('There are no digital application tasks waiting for you here. Staff-assisted steps are coordinated with Meridian Staff.')).toBeVisible()
+    expect(screen.getByText('There are no digital application tasks waiting for you here. Staff-assisted steps are coordinated with Meridian staff.')).toBeVisible()
     const attention = screen.getByRole('heading', { name: 'What needs your attention' }).closest('section') as HTMLElement
     expect(within(attention).queryByRole('link')).not.toBeInTheDocument()
     expect(screen.getByText(assisted.applicationNumber!)).toBeVisible()

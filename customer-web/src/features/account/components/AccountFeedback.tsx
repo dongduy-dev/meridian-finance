@@ -2,12 +2,10 @@ import { AlertCircle, CheckCircle2 } from 'lucide-react'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { ApiError } from '@/lib/api'
+import { accountErrorMessage } from '../account-presentation'
 
 export function AccountErrorFeedback({ error, title }: { error: unknown; title: string }) {
-  const description =
-    error instanceof ApiError
-      ? error.message
-      : 'The request could not be completed. Check your connection and try again.'
+  const description = accountErrorMessage(error)
 
   return (
     <Alert variant="destructive" tabIndex={-1} data-account-error>

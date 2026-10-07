@@ -31,7 +31,7 @@ export function ContractSummary({ contract }: { contract: LoanContract }) {
             <Fact label="Accepted principal"><MoneyDisplay value={contract.approvedPrincipal} /></Fact>
             <Fact label="Term">{contract.approvedTermMonths} months</Fact>
             <Fact label="Interest method">{interestMethodLabel(contract.interestCalculationMethod)}</Fact>
-            <Fact label="Monthly flat rate">{formatPercentage(contract.flatMonthlyInterestRate)}</Fact>
+            <Fact label="Monthly flat interest rate">{formatPercentage(contract.flatMonthlyInterestRate)}</Fact>
             <Fact label="Total interest"><MoneyDisplay value={contract.totalInterest} /></Fact>
             <Fact label="Fee"><MoneyDisplay value={contract.feeAmount} /></Fact>
             <Fact label="Total repayment"><MoneyDisplay value={contract.totalRepaymentAmount} /></Fact>
@@ -45,16 +45,16 @@ export function ContractSummary({ contract }: { contract: LoanContract }) {
       <Card className="min-w-0">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Landmark aria-hidden="true" className="size-5" />Disbursement account</CardTitle>
-          <CardDescription>This masked account is linked to this contract version.</CardDescription>
+          <CardDescription>This is the bank account recorded for payment of your loan funds under this contract version. Updating your saved bank accounts does not change this record.</CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-x-6 gap-y-5 text-sm sm:grid-cols-2">
             <Fact label="Bank">{account.bankNameSnapshot}</Fact>
             <Fact label="Bank code">{account.bankCode}</Fact>
             <Fact label="Account holder">{account.accountHolderName}</Fact>
-            <Fact label="Masked account"><span className="break-all font-mono">{account.maskedAccountNumber}</span></Fact>
-            <Fact label="Captured">{formatTimestamp(account.capturedAt)}</Fact>
-            <Fact label="Account status">{account.primaryAtCapture && account.activeAtCapture ? 'Primary and active when selected' : 'Previous status unavailable'}</Fact>
+            <Fact label="Account number (partly hidden)"><span className="break-all font-mono">{account.maskedAccountNumber}</span></Fact>
+            <Fact label="Recorded">{formatTimestamp(account.capturedAt)}</Fact>
+            <Fact label="Account status when selected">{account.primaryAtCapture && account.activeAtCapture ? 'Primary and active when selected' : 'Previous status unavailable'}</Fact>
           </dl>
         </CardContent>
       </Card>

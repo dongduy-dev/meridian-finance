@@ -61,12 +61,12 @@ export function ApplicationDocumentsPage() {
       eyebrow="Application documents"
       title="Documents"
       description={isDigital ? "Upload the documents we need and track their review status." : "Track required documents and their review status."}
-      backAction={<Button variant="secondary" asChild><Link to={`/applications/${loanApplicationId}`}><ArrowLeft aria-hidden="true" />Application</Link></Button>}
+      backAction={<Button variant="secondary" asChild><Link to={`/applications/${loanApplicationId}`}><ArrowLeft aria-hidden="true" />Back to application</Link></Button>}
     >
       <div className="space-y-8">
       {applicationQuery.isPending ? <Skeleton className="h-24" role="status" aria-label="Loading application details" /> : null}
       {applicationQuery.isError ? <QueryErrorFeedback error={applicationQuery.error} title="Application details could not be loaded" onRetry={() => void applicationQuery.refetch()} /> : null}
-      {isStaffAssisted ? <StaffAssistedApplicationNotice>Documents for this application are handled with Meridian Staff. If an upload or replacement is required, Meridian Staff will coordinate it with you.</StaffAssistedApplicationNotice> : null}
+      {isStaffAssisted ? <StaffAssistedApplicationNotice>Documents for this application are handled with Meridian staff. If an upload or replacement is required, Meridian staff will coordinate it with you.</StaffAssistedApplicationNotice> : null}
       {isDigital && notice ? (
         <Alert variant="success">
           <CheckCircle2 aria-hidden="true" />
@@ -85,13 +85,13 @@ export function ApplicationDocumentsPage() {
       ) : null}
       {checklistQuery.data && applicationQuery.data ? (
         <>
-          <section aria-labelledby="checklist-readiness-heading" className="space-y-4">
+          {checklistQuery.isSuccess && applicationQuery.isSuccess ? <section aria-labelledby="checklist-readiness-heading" className="space-y-4">
             <div><h2 id="checklist-readiness-heading" className="text-xl font-semibold">Document progress</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Document completion does not mean that your loan is approved.</p></div>
             <dl className="grid gap-4 sm:grid-cols-2">
               <ReadinessFact label="Documents provided" ready={checklistQuery.data.uploadComplete} readyText="All required documents have been provided or are no longer needed." pendingText="One or more required documents are still needed." />
               <ReadinessFact label="Review status" ready={checklistQuery.data.processingReady} readyText="Your documents are ready for the next step." pendingText="One or more documents are still being reviewed or need attention." />
             </dl>
-          </section>
+          </section> : null}
           <section aria-labelledby="document-items-heading" className="space-y-4">
             <div><h2 id="document-items-heading" className="text-xl font-semibold">Documents we need</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">{isDigital ? "Review the status of each document and take action where needed." : "Review the status of each required document."}</p></div>
             {checklistQuery.data.items.length ? (
@@ -128,9 +128,9 @@ export function ApplicationDocumentsPage() {
                   )
                 })}
               </div>
-            ) : (
+            ) : checklistQuery.isSuccess && applicationQuery.isSuccess ? (
               <EmptyState icon={FileCheck2} title="No documents are currently required" description="There are no documents to upload for this application right now." className="min-h-56" />
-            )}
+            ) : null}
           </section>
         </>
       ) : null}

@@ -7,9 +7,9 @@ export function DocumentStatus({ status, staffAssisted = false }: { status: stri
   const staffLabel = status === 'NOT_UPLOADED' ? 'Document required'
     : status === 'REPLACEMENT_REQUESTED' ? 'Replacement required' : presentation.label
   const description = staffAssisted && status === 'NOT_UPLOADED'
-    ? 'This document is still required. Meridian Staff will coordinate the upload with you.'
+    ? 'This document is still required. Meridian staff will coordinate the upload with you.'
     : staffAssisted && status === 'REPLACEMENT_REQUESTED'
-      ? 'A replacement is required. Meridian Staff will coordinate it with you.'
+      ? 'A replacement is required. Meridian staff will coordinate it with you.'
       : documentStatusDescription(status)
   return (
     <div className="space-y-2">

@@ -49,7 +49,7 @@ export function ApplicationsPage() {
           ))}
         </div>
       ) : null}
-      {applicationsQuery.data?.length === 0 ? (
+      {applicationsQuery.isSuccess && applicationsQuery.data?.length === 0 ? (
         <EmptyState
           icon={FileSearch}
           title="No applications yet"

@@ -57,7 +57,7 @@ function VerifyEmailContent({ locationKey }: { locationKey: string }) {
       description="Meridian is securely checking the confirmation link."
       footer={
         <p className="text-center text-sm text-muted-foreground">
-          <Link className="font-semibold text-primary underline-offset-4 hover:underline" to="/login">Return to Login</Link>
+          <Link className="font-semibold text-primary underline-offset-4 hover:underline" to="/login">Return to log in</Link>
         </p>
       }
     >
@@ -71,13 +71,13 @@ function VerifyEmailContent({ locationKey }: { locationKey: string }) {
         ) : null}
         {state.status === 'success' ? (
           <>
-            <SuccessFeedback title="Email confirmed" description="Your email is ready. You can now log in to Meridian." />
-            <Button asChild className="w-full"><Link to="/login"><BadgeCheck />Continue to Login</Link></Button>
+            <SuccessFeedback title="Email confirmed" description="Your email is confirmed. If you already have a password, you can log in. If you still need to set your first password, use Forgot password on the login page." />
+            <Button asChild className="w-full"><Link to="/login"><BadgeCheck />Continue to log in</Link></Button>
           </>
         ) : null}
         {state.status === 'missing' ? (
           <>
-            <ErrorFeedback title="Confirmation token missing" description="This confirmation link is incomplete. Request another verification email." />
+            <ErrorFeedback title="Confirmation link incomplete" description="This confirmation link is incomplete. Request another verification email." />
             <Button asChild variant="secondary" className="w-full"><Link to="/verify-email/pending"><MailWarning />Request another email</Link></Button>
           </>
         ) : null}
@@ -90,7 +90,7 @@ function VerifyEmailContent({ locationKey }: { locationKey: string }) {
         {state.status === 'error' ? (
           <>
             <ErrorFeedback {...state.error} />
-            <p className="flex items-start gap-2 text-sm leading-6 text-muted-foreground"><AlertCircle aria-hidden="true" className="mt-1 size-4 shrink-0" />The confirmation link has not been shown or stored elsewhere.</p>
+            <p className="flex items-start gap-2 text-sm leading-6 text-muted-foreground"><AlertCircle aria-hidden="true" className="mt-1 size-4 shrink-0" />We could not confirm the result. Try logging in. If email confirmation is still required, request another verification email.</p>
           </>
         ) : null}
       </div>

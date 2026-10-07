@@ -11,7 +11,7 @@ const offerStatuses: Record<string, StatusPresentation> = {
 }
 
 const interestMethods: Record<string, string> = {
-  FLAT_ORIGINAL_PRINCIPAL: 'Flat rate on original principal',
+  FLAT_ORIGINAL_PRINCIPAL: 'Flat interest on the amount borrowed',
 }
 
 const repaymentMethods: Record<string, string> = {

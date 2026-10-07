@@ -142,7 +142,7 @@ export function ApplicationContractPage() {
       <div className="space-y-6">
         {applicationQuery.isPending ? <Skeleton className="h-24" role="status" aria-label="Loading application details" /> : null}
         {applicationQuery.isError ? <QueryErrorFeedback error={applicationQuery.error} title="Application details could not be loaded" onRetry={() => void applicationQuery.refetch()} /> : null}
-        {isStaffAssisted ? <StaffAssistedApplicationNotice>Review the current contract here; Meridian Staff will coordinate acknowledgment with you.</StaffAssistedApplicationNotice> : null}
+        {isStaffAssisted ? <StaffAssistedApplicationNotice>Review the current contract here; Meridian staff will coordinate acknowledgment with you.</StaffAssistedApplicationNotice> : null}
         {waiting ? (
           <EmptyState icon={FileClock} title="Your contract is not ready yet" description="Your offer has been accepted. Check again later for your contract." action={<Button onClick={() => void contractQuery.refetch()}><RefreshCw aria-hidden="true" />Check again</Button>} />
         ) : null}
@@ -156,7 +156,7 @@ export function ApplicationContractPage() {
 
       <Dialog open={prerequisitesValidated && contract?.availableCustomerAction === 'ACKNOWLEDGE' && dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Confirm review of contract version {contract?.contractVersion}?</DialogTitle><DialogDescription>This confirmation applies only to the version shown. Continue after reviewing its terms and masked destination.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Confirm review of contract version {contract?.contractVersion}?</DialogTitle><DialogDescription>This confirmation applies only to the version shown. Continue after reviewing its terms and the bank account shown for payment of your loan funds.</DialogDescription></DialogHeader>
           {acknowledgmentError ? <ContractMutationError error={acknowledgmentError} /> : null}
           <DialogFooter>
             <DialogClose asChild><Button variant="secondary" disabled={acknowledgment.isPending}>Review again</Button></DialogClose>
@@ -169,14 +169,14 @@ export function ApplicationContractPage() {
 }
 
 function BackToApplication({ loanApplicationId }: { loanApplicationId?: string }) {
-  return <Button variant="secondary" asChild><Link to={loanApplicationId ? `/applications/${loanApplicationId}` : '/applications'}><ArrowLeft aria-hidden="true" />Application</Link></Button>
+  return <Button variant="secondary" asChild><Link to={loanApplicationId ? `/applications/${loanApplicationId}` : '/applications'}><ArrowLeft aria-hidden="true" />Back to application</Link></Button>
 }
 
 function ContractMutationError({ error }: { error: unknown }) {
   return (
     <Alert variant="destructive" aria-live="polite">
       <AlertCircle aria-hidden="true" />
-      <AlertTitle>Contract acknowledgment was not completed</AlertTitle>
+      <AlertTitle>Contract review was not confirmed</AlertTitle>
       <AlertDescription className="space-y-2"><p>{contractErrorMessage(error)}</p>{error instanceof ApiError && error.requestId ? <p className="break-all text-xs">Support reference: {error.requestId}</p> : null}</AlertDescription>
     </Alert>
   )

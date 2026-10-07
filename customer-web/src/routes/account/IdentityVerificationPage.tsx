@@ -13,7 +13,7 @@ import { useAuth } from '@/features/auth/auth-context'
 export function IdentityVerificationPage() {
   const { state } = useAuth()
   if (state.status !== 'authenticated' || !state.actor.permissions.includes('customer:identity:read:own'))
-    return <p role="alert">Own identity verification access is required.</p>
+    return <p role="alert">Identity verification is not available for your account. Contact Meridian support for help.</p>
   return <OwnIdentityWorkspace key={state.actor.userId} />
 }
 function OwnIdentityWorkspace() {
@@ -47,7 +47,7 @@ function OwnIdentityWorkspace() {
     setBusy(true); setMessage(undefined)
     try {
       await api.upload(file, crypto.randomUUID(), history.data?.find(v => v.source === 'CUSTOMER_DIGITAL')?.evidence?.versionId)
-      form.reset(); setSelectedFile(null); setMessage('Identity evidence submitted. A Staff review is required before your identity is verified.')
+      form.reset(); setSelectedFile(null); setMessage('Identity document submitted. Meridian will review it before confirming your identity.')
     } catch {
       setUncertain(true); setMessage('Submission was not confirmed. Refresh your verification history before sending another file.')
     } finally { await refresh(); setBusy(false) }
@@ -63,7 +63,7 @@ function OwnIdentityWorkspace() {
     } catch { if (generation === contentGeneration.current) setMessage('Evidence could not be downloaded. Refresh and try again.') }
   }
   return <div className="space-y-6">
-    <PageHeader eyebrow="Your account" title="Identity verification" description="Submit one identity document for manual Staff review. Verification is required before applying for a Meridian loan." />
+    <PageHeader eyebrow="Your account" title="Identity verification" description="We need to confirm your identity before you apply for a loan. Complete your profile, then upload one clear identity document for review." />
     <AccountNavigation />
     {customer.isSuccess && customer.fetchStatus === 'idle' && customer.data.status === 'ACTIVE'
       && state.status === 'authenticated' && state.actor.permissions.includes('customer:profile:write:own')
@@ -74,19 +74,19 @@ function OwnIdentityWorkspace() {
     {history.isError || customer.isError ? <><AccountErrorFeedback error={history.error ?? customer.error} title="Identity verification could not be loaded" /><Button onClick={() => void refresh()}>Try again</Button></> : null}
     {message ? <p role="status">{message}</p> : null}
     {history.data && customer.data ? <Card><CardHeader><CardTitle>{verified ? 'Identity verified' : current?.status === 'PENDING_REVIEW' ? 'Pending review' : current?.status === 'REJECTED' ? 'Verification could not be completed' : 'Upload identity document'}</CardTitle></CardHeader><CardContent className="space-y-4">
-      <p className="text-sm text-muted-foreground">Profile completion and document upload do not verify your identity. Manual review does not indicate credit approval.</p>
+      <p className="text-sm text-muted-foreground">{verified ? 'Your identity has been verified. Loan eligibility and approval are assessed separately.' : current?.status === 'PENDING_REVIEW' ? 'Your document is being reviewed. You do not need to submit it again unless you need to replace it. Identity verification does not guarantee loan approval.' : 'Your identity is verified only after Meridian accepts your document. Identity verification does not guarantee loan approval.'}</p>
       {current?.rejectionReason ? <p>{identityReasons[current.rejectionReason] ?? 'Review could not be completed. Supply acceptable identity evidence.'}</p> : null}
       {customer.data.profileCompletionStatus !== 'COMPLETE' ? <Button asChild variant="secondary"><Link to="/account/profile">Complete profile first</Link></Button> : null}
-      {!supported ? <p role="alert">Verification state is unavailable. Refresh before submitting evidence.</p> : null}
+      {!supported ? <p role="alert">Your verification status could not be confirmed. Refresh before submitting a document.</p> : null}
       {canUpload && supported && !verified && customer.data.status === 'ACTIVE' && customer.data.profileCompletionStatus === 'COMPLETE' ? <form noValidate className="space-y-3" onSubmit={event => { event.preventDefault(); void upload(event.currentTarget) }}>
         <label className="grid gap-2 font-medium">Identity document (PDF, JPEG, PNG; up to 10 MiB)<input name="file" type="file" onChange={event => setSelectedFile(event.target.files?.[0] ?? null)} accept="application/pdf,image/jpeg,image/png" required disabled={busy || uncertain} /></label>
-        <Button type="submit" disabled={busy || uncertain || !selectedFile}>{busy ? 'Submitting…' : current ? 'Submit replacement evidence' : 'Submit identity evidence'}</Button>
+        <Button type="submit" disabled={busy || uncertain || !selectedFile}>{busy ? 'Submitting…' : current ? 'Submit replacement document' : 'Submit identity document'}</Button>
       </form> : null}
       <Button variant="secondary" disabled={busy} onClick={() => void refresh().then(confirmed => { if (confirmed) setUncertain(false) })}>Refresh verification</Button>
     </CardContent></Card> : null}
     {history.data?.length ? <Card><CardHeader><CardTitle>Verification history</CardTitle></CardHeader><CardContent className="space-y-3">{history.data.map(v => <div className="rounded-md border p-3" key={v.verificationId}>
-      <p>Attempt {v.sequence} · {({ PENDING_REVIEW: 'Pending review', VERIFIED: 'Verified', REJECTED: 'Rejected', SUPERSEDED: 'Replaced evidence' } as Record<string, string>)[v.status] ?? 'Status unavailable'}</p>
-      {v.evidence ? <><p className="text-sm break-words">{v.evidence.filename} · Version {v.evidence.versionNumber}</p><Button variant="secondary" size="sm" onClick={() => void download(v.verificationId, v.evidence!.filename)}>Download evidence</Button></> : null}
+      <p>Attempt {v.sequence} · {({ PENDING_REVIEW: 'Pending review', VERIFIED: 'Verified', REJECTED: 'Not verified', SUPERSEDED: 'Replaced evidence' } as Record<string, string>)[v.status] ?? 'Status unavailable'}</p>
+      {v.evidence ? <><p className="text-sm break-words">{v.evidence.filename} · Version {v.evidence.versionNumber}</p><Button variant="secondary" size="sm" onClick={() => void download(v.verificationId, v.evidence!.filename)}>Download document</Button></> : null}
     </div>)}</CardContent></Card> : null}
   </div>
 }

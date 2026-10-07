@@ -127,12 +127,13 @@ export function ApplicationOfferPage() {
           {!actionsBlocked && supportedActions.length ? (
             <div className="space-y-3 rounded-lg border border-border bg-card p-5 shadow-soft">
               <h2 className="font-semibold">Respond to this offer</h2>
+              <p className="text-sm leading-6 text-muted-foreground">Accepting confirms these loan terms and takes you to the contract step. Declining ends this application.</p>
               {supportedActions.includes('ACCEPT') ? <Button className="w-full" disabled={pending} onClick={() => void respond('ACCEPT')}><CheckCircle2 aria-hidden="true" />{acceptance.isPending ? 'Accepting…' : 'Accept offer'}</Button> : null}
               {supportedActions.includes('DECLINE') ? <Button className="w-full" variant="destructive" disabled={pending} onClick={() => { setActionError(undefined); setDeclineOpen(true) }}><ThumbsDown aria-hidden="true" />Decline offer</Button> : null}
             </div>
           ) : null}
-          {isDigital && !actionsBlocked && supportedActions.length === 0 ? (
-            <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No response required</AlertTitle><AlertDescription>There is nothing you need to do with this offer right now.</AlertDescription></Alert>
+          {isDigital && !actionsBlocked && !hasUnknownAction && supportedActions.length === 0 ? (
+            <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No response required</AlertTitle><AlertDescription>{offer.status === 'EXPIRED' ? 'This offer can no longer be accepted or declined because it has expired.' : offer.status === 'ACCEPTED' ? 'This offer has been accepted. Return to your application to check the next step.' : offer.status === 'DECLINED' ? 'This offer has been declined and can no longer be accepted.' : 'No online response is available for this offer right now. Check its status or contact Meridian support for help.'}</AlertDescription></Alert>
           ) : null}
         </div>
       ) : undefined}
@@ -140,7 +141,7 @@ export function ApplicationOfferPage() {
       <div className="space-y-6">
         {applicationQuery.isPending ? <Skeleton className="h-24" role="status" aria-label="Loading application details" /> : null}
         {applicationQuery.isError ? <QueryErrorFeedback error={applicationQuery.error} title="Application details could not be loaded" onRetry={() => void applicationQuery.refetch()} /> : null}
-        {isStaffAssisted ? <StaffAssistedApplicationNotice>Review the offer here; Meridian Staff will coordinate your response with you.</StaffAssistedApplicationNotice> : null}
+        {isStaffAssisted ? <StaffAssistedApplicationNotice>Review the offer here; Meridian staff will coordinate your response with you.</StaffAssistedApplicationNotice> : null}
         {offerQuery.isPending ? <div role="status" aria-label="Loading approved offer" className="space-y-4"><Skeleton className="h-72" /><Skeleton className="h-52" /></div> : null}
         {offerQuery.isError ? <QueryErrorFeedback error={offerQuery.error} title="Approved offer could not be loaded" onRetry={() => void offerQuery.refetch()} /> : null}
         {isDigital && uncertainAction ? (
@@ -175,14 +176,14 @@ export function ApplicationOfferPage() {
 }
 
 function BackToApplication({ loanApplicationId }: { loanApplicationId?: string }) {
-  return <Button variant="secondary" asChild><Link to={loanApplicationId ? `/applications/${loanApplicationId}` : '/applications'}><ArrowLeft aria-hidden="true" />Application</Link></Button>
+  return <Button variant="secondary" asChild><Link to={loanApplicationId ? `/applications/${loanApplicationId}` : '/applications'}><ArrowLeft aria-hidden="true" />Back to application</Link></Button>
 }
 
 function OfferMutationError({ error }: { error: unknown }) {
   return (
     <Alert variant="destructive" aria-live="polite">
       <AlertCircle aria-hidden="true" />
-      <AlertTitle>Offer response was not completed</AlertTitle>
+      <AlertTitle>Offer response was not confirmed</AlertTitle>
       <AlertDescription className="space-y-2"><p>{offerErrorMessage(error)}</p>{error instanceof ApiError && error.requestId ? <p className="break-all text-xs">Support reference: {error.requestId}</p> : null}</AlertDescription>
     </Alert>
   )

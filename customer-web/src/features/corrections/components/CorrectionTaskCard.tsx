@@ -90,10 +90,10 @@ export function CorrectionTaskCard({
       <CardContent className="space-y-5">
         <Alert>
           <Info aria-hidden="true" />
-          <AlertTitle>What you need to update</AlertTitle>
+          <AlertTitle>{completed ? 'Requested change' : 'What you need to update'}</AlertTitle>
           <AlertDescription className="break-words whitespace-pre-wrap">{task.customerInstruction}</AlertDescription>
         </Alert>
-        <p className="text-sm leading-6 text-muted-foreground">{scope.description}</p>
+        <p className="text-sm leading-6 text-muted-foreground">{completed ? 'This requested change has been completed. No further upload is needed for this change.' : scope.description}</p>
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <div><dt className="text-muted-foreground">Document</dt><dd className="mt-1 font-medium">{task.documentType ? documentTypeLabel(task.documentType) : 'Document unavailable'}</dd></div>
           <div><dt className="text-muted-foreground">Created</dt><dd className="mt-1 font-medium">{formatTimestamp(task.createdAt)}</dd></div>
@@ -123,9 +123,9 @@ export function CorrectionTaskCard({
         {error ? (
           <Alert variant="destructive" aria-live="polite">
             <AlertCircle aria-hidden="true" />
-            <AlertTitle>Task completion failed</AlertTitle>
+            <AlertTitle>Change completion was not confirmed</AlertTitle>
             <AlertDescription className="space-y-2">
-              <p>{correctionErrorMessage(error, 'The task could not be completed. Check your connection and retry the same action if appropriate.')}</p>
+              <p>{correctionErrorMessage(error, 'We could not confirm the result. Refresh your requested changes before trying again.')}</p>
               {error instanceof ApiError && error.requestId ? <p className="break-all text-xs">Support reference: {error.requestId}</p> : null}
             </AlertDescription>
           </Alert>

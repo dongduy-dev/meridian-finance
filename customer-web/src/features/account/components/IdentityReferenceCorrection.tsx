@@ -49,7 +49,7 @@ export function IdentityReferenceCorrection() {
     {message ? <p role="status">{message}</p> : null}
     {error ? <AccountErrorFeedback error={error} title="Identity reference correction was not confirmed" /> : null}
     {!editing ? <Button variant="secondary" onClick={() => setEditing(true)}>Correct identity reference</Button> : <form className="space-y-3" onSubmit={event => { event.preventDefault(); void correct(event.currentTarget) }}>
-      <p className="text-sm text-muted-foreground">Enter the reference shown on your identity document. Your evidence and verification history will be kept for Staff review.</p>
+      <p className="text-sm text-muted-foreground">Enter the reference shown on your identity document. Your previous documents and verification history will be kept for review.</p>
       <label className="grid gap-2">Replacement identity reference<Input name="replacementIdentityReference" autoComplete="off" required maxLength={100} disabled={busy || uncertain} /></label>
       <div className="flex gap-2"><Button type="submit" disabled={busy || uncertain}>{busy ? 'Correcting…' : 'Confirm correction'}</Button><Button type="button" variant="secondary" disabled={busy} onClick={() => { setEditing(false); setError(undefined) }}>Cancel</Button></div>
     </form>}
