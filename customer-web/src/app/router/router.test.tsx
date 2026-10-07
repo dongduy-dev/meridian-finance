@@ -28,7 +28,7 @@ describe('application routing and shell', () => {
       expect(screen.getByRole('link', { name: label })).toBeVisible()
     }
     await waitFor(() => expect(document.title).toBe('Home | Meridian'))
-    expect(within(screen.getByRole('complementary')).queryByText(/FE-CP|checkpoint/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
     const navigationTrigger = screen.getByRole('button', { name: 'Open menu' })
     const shellBanner = navigationTrigger.closest('header') as HTMLElement
 

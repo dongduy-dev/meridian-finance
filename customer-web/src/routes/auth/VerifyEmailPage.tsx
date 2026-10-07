@@ -56,12 +56,12 @@ function VerifyEmailContent({ locationKey }: { locationKey: string }) {
       title="Confirm your email"
       description="Meridian is securely checking the confirmation link."
       footer={
-        <p className="text-center text-sm text-muted-foreground">
-          <Link className="font-semibold text-primary underline-offset-4 hover:underline" to="/login">Return to log in</Link>
+        <p className="text-sm leading-5 text-muted-foreground">
+          <Link className="font-semibold text-primary underline underline-offset-4" to="/login">Return to log in</Link>
         </p>
       }
     >
-      <div className="space-y-5">
+      <div className="space-y-6">
         {state.status === 'submitting' ? (
           <div className="flex min-h-36 flex-col items-center justify-center gap-3 text-center" role="status" aria-live="polite">
             <Spinner className="size-7 text-primary" />

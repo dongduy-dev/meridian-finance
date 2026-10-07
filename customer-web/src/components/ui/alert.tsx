@@ -4,7 +4,7 @@ import type { HTMLAttributes } from 'react'
 import { cn } from '@/lib/cn'
 
 const alertVariants = cva(
-  'relative grid grid-cols-[auto_1fr] gap-x-3 rounded-md border p-4 text-sm [&>svg]:mt-0.5 [&>svg]:size-5',
+  'relative grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 border p-4 text-sm leading-5 break-words [&>svg]:mt-0.5 [&>svg]:size-5',
   {
     variants: {
       variant: {
@@ -46,7 +46,7 @@ export function AlertDescription({
   ...props
 }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('col-start-2 mt-1 leading-5 text-current/85', className)} {...props} />
+    <div className={cn('col-start-2 mt-2 min-w-0 leading-5 text-current [overflow-wrap:anywhere]', className)} {...props} />
   )
 }
 

@@ -15,16 +15,16 @@ export function SheetContent({
 }: ComponentProps<typeof DialogPrimitive.Content>) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-primary/45 backdrop-blur-[1px] data-[state=closed]:opacity-0 data-[state=open]:opacity-100" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-primary/45 data-[state=closed]:opacity-0 data-[state=open]:opacity-100" />
       <DialogPrimitive.Content
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-[min(22rem,calc(100%-2rem))] flex-col border-r border-border bg-card shadow-2xl outline-none data-[state=closed]:-translate-x-full data-[state=open]:translate-x-0',
+          'fixed top-0 left-0 z-50 flex h-dvh max-h-dvh w-[min(22rem,calc(100vw-1rem))] flex-col bg-card shadow-overlay',
           className,
         )}
         {...props}
       >
-        {children}
-        <DialogPrimitive.Close className="absolute top-4 right-4 inline-flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+        <div className="min-h-0 overflow-y-auto pt-16">{children}</div>
+        <DialogPrimitive.Close className="absolute top-4 right-4 inline-flex size-11 items-center justify-center rounded-md text-current hover:bg-selected/15">
           <X aria-hidden="true" />
           <span className="sr-only">Close navigation</span>
         </DialogPrimitive.Close>
@@ -34,7 +34,7 @@ export function SheetContent({
 }
 
 export function SheetHeader({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('space-y-2 p-6 pr-16', className)} {...props} />
+  return <div className={cn('space-y-2 px-4 pb-6 sm:px-6', className)} {...props} />
 }
 
 export function SheetTitle({ className, ...props }: ComponentProps<typeof DialogPrimitive.Title>) {
@@ -52,7 +52,7 @@ export function SheetDescription({
 }: ComponentProps<typeof DialogPrimitive.Description>) {
   return (
     <DialogPrimitive.Description
-      className={cn('text-sm text-muted-foreground', className)}
+      className={cn('text-sm leading-5 text-muted-foreground', className)}
       {...props}
     />
   )

@@ -14,12 +14,12 @@ export function FormField({ children, description, error, htmlFor, label }: Form
 
   return (
     <div className="space-y-2">
-      <label htmlFor={htmlFor} className="block text-sm font-semibold text-foreground">
+      <label htmlFor={htmlFor} className="block text-sm leading-5 font-medium text-foreground">
         {label}
       </label>
       {children}
       {description ? (
-        <p id={descriptionId} className="text-xs leading-5 text-muted-foreground">
+        <p id={descriptionId} className="text-sm leading-5 text-muted-foreground">
           {description}
         </p>
       ) : null}

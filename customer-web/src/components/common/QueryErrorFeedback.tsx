@@ -24,7 +24,7 @@ export function QueryErrorFeedback({
         <AlertDescription>
           <p>{description}</p>
           {error instanceof ApiError && error.requestId ? (
-            <p className="mt-2 break-all text-xs">Support reference: {error.requestId}</p>
+            <p className="mt-2 break-all text-sm">Support reference: {error.requestId}</p>
           ) : null}
         </AlertDescription>
       </Alert>

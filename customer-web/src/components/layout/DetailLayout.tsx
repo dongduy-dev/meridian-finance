@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+import { cn } from '@/lib/cn'
+
 export interface DetailLayoutProps {
   header: ReactNode
   children: ReactNode
@@ -9,11 +11,11 @@ export interface DetailLayoutProps {
 export function DetailLayout({ header, children, rail }: DetailLayoutProps) {
   return (
     <main className="min-h-svh bg-background">
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+      <div className="page-container detail-container py-8 md:py-12">
         {header}
-        <div className="mt-8 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
+        <div className={cn('detail-regions', rail && 'detail-regions-with-rail')}>
+          {rail ? <aside>{rail}</aside> : null}
           <section className="min-w-0">{children}</section>
-          {rail ? <aside className="order-first xl:order-none">{rail}</aside> : null}
         </div>
       </div>
     </main>

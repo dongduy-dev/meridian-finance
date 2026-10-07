@@ -59,12 +59,12 @@ export function ForgotPasswordPage() {
       title="Reset your password"
       description="Enter your account email to request a password link. You can also use this to set your first password after confirming your email."
       footer={
-        <p className="text-center text-sm text-muted-foreground">
-          <Link className="font-semibold text-primary underline-offset-4 hover:underline" to="/login">Back to log in</Link>
+        <p className="text-sm leading-5 text-muted-foreground">
+          <Link className="font-semibold text-primary underline underline-offset-4" to="/login">Back to log in</Link>
         </p>
       }
     >
-      <form className="space-y-5" noValidate onSubmit={onSubmit}>
+      <form className="space-y-6" noValidate onSubmit={onSubmit}>
         {sent ? <SuccessFeedback title="Request accepted" description="If this email is eligible, a password-reset email will be sent." /> : null}
         {serverError ? <ErrorFeedback {...serverError} /> : null}
         {rateLimit.isLimited ? <RateLimitFeedback remainingSeconds={rateLimit.remainingSeconds} requestId={rateLimit.requestId} /> : null}
@@ -78,7 +78,7 @@ export function ForgotPasswordPage() {
             {...register('email', { validate: validateWith(emailSchema) })}
           />
         </FormField>
-        <Button className="w-full" type="submit" disabled={isSubmitting || rateLimit.isActive}>
+        <Button size="lg" className="w-full" type="submit" disabled={isSubmitting || rateLimit.isActive}>
           {isSubmitting ? <Spinner /> : null}
           {isSubmitting ? 'Requesting…' : rateLimit.isActive ? 'Try again shortly' : 'Send reset link'}
         </Button>

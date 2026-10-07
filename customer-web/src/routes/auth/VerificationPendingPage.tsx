@@ -68,13 +68,13 @@ export function VerificationPendingPage() {
       title="Check your email"
       description="Confirm your email before logging in to Meridian."
       footer={
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-sm leading-5 text-muted-foreground">
           Already confirmed?{' '}
-          <Link className="font-semibold text-primary underline-offset-4 hover:underline" to="/login">Log in</Link>
+          <Link className="font-semibold text-primary underline underline-offset-4" to="/login">Log in</Link>
         </p>
       }
     >
-      <form className="space-y-5" noValidate onSubmit={onSubmit}>
+      <form className="space-y-6" noValidate onSubmit={onSubmit}>
         {sent ? (
           <SuccessFeedback
             title="Request accepted"
@@ -100,7 +100,7 @@ export function VerificationPendingPage() {
           />
         </FormField>
 
-        <Button className="w-full" type="submit" disabled={isSubmitting || rateLimit.isActive}>
+        <Button size="lg" className="w-full" type="submit" disabled={isSubmitting || rateLimit.isActive}>
           {isSubmitting ? <Spinner /> : null}
           {isSubmitting ? 'Requesting…' : rateLimit.isActive ? 'Try again shortly' : 'Resend verification email'}
         </Button>

@@ -26,10 +26,10 @@
   --color-danger-subtle: var(--danger-subtle);
   --color-information: var(--information);
   --color-information-subtle: var(--information-subtle);
-  --radius-sm: calc(var(--radius) - 2px);
+  --radius-sm: var(--radius);
   --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 2px);
-  --shadow-soft: 0 18px 45px -30px rgb(9 18 45 / 0.28);
+  --radius-lg: 0.5rem;
+  --shadow-overlay: 0 16px 48px rgb(9 18 45 / 18%);
 }
 
 :root {
@@ -51,7 +51,7 @@
   --muted: #f0f1f3;
   --muted-foreground: #5a6275;
   --border: #d9dce3;
-  --input: #c8ccd6;
+  --input: #788296;
   --ring: var(--meridian-navy);
   --selected: #e9edf7;
   --success: #166534;
@@ -62,15 +62,36 @@
   --danger-subtle: #fff0ed;
   --information: #175cd3;
   --information-subtle: #edf4ff;
-  --radius: 0.625rem;
+  --radius: 0.25rem;
+  --gutter: 1rem;
+  --width-main: 80rem;
+  --width-detail: 70rem;
+  --width-flow: 45rem;
+  --width-auth: 28rem;
+  --width-prose: 40rem;
+  --section-editorial: 3rem;
+  --section-transactional: 2rem;
+  --grid-gap: 1rem;
+  --header-clearance: 0px;
+  --type-display: 2.25rem;
+  --line-display: 2.5rem;
+  --type-browse: 2rem;
+  --line-browse: 2.5rem;
+  --type-transactional: 1.75rem;
+  --line-transactional: 2.25rem;
+  --type-editorial-section: 1.5rem;
+  --line-editorial-section: 2rem;
+  --type-intro: 1.125rem;
+  --line-intro: 1.75rem;
+  --type-money: 1.75rem;
+  --line-money: 2.25rem;
 }
 
-* {
-  border-color: var(--border);
+@layer base {
+  * { border-color: var(--border); }
 }
 
 html {
-  min-width: 20rem;
   background: var(--background);
   color: var(--foreground);
   font-family:
@@ -79,13 +100,15 @@ html {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scroll-padding-top: calc(var(--header-clearance) + 1rem);
 }
 
 body {
-  min-width: 20rem;
   min-height: 100vh;
   margin: 0;
   background: var(--background);
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 button,
@@ -98,14 +121,77 @@ select {
 
 button,
 a {
-  transition-duration: 180ms;
-  transition-property: color, background-color, border-color, box-shadow, opacity;
+  transition-duration: 160ms;
+  transition-property: color, background-color, border-color, opacity;
   transition-timing-function: ease-out;
 }
 
-:focus-visible {
+:focus-visible,
+#page-heading:focus,
+[data-server-error]:focus {
   outline: 2px solid var(--ring);
   outline-offset: 3px;
+}
+
+.on-navy { --ring: var(--primary-foreground); color: var(--primary-foreground); background: var(--primary); }
+.on-navy :focus-visible { outline-color: var(--primary-foreground); }
+.on-navy button:hover, .on-navy a:hover { background-color: var(--primary-hover); }
+
+/* Native form controls share the foundation without replacing form registration. */
+input, textarea, select { font-size: 1rem; line-height: 1.5; }
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+@layer components {
+  .page-container { width: min(calc(100% - 2 * var(--gutter)), var(--width-main)); margin-inline: auto; min-width: 0; }
+  .detail-container { --width-main: var(--width-detail); }
+  .flow-container { --width-main: var(--width-flow); }
+  .type-editorial { font-size: var(--type-display); line-height: var(--line-display); font-weight: 500; letter-spacing: -0.025em; }
+  .type-browse { font-size: var(--type-browse); line-height: var(--line-browse); font-weight: 500; letter-spacing: -0.02em; }
+  .type-transactional { font-size: var(--type-transactional); line-height: var(--line-transactional); font-weight: 500; letter-spacing: -0.015em; }
+  .type-editorial-section { font-size: var(--type-editorial-section); line-height: var(--line-editorial-section); font-weight: 500; letter-spacing: -0.01em; }
+  .type-section { font-size: 1.25rem; line-height: 1.75rem; font-weight: 600; }
+  .type-intro { max-width: min(var(--width-prose), 60ch); font-size: var(--type-intro); line-height: var(--line-intro); }
+  .type-eyebrow { font-size: 0.75rem; line-height: 1rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+  .type-money { font-size: var(--type-money); line-height: var(--line-money); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .body-link { color: var(--primary); text-decoration: underline; text-underline-offset: 4px; }
+  .auth-brand { padding: 1.5rem var(--gutter); }
+  .auth-form-area { padding: 2rem var(--gutter); }
+  .auth-form { width: 100%; max-width: var(--width-auth); margin-inline: auto; min-width: 0; overflow-wrap: anywhere; }
+  .detail-regions { display: grid; gap: var(--grid-gap); margin-top: var(--section-transactional); }
+  .detail-regions > * { min-width: 0; overflow-wrap: anywhere; }
+  .focused-actions { position: sticky; bottom: 0; z-index: 30; padding-block: 1rem calc(1rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--card); }
+  .focused-actions-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+  .focused-actions-inner > * { min-width: 0; max-width: 100%; }
+  .main-nav-link { border-bottom: 2px solid transparent; color: var(--primary-foreground); }
+  .main-nav-link[aria-current='page'] { border-color: var(--accent); font-weight: 600; }
+}
+
+/* Focused inputs keep actions in flow, including when a virtual keyboard opens. */
+.focused-flow:has(input:focus, textarea:focus, select:focus) .focused-actions { position: static; }
+@media (max-height: 600px) { .focused-actions { position: static; } }
+@media (min-width: 640px) { :root { --gutter: 1.5rem; } }
+@media (min-width: 768px) {
+  :root {
+    --section-editorial: 4rem; --section-transactional: 3rem; --grid-gap: 1.5rem;
+    --type-display: 3rem; --line-display: 3.25rem;
+    --type-browse: 2.5rem; --line-browse: 3rem;
+    --type-transactional: 2rem; --line-transactional: 2.5rem;
+    --type-editorial-section: 1.75rem; --line-editorial-section: 2.25rem;
+    --type-intro: 1.25rem; --line-intro: 1.875rem;
+    --type-money: 2rem; --line-money: 2.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  :root { --gutter: 2rem; }
+  .auth-brand { padding: 3rem; }
+  .auth-form-area { padding: 3rem var(--gutter); }
+}
+@media (min-width: 1280px) {
+  :root { --section-editorial: 5rem; --grid-gap: 2rem; --type-display: 3.5rem; --line-display: 3.75rem; --type-money: 2.25rem; --line-money: 2.75rem; }
+  .detail-regions-with-rail { grid-template-columns: 20rem minmax(0, 1fr); align-items: start; }
 }
 
 ::selection {
@@ -118,8 +204,7 @@ a {
   *::before,
   *::after {
     scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
+    transition: none !important;
+    animation: none !important;
   }
 }

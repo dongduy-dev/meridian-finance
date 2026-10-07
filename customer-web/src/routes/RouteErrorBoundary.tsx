@@ -8,7 +8,7 @@ export function RouteErrorBoundary() {
   return (
     <main className="flex min-h-svh items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-2xl">
-        <h1 id="page-heading" tabIndex={-1} className="sr-only">
+        <h1 id="page-heading" tabIndex={-1} className="type-transactional mb-6">
           Page error
         </h1>
         <EmptyState

@@ -896,7 +896,7 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     expect(screen.getByText('Verification status unavailable')).toBeVisible()
     expect(screen.getByText('Employment status unavailable')).toBeVisible()
     expect(screen.getByText('Application status unavailable')).toBeVisible()
-    const limitCard = screen.getByRole('heading', { name: 'Current Salary Advance limit' }).closest('[class*="rounded-lg"]') as HTMLElement
+    const limitCard = screen.getByRole('heading', { name: 'Current Salary Advance limit' }).closest('[data-slot="card"]') as HTMLElement
     expect(within(limitCard).queryByText(moneyText(0))).not.toBeInTheDocument()
   })
 })

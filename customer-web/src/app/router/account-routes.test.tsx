@@ -354,7 +354,7 @@ describe('Customer bank-account experience', () => {
     })
     renderRoute('/account/bank-accounts', fetchMock)
 
-    const secondCard = (await screen.findByRole('heading', { name: 'Bank Two' })).closest('[class*="rounded-lg"]') as HTMLElement
+    const secondCard = (await screen.findByRole('heading', { name: 'Bank Two' })).closest('[data-slot="card"]') as HTMLElement
     const makePrimaryTrigger = within(secondCard).getByRole('button', { name: 'Make primary' })
     await user.click(makePrimaryTrigger)
     let primaryDialog = await screen.findByRole('dialog', { name: 'Make this the primary account?' })
@@ -367,7 +367,7 @@ describe('Customer bank-account experience', () => {
     await user.click(within(primaryDialog).getByRole('button', { name: 'Make primary' }))
     await waitFor(() => expect(commands).toContain('make-primary'))
 
-    const firstCard = screen.getByRole('heading', { name: 'Bank One' }).closest('[class*="rounded-lg"]') as HTMLElement
+    const firstCard = screen.getByRole('heading', { name: 'Bank One' }).closest('[data-slot="card"]') as HTMLElement
     await user.click(within(firstCard).getByRole('button', { name: 'Deactivate' }))
     const deactivateDialog = await screen.findByRole('dialog', { name: 'Deactivate this bank account?' })
     await user.click(within(deactivateDialog).getByRole('button', { name: 'Deactivate account' }))
@@ -392,7 +392,7 @@ describe('Customer bank-account experience', () => {
     })
     renderRoute('/account/bank-accounts', fetchMock)
 
-    const secondCard = (await screen.findByRole('heading', { name: 'Bank Two' })).closest('[class*="rounded-lg"]') as HTMLElement
+    const secondCard = (await screen.findByRole('heading', { name: 'Bank Two' })).closest('[data-slot="card"]') as HTMLElement
     await user.click(within(secondCard).getByRole('button', { name: 'Make primary' }))
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Make primary' }))
 
