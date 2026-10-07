@@ -83,7 +83,7 @@ export function CustomerDigitalAccessPage() {
       const result = await status.refetch()
       setNeedsReconciliation(!result.isSuccess || !result.data?.enabled)
       setFeedback(result.isSuccess && result.data?.enabled
-        ? 'Digital access is enabled. The Customer must verify the email, then use Forgot password to choose a password.'
+        ? 'Digital access is enabled. The Customer must complete the secure activation link sent to their email.'
         : 'Activation completed, but the latest status could not be confirmed. Refresh status before taking further action.')
     } catch (error) {
       if (unknownResult(error)) {
@@ -92,7 +92,7 @@ export function CustomerDigitalAccessPage() {
         if (result.isSuccess) setNeedsReconciliation(false)
         if (result.isSuccess && result.data?.enabled) setIdentityReference('')
         setFeedback(result.isSuccess && result.data?.enabled
-          ? 'Digital access is enabled. The Customer must verify the email, then use Forgot password.'
+          ? 'Digital access is enabled. The Customer must complete the secure activation link sent to their email.'
           : 'The activation result is unknown. Check status again before any new request; this page did not resend activation.')
       } else {
         setFeedback(errorMessage(error))
@@ -138,7 +138,7 @@ export function CustomerDigitalAccessPage() {
         {status.data.enabled ? <><p>Email: {status.data.email}</p><p>Email verified: {status.data.emailVerified ? 'Yes' : 'No'}</p></> : null}
       </div> : null}
       {status.data && !status.data.enabled ? <form onSubmit={(event) => void submitActivation(event)} className="space-y-4">
-        <p className="text-sm text-muted-foreground">Re-enter the Customer’s presented identity reference. The Customer receives an email verification invitation and then chooses a password through Forgot password.</p>
+        <p className="text-sm text-muted-foreground">Re-enter the Customer’s presented identity reference. The Customer receives one secure activation link to verify their email and set a password.</p>
         <label className="grid gap-1 text-sm font-medium">Email
           <Input type="email" required maxLength={255} value={email} onChange={(event) => setEmail(event.target.value)} />
         </label>

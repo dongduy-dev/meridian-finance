@@ -28,7 +28,7 @@ interface LoginFormValues {
 
 interface LoginLocationState {
   from?: string
-  notice?: 'PASSWORD_RESET_SUCCESS'
+  notice?: 'PASSWORD_RESET_SUCCESS' | 'PASSWORD_SETUP_SUCCESS'
 }
 
 function intendedCustomerPath(value: unknown) {
@@ -120,6 +120,9 @@ export function LoginPage() {
       }
     >
       <form className="space-y-5" noValidate onSubmit={onSubmit}>
+        {locationState.notice === 'PASSWORD_SETUP_SUCCESS' ? (
+          <SuccessFeedback title="Password set" description="Password set. Sign in to continue." />
+        ) : null}
         {locationState.notice === 'PASSWORD_RESET_SUCCESS' ? (
           <SuccessFeedback
             title="Password updated"

@@ -16,6 +16,7 @@ const routeTitles: Record<string, string> = {
   '/login': 'Login',
   '/register': 'Create Account',
   '/verify-email': 'Confirm Email',
+  '/activate-access': 'Activate Customer Web Access',
   '/verify-email/pending': 'Email Confirmation Required',
   '/forgot-password': 'Forgot Password',
   '/reset-password': 'Reset Password',

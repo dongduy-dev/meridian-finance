@@ -26,6 +26,9 @@ import com.meridian.platform.shared.domain.exception.AuthenticationFailedExcepti
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -49,6 +52,7 @@ import static org.mockito.Mockito.*;
         "meridian.document.orphan-reconciliation.enabled=false",
         "meridian.identity.rate-limit.login.max-requests=1000"
 })
+@ExtendWith(OutputCaptureExtension.class)
 class CustomerDigitalAccessPostgreSqlIntegrationTest {
     private static final String SCHEMA = "digital_access_" + UUID.randomUUID().toString().replace("-", "");
     private static final UUID STAFF_ID = UUID.fromString("00000000-0000-0000-0000-000000000305");
@@ -70,6 +74,7 @@ class CustomerDigitalAccessPostgreSqlIntegrationTest {
     @Autowired AuthenticationUseCase authentication;
     @Autowired QueryLoanApplicationUseCase ownApplications;
     @Autowired EmailVerificationTokenCodecPort verificationCodec;
+    @Autowired com.meridian.platform.identity.application.port.out.PasswordResetTokenCodecPort setupCodec;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired JdbcTemplate jdbc;
     @MockitoBean CurrentUserProvider currentUsers;
@@ -91,7 +96,7 @@ class CustomerDigitalAccessPostgreSqlIntegrationTest {
     }
 
     @Test
-    void linksExistingCustomerThroughVerificationPasswordResetAndHistoricalLoanRead() {
+    void linksExistingCustomerThroughInvitationFirstPasswordAndHistoricalLoanRead(CapturedOutput output) {
         String identity = "ID" + UUID.randomUUID().toString().substring(0, 12);
         UUID customerId = createCustomer(identity);
         UUID applicationId = UUID.randomUUID();
@@ -103,12 +108,13 @@ class CustomerDigitalAccessPostgreSqlIntegrationTest {
                 VALUES (?, ?, ?, ?, 'UNSECURED_CONSUMER_LOAN', 'UNSECURED', 'DOCUMENTS_PENDING',
                     10000000, 12, CURRENT_TIMESTAMP, 'STAFF_ASSISTED')
                 """, applicationId, customerId, productId, "APP-" + UUID.randomUUID());
+        var applicationBefore = jdbc.queryForMap("SELECT * FROM loan_applications WHERE id = ?", applicationId);
         int customersBefore = count("SELECT COUNT(*) FROM customers");
         var customerBefore = jdbc.queryForMap(
                 "SELECT customer_number, status, verification_status, profile_completion_status FROM customers WHERE id = ?",
                 customerId);
         var profileBefore = jdbc.queryForMap(
-                "SELECT full_name, identity_reference_fingerprint FROM customer_profiles WHERE customer_id = ?",
+                "SELECT * FROM customer_profiles WHERE customer_id = ?",
                 customerId);
         int bankAccountsBefore = count("SELECT COUNT(*) FROM customer_bank_accounts WHERE customer_id = ?", customerId);
         int loanAccountsBefore = count("SELECT COUNT(*) FROM loan_accounts WHERE customer_id = ?", customerId);
@@ -144,7 +150,8 @@ class CustomerDigitalAccessPostgreSqlIntegrationTest {
                 () -> authentication.login(new LoginRequest(email, "Meridian@123", UserType.CUSTOMER)));
 
         var invitationToken = org.mockito.ArgumentCaptor.forClass(String.class);
-        verify(invitation).sendInvitation(eq(email), invitationToken.capture());
+        var setupToken = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(invitation).sendInvitation(eq(email), invitationToken.capture(), setupToken.capture());
         String rawToken = invitationToken.getValue();
         String digest = jdbc.queryForObject("SELECT token_digest FROM email_verification_tokens WHERE user_id = ?", String.class, userId);
         assertEquals(verificationCodec.digest(rawToken), digest);
@@ -156,15 +163,37 @@ class CustomerDigitalAccessPostgreSqlIntegrationTest {
         assertFalse(((String) audit.get("payload")).contains(identity));
         assertFalse(((String) audit.get("payload")).contains(rawToken));
 
-        resend.requestVerification(new EmailVerificationRequest(email));
-        var resent = org.mockito.ArgumentCaptor.forClass(String.class);
-        verify(verificationMail).sendVerificationEmail(eq(email), resent.capture());
-        verification.confirmVerification(new EmailVerificationConfirmationRequest(resent.getValue()));
+        String rawSetup = setupToken.getValue();
+        assertNotEquals(rawToken, rawSetup);
+        assertFalse(passwordEncoder.matches(rawToken, (String) user.get("password_hash")));
+        assertFalse(passwordEncoder.matches(rawSetup, (String) user.get("password_hash")));
+        assertEquals(setupCodec.digest(rawSetup), jdbc.queryForObject(
+                "SELECT token_digest FROM password_reset_tokens WHERE user_id = ?", String.class, userId));
+        assertFalse(((String) audit.get("payload")).contains(rawSetup));
+        assertEquals(1, count("""
+                SELECT COUNT(*) FROM password_reset_tokens p JOIN email_verification_tokens e ON e.user_id = p.user_id
+                WHERE p.user_id = ? AND p.issued_at = e.issued_at AND p.expires_at = e.expires_at
+                  AND p.expires_at - p.issued_at = INTERVAL '24 hours'
+                """, userId));
+        var confirmation = new PasswordResetConfirmationRequest(rawSetup, "Chosen-Customer-Password-123");
+        assertEquals("INVALID_PASSWORD_RESET_TOKEN", assertThrows(AuthenticationFailedException.class,
+                () -> passwordConfirmation.confirmReset(confirmation)).getErrorCode());
+        assertEquals(0, count("SELECT COUNT(*) FROM password_reset_tokens WHERE user_id = ? AND consumed_at IS NOT NULL", userId));
+        verification.confirmVerification(new EmailVerificationConfirmationRequest(rawToken));
         assertTrue(digitalAccess.status(customerId).emailVerified());
-        passwordReset.requestReset(new PasswordResetRequest(email));
-        var resetToken = org.mockito.ArgumentCaptor.forClass(String.class);
-        verify(resetMail).sendPasswordResetEmail(eq(email), resetToken.capture());
-        passwordConfirmation.confirmReset(new PasswordResetConfirmationRequest(resetToken.getValue(), "Chosen-Customer-Password-123"));
+        jdbc.update("UPDATE users SET failed_login_attempts = 4, locked_until = CURRENT_TIMESTAMP + INTERVAL '1 hour' WHERE id = ?", userId);
+        UUID refreshId = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO refresh_token_sessions (id, user_id, family_id, token_digest, issued_at, expires_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '1 day')
+                """, refreshId, userId, UUID.randomUUID(), setupCodec.digest("test-refresh-" + refreshId));
+        passwordConfirmation.confirmReset(confirmation);
+        assertEquals(1, count("SELECT COUNT(*) FROM refresh_token_sessions WHERE id = ? AND revoked_at IS NOT NULL", refreshId));
+        assertEquals(1, count("SELECT COUNT(*) FROM password_reset_tokens WHERE user_id = ? AND consumed_at IS NOT NULL", userId));
+        assertEquals(0, count("SELECT COUNT(*) FROM users WHERE id = ? AND (failed_login_attempts <> 0 OR locked_until IS NOT NULL)", userId));
+        assertEquals("INVALID_PASSWORD_RESET_TOKEN", assertThrows(AuthenticationFailedException.class,
+                () -> passwordConfirmation.confirmReset(confirmation)).getErrorCode());
+        verifyNoInteractions(resetMail, verificationMail);
         var loggedIn = authentication.login(new LoginRequest(email, "Chosen-Customer-Password-123", UserType.CUSTOMER));
         assertEquals(customerId, loggedIn.response().customerId());
         when(currentUsers.currentUser()).thenReturn(new AuthenticatedUser(loggedIn.response().userId(),
@@ -180,8 +209,11 @@ class CustomerDigitalAccessPostgreSqlIntegrationTest {
                 "SELECT customer_number, status, verification_status, profile_completion_status FROM customers WHERE id = ?",
                 customerId));
         assertEquals(profileBefore, jdbc.queryForMap(
-                "SELECT full_name, identity_reference_fingerprint FROM customer_profiles WHERE customer_id = ?",
+                "SELECT * FROM customer_profiles WHERE customer_id = ?",
                 customerId));
+        assertFalse(output.getAll().contains(rawToken));
+        assertFalse(output.getAll().contains(rawSetup));
+        assertEquals(applicationBefore, jdbc.queryForMap("SELECT * FROM loan_applications WHERE id = ?", applicationId));
         assertEquals(bankAccountsBefore, count("SELECT COUNT(*) FROM customer_bank_accounts WHERE customer_id = ?", customerId));
         assertEquals(loanAccountsBefore, count("SELECT COUNT(*) FROM loan_accounts WHERE customer_id = ?", customerId));
         assertEquals(repaymentsBefore, count("SELECT COUNT(*) FROM repayment_transactions WHERE loan_account_id IN (SELECT id FROM loan_accounts WHERE customer_id = ?)", customerId));
@@ -197,7 +229,12 @@ class CustomerDigitalAccessPostgreSqlIntegrationTest {
                 () -> digitalAccess.enable(customerId, new EnableCustomerDigitalAccessRequest(email, "wrong-reference")))
                 .getErrorCode());
         assertEquals(0, count("SELECT COUNT(*) FROM users WHERE customer_id = ?", customerId));
-        doThrow(new IllegalStateException("mail unavailable")).when(invitation).sendInvitation(anyString(), anyString());
+        doAnswer(call -> {
+            assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+            assertEquals(1, count("SELECT COUNT(*) FROM email_verification_tokens e JOIN users u ON u.id = e.user_id WHERE u.customer_id = ?", customerId));
+            assertEquals(1, count("SELECT COUNT(*) FROM password_reset_tokens p JOIN users u ON u.id = p.user_id WHERE u.customer_id = ?", customerId));
+            throw new IllegalStateException("mail unavailable");
+        }).when(invitation).sendInvitation(eq(email), anyString(), anyString());
         digitalAccess.enable(customerId, new EnableCustomerDigitalAccessRequest(email, identity));
         assertTrue(digitalAccess.status(customerId).enabled());
         assertEquals("CUSTOMER_DIGITAL_ACCESS_ALREADY_ENABLED", assertThrows(BusinessStateConflictException.class,
@@ -216,6 +253,38 @@ class CustomerDigitalAccessPostgreSqlIntegrationTest {
         assertEquals("EMAIL_ALREADY_REGISTERED", assertThrows(BusinessStateConflictException.class,
                 () -> digitalAccess.enable(other, new EnableCustomerDigitalAccessRequest(staffEmail, otherIdentity)))
                 .getErrorCode());
+    }
+
+    @Test
+    void expiredAndRevokedSetupRecoverWithoutReactivation() {
+        for (boolean expired : new boolean[] {true, false}) {
+            String identity = "ID" + UUID.randomUUID().toString().substring(0, 12);
+            UUID customerId = createCustomer(identity);
+            String email = "recover-" + UUID.randomUUID() + "@meridian.local";
+            digitalAccess.enable(customerId, new EnableCustomerDigitalAccessRequest(email, identity));
+            var verifyToken = org.mockito.ArgumentCaptor.forClass(String.class);
+            var setupToken = org.mockito.ArgumentCaptor.forClass(String.class);
+            verify(invitation).sendInvitation(eq(email), verifyToken.capture(), setupToken.capture());
+            UUID userId = jdbc.queryForObject("SELECT id FROM users WHERE customer_id = ?", UUID.class, customerId);
+            if (expired) {
+                jdbc.update("UPDATE password_reset_tokens SET issued_at = CURRENT_TIMESTAMP - INTERVAL '2 days', expires_at = CURRENT_TIMESTAMP - INTERVAL '1 day' WHERE user_id = ?", userId);
+            } else {
+                jdbc.update("UPDATE password_reset_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ?", userId);
+            }
+            // Delivery/reload/verification expiry recovery uses the existing resend contract.
+            resend.requestVerification(new EmailVerificationRequest(email));
+            var resent = org.mockito.ArgumentCaptor.forClass(String.class);
+            verify(verificationMail).sendVerificationEmail(eq(email), resent.capture());
+            verification.confirmVerification(new EmailVerificationConfirmationRequest(resent.getValue()));
+            assertEquals("INVALID_PASSWORD_RESET_TOKEN", assertThrows(AuthenticationFailedException.class,
+                    () -> passwordConfirmation.confirmReset(new PasswordResetConfirmationRequest(setupToken.getValue(), "Recovered-password-123"))).getErrorCode());
+            passwordReset.requestReset(new PasswordResetRequest(email));
+            var recovery = org.mockito.ArgumentCaptor.forClass(String.class);
+            verify(resetMail).sendPasswordResetEmail(eq(email), recovery.capture());
+            passwordConfirmation.confirmReset(new PasswordResetConfirmationRequest(recovery.getValue(), "Recovered-password-123"));
+            assertEquals(customerId, authentication.login(new LoginRequest(email, "Recovered-password-123", UserType.CUSTOMER)).response().customerId());
+            assertEquals(1, count("SELECT COUNT(*) FROM users WHERE customer_id = ?", customerId));
+        }
     }
 
     @Test

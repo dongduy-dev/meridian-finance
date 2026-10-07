@@ -14,7 +14,7 @@ public class CustomerDigitalAccessInvitationAdapter implements CustomerDigitalAc
     }
 
     @Override
-    public void sendInvitation(String recipientEmail, String rawVerificationToken) {
-        notification.send(new CustomerDigitalAccessInvitationMessage(recipientEmail, rawVerificationToken));
+    public void sendInvitation(String recipientEmail, String rawVerificationToken, String rawSetupToken) {
+        notification.send(new CustomerDigitalAccessInvitationMessage(recipientEmail, rawVerificationToken, rawSetupToken));
     }
 }

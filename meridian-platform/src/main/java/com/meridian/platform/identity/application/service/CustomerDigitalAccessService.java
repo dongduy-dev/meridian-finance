@@ -32,7 +32,7 @@ public class CustomerDigitalAccessService implements ManageCustomerDigitalAccess
     public CustomerDigitalAccessDto enable(UUID customerId, EnableCustomerDigitalAccessRequest request) {
         PendingCustomerDigitalAccessInvitation delivery = transactions.enable(customerId, request);
         try {
-            invitations.sendInvitation(delivery.recipientEmail(), delivery.rawVerificationToken());
+            invitations.sendInvitation(delivery.recipientEmail(), delivery.rawVerificationToken(), delivery.rawSetupToken());
         } catch (RuntimeException exception) {
             LOGGER.warn("Customer digital-access invitation delivery failed after activation commit.");
         }

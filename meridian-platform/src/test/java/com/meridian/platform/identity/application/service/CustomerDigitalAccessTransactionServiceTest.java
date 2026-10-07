@@ -28,6 +28,8 @@ class CustomerDigitalAccessTransactionServiceTest {
         var service = new CustomerDigitalAccessTransactionService(mock(UserRepository.class),
                 mock(CustomerDigitalAccessVerificationPort.class), mock(PasswordHashingPort.class),
                 mock(EmailVerificationTokenCodecPort.class), mock(EmailVerificationTokenRepository.class),
+                mock(com.meridian.platform.identity.application.port.out.PasswordResetTokenCodecPort.class),
+                mock(com.meridian.platform.identity.application.port.out.PasswordResetTokenRepository.class),
                 currentUsers, mock(BusinessAuditPublisher.class), Duration.ofHours(24), Clock.systemUTC());
         UUID id = UUID.randomUUID();
         for (AuthenticatedUser actor : new AuthenticatedUser[] {

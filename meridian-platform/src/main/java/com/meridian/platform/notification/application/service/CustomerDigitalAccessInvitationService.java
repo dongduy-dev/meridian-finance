@@ -37,17 +37,18 @@ public class CustomerDigitalAccessInvitationService implements SendCustomerDigit
     public void send(CustomerDigitalAccessInvitationMessage message) {
         Objects.requireNonNull(message);
         String link = frontendBaseUri.toString().replaceFirst("/+$", "")
-                + "/verify-email#token="
-                + URLEncoder.encode(requireNonBlank(message.rawVerificationToken()), StandardCharsets.UTF_8);
+                + "/activate-access#verificationToken="
+                + URLEncoder.encode(requireNonBlank(message.rawVerificationToken()), StandardCharsets.UTF_8)
+                + "&setupToken="
+                + URLEncoder.encode(requireNonBlank(message.rawSetupToken()), StandardCharsets.UTF_8);
         sender.send(fromAddress, requireNonBlank(message.recipientEmail()),
                 "Enable your Meridian Customer Web access", """
                 Meridian Staff enabled Customer Web access for your existing Meridian Customer record.
-                Verify that you control this email address using this link:
+                Use this secure link to verify your email and set your password:
 
                 %s
 
-                After verification, open Customer Web and use "Forgot password" to choose your password.
-                The verification link expires after a limited time. If you did not expect this invitation, contact Meridian Staff.
+                The activation link expires after a limited time. If you did not expect this invitation, contact Meridian Staff.
                 """.formatted(link));
     }
 
