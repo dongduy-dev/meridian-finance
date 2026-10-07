@@ -24,9 +24,11 @@ import {
   type UnresolvedOperationType,
 } from '@/lib/operation/unresolved-operation'
 import type { ClosedLoanAccountResult } from '../api/contracts'
-import { loanAccountQuery, staffServicingKeys } from '../api/queries'
+import { loanAccountQuery, staffServicingKeys, staffServicingProvenanceQuery } from '../api/queries'
 import { closeLoanAccount } from '../api/staff-servicing-api'
 import { LoanAccountEvidence } from '../components/LoanAccountEvidence'
+import { RepaymentHistoryPanel } from '../components/RepaymentHistoryPanel'
+import { StaffServicingProvenancePanel } from '../components/StaffServicingProvenancePanel'
 import { accountStatusLabel, hasCoherentLoanAccount } from '../model/presentation'
 
 const operationType: UnresolvedOperationType = 'LOAN_ACCOUNT_ADMINISTRATIVE_CLOSURE'
@@ -50,12 +52,24 @@ export function StaffClosurePage() {
     && hasPermission(state.actor, 'loan:account:close')
     && hasRole(state.actor, 'ACCOUNTING_OFFICER')
   const accountQuery = useQuery(loanAccountQuery(manager, loanApplicationId, canRead && validId))
+  const [historyPage, setHistoryPage] = useState(0)
+  const provenanceQuery = useQuery(staffServicingProvenanceQuery(
+    manager, loanApplicationId, historyPage, 20, canRead && validId,
+  ))
   const [confirmation, setConfirmation] = useState(false)
   const [operation, setOperation] = useState<OperationState>({ status: 'DRAFT' })
   const requestResultFocus = useOperationResultFocus(operation.status, 'closure-command-result')
   const [result, setResult] = useState<ClosedLoanAccountResult>()
   const [confirmedRefreshFailed, setConfirmedRefreshFailed] = useState(false)
   const account = accountQuery.data
+  const provenance = provenanceQuery.data
+  const coherentProvenance = provenance?.loanApplicationId === loanApplicationId
+    && account?.loanApplicationId === loanApplicationId
+    && provenance?.loanAccountId === account?.loanAccountId
+    && provenance?.statusHistory.at(-1)?.toStatus === account?.status
+  const provenanceError = provenanceQuery.error ?? (provenance && !coherentProvenance
+    ? new Error('Account activity does not match this loan account.') : null)
+  const visibleProvenance = coherentProvenance && !provenanceError ? provenance : undefined
   const unresolved = validId ? findUnresolvedOperation(operationType, loanApplicationId) : undefined
   const safeAccount = Boolean(account && hasCoherentLoanAccount(account))
   const readLocked = !account || !safeAccount || accountQuery.isFetching || accountQuery.isRefetchError
@@ -71,6 +85,8 @@ export function StaffClosurePage() {
     setResult(confirmed)
     setOperation({ status: 'RECONCILING' })
     await invalidateAffected().catch(() => undefined)
+    // Actor history is informational; its availability cannot change the confirmed result.
+    void provenanceQuery.refetch()
     try {
       const refreshed = await accountQuery.refetch({ throwOnError: true })
       if (refreshed.isError) throw new NetworkError()
@@ -127,6 +143,7 @@ export function StaffClosurePage() {
   }
 
   const refreshOnly = async () => {
+    void provenanceQuery.refetch()
     try {
       const refreshed = await accountQuery.refetch({ throwOnError: true })
       if (refreshed.isError) throw new NetworkError()
@@ -155,6 +172,8 @@ export function StaffClosurePage() {
     <Card><CardHeader><CardTitle>Closure action</CardTitle></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">Meridian checks that the balance is fully settled and reconciled before closing the account.</p>{unresolved ? <Button disabled={!canClose || readLocked} onClick={() => void retryExact()}>Retry this closure</Button> : <Button id="confirm-closure-trigger" disabled={!canClose || newClosureLocked} onClick={() => setConfirmation(true)}>Review administrative closure</Button>}{account.status !== 'SETTLED' && !unresolved ? <p className="text-sm font-semibold text-muted-foreground">Refresh to confirm that the account is settled and reconciled before closing it.</p> : null}{operation.status !== 'DRAFT' ? <OperationStatusPanel status={operation.status} headingId="closure-command-result" headingLabel={`Closure result for account ${account.accountNumber}`} /> : null}{operation.detail ? <p aria-live="polite" className="text-sm font-medium">{operation.detail}</p> : null}{operation.error instanceof ApiError && operation.error.requestId ? <RequestCorrelation requestId={operation.error.requestId} /> : null}{confirmedRefreshFailed && result ? <Alert variant="success"><CheckCircle2 /><AlertTitle>Closure recorded; refresh needed</AlertTitle><AlertDescription>The account was confirmed closed at {formatTimestamp(result.closedAt)}. The latest account information is still unavailable; use Refresh and do not close the account again.</AlertDescription></Alert> : null}</CardContent></Card>
     {result ? <Card><CardHeader><CardTitle>{result.idempotentReplay ? 'Previously recorded closure confirmed' : 'Administrative closure confirmed'}</CardTitle></CardHeader><CardContent><p>Account status: <strong>{accountStatusLabel(result.resultingStatus)}</strong> · closed {formatTimestamp(result.closedAt)}</p></CardContent></Card> : null}
     <LoanAccountEvidence account={account} />
+    <StaffServicingProvenancePanel data={visibleProvenance} pending={provenanceQuery.isPending} error={provenanceError} onRetry={() => void provenanceQuery.refetch()} />
+    <RepaymentHistoryPanel data={visibleProvenance?.repaymentHistory} pending={provenanceQuery.isPending} error={provenanceError} fetching={provenanceQuery.isFetching} onRetry={() => void provenanceQuery.refetch()} onPage={setHistoryPage} />
     {confirmation ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="closure-confirm-title"><div className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-lg bg-card p-6 shadow-xl"><h2 id="closure-confirm-title" className="text-xl font-semibold">Confirm administrative closure</h2><p>Close account <strong>{account.accountNumber}</strong> from its current <strong>Settled</strong> status.</p><p className="text-sm text-muted-foreground">This creates no payment and changes no financial evidence.</p><div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={() => { setConfirmation(false); setTimeout(() => document.getElementById('confirm-closure-trigger')?.focus(), 0) }}>Cancel</Button><Button autoFocus disabled={newClosureLocked} onClick={() => { requestResultFocus(); setConfirmation(false); void submit() }}>Confirm closure</Button></div></div></div> : null}
   </section>
 }

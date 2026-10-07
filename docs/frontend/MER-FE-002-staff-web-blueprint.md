@@ -1300,6 +1300,12 @@ Network and `5xx` outcomes persist only actor-bound operation metadata, the stab
 
 Closure belongs to an Accounting Officer with `loan:account:close` and requires an eligible fully reconciled `SETTLED` account.
 
+The closure workspace reuses the Staff servicing-provenance read and the account activity and paged repayment panels described in Section 26.1. It displays the originating disbursement actor, ordered USER/SYSTEM status history, repayment recording actors, and optional approved-settlement and closure actors. Contractual payoff has no approved-settlement actor. Recorded actors identify completed operations and do not establish ongoing account ownership or assignment.
+
+Before displaying actor context, the browser matches the returned application ID to the route and account read, matches the LoanAccount ID, and checks the final timeline status against the account status. A failed read or mismatch suppresses actor context and offers explicit retry. This informational read is not a closure-command prerequisite; coherent account evidence and the existing closure eligibility and exact-request recovery rules continue to control the action.
+
+After a confirmed closure, the workspace invalidates affected servicing and work-queue reads and reloads the account and provenance. Refresh also reloads both reads. A provenance refresh failure does not change the confirmed command result. The closure actor appears only from matching durable evidence; a later `CLOSED` timeline never resolves an unknown command result.
+
 The page explains that closure:
 
 - records the separate `SETTLED -> CLOSED` administrative outcome;
