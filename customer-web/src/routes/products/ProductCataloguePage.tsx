@@ -13,8 +13,9 @@ export function ProductCataloguePage() {
   const productQuery = useLoanProductsQuery()
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-[var(--section-editorial)]">
       <PageHeader
+        headingRole="browse"
         eyebrow="Borrowing options"
         title="Explore loans"
         description="Compare available amounts, terms, interest, fees, required documents, and eligibility."
@@ -33,7 +34,7 @@ export function ProductCataloguePage() {
       {customerQuery.data ? <AccountReadinessPrompt customer={customerQuery.data} /> : null}
 
       {productQuery.isPending ? (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3" role="status" aria-label="Loading products">
+        <div className="grid gap-[var(--grid-gap)] md:grid-cols-2 xl:grid-cols-3" role="status" aria-label="Loading products">
           {Array.from({ length: 3 }, (_, index) => <Skeleton key={index} className="h-96 w-full" />)}
         </div>
       ) : null}
@@ -45,7 +46,7 @@ export function ProductCataloguePage() {
         />
       ) : null}
       {productQuery.data?.length ? (
-        <section aria-label="Available loans" className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <section aria-label="Available loans" className="grid gap-[var(--grid-gap)] md:grid-cols-2 xl:grid-cols-3">
           {productQuery.data.map((product) => (
             <LoanProductCard key={product.productCode} product={product} />
           ))}

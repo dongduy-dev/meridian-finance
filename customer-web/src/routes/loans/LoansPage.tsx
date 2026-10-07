@@ -11,14 +11,15 @@ export function LoansPage() {
   const accountsQuery = useOwnLoanAccountsQuery()
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-[var(--section-editorial)]">
       <PageHeader
+        headingRole="browse"
         eyebrow="Loan overview"
         title="Your loans"
         description="View your balance, repayment schedule, and payment history."
       />
       {accountsQuery.isPending ? (
-        <div className="space-y-4" role="status" aria-label="Loading loans">
+        <div className="space-y-6 border-t border-border pt-6" role="status" aria-label="Loading loans">
           <Skeleton className="h-72" />
           <Skeleton className="h-72" />
         </div>
@@ -31,11 +32,11 @@ export function LoansPage() {
         />
       ) : null}
       {accountsQuery.data?.length ? (
-        <div className="grid gap-5">
+        <section aria-label="Your loans" className="divide-y divide-border border-y border-border">
           {accountsQuery.data.map((account) => (
             <LoanAccountCard key={account.loanAccountId} account={account} />
           ))}
-        </div>
+        </section>
       ) : null}
       {accountsQuery.isSuccess && accountsQuery.data?.length === 0 ? (
         <EmptyState

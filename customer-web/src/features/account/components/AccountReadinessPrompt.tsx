@@ -16,11 +16,11 @@ export function AccountReadinessPrompt({ customer }: { customer: Customer }) {
     <Alert variant="warning">
       <CircleAlert aria-hidden="true" />
       <AlertTitle>Finish setting up your account</AlertTitle>
-      <AlertDescription className="space-y-3">
+      <AlertDescription className="space-y-4">
         <p>
           Complete your profile, identity verification, and primary bank account before applying. Finishing setup does not confirm loan eligibility.
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:flex-wrap">
           {profileNeedsAttention ? (
             <Button variant="secondary" size="sm" asChild>
               <Link to="/account/profile">Complete profile</Link>
