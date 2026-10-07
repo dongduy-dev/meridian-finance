@@ -91,6 +91,19 @@ describe('Staff LoanAccount workspace', () => {
     expect(await screen.findByText(/Recorded by Mina Accounting/)).toBeVisible()
   })
 
+  it.each(['application', 'account', 'status'] as const)('does not render %s-mismatched servicing provenance', async (mismatch) => {
+    const provenance = provenanceFixture()
+    if (mismatch === 'application') provenance.loanApplicationId = '66666666-6666-4666-8666-666666666666'
+    if (mismatch === 'account') provenance.loanAccountId = applicationId
+    if (mismatch === 'status') provenance.statusHistory.at(-1)!.toStatus = 'CLOSED'
+    vi.mocked(api.apiRequest).mockImplementation(async (path) =>
+      String(path).includes('/servicing-context') ? customerContextFixture() : String(path).includes('/servicing-provenance?') ? provenance : accountFixture())
+    renderPage()
+    await screen.findByRole('heading', { name: 'Account activity' })
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Try again' }).length).toBeGreaterThan(0))
+    expect(screen.queryByText(/Mina Accounting|mina@meridian.local/)).not.toBeInTheDocument()
+  })
+
   it('shows closure only when durable closure provenance exists', async () => {
     vi.mocked(api.apiRequest).mockImplementation(async (path) =>
       String(path).includes('/servicing-context') ? customerContextFixture() : String(path).includes('/servicing-provenance?') ? provenanceFixture('CLOSED') : terminalAccountFixture('CLOSED'))
