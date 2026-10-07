@@ -7,13 +7,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class PartnerEmployeeMapper {
 
+    private static String maskIdentityReference(String value) {
+        if (value == null || value.length() <= 4) return "****";
+        return "****" + value.substring(value.length() - 4);
+    }
+
     public PartnerEmployeeDto toDto(PartnerEmployee partnerEmployee) {
         return new PartnerEmployeeDto(
                 partnerEmployee.id(),
                 partnerEmployee.partnerCompanyId(),
                 partnerEmployee.importBatchId(),
                 partnerEmployee.employeeCode(),
-                partnerEmployee.identityReference(),
+                maskIdentityReference(partnerEmployee.identityReference()),
                 partnerEmployee.salaryAmount(),
                 partnerEmployee.salaryAdvanceLimit(),
                 partnerEmployee.employmentStatus().name(),

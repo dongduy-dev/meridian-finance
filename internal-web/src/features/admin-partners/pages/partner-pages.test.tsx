@@ -25,7 +25,7 @@ const company = { id: companyId, companyCode: 'ACME', name: 'Acme Ltd', status: 
 const employee = {
   id: '22222222-2222-4222-8222-222222222222', partnerCompanyId: companyId,
   importBatchId: '33333333-3333-4333-8333-333333333333', employeeCode: 'EMP-001',
-  identityReference: 'ID-SECRET', salaryAmount: 10_000_000, salaryAdvanceLimit: 4_000_000,
+  maskedIdentityReference: '****CRET', salaryAmount: 10_000_000, salaryAdvanceLimit: 4_000_000,
   employmentStatus: 'ACTIVE', active: true,
 }
 const snapshot = { partnerCompanyId: companyId, effectiveMonth: '2026-09', authoritativeBatchId: employee.importBatchId, employees: [employee] }
@@ -68,12 +68,13 @@ describe('Partner administration pages', () => {
     mockReads()
   })
 
-  it('shows sensitive employee evidence only on the authorized detail route without placing it in URLs or storage', async () => {
+  it('shows masked employee identity on the authorized detail route without raw references or storage', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read']))
     renderPath(`/admin/partners/${companyId}`)
     expect(await screen.findByRole('heading', { name: 'Acme Ltd' })).toBeVisible()
     expect(screen.getByText('EMP-001')).toBeVisible()
-    expect(screen.getByText('ID-SECRET')).toBeVisible()
+    expect(screen.getByText('****CRET')).toBeVisible()
+    expect(screen.queryByText('ID-SECRET')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save details' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Upload CSV')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Partner Employee CSV')).not.toBeInTheDocument()
@@ -278,20 +279,19 @@ describe('Partner administration pages', () => {
       && JSON.stringify((options as { body?: unknown }).body) === JSON.stringify({ status: 'ACTIVE' }))).toBe(true))
   })
 
-  it('shows a confirmed mixed import and refreshes employees and history', async () => {
+  it('shows a failed snapshot without replacing current employees and refreshes history', async () => {
     vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read', 'partner:manage']))
     let employeeReads = 0
     let historyReads = 0
     let imported = false
     const newBatchId = '77777777-7777-4777-8777-777777777777'
-    const newEmployee = { ...employee, id: '88888888-8888-4888-8888-888888888888', importBatchId: newBatchId, employeeCode: 'EMP-NEW', identityReference: 'ID-NEW' }
     vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
       if ((options as RequestInit | undefined)?.method === 'POST' && String(path).endsWith('/employee-import-batches')) {
         imported = true
-        return { importBatchId: newBatchId, partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'COMPLETED', validRowCount: 1, invalidRowCount: 1, rejections: [{ rowIndex: 2, errorCode: 'INVALID_SALARY_AMOUNT', reason: 'Salary amount must be nonnegative.' }] }
+        return { importBatchId: newBatchId, partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'FAILED', validRowCount: 1, invalidRowCount: 1, rejections: [{ rowIndex: 2, errorCode: 'INVALID_SALARY_AMOUNT', reason: 'Salary amount must be nonnegative.' }] }
       }
-      if (String(path).endsWith('/employees/current')) { employeeReads += 1; return imported ? { partnerCompanyId: companyId, effectiveMonth: '2026-09', authoritativeBatchId: newBatchId, employees: [newEmployee] } : snapshot }
-      if (String(path).endsWith('/employee-import-batches')) { historyReads += 1; return imported ? [{ id: newBatchId, partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'COMPLETED', validRowCount: 1, invalidRowCount: 1 }] : [] }
+      if (String(path).endsWith('/employees/current')) { employeeReads += 1; return snapshot }
+      if (String(path).endsWith('/employee-import-batches')) { historyReads += 1; return imported ? [{ id: newBatchId, partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'FAILED', validRowCount: 1, invalidRowCount: 1 }] : [] }
       if (String(path) === `/partner-companies/${companyId}`) return company
       if (String(path) === '/partner-companies') return [company]
       throw new Error(`Unexpected path ${path}`)
@@ -313,15 +313,17 @@ describe('Partner administration pages', () => {
     await user.type(screen.getByLabelText('Salary Advance limit'), '4000000')
     await user.click(screen.getByRole('button', { name: 'Import employees' }))
 
-    expect(await screen.findByText('1 valid row(s), 1 invalid row(s).')).toBeVisible()
+    expect(await screen.findByText('Snapshot was not replaced')).toBeVisible()
+    expect(screen.getByText(/No employee rows were imported/)).toBeVisible()
+    expect(screen.queryByText('Employee snapshot import completed.')).not.toBeInTheDocument()
     expect(screen.getByText(/Row 2: Salary amount must be nonnegative/)).toBeVisible()
     await waitFor(() => {
       expect(employeeReads).toBeGreaterThan(1)
       expect(historyReads).toBeGreaterThan(1)
     })
-    expect(screen.getByRole('table', { name: 'Current Partner employees' })).toHaveTextContent('EMP-NEW')
-    expect(screen.getByRole('table', { name: 'Current Partner employees' })).not.toHaveTextContent('EMP-001')
-    expect(within(screen.getByRole('table', { name: 'Employee import history' })).getByText(newBatchId).closest('tr')).toHaveTextContent('Current')
+    expect(screen.getByRole('table', { name: 'Current Partner employees' })).toHaveTextContent('EMP-001')
+    expect(screen.getByRole('table', { name: 'Current Partner employees' })).not.toHaveTextContent('EMP-NEW')
+    expect(within(screen.getByRole('table', { name: 'Employee import history' })).getByText(newBatchId).closest('tr')).not.toHaveTextContent('Current')
   })
 
   it('treats an idempotency conflict as definitive and does not offer exact retry', async () => {
@@ -380,7 +382,7 @@ describe('Partner administration pages', () => {
     expect(storedBrowserText()).not.toContain('ID-NEW')
 
     await user.click(screen.getByRole('button', { name: 'Import CSV rows' }))
-    await screen.findByText('Employee import completed.')
+    await screen.findByText('Employee snapshot import completed.')
     expect(submitted).toEqual({
       requestId: expect.any(String),
       effectiveMonth: '2026-09',
@@ -447,7 +449,7 @@ describe('Partner administration pages', () => {
     expect(screen.queryByRole('button', { name: 'Discard and start a new import' })).not.toBeInTheDocument()
     expect(screen.getByText(/leaving or reloading does not mean the import failed/i)).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Retry this import' }))
-    expect(await screen.findByText('Employee import completed.')).toBeVisible()
+    expect(await screen.findByText('Employee snapshot import completed.')).toBeVisible()
     await waitFor(() => expect(submitted).toHaveLength(2))
     expect(submitted[1]).toEqual(submitted[0])
     expect(submitted[0]).toMatchObject({ requestId: '44444444-4444-4444-8444-444444444444', effectiveMonth: '2026-09' })
@@ -511,7 +513,7 @@ describe('Partner administration pages', () => {
     expect(await screen.findByText('Showing the first 25 of 30 rows. The full parsed batch will be submitted.')).toBeVisible()
     expect(screen.getByRole('table', { name: 'Partner Employee CSV preview' }).querySelectorAll('tbody tr')).toHaveLength(25)
     await user.click(screen.getByRole('button', { name: 'Import CSV rows' }))
-    await screen.findByText('Employee import completed.')
+    await screen.findByText('Employee snapshot import completed.')
     expect(submittedRows).toHaveLength(30)
     expect(submittedRows[0]).toMatchObject({ employeeCode: 'EMP-001' })
     expect(submittedRows[29]).toMatchObject({ employeeCode: 'EMP-030' })

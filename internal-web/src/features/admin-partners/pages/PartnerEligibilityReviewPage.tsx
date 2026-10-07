@@ -31,13 +31,13 @@ const triggerLabels: Record<string, string> = {
   MANUAL_REVIEW_REJECTED: 'Employment not confirmed by review',
 }
 const reviewStatusLabels: Record<string, string> = {
-  PENDING: 'Pending review', APPROVED: 'Approved', REJECTED: 'Rejected', SUPERSEDED: 'Replaced by a later review',
+  PENDING: 'Pending review', APPROVED: 'Approved', REJECTED: 'Rejected', SUPERSEDED: 'Superseded employment attempt',
 }
 const unavailableReasonLabels: Record<string, string> = {
   REVIEW_RESOLVED: 'This review is complete',
   PRIOR_EFFECTIVE_MONTH: 'The effective month is no longer current',
   PARTNER_COMPANY_INACTIVE: 'The Partner Company is not active',
-  SOURCE_BATCH_REPLACED: 'A newer employee import replaced this review’s source',
+  SOURCE_BATCH_REPLACED: 'A newer employee snapshot replaced this review’s source. Ask the Customer to verify employment again against the current snapshot. This historical review cannot be retargeted.',
   CUSTOMER_IDENTITY_EVIDENCE_UNAVAILABLE: 'Current Customer identity evidence is unavailable',
 }
 const decisionLabels: Record<string, string> = {
@@ -196,7 +196,7 @@ export function PartnerEligibilityReviewPage() {
             <Fact label="Created">{formatTimestamp(review.createdAt)}</Fact>
           </dl>
 
-          {review.nonReviewableReason ? <Alert variant="destructive"><AlertTitle>Review is not actionable</AlertTitle><AlertDescription>{unavailableReasonLabel(review.nonReviewableReason)}. Refresh the review before taking another action.</AlertDescription></Alert> : null}
+          {review.nonReviewableReason ? <Alert variant="destructive"><AlertTitle>Review is not actionable</AlertTitle><AlertDescription>{unavailableReasonLabel(review.nonReviewableReason)}{review.nonReviewableReason === 'SOURCE_BATCH_REPLACED' ? '' : '. Refresh the review before taking another action.'}</AlertDescription></Alert> : null}
           <Button variant="outline" disabled={detail.isFetching || queue.isFetching} onClick={() => void Promise.all([detail.refetch(), queue.refetch()])}>Refresh review</Button>
 
           <div>

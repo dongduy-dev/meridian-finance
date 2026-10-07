@@ -93,7 +93,8 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
                 ));
         verificationPolicy.validatePartnerCompanyCanBeUsedForEligibility(partnerCompany);
 
-        String effectiveMonth = YearMonth.now(clock).toString();
+        LocalDateTime operationTime = LocalDateTime.now(clock);
+        String effectiveMonth = YearMonth.from(operationTime).toString();
         PartnerEmployeeImportBatch importBatch = importBatchRepository
                 .findLatestCompletedByPartnerCompanyIdAndEffectiveMonth(partnerCompanyId, effectiveMonth)
                 .orElse(null);
@@ -107,18 +108,20 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
                         partnerCompanyId,
                         importBatch,
                         identityReference,
-                        employeeCode
+                        employeeCode, operationTime
                 );
 
         if (result.manualReviewRequired()) {
             ensurePendingReview(
                     customerId, partnerCompanyId, effectiveMonth,
                     importBatch == null ? null : importBatch.id(),
-                    EmployeeVerificationOutcome.valueOf(result.outcome()), employeeCode
+                    EmployeeVerificationOutcome.valueOf(result.outcome()), employeeCode, operationTime
             );
-        } else if (EmployeeVerificationOutcome.MATCHED_ACTIVE.name().equals(result.outcome())
-                || EmployeeVerificationOutcome.MATCHED_INACTIVE.name().equals(result.outcome())) {
-            supersedePendingReview(customerId, partnerCompanyId);
+        } else if (EmployeeVerificationOutcome.MATCHED_ACTIVE.name().equals(result.outcome())) {
+            reviewRepository.findPendingByCustomerIdAndEffectiveMonth(customerId, effectiveMonth)
+                    .forEach(review -> reviewRepository.save(review.supersede(operationTime)));
+        } else if (EmployeeVerificationOutcome.MATCHED_INACTIVE.name().equals(result.outcome())) {
+            supersedePendingReview(customerId, partnerCompanyId, operationTime);
         }
         return result;
     }
@@ -153,7 +156,8 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
             UUID partnerCompanyId,
             PartnerEmployeeImportBatch importBatch,
             String identityReference,
-            String employeeCode
+            String employeeCode,
+            LocalDateTime operationTime
     ) {
         List<PartnerEmployee> matchingEmployees = partnerEmployeeRepository.findByVerificationEvidence(
                 partnerCompanyId,
@@ -169,7 +173,7 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
                     partnerCompanyId,
                     matchingEmployees.get(0),
                     identityReference,
-                    employeeCode
+                    employeeCode, operationTime
             ));
         }
 
@@ -192,9 +196,9 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
             UUID partnerCompanyId,
             PartnerEmployee partnerEmployee,
             String identityReference,
-            String employeeCode
+            String employeeCode,
+            LocalDateTime verifiedAt
     ) {
-        LocalDateTime verifiedAt = LocalDateTime.now(clock);
 
         CustomerPartnerEmployeeLink current = linkRepository
                 .findCurrentVerifiedByCustomerIdForUpdate(customerId)
@@ -303,9 +307,9 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
             String effectiveMonth,
             UUID sourceImportBatchId,
             EmployeeVerificationOutcome triggerOutcome,
-            String requestedEmployeeCode
+            String requestedEmployeeCode,
+            LocalDateTime now
     ) {
-        LocalDateTime now = LocalDateTime.now(clock);
         PartnerEligibilityReview existing = reviewRepository
                 .findPendingByCustomerIdAndPartnerCompanyId(customerId, partnerCompanyId)
                 .orElse(null);
@@ -324,8 +328,8 @@ public class VerifyPartnerEmployeeService implements VerifyPartnerEmployeeUseCas
         ));
     }
 
-    private void supersedePendingReview(UUID customerId, UUID partnerCompanyId) {
+    private void supersedePendingReview(UUID customerId, UUID partnerCompanyId, LocalDateTime operationTime) {
         reviewRepository.findPendingByCustomerIdAndPartnerCompanyId(customerId, partnerCompanyId)
-                .ifPresent(review -> reviewRepository.save(review.supersede(LocalDateTime.now(clock))));
+                .ifPresent(review -> reviewRepository.save(review.supersede(operationTime)));
     }
 }

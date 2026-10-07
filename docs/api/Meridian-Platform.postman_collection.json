@@ -4628,10 +4628,10 @@
                                       }, {
                                           "listen": "test",
                                           "script": {"type": "text/javascript", "exec": [
-                                              "pm.test(\"Import completes with partial-result counts\", function () {",
+                                              "pm.test(\"Invalid complete snapshot fails without partial acceptance\", function () {",
                                               "    pm.response.to.have.status(201);",
                                               "    const json = pm.response.json();",
-                                              "    pm.expect(json.status).to.eql(\"COMPLETED\");",
+                                              "    pm.expect(json.status).to.eql(\"FAILED\");",
                                               "    pm.expect(json.validRowCount).to.eql(1);",
                                               "    pm.expect(json.invalidRowCount).to.eql(1);",
                                               "    pm.collectionVariables.set(\"partnerImportBatchId\", json.importBatchId);",
@@ -4644,7 +4644,7 @@
                                           "body": {"mode": "raw", "raw": "{\n  \"requestId\": \"{{partnerImportRequestId}}\",\n  \"effectiveMonth\": \"{{partnerImportEffectiveMonth}}\",\n  \"rows\": [\n    {\"employeeCode\": \"DEMO-001\", \"identityReference\": \"FICTIONAL-ID-001\", \"salaryAmount\": 12000000, \"salaryAdvanceLimit\": 4000000, \"employmentStatus\": \"ACTIVE\", \"active\": true},\n    {\"employeeCode\": \"DEMO-002\", \"identityReference\": \"FICTIONAL-ID-002\", \"salaryAmount\": -1, \"salaryAdvanceLimit\": 1000000, \"employmentStatus\": \"ACTIVE\", \"active\": true}\n  ]\n}", "options": {"raw": {"language": "json"}}},
                                           "url": {"raw": "{{baseUrl}}/api/v1/partner-companies/{{partnerAdminManagedCompanyId}}/employee-import-batches", "host": ["{{baseUrl}}"], "path": ["api", "v1", "partner-companies", "{{partnerAdminManagedCompanyId}}", "employee-import-batches"]},
                                           "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{backOfficeAccessToken}}", "type": "string"}]},
-                                          "description": "Creates a synchronous structured JSON import with one safe fictional valid row and one rejected row."
+                                          "description": "Records a non-authoritative FAILED snapshot with safe fictional valid/invalid counts; no employee rows are written."
                                       },
                                       "response": []
                                   },

@@ -61,7 +61,7 @@ export function PartnerEmployeeCsvImport({ disabled, onImport }: PartnerEmployee
         />
       </label>
       <p className="text-sm text-muted-foreground">Required columns, in any order: {partnerEmployeeCsvHeaders.join(', ')}.</p>
-      <p className="text-sm text-muted-foreground">Review employee details before importing. Correct any errors in the CSV, then choose the file again.</p>
+      <p className="text-sm text-muted-foreground">Submit the complete roster for the selected month. This replaces the previous snapshot. Correct any errors in the CSV, then choose the file again.</p>
     </div>
 
     {fileError ? <Alert variant="destructive"><AlertTitle>CSV was not accepted</AlertTitle><AlertDescription>{fileError}</AlertDescription></Alert> : null}

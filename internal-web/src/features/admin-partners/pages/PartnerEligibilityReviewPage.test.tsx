@@ -145,7 +145,7 @@ describe('Partner eligibility review page', () => {
     })
     renderPage()
 
-    expect(await screen.findByText(/newer employee import replaced this review/)).toBeVisible()
+    expect(await screen.findByText(/Ask the Customer to verify employment again against the current snapshot/)).toBeVisible()
     expect(screen.getByRole('button', { name: 'Review approval' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Review rejection' })).toBeDisabled()
   })

@@ -58,6 +58,7 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
 
     @Autowired com.meridian.platform.customer.application.service.UpdateOwnCustomerProfileService profiles;
     @Autowired com.meridian.platform.customer.application.service.CorrectCustomerIdentityReferenceService corrections;
+    @Autowired com.meridian.platform.partner.application.port.in.VerifyPartnerEmployeeUseCase employmentVerification;
 
     @Autowired
     private QuerySalaryAdvanceReadinessUseCase readinessQueries;
@@ -142,6 +143,33 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
         assertEquals(applicationCount, count("select count(*) from loan_applications"));
         assertEquals(limitCount, count("select count(*) from salary_advance_limits"));
         assertEquals(movementCount, count("select count(*) from salary_advance_limit_movements"));
+    }
+
+    @Test
+    void exactEmploymentClearsObsoleteAlternativeReviewsAndRestoresReadinessWithoutFinancialWrites() {
+        UUID alternativeCompany = UUID.randomUUID();
+        UUID alternativeReview = UUID.randomUUID();
+        jdbc.update("insert into partner_companies (id, company_code, name, status, salary_advance_policy_limit) "
+                + "values (?, ?, 'Fictional Alternative Employer', 'ACTIVE', 20000000)",
+                alternativeCompany, "ALT-" + alternativeCompany);
+        jdbc.update("insert into partner_eligibility_reviews (id, customer_id, partner_company_id, effective_month, "
+                + "trigger_outcome, requested_employee_code, status, created_at, updated_at) "
+                + "values (?, ?, ?, '2026-06', 'NOT_FOUND', 'UNRESOLVED', 'PENDING', current_timestamp, current_timestamp)",
+                alternativeReview, fixture.customerId(), alternativeCompany);
+        var blocked = readinessQueries.queryReadiness();
+        assertFalse(blocked.applicationAllowed());
+        assertTrue(blocked.blockerCodes().contains("EMPLOYEE_NOT_VERIFIED"));
+        var verified = employmentVerification.verifyPartnerEmployee(fixture.partnerCompanyId(),
+                new com.meridian.platform.partner.application.dto.PartnerEmployeeVerificationRequest("READINESS-EMP"));
+        assertEquals("MATCHED_ACTIVE", verified.outcome());
+        assertEquals(fixture.linkId(), verified.customerPartnerEmployeeLinkId());
+        assertEquals("SUPERSEDED", jdbc.queryForObject("select status from partner_eligibility_reviews where id=?", String.class, alternativeReview));
+        var ready = readinessQueries.queryReadiness();
+        assertTrue(ready.applicationAllowed());
+        assertEquals("ELIGIBLE", ready.partnerEligibilityStatus());
+        assertEquals(money("6000000.00"), ready.availableAmount());
+        assertEquals(0, count("select count(*) from salary_advance_limits where customer_id=?", fixture.customerId()));
+        assertEquals(0, count("select count(*) from loan_applications where customer_id=?", fixture.customerId()));
     }
 
     @Test

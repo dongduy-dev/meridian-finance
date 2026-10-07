@@ -80,6 +80,23 @@ class QueryPartnerEmployeeServiceTest {
         assertEquals(CURRENT_BATCH_ID, rows.getLast().importBatchId());
     }
 
+    @Test
+    void ordinaryEmployeeJsonContainsOnlyMaskedIdentityForCurrentAndHistoricalReads() {
+        var source = new PartnerEmployee(UUID.randomUUID(), COMPANY_ID, CURRENT_BATCH_ID, "EMP-PII",
+                "FICTIONAL-IDENTITY-001", BigDecimal.TEN, BigDecimal.ONE, PartnerEmployeeStatus.ACTIVE, true);
+        when(employees.findByPartnerCompanyId(COMPANY_ID)).thenReturn(List.of(source));
+        var dto = service.getPartnerEmployeesByCompanyId(COMPANY_ID, false).getFirst();
+        var json = tools.jackson.databind.json.JsonMapper.builder().build().valueToTree(dto);
+        assertEquals("****-001", dto.maskedIdentityReference());
+        org.junit.jupiter.api.Assertions.assertFalse(json.has("identityReference"));
+        org.junit.jupiter.api.Assertions.assertFalse(json.toString().contains(source.identityReference()));
+        for (String shortValue : List.of("A", "1234")) {
+            var shortSource = new PartnerEmployee(source.id(), COMPANY_ID, CURRENT_BATCH_ID, source.employeeCode(),
+                    shortValue, BigDecimal.TEN, BigDecimal.ONE, PartnerEmployeeStatus.ACTIVE, true);
+            assertEquals("****", new PartnerEmployeeMapper().toDto(shortSource).maskedIdentityReference());
+        }
+    }
+
     private static PartnerEmployee employee(UUID batchId, String code) {
         return new PartnerEmployee(UUID.randomUUID(), COMPANY_ID, batchId, code, "ID-1",
                 BigDecimal.TEN, BigDecimal.ONE, PartnerEmployeeStatus.ACTIVE, true);

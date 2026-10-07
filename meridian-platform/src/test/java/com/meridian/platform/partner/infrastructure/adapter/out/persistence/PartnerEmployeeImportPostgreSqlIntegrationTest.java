@@ -187,7 +187,7 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
         assertEquals(second.importBatchId(), current.authoritativeBatchId());
         assertEquals(1, current.employees().size());
         assertEquals(code, current.employees().getFirst().employeeCode());
-        assertEquals("SECOND-ID", current.employees().getFirst().identityReference());
+        assertEquals("****D-ID", current.employees().getFirst().maskedIdentityReference());
         assertEquals(second.importBatchId(), current.employees().getFirst().importBatchId());
         assertEquals(3, employeeQueries.getPartnerEmployeesByCompanyId(companyId, false).size());
         assertEquals(1, employeeQueries.getPartnerEmployeesByCompanyId(companyId, false).stream()
