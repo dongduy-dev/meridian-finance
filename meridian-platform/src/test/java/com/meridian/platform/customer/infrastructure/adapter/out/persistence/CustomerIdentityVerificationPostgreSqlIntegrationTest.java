@@ -166,16 +166,22 @@ class CustomerIdentityVerificationPostgreSqlIntegrationTest {
         String clean="correction_clean_"+UUID.randomUUID().toString().replace("-", "");
         String upgrade="correction_upgrade_"+UUID.randomUUID().toString().replace("-", "");
         try {
-            var migrated=org.flywaydb.core.Flyway.configure().dataSource(dataSource).schemas(clean).defaultSchema(clean).locations("classpath:db/migration").load();
+            var migrated=org.flywaydb.core.Flyway.configure().dataSource(dataSource).schemas(clean).defaultSchema(clean).locations("classpath:db/migration").target("71").load();
             migrated.migrate(); assertEquals("71", migrated.info().current().getVersion().toString()); migrated.validate();
             var previous=org.flywaydb.core.Flyway.configure().dataSource(dataSource).schemas(upgrade).defaultSchema(upgrade).locations("classpath:db/migration").target("70").load(); previous.migrate();
             int permissions=jdbc.queryForObject("select count(*) from "+upgrade+".role_permissions", Integer.class);
-            var current=org.flywaydb.core.Flyway.configure().dataSource(dataSource).schemas(upgrade).defaultSchema(upgrade).locations("classpath:db/migration").load();
+            var current=org.flywaydb.core.Flyway.configure().dataSource(dataSource).schemas(upgrade).defaultSchema(upgrade).locations("classpath:db/migration").target("71").load();
             assertEquals(1,current.migrate().migrationsExecuted); assertEquals(0,current.migrate().migrationsExecuted); current.validate();
             assertEquals(permissions,jdbc.queryForObject("select count(*) from "+upgrade+".role_permissions", Integer.class));
             for(String schema:List.of(clean,upgrade)) {
                 String constraint=jdbc.queryForObject("select pg_get_constraintdef(c.oid) from pg_constraint c join pg_namespace n on n.oid=c.connamespace where n.nspname=? and c.conname='chk_audit_events_action'", String.class,schema);
-                for(var action:com.meridian.platform.shared.domain.audit.BusinessAuditAction.values()) assertTrue(constraint.contains("'"+action.name()+"'"),action.name());
+                for(var action:com.meridian.platform.shared.domain.audit.BusinessAuditAction.values()) {
+                    if (action == com.meridian.platform.shared.domain.audit.BusinessAuditAction.PARTNER_EMPLOYEE_IMPORT_FAILED) {
+                        assertFalse(constraint.contains("'"+action.name()+"'"),action.name());
+                    } else {
+                        assertTrue(constraint.contains("'"+action.name()+"'"),action.name());
+                    }
+                }
             }
         } finally { jdbc.execute("drop schema if exists "+clean+" cascade"); jdbc.execute("drop schema if exists "+upgrade+" cascade"); }
     }

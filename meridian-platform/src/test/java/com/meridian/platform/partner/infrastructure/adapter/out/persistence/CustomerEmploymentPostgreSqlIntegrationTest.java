@@ -14,6 +14,7 @@ import com.meridian.platform.partner.domain.model.PartnerEligibilityReviewReason
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
+import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -206,20 +207,28 @@ class CustomerEmploymentPostgreSqlIntegrationTest {
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
 
+        String manualResult;
         try (var executor = Executors.newFixedThreadPool(2)) {
             Future<String> automatic = executor.submit(() -> verifyAfterBarrier(
                     fixture.customerId(), companyC, ready, start));
-            Future<String> manual = executor.submit(() -> decideAfterBarrier(
-                    reviewId, fixture.companyB().employeeId(), ready, start));
+            Future<String> manual = executor.submit(() -> {
+                try {
+                    return decideAfterBarrier(reviewId, fixture.companyB().employeeId(), ready, start);
+                } catch (BusinessStateConflictException conflict) {
+                    return conflict.getErrorCode();
+                }
+            });
             assertTrue(ready.await(5, TimeUnit.SECONDS));
             start.countDown();
 
             assertEquals("MATCHED_ACTIVE", automatic.get(10, TimeUnit.SECONDS));
-            assertEquals("APPROVED", manual.get(10, TimeUnit.SECONDS));
+            manualResult = manual.get(10, TimeUnit.SECONDS);
+            assertTrue(Set.of("APPROVED", "PARTNER_ELIGIBILITY_REVIEW_ALREADY_RESOLVED").contains(manualResult));
         }
 
         assertEquals(1, currentLinkCount(fixture.customerId()));
-        assertEquals("APPROVED", jdbcTemplate.queryForObject(
+        assertEquals("APPROVED".equals(manualResult) ? 2 : 1, disabledLinkCount(fixture.customerId()));
+        assertEquals("APPROVED".equals(manualResult) ? "APPROVED" : "SUPERSEDED", jdbcTemplate.queryForObject(
                 "SELECT status FROM partner_eligibility_reviews WHERE id = ?",
                 String.class,
                 reviewId
