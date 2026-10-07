@@ -2,7 +2,7 @@ import { CheckCircle2, CircleAlert, Info, Landmark, UserRound } from 'lucide-rea
 import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import type { Customer } from '@/features/account/account-api'
 import { useOwnIdentityHistory } from '@/features/account/identity-queries'
 import { cn } from '@/lib/cn'
@@ -42,25 +42,25 @@ function ReadinessItem({
 }) {
   const StateIcon = complete ? CheckCircle2 : CircleAlert
   return (
-    <div className="flex flex-col gap-4 rounded-md border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex min-w-0 flex-col items-start gap-4 py-6 [overflow-wrap:anywhere]">
       <div className="flex min-w-0 gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card">
+        <div className="shrink-0 pt-0.5">
           <Icon aria-hidden="true" className="size-5" />
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-semibold">{title}</p>
             <span
               className={cn(
-                'inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold',
+                'inline-flex max-w-full min-w-0 items-center gap-2 rounded-sm px-3 py-1 text-sm leading-5 font-medium',
                 complete ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning',
               )}
             >
-              <StateIcon aria-hidden="true" className="size-3.5" />
-              {complete ? 'Complete' : statusLabel ?? 'Action needed'}
+              <StateIcon aria-hidden="true" className="size-4 shrink-0" />
+              <span className="min-w-0">{complete ? 'Complete' : statusLabel ?? 'Action needed'}</span>
             </span>
           </div>
-          <p className="mt-1 text-sm leading-5 text-muted-foreground">{description}</p>
+          <p className="mt-2 text-sm leading-5 text-muted-foreground">{description}</p>
         </div>
       </div>
       {!complete ? (
@@ -72,21 +72,25 @@ function ReadinessItem({
   )
 }
 
-export function AccountReadinessCard({ customer }: { customer: Customer }) {
+export function AccountReadinessCard({ customer, presentation = 'card' }: {
+  customer: Customer
+  presentation?: 'card' | 'section'
+}) {
   const identity = useOwnIdentityHistory()
   const pending = identity.data?.[0]?.status === 'PENDING_REVIEW'
   const identityDescription = customer.verificationStatus === 'VERIFIED' ? 'Identity verified.' : identity.isPending ? 'Checking your identity review status…' : identity.isError ? 'Identity review status could not be confirmed. Open identity verification and try again.' : pending ? 'Your identity document is being reviewed. No further document is needed right now.' : customer.verificationStatus === 'REJECTED' ? 'Verification could not be completed. Review the reason and submit a replacement document.' : 'Complete your profile, then submit an identity document for review before applying for a loan.'
   const profileComplete = customer.profileCompletionStatus === 'COMPLETE'
+  const Heading = presentation === 'section' ? 'h3' : 'h2'
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Account setup</CardTitle>
+    <Card className={presentation === 'section' ? 'border-0 border-t bg-transparent' : undefined}>
+      <CardHeader className={presentation === 'section' ? 'px-0 pt-6 sm:px-0' : undefined}>
+        <Heading className="type-section">Account setup</Heading>
         <CardDescription>
           Complete your profile, verify your identity, and choose a primary bank account. Salary Advance also requires employment verification. These steps do not guarantee loan approval.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-3 lg:grid-cols-2">
+      <CardContent className={cn('space-y-6', presentation === 'section' && 'px-0 pb-0 sm:px-0 sm:pb-0')}>
+        <div className={cn('grid divide-y divide-border border-y border-border', presentation === 'section' && 'lg:grid-cols-3 lg:divide-x lg:divide-y-0 lg:[&>div]:px-6 lg:[&>div:first-child]:pl-0 lg:[&>div:last-child]:pr-0')}>
           <ReadinessItem
             complete={profileComplete}
             icon={UserRound}
@@ -108,7 +112,7 @@ export function AccountReadinessCard({ customer }: { customer: Customer }) {
             action="Manage bank accounts"
           />
         </div>
-        <div className="flex flex-wrap gap-x-6 gap-y-2 rounded-md bg-information-subtle px-4 py-3 text-sm text-information">
+        <div className="flex min-w-0 flex-wrap gap-x-6 gap-y-2 text-sm leading-5 text-muted-foreground [overflow-wrap:anywhere]">
           <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
           <span><strong>Account status:</strong> {safeLabel(customerStatusLabels, customer.status)}</span>
           <span><strong>Identity verification:</strong> {safeLabel(verificationStatusLabels, customer.verificationStatus)}</span>

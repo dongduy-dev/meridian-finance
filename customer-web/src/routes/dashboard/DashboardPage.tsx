@@ -23,18 +23,18 @@ import { useOwnLoanAccountsQuery } from '@/features/loans/loan-queries'
 
 function SectionHeading({ id, title, description }: { id: string; title: string; description: string }) {
   return (
-    <div>
-      <h2 id={id} className="text-xl font-semibold tracking-tight text-foreground">{title}</h2>
-      <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
+    <div className="min-w-0 space-y-2 [overflow-wrap:anywhere]">
+      <h2 id={id} className="type-editorial-section text-foreground">{title}</h2>
+      <p className="max-w-[70ch] text-base leading-6 text-muted-foreground">{description}</p>
     </div>
   )
 }
 
-function CardSkeletons({ count = 2 }: { count?: number }) {
+function SummarySkeletons({ count = 2, products = false }: { count?: number; products?: boolean }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2" role="status" aria-label="Loading section">
+    <div className={products ? 'grid gap-[var(--grid-gap)] md:grid-cols-2 xl:grid-cols-3' : 'space-y-6 border-t border-border pt-6'} role="status" aria-label="Loading section">
       {Array.from({ length: count }, (_, index) => (
-        <Skeleton key={index} className="h-56 w-full" />
+        <Skeleton key={index} className={products ? 'h-96 w-full' : 'h-56 w-full'} />
       ))}
     </div>
   )
@@ -55,14 +55,15 @@ export function DashboardPage() {
   const activeLoanAccounts = loanQuery.data?.filter((account) => account.servicingActive)
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-[var(--section-editorial)]">
       <PageHeader
+        headingRole="editorial"
         eyebrow="Overview"
         title="Home"
         description="See what needs your attention, track applications, and review your loans."
       />
 
-      <section aria-labelledby="account-readiness-heading" className="space-y-4">
+      <section aria-labelledby="account-readiness-heading" className="min-w-0 space-y-6">
         <SectionHeading
           id="account-readiness-heading"
           title="Account"
@@ -78,16 +79,16 @@ export function DashboardPage() {
             onRetry={() => void customerQuery.refetch()}
           />
         ) : null}
-        {customerQuery.data ? <AccountReadinessCard customer={customerQuery.data} /> : null}
+        {customerQuery.data ? <AccountReadinessCard customer={customerQuery.data} presentation="section" /> : null}
       </section>
 
-      <section aria-labelledby="required-work-heading" className="space-y-4">
+      <section aria-labelledby="required-work-heading" className="min-w-0 space-y-6">
         <SectionHeading
           id="required-work-heading"
           title="What needs your attention"
           description="Review the next steps for your applications."
         />
-        {applicationQuery.isPending ? <CardSkeletons /> : null}
+        {applicationQuery.isPending ? <SummarySkeletons /> : null}
         {applicationQuery.isError ? (
           <QueryErrorFeedback
             error={applicationQuery.error}
@@ -96,9 +97,9 @@ export function DashboardPage() {
           />
         ) : null}
         {requiredActions?.length ? (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="border-y border-border [&>div+div]:border-t">
             {requiredActions.map((application) => (
-              <RequiredActionCard key={application.loanApplicationId} application={application} />
+              <RequiredActionCard key={application.loanApplicationId} application={application} presentation="row" />
             ))}
           </div>
         ) : null}
@@ -107,18 +108,17 @@ export function DashboardPage() {
             icon={CheckCircle2}
             title="You're up to date online"
             description="There are no digital application tasks waiting for you here. Staff-assisted steps are coordinated with Meridian staff."
-            className="min-h-52"
           />
         ) : null}
       </section>
 
-      <section aria-labelledby="active-applications-heading" className="space-y-4">
+      <section aria-labelledby="active-applications-heading" className="min-w-0 space-y-6">
         <SectionHeading
           id="active-applications-heading"
           title="Applications"
           description="Track applications that are still in progress."
         />
-        {applicationQuery.isPending ? <CardSkeletons /> : null}
+        {applicationQuery.isPending ? <SummarySkeletons /> : null}
         {applicationQuery.isError ? (
           <QueryErrorFeedback
             error={applicationQuery.error}
@@ -127,9 +127,9 @@ export function DashboardPage() {
           />
         ) : null}
         {activeApplications?.length ? (
-          <div className="grid gap-4">
+          <div className="border-y border-border [&>div+div]:border-t">
             {activeApplications.slice(0, 3).map((application) => (
-              <ApplicationSummary key={application.loanApplicationId} application={application} />
+              <ApplicationSummary key={application.loanApplicationId} application={application} presentation="row" headingLevel={3} />
             ))}
           </div>
         ) : null}
@@ -139,18 +139,17 @@ export function DashboardPage() {
             title="No active applications"
             description="You have no applications in progress. Explore available loans when you're ready."
             action={<Button variant="secondary" asChild><Link to="/products">Explore products</Link></Button>}
-            className="min-h-52"
           />
         ) : null}
       </section>
 
-      <section aria-labelledby="active-loans-heading" className="space-y-4">
+      <section aria-labelledby="active-loans-heading" className="min-w-0 space-y-6">
         <SectionHeading
           id="active-loans-heading"
           title="Your loans"
           description="View loans with an active or overdue balance."
         />
-        {loanQuery.isPending ? <CardSkeletons /> : null}
+        {loanQuery.isPending ? <SummarySkeletons /> : null}
         {loanQuery.isError ? (
           <QueryErrorFeedback
             error={loanQuery.error}
@@ -159,9 +158,9 @@ export function DashboardPage() {
           />
         ) : null}
         {activeLoanAccounts?.length ? (
-          <div className="grid gap-4">
+          <div className="divide-y divide-border border-y border-border">
             {activeLoanAccounts.slice(0, 3).map((account) => (
-              <LoanAccountCard key={account.loanAccountId} account={account} />
+              <LoanAccountCard key={account.loanAccountId} account={account} headingLevel={3} />
             ))}
           </div>
         ) : null}
@@ -170,12 +169,11 @@ export function DashboardPage() {
             icon={Landmark}
             title="No active loans"
             description="You have no active or overdue loans."
-            className="min-h-52"
           />
         ) : null}
       </section>
 
-      <section aria-labelledby="product-discovery-heading" className="space-y-4">
+      <section aria-labelledby="product-discovery-heading" className="min-w-0 space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <SectionHeading
             id="product-discovery-heading"
@@ -186,7 +184,7 @@ export function DashboardPage() {
             <Link to="/products">View all products <ArrowRight aria-hidden="true" /></Link>
           </Button>
         </div>
-        {productQuery.isPending ? <CardSkeletons count={3} /> : null}
+        {productQuery.isPending ? <SummarySkeletons count={3} products /> : null}
         {productQuery.isError ? (
           <QueryErrorFeedback
             error={productQuery.error}
@@ -195,9 +193,9 @@ export function DashboardPage() {
           />
         ) : null}
         {productQuery.data?.length ? (
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-[var(--grid-gap)] md:grid-cols-2 xl:grid-cols-3">
             {productQuery.data.slice(0, 3).map((product) => (
-              <LoanProductCard key={product.productCode} product={product} />
+              <LoanProductCard key={product.productCode} product={product} headingLevel={3} />
             ))}
           </div>
         ) : null}
@@ -206,7 +204,6 @@ export function DashboardPage() {
             icon={Shapes}
             title="No products available"
             description="No lending products are available right now. Please check again later."
-            className="min-h-52"
           />
         ) : null}
       </section>

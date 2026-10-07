@@ -13,14 +13,15 @@ export function ApplicationsPage() {
   const applicationsQuery = useOwnApplicationsQuery()
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-[var(--section-editorial)]">
       <PageHeader
+        headingRole="browse"
         eyebrow="Application tracking"
         title="Your applications"
         description="Track your applications and see what happens next."
       />
       {applicationsQuery.isPending ? (
-        <div className="space-y-4" role="status" aria-label="Loading applications">
+        <div className="space-y-6 border-t border-border pt-6" role="status" aria-label="Loading applications">
           <Skeleton className="h-56" />
           <Skeleton className="h-56" />
         </div>
@@ -33,11 +34,12 @@ export function ApplicationsPage() {
         />
       ) : null}
       {applicationsQuery.data?.length ? (
-        <div className="space-y-5">
+        <section aria-label="Your applications" className="border-y border-border [&>div+div]:border-t">
           {applicationsQuery.data.map((application) => (
             <ApplicationSummary
               key={application.loanApplicationId}
               application={application}
+              presentation="row"
               action={(
                 <Button variant="secondary" asChild>
                   <Link to={`/applications/${application.loanApplicationId}`}>
@@ -47,7 +49,7 @@ export function ApplicationsPage() {
               )}
             />
           ))}
-        </div>
+        </section>
       ) : null}
       {applicationsQuery.isSuccess && applicationsQuery.data?.length === 0 ? (
         <EmptyState
