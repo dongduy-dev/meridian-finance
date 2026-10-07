@@ -66,7 +66,7 @@ New pages must reuse an existing layer before adding a new abstraction. A visual
 
 ### 3.1 Delivery Character
 
-Backend delivery remains correctness-heavy because it owns financial and workflow invariants. Customer Web delivery is component-driven, visually reviewed, and optimized for short vertical increments. Speed does not permit the frontend to become a second business-rule engine.
+Backend delivery remains correctness-heavy because it owns financial and workflow invariants. Customer Web delivery is component-driven, visually reviewed, and optimized for short vertical increments. Speed does not permit the frontend to become a second business-rule engine. Presentation follows the Meridian Institutional Editorial Banking system in Sections 9–19. A visual refactor preserves proven stateful components and changes their presentation and composition without changing business behavior.
 
 ### 3.2 Non-Goals
 
@@ -406,44 +406,56 @@ Missing or invalid verification offers verification resend, followed by password
 
 ## 9. Visual Design Principles
 
-Customer Web uses a **clean, calm, trustworthy fintech** direction.
+Customer Web uses **Meridian Institutional Editorial Banking**: an institutional lending workspace whose hierarchy comes from confident typography, aligned information, generous section spacing, and restrained brand contrast.
 
 The interface is:
 
 - modern without using trading-dashboard or crypto aesthetics;
 - financially credible without dense enterprise-admin styling;
 - clear about status, money, and required actions;
-- polished through typography, spacing, and alignment rather than decoration;
-- restrained in its use of cards, gradients, shadows, and motion.
+- editorial on Home and product discovery, with larger headings and open sections;
+- task-focused on account, evidence, correction, offer, contract, and servicing pages;
+- polished through typography, spacing, and alignment rather than decoration.
 
-Meridian Navy leads the visual system, Meridian Gold provides restrained accents, and Meridian Ivory gives the interface breathing room. Semantic status colors remain distinct from those brand anchors. Cards group meaningful content; they do not wrap every heading, field, or row. Gradients, glassmorphism, neon effects, decorative charts, and continuous animation are outside the starting direction.
+The hierarchy is **NAVY LEADS, GOLD ACCENTS, IVORY BREATHES**. Navy anchors navigation, primary actions, headings, and the Auth brand panel. Ivory is the main canvas; white distinguishes a useful bounded region. Gold is a restrained rule, active-navigation detail, or brand accent. Semantic status colors retain their own meanings.
+
+Flat sections and ruled rows are the default. A card is justified by an independent item, form, or state boundary, not by the existence of a heading. Do not nest decorative cards around every financial fact or field. A financial review must expose complete terms and actions without marketing-sized empty space, promotional claims, or ornamental imagery.
+
+Home is the canonical authenticated composition. Its account readiness, required actions, application summaries, loan summaries, and product discovery use the same primitives and feature components as their owning routes. It must not invent portfolio totals, eligibility conclusions, charts, progress history, personalized claims, or unsupported actions to fill a layout.
+
+Gradients, glassmorphism, blurred decorative orbs, neon, decorative charts, continuous animation, hero video, carousels for required information, and page-specific product themes are outside this system. Reference material may inform visual grammar; third-party branding, content, media, icon artwork, and financial claims must not enter Meridian.
+
+This blueprint fixes the visual decisions. Implementation applies them centrally. An implementation conflict requires an explicit design decision; it does not authorize another aesthetic, navigation model, token system, or business rule.
 
 ---
 
-## 10. Starting Design Tokens
+## 10. Design Tokens
 
-These tokens are the starting implementation direction. The three approved brand-anchor values are fixed and must not drift. The first real Auth and shell pages may tune derived hover, pressed, border, muted, subtle, and selected variants centrally through browser review, but pages must consume semantic tokens rather than introducing local replacements.
+The following values are the Customer Web design authority. Central theme tokens own color, type, spacing, shape, widths, and interaction states. Existing semantic token names should be retained where they fit; role-specific additions belong in the same theme. Pages must not introduce local replacements. Browser acceptance verifies these rules rather than reopening the visual direction.
 
 ### 10.1 Color
 
-| Token group | Approved anchor or direction | Use |
+| Semantic role | Value | Use |
 |---|---|---|
-| Meridian Navy | `#09122D` | Primary brand color, primary actions, active navigation, major headings, strong foreground, and dark branded surfaces |
-| Meridian Gold | `#D9B973` | Secondary brand accent, selected details, highlights, restrained decorative emphasis, and accent surfaces with Navy foreground where appropriate |
-| Meridian Ivory | `#F9F9F9` | Primary application canvas, page background, and light branded surfaces |
-| Surface | White | Content cards, forms, and grouped details where distinction from the Ivory canvas is useful |
-| Navy hover and pressed | Centrally derived from Meridian Navy | Hover and pressed primary controls |
-| Navy subtle and selected | Centrally derived from Meridian Navy and Ivory | Selected and subtle brand surfaces |
-| Muted foreground | Centrally derived neutral | Supporting text |
-| Border | Centrally derived neutral | Fields, separators, and grouped regions |
-| Success | Deep green with pale green surface | Completed and healthy states |
-| Warning | Amber/brown with pale amber surface | Pending, expiring, attention states |
-| Danger | Deep red with pale red surface | Destructive action, rejection, failure |
-| Information | Separate semantic informational hue with a subtle surface | Neutral workflow information |
+| Primary / foreground | `#09122D` | Meridian Navy; headings, body foreground, primary action, opaque shell and Auth brand panel |
+| Primary foreground / background | `#F9F9F9` | Meridian Ivory; text on Navy and application canvas |
+| Accent | `#D9B973` | Meridian Gold; restrained brand accents, active rule on Navy, Navy text on Gold where needed |
+| Card / input surface | `#FFFFFF` | White; forms and independently bounded regions |
+| Primary hover / active | `#151F42` / `#020718` | Primary control interaction states |
+| Selected / muted | `#E9EDF7` / `#F0F1F3` | Light selected state and neutral supporting region |
+| Accent subtle | `#F5ECD9` | Occasional supporting brand region with Navy text |
+| Muted foreground | `#5A6275` | Supporting text on light surfaces; never reduce its opacity for ordinary copy |
+| Border | `#D9DCE3` | Decorative separators and non-interactive region edges |
+| Input / control border | `#788296` | Field boundary and controls that need visible non-text contrast |
+| Focus on light / dark | `#09122D` / `#F9F9F9` | Opaque visible outline with contrasting offset |
+| Success foreground / surface | `#166534` / `#E8F5EC` | Completed and healthy states |
+| Warning foreground / surface | `#854D0E` / `#FFF7DC` | Pending, expiring, and attention states |
+| Danger foreground / surface | `#B42318` / `#FFF0ED` | Failure, rejection, and destructive context |
+| Information foreground / surface | `#175CD3` / `#EDF4FF` | Informational workflow feedback |
 
-The visual hierarchy is **NAVY LEADS, GOLD ACCENTS, IVORY BREATHES**. Gold must not become the dominant interface color or ordinary small text on white or Ivory where contrast is insufficient. Preferred high-contrast brand combinations are Ivory on Navy, Navy on Ivory, and Navy on Gold.
+Gold is not body text, field chrome, a success state, or a general link color on white or Ivory. Preferred brand pairs are Ivory on Navy, Navy on Ivory, and Navy on Gold. Body links on light surfaces use Navy with an underline; links on Navy use Ivory. Status labels use their semantic foreground and surface plus text/icon; product identity never changes the palette.
 
-Success, warning, danger, and information colors remain separate from the three Meridian brand anchors. Status components must use the relevant semantic token and a label or icon. Product identity must not create three unrelated page themes.
+Normal text requires at least 4.5:1 contrast, large text at least 3:1, and necessary control boundaries and focus indicators at least 3:1 against adjacent colors. Decorative separators do not stand in for required input boundaries. Disabled controls use an explicit muted surface and muted foreground while retaining their disabled semantics; do not fade an entire region containing explanations. Verify rendered combinations, including hover, focus, selected, error, and dark navigation states.
 
 ### 10.2 Authoritative Logo Assets
 
@@ -456,41 +468,67 @@ The preferred source-of-truth logo assets for Customer Web are:
 
 `docs/branding/Logo Expand.png` and `docs/branding/Logo.png` remain the approved raster variants. Frontend implementation must choose the appropriate approved variant for the available space. It must use the source assets unchanged, preserve their design and proportions, and must not redraw, regenerate, recolor, distort, replace them with Lucide icons, or create an AI-generated substitute. A frontend foundation may copy exact unchanged versions into its build asset directory when Vite bundling requires it; the originals under `docs/branding/` remain authoritative.
 
+The main shell uses the unchanged horizontal wordmark on Navy, at 176 px wide on desktop and 144 px in the compact header, with its intrinsic aspect ratio and at least 16 px clear space from controls. Auth may use the unchanged expanded lockup; compact focused/detail identity may use the approved mark with an accessible Meridian Home link. Do not crop an asset to obtain a different lockup or restyle SVG fills.
+
 Illustrations and other extended brand assets remain deferred.
 
 ### 10.3 Typography
 
-The starting typeface is a system sans stack. Inter may replace it only if the foundation deliberately bundles or loads it with an acceptable privacy and performance decision.
+Use `ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif` for interface text. Keep the approved logo typography inside its source asset. Do not download or remotely load another font as part of this system. The system stack avoids a new font license, network dependency, tracking surface, and font-loading layout shift; operating-system differences are accepted and must be checked for wrapping rather than hidden with fixed heights. Vietnamese names and diacritics, punctuation, and full VND amounts must remain legible.
 
-| Role | Starting size and line height |
-|---|---|
-| Display | `32 / 40` |
-| Page title | `28 / 36` |
-| Section title | `20 / 28` |
-| Body | `16 / 24` |
-| Supporting text | `14 / 20` |
-| Caption | `12 / 16` |
+Sizes below are CSS px at the default 16 px root, implemented with rem-based tokens. Breakpoint roles are defined in Section 10.5. Do not scale the whole UI with viewport units.
 
-Headings use semibold weight. Body copy uses regular weight. Money, account summaries, and aligned schedule values use tabular numerals.
+| Role | Below `md` | `md` to below `xl` | `xl` and above | Weight / tracking |
+|---|---|---|---|---|
+| Editorial display: Home title, product-detail title, Auth brand statement | `36 / 40` | `48 / 52` | `56 / 60` | 500 / `-0.025em` |
+| Browse page title: Products, Applications, Loans | `32 / 40` | `40 / 48` | `40 / 48` | 500 / `-0.02em` |
+| Transactional title: account, form, evidence, record detail, Auth form | `28 / 36` | `32 / 40` | `32 / 40` | 500 / `-0.015em` |
+| Editorial section title | `24 / 32` | `28 / 36` | `28 / 36` | 500 / `-0.01em` |
+| Form, record, and financial section title | `20 / 28` | `20 / 28` | `20 / 28` | 600 / normal |
+| Introductory copy | `18 / 28` | `20 / 30` | `20 / 30` | 400 / normal |
+| Body, field value, action label | `16 / 24` | `16 / 24` | `16 / 24` | 400; actions 600 / normal |
+| Supporting copy, field label, status, navigation | `14 / 20` | `14 / 20` | `14 / 20` | 400; labels/navigation 500 / normal |
+| Eyebrow and non-critical metadata | `12 / 16` | `12 / 16` | `12 / 16` | 600 / `0.08em` for short eyebrows only |
+| Primary financial amount | `28 / 36` | `32 / 40` | `36 / 44` | 600 / normal, tabular numerals |
+
+Use one visible page heading with the existing focus target. Preserve heading levels when changing visual size. Introductory prose is at most 60 characters wide; longer instructional copy is at most 70 characters wide. Financial and legal/operational distinctions use body or supporting text, never a small decorative caption. Avoid uppercase sentences, forced title line breaks, and reduced letter spacing on names or money. Supporting copy uses at least 20 px line height; field values remain 16 px at every width.
+
+Money and aligned schedule values use tabular numerals through `MoneyDisplay` and the existing formatters. Do not introduce rounding, compact K/M notation, client-derived totals, a replacement currency formatter, or ellipsis. Long values and identifiers may wrap safely within `min-width: 0` containers; reduce the number of columns before reducing type size.
 
 ### 10.4 Shape, Spacing, and Elevation
 
 | Token | Rule |
 |---|---|
-| Spacing | 4 px base rhythm; common gaps are 8, 12, 16, 24, 32, and 48 px |
-| Radius | 10 px starting control radius; 12 px grouped-surface radius; full pills only for badges and compact filters |
-| Border | 1 px semantic border; do not use contrast-heavy boxes for every section |
-| Shadow | One restrained low elevation for overlays and rare raised surfaces; normal cards may use border only |
-| Focus ring | 2 px primary ring with visible offset |
-| Motion | 150–200 ms for state changes; honor reduced-motion preference |
+| Spacing scale | 4, 8, 12, 16, 24, 32, 48, 64, 80 px |
+| Related text | 8 px label/value or title/description gap; 12 px compact related items |
+| Field groups | 24 px between fields; 32 px between form sections |
+| Section spacing | Editorial: 48 px below `md`, 64 px at `md`, 80 px at `xl`; transactional: 32 px below `md`, 48 px from `md` |
+| Region padding | 16 px below `sm`, 24 px from `sm`; 32 px only for an editorial introduction or major summary |
+| Shape | Flat sections and cards: 0 px radius; inputs/buttons/status labels: 4 px; dialogs: 8 px; navigation Sheet: square edges |
+| Border | 1 px semantic border; active navigation rule 2 px; no ornamental outline around every field group or fact |
+| Elevation | None for page cards, inputs, headers, and normal sections; overlay only: `0 16px 48px rgb(9 18 45 / 18%)` |
+| Focus | 2 px opaque outline, 3 px contrasting offset; never remove focus visibility to make screenshots cleaner |
+| Motion | 160 ms color/border/opacity transitions; no movement of financial content; reduced-motion removes non-essential transition and Skeleton pulsing |
+| Layering | Base 0; sticky header 20; focused action region 30; modal overlay and content 50 |
+
+Default to a heading, content, and a separator. Use white bounded regions only for independent products/records, a significant financial summary, an upload/form task, or a distinct loading/error boundary. Use a thin edge or a background change, not stacked border, radius, and shadow treatments. Nested facts are definition-list cells or rows. Gold rules are limited to a single small accent in a branded region; they do not top every card.
 
 ### 10.5 Width and Breakpoints
 
-- Main app content: maximum 1280 px.
-- Detail content: maximum 1120 px.
-- Focused forms and readable text: maximum 720 px.
-- Page gutters: 16 px on small screens, 24 px on medium screens, and 32 px on large screens.
-- Tailwind's default `sm`, `md`, `lg`, and `xl` breakpoints are sufficient until browser review proves otherwise.
+| Role | Rule |
+|---|---|
+| Main content | Centered usable inner width up to 1280 px |
+| Detail content | Usable inner width up to 1120 px; full width when no rail exists |
+| Focused form / Auth form | Usable inner width up to 720 px / 448 px |
+| Prose | At most 640 px, additionally constrained by the readable character measure in Section 10.3 |
+| Viewport gutters | 16 px below `sm`; 24 px from `sm` to below `lg`; 32 px from `lg` |
+| Container calculation | `min(100% - 2 * gutter, role maximum)`; gutters are outside the usable inner maximum |
+| Breakpoints | `sm` 640 px; `md` 768 px; `lg` 1024 px; `xl` 1280 px |
+| Grid | Up to 12 conceptual columns; 16 px gaps below `md`, 24 px from `md`, 32 px from `xl`; use only the columns a composition needs |
+| Detail rail | At `xl`, 320 px rail plus 32 px gap and a flexible main region; below `xl`, one column |
+| Header | Opaque Navy; minimum 64 px compact, 80 px desktop; content may grow with text zoom |
+
+Product discovery uses one column below `md`, two from `md`, and three from `xl`. Independent short facts may use two columns from `sm`; dense financial groups reduce to one column below `sm`. Do not retain a forced two-column grid at 320 px for long amounts. All grid/flex children that carry names, filenames, statuses, or amounts allow shrinking and wrapping. No page has a viewport-sized minimum width or a fixed content height.
 
 ### 10.6 Action Hierarchy
 
@@ -502,7 +540,7 @@ Headings use semibold weight. Body copy uses regular weight. Money, account summ
 | Destructive | Decline, deactivate, cancel, or another action with a lasting negative outcome |
 | Link | Inline navigation within explanatory copy |
 
-An action region normally has one primary button. Destructive actions require explicit wording and a confirmation when the result is terminal or difficult to reverse. Button color must come from the shared variant; pages must not create product-colored button styles.
+An action region normally has one primary button. Destructive actions require explicit wording and a confirmation when the result is terminal or difficult to reverse. Button color must come from the shared variant; pages must not create product-colored button styles. Primary is Ivory on Navy; secondary is Navy on transparent/light surface with a control border; ghost is an unboxed contextual action; destructive is Ivory on Danger; body links are underlined. Dark-header controls use Ivory with visible hover and focus states. Buttons have a minimum height of 44 px (48 px for the principal form action), 16 px horizontal padding, and may grow for wrapping labels. Full-width mobile primary actions must not hide adjacent Back, Cancel, or explanatory text. Preserve existing confirmation triggers, pending labels, disabled conditions, and submit/form association.
 
 ### 10.7 Icons
 
@@ -522,9 +560,11 @@ Lucide icons normally render at 18 or 20 px with consistent stroke weight. Icons
 | Feedback | `Badge`, `Alert`, `Toast`, `Progress`, `Skeleton`, `Spinner`, `EmptyState` |
 | Navigation | `Breadcrumb`, `Pagination`, `Stepper` |
 
-Generic controls begin with shadcn/ui where a matching primitive exists. `PageHeader`, `EmptyState`, and the application Stepper are small Meridian-owned composites built from primitives.
+The table is a responsibility vocabulary, not a requirement to install every listed primitive. Reuse the existing shadcn-style controls and Radix behavior where present. Native Select, Textarea, Checkbox, and disclosure elements may share semantic styling without replacing their form registration or keyboard behavior. `PageHeader`, `EmptyState`, and the application Stepper are small Meridian-owned composites built from primitives. Add a generic primitive only when a real repeated need justifies it; a visual refactor does not add a new component framework.
 
 `Spinner` is reserved for compact controls and indeterminate inline work. `Skeleton` is preferred for initial page and section loading. Toasts confirm transient outcomes; important business outcomes remain visible in page content.
+
+`PageHeader` exposes explicit editorial, browse, and transactional type roles while keeping its heading ID, level, focus behavior, description, and action slot. A shared section wrapper may own heading/spacing/separator treatment without owning data or state. `Card` is a flat bounded region; summary components may expose a compact row presentation using the same data and action contract. `EmptyState` defaults to a left-aligned heading, explanation, and supported action within its owning region, without a tall dashed decorative box. Alerts keep icon/title/body and semantic tone; explanations and support references wrap. Dialogs and Sheets retain their accessible primitives, focus trap, close behavior, and return focus, with scrollable content and a viewport-safe maximum height.
 
 ### 11.2 Meridian Domain Components
 
@@ -553,18 +593,41 @@ Generic controls begin with shadcn/ui where a matching primitive exists. `PageHe
 
 A page may contain feature-local layout markup. It creates a shared component only when the component has a stable responsibility, stable inputs, and a second credible reuse. Page components must not clone a generic primitive merely to apply different colors or spacing.
 
+Preserve the established component/state owner while changing markup, classes, or presentational props. Do not render separate desktop/mobile copies of a form or mutation component, change its key to switch appearance, or conditionally unmount it for responsive layout. Keep form registration, query enablement, event handlers, operation identities, stale-version baselines, token cleanup, and uncertain-result recovery intact. In particular, `DocumentUpload`, correction-task completion, identity-reference correction, activation, and offer/contract response components must not acquire new state lifetimes. A presentation helper may format a layout; it must not calculate eligibility, balances, or action availability.
+
 ---
 
 ## 12. Page Layout Templates
 
 | Layout | Intent | Composition | Responsive behavior |
 |---|---|---|---|
-| `AuthLayout` | Public identity tasks with low distraction | Meridian wordmark, concise context, one narrow form surface, support link area | Single column at all sizes; visual panel may appear only on wide screens |
-| `CustomerAppLayout` | Normal authenticated navigation and browsing | Desktop sidebar, compact top bar, account access, main content container | Sidebar becomes a top bar plus Sheet navigation below `lg` |
-| `FocusedFlowLayout` | Application, evidence, and correction flows | Narrow content, form Stepper, Back/Continue region, leave-flow warning | Single column; action region may become a sticky bottom bar without covering content |
-| `DetailLayout` | Application, offer, contract, and LoanAccount detail | Page header, primary content, optional summary/action rail | Two columns at `xl`; summary stacks before secondary detail on smaller screens |
+| `AuthLayout` | Public identity tasks with low distraction | Unchanged expanded lockup and concise brand statement on opaque Navy; one unraised light form region and existing support links | Single column below `lg`, compact brand identity above form; from `lg`, 45% brand panel and 55% form area; no blurred decoration or fixed form height |
+| `CustomerAppLayout` | Normal authenticated navigation and browsing | Opaque Navy top navigation, approved horizontal wordmark, existing logout, centered main content | Five visible navigation destinations from `xl`; below `xl`, compact header and accessible navigation Sheet; no persistent sidebar |
+| `FocusedFlowLayout` | Application, evidence, and correction flows | Compact Meridian Home link, transactional header, existing form progress, narrow content, Back/Continue region, existing leave-flow warning | Single column at every width; action labels may wrap; bottom action region cannot obscure content or the virtual keyboard |
+| `DetailLayout` | Application, offer, contract, and LoanAccount detail | Exact parent link, transactional page header, primary content, optional summary/action rail | One column without a rail; rail layout only from `xl`; below `xl`, summary/action context precedes secondary detail with matching reading and focus order |
+
+The main navigation belongs only to routes already using `CustomerAppLayout`. Focused and detail routes retain their existing standalone router placement and exact parent/back links. Do not move them into the main shell, add navigation that bypasses leave-flow protection, or change route identity to achieve a visual layout.
+
+The main header is sticky and opaque. Reserve its actual rendered height for anchor/focus scroll clearance. Focused action regions are bottom-sticky in document flow, with safe-area padding; at short viewport heights or with an on-screen keyboard they remain in normal flow. Do not retain a fixed overlay with a guessed bottom spacer. Keep the existing action elements, `type`, `form`, disabled conditions, and handlers. Reading order and keyboard order must match the visual stacking of detail regions; do not use CSS order to create a different keyboard sequence. Terms and operational explanations stay visible and available before a consequential confirmation.
 
 Dialogs handle short confirmations. Sheets handle mobile navigation and compact supporting tasks. A full form, document workflow, or financial review must not be forced into a modal.
+
+### 12.1 Page Archetypes
+
+| Archetype | Surfaces | Composition rule |
+|---|---|---|
+| Editorial overview | Home | Display title on Ivory; account setup and attention remain distinct query regions; applications, loans, and discovery follow as clearly titled flat sections |
+| Product discovery | Catalogue and three product details | Comparable product regions, shared fact order, editorial product title; policy/evidence/readiness sections use transactional density; no invented promotional hero art |
+| Account workspace | Profile, identity verification, bank accounts | Transactional title, local account navigation, one primary task/form region, distinct read-only records and feedback |
+| Focused transaction | Three application forms, Documents, Corrections | Narrow single workflow with explicit stage or task context, reviewable information, visible feedback, and restrained actions |
+| Application record | Application Detail | Status/summary, channel guidance, exact required action, existing UCL/Collateral records navigation, local Collateral facts region |
+| Financial review | Offer and Contract | Complete immutable facts and preview items in readable rows; local action region and existing confirmations; no promotional display treatment |
+| Servicing record | Loans, Loan Detail, repayment history | Lists use browse hierarchy; detail uses labeled financial groups, scheduled/paid/outstanding distinctions, dates, status, and disclosure/pagination |
+| Recovery | Session failure, route error, not found, unavailable/empty sections | Same type and feedback primitives; preserve retry/parent destinations and concealment; do not simulate a successful page |
+
+Home keeps the reading sequence account setup, attention, active applications, active loans, and product discovery. Its page title sits directly on Ivory. Account setup may arrange its three existing readiness items in columns from `lg`, stacking below that width; action and record lists use full-width ruled rows. Keep the current item limits, order, independent query states, and exact destinations. Product discovery uses the grid in Section 10.5. Do not add a dark promotional panel, chart, or decorative financial total.
+
+Section 14 owns the page-specific fields, actions, state requirements, and success destinations. These archetypes change presentation only.
 
 ---
 
@@ -602,7 +665,7 @@ Authenticated Customer
     └── /account/bank-accounts
 ```
 
-The primary navigation labels are Home, Products, Applications, Loans, and Account. Home remains `/`; internal source names do not determine Customer-facing labels. `/account` redirects to `/account/profile`. Each supported product has an `/apply` route below its product path.
+The primary navigation labels are Home, Products, Applications, Loans, and Account. Home remains `/`; internal source names do not determine Customer-facing labels. Desktop navigation uses text links in that order, with the active destination identified by `aria-current`, weight, and a 2 px Gold underline on Navy. Home matches only `/`; existing nested-route matching remains intact. The compact navigation uses the same destination metadata in a Sheet; it closes after selection and returns focus appropriately. Account subnavigation remains within the account workspace; it is not a second global menu. No role switcher, new top-level Documents destination, or unsupported header action is introduced. `/account` redirects to `/account/profile`. Each supported product has an `/apply` route below its product path.
 
 Browser titles identify every public, account, application, nested application, and loan route. Repayment history uses its own title when selected within Loan Detail. Nested pages link back to the exact parent application or loan list.
 
@@ -656,9 +719,11 @@ Password confirmation is a client-only matching check. The backend remains autho
 
 | Page | Purpose and primary goal | Backend capability | Composition and primary actions | Important states and success destination |
 |---|---|---|---|---|
-| Home | Show account readiness and the next meaningful Customer work | Profile, bank accounts, products, Salary Advance readiness; portfolio projections are missing | `CustomerAppLayout`, `PageHeader`, readiness card, required actions, active application summary, active loan summary, product cards | Profile and product portions can load independently; application/loan/action areas depend on frontend-enabling projections; actions navigate to the owning page |
-| Profile | Complete or maintain the Customer profile | `GET /customers/me`, `PUT /customers/me/profile`, dedicated `PUT /customers/me/identity-reference` | Profile readiness header, verified full name read-only, mutable fields, consent checkboxes, Save | Initial completion requires full name and identity reference; after completion show protected identity as “On file”; omit both identity-bearing fields from verified ordinary updates; non-verified name remains editable and reference correction is a separate pre-verification action; success stays and refreshes Home readiness |
-| Bank Accounts | Maintain masked Customer-owned destination sources | Bank-account list/add/make-primary/deactivate endpoints | Account list, primary badge, Add account form, make-primary and deactivate confirmations | Empty state explains application readiness; mutation conflicts refetch; success stays and refreshes profile/readiness queries |
+| Home | Show account readiness and the next meaningful Customer work | Profile, bank accounts, products, Salary Advance readiness; portfolio projections are missing | `CustomerAppLayout`, editorial `PageHeader`, flat account-setup and required-action regions, ruled active application and loan summaries, bounded product discovery regions | Profile and product portions can load independently; application/loan/action areas depend on frontend-enabling projections; actions navigate to the owning page |
+| Profile | Complete or maintain the Customer profile | `GET /customers/me`, `PUT /customers/me/profile`, dedicated `PUT /customers/me/identity-reference` | Transactional header and account navigation, readiness context, flat labeled form sections, verified full name read-only, mutable fields, consent checkboxes, Save | Initial completion requires full name and identity reference; after completion show protected identity as “On file”; omit both identity-bearing fields from verified ordinary updates; non-verified name remains editable and reference correction is a separate pre-verification action; success stays and refreshes Home readiness |
+| Bank Accounts | Maintain masked Customer-owned destination sources | Bank-account list/add/make-primary/deactivate endpoints | Ruled masked-account list and primary badge, distinct Add account form, make-primary and deactivate confirmations; list/form stack below `xl` | Empty state explains application readiness; mutation conflicts refetch; success stays and refreshes profile/readiness queries |
+
+Identity verification uses the account-workspace archetype and the behavioral contract in Section 7.6: current verification context, the permitted upload/replacement task, and a separate ruled verification-history region with existing evidence downloads. Visual grouping must preserve permission guards, file constraints, uncertain-result blocking, and object-URL cleanup.
 
 Bank-account UI never displays or stores a full account number after the add request completes. The response and all later views use the backend mask.
 
@@ -666,12 +731,12 @@ Bank-account UI never displays or stores a full account number after the add req
 
 | Page | Purpose and primary goal | Backend capability | Composition and primary actions | Important states and success destination |
 |---|---|---|---|---|
-| Product Catalogue | Compare active Meridian products | Public product list | `CustomerAppLayout`, `PageHeader`, `LoanProductCard` grid, profile-readiness prompt | Empty catalogue is a real empty state; details are limited to returned fields until product metadata is enriched |
-| Salary Advance Product | Understand readiness, verify or update employment, and begin an application | Product detail, Salary Advance readiness, employee verification, submission | Product summary, `ReadinessSummary`, limit summary, blocker actions, reusable verification form, Update employment, Apply | A ready Customer may intentionally open the existing verification form; every verification result and authoritative review-state change, including removal of superseded attempts, refetches readiness; local pending feedback yields to successful authoritative reads; genuinely pending review removes Apply; submission goes to Application Detail |
+| Product Catalogue | Compare active Meridian products | Public product list | `CustomerAppLayout`, browse `PageHeader`, comparable flat `LoanProductCard` grid, separate profile-readiness prompt | Empty catalogue is a real empty state; details are limited to returned fields until product metadata is enriched |
+| Salary Advance Product | Understand readiness, verify or update employment, and begin an application | Product detail, Salary Advance readiness, employee verification, submission | Editorial product summary, ruled policy facts, transactional `ReadinessSummary` and limit summary, blocker actions, reusable verification form, Update employment, Apply | A ready Customer may intentionally open the existing verification form; every verification result and authoritative review-state change, including removal of superseded attempts, refetches readiness; local pending feedback yields to successful authoritative reads; genuinely pending review removes Apply; submission goes to Application Detail |
 | Salary Advance Application | Submit requested amount and term against returned readiness | Salary Advance submission | `FocusedFlowLayout`, `ApplicationStepper`, amount, term, readiness summary, review, Submit | No server draft exists; leaving warns about unsaved input; amount/term policy options depend on enriched product metadata; success goes to Application Detail |
-| UCL Product | Understand the streamlined evidence-based product and begin | Product detail and UCL submission | Product summary, eligibility notes, required-evidence preview, Apply | Full policy and evidence copy depends on product metadata; Apply enters focused flow |
+| UCL Product | Understand the streamlined evidence-based product and begin | Product detail and UCL submission | Editorial product summary, ruled policy facts, eligibility notes, required-evidence section, Apply | Full policy and evidence copy depends on product metadata; Apply enters focused flow |
 | UCL Application | Submit requested amount and term, then provide required evidence | UCL submission and document upload | Amount/term form, review, evidence workspace for income proof, bank statement, employment proof | The request must not invent income/employment fields absent from v1; checklist item discovery uses the Customer checklist query; success goes to Documents, then Application Detail |
-| Collateral Product | Understand the one-asset manual-assessment workflow and begin | Product detail and Collateral submission | Product summary, ownership-evidence explanation, supported Collateral fact summary, Apply | Product policy metadata remains an API dependency; Apply enters focused flow |
+| Collateral Product | Understand the one-asset manual-assessment workflow and begin | Product detail and Collateral submission | Editorial product summary, ruled policy facts, ownership-evidence section, supported Collateral fact summary, Apply | Product policy metadata remains an API dependency; Apply enters focused flow |
 | Collateral Application | Submit terms and one structured Collateral fact, then ownership evidence | Collateral submission and document upload | Amount/term, Collateral type, description, estimated value, ownership status, condition note, review, ownership-evidence upload | Estimated value is not an LTV calculation; submitted facts become immutable; success goes to Documents using returned evidence ID, then Application Detail |
 
 Application forms must not offer “Save draft” until a backend draft contract exists. Local unsaved form state is not a Meridian `DRAFT` application.
@@ -680,12 +745,12 @@ Application forms must not offer “Save draft” until a backend draft contract
 
 | Page | Purpose and primary goal | Backend capability | Composition and primary actions | Important states and success destination |
 |---|---|---|---|---|
-| Applications | Find owned applications and resume work | Customer-owned application index with authoritative lifecycle and required-action summaries | `CustomerAppLayout`, `ApplicationSummary` list, exact application-detail links | No search/filter API is provided. Do not construct the list from remembered submission IDs. |
+| Applications | Find owned applications and resume work | Customer-owned application index with authoritative lifecycle and required-action summaries | `CustomerAppLayout`, browse header, ruled `ApplicationSummary` list, exact application-detail links | No search/filter API is provided. Do not construct the list from remembered submission IDs. |
 | Application Detail | Understand durable state, revisit UCL/Collateral records, and find supported Customer actions | Owned minimal application-by-ID read, indexed required action, and dedicated Customer Collateral facts read | `DetailLayout`, `ApplicationSummary`, status explanation, required actions, immutable Collateral details, UCL/Collateral View documents, offer/contract/loan links | Records remain visible with `NONE`; Collateral query failures stay local; Staff-assisted facts/records are readable without digital controls; concealed `404` uses generic unavailable state; faithful timeline needs richer evidence |
 | Documents | Revisit evidence and its current state; upload or replace when authorized | Customer checklist/current-version query and existing upload/content endpoints | `FocusedFlowLayout` or application detail section, exact Application back link, checklist rows, `DocumentUpload`, `DocumentStatus` | Initial Collateral upload can use the submission response; direct URL/reload supports reconnect; Customer-digital upload actions follow authoritative Document status; Staff-assisted reads retain coordination guidance without upload/replacement; post-submission notice is preserved |
-| Corrections | Complete owned tasks and resubmit or abandon an eligible application | Owned correction task, completion, resubmission, and cancellation endpoints | Instruction alert, task list, document actions, completion state, Resubmit, eligible Cancel confirmation | Task proof must come from backend; mixed/Staff work is read-only context if exposed; Cancel appears only for Salary Advance/UCL in `RETURNED_FOR_REVISION`; success returns to Application Detail |
-| Offer | Review immutable approved terms and accept or decline | Approved-offer read/respond endpoints | `DetailLayout`, expiry banner, `OfferSummary`, provisional items, Accept, Decline confirmation | Loading, pending, accepted, declined, expired, action conflict; accept goes to Contract waiting/detail, decline goes to Application Detail |
-| Contract | Review the current operational contract and acknowledge its exact version | Current-contract read and acknowledgment | `DetailLayout`, version/status, accepted terms, masked destination, repayment preview, acknowledgment confirmation | Superseded/stale version refetches; acknowledgment success stays with persistent confirmation; Customer does not confirm readiness or reveal destination |
+| Corrections | Complete owned tasks and resubmit or abandon an eligible application | Owned correction task, completion, resubmission, and cancellation endpoints | Persistent instruction alert, separated task regions with local document actions and completion state, Resubmit, eligible Cancel confirmation | Task proof must come from backend; mixed/Staff work is read-only context if exposed; Cancel appears only for Salary Advance/UCL in `RETURNED_FOR_REVISION`; success returns to Application Detail |
+| Offer | Review immutable approved terms and accept or decline | Approved-offer read/respond endpoints | `DetailLayout`, persistent expiry banner, flat `OfferSummary`, fully labeled provisional rows, Accept, Decline confirmation | Loading, pending, accepted, declined, expired, action conflict; accept goes to Contract waiting/detail, decline goes to Application Detail |
+| Contract | Review the current operational contract and acknowledge its exact version | Current-contract read and acknowledgment | `DetailLayout`, version/status header, flat accepted-terms region, distinct masked destination, labeled repayment preview, acknowledgment confirmation | Superseded/stale version refetches; acknowledgment success stays with persistent confirmation; Customer does not confirm readiness or reveal destination |
 
 Staff-assisted application pages explain that records can be viewed online and that Meridian staff coordinates updates and responses. Account-level online access does not change the application channel or enable Customer mutation controls. Completed correction records describe completed work rather than instructing another upload.
 
@@ -693,21 +758,21 @@ The operational contract page must state that acknowledgment is operational evid
 
 #### 14.4.1 Application Records Navigation
 
-Application Detail is the stable records entry for UCL and Collateral Loan. Its main content includes an Application records card linking to `/applications/{loanApplicationId}/documents` across lifecycle states, including when `requiredAction = NONE` and the action rail says “No action needed.” Record visibility does not create a required action or infer Document upload eligibility. The Documents workspace reads its authoritative checklist/version/status contract and links back to the exact `/applications/{loanApplicationId}` route; direct URL entry and reload retain that path. Submission success notices remain available.
+Application Detail is the stable records entry for UCL and Collateral Loan. Its main content includes an Application records section linking to `/applications/{loanApplicationId}/documents` across lifecycle states, including when `requiredAction = NONE` and the action rail says “No action needed.” Record visibility does not create a required action or infer Document upload eligibility. The Documents workspace reads its authoritative checklist/version/status contract and links back to the exact `/applications/{loanApplicationId}` route; direct URL entry and reload retain that path. Submission success notices remain available.
 
-For `COLLATERAL_LOAN`, Application Detail mounts a feature-owned Collateral query only after the authoritative own application detail confirms that product. A read-only Collateral details card displays the five immutable submitted facts through the dedicated Customer contract in [MER-API-001 Section 4.2.1.1](../api/MER-API-001-endpoints-and-postman-scenarios.md#4211-customer-own-submitted-collateral-facts). Estimated value uses `MoneyDisplay` and remains a submitted advisory estimate. The card provides no edit action, LTV calculation, or valuation/approval conclusion. Collateral loading, error, and retry stay local to the card while `ApplicationSummary` and records navigation remain usable.
+For `COLLATERAL_LOAN`, Application Detail mounts a feature-owned Collateral query only after the authoritative own application detail confirms that product. A read-only Collateral details region displays the five immutable submitted facts through the dedicated Customer contract in [MER-API-001 Section 4.2.1.1](../api/MER-API-001-endpoints-and-postman-scenarios.md#4211-customer-own-submitted-collateral-facts). Estimated value uses `MoneyDisplay` and remains a submitted advisory estimate. The region provides no edit action, LTV calculation, or valuation/approval conclusion. Collateral loading, error, and retry stay local to the region while `ApplicationSummary` and records navigation remain usable.
 
 The Collateral feature validates non-empty returned type strings. Known types receive friendly labels; unknown types display “Type unavailable.” Description, ownership status, and condition note render as plain text with safe wrapping. Customer Web does not call Staff case or verification APIs for these facts.
 
-`STAFF_ASSISTED` UCL and Collateral records remain readable after digital access is enabled. Application Detail retains Staff coordination guidance, and Documents retains its read-only channel guard without upload/replacement controls. These records do not manufacture a digital action. Salary Advance Application Detail retains its existing presentation and receives no UCL/Collateral records card or Collateral query.
+`STAFF_ASSISTED` UCL and Collateral records remain readable after digital access is enabled. Application Detail retains Staff coordination guidance, and Documents retains its read-only channel guard without upload/replacement controls. These records do not manufacture a digital action. Salary Advance Application Detail retains its existing application content and action rules and receives no UCL/Collateral records section or Collateral query.
 
 ### 14.5 LoanAccount and Servicing Pages
 
 | Page | Purpose and primary goal | Backend capability | Composition and primary actions | Important states and success destination |
 |---|---|---|---|---|
-| Loans | Find activated owned LoanAccounts | Owned Customer LoanAccount index | `CustomerAppLayout`, `LoanAccountCard` list | Authoritative empty and list states come from the Customer LoanAccount query. |
+| Loans | Find activated owned LoanAccounts | Owned Customer LoanAccount index | `CustomerAppLayout`, browse header, ruled `LoanAccountCard` list | Authoritative empty and list states come from the Customer LoanAccount query. |
 | Loan Detail | Understand account status, outstanding balance, destination mask, and final schedule | Owned LoanAccount read by application ID | `DetailLayout`, status, `RepaymentSummary`, masked destination, responsive schedule of `InstallmentRow` | `ACTIVE`, `OVERDUE`, `SETTLED`, `CLOSED`; concealed unavailable state; no Customer repayment or settlement action |
-| Repayment History | Review immutable recorded payment outcomes | Owned paged repayment history | Tab within Loan Detail, history rows/cards, pagination, allocation detail disclosure | Empty history, loading next page, page error, and successful history; pagination remains in URL search state |
+| Repayment History | Review immutable recorded payment outcomes | Owned paged repayment history | Local navigation within Loan Detail, ruled history records, pagination, allocation detail disclosure | Empty history, loading next page, page error, and successful history; pagination remains in URL search state |
 
 Customer Web does not expose repayment entry, Administrative Full-Balance Settlement, account closure, readiness confirmation, disbursement destination reveal, or manual disbursement. Those are Staff operations.
 
@@ -803,19 +868,19 @@ Toasts may confirm a saved profile, added account, copied reference, or successf
 
 ## 17. Responsive Design
 
-- At `lg` and above, `CustomerAppLayout` uses a persistent sidebar. Below `lg`, it uses a compact top bar and a shadcn Sheet for navigation.
-- Primary navigation order is Home, Products, Applications, Loans, Account. Missing API-dependent destinations remain out of production navigation until their authoritative queries exist.
-- Tables convert to labeled cards or stacked rows below `md`. Horizontal scrolling is reserved for information that cannot be understood when split, such as a wide financial allocation detail.
-- Detail pages stack the action/summary rail before secondary detail on small screens.
-- Forms use one column by default. Two-column fields are allowed only for short, closely related values on `md` and above.
-- Dialogs become near-full-width with safe margins. Multi-step forms and evidence workflows remain pages, not full-screen dialogs.
-- The application Stepper shows compact step number and current label on small screens; completed and future labels may collapse into an accessible progress summary.
-- Touch targets are at least 44 by 44 px.
-- Long financial values use tabular numerals, controlled wrapping, and no ellipsis that hides the amount.
-- Long status labels wrap without changing their semantic color or losing their icon/text pairing.
-- Sticky mobile action bars reserve bottom padding so content and errors remain visible.
+- From `xl`, `CustomerAppLayout` uses the horizontal top navigation in Section 12. Below `xl`, it uses a compact header and accessible Sheet. Navigation never becomes a horizontally clipped strip of five destinations.
+- Primary navigation order remains Home, Products, Applications, Loans, Account. Missing API-dependent destinations remain out of production navigation until their authoritative queries exist.
+- Below `md`, repeated records use stacked labeled rows. Horizontal scrolling is reserved for information that cannot be understood when split, such as a wide financial allocation detail; any scroll region is named, keyboard reachable, and visibly signposted.
+- Detail pages follow the single-column reading order in Section 12. A rail must not leave a blank column when absent or become a separate independently scrolling financial pane.
+- Forms use one column by default. Two-column fields are allowed only for short, closely related values from `md`; long text, evidence, consent, and feedback span the available width.
+- Dialogs use 16 px minimum viewport margins, a width up to 512 px, and maximum height `calc(100dvh - 32px)` with scrolling. Navigation Sheets use at most 352 px and `calc(100vw - 16px)`, fit the dynamic viewport, and scroll without losing their close control.
+- The application Stepper shows compact step number and current label on small screens; completed and future labels may collapse into an accessible progress summary. This changes no workflow stage.
+- Touch targets are at least 44 by 44 px. Buttons and navigation rows grow for wrapped labels; content is never clipped to retain a nominal height.
+- Financial groups become one column below `sm` when needed. Long values use tabular numerals and safe wrapping; no ellipsis, truncation, smaller currency suffix, or hidden amount is permitted. Long filenames, names, and status labels wrap with their labels and icons intact.
+- Sticky headers and focused action regions follow Section 12's clearance, safe-area, and keyboard rules. Errors, final fields, confirmation descriptions, and the last schedule row remain reachable.
+- Validate 320, 390, 768, 1024, 1280, and 1440 px widths, including one pixel either side of navigation/rail breakpoints. Check 200% zoom, 320 CSS px reflow, short landscape height, and text-spacing overrides; no document-level horizontal scrolling is acceptable.
 
-Customer Web is one responsive web application. It does not maintain separate desktop and mobile feature implementations.
+Customer Web is one responsive application. CSS controls layout without duplicate desktop/mobile feature instances, remounted forms, or separate data fetching. Layout follows content and input behavior, not device-name detection.
 
 ---
 
@@ -842,39 +907,46 @@ This is a pragmatic implementation baseline, not a claim of formal WCAG certific
 
 ## 19. Code-First Visual Iteration
 
-Customer Web uses code-first design:
+Customer Web uses code-first implementation of the established system:
 
 ```text
-MER-FE-001 blueprint
+MER-FE-001 visual authority and existing behavior
         ↓
-theme, primitives, and layouts
+central theme, proven primitives, and existing layouts
         ↓
-first real Auth pages
+real Auth surfaces and Home with shared summaries
         ↓
-browser review at mobile and desktop widths
+browser acceptance across widths and real states
         ↓
-tune semantic tokens and shared components
+apply the same system to owning feature routes
         ↓
-reuse the established system in later features
+whole-Customer-Web regression and visual consistency review
 ```
 
-The foundation and Auth checkpoint act as the live design prototype. Token changes occur centrally. A page-specific override must not become the unreviewed start of another design system.
+Auth establishes form/control treatment; Home establishes the canonical authenticated page composition. Review these before propagating page-level changes. Use real production routes with controlled fictional data and existing safe test facilities; do not add a production showcase, bypass authentication, fabricate an API contract, or install a design-system application to demonstrate the style.
 
-Each feature review includes:
+Each bounded implementation review includes:
 
-1. keyboard and focus pass;
-2. narrow-mobile, tablet, and desktop browser pass;
-3. loading, empty, business-rejection, and unexpected-error pass;
-4. long-label and long-financial-value pass;
-5. confirmation that Staff actions and restricted data are absent.
+1. source diff review showing presentation changes and unchanged query, form, mutation, routing, and financial semantics;
+2. focused behavior tests for affected components and shared consumers;
+3. browser inspection at the Section 17 widths, plus keyboard, route focus, menu/dialog return focus, zoom, and reduced motion;
+4. loading, success, authoritative empty, business rejection, unexpected error, failed refetch, and recovery states wherever supported;
+5. long labels, Vietnamese names, filenames, identifiers, and full financial values;
+6. Customer-digital and Staff-assisted read-only views, stale version, and uncertain outcome where applicable;
+7. Customer Web lint, typecheck, test, and production-build gates with the repository-supported runtime;
+8. a report identifying changed surfaces, checks actually run, browser evidence, unverified states, and deviations.
 
-Figma may support later brand exploration, but implementation does not wait for pixel-perfect mockups.
+Preserve independent query regions: one failed region must not be styled as a successful empty page or hide unrelated readable records. Important business outcomes remain persistent. No visual acceptance is complete using ideal-data screenshots alone. An unavailable test environment is a reported acceptance gap, not a passing result.
+
+Token corrections occur centrally and require review against all consuming surfaces. Implementers must report an infeasible rule rather than silently inventing a replacement. Figma may support later brand exploration, but implementation does not wait for pixel-perfect mockups. Detailed task-specific rollout plans and review checkpoints belong in the working handoff, not a second permanent design-authority document.
 
 ---
 
 ## 20. Delivery Checkpoints
 
 The sequence below keeps review boundaries small and places missing API authority before dependent UI. `MER-FE-001` establishes this rulebook without changing frontend source, packages, or backend behavior. Delivery-history identifiers such as pull-request numbers do not form part of this durable roadmap.
+
+The FE-CP identifiers below describe functional delivery dependencies. A presentation-only refactor derives its own bounded review sequence from current shared-component coupling; it must not repeat completed backend-enabling work or reopen these business slices. Sections 9–19 remain its visual authority.
 
 ### FE-CP1 — Frontend Foundation
 
@@ -984,7 +1056,7 @@ The Customer Web MVP foundation deliberately defers:
 - OCR execution and Customer OCR-result presentation;
 - localization infrastructure until the initial UI language and copy authority are selected.
 
-The approved logo assets and Meridian Navy, Gold, and Ivory anchors are fixed inputs. System typography, desktop sidebar, mobile Sheet navigation, and English UI copy remain implementation defaults. Deni's visual/product review should confirm the public-facing language, derived color variants, minor centralized visual tuning, and Customer copy tone during FE-CP1–FE-CP2. Those decisions tune the centralized system; they do not change the approved anchor values or the component, layout, state, and authority rules in this blueprint.
+The approved logo assets and Meridian Navy, Gold, and Ivory anchors are fixed inputs. System typography, desktop top navigation, compact Sheet navigation, and the token/layout rules in Sections 9–19 are established decisions. English UI copy remains the implementation language. Product/design review validates their application and Customer copy clarity; it does not reopen the navigation model, introduce another font or palette, or change component state and authority rules for visual convenience.
 
 ---
 
