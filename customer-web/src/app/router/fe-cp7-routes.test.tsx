@@ -115,12 +115,16 @@ describe('FE-CP7 UCL origination', () => {
     expect(screen.queryByText(/completed or closed|application details changed/i)).not.toBeInTheDocument()
   })
 
-  it('warns before leaving unsaved form input', async () => {
+  it.each(['unsecured-consumer-loan', 'collateral-loan'])('warns before leaving %s input and returns keyboard focus on dismissal', async (productSlug) => {
     const user = userEvent.setup()
-    renderRoute('/products/unsecured-consumer-loan/apply')
+    renderRoute(`/products/${productSlug}/apply`)
     await user.type(await screen.findByRole('textbox', { name: /Requested amount/ }), '5000000')
-    await user.click(screen.getByRole('link', { name: 'Back to product' }))
+    const backLink = screen.getByRole('link', { name: 'Back to product' })
+    await user.click(backLink)
     expect(await screen.findByRole('dialog', { name: 'Leave this application?' })).toBeVisible()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(backLink).toHaveFocus())
   })
 
   it('focuses the first invalid UCL control after validation', async () => {

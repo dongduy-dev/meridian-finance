@@ -902,6 +902,31 @@ describe('FE-CP6 Salary Advance product readiness', () => {
 })
 
 describe('FE-CP6 focused Salary Advance application', () => {
+  it('returns focus to the leave control when Escape dismisses the warning', async () => {
+    const user = userEvent.setup()
+    renderRoute('/products/salary-advance/apply')
+    await user.type(await screen.findByRole('textbox', { name: /Requested amount/ }), '2000000')
+    const backLink = screen.getByRole('link', { name: 'Back to product' })
+    await user.click(backLink)
+    expect(await screen.findByRole('dialog', { name: 'Leave this application?' })).toBeVisible()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(backLink).toHaveFocus())
+  })
+
+  it('keeps focus on the first invalid field when amount and term are both missing', async () => {
+    const user = userEvent.setup()
+    renderRoute('/products/salary-advance/apply')
+    const heading = await screen.findByRole('heading', { name: 'Choose your request' })
+    await waitFor(() => expect(heading).toHaveFocus())
+
+    await user.click(screen.getByRole('button', { name: 'Review request' }))
+    await screen.findByText('Enter a requested amount.')
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    expect(screen.getByRole('textbox', { name: /Requested amount/ })).toHaveFocus()
+    expect(screen.getByRole('combobox', { name: /Requested term/ })).toHaveAttribute('aria-invalid', 'true')
+  })
+
   it('supports direct protected entry and derives amount and term validation only from returned facts', async () => {
     const user = userEvent.setup()
     renderRoute('/products/salary-advance/apply')

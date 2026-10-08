@@ -8,7 +8,6 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { QueryErrorFeedback } from '@/components/common/QueryErrorFeedback'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { LoanProduct } from '@/features/loan-products/loan-product-api'
 import { useLoanProductQuery } from '@/features/loan-products/loan-product-queries'
@@ -26,77 +25,71 @@ import { formatPercentage, formatTerms } from '@/lib/format/presentation'
 
 function PolicyFact({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="min-w-0 rounded-md border border-border bg-background p-4">
-      <dt className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">{label}</dt>
-      <dd className="mt-2 min-w-0 break-words font-semibold text-foreground">{children}</dd>
+    <div className="min-w-0 space-y-2 border-t border-border py-6 [overflow-wrap:anywhere]">
+      <dt className="text-sm leading-5 text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 font-semibold text-foreground">{children}</dd>
     </div>
   )
 }
 
 function ProductPolicy({ product }: { product: LoanProduct }) {
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
-      <div className="space-y-6">
-        <Card>
-          <CardHeader><CardTitle>Amounts &amp; terms</CardTitle></CardHeader>
-          <CardContent>
-            <dl className="grid gap-4 sm:grid-cols-2">
-              <PolicyFact label="Minimum amount"><MoneyDisplay value={product.minAmount} /></PolicyFact>
-              <PolicyFact label="Maximum amount"><MoneyDisplay value={product.maxAmount} /></PolicyFact>
-              <PolicyFact label="Allowed terms">{formatTerms(product.policy.allowedTermsMonths)}</PolicyFact>
-              <PolicyFact label="Monthly flat interest rate">{formatPercentage(product.policy.pricing.flatMonthlyInterestRate)}</PolicyFact>
-              <PolicyFact label="Fee"><MoneyDisplay value={product.policy.pricing.feeAmount} /></PolicyFact>
-              <PolicyFact label="Offer validity">{product.policy.offerValidityDays} {product.policy.offerValidityDays === 1 ? 'calendar day' : 'calendar days'}</PolicyFact>
-              <PolicyFact label="Interest method">{interestMethodLabel(product.policy.interestCalculationMethod)}</PolicyFact>
-              <PolicyFact label="Repayment method">{repaymentMethodLabel(product.policy.repaymentMethod)}</PolicyFact>
-            </dl>
-          </CardContent>
-        </Card>
+    <div className="space-y-[var(--section-editorial)]">
+      <section aria-labelledby="product-policy-heading" className="min-w-0 space-y-6">
+        <h2 id="product-policy-heading" className="type-editorial-section">Amounts &amp; terms</h2>
+        <dl className="grid gap-x-[var(--grid-gap)] sm:grid-cols-2 xl:grid-cols-4">
+          <PolicyFact label="Minimum amount"><MoneyDisplay value={product.minAmount} emphasis="primary" /></PolicyFact>
+          <PolicyFact label="Maximum amount"><MoneyDisplay value={product.maxAmount} emphasis="primary" /></PolicyFact>
+          <PolicyFact label="Allowed terms">{formatTerms(product.policy.allowedTermsMonths)}</PolicyFact>
+          <PolicyFact label="Monthly flat interest rate">{formatPercentage(product.policy.pricing.flatMonthlyInterestRate)}</PolicyFact>
+          <PolicyFact label="Fee"><MoneyDisplay value={product.policy.pricing.feeAmount} /></PolicyFact>
+          <PolicyFact label="Offer validity">{product.policy.offerValidityDays} {product.policy.offerValidityDays === 1 ? 'calendar day' : 'calendar days'}</PolicyFact>
+          <PolicyFact label="Interest method">{interestMethodLabel(product.policy.interestCalculationMethod)}</PolicyFact>
+          <PolicyFact label="Repayment method">{repaymentMethodLabel(product.policy.repaymentMethod)}</PolicyFact>
+        </dl>
+      </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Required documents</CardTitle>
-            <p className="text-sm leading-6 text-muted-foreground">Review the documents that may be required with your application.</p>
-          </CardHeader>
-          <CardContent>
-            {product.policy.submissionEvidenceRequirements.length ? (
-              <ul className="divide-y divide-border">
-                {product.policy.submissionEvidenceRequirements.map((requirement, index) => (
-                  <li key={`${requirement.documentType}-${index}`} className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-4 first:pt-0 last:pb-0">
-                    <span className="min-w-0 break-words font-medium">{documentTypeLabel(requirement.documentType)}</span>
-                    <StatusBadge presentation={evidenceRequirementPresentation(requirement.requirementStatus)} />
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="rounded-md bg-background p-4 text-sm leading-6 text-muted-foreground">
-                No documents are listed for this product.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="h-fit">
-        <CardHeader>
-          <CardTitle>Eligibility</CardTitle>
-          <p className="text-sm leading-6 text-muted-foreground">These notes explain the general requirements. Your information is checked when you apply.</p>
-        </CardHeader>
-        <CardContent>
-          {product.policy.eligibilityNotes.length ? (
-            <ul className="space-y-4">
-              {product.policy.eligibilityNotes.map((note, index) => (
-                <li key={index} className="flex min-w-0 gap-3 text-sm leading-6">
-                  <ClipboardList aria-hidden="true" className="mt-1 size-4 shrink-0 text-accent" />
-                  <span className="min-w-0 break-words">{eligibilityNoteLabel(note)}</span>
+      <div className="grid gap-[var(--section-transactional)] md:grid-cols-2">
+        <section aria-labelledby="product-evidence-heading" className="min-w-0 space-y-6">
+          <div className="space-y-2">
+            <h2 id="product-evidence-heading" className="type-editorial-section">Required documents</h2>
+            <p className="max-w-[70ch] text-base leading-6 text-muted-foreground">Review the documents that may be required with your application.</p>
+          </div>
+          {product.policy.submissionEvidenceRequirements.length ? (
+            <ul className="divide-y divide-border border-y border-border">
+              {product.policy.submissionEvidenceRequirements.map((requirement, index) => (
+                <li key={`${requirement.documentType}-${index}`} className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-6">
+                  <span className="min-w-0 break-words font-medium">{documentTypeLabel(requirement.documentType)}</span>
+                  <StatusBadge presentation={evidenceRequirementPresentation(requirement.requirementStatus)} />
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm leading-6 text-muted-foreground">No additional eligibility information is listed for this product.</p>
+            <p className="border-y border-border py-6 text-sm leading-5 text-muted-foreground">
+              No documents are listed for this product.
+            </p>
           )}
-        </CardContent>
-      </Card>
+        </section>
+
+        <section aria-labelledby="product-eligibility-heading" className="min-w-0 space-y-6">
+          <div className="space-y-2">
+            <h2 id="product-eligibility-heading" className="type-editorial-section">Eligibility</h2>
+            <p className="max-w-[70ch] text-base leading-6 text-muted-foreground">These notes explain the general requirements. Your information is checked when you apply.</p>
+          </div>
+          {product.policy.eligibilityNotes.length ? (
+            <ul className="divide-y divide-border border-y border-border">
+              {product.policy.eligibilityNotes.map((note, index) => (
+                <li key={index} className="flex min-w-0 gap-3 py-6 text-sm leading-5">
+                  <ClipboardList aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{eligibilityNoteLabel(note)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="border-y border-border py-6 text-sm leading-5 text-muted-foreground">No additional eligibility information is listed for this product.</p>
+          )}
+        </section>
+      </div>
     </div>
   )
 }
@@ -106,8 +99,8 @@ function ProductDetailContent({ productCode, applyPath }: { productCode: string;
 
   if (productQuery.isPending) {
     return (
-      <div className="space-y-8">
-        <PageHeader eyebrow="Product details" title="Product details" />
+      <div className="space-y-[var(--section-editorial)]">
+        <PageHeader headingRole="editorial" className="sm:flex-col sm:items-start [&_h1+p]:max-w-[var(--width-prose)] [&_h1+p]:text-[length:var(--type-intro)] [&_h1+p]:leading-[var(--line-intro)]" eyebrow="Product details" title="Product details" />
         <div role="status" aria-label="Loading product details">
           <div className="grid gap-6 xl:grid-cols-2"><Skeleton className="h-96" /><Skeleton className="h-80" /></div>
         </div>
@@ -117,8 +110,8 @@ function ProductDetailContent({ productCode, applyPath }: { productCode: string;
 
   if (productQuery.isError) {
     return (
-      <div className="space-y-8">
-        <PageHeader eyebrow="Product details" title="Product unavailable" />
+      <div className="space-y-[var(--section-editorial)]">
+        <PageHeader headingRole="editorial" className="sm:flex-col sm:items-start [&_h1+p]:max-w-[var(--width-prose)] [&_h1+p]:text-[length:var(--type-intro)] [&_h1+p]:leading-[var(--line-intro)]" eyebrow="Product details" title="Product unavailable" />
         <QueryErrorFeedback
           error={productQuery.error}
           title="Product details could not be loaded"
@@ -129,8 +122,8 @@ function ProductDetailContent({ productCode, applyPath }: { productCode: string;
   }
 
   return (
-    <div className="space-y-8">
-      <PageHeader
+    <div className="space-y-[var(--section-editorial)]">
+      <PageHeader headingRole="editorial" className="sm:flex-col sm:items-start [&_h1+p]:max-w-[var(--width-prose)] [&_h1+p]:text-[length:var(--type-intro)] [&_h1+p]:leading-[var(--line-intro)]"
         eyebrow="Product details"
         title={productQuery.data.name}
         description={productQuery.data.description ?? undefined}
@@ -146,8 +139,8 @@ function SalaryAdvanceProductContent() {
   const readinessQuery = useSalaryAdvanceReadinessQuery()
 
   return (
-    <div className="space-y-8">
-      <PageHeader
+    <div className="space-y-[var(--section-editorial)]">
+      <PageHeader headingRole="editorial" className="sm:flex-col sm:items-start [&_h1+p]:max-w-[var(--width-prose)] [&_h1+p]:text-[length:var(--type-intro)] [&_h1+p]:leading-[var(--line-intro)]"
         eyebrow="Product details"
         title={productQuery.data?.name ?? 'Salary Advance'}
         description={productQuery.data?.description ?? undefined}
@@ -169,10 +162,10 @@ function SalaryAdvanceProductContent() {
         <ProductPolicy product={productQuery.data} />
       ) : null}
 
-      <section aria-labelledby="salary-advance-readiness-heading" className="space-y-5">
+      <section aria-labelledby="salary-advance-readiness-heading" className="min-w-0 space-y-6">
         <div>
-          <h2 id="salary-advance-readiness-heading" className="text-2xl font-semibold tracking-tight">Before you apply</h2>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">Check your application availability, current limit, and any next steps.</p>
+          <h2 id="salary-advance-readiness-heading" className="type-editorial-section">Before you apply</h2>
+          <p className="mt-2 max-w-[70ch] text-base leading-6 text-muted-foreground">Check your application availability, current limit, and any next steps.</p>
         </div>
         {readinessQuery.isPending ? (
           <div className="grid gap-6 xl:grid-cols-2" role="status" aria-label="Loading application status">
@@ -202,8 +195,8 @@ export function ProductDetailPage() {
 
   if (!productCode) {
     return (
-      <div className="space-y-8">
-        <PageHeader eyebrow="Product details" title="Product not available" />
+      <div className="space-y-[var(--section-editorial)]">
+        <PageHeader headingRole="editorial" className="sm:flex-col sm:items-start [&_h1+p]:max-w-[var(--width-prose)] [&_h1+p]:text-[length:var(--type-intro)] [&_h1+p]:leading-[var(--line-intro)]" eyebrow="Product details" title="Product not available" />
         <EmptyState
           icon={Shapes}
           title="Product unavailable"

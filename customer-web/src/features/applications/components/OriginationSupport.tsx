@@ -1,12 +1,11 @@
 import { ArrowRight, ShieldAlert } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import type { Blocker } from 'react-router-dom'
 import { Link } from 'react-router-dom'
 
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -67,11 +66,22 @@ export function OriginationSubmissionError({ error }: { error: unknown }) {
 
 export function OriginationExitWarning({ blocker, productName }: { blocker: Blocker; productName: string }) {
   const blocked = blocker.state === 'blocked'
+  const returnFocusTarget = useRef<HTMLElement | null>(null)
   return (
     <Dialog open={blocked} onOpenChange={(open) => {
       if (!open && blocker.state === 'blocked') blocker.reset()
     }}>
-      <DialogContent>
+      <DialogContent
+        onOpenAutoFocus={() => {
+          returnFocusTarget.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+        }}
+        onCloseAutoFocus={(event) => {
+          if (returnFocusTarget.current?.isConnected) {
+            event.preventDefault()
+            returnFocusTarget.current.focus()
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Leave this application?</DialogTitle>
           <DialogDescription>
@@ -95,34 +105,44 @@ export function EvidenceRequirements({
   description?: string
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Required documents</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {requirements.length ? (
-          <ul className="divide-y divide-border">
-            {requirements.map((requirement, index) => (
-              <li key={`${requirement.documentType}-${index}`} className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-4 first:pt-0 last:pb-0">
-                <span className="min-w-0 break-words font-medium">{documentTypeLabel(requirement.documentType)}</span>
-                <StatusBadge presentation={evidenceRequirementPresentation(requirement.requirementStatus)} />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="rounded-md bg-background p-4 text-sm leading-6 text-muted-foreground">No documents are currently listed for this application.</p>
-        )}
-      </CardContent>
-    </Card>
+    <OriginationSection title="Required documents" description={description}>
+      {requirements.length ? (
+        <ul className="divide-y divide-border border-y border-border">
+          {requirements.map((requirement, index) => (
+            <li key={`${requirement.documentType}-${index}`} className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-4">
+              <span className="min-w-0 break-words font-medium">{documentTypeLabel(requirement.documentType)}</span>
+              <StatusBadge presentation={evidenceRequirementPresentation(requirement.requirementStatus)} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm leading-5 text-muted-foreground">No documents are currently listed for this application.</p>
+      )}
+    </OriginationSection>
   )
 }
 
 export function ReviewFact({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="min-w-0 rounded-md border border-border bg-background p-4">
-      <dt className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">{label}</dt>
-      <dd className="mt-2 min-w-0 break-words font-semibold">{children}</dd>
+    <div className="min-w-0 space-y-2 border-t border-border py-4 [overflow-wrap:anywhere]">
+      <dt className="text-sm leading-5 text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 whitespace-pre-wrap font-semibold">{children}</dd>
     </div>
+  )
+}
+
+export function OriginationSection({ title, description, children }: {
+  title: string
+  description: string
+  children: ReactNode
+}) {
+  return (
+    <section className="min-w-0 space-y-6 border-t border-border pt-6 [overflow-wrap:anywhere]">
+      <div className="space-y-2">
+        <h2 className="type-section">{title}</h2>
+        <p className="max-w-[70ch] text-sm leading-5 text-muted-foreground">{description}</p>
+      </div>
+      {children}
+    </section>
   )
 }

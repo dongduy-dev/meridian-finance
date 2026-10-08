@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, CheckCircle2, Info, ShieldAlert } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Controller, useForm, useWatch, type FieldErrors } from 'react-hook-form'
 import {
   Link,
@@ -26,6 +26,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { AccountFormField } from '@/features/account/components/AccountFormField'
+import { OriginationSection, ReviewFact } from '@/features/applications/components/OriginationSupport'
 import { applicationStatusPresentation } from '@/features/applications/application-presentation'
 import { useLoanProductQuery } from '@/features/loan-products/loan-product-queries'
 import type { SalaryAdvanceApplication } from '@/features/salary-advance/salary-advance-api'
@@ -97,6 +98,7 @@ function SubmissionError({ error }: { error: unknown }) {
 
 function ExitWarning({ blocker }: { blocker: ReturnType<typeof useBlocker> }) {
   const blocked = blocker.state === 'blocked'
+  const returnFocusTarget = useRef<HTMLElement | null>(null)
   return (
     <Dialog
       open={blocked}
@@ -104,7 +106,17 @@ function ExitWarning({ blocker }: { blocker: ReturnType<typeof useBlocker> }) {
         if (!open && blocker.state === 'blocked') blocker.reset()
       }}
     >
-      <DialogContent>
+      <DialogContent
+        onOpenAutoFocus={() => {
+          returnFocusTarget.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+        }}
+        onCloseAutoFocus={(event) => {
+          if (returnFocusTarget.current?.isConnected) {
+            event.preventDefault()
+            returnFocusTarget.current.focus()
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Leave this application?</DialogTitle>
           <DialogDescription>
@@ -135,7 +147,7 @@ function SuccessState({ application }: { application: SalaryAdvanceApplication }
       backAction={<span />}
       continueAction={<Button asChild><Link to="/">Return to Home<ArrowRight aria-hidden="true" /></Link></Button>}
     >
-      <Card>
+      <Card className="border-0">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -151,15 +163,9 @@ function SuccessState({ application }: { application: SalaryAdvanceApplication }
             <AlertTitle>Submission confirmed</AlertTitle>
             <AlertDescription>You can now track this application from Home.</AlertDescription>
           </Alert>
-          <dl className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-md border border-border bg-background p-4">
-              <dt className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">Requested amount</dt>
-              <dd className="mt-2 text-lg"><MoneyDisplay value={application.requestedAmount} /></dd>
-            </div>
-            <div className="rounded-md border border-border bg-background p-4">
-              <dt className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">Requested term</dt>
-              <dd className="mt-2 text-lg font-semibold">{application.requestedTermMonths} {application.requestedTermMonths === 1 ? 'month' : 'months'}</dd>
-            </div>
+          <dl className="grid gap-x-6 sm:grid-cols-2">
+            <ReviewFact label="Requested amount"><MoneyDisplay value={application.requestedAmount} /></ReviewFact>
+            <ReviewFact label="Requested term">{application.requestedTermMonths} {application.requestedTermMonths === 1 ? 'month' : 'months'}</ReviewFact>
           </dl>
         </CardContent>
       </Card>
@@ -185,6 +191,8 @@ export function SalaryAdvanceApplicationPage() {
     formState: { errors, isDirty },
   } = useForm<SalaryAdvanceFormValues>({
     defaultValues: { requestedAmount: '', requestedTermMonths: '' },
+    // The existing callback owns field order; registration order puts the term first.
+    shouldFocusError: false,
   })
 
   const amountValue = useWatch({ control, name: 'requestedAmount' })
@@ -297,24 +305,14 @@ export function SalaryAdvanceApplicationPage() {
         >
           <div className="space-y-6">
             <SubmissionError error={serverError} />
-            <Card>
-              <CardHeader>
-                <CardTitle>Your request details</CardTitle>
-                <CardDescription>These values have not been changed or resubmitted.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <dl className="grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-md border border-border bg-background p-4">
-                    <dt className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">Requested amount</dt>
-                    <dd className="mt-2 text-lg"><MoneyDisplay value={retainedAmount} /></dd>
-                  </div>
-                  <div className="rounded-md border border-border bg-background p-4">
-                    <dt className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">Requested term</dt>
-                    <dd className="mt-2 text-lg font-semibold">{retainedTerm} {retainedTerm === 1 ? 'month' : 'months'}</dd>
-                  </div>
+            <OriginationSection title="Your request details" description="These values have not been changed or resubmitted.">
+              <div className="space-y-6">
+                <dl className="grid gap-x-6 sm:grid-cols-2">
+                  <ReviewFact label="Requested amount"><MoneyDisplay value={retainedAmount} /></ReviewFact>
+                  <ReviewFact label="Requested term">{retainedTerm} {retainedTerm === 1 ? 'month' : 'months'}</ReviewFact>
                 </dl>
-              </CardContent>
-            </Card>
+              </div>
+            </OriginationSection>
             <SalaryAdvanceReadiness readiness={readiness} showApplyAction={false} />
           </div>
         </FocusedFlowLayout>
@@ -421,7 +419,7 @@ export function SalaryAdvanceApplicationPage() {
         <form
           id="salary-advance-form"
           noValidate
-          className="space-y-6"
+          className="min-w-0 space-y-8 bg-card p-4 sm:p-6 [overflow-wrap:anywhere]"
           onSubmit={stage === 'request' ? goToReview : submitApplication}
         >
           <h2 id="application-stage-heading" tabIndex={-1} className="sr-only outline-none">
@@ -438,12 +436,8 @@ export function SalaryAdvanceApplicationPage() {
 
           {stage === 'request' ? (
             <>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Request details</CardTitle>
-                  <CardDescription>We'll check that your amount and term are still available when you submit.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-5">
+              <OriginationSection title="Request details" description="We'll check that your amount and term are still available when you submit.">
+                <div className="space-y-6">
                   <AccountFormField
                     htmlFor="requestedAmount"
                     label="Requested amount"
@@ -473,7 +467,7 @@ export function SalaryAdvanceApplicationPage() {
                   >
                     <select
                       id="requestedTermMonths"
-                      className="flex min-h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20"
+                      className="flex min-h-11 w-full min-w-0 rounded-md border border-input bg-card px-3 py-2 text-base leading-6 text-foreground aria-invalid:border-danger focus-visible:border-ring"
                       aria-invalid={Boolean(errors.requestedTermMonths)}
                       aria-describedby={`requestedTermMonths-description${errors.requestedTermMonths ? ' requestedTermMonths-error' : ''}`}
                       {...register('requestedTermMonths', { validate: validateTerm })}
@@ -484,30 +478,20 @@ export function SalaryAdvanceApplicationPage() {
                       ))}
                     </select>
                   </AccountFormField>
-                </CardContent>
-              </Card>
+                </div>
+              </OriginationSection>
               <SalaryAdvanceReadiness readiness={readiness} showApplyAction={false} showVerification={false} />
             </>
           ) : (
             <>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Confirm your request</CardTitle>
-                  <CardDescription>Review the exact amount and term you are about to submit.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <dl className="grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-md border border-border bg-background p-4">
-                      <dt className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">Requested amount</dt>
-                      <dd className="mt-2 text-lg"><MoneyDisplay value={reviewAmount} /></dd>
-                    </div>
-                    <div className="rounded-md border border-border bg-background p-4">
-                      <dt className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">Requested term</dt>
-                      <dd className="mt-2 text-lg font-semibold">{reviewTerm} {reviewTerm === 1 ? 'month' : 'months'}</dd>
-                    </div>
+              <OriginationSection title="Confirm your request" description="Review the exact amount and term you are about to submit.">
+                <div className="space-y-6">
+                  <dl className="grid gap-x-6 sm:grid-cols-2">
+                    <ReviewFact label="Requested amount"><MoneyDisplay value={reviewAmount} /></ReviewFact>
+                    <ReviewFact label="Requested term">{reviewTerm} {reviewTerm === 1 ? 'month' : 'months'}</ReviewFact>
                   </dl>
-                </CardContent>
-              </Card>
+                </div>
+              </OriginationSection>
               <SalaryAdvanceReadiness readiness={readiness} showApplyAction={false} showVerification={false} />
             </>
           )}

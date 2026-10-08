@@ -153,7 +153,7 @@ export function EmployeeVerificationPanel({
   }, onInvalid)
 
   return (
-    <Card>
+    <Card className="max-w-[var(--width-flow)] border-0 [overflow-wrap:anywhere]">
       <CardHeader>
         <CardTitle>{employmentUpdate
           ? 'Update your employment'
@@ -162,7 +162,7 @@ export function EmployeeVerificationPanel({
           Select your employer and enter your employee code.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-6">
         {displayedResults.map((displayedResult) => (
           <VerificationResult
             key={displayedResult.partnerCompanyId}
@@ -202,7 +202,7 @@ export function EmployeeVerificationPanel({
           <Button variant="secondary" asChild><Link to="/account/identity-verification">Open identity verification</Link></Button>
         </AlertDescription></Alert> : null}
         {identityReady && optionsQuery.data?.length ? (
-          <form noValidate className="space-y-5" onSubmit={onSubmit}>
+          <form noValidate className="space-y-6 border-t border-border pt-6" onSubmit={onSubmit}>
             {serverError ? <VerificationError error={serverError} /> : null}
             <AccountFormField
               htmlFor="partnerCompanyId"
@@ -212,7 +212,7 @@ export function EmployeeVerificationPanel({
             >
               <select
                 id="partnerCompanyId"
-                className="flex min-h-11 w-full min-w-0 rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20"
+                className="flex min-h-11 w-full min-w-0 rounded-md border border-input bg-card px-3 py-2 text-base leading-6 text-foreground aria-invalid:border-danger focus-visible:border-ring"
                 aria-invalid={Boolean(errors.partnerCompanyId)}
                 aria-describedby={errors.partnerCompanyId ? 'partnerCompanyId-error' : undefined}
                 {...register('partnerCompanyId', { required: 'Select your employer.' })}
@@ -242,8 +242,8 @@ export function EmployeeVerificationPanel({
                 })}
               />
             </AccountFormField>
-            <div className="flex justify-end">
-              <Button type="submit" disabled={verification.isPending}>
+            <div className="flex border-t border-border pt-6 sm:justify-end">
+              <Button className="w-full sm:w-auto" size="lg" type="submit" disabled={verification.isPending}>
                 {verification.isPending ? <Spinner /> : null}
                 {verification.isPending
                   ? 'Checking employment…'

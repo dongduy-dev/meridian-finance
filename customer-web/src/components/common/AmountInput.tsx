@@ -17,7 +17,7 @@ export function AmountInput<TValues extends FieldValues>({
   invalid: boolean
 }) {
   return (
-    <div className="relative">
+    <div className="flex min-w-0 items-center gap-3">
       <Input
         {...field}
         value={typeof field.value === 'string' ? field.value : ''}
@@ -27,10 +27,10 @@ export function AmountInput<TValues extends FieldValues>({
         autoComplete="off"
         aria-invalid={invalid}
         aria-describedby={describedBy}
-        className="pr-16 tabular-nums"
+        className="tabular-nums"
         onChange={(event) => field.onChange(normalizeWholeVndInput(event.target.value))}
       />
-      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-semibold text-muted-foreground" aria-hidden="true">
+      <span className="shrink-0 text-sm font-semibold text-muted-foreground" aria-hidden="true">
         VND
       </span>
     </div>
