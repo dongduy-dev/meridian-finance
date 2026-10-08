@@ -344,7 +344,7 @@ describe('FE-CP10 repayment history', () => {
     expect(screen.getAllByText(/Component unavailable/)[0]).toBeVisible()
     await user.click(screen.getAllByText('Installments after this payment')[0]!)
     expect(screen.getAllByText('Status unavailable')[0]).toBeVisible()
-    const firstHistoryCard = receivedLabels[0]!.closest('[data-slot="card"]') as HTMLElement
+    const firstHistoryCard = receivedLabels[0]!.closest('article') as HTMLElement
     expect(within(firstHistoryCard).getByText(moneyText(7_777_777))).toBeVisible()
     expect(within(firstHistoryCard).queryByText(moneyText(servicingAmounts.totalOutstanding))).not.toBeInTheDocument()
     expect(screen.queryByText(/external payment|payment reference/i)).not.toBeInTheDocument()
