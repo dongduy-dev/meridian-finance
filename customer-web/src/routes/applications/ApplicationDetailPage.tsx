@@ -69,7 +69,7 @@ export function ApplicationDetailPage() {
         />
       )}
       rail={(
-        <div className="space-y-4">
+        <div className="space-y-6">
           {indexQuery.isPending ? <Skeleton className="h-64" role="status" aria-label="Loading next step" /> : null}
           {indexQuery.isError ? (
             <QueryErrorFeedback error={indexQuery.error} title="Next step could not be loaded" onRetry={() => void indexQuery.refetch()} />
@@ -77,19 +77,19 @@ export function ApplicationDetailPage() {
           {detailQuery.data?.originationChannel === 'STAFF_ASSISTED' ? <StaffAssistedApplicationNotice /> : null}
           {nextStepConfirmed && detailQuery.data?.originationChannel === 'CUSTOMER_DIGITAL' && indexedApplication ? <RequiredActionCard application={indexedApplication} /> : null}
           {nextStepConfirmed && indexQuery.data && !indexedApplication ? (
-            <Card>
+            <Card className="border-0">
               <CardHeader><CardTitle>Next step unavailable</CardTitle><CardDescription>We can't show the next step for this application right now. Try again later.</CardDescription></CardHeader>
             </Card>
           ) : null}
           {nextStepConfirmed && detailQuery.data?.originationChannel === 'CUSTOMER_DIGITAL' && indexedApplication?.requiredAction === 'NONE' ? (
-            <Card>
+            <Card className="border-0">
               <CardHeader><CardTitle>No action needed</CardTitle><CardDescription>There is nothing you need to do for this application right now.</CardDescription></CardHeader>
             </Card>
           ) : null}
         </div>
       )}
     >
-      <div className="space-y-5">
+      <div className="min-w-0 space-y-[var(--section-transactional)]">
         {notice ? (
           <Alert variant="success">
             <CircleCheck aria-hidden="true" />
@@ -101,12 +101,12 @@ export function ApplicationDetailPage() {
         {detailQuery.isError ? (
           <QueryErrorFeedback error={detailQuery.error} title="Application details could not be loaded" onRetry={() => void detailQuery.refetch()} />
         ) : null}
-        {detailQuery.data ? <ApplicationSummary application={detailQuery.data} /> : null}
+        {detailQuery.data ? <section aria-label="Application summary" className="border-y border-border"><ApplicationSummary application={detailQuery.data} presentation="row" /></section> : null}
         {detailQuery.data?.productCode === 'COLLATERAL_LOAN' ? <CustomerCollateralDetails loanApplicationId={detailQuery.data.loanApplicationId} /> : null}
         {detailQuery.data && ['UNSECURED_CONSUMER_LOAN', 'COLLATERAL_LOAN'].includes(detailQuery.data.productCode) ? (
-          <Card>
-            <CardHeader><CardTitle>Application records</CardTitle><CardDescription>Review the documents associated with this application and their current status.</CardDescription></CardHeader>
-            <CardContent><Button variant="secondary" asChild><Link to={`/applications/${detailQuery.data.loanApplicationId}/documents`}>View documents</Link></Button></CardContent>
+          <Card className="border-0 border-t bg-transparent">
+            <CardHeader className="px-0 pt-6 sm:px-0 sm:pt-6"><CardTitle>Application records</CardTitle><CardDescription>Review the documents associated with this application and their current status.</CardDescription></CardHeader>
+            <CardContent className="px-0 pb-0 sm:px-0 sm:pb-0"><Button variant="secondary" asChild><Link to={`/applications/${detailQuery.data.loanApplicationId}/documents`}>View documents</Link></Button></CardContent>
           </Card>
         ) : null}
       </div>

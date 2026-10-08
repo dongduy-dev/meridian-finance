@@ -1,9 +1,10 @@
-import { ArrowRight, Info, ShieldCheck } from 'lucide-react'
+import { ArrowRight, CircleHelp, Info, ShieldCheck } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
 import { MoneyDisplay } from '@/components/common/MoneyDisplay'
 import { StatusBadge } from '@/components/common/StatusBadge'
+import type { StatusPresentation } from '@/components/common/status-presentation'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -77,7 +78,27 @@ export function SalaryAdvanceLimitSummary({ readiness }: { readiness: SalaryAdva
   )
 }
 
+function employmentSummaryPresentation({
+  employeeVerificationStatus,
+  partnerEligibilityStatus,
+}: Pick<SalaryAdvanceReadinessData, 'employeeVerificationStatus' | 'partnerEligibilityStatus'>): StatusPresentation {
+  if (['PARTNER_INACTIVE', 'EMPLOYEE_INACTIVE', 'EVIDENCE_STALE'].includes(partnerEligibilityStatus)) {
+    return partnerStatusPresentation(partnerEligibilityStatus)
+  }
+  if (partnerEligibilityStatus === 'NOT_VERIFIED'
+    && ['VERIFIED', 'NOT_VERIFIED'].includes(employeeVerificationStatus)) {
+    return employeeStatusPresentation('NOT_VERIFIED')
+  }
+  if (employeeVerificationStatus === 'VERIFIED' && partnerEligibilityStatus === 'ELIGIBLE') {
+    return employeeStatusPresentation('VERIFIED')
+  }
+  return { label: 'Employment status unavailable', tone: 'neutral', icon: CircleHelp }
+}
+
 export function ReadinessSummary({ readiness }: { readiness: SalaryAdvanceReadinessData }) {
+  const employmentPresentation = employmentSummaryPresentation(readiness)
+  const employmentVerified = readiness.employeeVerificationStatus === 'VERIFIED'
+    && readiness.partnerEligibilityStatus === 'ELIGIBLE'
   const actions = Array.from(
     new Map(
       readiness.blockerCodes
@@ -103,35 +124,34 @@ export function ReadinessSummary({ readiness }: { readiness: SalaryAdvanceReadin
         </div>
       </CardHeader>
       <CardContent className="space-y-6 p-0 sm:p-0">
-        {readiness.applicationAllowed ? (
-          <div className="space-y-2" aria-live="polite">
-            <p className="font-semibold">Employment verified</p>
-            {readiness.partnerCompanyName ? <p>{readiness.partnerCompanyName}</p> : null}
-          </div>
-        ) : (
-          <>
-            <div className="flex flex-wrap gap-2" aria-label="Employment verification statuses">
-              <StatusBadge presentation={employeeStatusPresentation(readiness.employeeVerificationStatus)} />
-              <StatusBadge presentation={partnerStatusPresentation(readiness.partnerEligibilityStatus)} />
+        <div aria-label="Employment status" aria-live="polite">
+          {employmentVerified ? (
+            <div className="space-y-2">
+              <p className="font-semibold">{employmentPresentation.label}</p>
+              {readiness.partnerCompanyName ? <p>{readiness.partnerCompanyName}</p> : null}
             </div>
-            <div className="space-y-3" aria-live="polite">
-              {readiness.blockerCodes.length ? readiness.blockerCodes.map((code, index) => {
-                const presentation = blockerPresentation(code)
-                return (
-                  <div key={`${code}-${index}`} className="border-t border-border py-4">
-                    <p className="font-semibold">{presentation.title}</p>
-                    <p className="mt-1 text-sm leading-6 text-muted-foreground">{presentation.description}</p>
-                  </div>
-                )
-              }) : (
-                <div className="border-t border-border py-4">
-                  <p className="font-semibold">Application status unavailable</p>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">We can't confirm whether you can apply right now. Refresh the page or try again later.</p>
+          ) : (
+            <StatusBadge presentation={employmentPresentation} />
+          )}
+        </div>
+        {!readiness.applicationAllowed ? (
+          <div className="space-y-3" aria-live="polite">
+            {readiness.blockerCodes.length ? readiness.blockerCodes.map((code, index) => {
+              const presentation = blockerPresentation(code)
+              return (
+                <div key={`${code}-${index}`} className="border-t border-border py-4">
+                  <p className="font-semibold">{presentation.title}</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{presentation.description}</p>
                 </div>
-              )}
-            </div>
-          </>
-        )}
+              )
+            }) : (
+              <div className="border-t border-border py-4">
+                <p className="font-semibold">Application status unavailable</p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">We can't confirm whether you can apply right now. Refresh the page or try again later.</p>
+              </div>
+            )}
+          </div>
+        ) : null}
         {actions.length ? (
           <div className="flex flex-wrap gap-3">
             {actions.map((action) => (

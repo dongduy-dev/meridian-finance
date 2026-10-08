@@ -16,16 +16,16 @@ const collateralTypeLabels: Record<string, string> = {
 export function CustomerCollateralDetails({ loanApplicationId }: { loanApplicationId: string }) {
   const query = useOwnCollateralQuery(loanApplicationId)
   return (
-    <Card className="min-w-0">
-      <CardHeader>
+    <Card className="min-w-0 border-0 border-t bg-transparent">
+      <CardHeader className="px-0 pt-6 sm:px-0 sm:pt-6">
         <CardTitle>Collateral details</CardTitle>
         <CardDescription>These are the collateral details submitted with your application. The estimated value is the amount you provided, not a confirmed valuation.</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-0 pb-0 sm:px-0 sm:pb-0">
         {query.isPending ? <Skeleton className="h-48" role="status" aria-label="Loading collateral details" /> : null}
         {query.isError ? <QueryErrorFeedback error={query.error} title="Collateral details could not be loaded" onRetry={() => void query.refetch()} /> : null}
         {query.data ? (
-          <dl className="grid min-w-0 gap-5 sm:grid-cols-2">
+          <dl className="min-w-0 divide-y divide-border border-y border-border">
             <CollateralFact label="Collateral type">{Object.hasOwn(collateralTypeLabels, query.data.collateralType) ? collateralTypeLabels[query.data.collateralType] : 'Type unavailable'}</CollateralFact>
             <CollateralFact label="Description">{query.data.description}</CollateralFact>
             <CollateralFact label="Estimated value"><MoneyDisplay value={query.data.estimatedValue} /></CollateralFact>
@@ -39,5 +39,5 @@ export function CustomerCollateralDetails({ loanApplicationId }: { loanApplicati
 }
 
 function CollateralFact({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="min-w-0"><dt className="text-sm text-muted-foreground">{label}</dt><dd className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{children}</dd></div>
+  return <div className="grid min-w-0 gap-2 py-4 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-6"><dt className="text-sm leading-5 text-muted-foreground">{label}</dt><dd className="min-w-0 whitespace-pre-wrap text-base leading-6 [overflow-wrap:anywhere]">{children}</dd></div>
 }

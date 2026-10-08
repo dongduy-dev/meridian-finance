@@ -12,7 +12,7 @@ export function DocumentStatus({ status, staffAssisted = false }: { status: stri
       ? 'A replacement is required. Meridian staff will coordinate it with you.'
       : documentStatusDescription(status)
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2 [overflow-wrap:anywhere]">
       <StatusBadge presentation={staffAssisted ? { ...presentation, label: staffLabel } : presentation} />
       <p className="text-sm leading-6 text-muted-foreground">{description}</p>
     </div>

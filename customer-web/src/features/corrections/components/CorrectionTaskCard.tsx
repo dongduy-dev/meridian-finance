@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { DocumentStatus } from '@/features/documents/components/DocumentStatus'
 import { DocumentUpload } from '@/features/documents/components/DocumentUpload'
@@ -77,27 +77,27 @@ export function CorrectionTaskCard({
   }
 
   return (
-    <Card className="min-w-0">
+    <Card className="min-w-0 border-0 [overflow-wrap:anywhere]">
       <CardHeader className="gap-3">
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <CardTitle className="break-words">{scope.label}</CardTitle>
-            <CardDescription className="mt-1">{correctionReasonLabel(task.reasonCode)}</CardDescription>
+            <h3 className="type-section">{scope.label}</h3>
+            <CardDescription className="mt-2">{correctionReasonLabel(task.reasonCode)}</CardDescription>
           </div>
           <StatusBadge presentation={correctionTaskStatusPresentation(task.status)} />
         </div>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-6">
         <Alert>
           <Info aria-hidden="true" />
           <AlertTitle>{completed ? 'Requested change' : 'What you need to update'}</AlertTitle>
           <AlertDescription className="break-words whitespace-pre-wrap">{task.customerInstruction}</AlertDescription>
         </Alert>
         <p className="text-sm leading-6 text-muted-foreground">{completed ? 'This requested change has been completed. No further upload is needed for this change.' : scope.description}</p>
-        <dl className="grid gap-3 text-sm sm:grid-cols-2">
-          <div><dt className="text-muted-foreground">Document</dt><dd className="mt-1 font-medium">{task.documentType ? documentTypeLabel(task.documentType) : 'Document unavailable'}</dd></div>
-          <div><dt className="text-muted-foreground">Created</dt><dd className="mt-1 font-medium">{formatTimestamp(task.createdAt)}</dd></div>
-          {task.completedAt ? <div className="sm:col-span-2"><dt className="text-muted-foreground">Completed</dt><dd className="mt-1 font-medium">{formatTimestamp(task.completedAt)}</dd></div> : null}
+        <dl className="grid gap-6 border-y border-border py-6 sm:grid-cols-2">
+          <div className="min-w-0"><dt className="text-sm leading-5 text-muted-foreground">Document</dt><dd className="mt-2 text-base leading-6">{task.documentType ? documentTypeLabel(task.documentType) : 'Document unavailable'}</dd></div>
+          <div className="min-w-0"><dt className="text-sm leading-5 text-muted-foreground">Created</dt><dd className="mt-2 text-base leading-6">{formatTimestamp(task.createdAt)}</dd></div>
+          {task.completedAt ? <div className="min-w-0 sm:col-span-2"><dt className="text-sm leading-5 text-muted-foreground">Completed</dt><dd className="mt-2 text-base leading-6">{formatTimestamp(task.completedAt)}</dd></div> : null}
         </dl>
         {completed ? (
           <Alert variant="success"><CheckCircle2 aria-hidden="true" /><AlertTitle>Change completed</AlertTitle><AlertDescription>This requested change is complete.</AlertDescription></Alert>
@@ -115,7 +115,7 @@ export function CorrectionTaskCard({
           <Alert variant="warning"><FileQuestion aria-hidden="true" /><AlertTitle>Document unavailable</AlertTitle><AlertDescription>We can't show the document needed for this change. Refresh the page or try again later.</AlertDescription></Alert>
         ) : null}
         {open && scope.documentAction && checklistItem ? (
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-6">
             <DocumentStatus status={checklistItem.customerStatus} />
             <DocumentUpload loanApplicationId={loanApplicationId} item={checklistItem} action={scope.documentAction} actionsAllowed={actionsAllowed && checklistReady} canAct={canAct} onVersionConflict={onRefreshAuthoritative} />
           </div>
@@ -134,14 +134,15 @@ export function CorrectionTaskCard({
           <Alert variant="success" aria-live="polite"><CheckCircle2 aria-hidden="true" /><AlertTitle>Requested change completed</AlertTitle><AlertDescription>This change is complete and the application status was refreshed.</AlertDescription></Alert>
         ) : null}
         {actionsAllowed && open && scope.customerCompletable && checklistReady && checklistItem ? (
-          <div className="space-y-2 border-t border-border pt-5">
+          <div className="space-y-4 border-t border-border pt-6">
             <p className="text-sm leading-6 text-muted-foreground">Uploading a document does not complete this change. Mark it complete after the required document is available.</p>
-            <Button type="button" disabled={completion.isPending} onClick={() => void completeTask()}>
+            <Button className="w-full sm:w-auto" type="button" disabled={completion.isPending} onClick={() => void completeTask()}>
               {completion.isPending ? <Spinner /> : <CheckCircle2 aria-hidden="true" />}
               {completion.isPending ? 'Completing…' : 'Mark as complete'}
             </Button>
           </div>
         ) : null}
+        <span className="sr-only" aria-live="polite">{completion.isPending ? 'Requested change completion in progress.' : ''}</span>
       </CardContent>
     </Card>
   )

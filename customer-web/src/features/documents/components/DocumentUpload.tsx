@@ -120,7 +120,7 @@ export function DocumentUpload({
 
   const knownMessage = serverError instanceof ApiError ? uploadMessages[serverError.errorCode] : undefined
   return (
-    <div className="space-y-4 rounded-md border border-border bg-background p-4">
+    <div className="min-w-0 space-y-6 bg-muted p-4 [overflow-wrap:anywhere] sm:p-6">
       <div className="space-y-2">
         <label htmlFor={`file-${item.checklistItemId}`} className="block text-sm font-semibold">
           {action === 'replace' ? 'Choose replacement file' : 'Choose file'}
@@ -129,14 +129,15 @@ export function DocumentUpload({
           id={`file-${item.checklistItemId}`}
           type="file"
           accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-          className="block min-h-11 w-full min-w-0 cursor-pointer rounded-md border border-input bg-card p-2 text-sm file:mr-3 file:rounded-sm file:border-0 file:bg-muted file:px-3 file:py-2 file:font-semibold"
+          className="block min-h-11 w-full min-w-0 cursor-pointer rounded-md border border-input bg-card p-3 text-base leading-6 file:mr-3 file:rounded-sm file:border-0 file:bg-selected file:px-3 file:py-2 file:text-sm file:font-semibold file:text-foreground"
+          aria-invalid={Boolean(localError)}
           aria-describedby={`file-${item.checklistItemId}-help${localError ? ` file-${item.checklistItemId}-error` : ''}`}
           onChange={(event) => chooseFile(event.target.files?.[0])}
         />
-        <p id={`file-${item.checklistItemId}-help`} className="text-xs leading-5 text-muted-foreground">
+        <p id={`file-${item.checklistItemId}-help`} className="text-sm leading-5 text-muted-foreground">
           PDF, JPEG, or PNG; maximum 10 MiB.
         </p>
-        {file ? <p className="break-all text-sm">Selected: {file.name} ({formatFileSize(file.size)})</p> : null}
+        {file ? <p className="text-base leading-6 [overflow-wrap:anywhere]">Selected: {file.name} ({formatFileSize(file.size)})</p> : null}
         {localError ? <p id={`file-${item.checklistItemId}-error`} className="text-sm text-danger">{localError}</p> : null}
       </div>
       {serverError ? (
@@ -156,7 +157,7 @@ export function DocumentUpload({
           <AlertDescription>Your file was uploaded and the document status was refreshed.</AlertDescription>
         </Alert>
       ) : null}
-      <Button type="button" disabled={!file || Boolean(localError) || mutation.isPending} onClick={() => void submit()}>
+      <Button className="w-full sm:w-auto" size="lg" type="button" disabled={!file || Boolean(localError) || mutation.isPending} onClick={() => void submit()}>
         {mutation.isPending ? <Spinner /> : <Upload aria-hidden="true" />}
         {mutation.isPending ? 'Uploading…' : action === 'replace' ? 'Replace document' : 'Upload document'}
       </Button>
