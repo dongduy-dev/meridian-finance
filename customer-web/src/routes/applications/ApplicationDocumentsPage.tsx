@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, FileCheck2, FileText, UploadCloud } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, FileCheck2, UploadCloud } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useParams } from 'react-router-dom'
 
@@ -15,12 +15,12 @@ import { applicationKeys, useOwnApplicationQuery } from '@/features/applications
 import { applicationStatusPresentation } from '@/features/applications/application-presentation'
 import { DocumentStatus } from '@/features/documents/components/DocumentStatus'
 import { DocumentUpload } from '@/features/documents/components/DocumentUpload'
+import { DocumentVersionSummary } from '@/features/documents/components/DocumentVersionSummary'
 import { documentKeys, useDocumentChecklistQuery } from '@/features/documents/document-queries'
-import { documentUploadAction, formatFileSize } from '@/features/documents/document-presentation'
+import { documentUploadAction } from '@/features/documents/document-presentation'
 import {
   documentTypeLabel, evidenceRequirementPresentation,
 } from '@/features/loan-products/loan-product-presentation'
-import { formatTimestamp } from '@/lib/format/presentation'
 
 interface SubmissionNotice {
   applicationNumber: string
@@ -112,16 +112,7 @@ export function ApplicationDocumentsPage() {
                           <ReadinessLine label="Document provided" value={item.uploadComplete ? 'Complete' : 'Still needed'} />
                           <ReadinessLine label="Ready for next step" value={item.processingReady ? 'Yes' : 'No'} />
                         </dl>
-                        {item.currentVersion ? (
-                          <div className="min-w-0 space-y-4 border-y border-border py-6">
-                            <h4 className="flex items-start gap-2 text-base leading-6 font-semibold"><FileText aria-hidden="true" className="mt-0.5 size-5 shrink-0" />Uploaded file · Version {item.currentVersion.versionNumber}</h4>
-                            <dl className="grid min-w-0 gap-4">
-                              <ReadinessLine label="Filename" value={item.currentVersion.originalFilename} />
-                              <ReadinessLine label="File details" value={`${item.currentVersion.mimeType} · ${formatFileSize(item.currentVersion.byteSize)}`} />
-                              <ReadinessLine label="Uploaded" value={formatTimestamp(item.currentVersion.uploadedAt)} />
-                            </dl>
-                          </div>
-                        ) : null}
+                        {item.currentVersion ? <DocumentVersionSummary version={item.currentVersion} /> : null}
                         {action ? <DocumentUpload loanApplicationId={checklistQuery.data.loanApplicationId} item={item} action={action} actionsAllowed={actionsAllowed} canAct={canUpload} onVersionConflict={() => checklistQuery.refetch()} /> : null}
                       </CardContent>
                     </Card>
