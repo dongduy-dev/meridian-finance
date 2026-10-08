@@ -16,14 +16,14 @@ export function AccountFormField({
   required?: boolean
 }) {
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2 [overflow-wrap:anywhere]">
       <label htmlFor={htmlFor} className="block text-sm font-semibold text-foreground">
         {label}
         {required ? <span className="ml-1 text-danger" aria-hidden="true">*</span> : null}
       </label>
       {children}
       {description ? (
-        <p id={`${htmlFor}-description`} className="text-xs leading-5 text-muted-foreground">
+        <p id={`${htmlFor}-description`} className="text-sm leading-5 text-muted-foreground">
           {description}
         </p>
       ) : null}
@@ -48,10 +48,10 @@ export function ConsentField({
   children: ReactNode
 }) {
   return (
-    <div>
+    <div className="min-w-0 [overflow-wrap:anywhere]">
       <label
         htmlFor={id}
-        className="flex min-h-11 cursor-pointer items-start gap-3 rounded-md border border-border bg-background p-3 text-sm leading-6"
+        className="flex min-h-11 cursor-pointer items-start gap-3 py-2 text-sm leading-6"
       >
         {children}
         <span>{label}</span>

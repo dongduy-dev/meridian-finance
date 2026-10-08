@@ -1,11 +1,11 @@
-import { CheckCircle2, Landmark, Plus, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, Landmark, ShieldCheck } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useForm, type FieldErrors } from 'react-hook-form'
 
 import { EmptyState } from '@/components/common/EmptyState'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -44,7 +44,7 @@ function formatDate(value: string) {
     : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date)
 }
 
-function BankAccountCard({
+function BankAccountRecord({
   account,
   activeAccountCount,
   onConfirm,
@@ -56,37 +56,35 @@ function BankAccountCard({
   const active = account.status === 'ACTIVE'
   const primaryDeactivationBlocked = active && account.primaryAccount && activeAccountCount > 1
   return (
-    <Card>
-      <CardHeader>
+    <article className="min-w-0 space-y-6 py-6 [overflow-wrap:anywhere]">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <CardTitle className="break-words">{account.bankNameSnapshot}</CardTitle>
-            <CardDescription className="mt-1">{account.bankCode}</CardDescription>
+          <div className="min-w-0 space-y-2">
+            <h3 className="type-section">{account.bankNameSnapshot}</h3>
+            <p className="text-sm leading-5 text-muted-foreground">{account.bankCode}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-foreground">
+            <span className="inline-flex items-center rounded-sm bg-muted px-3 py-1 text-sm leading-5 font-medium text-foreground">
               {accountStatusLabel(account.status)}
             </span>
             {account.primaryAccount ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-success-subtle px-2.5 py-1 text-xs font-semibold text-success">
-                <CheckCircle2 aria-hidden="true" className="size-3.5" /> Primary
+              <span className="inline-flex items-center gap-2 rounded-sm bg-success-subtle px-3 py-1 text-sm leading-5 font-medium text-success">
+                <CheckCircle2 aria-hidden="true" className="size-4 shrink-0" /> Primary
               </span>
             ) : null}
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="break-all text-xl font-semibold tracking-[0.08em] tabular-nums">{account.maskedAccountNumber}</p>
-        <dl className="grid gap-3 text-sm sm:grid-cols-2">
-          <div><dt className="text-muted-foreground">Account holder</dt><dd className="mt-1 font-medium break-words">{account.accountHolderName}</dd></div>
-          <div><dt className="text-muted-foreground">Added</dt><dd className="mt-1 font-medium">{formatDate(account.createdAt)}</dd></div>
+      <div className="space-y-6">
+        <p className="text-xl leading-7 font-semibold tabular-nums">{account.maskedAccountNumber}</p>
+        <dl className="grid gap-6 sm:grid-cols-2">
+          <div className="min-w-0"><dt className="text-sm leading-5 text-muted-foreground">Account holder</dt><dd className="mt-2 text-base leading-6">{account.accountHolderName}</dd></div>
+          <div className="min-w-0"><dt className="text-sm leading-5 text-muted-foreground">Added</dt><dd className="mt-2 text-base leading-6">{formatDate(account.createdAt)}</dd></div>
         </dl>
         {primaryDeactivationBlocked ? (
-          <p className="text-xs leading-5 text-muted-foreground">Make another active account primary before deactivating this account.</p>
+          <p className="text-sm leading-5 text-muted-foreground">Make another active account primary before deactivating this account.</p>
         ) : null}
-      </CardContent>
+      </div>
       {active ? (
-        <CardFooter className="flex-wrap">
+        <div className="flex flex-wrap gap-3">
           {!account.primaryAccount ? (
             <Button variant="secondary" size="sm" onClick={(event) => onConfirm({ type: 'primary', account }, event.currentTarget)}>Make primary</Button>
           ) : null}
@@ -98,9 +96,9 @@ function BankAccountCard({
           >
             Deactivate
           </Button>
-        </CardFooter>
+        </div>
       ) : null}
-    </Card>
+    </article>
   )
 }
 
@@ -189,7 +187,7 @@ export function BankAccountsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="min-w-0 space-y-[var(--section-transactional)]">
       <PageHeader
         eyebrow="Your account"
         title="Bank accounts"
@@ -199,16 +197,16 @@ export function BankAccountsPage() {
 
       {customerQuery.isPending ? <Skeleton className="h-40 w-full" /> : null}
       {customerQuery.isError ? <AccountErrorFeedback error={customerQuery.error} title="Account status could not be loaded" /> : null}
-      {customerQuery.data ? <AccountReadinessCard customer={customerQuery.data} /> : null}
+      {customerQuery.data ? <AccountReadinessCard customer={customerQuery.data} presentation="workspace" /> : null}
 
       {serverError ? <AccountErrorFeedback error={serverError} title="Bank account update was not confirmed" /> : null}
       {successMessage ? <AccountSuccessFeedback title="Bank accounts updated" description={successMessage} /> : null}
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
-        <section aria-labelledby="saved-accounts-heading" className="space-y-4">
-          <div>
-            <h2 id="saved-accounts-heading" tabIndex={-1} className="text-xl font-semibold outline-none">Saved bank accounts</h2>
-            <p className="mt-1 text-sm text-muted-foreground">For your security, only masked account numbers are shown.</p>
+      <div className="grid items-start gap-[var(--section-transactional)] xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)] xl:gap-[var(--grid-gap)]">
+        <section aria-labelledby="saved-accounts-heading" className="min-w-0 space-y-6 [overflow-wrap:anywhere]">
+          <div className="space-y-2">
+            <h2 id="saved-accounts-heading" tabIndex={-1} className="type-section">Saved bank accounts</h2>
+            <p className="text-sm leading-5 text-muted-foreground">For your security, only masked account numbers are shown.</p>
           </div>
           {accountsQuery.isPending ? (
             <div className="space-y-4" role="status" aria-label="Loading bank accounts">
@@ -231,9 +229,9 @@ export function BankAccountsPage() {
             />
           ) : null}
           {accounts.length > 0 ? (
-            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-1">
+            <div className="divide-y divide-border border-y border-border">
               {accounts.map((account) => (
-                <BankAccountCard
+                <BankAccountRecord
                   key={account.customerBankAccountId}
                   account={account}
                   activeAccountCount={activeAccountCount}
@@ -244,14 +242,13 @@ export function BankAccountsPage() {
           ) : null}
         </section>
 
-        <Card id="add-bank-account">
+        <Card id="add-bank-account" className="max-w-[var(--width-flow)] border-0">
           <CardHeader>
-            <div className="flex size-10 items-center justify-center rounded-full bg-accent-subtle"><Plus aria-hidden="true" className="size-5" /></div>
             <CardTitle>Add bank account</CardTitle>
             <CardDescription>Enter the bank details exactly as they appear on your account.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="space-y-5" noValidate onSubmit={onAdd}>
+            <form className="space-y-6" noValidate onSubmit={onAdd}>
               <AccountFormField htmlFor="bankCode" label="Bank code" required error={errors.bankCode?.message}>
                 <Input id="bankCode" autoCapitalize="characters" aria-invalid={Boolean(errors.bankCode)} aria-describedby={fieldDescriptionIds('bankCode', false, Boolean(errors.bankCode))} {...register('bankCode', { validate: validateWith(bankAccountFieldSchemas.bankCode) })} />
               </AccountFormField>
@@ -270,7 +267,7 @@ export function BankAccountsPage() {
               >
                 <Input id="accountNumber" autoComplete="off" spellCheck={false} aria-invalid={Boolean(errors.accountNumber)} aria-describedby={fieldDescriptionIds('accountNumber', true, Boolean(errors.accountNumber))} {...register('accountNumber', { validate: validateWith(bankAccountFieldSchemas.accountNumber) })} />
               </AccountFormField>
-              <Button className="w-full" type="submit" disabled={isSubmitting}>
+              <Button className="w-full" size="lg" type="submit" disabled={isSubmitting}>
                 {isSubmitting ? <Spinner /> : <ShieldCheck aria-hidden="true" />}
                 {isSubmitting ? 'Adding account…' : 'Add bank account'}
               </Button>

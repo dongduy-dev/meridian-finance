@@ -45,17 +45,17 @@ export function IdentityReferenceCorrection() {
       await client.invalidateQueries({ queryKey: accountKeys.customer() })
     } finally { pending.current = false; setBusy(false) }
   }
-  return <div className="space-y-3 rounded-md border p-4">
+  return <div className="min-w-0 max-w-[var(--width-flow)] space-y-6 border-t border-border pt-6 [overflow-wrap:anywhere]">
     {message ? <p role="status">{message}</p> : null}
     {error ? <AccountErrorFeedback error={error} title="Identity reference correction was not confirmed" /> : null}
-    {!editing ? <Button variant="secondary" onClick={() => setEditing(true)}>Correct identity reference</Button> : <form className="space-y-3" onSubmit={event => { event.preventDefault(); void correct(event.currentTarget) }}>
+    {!editing ? <Button variant="secondary" onClick={() => setEditing(true)}>Correct identity reference</Button> : <form className="space-y-6" onSubmit={event => { event.preventDefault(); void correct(event.currentTarget) }}>
       <p className="text-sm text-muted-foreground">Enter the reference shown on your identity document. Your previous documents and verification history will be kept for review.</p>
-      <label className="grid gap-2">Replacement identity reference<Input name="replacementIdentityReference" autoComplete="off" required maxLength={100} disabled={busy || uncertain} /></label>
-      <div className="flex gap-2"><Button type="submit" disabled={busy || uncertain}>{busy ? 'Correcting…' : 'Confirm correction'}</Button><Button type="button" variant="secondary" disabled={busy} onClick={() => { setEditing(false); setError(undefined) }}>Cancel</Button></div>
+      <label className="grid min-w-0 gap-2 text-sm font-semibold">Replacement identity reference<Input name="replacementIdentityReference" autoComplete="off" required maxLength={100} disabled={busy || uncertain} /></label>
+      <div className="flex flex-wrap gap-3"><Button size="lg" type="submit" disabled={busy || uncertain}>{busy ? 'Correcting…' : 'Confirm correction'}</Button><Button type="button" variant="secondary" disabled={busy} onClick={() => { setEditing(false); setError(undefined) }}>Cancel</Button></div>
     </form>}
     {uncertain ? <Button variant="secondary" disabled={busy} onClick={() => void client.refetchQueries({ queryKey: accountKeys.customer() }).then(() => {
       const state = client.getQueryState<Customer>(accountKeys.customer())
-      if (state?.status === 'success' && state.fetchStatus === 'idle' && !state.isInvalidated) { setUncertain(false); setError(undefined) }
+      if (state?.status === 'success' && state.fetchStatus === 'idle' && !state.isInvalidated) { setUncertain(false); setError(undefined); setMessage(undefined) }
     })}>Refresh profile</Button> : null}
   </div>
 }
