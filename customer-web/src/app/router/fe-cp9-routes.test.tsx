@@ -211,6 +211,15 @@ function renderRoute(path: string, fixture: FixtureState) {
   return { fetchMock, router }
 }
 
+function financialReviewActionRegion(page: 'offer' | 'contract') {
+  const preview = screen.getByRole('region', {
+    name: page === 'offer' ? 'Provisional repayment preview' : 'Contract repayment preview',
+  })
+  // An empty wrapper has no accessible content. Check only the sibling after the
+  // financial summary so this regression does not depend on styling classes.
+  return preview.parentElement?.nextElementSibling ?? null
+}
+
 afterEach(() => {
   queryClient.clear()
   vi.restoreAllMocks()
@@ -245,6 +254,8 @@ describe('FE-CP9 offer flow', () => {
       expect(within(preview).getByText(label, { exact: true }).parentElement?.querySelector('dd')?.textContent).toBe(formatMoney(value))
     }
     expect(preview.compareDocumentPosition(screen.getByRole('button', { name: 'Accept offer' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(financialReviewActionRegion('offer')).toContainElement(screen.getByRole('heading', { name: 'Respond to this offer' }))
+    expect(financialReviewActionRegion('offer')).toContainElement(screen.getByRole('button', { name: 'Accept offer' }))
   })
 
   it.each([
@@ -254,6 +265,7 @@ describe('FE-CP9 offer flow', () => {
   ])('renders terminal %s status without inferred actions', async (status, label) => {
     renderRoute(`/applications/${applicationId}/offer`, state({ offer: { ...pendingOffer, status, availableActions: [] } }))
     expect(await screen.findByText(label)).toBeVisible()
+    expect(financialReviewActionRegion('offer')).toContainElement(await screen.findByText('No response required'))
     expect(screen.queryByRole('button', { name: /accept offer|decline offer/i })).not.toBeInTheDocument()
   })
 
@@ -261,6 +273,7 @@ describe('FE-CP9 offer flow', () => {
     renderRoute(`/applications/${applicationId}/offer`, state({ offer: { ...pendingOffer, status: 'FUTURE_STATUS', availableActions: ['FUTURE_ACTION'] } }))
     expect(await screen.findByText('Status unavailable')).toBeVisible()
     expect(screen.getByText('Action unavailable')).toBeVisible()
+    expect(financialReviewActionRegion('offer')).toContainElement(screen.getByText('Action unavailable'))
     expect(screen.queryByRole('button', { name: /accept offer|decline offer/i })).not.toBeInTheDocument()
   })
 
@@ -349,11 +362,14 @@ describe('FE-CP9 contract flow', () => {
       expect(within(preview).getByText(label, { exact: true }).parentElement?.querySelector('dd')?.textContent).toBe(formatMoney(value))
     }
     expect(preview.compareDocumentPosition(screen.getByRole('button', { name: 'Confirm review of version 1' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(financialReviewActionRegion('contract')).toContainElement(screen.getByRole('heading', { name: 'Confirm your review' }))
+    expect(financialReviewActionRegion('contract')).toContainElement(screen.getByRole('button', { name: 'Confirm review of version 1' }))
   })
 
   it('drives acknowledgment only from availableCustomerAction and handles unknown values safely', async () => {
     const first = renderRoute(`/applications/${applicationId}/contract`, state({ contract: { ...preparedContract, status: 'PREPARED', availableCustomerAction: null } }))
     expect(await screen.findByText('No action needed')).toBeVisible()
+    expect(financialReviewActionRegion('contract')).toContainElement(screen.getByText('No action needed'))
     expect(screen.queryByRole('button', { name: /confirm review of version/i })).not.toBeInTheDocument()
     first.router.dispose()
     cleanup()
@@ -362,6 +378,7 @@ describe('FE-CP9 contract flow', () => {
     renderRoute(`/applications/${applicationId}/contract`, state({ contract: { ...preparedContract, status: 'FUTURE_STATUS', availableCustomerAction: 'FUTURE_ACTION' } }))
     expect(await screen.findByText('Status unavailable')).toBeVisible()
     expect(screen.getByText('Action unavailable')).toBeVisible()
+    expect(financialReviewActionRegion('contract')).toContainElement(screen.getByText('Action unavailable'))
     expect(screen.queryByRole('button', { name: /confirm review of version/i })).not.toBeInTheDocument()
   })
 
@@ -464,6 +481,7 @@ describe('Staff-assisted direct offer and contract routes', () => {
     expect(screen.queryByRole('button', { name: 'Decline offer' })).not.toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(screen.queryByText('No response required')).not.toBeInTheDocument()
+    expect(financialReviewActionRegion('offer')).toBeNull()
     expect(fixture.acceptPosts + fixture.declinePosts).toBe(0)
   })
 
@@ -476,10 +494,11 @@ describe('Staff-assisted direct offer and contract routes', () => {
     expect(screen.queryByRole('button', { name: /Confirm review/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(screen.queryByText('There is nothing you need to do with this contract right now.')).not.toBeInTheDocument()
+    expect(financialReviewActionRegion('contract')).toBeNull()
     expect(fixture.acknowledgmentBodies).toEqual([])
   })
 
-  it.each(['offer', 'contract'])('fails closed on the direct %s route while application context loads or fails', async (page) => {
+  it.each(['offer', 'contract'] as const)('fails closed on the direct %s route while application context loads or fails', async (page) => {
     let resolveApplication!: (response: Response) => void
     const pending = new Promise<Response>((resolve) => { resolveApplication = resolve })
     const fixture = state()
@@ -487,9 +506,11 @@ describe('Staff-assisted direct offer and contract routes', () => {
     render(<AppProviders router={createTestRouter([`/applications/${applicationId}/${page}`])} authManager={createTestAuthManager()} />)
     expect(await screen.findByLabelText('Loading application details')).toBeVisible()
     expect(await screen.findByText(page === 'offer' ? 'Approved principal' : 'Accepted principal')).toBeVisible()
+    expect(financialReviewActionRegion(page)).toBeNull()
     expect(screen.queryByRole('button', { name: /Accept offer|Decline offer|Confirm review/ })).not.toBeInTheDocument()
     resolveApplication(error('application', 'QUERY_UNAVAILABLE', 400))
     expect(await screen.findByText('Application details could not be loaded')).toBeVisible()
+    expect(financialReviewActionRegion(page)).toBeNull()
     expect(screen.queryByRole('button', { name: /Accept offer|Decline offer|Confirm review/ })).not.toBeInTheDocument()
     expect(fixture.acceptPosts + fixture.declinePosts + fixture.acknowledgmentBodies.length).toBe(0)
   })

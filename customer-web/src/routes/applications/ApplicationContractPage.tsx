@@ -122,6 +122,7 @@ export function ApplicationContractPage() {
   const waiting = contractMissing && applicationQuery.data?.status === 'CONTRACT_PENDING'
   const contract = contractQuery.data
   const unknownAction = isDigital && Boolean(contract?.availableCustomerAction && contract.availableCustomerAction !== 'ACKNOWLEDGE')
+  const showNoActionNeeded = prerequisitesValidated && !acknowledgment.isPending && !canAcknowledge && !unknownAction
 
   return (
     <DetailLayout
@@ -140,7 +141,7 @@ export function ApplicationContractPage() {
         {notice === 'new-version' ? <Alert variant="warning" aria-live="polite"><FileWarning aria-hidden="true" /><AlertTitle>Review the current contract version</AlertTitle><AlertDescription>The contract changed. Review this version before confirming again.</AlertDescription></Alert> : null}
         {isDigital ? <Alert variant="information"><Info aria-hidden="true" /><AlertTitle>About this confirmation</AlertTitle><AlertDescription>By continuing, you confirm that you reviewed this contract version. This acknowledgment is not an electronic or digital signature and does not create a signed PDF or legal agreement.</AlertDescription></Alert> : null}
         {contract ? <ContractSummary contract={contract} /> : null}
-        {contract ? (
+        {contract && (canAcknowledge || unknownAction || showNoActionNeeded) ? (
           <div className="min-w-0 space-y-6 border-t border-border pt-6">
             {canAcknowledge ? (
               <div className="min-w-0 space-y-4">
@@ -150,7 +151,7 @@ export function ApplicationContractPage() {
               </div>
             ) : null}
             {unknownAction ? <Alert variant="warning"><FileWarning aria-hidden="true" /><AlertTitle>Action unavailable</AlertTitle><AlertDescription>This action is not available right now. Refresh the page or try again later.</AlertDescription></Alert> : null}
-            {prerequisitesValidated && !acknowledgment.isPending && !canAcknowledge && !unknownAction ? <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No action needed</AlertTitle><AlertDescription>There is nothing you need to do with this contract right now.</AlertDescription></Alert> : null}
+            {showNoActionNeeded ? <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No action needed</AlertTitle><AlertDescription>There is nothing you need to do with this contract right now.</AlertDescription></Alert> : null}
           </div>
         ) : null}
       </div>
