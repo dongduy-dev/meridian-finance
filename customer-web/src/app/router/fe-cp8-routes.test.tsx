@@ -281,6 +281,31 @@ describe('FE-CP8 application tracking', () => {
 })
 
 describe('FE-CP8 Customer corrections', () => {
+  it('shows the current filename and version after replacement without completing the correction', async () => {
+    const user = userEvent.setup()
+    const fixture = state()
+    const replacement = { ...currentVersion, documentVersionId: '70000000-0000-4000-8000-000000000001', versionNumber: 2, originalFilename: 'bản-thay-thế-sao-kê-ngân-hàng-rất-dài.pdf' }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith(`/documents/${replacementItemId}/versions`) && init?.method === 'POST') {
+        fixture.checklist = { ...checklist, items: checklist.items.map(item => item.checklistItemId === replacementItemId ? { ...item, currentVersion: replacement } : item) }
+        return json(replacement, 201)
+      }
+      return fixtureFetch(fixture)(input, init)
+    }))
+    render(<AppProviders router={createTestRouter([`/applications/${applicationId}/corrections`])} authManager={createTestAuthManager()} />)
+
+    expect(await screen.findByText(currentVersion.originalFilename)).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Uploaded file · Version 1' })).toBeVisible()
+    await user.upload(screen.getByLabelText('Choose replacement file'), new File(['%PDF'], replacement.originalFilename, { type: 'application/pdf' }))
+    await user.click(screen.getByRole('button', { name: 'Replace document' }))
+
+    expect(await screen.findByRole('heading', { name: 'Uploaded file · Version 2' })).toBeVisible()
+    expect(screen.getByText(replacement.originalFilename, { exact: true })).toBeVisible()
+    expect(screen.queryByText(currentVersion.originalFilename)).not.toBeInTheDocument()
+    expect(fixture.completionBodies).toEqual([])
+    expect(screen.getAllByRole('button', { name: 'Mark as complete' })).toHaveLength(2)
+  })
+
   it('refetches checklist and application reads after a replacement upload', async () => {
     const user = userEvent.setup()
     const fixture = state()
