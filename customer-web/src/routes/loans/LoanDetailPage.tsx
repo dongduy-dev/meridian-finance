@@ -40,20 +40,20 @@ function BackToLoans() {
 }
 
 function DetailNavigation({ loanApplicationId, historySelected }: { loanApplicationId: string; historySelected: boolean }) {
-  const baseClass = 'inline-flex min-h-11 items-center rounded-md px-4 text-sm font-semibold transition-colors'
+  const baseClass = 'inline-flex min-h-11 min-w-0 items-center border-b-2 px-4 py-3 text-sm font-medium leading-5 transition-colors'
   return (
-    <nav aria-label="Loan detail views" className="flex flex-wrap gap-2 rounded-lg border border-border bg-card p-2 shadow-soft">
+    <nav aria-label="Loan detail views" className="flex min-w-0 flex-wrap border-b border-border">
       <Link
         to={`/loans/${loanApplicationId}`}
         aria-current={!historySelected ? 'page' : undefined}
-        className={cn(baseClass, !historySelected ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-selected')}
+        className={cn(baseClass, !historySelected ? 'border-primary bg-selected text-primary' : 'border-transparent text-muted-foreground hover:bg-selected hover:text-foreground')}
       >
         Overview
       </Link>
       <Link
         to={`/loans/${loanApplicationId}?tab=repayments&page=0`}
         aria-current={historySelected ? 'page' : undefined}
-        className={cn(baseClass, historySelected ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-selected')}
+        className={cn(baseClass, historySelected ? 'border-primary bg-selected text-primary' : 'border-transparent text-muted-foreground hover:bg-selected hover:text-foreground')}
       >
         Repayment history
       </Link>
@@ -99,6 +99,7 @@ export function LoanDetailPage() {
     <DetailLayout
       header={(
         <PageHeader
+          className="sm:flex-wrap"
           eyebrow="Loan"
           title={account?.accountNumber ?? (concealedUnavailable ? 'Loan unavailable' : 'Loan details')}
           description={account ? `Activated ${formatTimestamp(account.activatedAt)}` : 'Review your loan balance, schedule, and payment history.'}
@@ -107,7 +108,7 @@ export function LoanDetailPage() {
       )}
       rail={account ? <LoanStatusRail account={account} /> : undefined}
     >
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-[var(--section-transactional)] [overflow-wrap:anywhere]">
         {detailQuery.isPending ? (
           <div role="status" aria-label="Loading loan details" className="space-y-4">
             <Skeleton className="h-16" />
@@ -153,14 +154,14 @@ type RepaymentHistoryQuery = ReturnType<typeof useRepaymentHistoryQuery>
 
 function LoanStatusRail({ account }: { account: LoanAccountData }) {
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader><CardTitle>Loan status</CardTitle></CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-6">
         <StatusBadge presentation={loanAccountStatusPresentation(account.status)} />
-        <dl className="space-y-4 text-sm">
-          <div><dt className="text-muted-foreground">Amount paid</dt><dd className="mt-1"><MoneyDisplay value={account.servicing.totalPaid} /></dd></div>
-          <div><dt className="text-muted-foreground">Amount remaining</dt><dd className="mt-1"><MoneyDisplay value={account.servicing.totalOutstanding} /></dd></div>
-          <div><dt className="text-muted-foreground">Balance updated</dt><dd className="mt-1 font-medium">As of {formatDateOnly(account.servicing.servicingEvaluationDate)}</dd></div>
+        <dl className="space-y-6">
+          <div className="min-w-0"><dt className="text-sm leading-5 text-muted-foreground">Amount paid</dt><dd className="mt-2 min-w-0 text-base leading-6"><MoneyDisplay value={account.servicing.totalPaid} /></dd></div>
+          <div className="min-w-0"><dt className="text-sm leading-5 text-muted-foreground">Amount remaining</dt><dd className="mt-2 min-w-0"><MoneyDisplay value={account.servicing.totalOutstanding} emphasis="primary" /></dd></div>
+          <div className="min-w-0"><dt className="text-sm leading-5 text-muted-foreground">Balance updated</dt><dd className="mt-2 text-base font-medium leading-6">As of {formatDateOnly(account.servicing.servicingEvaluationDate)}</dd></div>
         </dl>
       </CardContent>
     </Card>
@@ -170,33 +171,35 @@ function LoanStatusRail({ account }: { account: LoanAccountData }) {
 function LoanOverview({ account }: { account: LoanAccountData }) {
   const schedule = account.finalRepaymentSchedule
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-[var(--section-transactional)]">
       <RepaymentSummary account={account} />
-      <Card>
-        <CardHeader><CardTitle>Disbursement destination</CardTitle></CardHeader>
-        <CardContent>
-          <dl className="grid gap-4 text-sm sm:grid-cols-2">
-            <div><dt className="text-muted-foreground">Bank</dt><dd className="mt-1 font-medium">{account.disbursementDestination.bankName} ({account.disbursementDestination.bankCode})</dd></div>
-            <div><dt className="text-muted-foreground">Account holder</dt><dd className="mt-1 break-words font-medium">{account.disbursementDestination.accountHolderName}</dd></div>
-            <div><dt className="text-muted-foreground">Masked account number</dt><dd className="mt-1 break-all font-medium">{account.disbursementDestination.maskedAccountNumber}</dd></div>
-          </dl>
-        </CardContent>
-      </Card>
+      <section aria-labelledby="loan-destination-heading" className="min-w-0 space-y-6">
+        <h2 id="loan-destination-heading" className="type-section">Disbursement destination</h2>
+        <dl className="grid min-w-0 gap-x-6 border-b border-border sm:grid-cols-2">
+          <div className="min-w-0 border-t border-border py-4"><dt className="text-sm leading-5 text-muted-foreground">Bank</dt><dd className="mt-2 text-base font-medium leading-6">{account.disbursementDestination.bankName} ({account.disbursementDestination.bankCode})</dd></div>
+          <div className="min-w-0 border-t border-border py-4"><dt className="text-sm leading-5 text-muted-foreground">Account holder</dt><dd className="mt-2 text-base font-medium leading-6">{account.disbursementDestination.accountHolderName}</dd></div>
+          <div className="min-w-0 border-t border-border py-4"><dt className="text-sm leading-5 text-muted-foreground">Masked account number</dt><dd className="mt-2 break-all text-base font-medium leading-6">{account.disbursementDestination.maskedAccountNumber}</dd></div>
+        </dl>
+      </section>
       <section aria-labelledby="final-schedule-heading" className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 id="final-schedule-heading" className="text-xl font-semibold">Repayment schedule</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <h2 id="final-schedule-heading" className="type-section">Repayment schedule</h2>
+            <p className="mt-2 text-sm leading-5 text-muted-foreground">
               {schedule.scheduleType === 'FINAL' ? 'Current schedule' : 'Schedule details unavailable'} · Version {schedule.version}
             </p>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="min-w-0 text-sm leading-5 text-muted-foreground">
             {formatDateOnly(schedule.firstDueDate)} – {formatDateOnly(schedule.lastDueDate)}
           </p>
         </div>
-        {schedule.items.length ? schedule.items.map((item) => (
-          <InstallmentRow key={item.installmentNumber} item={item} />
-        )) : (
+        {schedule.items.length ? (
+          <div className="min-w-0 divide-y divide-border border-y border-border">
+            {schedule.items.map((item) => (
+              <InstallmentRow key={item.installmentNumber} item={item} />
+            ))}
+          </div>
+        ) : (
           <EmptyState icon={Clock3} title="No schedule items available" description="We can't show any installments for this schedule right now." />
         )}
       </section>
@@ -207,10 +210,10 @@ function LoanOverview({ account }: { account: LoanAccountData }) {
 function RepaymentHistory({ query, page, onPageChange }: { query: RepaymentHistoryQuery; page: number; onPageChange: (page: number) => void }) {
   const history = query.data
   return (
-    <section aria-labelledby="repayment-history-heading" className="space-y-5">
+    <section aria-labelledby="repayment-history-heading" className="min-w-0 space-y-6">
       <div>
-        <h2 id="repayment-history-heading" className="text-xl font-semibold">Repayment history</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Review recorded payments and the balance after each repayment.</p>
+        <h2 id="repayment-history-heading" className="type-section">Repayment history</h2>
+        <p className="mt-2 max-w-[70ch] text-sm leading-5 text-muted-foreground">Review recorded payments and the balance after each repayment.</p>
       </div>
       {query.isPending ? (
         <div role="status" aria-label="Loading repayment history" className="space-y-4"><Skeleton className="h-72" /><Skeleton className="h-72" /></div>
@@ -218,16 +221,20 @@ function RepaymentHistory({ query, page, onPageChange }: { query: RepaymentHisto
       {query.isError ? (
         <QueryErrorFeedback error={query.error} title="Repayment history could not be loaded" onRetry={() => void query.refetch()} />
       ) : null}
-      {history?.items.length ? history.items.map((item) => (
-        <RepaymentHistoryItem key={item.repaymentTransactionId} item={item} />
-      )) : null}
+      {history?.items.length ? (
+        <div className="min-w-0 divide-y divide-border border-y border-border">
+          {history.items.map((item) => (
+            <RepaymentHistoryItem key={item.repaymentTransactionId} item={item} />
+          ))}
+        </div>
+      ) : null}
       {query.isSuccess && history?.totalElements === 0 ? (
         <EmptyState icon={ReceiptText} title="No payments recorded yet" description="Your payment history will appear here after a repayment is recorded." />
       ) : null}
       {query.isSuccess && history ? (
-        <nav aria-label="Repayment history pagination" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4">
+        <nav aria-label="Repayment history pagination" className="flex min-w-0 flex-wrap items-center justify-between gap-4 border-t border-border pt-6">
           <Button variant="secondary" disabled={page <= 0} aria-label="Previous repayment history page" onClick={() => onPageChange(page - 1)}>Previous</Button>
-          <p className="text-sm text-muted-foreground">Page <span className="font-medium text-foreground">{history.page + 1}</span> · {history.totalElements} repayments</p>
+          <p className="min-w-0 text-sm leading-5 text-muted-foreground">Page <span className="font-medium text-foreground">{history.page + 1}</span> · {history.totalElements} repayments</p>
           <Button variant="secondary" disabled={page + 1 >= history.totalPages} aria-label="Next repayment history page" onClick={() => onPageChange(page + 1)}>Next</Button>
         </nav>
       ) : null}
