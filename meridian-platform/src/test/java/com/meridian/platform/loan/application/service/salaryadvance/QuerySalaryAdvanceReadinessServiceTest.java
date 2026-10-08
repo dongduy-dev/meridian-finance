@@ -78,7 +78,7 @@ class QuerySalaryAdvanceReadinessServiceTest {
         ));
         lenient().when(products.findByProductCode(ProductCode.SALARY_ADVANCE)).thenReturn(Optional.of(product()));
         lenient().when(partners.inspectCurrentEmployeeLink(CUSTOMER_ID)).thenReturn(
-                PartnerEligibilityAssessment.eligible(partnerSnapshot())
+                PartnerEligibilityAssessment.eligible(partnerSnapshot(), "Aurora Manufacturing")
         );
         lenient().when(applications.existsByCustomerIdAndProductCodeAndStatusIn(
                 any(), any(), any()
@@ -117,6 +117,7 @@ class QuerySalaryAdvanceReadinessServiceTest {
         assertTrue(result.applicationAllowed());
         assertTrue(result.blockerCodes().isEmpty());
         assertEquals(LINK_ID, result.customerPartnerEmployeeLinkId());
+        assertEquals("Aurora Manufacturing", result.partnerCompanyName());
         assertEquals("VERIFIED", result.employeeVerificationStatus());
         assertEquals("ELIGIBLE", result.partnerEligibilityStatus());
         assertEquals("ACTIVE", result.limitStatus());
@@ -145,6 +146,32 @@ class QuerySalaryAdvanceReadinessServiceTest {
         assertEquals("EVIDENCE_STALE", result.partnerEligibilityStatus());
         assertTrue(result.blockerCodes().contains("SALARY_ADVANCE_ELIGIBILITY_DATA_STALE"));
         assertNull(result.customerPartnerEmployeeLinkId());
+        assertNull(result.partnerCompanyName());
+    }
+
+    @Test
+    void missingCurrentEmploymentKeepsExistingBlockersWithoutAnEmployerName() {
+        when(partners.inspectCurrentEmployeeLink(CUSTOMER_ID)).thenReturn(
+                PartnerEligibilityAssessment.ineligible(PartnerEligibilityAssessment.Status.NOT_VERIFIED)
+        );
+
+        SalaryAdvanceReadinessDto result = service.queryReadiness();
+
+        assertFalse(result.applicationAllowed());
+        assertEquals(List.of("EMPLOYEE_NOT_VERIFIED", "SALARY_ADVANCE_LIMIT_UNAVAILABLE"), result.blockerCodes());
+        assertNull(result.partnerCompanyName());
+    }
+
+    @Test
+    void employerDisplayContextDoesNotGateEligibility() {
+        when(partners.inspectCurrentEmployeeLink(CUSTOMER_ID)).thenReturn(
+                PartnerEligibilityAssessment.eligible(partnerSnapshot())
+        );
+
+        SalaryAdvanceReadinessDto result = service.queryReadiness();
+
+        assertTrue(result.applicationAllowed());
+        assertNull(result.partnerCompanyName());
     }
 
     @Test

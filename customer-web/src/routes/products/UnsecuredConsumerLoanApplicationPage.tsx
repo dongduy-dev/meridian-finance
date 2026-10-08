@@ -8,12 +8,11 @@ import { QueryErrorFeedback } from '@/components/common/QueryErrorFeedback'
 import { FocusedFlowLayout } from '@/components/layout/FocusedFlowLayout'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { AccountFormField } from '@/features/account/components/AccountFormField'
 import {
-  EvidenceRequirements,
+  OriginationSection, EvidenceRequirements,
   OriginationExitWarning,
   OriginationSubmissionError,
   ReviewFact,
@@ -136,30 +135,28 @@ export function UnsecuredConsumerLoanApplicationPage() {
           ? <Button type="submit" form="ucl-form">Review request<ArrowRight aria-hidden="true" /></Button>
           : <Button type="submit" form="ucl-form" disabled={submission.isPending}>{submission.isPending ? <Spinner /> : null}{submission.isPending ? 'Submitting…' : 'Submit application'}</Button>}
       >
-        <form id="ucl-form" noValidate className="space-y-6" onSubmit={stage === 'request' ? goToReview : submit}>
+        <form id="ucl-form" noValidate className="min-w-0 space-y-8 bg-card p-4 sm:p-6 [overflow-wrap:anywhere]" onSubmit={stage === 'request' ? goToReview : submit}>
           <h2 id="application-stage-heading" tabIndex={-1} className="sr-only outline-none">{stage === 'request' ? 'Request details' : 'Application review'}</h2>
           {validationMessages.length > 1 ? <Alert variant="destructive"><ShieldAlert aria-hidden="true" /><AlertTitle>Check the application details</AlertTitle><AlertDescription>{validationMessages.join(' ')}</AlertDescription></Alert> : null}
           {serverError ? <OriginationSubmissionError error={serverError} /> : null}
           {stage === 'request' ? (
-            <Card>
-              <CardHeader><CardTitle>Request details</CardTitle><CardDescription>We'll check that your amount and term are still available when you submit.</CardDescription></CardHeader>
-              <CardContent className="space-y-5">
+            <OriginationSection title="Request details" description="We'll check that your amount and term are still available when you submit.">
+              <div className="space-y-6">
                 <AccountFormField htmlFor="requestedAmount" label="Requested amount" required description="Enter a positive whole-VND amount within the current product minimum and maximum." error={errors.requestedAmount?.message}>
                   <Controller name="requestedAmount" control={control} rules={{ validate: validateAmount }} render={({ field }) => <AmountInput field={field} invalid={Boolean(errors.requestedAmount)} describedBy={`requestedAmount-description${errors.requestedAmount ? ' requestedAmount-error' : ''}`} />} />
                 </AccountFormField>
                 <AccountFormField htmlFor="requestedTermMonths" label="Requested term" required description="Choose one of the available terms." error={errors.requestedTermMonths?.message}>
-                  <select id="requestedTermMonths" className="flex min-h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20" aria-invalid={Boolean(errors.requestedTermMonths)} aria-describedby={`requestedTermMonths-description${errors.requestedTermMonths ? ' requestedTermMonths-error' : ''}`} {...register('requestedTermMonths', { validate: validateTerm })}>
+                  <select id="requestedTermMonths" className="flex min-h-11 w-full min-w-0 rounded-md border border-input bg-card px-3 py-2 text-base leading-6 text-foreground aria-invalid:border-danger focus-visible:border-ring" aria-invalid={Boolean(errors.requestedTermMonths)} aria-describedby={`requestedTermMonths-description${errors.requestedTermMonths ? ' requestedTermMonths-error' : ''}`} {...register('requestedTermMonths', { validate: validateTerm })}>
                     <option value="">Select a term</option>
                     {product.policy.allowedTermsMonths.map((value) => <option key={value} value={value}>{value} {value === 1 ? 'month' : 'months'}</option>)}
                   </select>
                 </AccountFormField>
-              </CardContent>
-            </Card>
+              </div>
+            </OriginationSection>
           ) : (
-            <Card>
-              <CardHeader><CardTitle>Confirm your request</CardTitle><CardDescription>Review the exact amount and term you are about to submit.</CardDescription></CardHeader>
-              <CardContent><dl className="grid gap-4 sm:grid-cols-2"><ReviewFact label="Requested amount"><MoneyDisplay value={Number(getValues('requestedAmount'))} /></ReviewFact><ReviewFact label="Requested term">{getValues('requestedTermMonths')} months</ReviewFact></dl></CardContent>
-            </Card>
+            <OriginationSection title="Confirm your request" description="Review the exact amount and term you are about to submit.">
+              <div className="space-y-6"><dl className="grid gap-x-6 sm:grid-cols-2"><ReviewFact label="Requested amount"><MoneyDisplay value={Number(getValues('requestedAmount'))} /></ReviewFact><ReviewFact label="Requested term">{getValues('requestedTermMonths')} months</ReviewFact></dl></div>
+            </OriginationSection>
           )}
           <EvidenceRequirements requirements={product.policy.submissionEvidenceRequirements} />
         </form>

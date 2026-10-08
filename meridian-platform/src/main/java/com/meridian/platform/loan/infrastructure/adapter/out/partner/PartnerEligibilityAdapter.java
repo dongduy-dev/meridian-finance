@@ -67,7 +67,8 @@ public class PartnerEligibilityAdapter implements PartnerEligibilityPort {
                         snapshot.lastVerifiedAt(),
                         snapshot.lastRefreshedAt()
                 ))
-                        .orElseThrow()
+                        .orElseThrow(),
+                assessment.partnerCompanyName()
         );
     }
 }

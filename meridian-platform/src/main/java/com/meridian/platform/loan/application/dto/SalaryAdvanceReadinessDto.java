@@ -9,6 +9,7 @@ import java.util.UUID;
 public record SalaryAdvanceReadinessDto(
         String productCode,
         UUID customerPartnerEmployeeLinkId,
+        String partnerCompanyName,
         String employeeVerificationStatus,
         String partnerEligibilityStatus,
         String limitStatus,
@@ -23,6 +24,9 @@ public record SalaryAdvanceReadinessDto(
 
     public SalaryAdvanceReadinessDto {
         productCode = requireText(productCode, "productCode");
+        if (partnerCompanyName != null) {
+            partnerCompanyName = requireText(partnerCompanyName, "partnerCompanyName");
+        }
         employeeVerificationStatus = requireText(
                 employeeVerificationStatus,
                 "employeeVerificationStatus"

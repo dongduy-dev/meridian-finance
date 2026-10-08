@@ -7,11 +7,15 @@ import java.util.Optional;
 
 public record PartnerEligibilityAssessment(
         Status status,
-        VerifiedPartnerEmployeeLinkSnapshot snapshot
+        VerifiedPartnerEmployeeLinkSnapshot snapshot,
+        String partnerCompanyName
 ) {
 
     public PartnerEligibilityAssessment {
         Objects.requireNonNull(status, "status must not be null");
+        if (partnerCompanyName != null && partnerCompanyName.isBlank()) {
+            throw new IllegalArgumentException("partnerCompanyName must not be blank");
+        }
         if (status == Status.ELIGIBLE && snapshot == null) {
             throw new IllegalArgumentException("Eligible Partner assessment requires a snapshot.");
         }
@@ -21,9 +25,17 @@ public record PartnerEligibilityAssessment(
     }
 
     public static PartnerEligibilityAssessment eligible(VerifiedPartnerEmployeeLinkSnapshot snapshot) {
+        return eligible(snapshot, null);
+    }
+
+    public static PartnerEligibilityAssessment eligible(
+            VerifiedPartnerEmployeeLinkSnapshot snapshot,
+            String partnerCompanyName
+    ) {
         return new PartnerEligibilityAssessment(
                 Status.ELIGIBLE,
-                Objects.requireNonNull(snapshot, "snapshot must not be null")
+                Objects.requireNonNull(snapshot, "snapshot must not be null"),
+                partnerCompanyName
         );
     }
 
@@ -31,7 +43,7 @@ public record PartnerEligibilityAssessment(
         if (status == Status.ELIGIBLE) {
             throw new IllegalArgumentException("Eligible status requires a snapshot.");
         }
-        return new PartnerEligibilityAssessment(status, null);
+        return new PartnerEligibilityAssessment(status, null, null);
     }
 
     public Optional<VerifiedPartnerEmployeeLinkSnapshot> optionalSnapshot() {

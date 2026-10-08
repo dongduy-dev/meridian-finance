@@ -8,12 +8,11 @@ import { QueryErrorFeedback } from '@/components/common/QueryErrorFeedback'
 import { FocusedFlowLayout } from '@/components/layout/FocusedFlowLayout'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { AccountFormField } from '@/features/account/components/AccountFormField'
 import {
-  EvidenceRequirements, OriginationExitWarning, OriginationSubmissionError,
+  OriginationSection, EvidenceRequirements, OriginationExitWarning, OriginationSubmissionError,
   ReviewFact,
 } from '@/features/applications/components/OriginationSupport'
 import { validateWholeVnd } from '@/features/applications/origination-validation'
@@ -140,35 +139,32 @@ export function CollateralLoanApplicationPage() {
         backAction={stage === 'request' ? backToProduct : <Button variant="secondary" onClick={() => setSearchParams({})}><ArrowLeft aria-hidden="true" />Back to request</Button>}
         continueAction={stage === 'request' ? <Button type="submit" form="collateral-form">Review request<ArrowRight aria-hidden="true" /></Button> : <Button type="submit" form="collateral-form" disabled={submission.isPending}>{submission.isPending ? <Spinner /> : null}{submission.isPending ? 'Submitting…' : 'Submit application'}</Button>}
       >
-        <form id="collateral-form" noValidate className="space-y-6" onSubmit={stage === 'request' ? goToReview : submit}>
+        <form id="collateral-form" noValidate className="min-w-0 space-y-8 bg-card p-4 sm:p-6 [overflow-wrap:anywhere]" onSubmit={stage === 'request' ? goToReview : submit}>
           <h2 id="application-stage-heading" tabIndex={-1} className="sr-only outline-none">{stage === 'request' ? 'Request and collateral details' : 'Application review'}</h2>
           {validationMessages.length > 1 ? <Alert variant="destructive"><ShieldAlert aria-hidden="true" /><AlertTitle>Check the application details</AlertTitle><AlertDescription>{validationMessages.join(' ')}</AlertDescription></Alert> : null}
           {serverError ? <OriginationSubmissionError error={serverError} /> : null}
           {stage === 'request' ? (
             <>
-              <Card>
-                <CardHeader><CardTitle>Request details</CardTitle><CardDescription>Choose an amount and one of the available terms.</CardDescription></CardHeader>
-                <CardContent className="space-y-5">
+              <OriginationSection title="Request details" description="Choose an amount and one of the available terms.">
+                <div className="space-y-6">
                   <AccountFormField htmlFor="requestedAmount" label="Requested amount" required description="Enter a whole amount in VND within the product range." error={errors.requestedAmount?.message}><Controller name="requestedAmount" control={control} rules={{ validate: (value) => validateWholeVnd(value, product.minAmount, product.maxAmount) }} render={({ field }) => <AmountInput field={field} invalid={Boolean(errors.requestedAmount)} describedBy={`requestedAmount-description${errors.requestedAmount ? ' requestedAmount-error' : ''}`} />} /></AccountFormField>
-                  <AccountFormField htmlFor="requestedTermMonths" label="Requested term" required description="Choose one of the available terms." error={errors.requestedTermMonths?.message}><select id="requestedTermMonths" className="flex min-h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20" aria-invalid={Boolean(errors.requestedTermMonths)} aria-describedby={`requestedTermMonths-description${errors.requestedTermMonths ? ' requestedTermMonths-error' : ''}`} {...register('requestedTermMonths', { validate: (value) => product.policy.allowedTermsMonths.includes(Number(value)) || 'Select one of the available terms.' })}><option value="">Select a term</option>{product.policy.allowedTermsMonths.map((value) => <option key={value} value={value}>{value} {value === 1 ? 'month' : 'months'}</option>)}</select></AccountFormField>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle>Collateral details</CardTitle><CardDescription>Meridian reviews these details as part of your application. The estimated value does not determine approval.</CardDescription></CardHeader>
-                <CardContent className="space-y-5">
-                  <AccountFormField htmlFor="collateralType" label="Collateral type" required error={errors.collateralType?.message}><select id="collateralType" className="flex min-h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20" aria-invalid={Boolean(errors.collateralType)} aria-describedby={errors.collateralType ? 'collateralType-error' : undefined} {...register('collateralType', { validate: (value) => collateralTypes.includes(value as CollateralType) || 'Select a supported collateral type.' })}><option value="">Select a collateral type</option>{collateralTypes.map((value) => <option key={value} value={value}>{collateralLabels[value]}</option>)}</select></AccountFormField>
+                  <AccountFormField htmlFor="requestedTermMonths" label="Requested term" required description="Choose one of the available terms." error={errors.requestedTermMonths?.message}><select id="requestedTermMonths" className="flex min-h-11 w-full min-w-0 rounded-md border border-input bg-card px-3 py-2 text-base leading-6 text-foreground aria-invalid:border-danger focus-visible:border-ring" aria-invalid={Boolean(errors.requestedTermMonths)} aria-describedby={`requestedTermMonths-description${errors.requestedTermMonths ? ' requestedTermMonths-error' : ''}`} {...register('requestedTermMonths', { validate: (value) => product.policy.allowedTermsMonths.includes(Number(value)) || 'Select one of the available terms.' })}><option value="">Select a term</option>{product.policy.allowedTermsMonths.map((value) => <option key={value} value={value}>{value} {value === 1 ? 'month' : 'months'}</option>)}</select></AccountFormField>
+                </div>
+              </OriginationSection>
+              <OriginationSection title="Collateral details" description="Meridian reviews these details as part of your application. The estimated value does not determine approval.">
+                <div className="space-y-6">
+                  <AccountFormField htmlFor="collateralType" label="Collateral type" required error={errors.collateralType?.message}><select id="collateralType" className="flex min-h-11 w-full min-w-0 rounded-md border border-input bg-card px-3 py-2 text-base leading-6 text-foreground aria-invalid:border-danger focus-visible:border-ring" aria-invalid={Boolean(errors.collateralType)} aria-describedby={errors.collateralType ? 'collateralType-error' : undefined} {...register('collateralType', { validate: (value) => collateralTypes.includes(value as CollateralType) || 'Select a supported collateral type.' })}><option value="">Select a collateral type</option>{collateralTypes.map((value) => <option key={value} value={value}>{collateralLabels[value]}</option>)}</select></AccountFormField>
                   <TextAreaField name="description" label="Description" maxLength={500} control={register('description', { validate: requiredText('Description', 500) })} error={errors.description?.message} />
                   <AccountFormField htmlFor="estimatedValue" label="Estimated value" required description="Enter a positive whole-VND estimate. This amount does not determine approval." error={errors.estimatedValue?.message}><Controller name="estimatedValue" control={control} rules={{ validate: (value) => validateWholeVnd(value) }} render={({ field }) => <AmountInput field={field} invalid={Boolean(errors.estimatedValue)} describedBy={`estimatedValue-description${errors.estimatedValue ? ' estimatedValue-error' : ''}`} />} /></AccountFormField>
                   <TextAreaField name="ownershipStatus" label="Ownership status" maxLength={200} description="Describe the current ownership status in your own words." control={register('ownershipStatus', { validate: requiredText('Ownership status', 200) })} error={errors.ownershipStatus?.message} />
                   <TextAreaField name="conditionNote" label="Condition note" maxLength={500} control={register('conditionNote', { validate: requiredText('Condition note', 500) })} error={errors.conditionNote?.message} />
-                </CardContent>
-              </Card>
+                </div>
+              </OriginationSection>
             </>
           ) : (
-            <Card>
-              <CardHeader><CardTitle>Confirm your request</CardTitle><CardDescription>Review the details you are about to submit.</CardDescription></CardHeader>
-              <CardContent><dl className="grid gap-4 sm:grid-cols-2"><ReviewFact label="Requested amount"><MoneyDisplay value={Number(review.requestedAmount)} /></ReviewFact><ReviewFact label="Requested term">{review.requestedTermMonths} months</ReviewFact><ReviewFact label="Collateral type">{collateralLabels[review.collateralType as CollateralType] ?? 'Type unavailable'}</ReviewFact><ReviewFact label="Estimated value"><MoneyDisplay value={Number(review.estimatedValue)} /></ReviewFact><ReviewFact label="Description">{review.description}</ReviewFact><ReviewFact label="Ownership status">{review.ownershipStatus}</ReviewFact><ReviewFact label="Condition note">{review.conditionNote}</ReviewFact></dl></CardContent>
-            </Card>
+            <OriginationSection title="Confirm your request" description="Review the details you are about to submit.">
+              <div className="space-y-6"><dl className="grid gap-x-6 sm:grid-cols-2"><ReviewFact label="Requested amount"><MoneyDisplay value={Number(review.requestedAmount)} /></ReviewFact><ReviewFact label="Requested term">{review.requestedTermMonths} months</ReviewFact><ReviewFact label="Collateral type">{collateralLabels[review.collateralType as CollateralType] ?? 'Type unavailable'}</ReviewFact><ReviewFact label="Estimated value"><MoneyDisplay value={Number(review.estimatedValue)} /></ReviewFact></dl><dl><ReviewFact label="Description">{review.description}</ReviewFact><ReviewFact label="Ownership status">{review.ownershipStatus}</ReviewFact><ReviewFact label="Condition note">{review.conditionNote}</ReviewFact></dl></div>
+            </OriginationSection>
           )}
           <EvidenceRequirements requirements={product.policy.submissionEvidenceRequirements} />
         </form>
@@ -179,5 +175,5 @@ export function CollateralLoanApplicationPage() {
 }
 
 function TextAreaField({ name, label, maxLength, description, control, error }: { name: string; label: string; maxLength: number; description?: string; control: UseFormRegisterReturn; error?: string }) {
-  return <AccountFormField htmlFor={name} label={label} required description={description ?? `Maximum ${maxLength} characters.`} error={error}><textarea id={name} rows={4} maxLength={maxLength} className="flex min-h-24 w-full resize-y rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20" aria-invalid={Boolean(error)} aria-describedby={`${name}-description${error ? ` ${name}-error` : ''}`} {...control} /></AccountFormField>
+  return <AccountFormField htmlFor={name} label={label} required description={description ?? `Maximum ${maxLength} characters.`} error={error}><textarea id={name} rows={4} maxLength={maxLength} className="flex min-h-24 w-full min-w-0 resize-y rounded-md border border-input bg-card px-3 py-2 text-base leading-6 text-foreground aria-invalid:border-danger focus-visible:border-ring" aria-invalid={Boolean(error)} aria-describedby={`${name}-description${error ? ` ${name}-error` : ''}`} {...control} /></AccountFormField>
 }

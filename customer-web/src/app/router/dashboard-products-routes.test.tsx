@@ -98,6 +98,7 @@ const products = Object.values(productDefinitions)
 
 const salaryAdvanceReadiness = {
   productCode: 'SALARY_ADVANCE',
+  partnerCompanyName: 'Aurora Manufacturing',
   customerPartnerEmployeeLinkId: '55555555-5555-4555-8555-555555555551',
   employeeVerificationStatus: 'VERIFIED',
   partnerEligibilityStatus: 'ELIGIBLE',

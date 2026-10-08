@@ -13,6 +13,7 @@ const nullableUuid = javaUuid.nullable()
 export const salaryAdvanceReadinessSchema = z.object({
   productCode: nonEmptyString,
   customerPartnerEmployeeLinkId: nullableUuid,
+  partnerCompanyName: nonEmptyString.nullable(),
   employeeVerificationStatus: nonEmptyString,
   partnerEligibilityStatus: nonEmptyString,
   limitStatus: nonEmptyString,

@@ -23,6 +23,7 @@ class SalaryAdvanceReadinessControllerTest {
         QuerySalaryAdvanceReadinessUseCase useCase = () -> new SalaryAdvanceReadinessDto(
                 "SALARY_ADVANCE",
                 linkId,
+                "Aurora Manufacturing",
                 "VERIFIED",
                 "ELIGIBLE",
                 "ACTIVE",
@@ -42,12 +43,19 @@ class SalaryAdvanceReadinessControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.productCode").value("SALARY_ADVANCE"))
                 .andExpect(jsonPath("$.customerPartnerEmployeeLinkId").value(linkId.toString()))
+                .andExpect(jsonPath("$.partnerCompanyName").value("Aurora Manufacturing"))
                 .andExpect(jsonPath("$.availableAmount").value(3_000_000))
                 .andExpect(jsonPath("$.applicationAllowed").value(true))
                 .andExpect(jsonPath("$.salaryAdvanceLimitId").doesNotExist())
                 .andExpect(jsonPath("$.partnerEmployeeId").doesNotExist())
                 .andExpect(jsonPath("$.sourceImportBatchId").doesNotExist())
-                .andExpect(jsonPath("$.salary").doesNotExist());
+                .andExpect(jsonPath("$.salary").doesNotExist())
+                .andExpect(jsonPath("$.employeeSalaryAmount").doesNotExist())
+                .andExpect(jsonPath("$.employeeCode").doesNotExist())
+                .andExpect(jsonPath("$.partnerCompanyId").doesNotExist())
+                .andExpect(jsonPath("$.snapshot").doesNotExist())
+                .andExpect(jsonPath("$.internalNotes").doesNotExist())
+                .andExpect(jsonPath("$.*").value(org.hamcrest.Matchers.hasSize(13)));
     }
 
     private static BigDecimal amount(long value) {

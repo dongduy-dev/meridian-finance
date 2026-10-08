@@ -101,7 +101,7 @@ class LoanWorkflowReadSecurityTest {
     private static SalaryAdvanceReadinessDto readinessResult() {
         BigDecimal zero = BigDecimal.ZERO.setScale(2);
         return new SalaryAdvanceReadinessDto(
-                "SALARY_ADVANCE", null, "NOT_VERIFIED", "NOT_VERIFIED", "UNAVAILABLE",
+                "SALARY_ADVANCE", null, null, "NOT_VERIFIED", "NOT_VERIFIED", "UNAVAILABLE",
                 zero, zero, zero, zero, null, false,
                 List.of("EMPLOYEE_NOT_VERIFIED", "SALARY_ADVANCE_LIMIT_UNAVAILABLE")
         );

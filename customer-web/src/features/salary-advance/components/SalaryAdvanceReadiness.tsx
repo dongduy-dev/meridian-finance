@@ -1,5 +1,5 @@
 import { ArrowRight, Info, ShieldCheck } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
 import { MoneyDisplay } from '@/components/common/MoneyDisplay'
@@ -18,11 +18,18 @@ import {
 } from '../salary-advance-presentation'
 import { EmployeeVerificationPanel } from './EmployeeVerificationPanel'
 
-function LimitFact({ label, value }: { label: string; value: number }) {
+// Preserve the returned number's precision for Available, including fractional VND.
+const availableAmountFormatter = new Intl.NumberFormat('vi-VN', {
+  style: 'currency',
+  currency: 'VND',
+  maximumSignificantDigits: 21,
+})
+
+function LimitFact({ label, value, children }: { label: string; value: number; children?: ReactNode }) {
   return (
-    <div className="min-w-0 rounded-md border border-border bg-background p-4">
-      <dt className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">{label}</dt>
-      <dd className="mt-2 min-w-0 text-lg"><MoneyDisplay value={value} /></dd>
+    <div className="min-w-0 space-y-2 border-t border-border py-4 [overflow-wrap:anywhere]">
+      <dt className="text-sm leading-5 text-muted-foreground">{label}</dt>
+      <dd className="mt-2 min-w-0 text-lg">{children ?? <MoneyDisplay value={value} />}</dd>
     </div>
   )
 }
@@ -30,8 +37,8 @@ function LimitFact({ label, value }: { label: string; value: number }) {
 export function SalaryAdvanceLimitSummary({ readiness }: { readiness: SalaryAdvanceReadinessData }) {
   const unavailable = readiness.limitStatus === 'UNAVAILABLE'
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-0 bg-transparent [overflow-wrap:anywhere]">
+      <CardHeader className="p-0 pb-6 sm:p-0 sm:pb-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle>Current Salary Advance limit</CardTitle>
@@ -40,7 +47,7 @@ export function SalaryAdvanceLimitSummary({ readiness }: { readiness: SalaryAdva
           <StatusBadge presentation={limitStatusPresentation(readiness.limitStatus)} />
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 p-0 sm:p-0">
         {unavailable ? (
           <Alert>
             <Info aria-hidden="true" />
@@ -48,11 +55,15 @@ export function SalaryAdvanceLimitSummary({ readiness }: { readiness: SalaryAdva
             <AlertDescription>We can't show a usable limit right now. Refresh the page or try again later.</AlertDescription>
           </Alert>
         ) : (
-          <dl className="grid gap-3 sm:grid-cols-2">
+          <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-x-6">
             <LimitFact label="Total limit" value={readiness.totalAmount} />
             <LimitFact label="Used" value={readiness.usedAmount} />
             <LimitFact label="Reserved" value={readiness.reservedAmount} />
-            <LimitFact label="Available" value={readiness.availableAmount} />
+            <LimitFact label="Available" value={readiness.availableAmount}>
+              <span className="min-w-0 [overflow-wrap:anywhere] font-semibold tabular-nums type-money">
+                {availableAmountFormatter.format(readiness.availableAmount)}
+              </span>
+            </LimitFact>
           </dl>
         )}
         {readiness.limitStatus === 'NOT_INITIALIZED' ? (
@@ -77,46 +88,49 @@ export function ReadinessSummary({ readiness }: { readiness: SalaryAdvanceReadin
   )
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-0 bg-transparent [overflow-wrap:anywhere]">
+      <CardHeader className="p-0 pb-6 sm:p-0 sm:pb-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle>Can you apply?</CardTitle>
-            <CardDescription className="mt-1">Check whether anything needs your attention before you apply.</CardDescription>
+            {!readiness.applicationAllowed ? (
+              <CardDescription className="mt-1">Check whether anything needs your attention before you apply.</CardDescription>
+            ) : null}
           </div>
           <StatusBadge presentation={readiness.applicationAllowed
             ? { label: 'Ready to apply', tone: 'success', icon: ShieldCheck }
             : { label: 'Not ready to apply', tone: 'warning', icon: Info }} />
         </div>
       </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="flex flex-wrap gap-2" aria-label="Employment verification statuses">
-          <StatusBadge presentation={employeeStatusPresentation(readiness.employeeVerificationStatus)} />
-          <StatusBadge presentation={partnerStatusPresentation(readiness.partnerEligibilityStatus)} />
-        </div>
+      <CardContent className="space-y-6 p-0 sm:p-0">
         {readiness.applicationAllowed ? (
-          <Alert variant="success" aria-live="polite">
-            <ShieldCheck aria-hidden="true" />
-            <AlertTitle>Ready to begin</AlertTitle>
-            <AlertDescription>You're ready to start an application. We'll check your information again when you submit.</AlertDescription>
-          </Alert>
-        ) : (
-          <div className="space-y-3" aria-live="polite">
-            {readiness.blockerCodes.length ? readiness.blockerCodes.map((code, index) => {
-              const presentation = blockerPresentation(code)
-              return (
-                <div key={`${code}-${index}`} className="rounded-md border border-border bg-background p-4">
-                  <p className="font-semibold">{presentation.title}</p>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{presentation.description}</p>
-                </div>
-              )
-            }) : (
-              <div className="rounded-md border border-border bg-background p-4">
-                <p className="font-semibold">Application status unavailable</p>
-                <p className="mt-1 text-sm leading-6 text-muted-foreground">We can't confirm whether you can apply right now. Refresh the page or try again later.</p>
-              </div>
-            )}
+          <div className="space-y-2" aria-live="polite">
+            <p className="font-semibold">Employment verified</p>
+            {readiness.partnerCompanyName ? <p>{readiness.partnerCompanyName}</p> : null}
           </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2" aria-label="Employment verification statuses">
+              <StatusBadge presentation={employeeStatusPresentation(readiness.employeeVerificationStatus)} />
+              <StatusBadge presentation={partnerStatusPresentation(readiness.partnerEligibilityStatus)} />
+            </div>
+            <div className="space-y-3" aria-live="polite">
+              {readiness.blockerCodes.length ? readiness.blockerCodes.map((code, index) => {
+                const presentation = blockerPresentation(code)
+                return (
+                  <div key={`${code}-${index}`} className="border-t border-border py-4">
+                    <p className="font-semibold">{presentation.title}</p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">{presentation.description}</p>
+                  </div>
+                )
+              }) : (
+                <div className="border-t border-border py-4">
+                  <p className="font-semibold">Application status unavailable</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">We can't confirm whether you can apply right now. Refresh the page or try again later.</p>
+                </div>
+              )}
+            </div>
+          </>
         )}
         {actions.length ? (
           <div className="flex flex-wrap gap-3">
@@ -127,7 +141,9 @@ export function ReadinessSummary({ readiness }: { readiness: SalaryAdvanceReadin
             ))}
           </div>
         ) : null}
-        <p className="text-xs leading-5 text-muted-foreground">We'll check your information again when you submit. Being ready to apply does not guarantee that the application will be accepted.</p>
+        <p className="text-sm leading-5 text-muted-foreground">{readiness.applicationAllowed
+          ? "We'll check your information again when you submit."
+          : "We'll check your information again when you submit. Being ready to apply does not guarantee that the application will be accepted."}</p>
       </CardContent>
     </Card>
   )
@@ -151,8 +167,8 @@ export function SalaryAdvanceReadiness({
   const hasCurrentEmployment = Boolean(readiness.customerPartnerEmployeeLinkId)
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6 xl:grid-cols-2">
+    <div className="space-y-[var(--section-transactional)]">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,24rem),1fr))] gap-[var(--section-transactional)]">
         <ReadinessSummary readiness={readiness} />
         <SalaryAdvanceLimitSummary readiness={readiness} />
       </div>
@@ -165,7 +181,7 @@ export function SalaryAdvanceReadiness({
       ) : null}
       {showVerification && hasCurrentEmployment && !needsVerification && !needsReverification
         && !employmentUpdateOpen ? (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap gap-3 border-t border-border pt-6 sm:justify-end [&>a]:w-full [&>button]:w-full sm:[&>a]:w-auto sm:[&>button]:w-auto">
           <Button variant="secondary" onClick={() => setEmploymentUpdateOpen(true)}>
             Update employment
           </Button>
@@ -181,7 +197,7 @@ export function SalaryAdvanceReadiness({
         />
       ) : null}
       {showApplyAction && applyAvailable ? (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap gap-3 border-t border-border pt-6 sm:justify-end [&>a]:w-full [&>button]:w-full sm:[&>a]:w-auto sm:[&>button]:w-auto">
           <Button size="lg" asChild>
             <Link to="/products/salary-advance/apply">Apply for Salary Advance<ArrowRight aria-hidden="true" /></Link>
           </Button>

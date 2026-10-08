@@ -6,6 +6,7 @@ import { createSalaryAdvanceApi } from './salary-advance-api'
 
 const readiness = {
   productCode: 'SALARY_ADVANCE',
+  partnerCompanyName: null,
   customerPartnerEmployeeLinkId: null,
   employeeVerificationStatus: 'FUTURE_EMPLOYEE_STATUS',
   partnerEligibilityStatus: 'FUTURE_PARTNER_STATUS',
@@ -73,6 +74,30 @@ function setup(responses: unknown[]) {
 }
 
 describe('Salary Advance API boundary', () => {
+  it('preserves the Customer-safe employer name from readiness without querying selectable employers', async () => {
+    const { api, request } = setup([{ ...readiness, partnerCompanyName: 'Aurora Manufacturing' }])
+    expect((await api.getReadiness()).partnerCompanyName).toBe('Aurora Manufacturing')
+    expect(request).toHaveBeenCalledOnce()
+    expect(request.mock.calls[0]![0]).toBe('/loan-products/salary-advance/readiness')
+  })
+
+  it('rejects an empty employer display name', async () => {
+    const { api } = setup([{ ...readiness, partnerCompanyName: '' }])
+    await expect(api.getReadiness()).rejects.toThrow()
+  })
+
+  it('preserves decimal Salary Advance money facts without rounding', async () => {
+    const decimalReadiness = { ...readiness, totalAmount: 3_999_999_999.60, usedAmount: 0.25,
+      reservedAmount: 0.10, availableAmount: 3_999_999_999.25, applicationAllowed: true, blockerCodes: [] }
+    const { api } = setup([decimalReadiness])
+    expect(await api.getReadiness()).toEqual(decimalReadiness)
+  })
+
+  it.each([-1, NaN, Infinity, -Infinity, null, undefined])('rejects invalid readiness money: %s', async (availableAmount) => {
+    const { api } = setup([{ ...readiness, availableAmount }])
+    await expect(api.getReadiness()).rejects.toThrow()
+  })
+
   it('parses nullable readiness fields, evolving strings, and preserved blockers through the protected client', async () => {
     const { api, coordinator, request } = setup([readiness])
 
