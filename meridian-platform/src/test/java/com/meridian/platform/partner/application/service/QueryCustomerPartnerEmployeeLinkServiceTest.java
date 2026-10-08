@@ -69,6 +69,7 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
 
         assertEquals(CustomerPartnerEmployeeEligibilityDto.Status.ELIGIBLE, result.status());
         assertEquals(LINK_ID, result.optionalSnapshot().orElseThrow().customerPartnerEmployeeLinkId());
+        assertEquals("Meridian Partner Co.", result.partnerCompanyName());
     }
 
     @Test
@@ -79,6 +80,7 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
 
         assertEquals(CustomerPartnerEmployeeEligibilityDto.Status.EVIDENCE_STALE, result.status());
         assertTrue(result.optionalSnapshot().isEmpty());
+        org.junit.jupiter.api.Assertions.assertNull(result.partnerCompanyName());
     }
 
     @Test
@@ -140,6 +142,7 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
 
         assertEquals(CustomerPartnerEmployeeEligibilityDto.Status.ELIGIBLE, result.status());
         assertEquals(LINK_ID, result.optionalSnapshot().orElseThrow().customerPartnerEmployeeLinkId());
+        assertEquals("Meridian Partner Co.", result.partnerCompanyName());
     }
 
     @Test

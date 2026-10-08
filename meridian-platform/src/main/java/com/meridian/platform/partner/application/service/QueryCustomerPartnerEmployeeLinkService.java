@@ -137,7 +137,8 @@ public class QueryCustomerPartnerEmployeeLinkService implements QueryCustomerPar
                         employee.salaryAdvanceLimit(),
                         link.lastVerifiedAt(),
                         link.lastRefreshedAt()
-                )
+                ),
+                companyResult.orElseThrow().name()
         );
     }
 

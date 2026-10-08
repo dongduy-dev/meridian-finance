@@ -44,6 +44,7 @@ const product = {
 
 const readyReadiness = {
   productCode: 'SALARY_ADVANCE',
+  partnerCompanyName: 'Aurora Manufacturing',
   customerPartnerEmployeeLinkId: linkId,
   employeeVerificationStatus: 'VERIFIED',
   partnerEligibilityStatus: 'ELIGIBLE',
@@ -201,6 +202,21 @@ afterEach(() => {
 })
 
 describe('FE-CP6 Salary Advance product readiness', () => {
+  it.each(['/products/salary-advance', '/products/salary-advance/apply'])(
+    'shows one concise ready state with the authoritative employer on %s', async (path) => {
+      const { fetchMock, unmount } = renderRoute(path)
+      expect(await screen.findByText('Aurora Manufacturing')).toBeVisible()
+      expect(screen.getAllByText('Ready to apply')).toHaveLength(1)
+      expect(screen.getAllByText('Employment verified')).toHaveLength(1)
+      expect(screen.queryByText('Ready to begin')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Employment verification statuses')).not.toBeInTheDocument()
+      expect(screen.getAllByText("We'll check your information again when you submit.")).toHaveLength(1)
+      expect(screen.queryByText(options[0]!.name)).not.toBeInTheDocument()
+      expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/partner-companies/verification-options'))).toBe(false)
+      unmount()
+    },
+  )
+
   it('preserves CP5 policy, displays exact returned limit facts, and exposes Apply only from backend readiness', async () => {
     const { fetchMock } = renderRoute('/products/salary-advance')
 

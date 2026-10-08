@@ -134,6 +134,7 @@ public class QuerySalaryAdvanceReadinessService implements QuerySalaryAdvanceRea
                 ProductCode.SALARY_ADVANCE.name(),
                 partnerSnapshot.map(VerifiedPartnerEmployeeLinkSnapshot::customerPartnerEmployeeLinkId)
                         .orElse(null),
+                partner.partnerCompanyName(),
                 partner.status() == PartnerEligibilityAssessment.Status.NOT_VERIFIED
                         ? "NOT_VERIFIED" : "VERIFIED",
                 partner.status().name(),

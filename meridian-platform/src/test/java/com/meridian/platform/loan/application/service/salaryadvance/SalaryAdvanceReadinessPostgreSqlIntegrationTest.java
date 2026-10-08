@@ -137,12 +137,30 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
         assertEquals("ELIGIBLE", result.partnerEligibilityStatus());
         assertEquals("NOT_INITIALIZED", result.limitStatus());
         assertEquals(fixture.linkId(), result.customerPartnerEmployeeLinkId());
+        assertEquals("Readiness Employer", result.partnerCompanyName());
         assertEquals(money("6000000.00"), result.totalAmount());
         assertEquals(money("6000000.00"), result.availableAmount());
         assertTrue(result.blockerCodes().isEmpty());
         assertEquals(applicationCount, count("select count(*) from loan_applications"));
         assertEquals(limitCount, count("select count(*) from salary_advance_limits"));
         assertEquals(movementCount, count("select count(*) from salary_advance_limit_movements"));
+    }
+
+    @Test
+    void employerNameComesFromTheCurrentVerifiedCompanyRatherThanOtherCompaniesOrProfile() {
+        UUID unrelatedCompanyId = UUID.randomUUID();
+        jdbc.update("insert into partner_companies (id, company_code, name, status, salary_advance_policy_limit) "
+                        + "values (?, ?, 'Unrelated Employer', 'ACTIVE', 7000000.00)",
+                unrelatedCompanyId, "UNRELATED-" + unrelatedCompanyId);
+        jdbc.update("update customer_profiles set employer_name='Self-declared employer' where customer_id=?", fixture.customerId());
+
+        assertEquals("Readiness Employer", readinessQueries.queryReadiness().partnerCompanyName());
+        jdbc.update("update partner_companies set name='Aurora Manufacturing' where id=?", fixture.partnerCompanyId());
+
+        SalaryAdvanceReadinessDto result = readinessQueries.queryReadiness();
+        assertEquals("Aurora Manufacturing", result.partnerCompanyName());
+        assertEquals(fixture.linkId(), result.customerPartnerEmployeeLinkId());
+        assertTrue(result.applicationAllowed());
     }
 
     @Test
@@ -158,6 +176,7 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
                 alternativeReview, fixture.customerId(), alternativeCompany);
         var blocked = readinessQueries.queryReadiness();
         assertFalse(blocked.applicationAllowed());
+        org.junit.jupiter.api.Assertions.assertNull(blocked.partnerCompanyName());
         assertTrue(blocked.blockerCodes().contains("EMPLOYEE_NOT_VERIFIED"));
         var verified = employmentVerification.verifyPartnerEmployee(fixture.partnerCompanyId(),
                 new com.meridian.platform.partner.application.dto.PartnerEmployeeVerificationRequest("READINESS-EMP"));
@@ -252,6 +271,7 @@ class SalaryAdvanceReadinessPostgreSqlIntegrationTest {
         SalaryAdvanceReadinessDto refreshed = readinessQueries.queryReadiness();
         assertTrue(refreshed.applicationAllowed());
         assertEquals("ELIGIBLE", refreshed.partnerEligibilityStatus());
+        assertEquals("Readiness Employer", refreshed.partnerCompanyName());
         SalaryAdvanceApplicationDto application = submissions.startSalaryAdvanceApplication(
                 new SalaryAdvanceApplicationRequest(fixture.linkId(), REQUESTED_AMOUNT, 1)
         );
