@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppProviders } from '@/app/providers/AppProviders'
 import { AuthSessionManager } from '@/features/auth/auth-session'
 import { ApiError } from '@/lib/api'
-import { formatPercentage } from '@/lib/format/presentation'
+import { formatMoney, formatPercentage } from '@/lib/format/presentation'
 import { createAuthApiMock, createTestAuthManager } from '@/test/auth'
 
 import { createTestRouter } from './router'
@@ -236,6 +236,15 @@ describe('FE-CP9 offer flow', () => {
     expect(screen.getByRole('heading', { name: 'Provisional repayment preview' })).toBeVisible()
     expect(screen.getByText('These amounts are a preview. Your final repayment schedule will include the due dates.')).toBeVisible()
     expect(screen.getByText(/Refresh the page if its status changes/i)).toBeVisible()
+    const terms = within(screen.getByRole('region', { name: 'Approved offer' }))
+    for (const [label, value] of [['Total interest', pendingOffer.totalInterest], ['Fee', pendingOffer.feeAmount], ['Total repayment', pendingOffer.totalRepaymentAmount]] as const) {
+      expect(terms.getByText(label, { exact: true }).parentElement?.querySelector('dd')?.textContent).toBe(formatMoney(value))
+    }
+    const preview = screen.getByRole('region', { name: 'Provisional repayment preview' })
+    for (const [label, value] of [['Principal', repaymentItem.principalDue], ['Interest', repaymentItem.interestDue], ['Fee', repaymentItem.feeDue], ['Total', repaymentItem.totalDue]] as const) {
+      expect(within(preview).getByText(label, { exact: true }).parentElement?.querySelector('dd')?.textContent).toBe(formatMoney(value))
+    }
+    expect(preview.compareDocumentPosition(screen.getByRole('button', { name: 'Accept offer' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it.each([
@@ -330,6 +339,16 @@ describe('FE-CP9 contract flow', () => {
     expect(screen.getByRole('heading', { name: 'Contract repayment preview' })).toBeVisible()
     expect(screen.getByText(/not an electronic or digital signature/i)).toBeVisible()
     expect(screen.queryByRole('button', { name: /readiness|reveal|prepare contract/i })).not.toBeInTheDocument()
+    const terms = within(screen.getByRole('region', { name: preparedContract.contractReference }))
+    for (const [label, value] of [['Accepted principal', preparedContract.approvedPrincipal], ['Total interest', preparedContract.totalInterest], ['Fee', preparedContract.feeAmount], ['Total repayment', preparedContract.totalRepaymentAmount]] as const) {
+      expect(terms.getByText(label, { exact: true }).parentElement?.querySelector('dd')?.textContent).toBe(formatMoney(value))
+    }
+    expect(terms.getByText('Monthly flat interest rate').parentElement).toHaveTextContent(formatPercentage(preparedContract.flatMonthlyInterestRate))
+    const preview = screen.getByRole('region', { name: 'Contract repayment preview' })
+    for (const [label, value] of [['Principal', repaymentItem.principalDue], ['Interest', repaymentItem.interestDue], ['Fee', repaymentItem.feeDue], ['Total', repaymentItem.totalDue]] as const) {
+      expect(within(preview).getByText(label, { exact: true }).parentElement?.querySelector('dd')?.textContent).toBe(formatMoney(value))
+    }
+    expect(preview.compareDocumentPosition(screen.getByRole('button', { name: 'Confirm review of version 1' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('drives acknowledgment only from availableCustomerAction and handles unknown values safely', async () => {
@@ -412,6 +431,25 @@ describe('FE-CP9 route protection', () => {
     render(<AppProviders router={router} authManager={new AuthSessionManager(api, vi.fn())} />)
     expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeVisible()
     expect(router.state.location.pathname).toBe('/login')
+  })
+})
+
+describe('Financial review confirmation focus', () => {
+  it.each([
+    ['offer', 'Decline offer', 'Decline this offer?'],
+    ['contract', 'Confirm review of version 1', 'Confirm review of contract version 1?'],
+  ])('returns keyboard focus to the %s confirmation opener without dispatching a command', async (page, action, title) => {
+    const user = userEvent.setup()
+    const fixture = state()
+    renderRoute(`/applications/${applicationId}/${page}`, fixture)
+    const opener = await screen.findByRole('button', { name: action })
+    await user.click(opener)
+    const dialog = await screen.findByRole('dialog', { name: title })
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true))
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(opener).toHaveFocus())
+    expect(fixture.acceptPosts + fixture.declinePosts + fixture.acknowledgmentBodies.length).toBe(0)
   })
 })
 
