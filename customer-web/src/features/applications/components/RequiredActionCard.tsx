@@ -18,7 +18,7 @@ export function RequiredActionCard({ application, presentation: layout = 'card' 
   const Heading = layout === 'row' ? 'h3' : 'h2'
 
   return (
-    <Card className={cn('min-w-0 [overflow-wrap:anywhere]', layout === 'row' ? 'border-0 bg-transparent py-6' : 'border-warning/25')}>
+    <Card className={cn('min-w-0 [overflow-wrap:anywhere]', layout === 'row' ? 'border-0 bg-transparent py-6' : 'border-0 border-l-2 border-warning')}>
       <CardHeader className={cn('gap-3', layout === 'row' && 'p-0 sm:p-0')}>
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">

@@ -173,7 +173,7 @@ export function ApplicationCorrectionsPage() {
         </Button>
       ) : undefined}
     >
-      <div className="space-y-7">
+      <div className="min-w-0 space-y-[var(--section-transactional)] [overflow-wrap:anywhere]">
         {notFound ? (
           <EmptyState icon={Info} title="Requested changes unavailable" description="Return to your application list and choose an available application." action={<Button asChild><Link to="/applications">Applications</Link></Button>} />
         ) : null}
@@ -190,8 +190,8 @@ export function ApplicationCorrectionsPage() {
         ) : null}
 
         {tasksQuery.data?.length ? (
-          <section aria-labelledby="customer-correction-tasks" className="space-y-5">
-            <div><h2 id="customer-correction-tasks" className="text-xl font-semibold">What you need to update</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Review each requested change. Upload any required documents and mark each change as complete before submitting your updates.</p></div>
+          <section aria-labelledby="customer-correction-tasks" className="space-y-8">
+            <div className="space-y-2"><h2 id="customer-correction-tasks" className="type-section">What you need to update</h2><p className="text-sm leading-5 text-muted-foreground">Review each requested change. Upload any required documents and mark each change as complete before submitting your updates.</p></div>
             {tasksQuery.data.map((task) => (
               <CorrectionTaskCard
                 key={task.correctionTaskId}
@@ -220,8 +220,8 @@ export function ApplicationCorrectionsPage() {
         ) : null}
 
         {canCancel ? (
-          <section aria-labelledby="cancel-application-heading" className="space-y-3 border-t border-border pt-6">
-            <div><h2 id="cancel-application-heading" className="text-lg font-semibold">Cancel this application</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">You can cancel this application while it is waiting for your updates.</p></div>
+          <section aria-labelledby="cancel-application-heading" className="space-y-6 border-t border-border pt-6">
+            <div className="space-y-2"><h2 id="cancel-application-heading" className="type-section">Cancel this application</h2><p className="text-sm leading-5 text-muted-foreground">You can cancel this application while it is waiting for your updates.</p></div>
             <Dialog>
               <DialogTrigger asChild><Button variant="destructive"><Ban aria-hidden="true" />Cancel application</Button></DialogTrigger>
               <DialogContent>
