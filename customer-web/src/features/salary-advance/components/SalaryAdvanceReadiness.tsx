@@ -1,5 +1,5 @@
 import { ArrowRight, Info, ShieldCheck } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
 import { MoneyDisplay } from '@/components/common/MoneyDisplay'
@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { formatTimestamp } from '@/lib/format/presentation'
 
 import type { SalaryAdvanceReadiness as SalaryAdvanceReadinessData } from '../salary-advance-api'
-import { wholeVndAvailability } from '../whole-vnd-availability'
 import {
   blockerPresentation,
   employeeStatusPresentation,
@@ -19,18 +18,24 @@ import {
 } from '../salary-advance-presentation'
 import { EmployeeVerificationPanel } from './EmployeeVerificationPanel'
 
-function LimitFact({ label, value, primary = false }: { label: string; value: number; primary?: boolean }) {
+// Preserve the returned number's precision for Available, including fractional VND.
+const availableAmountFormatter = new Intl.NumberFormat('vi-VN', {
+  style: 'currency',
+  currency: 'VND',
+  maximumSignificantDigits: 21,
+})
+
+function LimitFact({ label, value, children }: { label: string; value: number; children?: ReactNode }) {
   return (
     <div className="min-w-0 space-y-2 border-t border-border py-4 [overflow-wrap:anywhere]">
       <dt className="text-sm leading-5 text-muted-foreground">{label}</dt>
-      <dd className="mt-2 min-w-0 text-lg"><MoneyDisplay value={value} emphasis={primary ? 'primary' : 'inline'} /></dd>
+      <dd className="mt-2 min-w-0 text-lg">{children ?? <MoneyDisplay value={value} />}</dd>
     </div>
   )
 }
 
 export function SalaryAdvanceLimitSummary({ readiness }: { readiness: SalaryAdvanceReadinessData }) {
-  const wholeVndAvailableAmount = wholeVndAvailability(readiness.availableAmount)
-  const unavailable = readiness.limitStatus === 'UNAVAILABLE' || wholeVndAvailableAmount === null
+  const unavailable = readiness.limitStatus === 'UNAVAILABLE'
   return (
     <Card className="border-0 bg-transparent [overflow-wrap:anywhere]">
       <CardHeader className="p-0 pb-6 sm:p-0 sm:pb-6">
@@ -54,12 +59,13 @@ export function SalaryAdvanceLimitSummary({ readiness }: { readiness: SalaryAdva
             <LimitFact label="Total limit" value={readiness.totalAmount} />
             <LimitFact label="Used" value={readiness.usedAmount} />
             <LimitFact label="Reserved" value={readiness.reservedAmount} />
-            <LimitFact label="Available" value={wholeVndAvailableAmount} primary />
+            <LimitFact label="Available" value={readiness.availableAmount}>
+              <span className="min-w-0 [overflow-wrap:anywhere] font-semibold tabular-nums type-money">
+                {availableAmountFormatter.format(readiness.availableAmount)}
+              </span>
+            </LimitFact>
           </dl>
         )}
-        {!unavailable && wholeVndAvailableAmount !== readiness.availableAmount ? (
-          <p className="text-sm leading-6 text-muted-foreground">Available is shown in whole VND. Product amount limits also apply.</p>
-        ) : null}
         {readiness.limitStatus === 'NOT_INITIALIZED' ? (
           <p className="text-sm leading-6 text-muted-foreground">This amount is an estimate. We'll confirm the available limit when you submit.</p>
         ) : null}

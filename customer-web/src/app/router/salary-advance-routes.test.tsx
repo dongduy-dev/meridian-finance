@@ -920,8 +920,10 @@ describe('FE-CP6 focused Salary Advance application', () => {
     expect(screen.queryByText('Application cannot be started')).not.toBeInTheDocument()
     expect(screen.queryByText('Loan details are unavailable')).not.toBeInTheDocument()
     const available = screen.getByText('Available').parentElement!
-    expect(within(available).getByText(moneyText(3_999_999_999))).toBeVisible()
+    expect(within(available).getByText('3.999.999.999,6 ₫')).toBeVisible()
+    expect(within(available).queryByText(moneyText(3_999_999_999))).not.toBeInTheDocument()
     expect(within(available).queryByText(moneyText(4_000_000_000))).not.toBeInTheDocument()
+    expect(screen.queryByText('Available is shown in whole VND. Product amount limits also apply.')).not.toBeInTheDocument()
     // Informational facts retain the existing formatter and raw response value.
     expect(within(screen.getByText('Total limit').parentElement!).getByText(moneyText(3_999_999_999.60))).toBeVisible()
     await user.selectOptions(screen.getByRole('combobox', { name: /Requested term/ }), '1')
@@ -944,8 +946,12 @@ describe('FE-CP6 focused Salary Advance application', () => {
     unmount()
   })
 
-  it.each([3_999_999_999.60, 1_999_999.99, 1_999_999.01])(
-    'enforces the floored available ceiling for %s through review and submission', async (availableAmount) => {
+  it.each([
+    [3_999_999_999.60, '3.999.999.999,6 ₫'],
+    [1_999_999.99, '1.999.999,99 ₫'],
+    [1_999_999.01, '1.999.999,01 ₫'],
+  ] as const)(
+    'enforces the floored available ceiling for %s through review and submission', async (availableAmount, displayedAmount) => {
       const user = userEvent.setup()
       const ceiling = Math.floor(availableAmount)
       const { fetchMock, unmount } = renderRoute('/products/salary-advance/apply', async (input, init) => {
@@ -959,6 +965,10 @@ describe('FE-CP6 focused Salary Advance application', () => {
         return defaultFetch(input, init)
       })
       const amount = await screen.findByRole('textbox', { name: /Requested amount/ })
+      const available = screen.getByText('Available').parentElement!
+      expect(within(available).getByText(displayedAmount)).toBeVisible()
+      expect(within(available).queryByText(moneyText(ceiling))).not.toBeInTheDocument()
+      expect(screen.queryByText('Available is shown in whole VND. Product amount limits also apply.')).not.toBeInTheDocument()
       await user.selectOptions(screen.getByRole('combobox', { name: /Requested term/ }), '5')
       await user.type(amount, String(ceiling + 1))
       await user.click(screen.getByRole('button', { name: 'Review request' }))
