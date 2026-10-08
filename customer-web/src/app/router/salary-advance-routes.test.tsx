@@ -217,6 +217,85 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     },
   )
 
+  it.each(['/products/salary-advance', '/products/salary-advance/apply'])(
+    'keeps verified employment concise when an existing application blocks readiness on %s', async (path) => {
+      renderRoute(path, (input, init) => String(input).endsWith('/loan-products/salary-advance/readiness')
+        ? Promise.resolve(response({
+          ...readyReadiness,
+          applicationAllowed: false,
+          blockerCodes: ['BLOCKING_APPLICATION_EXISTS'],
+        }))
+        : defaultFetch(input, init))
+
+      expect(await screen.findByText('Salary Advance application in progress')).toBeVisible()
+      expect(screen.getAllByText('Not ready to apply')).toHaveLength(1)
+      expect(screen.getAllByText('Employment verified')).toHaveLength(1)
+      expect(screen.getByText('Employment verified')).toBeVisible()
+      expect(screen.getByText('Aurora Manufacturing')).toBeVisible()
+      expect(screen.queryByLabelText('Employment verification statuses')).not.toBeInTheDocument()
+      expect(screen.queryByText('Ready to apply')).not.toBeInTheDocument()
+      expect(screen.getByText('You already have a Salary Advance application in progress. You can start another after it is no longer active.')).toBeVisible()
+      expect(screen.getByText("We'll check your information again when you submit. Being ready to apply does not guarantee that the application will be accepted.")).toBeVisible()
+      expect(screen.queryByRole('link', { name: 'Apply for Salary Advance' })).not.toBeInTheDocument()
+      expect(screen.queryByText(options[0]!.name)).not.toBeInTheDocument()
+      expect(screen.queryByText(customer.profile.employerName)).not.toBeInTheDocument()
+    },
+  )
+
+  it.each([true, false])('does not infer a missing authoritative employer when applicationAllowed is %s', async (applicationAllowed) => {
+    renderRoute('/products/salary-advance', (input, init) => String(input).endsWith('/loan-products/salary-advance/readiness')
+      ? Promise.resolve(response({
+        ...readyReadiness,
+        partnerCompanyName: null,
+        applicationAllowed,
+        blockerCodes: applicationAllowed ? [] : ['BLOCKING_APPLICATION_EXISTS'],
+      }))
+      : defaultFetch(input, init))
+
+    expect(await screen.findByText('Employment verified')).toBeVisible()
+    expect(screen.getAllByText('Employment verified')).toHaveLength(1)
+    expect(screen.queryByText('Aurora Manufacturing')).not.toBeInTheDocument()
+    expect(screen.queryByText(options[0]!.name)).not.toBeInTheDocument()
+    expect(screen.queryByText(customer.profile.employerName)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Employment verification statuses')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['NOT_VERIFIED', 'NOT_VERIFIED', 'EMPLOYEE_NOT_VERIFIED', 'Employment verification required', 'Select your employer and enter your employee code below.'],
+    ['VERIFIED', 'PARTNER_INACTIVE', 'EMPLOYEE_NOT_VERIFIED', 'Employer is inactive', 'Select your employer and enter your employee code below.'],
+    ['VERIFIED', 'EMPLOYEE_INACTIVE', 'EMPLOYEE_NOT_VERIFIED', 'Employment is inactive', 'Select your employer and enter your employee code below.'],
+    ['VERIFIED', 'EVIDENCE_STALE', 'SALARY_ADVANCE_ELIGIBILITY_DATA_STALE', 'Employment information needs updating', 'Verify your employment again before submitting your application.'],
+    ['FUTURE_EMPLOYEE_STATUS', 'FUTURE_PARTNER_STATUS', 'FUTURE_BLOCKER', 'Employment status unavailable', "We can't show whether you can apply right now. Refresh the page or try again later."],
+    ['VERIFIED', 'NOT_VERIFIED', 'EMPLOYEE_NOT_VERIFIED', 'Employment verification required', 'Select your employer and enter your employee code below.'],
+    ['NOT_VERIFIED', 'ELIGIBLE', 'FUTURE_BLOCKER', 'Employment status unavailable', "We can't show whether you can apply right now. Refresh the page or try again later."],
+    ['FUTURE_EMPLOYEE_STATUS', 'ELIGIBLE', 'FUTURE_BLOCKER', 'Employment status unavailable', "We can't show whether you can apply right now. Refresh the page or try again later."],
+    ['VERIFIED', 'FUTURE_PARTNER_STATUS', 'FUTURE_BLOCKER', 'Employment status unavailable', "We can't show whether you can apply right now. Refresh the page or try again later."],
+    ['FUTURE_EMPLOYEE_STATUS', 'NOT_VERIFIED', 'FUTURE_BLOCKER', 'Employment status unavailable', "We can't show whether you can apply right now. Refresh the page or try again later."],
+    ['FUTURE_EMPLOYEE_STATUS', 'PARTNER_INACTIVE', 'EMPLOYEE_NOT_VERIFIED', 'Employer is inactive', 'Select your employer and enter your employee code below.'],
+  ])('retains employment status and guidance for %s / %s', async (employeeVerificationStatus, partnerEligibilityStatus, blockerCode, statusLabel, guidance) => {
+    renderRoute('/products/salary-advance', (input, init) => String(input).endsWith('/loan-products/salary-advance/readiness')
+      ? Promise.resolve(response({
+        ...readyReadiness,
+        employeeVerificationStatus,
+        partnerEligibilityStatus,
+        applicationAllowed: false,
+        blockerCodes: [blockerCode],
+      }))
+      : defaultFetch(input, init))
+
+    const employmentSummary = await screen.findByLabelText('Employment status')
+    expect(employmentSummary).toBeVisible()
+    expect(employmentSummary.textContent).toBe(statusLabel)
+    expect(within(employmentSummary).getAllByText(statusLabel)).toHaveLength(1)
+    expect(screen.queryByText('Employment verified')).not.toBeInTheDocument()
+    expect(screen.queryByText('Verification status unavailable')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Employment verification statuses')).not.toBeInTheDocument()
+    expect(screen.getByText(guidance)).toBeVisible()
+    expect(screen.getByText('Not ready to apply')).toBeVisible()
+    expect(screen.queryByText('Ready to apply')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Apply for Salary Advance' })).not.toBeInTheDocument()
+  })
+
   it('preserves CP5 policy, displays exact returned limit facts, and exposes Apply only from backend readiness', async () => {
     const { fetchMock } = renderRoute('/products/salary-advance')
 
@@ -909,7 +988,8 @@ describe('FE-CP6 Salary Advance product readiness', () => {
     })
 
     expect(await screen.findByText('Limit values are unavailable')).toBeVisible()
-    expect(screen.getByText('Verification status unavailable')).toBeVisible()
+    expect(screen.queryByText('Verification status unavailable')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Employment status unavailable')).toHaveLength(1)
     expect(screen.getByText('Employment status unavailable')).toBeVisible()
     expect(screen.getByText('Application status unavailable')).toBeVisible()
     const limitCard = screen.getByRole('heading', { name: 'Current Salary Advance limit' }).closest('[data-slot="card"]') as HTMLElement
