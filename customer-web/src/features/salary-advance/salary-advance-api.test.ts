@@ -73,6 +73,18 @@ function setup(responses: unknown[]) {
 }
 
 describe('Salary Advance API boundary', () => {
+  it('preserves decimal Salary Advance money facts without rounding', async () => {
+    const decimalReadiness = { ...readiness, totalAmount: 3_999_999_999.60, usedAmount: 0.25,
+      reservedAmount: 0.10, availableAmount: 3_999_999_999.25, applicationAllowed: true, blockerCodes: [] }
+    const { api } = setup([decimalReadiness])
+    expect(await api.getReadiness()).toEqual(decimalReadiness)
+  })
+
+  it.each([-1, NaN, Infinity, -Infinity, null, undefined])('rejects invalid readiness money: %s', async (availableAmount) => {
+    const { api } = setup([{ ...readiness, availableAmount }])
+    await expect(api.getReadiness()).rejects.toThrow()
+  })
+
   it('parses nullable readiness fields, evolving strings, and preserved blockers through the protected client', async () => {
     const { api, coordinator, request } = setup([readiness])
 

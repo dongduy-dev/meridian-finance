@@ -902,6 +902,94 @@ describe('FE-CP6 Salary Advance product readiness', () => {
 })
 
 describe('FE-CP6 focused Salary Advance application', () => {
+  it('opens with decimal limit facts while preserving product bounds and whole-VND request validation', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderRoute('/products/salary-advance/apply', async (input, init) => {
+      if (String(input).endsWith('/loan-products/SALARY_ADVANCE')) return response({
+        ...product, minAmount: 500_000, maxAmount: 2_000_000_000,
+        policy: { ...product.policy, allowedTermsMonths: [1, 2, 3] },
+      })
+      if (String(input).endsWith('/loan-products/salary-advance/readiness')) return response({
+        ...readyReadiness, limitStatus: 'NOT_INITIALIZED', totalAmount: 3_999_999_999.60,
+        usedAmount: 0, reservedAmount: 0, availableAmount: 3_999_999_999.60,
+      })
+      return defaultFetch(input, init)
+    })
+
+    const amount = await screen.findByRole('textbox', { name: /Requested amount/ })
+    expect(screen.queryByText('Application cannot be started')).not.toBeInTheDocument()
+    expect(screen.queryByText('Loan details are unavailable')).not.toBeInTheDocument()
+    const available = screen.getByText('Available').parentElement!
+    expect(within(available).getByText(moneyText(3_999_999_999))).toBeVisible()
+    expect(within(available).queryByText(moneyText(4_000_000_000))).not.toBeInTheDocument()
+    // Informational facts retain the existing formatter and raw response value.
+    expect(within(screen.getByText('Total limit').parentElement!).getByText(moneyText(3_999_999_999.60))).toBeVisible()
+    await user.selectOptions(screen.getByRole('combobox', { name: /Requested term/ }), '1')
+    for (const [value, error] of [
+      ['499999', 'Requested amount is below the current product minimum.'],
+      ['2000000001', 'Requested amount is above the current product maximum.'],
+      ['500000.5', 'Enter a positive whole-VND amount using digits only.'],
+      ['9007199254740992', 'Requested amount is too large. Enter a smaller amount.'],
+    ]) {
+      await user.clear(amount)
+      await user.type(amount, value!)
+      await user.click(screen.getByRole('button', { name: 'Review request' }))
+      expect(await screen.findByText(error!)).toBeVisible()
+    }
+    await user.clear(amount)
+    await user.type(amount, '2000000000')
+    await user.click(screen.getByRole('button', { name: 'Review request' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Review your application' })).toBeVisible()
+    expect(screen.getByText(moneyText(2_000_000_000))).toBeVisible()
+    unmount()
+  })
+
+  it.each([3_999_999_999.60, 1_999_999.99, 1_999_999.01])(
+    'enforces the floored available ceiling for %s through review and submission', async (availableAmount) => {
+      const user = userEvent.setup()
+      const ceiling = Math.floor(availableAmount)
+      const { fetchMock, unmount } = renderRoute('/products/salary-advance/apply', async (input, init) => {
+        if (String(input).endsWith('/loan-products/SALARY_ADVANCE')) return response({ ...product, maxAmount: 5_000_000_000 })
+        if (String(input).endsWith('/loan-products/salary-advance/readiness')) return response({
+          ...readyReadiness, totalAmount: availableAmount, usedAmount: 0, reservedAmount: 0, availableAmount,
+        })
+        if (String(input).endsWith('/loan-applications/salary-advance') && init?.method === 'POST') {
+          return response({ ...application, requestedAmount: ceiling }, 201)
+        }
+        return defaultFetch(input, init)
+      })
+      const amount = await screen.findByRole('textbox', { name: /Requested amount/ })
+      await user.selectOptions(screen.getByRole('combobox', { name: /Requested term/ }), '5')
+      await user.type(amount, String(ceiling + 1))
+      await user.click(screen.getByRole('button', { name: 'Review request' }))
+      expect(await screen.findByText('Requested amount exceeds the currently available Salary Advance amount.')).toBeVisible()
+      expect(amount).toHaveFocus()
+      await user.clear(amount)
+      await user.type(amount, String(ceiling))
+      await user.click(screen.getByRole('button', { name: 'Review request' }))
+      await user.click(await screen.findByRole('button', { name: 'Submit application' }))
+      expect(await screen.findByText('Submission confirmed')).toBeVisible()
+      const submissions = fetchMock.mock.calls.filter(([input, init]) => String(input).endsWith('/loan-applications/salary-advance') && init?.method === 'POST')
+      expect(submissions).toHaveLength(1)
+      expect(JSON.parse(submissions[0]![1]!.body as string)).toEqual({
+        customerPartnerEmployeeLinkId: linkId, requestedAmount: ceiling, requestedTermMonths: 5,
+      })
+      unmount()
+    },
+  )
+
+  it.each([-1, NaN, Infinity, null, undefined, Number.MAX_SAFE_INTEGER + 1])(
+    'fails closed for invalid or unsafe available facts: %s', async (availableAmount) => {
+      const { unmount } = renderRoute('/products/salary-advance/apply', async (input, init) => String(input).endsWith('/loan-products/salary-advance/readiness')
+        ? response({ ...readyReadiness, availableAmount }) : defaultFetch(input, init))
+      expect(await screen.findByRole('heading', { level: 1, name: availableAmount === Number.MAX_SAFE_INTEGER + 1
+        ? 'Application cannot be started' : 'Application details unavailable' })).toBeVisible()
+      expect(screen.queryByRole('textbox', { name: /Requested amount/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Submit application' })).not.toBeInTheDocument()
+      unmount()
+    },
+  )
+
   it('returns focus to the leave control when Escape dismisses the warning', async () => {
     const user = userEvent.setup()
     renderRoute('/products/salary-advance/apply')

@@ -30,6 +30,7 @@ import { OriginationSection, ReviewFact } from '@/features/applications/componen
 import { applicationStatusPresentation } from '@/features/applications/application-presentation'
 import { useLoanProductQuery } from '@/features/loan-products/loan-product-queries'
 import type { SalaryAdvanceApplication } from '@/features/salary-advance/salary-advance-api'
+import { wholeVndAvailability } from '@/features/salary-advance/whole-vnd-availability'
 import { AmountInput } from '@/components/common/AmountInput'
 import { SalaryAdvanceReadiness } from '@/features/salary-advance/components/SalaryAdvanceReadiness'
 import {
@@ -281,7 +282,8 @@ export function SalaryAdvanceApplicationPage() {
 
   const product = productQuery.data
   const readiness = readinessQuery.data
-  const usableAmountFacts = [product.minAmount, product.maxAmount, readiness.availableAmount]
+  const wholeVndAvailableAmount = wholeVndAvailability(readiness.availableAmount)
+  const usableAmountFacts = wholeVndAvailableAmount !== null && [product.minAmount, product.maxAmount]
     .every((value) => Number.isSafeInteger(value) && value >= 0)
   const allowedTerms = product.policy.allowedTermsMonths
   const canUseForm = readiness.applicationAllowed
@@ -354,7 +356,7 @@ export function SalaryAdvanceApplicationPage() {
     if (amount > BigInt(Number.MAX_SAFE_INTEGER)) return 'Requested amount is too large. Enter a smaller amount.'
     if (amount < BigInt(product.minAmount)) return 'Requested amount is below the current product minimum.'
     if (amount > BigInt(product.maxAmount)) return 'Requested amount is above the current product maximum.'
-    if (amount > BigInt(readiness.availableAmount)) return 'Requested amount exceeds the currently available Salary Advance amount.'
+    if (amount > BigInt(wholeVndAvailableAmount)) return 'Requested amount exceeds the currently available Salary Advance amount.'
     return true
   }
 

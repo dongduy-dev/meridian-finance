@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { formatTimestamp } from '@/lib/format/presentation'
 
 import type { SalaryAdvanceReadiness as SalaryAdvanceReadinessData } from '../salary-advance-api'
+import { wholeVndAvailability } from '../whole-vnd-availability'
 import {
   blockerPresentation,
   employeeStatusPresentation,
@@ -28,7 +29,8 @@ function LimitFact({ label, value, primary = false }: { label: string; value: nu
 }
 
 export function SalaryAdvanceLimitSummary({ readiness }: { readiness: SalaryAdvanceReadinessData }) {
-  const unavailable = readiness.limitStatus === 'UNAVAILABLE'
+  const wholeVndAvailableAmount = wholeVndAvailability(readiness.availableAmount)
+  const unavailable = readiness.limitStatus === 'UNAVAILABLE' || wholeVndAvailableAmount === null
   return (
     <Card className="border-0 bg-transparent [overflow-wrap:anywhere]">
       <CardHeader className="p-0 pb-6 sm:p-0 sm:pb-6">
@@ -52,9 +54,12 @@ export function SalaryAdvanceLimitSummary({ readiness }: { readiness: SalaryAdva
             <LimitFact label="Total limit" value={readiness.totalAmount} />
             <LimitFact label="Used" value={readiness.usedAmount} />
             <LimitFact label="Reserved" value={readiness.reservedAmount} />
-            <LimitFact label="Available" value={readiness.availableAmount} primary />
+            <LimitFact label="Available" value={wholeVndAvailableAmount} primary />
           </dl>
         )}
+        {!unavailable && wholeVndAvailableAmount !== readiness.availableAmount ? (
+          <p className="text-sm leading-6 text-muted-foreground">Available is shown in whole VND. Product amount limits also apply.</p>
+        ) : null}
         {readiness.limitStatus === 'NOT_INITIALIZED' ? (
           <p className="text-sm leading-6 text-muted-foreground">This amount is an estimate. We'll confirm the available limit when you submit.</p>
         ) : null}
