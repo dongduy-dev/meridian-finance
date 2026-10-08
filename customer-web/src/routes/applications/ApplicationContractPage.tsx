@@ -44,6 +44,7 @@ export function ApplicationContractPage() {
   const { begin: beginAcknowledgment, reset: resetAcknowledgment } = useOperationIdentity()
   const lastVersion = useRef<number | undefined>(undefined)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const acknowledgmentTrigger = useRef<HTMLButtonElement>(null)
   const [acknowledgmentError, setAcknowledgmentError] = useState<unknown>()
   const [notice, setNotice] = useState<ContractNotice>()
   const prerequisitesValidated = Boolean(loanApplicationId) && isDigital
@@ -121,25 +122,13 @@ export function ApplicationContractPage() {
   const waiting = contractMissing && applicationQuery.data?.status === 'CONTRACT_PENDING'
   const contract = contractQuery.data
   const unknownAction = isDigital && Boolean(contract?.availableCustomerAction && contract.availableCustomerAction !== 'ACKNOWLEDGE')
+  const showNoActionNeeded = prerequisitesValidated && !acknowledgment.isPending && !canAcknowledge && !unknownAction
 
   return (
     <DetailLayout
       header={<PageHeader eyebrow="Contract" title={waiting ? 'Contract preparation in progress' : 'Review your contract'} description="Review the current version and the terms you accepted." actions={<BackToApplication loanApplicationId={loanApplicationId} />} />}
-      rail={contract ? (
-        <div className="space-y-4">
-          {canAcknowledge ? (
-            <div className="space-y-3 rounded-lg border border-border bg-card p-5 shadow-soft">
-              <h2 className="font-semibold">Confirm your review</h2>
-              <p className="text-sm leading-6 text-muted-foreground">Continue only after reviewing contract version {contract.contractVersion}.</p>
-              <Button className="w-full" disabled={acknowledgment.isPending} onClick={() => { beginAcknowledgment(); setAcknowledgmentError(undefined); setDialogOpen(true) }}><CheckCircle2 aria-hidden="true" />Confirm review of version {contract.contractVersion}</Button>
-            </div>
-          ) : null}
-          {unknownAction ? <Alert variant="warning"><FileWarning aria-hidden="true" /><AlertTitle>Action unavailable</AlertTitle><AlertDescription>This action is not available right now. Refresh the page or try again later.</AlertDescription></Alert> : null}
-          {prerequisitesValidated && !acknowledgment.isPending && !canAcknowledge && !unknownAction ? <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No action needed</AlertTitle><AlertDescription>There is nothing you need to do with this contract right now.</AlertDescription></Alert> : null}
-        </div>
-      ) : undefined}
     >
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-[var(--section-transactional)]">
         {applicationQuery.isPending ? <Skeleton className="h-24" role="status" aria-label="Loading application details" /> : null}
         {applicationQuery.isError ? <QueryErrorFeedback error={applicationQuery.error} title="Application details could not be loaded" onRetry={() => void applicationQuery.refetch()} /> : null}
         {isStaffAssisted ? <StaffAssistedApplicationNotice>Review the current contract here; Meridian staff will coordinate acknowledgment with you.</StaffAssistedApplicationNotice> : null}
@@ -152,10 +141,27 @@ export function ApplicationContractPage() {
         {notice === 'new-version' ? <Alert variant="warning" aria-live="polite"><FileWarning aria-hidden="true" /><AlertTitle>Review the current contract version</AlertTitle><AlertDescription>The contract changed. Review this version before confirming again.</AlertDescription></Alert> : null}
         {isDigital ? <Alert variant="information"><Info aria-hidden="true" /><AlertTitle>About this confirmation</AlertTitle><AlertDescription>By continuing, you confirm that you reviewed this contract version. This acknowledgment is not an electronic or digital signature and does not create a signed PDF or legal agreement.</AlertDescription></Alert> : null}
         {contract ? <ContractSummary contract={contract} /> : null}
+        {contract && (canAcknowledge || unknownAction || showNoActionNeeded) ? (
+          <div className="min-w-0 space-y-6 border-t border-border pt-6">
+            {canAcknowledge ? (
+              <div className="min-w-0 space-y-4">
+                <h2 className="type-section">Confirm your review</h2>
+                <p className="max-w-[70ch] text-sm leading-5 text-muted-foreground">Continue only after reviewing contract version {contract.contractVersion}.</p>
+                <Button className="w-full sm:w-auto" disabled={acknowledgment.isPending} onClick={(event) => { acknowledgmentTrigger.current = event.currentTarget; beginAcknowledgment(); setAcknowledgmentError(undefined); setDialogOpen(true) }}><CheckCircle2 aria-hidden="true" />Confirm review of version {contract.contractVersion}</Button>
+              </div>
+            ) : null}
+            {unknownAction ? <Alert variant="warning"><FileWarning aria-hidden="true" /><AlertTitle>Action unavailable</AlertTitle><AlertDescription>This action is not available right now. Refresh the page or try again later.</AlertDescription></Alert> : null}
+            {showNoActionNeeded ? <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No action needed</AlertTitle><AlertDescription>There is nothing you need to do with this contract right now.</AlertDescription></Alert> : null}
+          </div>
+        ) : null}
       </div>
 
       <Dialog open={prerequisitesValidated && contract?.availableCustomerAction === 'ACKNOWLEDGE' && dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          if (acknowledgmentTrigger.current?.isConnected) acknowledgmentTrigger.current.focus()
+          else document.querySelector<HTMLElement>('#page-heading')?.focus()
+        }}>
           <DialogHeader><DialogTitle>Confirm review of contract version {contract?.contractVersion}?</DialogTitle><DialogDescription>This confirmation applies only to the version shown. Continue after reviewing its terms and the bank account shown for payment of your loan funds.</DialogDescription></DialogHeader>
           {acknowledgmentError ? <ContractMutationError error={acknowledgmentError} /> : null}
           <DialogFooter>
@@ -177,7 +183,7 @@ function ContractMutationError({ error }: { error: unknown }) {
     <Alert variant="destructive" aria-live="polite">
       <AlertCircle aria-hidden="true" />
       <AlertTitle>Contract review was not confirmed</AlertTitle>
-      <AlertDescription className="space-y-2"><p>{contractErrorMessage(error)}</p>{error instanceof ApiError && error.requestId ? <p className="break-all text-xs">Support reference: {error.requestId}</p> : null}</AlertDescription>
+      <AlertDescription className="space-y-2"><p>{contractErrorMessage(error)}</p>{error instanceof ApiError && error.requestId ? <p className="break-all text-sm">Support reference: {error.requestId}</p> : null}</AlertDescription>
     </Alert>
   )
 }

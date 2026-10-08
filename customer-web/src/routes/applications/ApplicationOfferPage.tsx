@@ -1,5 +1,5 @@
 import { AlertCircle, ArrowLeft, CheckCircle2, Clock3, RefreshCw, ShieldAlert, ThumbsDown } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -45,6 +45,7 @@ export function ApplicationOfferPage() {
   const [uncertainAction, setUncertainAction] = useState<SupportedOfferAction>()
   const [recovering, setRecovering] = useState(false)
   const [declineOpen, setDeclineOpen] = useState(false)
+  const declineTrigger = useRef<HTMLButtonElement>(null)
   const prerequisitesValidated = Boolean(loanApplicationId) && isDigital
     && applicationQuery.isSuccess && applicationQuery.fetchStatus === 'idle'
     && offerQuery.isSuccess && offerQuery.fetchStatus === 'idle'
@@ -112,33 +113,14 @@ export function ApplicationOfferPage() {
   const supportedActions = isDigital ? offer?.availableActions.filter(supportedOfferAction) ?? [] : []
   const hasUnknownAction = isDigital && Boolean(offer?.availableActions.some((action) => !supportedOfferAction(action)))
   const actionsBlocked = !prerequisitesValidated || Boolean(uncertainAction) || recovering
+  const showResponseControls = !actionsBlocked && supportedActions.length > 0
+  const showNoResponseRequired = isDigital && !actionsBlocked && !hasUnknownAction && supportedActions.length === 0
 
   return (
     <DetailLayout
       header={<PageHeader eyebrow="Approved offer" title="Review your offer" description="Review the terms approved for your application." actions={<BackToApplication loanApplicationId={loanApplicationId} />} />}
-      rail={offer ? (
-        <div className="space-y-4">
-          {offer.status === 'PENDING' ? (
-            <Alert variant="warning"><Clock3 aria-hidden="true" /><AlertTitle>Offer expiry</AlertTitle><AlertDescription>This offer expires at {formatTimestamp(offer.expiresAt)}. Refresh the page if its status changes while you are reviewing it.</AlertDescription></Alert>
-          ) : null}
-          {hasUnknownAction ? (
-            <Alert variant="warning"><ShieldAlert aria-hidden="true" /><AlertTitle>Action unavailable</AlertTitle><AlertDescription>This action is not available right now. Refresh the page or try again later.</AlertDescription></Alert>
-          ) : null}
-          {!actionsBlocked && supportedActions.length ? (
-            <div className="space-y-3 rounded-lg border border-border bg-card p-5 shadow-soft">
-              <h2 className="font-semibold">Respond to this offer</h2>
-              <p className="text-sm leading-6 text-muted-foreground">Accepting confirms these loan terms and takes you to the contract step. Declining ends this application.</p>
-              {supportedActions.includes('ACCEPT') ? <Button className="w-full" disabled={pending} onClick={() => void respond('ACCEPT')}><CheckCircle2 aria-hidden="true" />{acceptance.isPending ? 'Accepting…' : 'Accept offer'}</Button> : null}
-              {supportedActions.includes('DECLINE') ? <Button className="w-full" variant="destructive" disabled={pending} onClick={() => { setActionError(undefined); setDeclineOpen(true) }}><ThumbsDown aria-hidden="true" />Decline offer</Button> : null}
-            </div>
-          ) : null}
-          {isDigital && !actionsBlocked && !hasUnknownAction && supportedActions.length === 0 ? (
-            <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No response required</AlertTitle><AlertDescription>{offer.status === 'EXPIRED' ? 'This offer can no longer be accepted or declined because it has expired.' : offer.status === 'ACCEPTED' ? 'This offer has been accepted. Return to your application to check the next step.' : offer.status === 'DECLINED' ? 'This offer has been declined and can no longer be accepted.' : 'No online response is available for this offer right now. Check its status or contact Meridian support for help.'}</AlertDescription></Alert>
-          ) : null}
-        </div>
-      ) : undefined}
     >
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-[var(--section-transactional)]">
         {applicationQuery.isPending ? <Skeleton className="h-24" role="status" aria-label="Loading application details" /> : null}
         {applicationQuery.isError ? <QueryErrorFeedback error={applicationQuery.error} title="Application details could not be loaded" onRetry={() => void applicationQuery.refetch()} /> : null}
         {isStaffAssisted ? <StaffAssistedApplicationNotice>Review the offer here; Meridian staff will coordinate your response with you.</StaffAssistedApplicationNotice> : null}
@@ -158,11 +140,38 @@ export function ApplicationOfferPage() {
           </Alert>
         ) : null}
         {actionError && !uncertainAction ? <OfferMutationError error={actionError} /> : null}
+        {offer?.status === 'PENDING' ? (
+          <Alert variant="warning"><Clock3 aria-hidden="true" /><AlertTitle>Offer expiry</AlertTitle><AlertDescription>This offer expires at {formatTimestamp(offer.expiresAt)}. Refresh the page if its status changes while you are reviewing it.</AlertDescription></Alert>
+        ) : null}
         {offer ? <OfferSummary offer={offer} /> : null}
+        {offer && (hasUnknownAction || showResponseControls || showNoResponseRequired) ? (
+          <div className="min-w-0 space-y-6 border-t border-border pt-6">
+            {hasUnknownAction ? (
+              <Alert variant="warning"><ShieldAlert aria-hidden="true" /><AlertTitle>Action unavailable</AlertTitle><AlertDescription>This action is not available right now. Refresh the page or try again later.</AlertDescription></Alert>
+            ) : null}
+            {showResponseControls ? (
+              <div className="min-w-0 space-y-4">
+                <h2 className="type-section">Respond to this offer</h2>
+                <p className="max-w-[70ch] text-sm leading-5 text-muted-foreground">Accepting confirms these loan terms and takes you to the contract step. Declining ends this application.</p>
+                <div className="flex flex-wrap gap-3">
+                  {supportedActions.includes('ACCEPT') ? <Button className="w-full sm:w-auto" disabled={pending} onClick={() => void respond('ACCEPT')}><CheckCircle2 aria-hidden="true" />{acceptance.isPending ? 'Accepting…' : 'Accept offer'}</Button> : null}
+                  {supportedActions.includes('DECLINE') ? <Button className="w-full sm:w-auto" variant="destructive" disabled={pending} onClick={(event) => { declineTrigger.current = event.currentTarget; setActionError(undefined); setDeclineOpen(true) }}><ThumbsDown aria-hidden="true" />Decline offer</Button> : null}
+                </div>
+              </div>
+            ) : null}
+            {showNoResponseRequired ? (
+              <Alert variant="information"><CheckCircle2 aria-hidden="true" /><AlertTitle>No response required</AlertTitle><AlertDescription>{offer.status === 'EXPIRED' ? 'This offer can no longer be accepted or declined because it has expired.' : offer.status === 'ACCEPTED' ? 'This offer has been accepted. Return to your application to check the next step.' : offer.status === 'DECLINED' ? 'This offer has been declined and can no longer be accepted.' : 'No online response is available for this offer right now. Check its status or contact Meridian support for help.'}</AlertDescription></Alert>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <Dialog open={!actionsBlocked && supportedActions.includes('DECLINE') && declineOpen} onOpenChange={setDeclineOpen}>
-        <DialogContent>
+        <DialogContent onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          if (declineTrigger.current?.isConnected) declineTrigger.current.focus()
+          else document.querySelector<HTMLElement>('#page-heading')?.focus()
+        }}>
           <DialogHeader><DialogTitle>Decline this offer?</DialogTitle><DialogDescription>Declining this offer ends this application. You will not be able to accept this offer afterward.</DialogDescription></DialogHeader>
           {actionError ? <OfferMutationError error={actionError} /> : null}
           <DialogFooter>
@@ -184,7 +193,7 @@ function OfferMutationError({ error }: { error: unknown }) {
     <Alert variant="destructive" aria-live="polite">
       <AlertCircle aria-hidden="true" />
       <AlertTitle>Offer response was not confirmed</AlertTitle>
-      <AlertDescription className="space-y-2"><p>{offerErrorMessage(error)}</p>{error instanceof ApiError && error.requestId ? <p className="break-all text-xs">Support reference: {error.requestId}</p> : null}</AlertDescription>
+      <AlertDescription className="space-y-2"><p>{offerErrorMessage(error)}</p>{error instanceof ApiError && error.requestId ? <p className="break-all text-sm">Support reference: {error.requestId}</p> : null}</AlertDescription>
     </Alert>
   )
 }
