@@ -45,6 +45,34 @@ describe('internal router access contract', () => {
   beforeEach(() => vi.clearAllMocks())
   afterEach(() => vi.unstubAllGlobals())
 
+  it('toggles the login password without dispatching login and preserves Enter submission', async () => {
+    const user = userEvent.setup()
+    vi.mocked(authApi.refresh).mockRejectedValue(new ApiError(401, 'INVALID_REFRESH_TOKEN', 'required', '/auth/refresh', 'now'))
+    vi.mocked(authApi.login).mockResolvedValue(admin())
+    renderRoute('/login')
+    const field = await screen.findByLabelText('Password')
+    expect(field).toHaveAttribute('type', 'password')
+    expect(field).toHaveAttribute('autocomplete', 'current-password')
+    await user.type(screen.getByLabelText('Email'), 'staff@example.com')
+    await user.type(field, 'visibility-password-value')
+    const show = screen.getByRole('button', { name: 'Show password' })
+    expect(show).toHaveAttribute('type', 'button')
+    expect(show).toHaveAttribute('aria-controls', 'password')
+    await user.click(show)
+    expect(field).toHaveAttribute('type', 'text')
+    expect(field).toHaveValue('visibility-password-value')
+    expect(field).toHaveAttribute('aria-invalid', 'false')
+    await user.click(screen.getByRole('button', { name: 'Hide password' }))
+    expect(field).toHaveAttribute('type', 'password')
+    expect(field).toHaveValue('visibility-password-value')
+    expect(authApi.login).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Show password' }))
+    await user.click(field)
+    await user.keyboard('{Enter}')
+    expect(await screen.findByRole('heading', { name: 'Back-Office Administration' })).toBeVisible()
+    expect(authApi.login).toHaveBeenCalledExactlyOnceWith('staff@example.com', 'visibility-password-value')
+  })
+
   it.each([
     { path: '/staff', response: staff(), heading: 'Staff Operations' },
     { path: '/admin', response: admin(), heading: 'Back-Office Administration' },

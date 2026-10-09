@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/features/auth/components/PasswordInput'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/features/auth/auth-context'
 import { focusServerError, isAuthApiError, unexpectedAuthError } from '@/features/auth/auth-errors'
@@ -80,7 +81,7 @@ export function RegisterPage() {
     <AuthCard
       eyebrow="Create an account"
       title="Start with Meridian"
-      description="Create your account, then confirm your email before logging in."
+      description="Create your account, then confirm your email to sign in."
       footer={
         <div className="flex flex-wrap gap-x-6 gap-y-3 text-sm">
           <Link className="font-semibold text-primary underline underline-offset-4" to="/login">Log in</Link>
@@ -118,9 +119,8 @@ export function RegisterPage() {
           description="Use 12 to 72 characters."
           error={errors.password?.message}
         >
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="new-password"
             aria-invalid={Boolean(errors.password)}
             aria-describedby={fieldDescriptionIds('password', true, Boolean(errors.password))}

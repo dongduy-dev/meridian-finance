@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { StrictMode, Suspense, useLayoutEffect } from 'react'
 import { BrowserRouter, createBrowserRouter, Route, RouterProvider, Routes } from 'react-router-dom'
@@ -24,6 +24,44 @@ function renderSetup(hash = '#token=opaque-value') {
 
 describe('Internal Web password setup', () => {
   beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear() })
+
+  it('reveals only the new password and keeps confirmation masked without consuming the setup token', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(undefined)
+    renderSetup()
+    const user = userEvent.setup()
+    const fields = [screen.getByLabelText('New password'), screen.getByLabelText('Confirm new password')] as const
+    expect(screen.getAllByRole('button', { name: 'Show password' })).toHaveLength(1)
+    expect(within(fields[1].parentElement!).queryByRole('button')).not.toBeInTheDocument()
+    for (const field of fields) {
+      expect(field).toHaveAttribute('type', 'password')
+      expect(field).toHaveAttribute('autocomplete', 'new-password')
+      await user.type(field, 'visibility-password-value')
+    }
+    for (const field of [fields[0]]) {
+      const controls = within(field.parentElement!)
+      const show = controls.getByRole('button', { name: 'Show password' })
+      expect(show).toHaveAttribute('type', 'button')
+      expect(show).toHaveAttribute('aria-controls', field.id)
+      await user.click(show)
+      expect(field).toHaveAttribute('type', 'text')
+      expect(field).toHaveValue('visibility-password-value')
+      expect(fields.find((other) => other !== field)).toHaveAttribute('type', 'password')
+      expect(fields[1]).toHaveValue('visibility-password-value')
+      expect(within(fields[1].parentElement!).queryByRole('button')).not.toBeInTheDocument()
+      await user.click(controls.getByRole('button', { name: 'Hide password' }))
+      expect(field).toHaveAttribute('type', 'password')
+      expect(field).toHaveValue('visibility-password-value')
+    }
+    expect(api.apiRequest).not.toHaveBeenCalled()
+    expect(fields[1]).toHaveAttribute('type', 'password')
+    await user.click(within(fields[0].parentElement!).getByRole('button', { name: 'Show password' }))
+    await user.click(fields[1])
+    await user.keyboard('{Enter}')
+    expect(await screen.findByText('Staff login destination')).toBeVisible()
+    expect(api.apiRequest).toHaveBeenCalledExactlyOnceWith('/auth/password-reset/confirm', {
+      method: 'POST', body: { token: 'opaque-value', newPassword: 'visibility-password-value' },
+    })
+  })
 
   it('shows the valid form and scrubs the fragment before the first paint', () => {
     function BeforePaintProbe() {

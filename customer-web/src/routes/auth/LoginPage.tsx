@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/features/auth/components/PasswordInput'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/features/auth/auth-context'
 import { CustomerSessionRequiredError } from '@/features/auth/auth-session'
@@ -147,9 +148,8 @@ export function LoginPage() {
         </FormField>
 
         <FormField htmlFor="password" label="Password" error={errors.password?.message}>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete="current-password"
             aria-invalid={Boolean(errors.password)}
             aria-describedby={fieldDescriptionIds('password', false, Boolean(errors.password))}

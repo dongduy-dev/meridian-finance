@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { StrictMode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -47,6 +47,63 @@ afterEach(() => {
 })
 
 describe('Customer authentication routes', () => {
+  it.each([
+    { path: '/login', labels: ['Password'], autocomplete: 'current-password', command: 'login' as const },
+    { path: '/register', labels: ['Password'], autocomplete: 'new-password', command: 'register' as const },
+    { path: '/reset-password#token=visibility-reset', labels: ['New password', 'Confirm new password'], autocomplete: 'new-password', command: 'confirmPasswordReset' as const },
+    { path: '/activate-access#verificationToken=visibility-email&setupToken=visibility-setup', labels: ['New password', 'Confirm new password'], autocomplete: 'new-password', command: 'confirmPasswordReset' as const },
+  ])('toggles only the primary password on $path without submitting or revealing confirmation', async ({ path, labels, autocomplete, command }) => {
+    const user = userEvent.setup()
+    const api = anonymousApi()
+    window.history.replaceState(null, '', path)
+    renderAuthRoute(path, api)
+    const first = await screen.findByLabelText(labels[0]!)
+    const fields = labels.map((label) => screen.getByLabelText(label))
+    expect(screen.getAllByRole('button', { name: 'Show password' })).toHaveLength(1)
+    const confirmation = fields[1]
+    if (confirmation) expect(within(confirmation.parentElement!).queryByRole('button')).not.toBeInTheDocument()
+    if (path === '/register') {
+      expect(screen.getByText('Create your account, then confirm your email to sign in.')).toBeVisible()
+      await user.type(screen.getByLabelText('Display name'), 'Meridian Customer')
+    }
+    if (screen.queryByLabelText('Email')) await user.type(screen.getByLabelText('Email'), 'customer@example.com')
+    for (const field of fields) {
+      expect(field).toHaveAttribute('type', 'password')
+      expect(field).toHaveAttribute('autocomplete', autocomplete)
+      await user.type(field, 'visibility-password-value')
+    }
+    for (const field of [first]) {
+      const controls = within(field.parentElement!)
+      const describedBy = field.getAttribute('aria-describedby')
+      const show = controls.getByRole('button', { name: 'Show password' })
+      expect(show).toHaveAttribute('type', 'button')
+      expect(show).toHaveAttribute('aria-controls', field.id)
+      await user.click(show)
+      expect(field).toHaveAttribute('type', 'text')
+      expect(field).toHaveValue('visibility-password-value')
+      expect(field).toHaveAttribute('aria-invalid', 'false')
+      expect(field.getAttribute('aria-describedby')).toBe(describedBy)
+      if (confirmation) {
+        expect(confirmation).toHaveAttribute('type', 'password')
+        expect(confirmation).toHaveValue('visibility-password-value')
+        expect(confirmation).toHaveAttribute('autocomplete', 'new-password')
+        expect(within(confirmation.parentElement!).queryByRole('button')).not.toBeInTheDocument()
+      }
+      await user.click(controls.getByRole('button', { name: 'Hide password' }))
+      expect(field).toHaveAttribute('type', 'password')
+      expect(field).toHaveValue('visibility-password-value')
+    }
+    if (confirmation) expect(confirmation).toHaveAttribute('type', 'password')
+    expect(api.login).not.toHaveBeenCalled()
+    expect(api.register).not.toHaveBeenCalled()
+    expect(api.confirmPasswordReset).not.toHaveBeenCalled()
+    // Native Enter submission also works while the input is revealed.
+    await user.click(within(first.parentElement!).getByRole('button', { name: 'Show password' }))
+    await user.click(first)
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(api[command]).toHaveBeenCalledTimes(1))
+  })
+
   it('establishes login and restores the intended protected destination', async () => {
     const user = userEvent.setup()
     const api = anonymousApi()

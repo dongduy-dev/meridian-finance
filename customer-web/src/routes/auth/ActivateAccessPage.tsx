@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/features/auth/components/PasswordInput'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/features/auth/auth-context'
 import { focusServerError, isAuthApiError, unexpectedAuthError } from '@/features/auth/auth-errors'
@@ -111,7 +112,7 @@ function ActivateAccessContent({ locationKey }: { locationKey: string }) {
         <form className="space-y-6" noValidate onSubmit={onSubmit}>
           <ValidationSummary messages={validationMessages} />
           <FormField htmlFor="password" label="New password" description="Use 12 to 72 characters." error={errors.password?.message}>
-            <Input id="password" type="password" autoComplete="new-password" aria-invalid={Boolean(errors.password)}
+            <PasswordInput id="password" autoComplete="new-password" aria-invalid={Boolean(errors.password)}
               aria-describedby={fieldDescriptionIds('password', true, Boolean(errors.password))}
               {...register('password', { validate: validateWith(newPasswordSchema) })} />
           </FormField>
