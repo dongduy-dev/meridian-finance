@@ -7,6 +7,7 @@ import { IdentityVerificationPage } from './IdentityVerificationPage'
 import { IntakeIdentityReadiness } from './IntakeIdentityReadiness'
 import * as api from './api'
 import { ApiError, NetworkError } from '@/lib/api/errors'
+import { formatTimestamp } from '@/lib/format/presentation'
 
 const auth = vi.hoisted(() => ({ permissions: ['customer:identity:verify'] as string[], role: 'LOAN_OFFICER' }))
 vi.mock('@/features/auth/model/auth-context', () => ({ useAuth: () => ({ manager: {}, state: { status: 'authenticated', epoch: 1, actor: { userId: 'officer', permissions: auth.permissions, roles: [auth.role] } } }) }))
@@ -173,6 +174,8 @@ it('rejects with a controlled reason and no presented reference', async () => {
 it('shows only safe queue identity and no arbitrary Customer directory', async () => {
   render(<QueryClientProvider client={client}><MemoryRouter><IdentityVerificationPage /></MemoryRouter></QueryClientProvider>)
   expect(await screen.findByText('CUS-001 · Ari Fictional')).toBeVisible()
+  expect(screen.getByText(`Customer digital evidence · ${formatTimestamp(v.submittedAt)} · Pending review`)).toBeVisible()
+  expect(screen.queryByText(v.submittedAt, { exact: false })).not.toBeInTheDocument()
   expect(screen.queryByText('identity.pdf')).not.toBeInTheDocument(); expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
 })
 it('reuses verified Customer identity for another assisted loan without requesting new evidence', () => {

@@ -9,6 +9,7 @@ import * as authApi from '@/features/auth/api/auth-api'
 import { AuthProvider } from '@/features/auth/model/auth-context'
 import * as api from '@/lib/api'
 import { ApiError, NetworkError } from '@/lib/api'
+import { formatTimestamp } from '@/lib/format/presentation'
 import { createQueryClient } from '@/lib/query/query-client'
 import { findUnresolvedOperation } from '@/lib/operation/unresolved-operation'
 import { evidenceRecoveryResource } from '../model/recovery'
@@ -265,13 +266,15 @@ describe('assisted origination pages', () => {
   })
 
   it('loads the OPEN intake list and presents both supported products without inventing application submission', async () => {
-    vi.mocked(api.apiRequest).mockResolvedValue([intake({ customerId: null })])
+    const openIntake = intake({ customerId: null })
+    vi.mocked(api.apiRequest).mockResolvedValue([openIntake])
     renderRoute('/staff/origination')
 
     expect(await screen.findByRole('heading', { name: 'Paper intake', level: 1 })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Start UCL intake' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Start Collateral intake' })).toBeEnabled()
-    expect(await screen.findByText(/Customer not selected/)).toBeVisible()
+    expect(await screen.findByText(`Customer not selected · Updated ${formatTimestamp(openIntake.updatedAt)}`)).toBeVisible()
+    expect(screen.queryByText(openIntake.updatedAt, { exact: false })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /submit application/i })).not.toBeInTheDocument()
   })
 
