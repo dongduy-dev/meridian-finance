@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
-import { FileClock } from 'lucide-react'
+import { AlertTriangle, FileClock } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { OperationStatusPanel, type OperationStatus } from '@/components/operations/OperationStatusPanel'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { RequestCorrelation } from '@/components/common/RequestCorrelation'
+import { operatorErrorMessage } from '@/lib/api/operator-error-message'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ApplicationWorkspaceShell, applicationWorkspaceCaseFacts } from '@/components/operations/ApplicationWorkspaceShell'
 import { Spinner } from '@/components/ui/spinner'
@@ -31,7 +33,18 @@ import { DocumentReviewForm } from '../components/DocumentReviewForm'
 import type { StaffDocumentItem } from '../api/contracts'
 import { uploadStaffDocument } from '../api/staff-documents-api'
 
-type UploadState = { status: OperationStatus; message?: string; error?: Error }
+type UploadState = { status: OperationStatus | 'UPLOAD_CONFIRMED_REFRESH_NEEDED'; message?: string; error?: Error }
+
+const MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+const uploadTypes = new Set(['application/pdf', 'image/jpeg', 'image/png'])
+
+function fileValidationMessage(file?: File) {
+  if (!file) return undefined
+  if (!uploadTypes.has(file.type)) return 'Choose a PDF, JPEG, or PNG file.'
+  if (file.size === 0) return 'Choose a file that is not empty.'
+  if (file.size > MAX_UPLOAD_SIZE) return 'Choose a file no larger than 10 MiB.'
+  return undefined
+}
 
 function AssistedApplicationUpload({
   manager, loanApplicationId, item, refresh,
@@ -39,17 +52,35 @@ function AssistedApplicationUpload({
   manager: AuthSessionManager
   loanApplicationId: string
   item: StaffDocumentItem
-  refresh: () => Promise<unknown>
+  refresh: () => Promise<{ isError: boolean }>
 }) {
   const [state, setState] = useState<UploadState>({ status: 'DRAFT' })
+  const [selectedFile, setSelectedFile] = useState<File>()
+  const [localError, setLocalError] = useState<string>()
+  const busy = state.status === 'IN_FLIGHT' || state.status === 'RECONCILING'
+  const refreshNeeded = state.status === 'UPLOAD_CONFIRMED_REFRESH_NEEDED'
   const resource = `${loanApplicationId}:${item.checklistItemId}`
   const unresolved = findUnresolvedOperation('ASSISTED_APPLICATION_UPLOAD', resource)
+  const inputId = `initial-evidence-${item.checklistItemId}`
+
+  const refreshConfirmedUpload = async () => {
+    setState({ status: 'RECONCILING' })
+    try {
+      const result = await refresh()
+      setState({ status: result.isError ? 'UPLOAD_CONFIRMED_REFRESH_NEEDED' : 'RESOLVED' })
+    } catch {
+      setState({ status: 'UPLOAD_CONFIRMED_REFRESH_NEEDED' })
+    }
+  }
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (busy || refreshNeeded) return
     const form = event.currentTarget
     const file = (form.elements.namedItem('file') as HTMLInputElement | null)?.files?.[0]
-    if (!file || file.size === 0) return
+    const validation = fileValidationMessage(file)
+    setLocalError(validation)
+    if (!file || validation) return
     const storedBaseline = unresolved?.semanticPayload && typeof unresolved.semanticPayload === 'object'
       && 'baseline' in unresolved.semanticPayload
       ? (unresolved.semanticPayload as { baseline: string | null }).baseline
@@ -83,21 +114,38 @@ function AssistedApplicationUpload({
       }
       removeUnresolvedOperation('ASSISTED_APPLICATION_UPLOAD', resource)
       if (error instanceof ApiError && error.errorCode === 'STALE_DOCUMENT_VERSION') {
-        await refresh().catch(() => undefined)
-        setState({ status: 'BLOCKED', error, message: 'Document evidence changed. Review the refreshed current version before starting a new upload.' })
+        const result = await refresh().catch(() => undefined)
+        setState({ status: 'BLOCKED', error, message: result && !result.isError
+          ? 'Document evidence changed. Review the refreshed current version before starting a new upload.'
+          : 'Document evidence changed, but the current version could not be refreshed. Refresh the evidence before starting a new upload.' })
         return
       }
-      setState({ status: 'BLOCKED', error })
+      setState({ status: 'BLOCKED', error, message: operatorErrorMessage(error,
+        error instanceof ApiError && error.status < 500 && error.errorCode === 'INVALID_DOCUMENT_UPLOAD'
+          ? 'The file was rejected. Choose a valid PDF, JPEG, or PNG file no larger than 10 MiB with a simple filename matching its contents.'
+          : 'The upload was rejected. Review the file and refresh the latest document evidence before trying again.') })
       return
     }
     removeUnresolvedOperation('ASSISTED_APPLICATION_UPLOAD', resource)
-    setState({ status: 'RECONCILING' })
-    await refresh().catch(() => undefined)
-    setState({ status: 'RESOLVED' })
     form.reset()
+    setSelectedFile(undefined)
+    await refreshConfirmedUpload()
   }
 
-  return <form className="mt-3 space-y-2" onSubmit={(event) => void submit(event)}><Input aria-label={`Upload ${humanizeKnownValue(item.documentType)}`} type="file" name="file" required accept="application/pdf,image/jpeg,image/png" /><Button className="w-full" type="submit" disabled={state.status === 'IN_FLIGHT' || state.status === 'RECONCILING'}>{item.currentVersion ? 'Replace initial evidence' : 'Upload initial evidence'}</Button>{unresolved ? <p className="text-xs font-medium text-warning">Reselect the exact same file to retry the unresolved upload.</p> : null}{state.status !== 'DRAFT' ? <OperationStatusPanel status={state.status} /> : null}{state.message ? <p role="alert" className="text-xs text-muted-foreground">{state.message}</p> : null}</form>
+  return <form className="mt-3 min-w-0 space-y-2" onSubmit={(event) => void submit(event)}>
+    <label htmlFor={inputId} className="block text-sm font-semibold">{item.currentVersion ? 'Choose replacement file' : 'Choose file'}</label>
+    <Input id={inputId} aria-label={`Upload ${humanizeKnownValue(item.documentType)}`} type="file" name="file" required accept="application/pdf,image/jpeg,image/png"
+      disabled={busy || refreshNeeded} aria-invalid={Boolean(localError)} aria-describedby={`${inputId}-help${localError ? ` ${inputId}-error` : ''}`}
+      onChange={(event) => { const file = event.target.files?.[0]; setSelectedFile(file); setLocalError(fileValidationMessage(file)) }} />
+    <p id={`${inputId}-help`} className="text-xs text-muted-foreground">PDF, JPEG, or PNG; maximum 10 MiB.</p>
+    {selectedFile ? <p className="text-sm [overflow-wrap:anywhere]">Selected: {selectedFile.name} ({selectedFile.size.toLocaleString()} bytes)</p> : null}
+    {localError ? <p id={`${inputId}-error`} role="alert" className="text-sm text-danger">{localError}</p> : null}
+    <Button className="w-full" type="submit" disabled={!selectedFile || Boolean(localError) || busy || refreshNeeded}>{state.status === 'IN_FLIGHT' ? <Spinner /> : null}{state.status === 'IN_FLIGHT' ? 'Uploading…' : item.currentVersion ? 'Replace initial evidence' : 'Upload initial evidence'}</Button>
+    {unresolved ? <p className="text-xs font-medium text-warning">Reselect the exact same file to retry the unresolved upload.</p> : null}
+    {refreshNeeded ? <Alert variant="warning" aria-live="polite"><AlertTriangle /><AlertTitle>Upload confirmed; refresh needed</AlertTitle><AlertDescription>The file was uploaded, but the latest document evidence could not be refreshed. Refresh the evidence before continuing.<Button className="mt-3" variant="outline" type="button" onClick={() => void refreshConfirmedUpload()}>Refresh evidence</Button></AlertDescription></Alert>
+      : state.status !== 'DRAFT' && state.status !== 'UPLOAD_CONFIRMED_REFRESH_NEEDED' ? <OperationStatusPanel status={state.status} /> : null}
+    {state.message ? <Alert variant={state.status === 'RESULT_UNKNOWN' ? 'warning' : 'destructive'}><AlertTriangle /><AlertTitle>{state.status === 'RESULT_UNKNOWN' ? 'Upload result not confirmed' : 'Upload needs review'}</AlertTitle><AlertDescription>{state.message}{state.error instanceof ApiError && state.error.requestId ? <RequestCorrelation requestId={state.error.requestId} /> : null}</AlertDescription></Alert> : null}
+  </form>
 }
 
 export function StaffDocumentWorkspacePage() {
