@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ApiError, apiRequest } from '@/lib/api'
 import { AuthCard } from './AuthCard'
+import { PasswordInput } from './PasswordInput'
 import { StaffSetupAttempt } from '../model/fragment-token'
 
 function SetPasswordContent() {
@@ -52,12 +53,14 @@ function SetPasswordContent() {
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {pending ? <p role="status">Setting password…</p> : null}
       {hasToken ? <>
-        <label className="block space-y-2 text-sm font-medium">New password
-          <Input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} />
-        </label>
-        <label className="block space-y-2 text-sm font-medium">Confirm new password
-          <Input type="password" autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} />
-        </label>
+        <div className="space-y-2 text-sm font-medium">
+          <label htmlFor="password">New password</label>
+          <PasswordInput id="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+        </div>
+        <div className="space-y-2 text-sm font-medium">
+          <label htmlFor="confirmation">Confirm new password</label>
+          <Input id="confirmation" type="password" autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} />
+        </div>
         <p className="text-xs text-muted-foreground">Use 12 to 72 characters.</p>
         <Button type="submit" disabled={pending}>{pending ? 'Setting password…' : 'Set password'}</Button>
       </> : null}

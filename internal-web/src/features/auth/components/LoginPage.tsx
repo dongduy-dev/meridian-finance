@@ -8,6 +8,7 @@ import { RequestCorrelation } from '@/components/common/RequestCorrelation'
 import { resolvePostLoginDestination } from '@/app/router/internal-destination'
 import { ApiError } from '@/lib/api'
 import { AuthCard } from './AuthCard'
+import { PasswordInput } from './PasswordInput'
 import { useAuth } from '../model/auth-context'
 import { InternalAccessRequiredError } from '../model/auth-session'
 import { useRateLimitRecovery } from '../model/use-rate-limit'
@@ -68,7 +69,7 @@ export function LoginPage() {
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor="password">Password</label>
-          <Input id="password" type="password" autoComplete="current-password" aria-invalid={Boolean(errors.password)} {...register('password')} />
+          <PasswordInput id="password" autoComplete="current-password" aria-invalid={Boolean(errors.password)} {...register('password')} />
           {errors.password && <p className="text-sm text-danger">{errors.password.message}</p>}
         </div>
         <Button className="w-full" size="lg" disabled={isSubmitting || rateLimit.isActive} type="submit">
