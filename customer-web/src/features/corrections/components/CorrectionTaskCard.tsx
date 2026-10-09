@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import { Spinner } from '@/components/ui/spinner'
 import { DocumentStatus } from '@/features/documents/components/DocumentStatus'
 import { DocumentUpload } from '@/features/documents/components/DocumentUpload'
-import { DocumentVersionSummary } from '@/features/documents/components/DocumentVersionSummary'
+import { CurrentDocumentSummary } from '@/features/documents/components/CurrentDocumentSummary'
 import type { CustomerDocumentChecklistItem } from '@/features/documents/document-api'
 import { documentTypeLabel } from '@/features/loan-products/loan-product-presentation'
 import { ApiError } from '@/lib/api'
@@ -115,7 +115,7 @@ export function CorrectionTaskCard({
         {open && scope.documentAction && checklistReady && !checklistItem ? (
           <Alert variant="warning"><FileQuestion aria-hidden="true" /><AlertTitle>Document unavailable</AlertTitle><AlertDescription>We can't show the document needed for this change. Refresh the page or try again later.</AlertDescription></Alert>
         ) : null}
-        {scope.documentAction && checklistItem?.currentVersion ? <DocumentVersionSummary version={checklistItem.currentVersion} /> : null}
+        {scope.documentAction && checklistItem?.currentVersion ? <CurrentDocumentSummary loanApplicationId={loanApplicationId} checklistItemId={checklistItem.checklistItemId} version={checklistItem.currentVersion} /> : null}
         {open && scope.documentAction && checklistItem ? (
           <div className="min-w-0 space-y-6">
             <DocumentStatus status={checklistItem.customerStatus} />

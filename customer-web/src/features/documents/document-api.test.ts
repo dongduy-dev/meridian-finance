@@ -53,3 +53,28 @@ describe('multipart upload', () => {
     expect(body.get('expectedCurrentVersionId')).toBe(versionId)
   })
 })
+
+describe('document content', () => {
+  it('returns the protected Blob unchanged with exact identifiers and no-store across auth replay', async () => {
+    const blob = new Blob(['%PDF'], { type: 'application/pdf' })
+    const { api, request } = setup(blob, true)
+    expect(await api.getDocumentContent(applicationId, itemId, versionId)).toBe(blob)
+    expect(request).toHaveBeenCalledTimes(2)
+    for (const [index, [path, options]] of request.mock.calls.entries()) {
+      expect(path).toBe(`/loan-applications/${applicationId}/documents/${itemId}/versions/${versionId}/content`)
+      expect(options).toMatchObject({ method: 'GET', responseType: 'blob', cache: 'no-store' })
+      expect(new Headers(options.headers).get('Authorization')).toBe(`Bearer ${index === 0 ? 'expired' : 'fresh'}`)
+      expect(options.body).toBeUndefined()
+    }
+  })
+
+  it.each([
+    ['../application', itemId, versionId],
+    [applicationId, 'https://storage.example/file', versionId],
+    [applicationId, itemId, 'filename.pdf'],
+  ])('rejects invalid identifiers before requesting content (%s, %s, %s)', async (app, item, version) => {
+    const { api, request } = setup(new Blob())
+    await expect(api.getDocumentContent(app, item, version)).rejects.toThrow()
+    expect(request).not.toHaveBeenCalled()
+  })
+})

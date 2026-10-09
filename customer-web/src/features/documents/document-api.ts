@@ -61,6 +61,15 @@ export function createDocumentApi(
         ),
       )
     },
+    async getDocumentContent(loanApplicationId: string, checklistItemId: string, documentVersionId: string) {
+      javaUuid.parse(loanApplicationId)
+      javaUuid.parse(checklistItemId)
+      javaUuid.parse(documentVersionId)
+      return protectedClient.request<Blob>(
+        `/loan-applications/${encodeURIComponent(loanApplicationId)}/documents/${encodeURIComponent(checklistItemId)}/versions/${encodeURIComponent(documentVersionId)}/content`,
+        { method: 'GET', responseType: 'blob', cache: 'no-store' },
+      )
+    },
     async uploadDocument(input: UploadDocumentInput) {
       javaUuid.parse(input.loanApplicationId)
       javaUuid.parse(input.checklistItemId)

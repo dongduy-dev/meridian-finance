@@ -15,7 +15,7 @@ import { applicationKeys, useOwnApplicationQuery } from '@/features/applications
 import { applicationStatusPresentation } from '@/features/applications/application-presentation'
 import { DocumentStatus } from '@/features/documents/components/DocumentStatus'
 import { DocumentUpload } from '@/features/documents/components/DocumentUpload'
-import { DocumentVersionSummary } from '@/features/documents/components/DocumentVersionSummary'
+import { CurrentDocumentSummary } from '@/features/documents/components/CurrentDocumentSummary'
 import { documentKeys, useDocumentChecklistQuery } from '@/features/documents/document-queries'
 import { documentUploadAction } from '@/features/documents/document-presentation'
 import {
@@ -112,7 +112,7 @@ export function ApplicationDocumentsPage() {
                           <ReadinessLine label="Document provided" value={item.uploadComplete ? 'Complete' : 'Still needed'} />
                           <ReadinessLine label="Ready for next step" value={item.processingReady ? 'Yes' : 'No'} />
                         </dl>
-                        {item.currentVersion ? <DocumentVersionSummary version={item.currentVersion} /> : null}
+                        {item.currentVersion ? <CurrentDocumentSummary loanApplicationId={checklistQuery.data.loanApplicationId} checklistItemId={item.checklistItemId} version={item.currentVersion} /> : null}
                         {action ? <DocumentUpload loanApplicationId={checklistQuery.data.loanApplicationId} item={item} action={action} actionsAllowed={actionsAllowed} canAct={canUpload} onVersionConflict={() => checklistQuery.refetch()} /> : null}
                       </CardContent>
                     </Card>
