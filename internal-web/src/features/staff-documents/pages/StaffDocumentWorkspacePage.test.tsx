@@ -10,6 +10,7 @@ import { AuthProvider } from '@/features/auth/model/auth-context'
 import * as api from '@/lib/api'
 import { ApiError, NetworkError } from '@/lib/api'
 import { createQueryClient } from '@/lib/query/query-client'
+import { findUnresolvedOperation } from '@/lib/operation/unresolved-operation'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
   const actual = await vi.importActual<typeof import('@/features/auth/api/auth-api')>('@/features/auth/api/auth-api')
@@ -251,6 +252,7 @@ describe('Staff document workspace review eligibility', () => {
     await user.upload(input, file)
     fireEvent.submit(input.closest('form')!)
     expect(await screen.findByText(/could not confirm the upload/i)).toBeVisible()
+    expect(uploads).toHaveLength(1)
     fireEvent.submit(input.closest('form')!)
     await waitFor(() => expect(uploads).toHaveLength(2))
 
@@ -287,6 +289,155 @@ describe('Staff document workspace review eligibility', () => {
     const stored = sessionStorage.getItem('meridian.staff.unresolved-operations.v1') ?? ''
     expect(stored).not.toContain('income.pdf')
     expect(stored).not.toContain('first')
+  })
+})
+
+describe('Initial assisted evidence upload feedback and reconciliation', () => {
+  const uploadPath = `/staff/loan-applications/${applicationId}/documents/${itemId}/versions`
+  const assistedFixture = () => fixture('AWAITING_REVIEW', {
+    originationChannel: 'STAFF_ASSISTED', applicationStatus: 'DOCUMENTS_PENDING',
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    sessionStorage.clear()
+    vi.mocked(authApi.refresh).mockResolvedValue({ ...staff, permissions: ['document:review', 'document:upload:assisted'] })
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => path.endsWith('/assisted-action-evidence') ? [] : assistedFixture())
+  })
+
+  it('shows constraints and selected filename, with explicit Upload or Replace actions', async () => {
+    const value = assistedFixture()
+    const withoutVersion = { ...value, items: [{ ...value.items[0]!, currentVersion: null, versionHistory: [] }] }
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => path.endsWith('/assisted-action-evidence') ? [] : withoutVersion)
+    renderDocumentWorkspace()
+    const input = await screen.findByLabelText('Upload Bank statement')
+    expect(screen.getByText('PDF, JPEG, or PNG; maximum 10 MiB.')).toBeVisible()
+    expect(input).toHaveClass('file:bg-selected')
+    const button = screen.getByRole('button', { name: 'Upload initial evidence' })
+    expect(button).toBeDisabled()
+    const filename = `${'long-filename-'.repeat(15)}income.pdf`
+    await userEvent.setup().upload(input, new File(['valid'], filename, { type: 'application/pdf' }))
+    expect(screen.getByText(`Selected: ${filename} (5 bytes)`)).toHaveClass('[overflow-wrap:anywhere]')
+    expect(button).toBeEnabled()
+    expect(input).toHaveAttribute('aria-invalid', 'false')
+  })
+
+  it.each([
+    ['unsupported MIME', new File(['invalid'], 'income.txt', { type: 'text/plain' }), 'Choose a PDF, JPEG, or PNG file.'],
+    ['oversized file', new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'income.pdf', { type: 'application/pdf' }), 'Choose a file no larger than 10 MiB.'],
+    ['empty file', new File([], 'income.pdf', { type: 'application/pdf' }), 'Choose a file that is not empty.'],
+  ])('rejects %s locally without sending an upload', async (_reason, file, message) => {
+    renderDocumentWorkspace()
+    const input = await screen.findByLabelText('Upload Bank statement')
+    await userEvent.setup({ applyAccept: false }).upload(input, file)
+    expect(screen.getByText(message)).toBeVisible()
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('button', { name: 'Replace initial evidence' })).toBeDisabled()
+    fireEvent.submit(input.closest('form')!)
+    expect(api.apiRequest).not.toHaveBeenCalledWith(uploadPath, expect.anything())
+  })
+
+  it('shows a controlled deterministic rejection and correlation without raw server text', async () => {
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === uploadPath) throw new ApiError(400, 'INVALID_DOCUMENT_UPLOAD', 'unsafe storage path /private/evidence', path, '2026-10-09T00:00:00Z', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+      return path.endsWith('/assisted-action-evidence') ? [] : assistedFixture()
+    })
+    renderDocumentWorkspace()
+    const input = await screen.findByLabelText('Upload Bank statement')
+    await userEvent.setup().upload(input, new File(['valid'], 'income.pdf', { type: 'application/pdf' }))
+    fireEvent.submit(input.closest('form')!)
+    expect(await screen.findByText(/The file was rejected. Choose a valid PDF/)).toBeVisible()
+    expect(screen.getByText(/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/)).toBeVisible()
+    expect(screen.queryByText(/unsafe storage path/)).not.toBeInTheDocument()
+    expect(screen.queryByText('The latest information confirms this action.')).not.toBeInTheDocument()
+    expect(findUnresolvedOperation('ASSISTED_APPLICATION_UPLOAD', `${applicationId}:${itemId}`)).toBeUndefined()
+  })
+
+  it('keeps selection and submission disabled while uploading, then confirms successful reconciliation', async () => {
+    let confirmUpload!: () => void
+    const pending = new Promise<void>((resolve) => { confirmUpload = resolve })
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === uploadPath) { await pending; return {} }
+      return path.endsWith('/assisted-action-evidence') ? [] : assistedFixture()
+    })
+    renderDocumentWorkspace()
+    const input = await screen.findByLabelText('Upload Bank statement')
+    await userEvent.setup().upload(input, new File(['valid'], 'income.pdf', { type: 'application/pdf' }))
+    fireEvent.submit(input.closest('form')!)
+    expect(await screen.findByRole('button', { name: 'Uploading…' })).toBeDisabled()
+    expect(input).toBeDisabled()
+    confirmUpload()
+    expect(await screen.findByText('The latest information confirms this action.')).toBeVisible()
+    expect(screen.queryByText(/Selected: income.pdf/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Replace initial evidence' })).toBeDisabled()
+  })
+
+  it('distinguishes confirmed upload from failed refetch and recovers through GET without another upload', async () => {
+    let uploaded = false
+    let allowRefresh = false
+    let uploadCount = 0
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (path === uploadPath) { uploaded = true; uploadCount++; return {} }
+      if (path.endsWith('/assisted-action-evidence')) return []
+      if (uploaded && !allowRefresh) throw new ApiError(400, 'VALIDATION_ERROR', 'unsafe refresh detail', path, '2026-10-09T00:00:00Z')
+      return assistedFixture()
+    })
+    renderDocumentWorkspace()
+    const input = await screen.findByLabelText('Upload Bank statement')
+    await userEvent.setup().upload(input, new File(['valid'], 'income.pdf', { type: 'application/pdf' }))
+    fireEvent.submit(input.closest('form')!)
+    expect(await screen.findByText('Upload confirmed; refresh needed')).toBeVisible()
+    expect(screen.getByText(/The file was uploaded, but the latest document evidence could not be refreshed/)).toBeVisible()
+    expect(screen.queryByText('The latest information confirms this action.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Result not confirmed')).not.toBeInTheDocument()
+    expect(screen.queryByText(/retry.*upload|upload.*again|could not confirm the upload/i)).not.toBeInTheDocument()
+    expect(input).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Replace initial evidence' })).toBeDisabled()
+    expect(findUnresolvedOperation('ASSISTED_APPLICATION_UPLOAD', `${applicationId}:${itemId}`)).toBeUndefined()
+    fireEvent.submit(input.closest('form')!)
+    expect(uploadCount).toBe(1)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Refresh evidence' }))
+    expect(await screen.findByText('Upload confirmed; refresh needed')).toBeVisible()
+    allowRefresh = true
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Refresh evidence' }))
+    expect(await screen.findByText('The latest information confirms this action.')).toBeVisible()
+    expect(uploadCount).toBe(1)
+  })
+
+  it('retains the original baseline across reload recovery even when the current version changes', async () => {
+    const uploads: FormData[] = []
+    let newerVersion = false
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (path === uploadPath) {
+        uploads.push((options as { body: FormData }).body)
+        if (uploads.length === 1) throw new NetworkError()
+        return {}
+      }
+      if (path.endsWith('/assisted-action-evidence')) return []
+      const value = assistedFixture()
+      if (newerVersion) value.items[0]!.currentVersion = version(historicalVersionId, 3)
+      return value
+    })
+    const user = userEvent.setup()
+    const mounted = renderDocumentWorkspace()
+    const input = await screen.findByLabelText('Upload Bank statement')
+    const file = new File(['same evidence'], 'income.pdf', { type: 'application/pdf' })
+    await user.upload(input, file)
+    fireEvent.submit(input.closest('form')!)
+    expect(await screen.findByText(/could not confirm the upload/i)).toBeVisible()
+    expect(uploads).toHaveLength(1)
+    mounted.unmount()
+    newerVersion = true
+    renderDocumentWorkspace()
+    const recoveryInput = await screen.findByLabelText('Upload Bank statement')
+    expect(screen.getByText('Reselect the exact same file to retry the unresolved upload.')).toBeVisible()
+    expect(uploads).toHaveLength(1)
+    await user.upload(recoveryInput, file)
+    fireEvent.submit(recoveryInput.closest('form')!)
+    expect(await screen.findByText('The latest information confirms this action.')).toBeVisible()
+    expect(uploads).toHaveLength(2)
+    expect(uploads[1]!.get('uploadRequestId')).toBe(uploads[0]!.get('uploadRequestId'))
+    expect(uploads[1]!.get('expectedCurrentVersionId')).toBe(currentVersionId)
   })
 })
 

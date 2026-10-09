@@ -274,6 +274,8 @@ describe('Staff correction operation recovery', () => {
       await screen.findByLabelText('Upload proof'),
       new File(['replacement bytes'], 'replacement.pdf', { type: 'application/pdf' }),
     )
+    expect(screen.getByLabelText('Upload proof')).toHaveClass('file:bg-selected')
+    expect(screen.getByRole('button', { name: 'Upload Customer-provided evidence' })).toHaveClass('max-w-full', 'whitespace-normal')
     await user.click(screen.getByRole('button', { name: 'Upload Customer-provided evidence' }))
 
     await waitFor(() => {

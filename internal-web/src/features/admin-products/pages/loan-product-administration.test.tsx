@@ -164,6 +164,18 @@ describe('Loan Product administration page', () => {
     expect(dialog).toHaveTextContent('Salary Advance (SALARY_ADVANCE)')
     expect(dialog).toHaveTextContent(/removes this product from Customer discovery and blocks future submission/i)
     expect(vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(0)
+    for (let i = 0; i < 5; i++) {
+      await user.tab()
+      expect(dialog).toContainElement(document.activeElement as HTMLElement)
+      await user.tab({ shift: true })
+      expect(dialog).toContainElement(document.activeElement as HTMLElement)
+    }
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(trigger).toHaveFocus())
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(0)
+    await user.click(trigger)
+    dialog = screen.getByRole('dialog', { name: 'Confirm product deactivation' })
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(trigger).toHaveFocus())
     expect(vi.mocked(api.apiRequest).mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(0)

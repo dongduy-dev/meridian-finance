@@ -8,6 +8,7 @@ import { AuthSessionManager } from '@/features/auth/auth-session'
 import { correctionErrorMessage } from '@/features/corrections/correction-presentation'
 import { ApiError } from '@/lib/api'
 import { createAuthApiMock, createTestAuthManager } from '@/test/auth'
+import { stubDocumentDownload } from '@/test/document-download'
 
 import { createTestRouter } from './router'
 
@@ -122,6 +123,7 @@ interface FixtureState {
   checklistReads: number
   detailReads: number
   detailParseFailureAfterUpload?: boolean
+  downloadFailure?: boolean
 }
 
 function state(overrides: Partial<FixtureState> = {}): FixtureState {
@@ -156,6 +158,10 @@ function fixtureFetch(fixture: FixtureState) {
   return async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
+    if (url.includes('/documents/') && url.endsWith('/content') && method === 'GET') {
+      if (fixture.downloadFailure) return json({ timestamp: '2026-08-31T10:00:00Z', status: 500, errorCode: 'STORAGE_FAILURE', message: 'raw storage detail /private/correction', path: url }, 500, 'download-correction-ref')
+      return new Response('%PDF current correction', { headers: { 'Content-Type': 'application/pdf' } })
+    }
     if (url.endsWith(`/loan-applications/${applicationId}/corrections/tasks/${supportingTaskId}/complete`) && method === 'POST') {
       fixture.completionBodies.push(JSON.parse(String(init?.body)))
       if (fixture.completionUncertainOnce && fixture.completionBodies.length === 1) throw new TypeError('uncertain completion result')
@@ -281,17 +287,48 @@ describe('FE-CP8 application tracking', () => {
 })
 
 describe('FE-CP8 Customer corrections', () => {
+  it.each([false, true])('retrieves the current correction document without mutations (failure: %s)', async (downloadFailure) => {
+    const user = userEvent.setup()
+    const browser = stubDocumentDownload()
+    const fixture = state({ downloadFailure })
+    const { fetchMock, authManager } = renderRoute(`/applications/${applicationId}/corrections`, fixture)
+    const button = await screen.findByRole('button', { name: 'Download document' })
+    await user.click(button)
+    if (downloadFailure) {
+      expect(await screen.findByText("We couldn't download this document. Refresh the page and try again.")).toBeVisible()
+      expect(screen.getByText('Support reference: download-correction-ref')).toBeVisible()
+      expect(screen.queryByText(/raw storage detail|\/private\/correction/)).not.toBeInTheDocument()
+      expect(browser.createObjectURL).not.toHaveBeenCalled()
+    } else {
+      await waitFor(() => expect(browser.downloads).toEqual([{ filename: currentVersion.originalFilename, url: 'blob:current-document' }]))
+    }
+    const contentRequests = fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/content'))
+    expect(contentRequests).toHaveLength(1)
+    expect(String(contentRequests[0]?.[0])).toContain(`/loan-applications/${applicationId}/documents/${replacementItemId}/versions/${versionId}/content`)
+    expect(contentRequests[0]?.[1]).toMatchObject({ method: 'GET', cache: 'no-store' })
+    expect(screen.getByText(currentVersion.originalFilename)).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Uploaded file · Version 1' })).toBeVisible()
+    expect(screen.getAllByRole('button', { name: 'Mark as complete' })).toHaveLength(2)
+    expect(fixture.uploadPosts).toBe(0)
+    expect(fixture.completionBodies).toEqual([])
+    expect(fixture.resubmissionBodies).toEqual([])
+    expect(fixture.cancellationBodies).toEqual([])
+    expect(fetchMock.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true)
+    expect(authManager.getSnapshot().status).toBe('authenticated')
+  })
   it('shows the current filename and version after replacement without completing the correction', async () => {
     const user = userEvent.setup()
+    const browser = stubDocumentDownload()
     const fixture = state()
     const replacement = { ...currentVersion, documentVersionId: '70000000-0000-4000-8000-000000000001', versionNumber: 2, originalFilename: 'bản-thay-thế-sao-kê-ngân-hàng-rất-dài.pdf' }
-    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).endsWith(`/documents/${replacementItemId}/versions`) && init?.method === 'POST') {
         fixture.checklist = { ...checklist, items: checklist.items.map(item => item.checklistItemId === replacementItemId ? { ...item, currentVersion: replacement } : item) }
         return json(replacement, 201)
       }
       return fixtureFetch(fixture)(input, init)
-    }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
     render(<AppProviders router={createTestRouter([`/applications/${applicationId}/corrections`])} authManager={createTestAuthManager()} />)
 
     expect(await screen.findByText(currentVersion.originalFilename)).toBeVisible()
@@ -304,6 +341,13 @@ describe('FE-CP8 Customer corrections', () => {
     expect(screen.queryByText(currentVersion.originalFilename)).not.toBeInTheDocument()
     expect(fixture.completionBodies).toEqual([])
     expect(screen.getAllByRole('button', { name: 'Mark as complete' })).toHaveLength(2)
+    await user.click(screen.getByRole('button', { name: 'Download document' }))
+    await waitFor(() => expect(browser.downloads).toEqual([{ filename: replacement.originalFilename, url: 'blob:current-document' }]))
+    const requests = fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/content'))
+    expect(requests).toHaveLength(1)
+    expect(String(requests[0]?.[0])).toContain(`/documents/${replacementItemId}/versions/${replacement.documentVersionId}/content`)
+    expect(requests[0]?.[1]?.method).toBe('GET')
+    expect(fixture.completionBodies).toEqual([])
   })
 
   it('refetches checklist and application reads after a replacement upload', async () => {

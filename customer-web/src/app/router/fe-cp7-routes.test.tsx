@@ -7,6 +7,7 @@ import { AppProviders } from '@/app/providers/AppProviders'
 import { AuthSessionManager } from '@/features/auth/auth-session'
 import { ApiError } from '@/lib/api'
 import { createAuthApiMock, createTestAuthManager } from '@/test/auth'
+import { stubDocumentDownload } from '@/test/document-download'
 
 import { createTestRouter } from './router'
 
@@ -192,6 +193,52 @@ describe('FE-CP7 document workspace', () => {
   const statuses = ['NOT_UPLOADED', 'AWAITING_REVIEW', 'ACCEPTED', 'REPLACEMENT_REQUESTED', 'WAIVED', 'FUTURE_STATUS']
   const checklist = { ...emptyChecklist, uploadComplete: false, processingReady: false, items: [...statuses.map((status, index) => ({ checklistItemId: `${index + 1}0000000-0000-0000-0000-000000000000`, documentType: index ? 'BANK_STATEMENT' : 'INCOME_PROOF', requirementStatus: 'REQUIRED', customerStatus: status, uploadComplete: status !== 'NOT_UPLOADED', processingReady: status === 'ACCEPTED' || status === 'WAIVED', currentVersion: status === 'NOT_UPLOADED' || status === 'FUTURE_STATUS' ? null : { ...version, checklistItemId: `${index + 1}0000000-0000-0000-0000-000000000000` } })), { checklistItemId: '70000000-0000-0000-0000-000000000000', documentType: 'EMPLOYMENT_PROOF', requirementStatus: 'REQUIRED', customerStatus: 'REPLACEMENT_REQUESTED', uploadComplete: true, processingReady: false, currentVersion: null }] }
 
+  it('downloads the exact current document with a protected GET and preserves the displayed filename', async () => {
+    const user = userEvent.setup()
+    const browser = stubDocumentDownload()
+    const currentItem = { ...checklist.items[2], currentVersion: version, checklistItemId: itemId }
+    const contentPath = `/loan-applications/${applicationId}/documents/${itemId}/versions/${currentVersionId}/content`
+    const { fetchMock } = renderRoute(`/applications/${applicationId}/documents`, async (input, init) => {
+      if (String(input).endsWith(contentPath)) return new Response('%PDF current', { headers: { 'Content-Type': 'application/pdf' } })
+      if (String(input).endsWith(`/loan-applications/${applicationId}/documents`)) return response({ ...checklist, items: [currentItem] })
+      return baseFetch(input, init)
+    })
+    expect(await screen.findByText(version.originalFilename)).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Download document' }))
+    await waitFor(() => expect(browser.downloads).toEqual([{ filename: version.originalFilename, url: 'blob:current-document' }]))
+    const requests = fetchMock.mock.calls.filter(([input]) => String(input).endsWith(contentPath))
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.[1]).toMatchObject({ method: 'GET', cache: 'no-store' })
+    expect(new Headers(requests[0]?.[1]?.headers).get('Authorization')).toBe('Bearer customer-access-token')
+    expect(browser.createObjectURL).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(browser.revokeObjectURL).toHaveBeenCalledWith('blob:current-document'), { timeout: 2000 })
+    expect(fetchMock.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true)
+  })
+
+  it('keeps document metadata and session intact on a local download failure', async () => {
+    const user = userEvent.setup()
+    const browser = stubDocumentDownload()
+    const currentItem = { ...checklist.items[3], checklistItemId: itemId, currentVersion: version }
+    const authManager = createTestAuthManager()
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/content')) return new Response(JSON.stringify({ timestamp: '2026-08-31T09:00:00Z', status: 500, errorCode: 'STORAGE_FAILURE', message: 'raw internal storage /private/evidence', path: url }), { status: 500, headers: { 'Content-Type': 'application/json', 'X-Request-ID': 'download-support-ref' } })
+      if (url.endsWith(`/loan-applications/${applicationId}/documents`)) return response({ ...checklist, items: [currentItem] })
+      return baseFetch(input, init)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<AppProviders router={createTestRouter([`/applications/${applicationId}/documents`])} authManager={authManager} />)
+    await user.click(await screen.findByRole('button', { name: 'Download document' }))
+    expect(await screen.findByText("We couldn't download this document. Refresh the page and try again.")).toBeVisible()
+    expect(screen.getByText('Support reference: download-support-ref')).toBeVisible()
+    expect(screen.getByText(version.originalFilename)).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Uploaded file · Version 1' })).toBeVisible()
+    expect(screen.queryByText(/raw internal storage|\/private\/evidence/)).not.toBeInTheDocument()
+    expect(authManager.getSnapshot().status).toBe('authenticated')
+    expect(browser.createObjectURL).not.toHaveBeenCalled()
+    expect(fetchMock.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true)
+  })
+
   it('reconnects by direct route, renders returned readiness/status facts, and exposes only allowed actions', async () => {
     renderRoute(`/applications/${applicationId}/documents`, (input, init) => String(input).endsWith(`/loan-applications/${applicationId}/documents`) ? Promise.resolve(response(checklist)) : baseFetch(input, init))
     const heading = await screen.findByRole('heading', { name: 'Documents' })
@@ -289,12 +336,14 @@ describe('FE-CP7 document workspace', () => {
 
   it('sends the loaded replacement baseline, refetches a stale conflict, and never overwrites automatically', async () => {
     const user = userEvent.setup()
+    const browser = stubDocumentDownload()
     let reads = 0
     let replacementBody: FormData | undefined
     const replacementItem = { ...checklist.items[3], currentVersion: version }
     const replacementChecklist = { ...checklist, items: [replacementItem] }
-    renderRoute(`/applications/${applicationId}/documents`, async (input, init) => {
+    const { fetchMock } = renderRoute(`/applications/${applicationId}/documents`, async (input, init) => {
       const url = String(input)
+      if (url.endsWith('/content')) return new Response('%PDF refreshed version')
       if (url.endsWith(`/loan-applications/${applicationId}/documents`) && init?.method !== 'POST') {
         reads += 1
         return response(reads === 1 ? replacementChecklist : { ...replacementChecklist, items: [{ ...replacementItem, currentVersion: { ...version, documentVersionId: 'ffffffff-ffff-ffff-ffff-ffffffffffff', versionNumber: 2 } }] })
@@ -312,19 +361,30 @@ describe('FE-CP7 document workspace', () => {
     expect(replacementBody?.get('expectedCurrentVersionId')).toBe(currentVersionId)
     expect(reads).toBeGreaterThanOrEqual(2)
     expect(screen.getByText(/Selected: replacement.pdf/)).toBeVisible()
+    await screen.findByRole('heading', { name: 'Uploaded file · Version 2' })
+    await user.click(screen.getByRole('button', { name: 'Download document' }))
+    await waitFor(() => expect(browser.downloads).toHaveLength(1))
+    const contentRequests = fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/content'))
+    expect(contentRequests).toHaveLength(1)
+    expect(String(contentRequests[0]?.[0])).toContain(`/documents/${replacementItem.checklistItemId}/versions/ffffffff-ffff-ffff-ffff-ffffffffffff/content`)
+    expect(contentRequests[0]?.[1]?.method).toBe('GET')
   })
 })
 
 
 describe('Staff-assisted direct Documents route', () => {
   it('keeps checklist and safe file metadata readable without upload controls or direct instructions', async () => {
-    const version = { documentVersionId: currentVersionId, checklistItemId: itemId, versionNumber: 1, originalFilename: 'statement.pdf', mimeType: 'application/pdf', byteSize: 4096, uploadedAt: '2026-08-31T08:30:00' }
+    const user = userEvent.setup()
+    const browser = stubDocumentDownload()
+    const assistedItemId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee'
+    const version = { documentVersionId: currentVersionId, checklistItemId: assistedItemId, versionNumber: 1, originalFilename: 'statement.pdf', mimeType: 'application/pdf', byteSize: 4096, uploadedAt: '2026-08-31T08:30:00' }
     const assistedChecklist = { ...emptyChecklist, uploadComplete: false, processingReady: false, items: [
       { checklistItemId: itemId, documentType: 'INCOME_PROOF', requirementStatus: 'REQUIRED', customerStatus: 'NOT_UPLOADED', uploadComplete: false, processingReady: false, currentVersion: null },
-      { checklistItemId: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', documentType: 'BANK_STATEMENT', requirementStatus: 'REQUIRED', customerStatus: 'REPLACEMENT_REQUESTED', uploadComplete: true, processingReady: false, currentVersion: version },
+      { checklistItemId: assistedItemId, documentType: 'BANK_STATEMENT', requirementStatus: 'REQUIRED', customerStatus: 'REPLACEMENT_REQUESTED', uploadComplete: true, processingReady: false, currentVersion: version },
     ] }
     const { fetchMock } = renderRoute(`/applications/${applicationId}/documents`, async (input, init) => {
       const url = String(input)
+      if (url.endsWith(`/documents/${assistedItemId}/versions/${currentVersionId}/content`)) return new Response('%PDF staff evidence')
       if (url.endsWith(`/loan-applications/${applicationId}`)) return response({ ...application, originationChannel: 'STAFF_ASSISTED' })
       if (url.endsWith(`/loan-applications/${applicationId}/documents`)) return response(assistedChecklist)
       return baseFetch(input, init)
@@ -336,6 +396,12 @@ describe('Staff-assisted direct Documents route', () => {
     expect(document.querySelector('input[type="file"]')).toBeNull()
     expect(screen.queryByRole('button', { name: /Upload document|Replace document/ })).not.toBeInTheDocument()
     expect(screen.queryByText('Please upload a replacement for this document.')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Download document' }))
+    await waitFor(() => expect(browser.downloads).toEqual([{ filename: version.originalFilename, url: 'blob:current-document' }]))
+    const requests = fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/content'))
+    expect(requests).toHaveLength(1)
+    expect(String(requests[0]?.[0])).toContain(`/loan-applications/${applicationId}/documents/${assistedItemId}/versions/${currentVersionId}/content`)
+    expect(requests[0]?.[1]?.method).toBe('GET')
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
   })
 })

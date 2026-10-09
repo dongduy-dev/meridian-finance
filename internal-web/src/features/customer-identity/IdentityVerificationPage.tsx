@@ -1,4 +1,4 @@
-import { knownLabel } from '@/lib/format/presentation'
+import { formatTimestamp, knownLabel } from '@/lib/format/presentation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
@@ -76,7 +76,7 @@ function IdentityWorkspace({ verificationId }: { verificationId?: string }) {
     <Button variant="outline" disabled={busy} onClick={() => { setReference(''); void query.refetch().then(result => { if (result.isSuccess && result.fetchStatus === 'idle') setUncertain(false) }) }}>Refresh</Button>
     {!verificationId && queue.data && !queue.isError ? <>
       {queue.data.length === 0 ? <p>No pending identity verifications.</p> : queue.data.map(row => <article key={row.verificationId} className="rounded-lg border bg-card p-4">
-        <h2 className="break-words font-semibold">{row.customerNumber} · {row.fullName}</h2><p className="text-sm">{row.source === 'CUSTOMER_DIGITAL' ? 'Customer digital evidence' : row.source === 'STAFF_ASSISTED_INTAKE' ? 'Staff intake evidence' : 'Source unavailable'} · {row.submittedAt} · {row.status === 'PENDING_REVIEW' ? 'Pending review' : 'Status unavailable'}</p>
+        <h2 className="break-words font-semibold">{row.customerNumber} · {row.fullName}</h2><p className="text-sm">{row.source === 'CUSTOMER_DIGITAL' ? 'Customer digital evidence' : row.source === 'STAFF_ASSISTED_INTAKE' ? 'Staff intake evidence' : 'Source unavailable'} · {formatTimestamp(row.submittedAt)} · {row.status === 'PENDING_REVIEW' ? 'Pending review' : 'Status unavailable'}</p>
         <Button variant="link" asChild><Link to={`/staff/customer-identity-verifications/${row.verificationId}`}>Open verification</Link></Button>
       </article>)}
       <div className="flex gap-3"><Button variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</Button><Button variant="outline" disabled={queue.data.length < 25} onClick={() => setPage(page + 1)}>Next</Button></div>
