@@ -45,6 +45,29 @@ describe('Document review operation recovery', () => {
     })
   })
 
+  it('keeps keyboard focus in the exact-version confirmation and cancels without reviewing', async () => {
+    const protectedRequest = vi.fn()
+    renderForm(protectedRequest)
+    const user = userEvent.setup()
+    const trigger = screen.getByRole('button', { name: 'Review document decision' })
+    await user.click(trigger)
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm document review' })
+    expect(dialog).toHaveAccessibleDescription('This review applies to the exact evidence shown below.')
+    for (let i = 0; i < 5; i++) {
+      await user.tab()
+      expect(dialog).toContainElement(document.activeElement as HTMLElement)
+      await user.tab({ shift: true })
+      expect(dialog).toContainElement(document.activeElement as HTMLElement)
+    }
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(trigger).toHaveFocus())
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await user.click(trigger)
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(trigger).toHaveFocus())
+    expect(protectedRequest).not.toHaveBeenCalled()
+  })
+
   it('reuses the retained reviewRequestId for the same semantic payload', async () => {
     const protectedRequest = vi.fn().mockResolvedValue({
       reviewDecisionId: '66666666-6666-4666-8666-666666666666',
