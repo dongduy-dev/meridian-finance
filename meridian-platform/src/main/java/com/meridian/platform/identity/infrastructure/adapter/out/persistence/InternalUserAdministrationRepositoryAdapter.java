@@ -24,6 +24,25 @@ public class InternalUserAdministrationRepositoryAdapter implements InternalUser
     }
 
     @Override
+    public void lockAdministratorBootstrap() {
+        jdbcTemplate.queryForList("SELECT pg_advisory_xact_lock(hashtextextended('identity:first-admin-bootstrap', 0))");
+    }
+
+    @Override
+    public boolean hasEstablishedAdministrator() {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                """
+                        SELECT EXISTS (
+                            SELECT 1 FROM users u
+                            JOIN role_assignments ra ON ra.user_id = u.id
+                            JOIN roles r ON r.id = ra.role_id
+                            WHERE u.user_type = 'STAFF' AND r.code = 'BACK_OFFICE_ADMIN'
+                              AND (u.status = 'ACTIVE' OR u.id <> '00000000-0000-0000-0000-000000000305')
+                        )
+                        """, Boolean.class));
+    }
+
+    @Override
     public List<InternalUserRecord> findAllInternalUsers() {
         return jdbcTemplate.query(
                 """

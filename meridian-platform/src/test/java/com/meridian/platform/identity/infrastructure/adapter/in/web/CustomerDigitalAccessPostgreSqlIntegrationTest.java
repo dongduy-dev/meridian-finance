@@ -185,7 +185,7 @@ class CustomerDigitalAccessPostgreSqlIntegrationTest {
         UUID refreshId = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO refresh_token_sessions (id, user_id, family_id, token_digest, issued_at, expires_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '1 day')
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP - INTERVAL '1 minute', CURRENT_TIMESTAMP + INTERVAL '1 day')
                 """, refreshId, userId, UUID.randomUUID(), setupCodec.digest("test-refresh-" + refreshId));
         passwordConfirmation.confirmReset(confirmation);
         assertEquals(1, count("SELECT COUNT(*) FROM refresh_token_sessions WHERE id = ? AND revoked_at IS NOT NULL", refreshId));
@@ -269,7 +269,7 @@ class CustomerDigitalAccessPostgreSqlIntegrationTest {
             if (expired) {
                 jdbc.update("UPDATE password_reset_tokens SET issued_at = CURRENT_TIMESTAMP - INTERVAL '2 days', expires_at = CURRENT_TIMESTAMP - INTERVAL '1 day' WHERE user_id = ?", userId);
             } else {
-                jdbc.update("UPDATE password_reset_tokens SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ?", userId);
+                jdbc.update("UPDATE password_reset_tokens SET revoked_at = GREATEST(CURRENT_TIMESTAMP, issued_at) WHERE user_id = ?", userId);
             }
             // Delivery/reload/verification expiry recovery uses the existing resend contract.
             resend.requestVerification(new EmailVerificationRequest(email));

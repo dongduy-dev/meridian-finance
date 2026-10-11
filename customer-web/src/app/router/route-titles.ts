@@ -15,6 +15,7 @@ const routeTitles: Record<string, string> = {
   '/account/bank-accounts': 'Bank accounts',
   '/login': 'Login',
   '/register': 'Create Account',
+  '/demo-privacy': 'Demo and privacy notice',
   '/verify-email': 'Confirm Email',
   '/activate-access': 'Activate your access',
   '/verify-email/pending': 'Email Confirmation Required',

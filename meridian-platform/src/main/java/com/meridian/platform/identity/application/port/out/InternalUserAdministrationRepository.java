@@ -9,6 +9,10 @@ import java.util.UUID;
 
 public interface InternalUserAdministrationRepository {
 
+    void lockAdministratorBootstrap();
+
+    boolean hasEstablishedAdministrator();
+
     List<InternalUserRecord> findAllInternalUsers();
 
     List<AssignableInternalRole> findAssignableRoles();

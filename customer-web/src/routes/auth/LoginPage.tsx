@@ -10,6 +10,7 @@ import { useAuth } from '@/features/auth/auth-context'
 import { CustomerSessionRequiredError } from '@/features/auth/auth-session'
 import { focusServerError, isAuthApiError, unexpectedAuthError } from '@/features/auth/auth-errors'
 import { AuthCard } from '@/features/auth/components/AuthCard'
+import { PublicDemoNotice } from '@/features/auth/components/PublicDemoNotice'
 import {
   ErrorFeedback,
   RateLimitFeedback,
@@ -120,6 +121,7 @@ export function LoginPage() {
         </p>
       }
     >
+      <PublicDemoNotice />
       <form className="space-y-6" noValidate onSubmit={onSubmit}>
         {locationState.notice === 'PASSWORD_SETUP_SUCCESS' ? (
           <SuccessFeedback title="Password set" description="Log in with your new password to continue." />

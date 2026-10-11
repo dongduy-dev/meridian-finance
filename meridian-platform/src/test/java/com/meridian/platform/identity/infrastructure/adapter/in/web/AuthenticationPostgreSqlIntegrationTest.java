@@ -23,6 +23,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -69,7 +70,7 @@ class AuthenticationPostgreSqlIntegrationTest {
     private static final UUID ADMIN_CONFIG_PERMISSION_ID = UUID.fromString("00000000-0000-0000-0000-000000000221");
     private static final LoginRequest LOGIN = new LoginRequest(
             "customer.demo@meridian.local",
-            "Meridian@123"
+            "Isolated-Test-Password-73"
     );
 
     @Autowired
@@ -83,6 +84,9 @@ class AuthenticationPostgreSqlIntegrationTest {
 
     @Autowired
     private JwtTokenService jwtTokenService;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -103,6 +107,9 @@ class AuthenticationPostgreSqlIntegrationTest {
 
     @BeforeEach
     void resetIdentityState() {
+        // Test-owned credential; V73 never restores historical credentials at runtime.
+        jdbcTemplate.update("UPDATE users SET password_hash = ? WHERE id = ?",
+                passwordEncoder.encode("Isolated-Test-Password-73"), CUSTOMER_USER_ID);
         jdbcTemplate.update("DELETE FROM access_token_revocations");
         jdbcTemplate.update("DELETE FROM refresh_token_sessions");
         jdbcTemplate.update(
@@ -125,7 +132,7 @@ class AuthenticationPostgreSqlIntegrationTest {
                         .content("""
                                 {
                                   "email": "customer.demo@meridian.local",
-                                  "password": "Meridian@123"
+                                  "password": "Isolated-Test-Password-73"
                                 }
                                 """))
                 .andExpect(status().isOk())
@@ -189,7 +196,7 @@ class AuthenticationPostgreSqlIntegrationTest {
         assertEquals(3, failedLoginAttempts());
         assertEquals(1, count("SELECT COUNT(*) FROM users WHERE locked_until > CURRENT_TIMESTAMP"));
 
-        mockMvc.perform(loginRequest("Meridian@123"))
+        mockMvc.perform(loginRequest("Isolated-Test-Password-73"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.errorCode").value("INVALID_CREDENTIALS"))
                 .andExpect(jsonPath("$.message").value("Invalid credentials."));
@@ -209,7 +216,7 @@ class AuthenticationPostgreSqlIntegrationTest {
                 CUSTOMER_USER_ID
         );
 
-        mockMvc.perform(loginRequest("Meridian@123"))
+        mockMvc.perform(loginRequest("Isolated-Test-Password-73"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isString());
 
@@ -223,7 +230,7 @@ class AuthenticationPostgreSqlIntegrationTest {
                 .andExpect(status().isUnauthorized());
         assertEquals(1, failedLoginAttempts());
 
-        mockMvc.perform(loginRequest("Meridian@123"))
+        mockMvc.perform(loginRequest("Isolated-Test-Password-73"))
                 .andExpect(status().isOk());
 
         assertEquals(0, failedLoginAttempts());
@@ -250,7 +257,7 @@ class AuthenticationPostgreSqlIntegrationTest {
 
         assertEquals(3, failedLoginAttempts());
         assertEquals(1, count("SELECT COUNT(*) FROM users WHERE locked_until > CURRENT_TIMESTAMP"));
-        mockMvc.perform(loginRequest("Meridian@123"))
+        mockMvc.perform(loginRequest("Isolated-Test-Password-73"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.errorCode").value("INVALID_CREDENTIALS"));
     }
@@ -378,7 +385,7 @@ class AuthenticationPostgreSqlIntegrationTest {
 
         AuthenticationResult revoked = authenticationUseCase.login(LOGIN);
         jdbcTemplate.update(
-                "UPDATE refresh_token_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE token_digest = ?",
+                "UPDATE refresh_token_sessions SET revoked_at = GREATEST(CURRENT_TIMESTAMP, issued_at) WHERE token_digest = ?",
                 refreshTokenCodec.digest(revoked.refreshToken())
         );
         assertInvalidRefresh(revoked.refreshToken());

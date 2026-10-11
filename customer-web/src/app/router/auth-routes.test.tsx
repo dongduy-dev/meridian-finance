@@ -47,6 +47,31 @@ afterEach(() => {
 })
 
 describe('Customer authentication routes', () => {
+  it.each(['/login', '/register'])('shows the fictional demo boundary and links to its public notice on %s', async (path) => {
+    const user = userEvent.setup()
+    const api = anonymousApi()
+    const { router } = renderAuthRoute(path, api)
+    const notice = await screen.findByRole('complementary', { name: 'Portfolio demo notice' })
+    expect(notice).toHaveTextContent('Use fictional information only.')
+    expect(notice).toHaveTextContent('Do not submit real identity, banking, employment, payroll, financial, or personal documents.')
+    expect(screen.queryByText(/agree to provide accurate information/)).not.toBeInTheDocument()
+    await user.click(within(notice).getByRole('link', { name: 'Demo and privacy notice' }))
+    expect(await screen.findByRole('heading', { name: 'Demo and privacy notice' })).toBeVisible()
+    expect(router.state.location.pathname).toBe('/demo-privacy')
+    expect(screen.getByText(/not a real financial service/)).toBeVisible()
+    expect(screen.getByText(/manually reset or deleted/)).toBeVisible()
+    expect(screen.getByText(/contact the operator through/)).toBeVisible()
+    expect(api.register).not.toHaveBeenCalled()
+    expect(api.login).not.toHaveBeenCalled()
+  })
+
+  it('opens the demo notice directly without Customer authentication', async () => {
+    const api = anonymousApi()
+    renderAuthRoute('/demo-privacy', api)
+    expect(await screen.findByRole('heading', { name: 'Demo and privacy notice' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Return to login' })).toHaveAttribute('href', '/login')
+  })
+
   it.each([
     { path: '/login', labels: ['Password'], autocomplete: 'current-password', command: 'login' as const },
     { path: '/register', labels: ['Password'], autocomplete: 'new-password', command: 'register' as const },
