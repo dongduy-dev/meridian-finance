@@ -1,7 +1,8 @@
 -- Meridian current physical schema snapshot.
 -- Documentation only. Flyway migrations under meridian-platform/src/main/resources/db/migration
 -- remain the executable database history.
--- Snapshot source: migrations V1 through V72. V68 is an intentional no-op.
+-- V73 retires the five V13 credentials and outstanding session/recovery authority; no DDL change.
+-- Snapshot source: migrations V1 through V73. V68 is an intentional no-op.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 

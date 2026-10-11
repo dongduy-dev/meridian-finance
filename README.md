@@ -111,6 +111,8 @@ Useful local endpoints:
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
 - Mailpit UI: `http://localhost:8025`
 
+Historical demo credentials are disabled by Flyway V73. Register Customer demo accounts through Customer Web and verify their email in Mailpit. Establish the first Back-Office Admin through the opt-in [Identity bootstrap procedure](docs/deployment/MER-DEP-001-identity-bootstrap-and-demo-boundary.md), then create Staff accounts through `/admin/users` and their emailed password-setup links. No shared Staff password is provided.
+
 The OCR worker is opt-in:
 
 ```bash

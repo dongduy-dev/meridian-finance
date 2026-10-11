@@ -83,6 +83,20 @@ public class ProvisionInternalUserTransactionService {
 
     @Transactional
     public PendingStaffSetupDelivery create(CreateInternalUserRequest request) {
+        return provision(request, false);
+    }
+
+    @Transactional
+    public PendingStaffSetupDelivery bootstrapAdministrator(String email, String displayName) {
+        administration.lockAdministratorBootstrap();
+        if (administration.hasEstablishedAdministrator()) {
+            throw new BusinessStateConflictException("ADMINISTRATOR_ALREADY_ESTABLISHED",
+                    "Administrator bootstrap is unavailable. Use Internal User Administration or password recovery.");
+        }
+        return provision(new CreateInternalUserRequest(email, displayName, List.of("BACK_OFFICE_ADMIN")), true);
+    }
+
+    private PendingStaffSetupDelivery provision(CreateInternalUserRequest request, boolean bootstrap) {
         Objects.requireNonNull(request, "request must not be null");
         String email = Objects.requireNonNull(request.email(), "email must not be null").trim().toLowerCase(Locale.ROOT);
         String displayName = Objects.requireNonNull(request.displayName(), "displayName must not be null").trim();
@@ -103,7 +117,7 @@ public class ProvisionInternalUserTransactionService {
             administration.assignRole(userId, role);
         }
         GeneratedPasswordResetToken generated = createToken(userId, now);
-        publishCreation(userId, roles, now);
+        publishCreation(userId, roles, now, bootstrap);
         return new PendingStaffSetupDelivery(mapper.toDto(user, user.status(), roles), email, generated.tokenValue());
     }
 
@@ -144,7 +158,7 @@ public class ProvisionInternalUserTransactionService {
         return generated;
     }
 
-    private void publishCreation(UUID userId, Set<String> roles, Instant now) {
+    private void publishCreation(UUID userId, Set<String> roles, Instant now, boolean bootstrap) {
         List<BusinessAuditEntry> entries = new ArrayList<>();
         entries.add(BusinessAuditEntry.of(BusinessAuditAction.IDENTITY_USER_CREATED,
                 BusinessAuditEntityType.IDENTITY_USER, userId));
@@ -154,8 +168,10 @@ public class ProvisionInternalUserTransactionService {
                     BusinessAuditPayload.builder().put(BusinessAuditPayloadKey.ROLE_CODE, role).build()));
         }
         auditPublisher.publish(new BusinessAuditEvent(
-                BusinessOperationContext.user(UUID.randomUUID(), currentUserProvider.currentUser().userId(),
-                        LocalDateTime.ofInstant(now, ZoneOffset.UTC)), entries));
+                bootstrap
+                        ? BusinessOperationContext.system(UUID.randomUUID(), LocalDateTime.ofInstant(now, ZoneOffset.UTC))
+                        : BusinessOperationContext.user(UUID.randomUUID(), currentUserProvider.currentUser().userId(),
+                                LocalDateTime.ofInstant(now, ZoneOffset.UTC)), entries));
     }
 
     private static EntityNotFoundException userNotFound() {

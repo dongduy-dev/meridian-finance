@@ -184,7 +184,7 @@ class PartnerSnapshotAuthorityPostgreSqlIntegrationTest {
                 assertTrue(constraint.contains("'" + action.name() + "'"), action.name());
             }
             String snapshot = java.nio.file.Files.readString(java.nio.file.Path.of("../docs/database/MER-DB-CURRENT-SCHEMA.sql"));
-            assertTrue(snapshot.contains("Snapshot source: migrations V1 through V72"));
+            assertTrue(snapshot.contains("Snapshot source: migrations V1 through V73"));
             assertTrue(snapshot.contains("PARTNER_EMPLOYEE_IMPORT_FAILED"));
         } finally {
             jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");

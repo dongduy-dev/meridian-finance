@@ -6,6 +6,7 @@ import { NotFoundPage } from '@/routes/NotFoundPage'
 import { RouteErrorBoundary } from '@/routes/RouteErrorBoundary'
 import { ForgotPasswordPage } from '@/routes/auth/ForgotPasswordPage'
 import { LoginPage } from '@/routes/auth/LoginPage'
+import { DemoPrivacyPage } from '@/routes/auth/DemoPrivacyPage'
 import { RegisterPage } from '@/routes/auth/RegisterPage'
 import { ResetPasswordPage } from '@/routes/auth/ResetPasswordPage'
 import { ActivateAccessPage } from '@/routes/auth/ActivateAccessPage'
@@ -43,6 +44,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: 'login', element: <LoginPage /> },
           { path: 'register', element: <RegisterPage /> },
+          { path: 'demo-privacy', element: <DemoPrivacyPage /> },
           { path: 'verify-email', element: <VerifyEmailPage /> },
           { path: 'activate-access', element: <ActivateAccessPage /> },
           { path: 'verify-email/pending', element: <VerificationPendingPage /> },

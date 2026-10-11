@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/features/auth/auth-context'
 import { focusServerError, isAuthApiError, unexpectedAuthError } from '@/features/auth/auth-errors'
 import { AuthCard } from '@/features/auth/components/AuthCard'
+import { PublicDemoNotice } from '@/features/auth/components/PublicDemoNotice'
 import { ErrorFeedback, RateLimitFeedback, ValidationSummary } from '@/features/auth/components/AuthFeedback'
 import { FormField } from '@/features/auth/components/FormField'
 import { fieldDescriptionIds } from '@/features/auth/field-description'
@@ -89,6 +90,7 @@ export function RegisterPage() {
         </div>
       }
     >
+      <PublicDemoNotice />
       <form className="space-y-6" noValidate onSubmit={onSubmit}>
         <ValidationSummary messages={validationMessages} />
         {serverError ? <ErrorFeedback {...serverError} /> : null}
@@ -129,7 +131,7 @@ export function RegisterPage() {
         </FormField>
 
         <p className="text-sm leading-5 text-muted-foreground">
-          By creating an account, you agree to provide accurate information to Meridian.
+          Create a demo account with an email you can verify. Keep your profile, applications, and documents fictional.
         </p>
 
         <Button size="lg" className="w-full" type="submit" disabled={isSubmitting || rateLimit.isActive}>

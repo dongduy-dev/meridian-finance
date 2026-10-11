@@ -18,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -60,6 +61,7 @@ class InternalUserAdministrationPostgreSqlIntegrationTest {
     @Autowired ManageInternalUserUseCase commands;
     @Autowired QueryInternalUsersUseCase queries;
     @Autowired AuthenticationUseCase authentication;
+    @Autowired PasswordEncoder passwordEncoder;
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired MockMvc mockMvc;
     @MockitoBean CurrentUserProvider currentUserProvider;
@@ -74,6 +76,9 @@ class InternalUserAdministrationPostgreSqlIntegrationTest {
 
     @BeforeEach
     void resetTarget() {
+        // Test-owned credential; V73 never restores historical credentials at runtime.
+        jdbcTemplate.update("UPDATE users SET password_hash = ? WHERE id = ?",
+                passwordEncoder.encode("Isolated-Test-Password-73"), TARGET_ID);
         when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(
                 ACTOR_ID,
                 "backoffice.admin@meridian.local",
@@ -280,7 +285,7 @@ class InternalUserAdministrationPostgreSqlIntegrationTest {
     }
 
     private AuthenticationResult loginTarget() {
-        return authentication.login(new LoginRequest("loan.officer@meridian.local", "Meridian@123"));
+        return authentication.login(new LoginRequest("loan.officer@meridian.local", "Isolated-Test-Password-73"));
     }
 
     private void assertInvalidAccess(String accessToken) throws Exception {
