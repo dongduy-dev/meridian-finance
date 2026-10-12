@@ -8,6 +8,8 @@ public interface DocumentStoragePort {
 
     StagedDocument stage(InputStream content, String declaredMimeType, String originalFilename);
 
+    InputStream openStaged(StagedDocument stagedDocument);
+
     StoredObject commit(StagedDocument stagedDocument);
 
     InputStream open(String storageKey);

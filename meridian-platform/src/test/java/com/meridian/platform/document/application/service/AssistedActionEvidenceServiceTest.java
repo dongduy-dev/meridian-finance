@@ -40,6 +40,7 @@ class AssistedActionEvidenceServiceTest {
     private final UUID offerId = UUID.randomUUID();
     private final UUID correctionId = UUID.randomUUID();
     private final UUID actorId = UUID.randomUUID();
+    private final DocumentPromotionService promotion = org.mockito.Mockito.mock(DocumentPromotionService.class);
     private AssistedActionEvidenceService service;
 
     @BeforeEach
@@ -48,17 +49,28 @@ class AssistedActionEvidenceServiceTest {
         when(users.currentUser()).thenReturn(staff(Set.of("LOAN_OFFICER"),
                 Set.of("document:upload:assisted-action")));
         when(storage.stage(any(), any(), any())).thenReturn(staged());
-        when(storage.commit(any())).thenReturn(new StoredObject("assisted-actions/final/object"));
+        when(promotion.promote(any())).thenReturn(new StoredObject("assisted-actions/final/object"));
         when(documents.saveDocument(any())).thenAnswer(call -> call.getArgument(0));
         when(documents.saveVersion(any())).thenAnswer(call -> call.getArgument(0));
         service = new AssistedActionEvidenceService(
-                documents, storage, authorizations, users, audits,
+                documents, storage, promotion, authorizations, users, audits,
                 Clock.fixed(Instant.parse("2026-09-22T08:00:00Z"), ZoneOffset.UTC));
     }
 
     @AfterEach
     void cleanUp() {
         TransactionSynchronizationManager.clearSynchronization();
+    }
+
+    @Test
+    void unavailableScanCreatesNoVersionAndDiscardsStaging() {
+        when(promotion.promote(any())).thenThrow(new com.meridian.platform.shared.domain.exception.ServiceUnavailableException(
+                "DOCUMENT_SCAN_UNAVAILABLE", "Document safety checking is temporarily unavailable."));
+        assertThrows(com.meridian.platform.shared.domain.exception.ServiceUnavailableException.class,
+                () -> service.upload(command(UUID.randomUUID(), null, AssistedOfferDecision.ACCEPT)));
+        verify(documents, never()).saveVersion(any());
+        verify(storage, never()).commit(any());
+        verify(storage).discardStaged(any());
     }
 
     @Test
@@ -89,6 +101,7 @@ class AssistedActionEvidenceServiceTest {
                 service.upload(command(requestId, null, AssistedOfferDecision.ACCEPT)).documentVersionId());
 
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
         verify(documents, never()).saveVersion(any());
         verifyNoInteractions(audits);
     }
@@ -108,6 +121,7 @@ class AssistedActionEvidenceServiceTest {
 
         assertEquals("IDEMPOTENCY_KEY_REUSED", error.getErrorCode());
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
     }
 
     @Test
@@ -122,6 +136,7 @@ class AssistedActionEvidenceServiceTest {
 
         assertEquals("STALE_DOCUMENT_VERSION", error.getErrorCode());
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
         verify(documents, never()).saveVersion(any());
     }
 
@@ -135,6 +150,7 @@ class AssistedActionEvidenceServiceTest {
 
         assertEquals("ASSISTED_ACTION_EVIDENCE_INVALID", error.getErrorCode());
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
     }
 
     @Test
@@ -152,6 +168,7 @@ class AssistedActionEvidenceServiceTest {
                     () -> service.upload(command(UUID.randomUUID(), null, AssistedOfferDecision.ACCEPT)));
             verifyNoInteractions(authorizations, documents, audits);
             verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
         }
     }
 
@@ -166,6 +183,7 @@ class AssistedActionEvidenceServiceTest {
 
         verifyNoInteractions(documents, audits);
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
     }
 
     @Test
@@ -204,6 +222,7 @@ class AssistedActionEvidenceServiceTest {
 
         assertEquals("STALE_DOCUMENT_VERSION", error.getErrorCode());
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
     }
 
     private UploadAssistedActionEvidenceCommand command(

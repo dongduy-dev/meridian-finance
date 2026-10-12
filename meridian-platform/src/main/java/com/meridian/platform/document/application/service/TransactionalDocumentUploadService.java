@@ -50,6 +50,7 @@ public class TransactionalDocumentUploadService {
     private final DocumentChecklistRepository checklistRepository;
     private final DocumentRepository documentRepository;
     private final DocumentStoragePort storagePort;
+    private final DocumentPromotionService promotion;
     private final LoanDocumentCorrectionPort correctionPort;
     private final DocumentWorkflowEventPublisher workflowEventPublisher;
     private final BusinessAuditPublisher auditPublisher;
@@ -61,6 +62,7 @@ public class TransactionalDocumentUploadService {
             DocumentChecklistRepository checklistRepository,
             DocumentRepository documentRepository,
             DocumentStoragePort storagePort,
+            DocumentPromotionService promotion,
             LoanDocumentCorrectionPort correctionPort,
             DocumentWorkflowEventPublisher workflowEventPublisher,
             BusinessAuditPublisher auditPublisher,
@@ -71,6 +73,7 @@ public class TransactionalDocumentUploadService {
         this.checklistRepository = checklistRepository;
         this.documentRepository = documentRepository;
         this.storagePort = storagePort;
+        this.promotion = promotion;
         this.correctionPort = correctionPort;
         this.workflowEventPublisher = workflowEventPublisher;
         this.auditPublisher = auditPublisher;
@@ -178,7 +181,7 @@ public class TransactionalDocumentUploadService {
                         .orElseThrow(() -> new IllegalStateException("Current document version was not found."))
                         .versionNumber() + 1;
 
-        StoredObject storedObject = storagePort.commit(staged);
+        StoredObject storedObject = promotion.promote(staged);
         registerRollbackCleanup(storedObject.storageKey());
         DocumentVersion version = documentRepository.saveVersion(new DocumentVersion(
                 UUID.randomUUID(),

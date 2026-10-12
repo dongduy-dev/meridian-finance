@@ -111,6 +111,20 @@ public class LocalFilesystemDocumentStorageAdapter implements DocumentStoragePor
     }
 
     @Override
+    public InputStream openStaged(StagedDocument stagedDocument) {
+        Path path = stagingPath(stagedDocument);
+        try {
+            ensureRootSafety();
+            if (Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+                throw unavailable();
+            }
+            return Files.newInputStream(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+        } catch (IOException exception) {
+            throw unavailable();
+        }
+    }
+
+    @Override
     public StoredObject commit(StagedDocument stagedDocument) {
         Path stagedPath = stagingPath(stagedDocument);
         String objectId = UUID.randomUUID().toString().replace("-", "");

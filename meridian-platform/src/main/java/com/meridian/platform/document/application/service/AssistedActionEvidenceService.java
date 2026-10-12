@@ -32,6 +32,7 @@ public class AssistedActionEvidenceService
 
     private final AssistedActionDocumentRepository documents;
     private final DocumentStoragePort storage;
+    private final DocumentPromotionService promotion;
     private final LoanAssistedActionAuthorizationPort authorizations;
     private final CurrentUserProvider currentUsers;
     private final BusinessAuditPublisher auditPublisher;
@@ -40,6 +41,7 @@ public class AssistedActionEvidenceService
     public AssistedActionEvidenceService(
             AssistedActionDocumentRepository documents,
             DocumentStoragePort storage,
+            DocumentPromotionService promotion,
             LoanAssistedActionAuthorizationPort authorizations,
             CurrentUserProvider currentUsers,
             BusinessAuditPublisher auditPublisher,
@@ -47,6 +49,7 @@ public class AssistedActionEvidenceService
     ) {
         this.documents = documents;
         this.storage = storage;
+        this.promotion = promotion;
         this.authorizations = authorizations;
         this.currentUsers = currentUsers;
         this.auditPublisher = auditPublisher;
@@ -97,7 +100,7 @@ public class AssistedActionEvidenceService
                                 "Current assisted-action evidence version was not found."))
                         .versionNumber() + 1;
 
-        StoredObject stored = storage.commit(staged);
+        StoredObject stored = promotion.promote(staged);
         registerRollbackCleanup(stored.storageKey());
         AssistedActionDocumentVersion version = documents.saveVersion(new AssistedActionDocumentVersion(
                 UUID.randomUUID(), document.id(), versionNumber, command.uploadRequestId(),

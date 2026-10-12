@@ -75,12 +75,13 @@ class TransactionalDocumentUploadServiceTest {
     @Mock BusinessAuditPublisher audits;
     @Mock CurrentUserProvider currentUsers;
 
+    private final DocumentPromotionService promotion = org.mockito.Mockito.mock(DocumentPromotionService.class);
     private TransactionalDocumentUploadService service;
 
     @BeforeEach
     void setUp() {
         service = new TransactionalDocumentUploadService(
-                workflows, checklists, documents, storage, corrections, events, audits, currentUsers,
+                workflows, checklists, documents, storage, promotion, corrections, events, audits, currentUsers,
                 Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
         TransactionSynchronizationManager.initSynchronization();
     }
@@ -90,6 +91,24 @@ class TransactionalDocumentUploadServiceTest {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.clearSynchronization();
         }
+    }
+
+    @Test
+    void rejectedScanCreatesNoVersionAndOuterUploadDiscardsStaging() {
+        prepareWorkflow(customer(), OriginationChannel.CUSTOMER_DIGITAL, LoanApplicationStatus.DOCUMENTS_PENDING);
+        when(checklists.findByLoanApplicationIdAndStage(APPLICATION_ID, DocumentChecklistStage.SUBMISSION))
+                .thenReturn(Optional.of(checklist()));
+        when(checklists.findItemByIdForUpdate(ITEM_ID)).thenReturn(Optional.of(item()));
+        when(documents.findDocumentByChecklistItemIdForUpdate(ITEM_ID)).thenReturn(Optional.of(storedDocument(null)));
+        when(storage.stage(any(), any(), any())).thenReturn(STAGED);
+        when(promotion.promote(STAGED)).thenThrow(new com.meridian.platform.shared.domain.exception.BusinessRuleViolationException(
+                "UNSAFE_DOCUMENT_UPLOAD", "Document failed the required safety check."));
+
+        assertThrows(com.meridian.platform.shared.domain.exception.BusinessRuleViolationException.class,
+                () -> new UploadDocumentService(storage, service).upload(command(DocumentUploaderActorType.CUSTOMER, null)));
+        verify(documents, never()).saveVersion(any());
+        verify(storage, never()).commit(any());
+        verify(storage).discardStaged(STAGED);
     }
 
     @Test
@@ -158,6 +177,7 @@ class TransactionalDocumentUploadServiceTest {
 
         assertEquals("DOCUMENT_ACCESS_DENIED", error.getErrorCode());
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
     }
 
     @Test
@@ -172,6 +192,7 @@ class TransactionalDocumentUploadServiceTest {
 
         assertEquals("DOCUMENT_ACCESS_DENIED", error.getErrorCode());
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
     }
 
     @Test
@@ -200,6 +221,7 @@ class TransactionalDocumentUploadServiceTest {
         service.store(command(DocumentUploaderActorType.CUSTOMER, requestId, null), STAGED);
 
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
         verify(documents, never()).saveVersion(any());
     }
 
@@ -294,7 +316,7 @@ class TransactionalDocumentUploadServiceTest {
         when(documents.findDocumentByChecklistItemIdForUpdate(ITEM_ID)).thenReturn(Optional.empty());
         when(documents.saveDocument(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(documents.findVersionByUploadRequestId(any())).thenReturn(Optional.empty());
-        when(storage.commit(STAGED)).thenReturn(new StoredObject("documents/evidence.pdf"));
+        when(promotion.promote(STAGED)).thenReturn(new StoredObject("documents/evidence.pdf"));
         when(documents.saveVersion(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(checklists.findReadiness(APPLICATION_ID, DocumentChecklistStage.SUBMISSION))
                 .thenReturn(new DocumentChecklistReadiness(uploadComplete, false));
@@ -316,7 +338,7 @@ class TransactionalDocumentUploadServiceTest {
                 .thenReturn(authority);
         lenient().when(documents.findVersionById(BASELINE_ID)).thenReturn(Optional.of(version(
                 UUID.randomUUID(), null)));
-        lenient().when(storage.commit(STAGED)).thenReturn(new StoredObject("documents/evidence.pdf"));
+        lenient().when(promotion.promote(STAGED)).thenReturn(new StoredObject("documents/evidence.pdf"));
         lenient().when(documents.saveVersion(any())).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(checklists.findReadiness(APPLICATION_ID, DocumentChecklistStage.SUBMISSION))
                 .thenReturn(new DocumentChecklistReadiness(true, false));

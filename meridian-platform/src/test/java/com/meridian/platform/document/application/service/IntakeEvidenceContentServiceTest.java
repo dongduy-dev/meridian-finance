@@ -39,8 +39,9 @@ class IntakeEvidenceContentServiceTest {
     private final UUID currentId = UUID.randomUUID();
     private final IntakeEvidenceType type = IntakeEvidenceType.UCL_PAPER_APPLICATION;
     private final LocalDateTime now = LocalDateTime.of(2026, 10, 7, 10, 0);
+    private final DocumentPromotionService promotion = mock(DocumentPromotionService.class);
     private final IntakeEvidenceService service = new IntakeEvidenceService(
-            documents, storage, cases, users, audits, Clock.systemUTC());
+            documents, storage, promotion, cases, users, audits, Clock.systemUTC());
 
     @BeforeEach
     void setUp() {

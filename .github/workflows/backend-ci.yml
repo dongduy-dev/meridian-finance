@@ -44,6 +44,21 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
+      clamav:
+        image: clamav/clamav:1.4.6
+        env:
+          CLAMD_CONF_StreamMaxLength: "10M"
+          CLAMD_CONF_MaxScanTime: "10000"
+          CLAMD_CONF_AlertExceedsMax: "yes"
+          CLAMD_CONF_LogClean: "no"
+        ports:
+          - 3310:3310
+        options: >-
+          --health-cmd "clamdscan --stream --no-summary /etc/hostname >/dev/null 2>&1"
+          --health-interval 10s
+          --health-timeout 15s
+          --health-retries 12
+          --health-start-period 120s
       postgres:
         image: postgres:16
         env:

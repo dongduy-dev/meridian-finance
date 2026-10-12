@@ -47,6 +47,7 @@ class IntakeEvidenceServiceTest {
     private final BusinessAuditPublisher audits = mock(BusinessAuditPublisher.class);
     private final UUID caseId = UUID.randomUUID();
     private final UUID userId = UUID.randomUUID();
+    private final DocumentPromotionService promotion = org.mockito.Mockito.mock(DocumentPromotionService.class);
     private IntakeEvidenceService service;
 
     @BeforeEach
@@ -58,16 +59,26 @@ class IntakeEvidenceServiceTest {
         when(cases.authorizeMutation(caseId)).thenReturn(
                 new LoanAssistedOriginationPort.AuthorizedIntake(caseId, "UNSECURED_CONSUMER_LOAN"));
         when(storage.stage(any(), any(), any())).thenReturn(staged());
-        when(storage.commit(any())).thenReturn(new StoredObject("intake/final/object"));
+        when(promotion.promote(any())).thenReturn(new StoredObject("intake/final/object"));
         when(documents.saveDocument(any())).thenAnswer(call -> call.getArgument(0));
         when(documents.saveVersion(any())).thenAnswer(call -> call.getArgument(0));
-        service = new IntakeEvidenceService(documents, storage, cases, users, audits,
+        service = new IntakeEvidenceService(documents, storage, promotion, cases, users, audits,
                 Clock.fixed(Instant.parse("2026-09-17T08:00:00Z"), ZoneOffset.UTC));
     }
 
     @AfterEach
     void cleanUp() {
         TransactionSynchronizationManager.clearSynchronization();
+    }
+
+    @Test
+    void rejectedScanCreatesNoVersionAndDiscardsStaging() {
+        when(promotion.promote(any())).thenThrow(new BusinessRuleViolationException(
+                "UNSAFE_DOCUMENT_UPLOAD", "Document failed the required safety check."));
+        assertThrows(BusinessRuleViolationException.class, () -> service.upload(command(UUID.randomUUID(), null)));
+        verify(documents, never()).saveVersion(any());
+        verify(storage, never()).commit(any());
+        verify(storage).discardStaged(any());
     }
 
     @Test
@@ -98,6 +109,7 @@ class IntakeEvidenceServiceTest {
 
         assertEquals(versionId, service.upload(command(requestId, null)).intakeDocumentVersionId());
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
     }
 
     @Test
@@ -111,6 +123,7 @@ class IntakeEvidenceServiceTest {
         assertThrows(BusinessStateConflictException.class,
                 () -> service.upload(command(UUID.randomUUID(), UUID.randomUUID())));
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
     }
 
     @Test
@@ -127,6 +140,7 @@ class IntakeEvidenceServiceTest {
 
         assertThrows(BusinessStateConflictException.class, () -> service.upload(command(requestId, null)));
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
     }
 
     @Test
@@ -138,6 +152,7 @@ class IntakeEvidenceServiceTest {
         assertThrows(BusinessRuleViolationException.class, () -> service.upload(mismatch));
         verify(documents, never()).saveVersion(any());
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
     }
 
     @Test
@@ -149,6 +164,7 @@ class IntakeEvidenceServiceTest {
         assertThrows(AuthorizationException.class, () -> service.upload(command(UUID.randomUUID(), null)));
         verify(cases, never()).authorizeMutation(any());
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
     }
 
     @Test
@@ -161,6 +177,7 @@ class IntakeEvidenceServiceTest {
         verify(documents, never()).saveDocument(any());
         verify(documents, never()).saveVersion(any());
         verify(storage, never()).commit(any());
+        verify(promotion, never()).promote(any());
     }
 
     private UploadIntakeEvidenceCommand command(UUID requestId, UUID expectedVersion) {

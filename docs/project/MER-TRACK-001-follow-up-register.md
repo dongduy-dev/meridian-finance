@@ -652,12 +652,26 @@ Blocking: Production deployment.
 
 Problem:
 The MVP local-filesystem adapter validates declared type, file signature, filename,
-size, and opaque references, but does not provide production object storage,
-malware/quarantine scanning, retention schedules, legal hold, or retirement purge.
+size, and opaque references. Production object storage, formal retention schedules,
+legal hold, retirement purge, full storage-key lifecycle, and production-grade
+disaster recovery remain open.
+
+Partial completion:
+Document requires malware scanning before promoting new staged bytes for application
+documents, Customer identity evidence, intake evidence, and signed assisted-action
+evidence. One application coordinator scans the private staged object through a
+Document-owned output port before storage commit. The private ClamAV adapter rejects
+unsafe content and fails closed on scanner unavailability, timeout, or protocol
+failure. Exact successful upload replay resolves before promotion and does not
+require a new scan. The content limit remains 10 MiB; multipart transport permits
+10 MiB files plus request overhead. Local and backend CI verification use ClamAV;
+production Compose keeps it off the Tunnel network with no host port, persists
+signatures, and retains FreshClam updates. Live deployed upload, signature-update,
+cleanup, and EC2 memory/reload stability evidence is still required before accepting
+the public portfolio deployment. This partial delivery does not close MER-FU-032.
 
 Recommendation:
-Add a private object-storage adapter, quarantine-before-availability workflow,
-malware scanner port with fail-closed policy, encrypted storage and key rotation,
+Add a private object-storage adapter, encrypted storage and key rotation,
 retention/legal-hold decisions, secure retirement, operational retry states, and
 provider-failure integration tests. Never expose provider URLs or storage keys.
 

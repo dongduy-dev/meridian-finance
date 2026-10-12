@@ -44,6 +44,7 @@ public class IntakeEvidenceService implements ManageIntakeEvidenceUseCase {
 
     private final IntakeDocumentRepository documents;
     private final DocumentStoragePort storage;
+    private final DocumentPromotionService promotion;
     private final LoanAssistedOriginationPort assistedOriginations;
     private final CurrentUserProvider currentUsers;
     private final BusinessAuditPublisher auditPublisher;
@@ -52,6 +53,7 @@ public class IntakeEvidenceService implements ManageIntakeEvidenceUseCase {
     public IntakeEvidenceService(
             IntakeDocumentRepository documents,
             DocumentStoragePort storage,
+            DocumentPromotionService promotion,
             LoanAssistedOriginationPort assistedOriginations,
             CurrentUserProvider currentUsers,
             BusinessAuditPublisher auditPublisher,
@@ -59,6 +61,7 @@ public class IntakeEvidenceService implements ManageIntakeEvidenceUseCase {
     ) {
         this.documents = documents;
         this.storage = storage;
+        this.promotion = promotion;
         this.assistedOriginations = assistedOriginations;
         this.currentUsers = currentUsers;
         this.auditPublisher = auditPublisher;
@@ -144,7 +147,7 @@ public class IntakeEvidenceService implements ManageIntakeEvidenceUseCase {
                         .orElseThrow(() -> new IllegalStateException("Current intake evidence version was not found."))
                         .versionNumber() + 1;
 
-        StoredObject stored = storage.commit(staged);
+        StoredObject stored = promotion.promote(staged);
         registerRollbackCleanup(stored.storageKey());
         IntakeDocumentVersion version = documents.saveVersion(new IntakeDocumentVersion(
                 UUID.randomUUID(), document.id(), versionNumber, command.uploadRequestId(),
