@@ -30,6 +30,7 @@ public class AuthenticationRateLimitInterceptor implements HandlerInterceptor, W
     private static final String ERROR_MESSAGE = "Too many requests.";
 
     private final SecurityErrorResponseWriter errorResponseWriter;
+    private final AuthenticationClientAddressResolver clientAddressResolver;
     private final FixedWindowRateLimiter loginLimiter;
     private final FixedWindowRateLimiter refreshLimiter;
     private final FixedWindowRateLimiter registrationLimiter;
@@ -39,6 +40,8 @@ public class AuthenticationRateLimitInterceptor implements HandlerInterceptor, W
     @Autowired
     public AuthenticationRateLimitInterceptor(
             SecurityErrorResponseWriter errorResponseWriter,
+            @Value("${meridian.identity.rate-limit.client-address-mode:REMOTE_ADDR}")
+            AuthenticationClientAddressResolver.Mode clientAddressMode,
             @Value("${meridian.identity.rate-limit.login.max-requests:10}") int loginMaxRequests,
             @Value("${meridian.identity.rate-limit.login.window:1m}") Duration loginWindow,
             @Value("${meridian.identity.rate-limit.refresh.max-requests:30}") int refreshMaxRequests,
@@ -56,6 +59,7 @@ public class AuthenticationRateLimitInterceptor implements HandlerInterceptor, W
     ) {
         this(
                 errorResponseWriter,
+                new AuthenticationClientAddressResolver(clientAddressMode),
                 Clock.systemUTC(),
                 loginMaxRequests,
                 loginWindow,
@@ -166,7 +170,31 @@ public class AuthenticationRateLimitInterceptor implements HandlerInterceptor, W
             Duration passwordResetRequestWindow,
             int maxTrackedClientsPerEndpoint
     ) {
+        this(errorResponseWriter, new AuthenticationClientAddressResolver(AuthenticationClientAddressResolver.Mode.REMOTE_ADDR),
+                clock, loginMaxRequests, loginWindow, refreshMaxRequests, refreshWindow,
+                registrationMaxRequests, registrationWindow, emailVerificationRequestMaxRequests,
+                emailVerificationRequestWindow, passwordResetRequestMaxRequests, passwordResetRequestWindow,
+                maxTrackedClientsPerEndpoint);
+    }
+
+    AuthenticationRateLimitInterceptor(
+            SecurityErrorResponseWriter errorResponseWriter,
+            AuthenticationClientAddressResolver clientAddressResolver,
+            Clock clock,
+            int loginMaxRequests,
+            Duration loginWindow,
+            int refreshMaxRequests,
+            Duration refreshWindow,
+            int registrationMaxRequests,
+            Duration registrationWindow,
+            int emailVerificationRequestMaxRequests,
+            Duration emailVerificationRequestWindow,
+            int passwordResetRequestMaxRequests,
+            Duration passwordResetRequestWindow,
+            int maxTrackedClientsPerEndpoint
+    ) {
         this.errorResponseWriter = errorResponseWriter;
+        this.clientAddressResolver = clientAddressResolver;
         this.loginLimiter = new FixedWindowRateLimiter(
                 loginMaxRequests,
                 loginWindow,
@@ -230,7 +258,13 @@ public class AuthenticationRateLimitInterceptor implements HandlerInterceptor, W
             return true;
         }
 
-        FixedWindowRateLimiter.RateLimitDecision decision = limiter.acquire(request.getRemoteAddr());
+        var clientAddress = clientAddressResolver.resolve(request);
+        if (clientAddress.isEmpty()) {
+            errorResponseWriter.write(request, response, HttpStatus.BAD_REQUEST.value(),
+                    "VALIDATION_ERROR", "Invalid client address metadata.");
+            return false;
+        }
+        FixedWindowRateLimiter.RateLimitDecision decision = limiter.acquire(clientAddress.get());
         if (decision.allowed()) {
             return true;
         }

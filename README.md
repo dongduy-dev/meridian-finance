@@ -113,6 +113,8 @@ Useful local endpoints:
 
 Historical demo credentials are disabled by Flyway V73. Register Customer demo accounts through Customer Web and verify their email in Mailpit. Establish the first Back-Office Admin through the opt-in [Identity bootstrap procedure](docs/deployment/MER-DEP-001-identity-bootstrap-and-demo-boundary.md), then create Staff accounts through `/admin/users` and their emailed password-setup links. No shared Staff password is provided.
 
+The separate [Cloudflare edge and AWS runtime contract](docs/deployment/MER-DEP-002-cloudflare-edge-and-aws-runtime.md) defines deployed hostnames, Tunnel-only API access, private container storage/networking, and operator validation. The Compose instructions below remain for local development.
+
 The OCR worker is opt-in:
 
 ```bash

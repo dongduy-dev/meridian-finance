@@ -118,9 +118,11 @@ class AuthenticationRateLimitInterceptorTest {
     void ignoresCallerSuppliedForwardingHeaders() throws Exception {
         MockMvc mockMvc = mockMvc(1, Duration.ofMinutes(1), 3, Duration.ofMinutes(1));
 
-        mockMvc.perform(login("192.0.2.1").header("X-Forwarded-For", "198.51.100.10"))
+        mockMvc.perform(login("192.0.2.1").header("X-Forwarded-For", "198.51.100.10")
+                        .header("CF-Connecting-IP", "198.51.100.10").header("Forwarded", "for=198.51.100.10"))
                 .andExpect(status().isOk());
-        mockMvc.perform(login("192.0.2.1").header("X-Forwarded-For", "203.0.113.20"))
+        mockMvc.perform(login("192.0.2.1").header("X-Forwarded-For", "203.0.113.20")
+                        .header("CF-Connecting-IP", "203.0.113.20").header("Forwarded", "for=203.0.113.20"))
                 .andExpect(status().isTooManyRequests());
 
         verify(authenticationUseCase).login(any());
@@ -277,6 +279,76 @@ class AuthenticationRateLimitInterceptorTest {
             int verificationRequestMaxRequests,
             int passwordResetRequestMaxRequests
     ) {
+        return mockMvc(loginMaxRequests, loginWindow, refreshMaxRequests, refreshWindow,
+                registrationMaxRequests, verificationRequestMaxRequests, passwordResetRequestMaxRequests,
+                AuthenticationClientAddressResolver.Mode.REMOTE_ADDR);
+    }
+
+    private MockMvc cloudflareMockMvc() {
+        return mockMvc(1, Duration.ofMinutes(1), 1, Duration.ofMinutes(1), 1, 1, 1,
+                AuthenticationClientAddressResolver.Mode.CLOUDFLARE);
+    }
+
+    @Test
+    void cloudflareClientsHaveSeparateBucketsButGenericForwardingCannotChangeIdentity() throws Exception {
+        MockMvc mvc = cloudflareMockMvc();
+        mvc.perform(login("172.20.0.2").header("CF-Connecting-IP", "198.51.100.1"))
+                .andExpect(status().isOk());
+        mvc.perform(login("172.20.0.2").header("CF-Connecting-IP", "198.51.100.2"))
+                .andExpect(status().isOk());
+        mvc.perform(login("172.20.0.3").header("CF-Connecting-IP", "198.51.100.1")
+                        .header("X-Forwarded-For", "203.0.113.10").header("Forwarded", "for=203.0.113.10"))
+                .andExpect(status().isTooManyRequests());
+        verify(authenticationUseCase, times(2)).login(any());
+    }
+
+    @Test
+    void equivalentIpv6LiteralsShareOneBucket() throws Exception {
+        MockMvc mvc = cloudflareMockMvc();
+        mvc.perform(login("172.20.0.2").header("CF-Connecting-IP", "2001:db8::a"))
+                .andExpect(status().isOk());
+        mvc.perform(login("172.20.0.2").header("CF-Connecting-IP", "2001:0DB8:0:0:0:0:0:000a"))
+                .andExpect(status().isTooManyRequests());
+    }
+
+    @Test
+    void missingOrInvalidCloudflareMetadataFailsBeforeAuthenticationWithoutConsumingCapacity() throws Exception {
+        MockMvc mvc = cloudflareMockMvc();
+        mvc.perform(login("172.20.0.2")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_ERROR"));
+        mvc.perform(login("172.20.0.2").header("CF-Connecting-IP", "private.invalid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid client address metadata."));
+        mvc.perform(refresh("172.20.0.2")).andExpect(status().isBadRequest());
+        mvc.perform(registration("172.20.0.2", "198.51.100.1")).andExpect(status().isBadRequest());
+        mvc.perform(verificationRequest("172.20.0.2", "198.51.100.1")).andExpect(status().isBadRequest());
+        mvc.perform(passwordResetRequest("172.20.0.2", "198.51.100.1")).andExpect(status().isBadRequest());
+        org.mockito.Mockito.verifyNoInteractions(authenticationUseCase, registerCustomerUseCase,
+                requestEmailVerificationUseCase, requestPasswordResetUseCase);
+        mvc.perform(login("172.20.0.2").header("CF-Connecting-IP", "198.51.100.1"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void cloudflareModeKeepsAllFivePoliciesIndependentAndLeavesPreflightAndLogoutAlone() throws Exception {
+        MockMvc mvc = cloudflareMockMvc();
+        mvc.perform(options(AuthenticationRateLimitInterceptor.LOGIN_PATH)).andExpect(status().isOk());
+        var requests = java.util.List.of(login("172.20.0.2"), refresh("172.20.0.2"),
+                registration("172.20.0.2", "203.0.113.1"), verificationRequest("172.20.0.2", "203.0.113.1"),
+                passwordResetRequest("172.20.0.2", "203.0.113.1"));
+        for (var request : requests) {
+            request.header("CF-Connecting-IP", "198.51.100.1");
+            mvc.perform(request).andExpect(status().is2xxSuccessful());
+            mvc.perform(request).andExpect(status().isTooManyRequests());
+        }
+        mvc.perform(post("/api/v1/auth/logout")).andExpect(status().isNoContent());
+    }
+
+    private MockMvc mockMvc(
+            int loginMaxRequests, Duration loginWindow, int refreshMaxRequests, Duration refreshWindow,
+            int registrationMaxRequests, int verificationRequestMaxRequests, int passwordResetRequestMaxRequests,
+            AuthenticationClientAddressResolver.Mode mode
+    ) {
         AuthController controller = new AuthController(
                 authenticationUseCase,
                 logoutUseCase,
@@ -290,6 +362,7 @@ class AuthenticationRateLimitInterceptorTest {
         );
         AuthenticationRateLimitInterceptor interceptor = new AuthenticationRateLimitInterceptor(
                 new SecurityErrorResponseWriter(),
+                new AuthenticationClientAddressResolver(mode),
                 clock,
                 loginMaxRequests,
                 loginWindow,

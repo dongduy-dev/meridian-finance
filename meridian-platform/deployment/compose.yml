@@ -1,0 +1,86 @@
+name: meridian-prod
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: meridian_db
+      POSTGRES_USER: meridian_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set the private deployment database password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [database]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    logging: &bounded-logs
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  meridian-platform:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/meridian_db
+      SPRING_DATASOURCE_USERNAME: meridian_user
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set the private deployment database password}
+      MERIDIAN_CUSTOMER_ENCRYPTION_KEY: ${MERIDIAN_CUSTOMER_ENCRYPTION_KEY:?Set the private Customer encryption key}
+      MERIDIAN_CUSTOMER_FINGERPRINT_KEY: ${MERIDIAN_CUSTOMER_FINGERPRINT_KEY:?Set the private Customer fingerprint key}
+      MERIDIAN_LOAN_DISBURSEMENT_SNAPSHOT_ACTIVE_KEY_ID: local
+      MERIDIAN_LOAN_DISBURSEMENT_SNAPSHOT_KEYS_LOCAL: ${MERIDIAN_LOAN_DISBURSEMENT_SNAPSHOT_KEYS_LOCAL:?Set the private Loan snapshot key}
+      MERIDIAN_JWT_PRIVATE_KEY: ${MERIDIAN_JWT_PRIVATE_KEY:?Set the private JWT signing key}
+      MERIDIAN_JWT_PUBLIC_KEY: ${MERIDIAN_JWT_PUBLIC_KEY:?Set the matching JWT public key}
+      MERIDIAN_DOCUMENT_STORAGE_ROOT: /var/lib/meridian/documents
+      MERIDIAN_OCR_RESULT_ENCRYPTION_KEY: ""
+      MERIDIAN_FRONTEND_ALLOWED_ORIGINS: https://meridianfinance.dev,https://internal.meridianfinance.dev
+      MERIDIAN_FRONTEND_BASE_URL: https://meridianfinance.dev
+      MERIDIAN_INTERNAL_FRONTEND_BASE_URL: https://internal.meridianfinance.dev
+      MERIDIAN_REFRESH_TOKEN_COOKIE_SECURE: "true"
+      MERIDIAN_AUTH_CLIENT_ADDRESS_MODE: CLOUDFLARE
+      SERVER_FORWARD_HEADERS_STRATEGY: none
+      MERIDIAN_ADMIN_BOOTSTRAP_ENABLED: "false"
+      # SMTP activation and onboarding belong to CP4. No local Mailpit fallback.
+      MERIDIAN_SMTP_HOST: 127.0.0.1
+      MERIDIAN_SMTP_PORT: "1025"
+      MERIDIAN_NOTIFICATION_FROM_ADDRESS: notifications@meridianfinance.dev
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx768m
+    volumes:
+      - document_data:/var/lib/meridian/documents
+    networks: [database, tunnel]
+    logging: *bounded-logs
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.3
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run", "--token-file", "/run/secrets/tunnel_token"]
+    depends_on:
+      meridian-platform:
+        condition: service_started
+    secrets: [tunnel_token]
+    networks: [tunnel]
+    logging: *bounded-logs
+
+networks:
+  database:
+    internal: true
+  # Outbound access supports Tunnel and later backend SMTP. No host ports are published.
+  tunnel:
+
+volumes:
+  postgres_data:
+  document_data:
+
+secrets:
+  tunnel_token:
+    file: ${MERIDIAN_TUNNEL_TOKEN_FILE:?Set the path to the private Tunnel token file}
