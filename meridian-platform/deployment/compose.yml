@@ -31,6 +31,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      clamav:
+        condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/meridian_db
       SPRING_DATASOURCE_USERNAME: meridian_user
@@ -42,6 +44,11 @@ services:
       MERIDIAN_JWT_PRIVATE_KEY: ${MERIDIAN_JWT_PRIVATE_KEY:?Set the private JWT signing key}
       MERIDIAN_JWT_PUBLIC_KEY: ${MERIDIAN_JWT_PUBLIC_KEY:?Set the matching JWT public key}
       MERIDIAN_DOCUMENT_STORAGE_ROOT: /var/lib/meridian/documents
+      MERIDIAN_DOCUMENT_SCANNER_HOST: clamav
+      MERIDIAN_DOCUMENT_SCANNER_PORT: "3310"
+      MERIDIAN_DOCUMENT_SCANNER_CONNECT_TIMEOUT_MS: "2000"
+      MERIDIAN_DOCUMENT_SCANNER_READ_TIMEOUT_MS: "5000"
+      MERIDIAN_DOCUMENT_SCANNER_OPERATION_TIMEOUT_MS: "15000"
       MERIDIAN_OCR_RESULT_ENCRYPTION_KEY: ""
       MERIDIAN_FRONTEND_ALLOWED_ORIGINS: https://meridianfinance.dev,https://internal.meridianfinance.dev
       MERIDIAN_FRONTEND_BASE_URL: https://meridianfinance.dev
@@ -57,7 +64,31 @@ services:
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx768m
     volumes:
       - document_data:/var/lib/meridian/documents
-    networks: [database, tunnel]
+    networks: [database, tunnel, scanning]
+    logging: *bounded-logs
+
+  clamav:
+    image: clamav/clamav:1.4.6
+    restart: unless-stopped
+    environment:
+      # Official image starts clamd + freshclam, initializes missing databases,
+      # and notifies clamd after updates. Keep normal signature load testing.
+      CLAMAV_NO_FRESHCLAMD: "false"
+      FRESHCLAM_CHECKS: "12"
+      CLAMD_CONF_StreamMaxLength: "10M"
+      CLAMD_CONF_MaxScanTime: "10000"
+      CLAMD_CONF_AlertExceedsMax: "yes"
+      CLAMD_CONF_LogClean: "no"
+    volumes:
+      - clamav_signatures:/var/lib/clamav
+    networks: [scanning, signature_updates]
+    healthcheck:
+      # PING alone cannot prove an initialized engine can scan.
+      test: ["CMD-SHELL", "clamdscan --stream --no-summary /etc/hostname >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 6m
     logging: *bounded-logs
 
   cloudflared:
@@ -74,12 +105,18 @@ services:
 networks:
   database:
     internal: true
+  scanning:
+    internal: true
+  # Isolated outbound bridge for FreshClam DNS/HTTPS. No published ports;
+  # the scanner never joins the Tunnel network.
+  signature_updates:
   # Outbound access supports Tunnel and later backend SMTP. No host ports are published.
   tunnel:
 
 volumes:
   postgres_data:
   document_data:
+  clamav_signatures:
 
 secrets:
   tunnel_token:

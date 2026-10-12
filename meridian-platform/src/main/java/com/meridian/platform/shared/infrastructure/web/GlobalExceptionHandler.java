@@ -15,11 +15,21 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.Instant;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleUploadTooLarge(
+            MaxUploadSizeExceededException exception, HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(new ApiErrorResponse(
+                Instant.now(), HttpStatus.PAYLOAD_TOO_LARGE.value(), "INVALID_DOCUMENT_UPLOAD",
+                "Document exceeds the upload size limit.", safeValidationPath(request)));
+    }
 
     @ExceptionHandler(ServiceUnavailableException.class)
     public ResponseEntity<ApiErrorResponse> handleServiceUnavailableException(

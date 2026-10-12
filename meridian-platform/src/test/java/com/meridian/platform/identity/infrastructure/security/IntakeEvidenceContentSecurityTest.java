@@ -46,6 +46,7 @@ class IntakeEvidenceContentSecurityTest {
     @MockitoBean com.meridian.platform.identity.application.port.out.AccessTokenRevocationRepository accessTokenRevocationRepository;
     @MockitoBean IntakeDocumentRepository documents;
     @MockitoBean DocumentStoragePort storage;
+    @MockitoBean com.meridian.platform.document.application.service.DocumentPromotionService promotion;
     @MockitoBean LoanAssistedOriginationPort cases;
     @MockitoBean CurrentUserProvider users;
     @MockitoBean BusinessAuditPublisher audits;

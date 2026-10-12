@@ -20,9 +20,10 @@ public class CustomerIdentityEvidenceService implements CustomerIdentityEvidence
     private final IntakeDocumentRepository intake;
     private final LoanAssistedOriginationPort cases;
     private final DocumentStoragePort storage;
+    private final DocumentPromotionService promotion;
     public CustomerIdentityEvidenceService(CustomerIdentityDocumentRepository digital, IntakeDocumentRepository intake,
-            LoanAssistedOriginationPort cases, DocumentStoragePort storage) {
-        this.digital = digital; this.intake = intake; this.cases = cases; this.storage = storage;
+            LoanAssistedOriginationPort cases, DocumentStoragePort storage, DocumentPromotionService promotion) {
+        this.digital = digital; this.intake = intake; this.cases = cases; this.storage = storage; this.promotion = promotion;
     }
     @Transactional
     public Evidence store(UUID customerId, UUID requestId, UUID baseline, InputStream content, String mime, String filename, UUID actor, LocalDateTime now) {
@@ -39,7 +40,7 @@ public class CustomerIdentityEvidenceService implements CustomerIdentityEvidence
             }
             if (!Objects.equals(document.currentVersionId(), baseline)) throw stale();
             int number = baseline == null ? 1 : digital.findVersion(baseline).orElseThrow(CustomerIdentityEvidenceService::missing).versionNumber() + 1;
-            StoredObject stored = storage.commit(staged);
+            StoredObject stored = promotion.promote(staged);
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override public void afterCompletion(int status) { if (status == STATUS_ROLLED_BACK) storage.deleteFinal(stored.storageKey()); }
             });
