@@ -141,6 +141,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @TestPropertySource(properties = "meridian.web.cors.allowed-origins=http://localhost:5173,http://localhost:5174")
 class SecurityConfigTest {
+    @Test
+    void actuatorIsDeniedOnThePublicListenerEvenForAuthenticatedActors() throws Exception {
+        mockMvc.perform(get("/actuator/health/readiness")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/actuator/health/readiness").with(user("operator")))
+                .andExpect(status().isForbidden());
+    }
+
 
     private static final String CONFIGURED_FRONTEND_ORIGIN = "http://localhost:5173";
     private static final String CONFIGURED_STAFF_FRONTEND_ORIGIN = "http://localhost:5174";

@@ -1,2 +1,4 @@
 /meridian-platform/mvnw text eol=lf
 *.cmd text eol=crlf
+# This helper is bind-mounted into a Linux container, including from Windows.
+meridian-platform/deployment/document-volume-cutover.sh text eol=lf

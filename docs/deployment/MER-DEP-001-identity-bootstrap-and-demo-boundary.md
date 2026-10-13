@@ -22,7 +22,7 @@ Before running bootstrap, configure the normal database, encryption/JWT keys, SM
 
 1. In the private runtime environment or local ignored `meridian-platform/.env`, set `MERIDIAN_ADMIN_BOOTSTRAP_ENABLED=true`, `MERIDIAN_ADMIN_BOOTSTRAP_EMAIL` to the intended operator inbox, and `MERIDIAN_ADMIN_BOOTSTRAP_DISPLAY_NAME` to the intended display name. Email and display name must satisfy the existing Internal User creation validation. No password or raw token is configured.
 2. Start the backend. For local Compose, run `docker compose up --build -d` from `meridian-platform`. Flyway runs before bootstrap.
-3. Read the Staff password-setup email privately. Open its Internal Web `/reset-password` link and choose a password. Setup tokens use the configured password-reset lifetime, 30 minutes by default, and are single-use.
+3. Read the Staff password-setup email privately. Open its Internal Web `/set-password` link and choose a password. Later Staff recovery uses `/reset-password`. Setup tokens use the configured password-reset lifetime, 30 minutes by default, and are single-use.
 4. Remove the bootstrap email/display-name configuration and set `MERIDIAN_ADMIN_BOOTSTRAP_ENABLED=false`. Recreate the local backend with `docker compose up -d --force-recreate meridian-platform`, or restart the deployed backend with the disabled configuration.
 5. Log into Internal Web with the new account and open `/admin/users`.
 
