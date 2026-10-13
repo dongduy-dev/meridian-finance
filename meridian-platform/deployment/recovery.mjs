@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync,
+import { chmodSync, closeSync, createReadStream, existsSync, lstatSync, mkdirSync, openSync, readFileSync,
   readdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -23,7 +23,15 @@ function docker(args, outputFile) {
   } finally { if (fd !== null) closeSync(fd) }
 }
 const inspect = id => JSON.parse(docker(['inspect', id]))[0]
-const hash = file => createHash('sha256').update(readFileSync(file)).digest('hex')
+export async function hash(file) {
+  const digest = createHash('sha256')
+  try {
+    for await (const chunk of createReadStream(file, { highWaterMark: 64 * 1024 })) digest.update(chunk)
+    return digest.digest('hex')
+  } catch {
+    throw new Error('Backup checksum could not be calculated; inspect privately')
+  }
+}
 const checksumFiles = ['database.dump', 'documents.tgz', 'private.tgz', 'release.json']
 function safeDirectory(path, fresh = false) {
   assert.ok(isAbsolute(path), 'Use absolute paths')
@@ -40,13 +48,18 @@ function regularTree(path) {
     else assert.ok(stat.isFile() && stat.nlink === 1, 'Only private regular files are accepted')
   }
 }
-function verifyBackup(directory) {
-  safeDirectory(directory)
-  const manifest = JSON.parse(readFileSync(join(directory, 'matched-set.json'), 'utf8'))
-  assert.deepEqual(Object.keys(manifest.checksums).sort(), [...checksumFiles].sort())
-  for (const name of checksumFiles) assert.equal(hash(join(directory, name)), manifest.checksums[name], 'Backup checksum mismatch')
-  return manifest
+export async function verifyBackup(directory) {
+  try {
+    safeDirectory(directory)
+    const manifest = JSON.parse(readFileSync(join(directory, 'matched-set.json'), 'utf8'))
+    assert.deepEqual(Object.keys(manifest.checksums).sort(), [...checksumFiles].sort())
+    for (const name of checksumFiles) assert.equal(await hash(join(directory, name)), manifest.checksums[name], 'Backup checksum mismatch')
+    return manifest
+  } catch {
+    throw new Error('Backup checksum verification failed; inspect privately')
+  }
 }
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 const [action, ...args] = process.argv.slice(2)
 if (action === 'backup') {
   const [project, backendId, dbId, privateDirectory, destination, sourceRevision, confirmation] = args
@@ -93,16 +106,17 @@ if (action === 'backup') {
   archive(`type=volume,source=${mount.Name}`, 'documents.tgz')
   archive(`type=bind,source=${privateDirectory}`, 'private.tgz')
   for (const file of checksumFiles) chmodSync(join(destination, file), 0o600)
-  const checksums = Object.fromEntries(checksumFiles.map(file => [file, hash(join(destination, file))]))
+  const checksums = {}
+  for (const file of checksumFiles) checksums[file] = await hash(join(destination, file))
   writeFileSync(join(destination, 'matched-set.json'), JSON.stringify({ project, createdAt: new Date().toISOString(), checksums }, null, 2),
     { flag: 'wx', mode: 0o600 })
-  verifyBackup(destination)
+  await verifyBackup(destination)
   console.log('PASS: matched backup checksums; application/ingress remain stopped pending operator review')
 } else if (action === 'verify') {
-  verifyBackup(args[0]); console.log('PASS: matched backup checksums')
+  await verifyBackup(args[0]); console.log('PASS: matched backup checksums')
 } else if (action === 'restore') {
   const [directory, project] = args
-  verifyBackup(directory)
+  await verifyBackup(directory)
   // This helper can never restore into production or a preexisting project/volume.
   assert.match(project ?? '', /^cp4restore-[a-z0-9-]+$/)
   const restoreVolumes = [`${project}_postgres_data`, `${project}_document_data`]
@@ -141,4 +155,5 @@ if (action === 'backup') {
   console.log(`PASS: isolated DB/document/private restore into ${project}; application readback still required`)
 } else {
   throw new Error('Usage: recovery.mjs backup PROJECT BACKEND_ID DB_ID PRIVATE_DIR NEW_ABSOLUTE_DIR SOURCE_SHA BACKUP-PROJECT | verify DIR | restore DIR NEW_cp4restore-PROJECT')
+}
 }

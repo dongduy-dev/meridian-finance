@@ -6,18 +6,96 @@ This runbook owns manual release, persistence, recovery, reset, and startup chec
 
 Use SSM on the existing host. The stopped EC2 instance must stay stopped until the operator schedules deployment. Commands below are operator procedures, not instructions to start or mutate AWS from a coding session. Never paste keys, passwords, inbox contents, reset/verification fragments, or resolved environments into shared evidence. Public demo submissions are private data even when visitors were instructed to use fictional data.
 
-Set these non-secret shell values on the host; the private directory and files already exist under operator control:
+### 1.1 One Privileged Operator Shell
+
+The CP3 host has an `ubuntu`-owned checkout at `/opt/meridian/source`, requires `sudo` for Docker, and has no verified Node installation. After the operator schedules host access, use one temporary root Bash shell for the procedures in this document. Docker access is inherently privileged; do not add the SSM user or `ubuntu` to the Docker group. A shell alias or function for `sudo docker` does not apply to the helpers' Node subprocesses.
+
+From the authorized SSM session, check the caller and approved sudo access, then enter the operator shell. If sudo policy refuses the shell, stop and obtain the operator's approved administration access; do not change permissions to bypass it.
 
 ```bash
-set -eu
+id
+command -v sudo
+sudo -n true
+sudo -n -H /bin/bash --noprofile --norc
+```
+
+Run all subsequent blocks in that same shell. Confirm the exact checkout path, owner, and directory permissions before trusting its Git configuration/hooks. The checkout and `.git` must be controlled by the trusted `ubuntu` operator, without write access for unrelated users. Do not change repository ownership. The exported Git command-scope settings reset inherited safe-directory exceptions and trust only this checkout, including Git launched by `release.mjs`. They do not modify global/system Git configuration. See [Git's safe-directory and runtime configuration rules](https://git-scm.com/docs/git-config).
+
+```bash
+set -euo pipefail
 umask 077
+test "$(id -u)" = 0
+test "$(uname -m)" = x86_64
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+unset SUDO_UID SUDO_GID SUDO_USER NODE_OPTIONS NODE_PATH
+test "$(readlink -f /opt/meridian/source)" = /opt/meridian/source
+test "$(stat -c %U /opt/meridian/source)" = ubuntu
+stat -c '%U:%G %a %n' /opt/meridian /opt/meridian/source /opt/meridian/source/.git
+export GIT_CONFIG_COUNT=2
+export GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0=
+export GIT_CONFIG_KEY_1=safe.directory GIT_CONFIG_VALUE_1=/opt/meridian/source
+export GIT_OPTIONAL_LOCKS=0
 cd /opt/meridian/source
+```
+
+### 1.2 Obtain and Verify Node 22
+
+Choose and record an exact maintained Node 22 patch from the [official Node 22 archive](https://nodejs.org/en/download/archive/v22). Replace the version placeholder below. Download the Linux x64 binary and its SHA-256 listing from that exact official HTTPS release directory; do not execute downloaded installation scripts or use an unverified third-party package. The new mode-0700 temporary directory supplies Node only for this operator session; no package/service installation or persistent PATH change is required.
+
+```bash
+for tool in curl tar sha256sum awk git docker; do command -v "$tool"; done
+node_version=v22.REPLACE_WITH_REVIEWED_PATCH
+[[ "$node_version" =~ ^v22\.[0-9]+\.[0-9]+$ ]]
+node_archive="node-$node_version-linux-x64.tar.gz"
+node_tools=$(mktemp -d /tmp/meridian-node22.XXXXXX)
+node_release="https://nodejs.org/dist/$node_version"
+curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location \
+  --output "$node_tools/$node_archive" "$node_release/$node_archive"
+curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location \
+  --output "$node_tools/SHASUMS256.txt" "$node_release/SHASUMS256.txt"
+awk -v archive="$node_archive" '$2 == archive { print; found++ } END { if (found != 1) exit 1 }' \
+  "$node_tools/SHASUMS256.txt" > "$node_tools/selected.sha256"
+(cd "$node_tools" && sha256sum --check --strict selected.sha256)
+tar -xzf "$node_tools/$node_archive" -C "$node_tools"
+export PATH="$node_tools/node-$node_version-linux-x64/bin:$PATH"
+test "$(node --version)" = "$node_version"
+node -e 'if (process.versions.node.split(".")[0] !== "22") process.exit(1)'
+```
+
+Require a successful checksum comparison before extraction/execution. HTTPS authenticates the official checksum source; the selected checksum verifies the downloaded archive. Keep the verified directory and PATH available until every helper completes, including backup/recovery verification. Do not assume Node from a user's interactive PATH survives sudo.
+
+### 1.3 Read-Only Prerequisite Checks
+
+These checks read versions, checkout state, and command/file access. They do not start containers, change provider settings, or print private configuration. Node checks exercise the same inherited PATH/Git trust and direct Docker permissions used by all three helpers. Stop on any failed check before release, backup, restore, or reset.
+
+```bash
+command -v node git docker
+node --version
+git --version
+test "$(git rev-parse --show-toplevel)" = /opt/meridian/source
+git --no-optional-locks status --short --branch
+git rev-parse HEAD
+docker version --format '{{.Server.Version}}'
+docker compose version
+node --input-type=module <<'NODE'
+import { spawnSync } from 'node:child_process'
+for (const [tool, args] of [
+  ['git', ['rev-parse', '--show-toplevel']],
+  ['docker', ['version', '--format', '{{.Server.Version}}']],
+]) {
+  if (spawnSync(tool, args, { stdio: 'inherit' }).status !== 0) process.exit(1)
+}
+NODE
 private=/opt/meridian/private
+test -r "$private/runtime.env" && test -r "$private/tunnel-token"
+stat -c '%a %n' "$private" "$private/runtime.env"
 compose() { docker compose --env-file "$private/runtime.env" -f meridian-platform/deployment/compose.yml "$@"; }
 compose config --quiet
 ```
 
-Use Node 22 for the deployment helpers. Their error messages omit command output that could contain private configuration. Inspect failures privately. Do not run local-development Compose on EC2 or combine it with deployment Compose.
+Require the existing private directory/file modes 0700/0600 and the reviewed clean source revision. All later `node`, `docker`, and `compose()` commands run without another sudo prefix inside this shell; Node-spawned Docker/Git commands inherit the same authority and environment. Do not source or display `runtime.env`, enable shell tracing, or render resolved Compose output. Exit the privileged shell when the approved operation ends. Actual EC2 tooling/permission checks remain operator-only pending; the stopped host has not been updated or validated by local work.
+
+The deployment helpers omit command output that could contain private configuration. Inspect failures privately. Do not run local-development Compose on EC2 or combine it with deployment Compose.
 
 ## 2. Persistent State and Recovery Inventory
 
